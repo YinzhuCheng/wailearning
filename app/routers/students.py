@@ -286,10 +286,19 @@ async def create_students_batch(
     
     results = []
     errors = []
+    failed_data = []
+    duplicate_count = 0
     
     for i, student_data in enumerate(students_list):
         if not isinstance(student_data, dict):
-            errors.append(f"第{i+1}行: 数据格式错误")
+            error_msg = f"第{i+1}行: 数据格式错误"
+            errors.append(error_msg)
+            failed_data.append({
+                "row": i + 1,
+                "name": student_data.get("name", ""),
+                "student_no": student_data.get("student_no", ""),
+                "error": "数据格式错误"
+            })
             continue
             
         class_id = student_data.get("class_id")
@@ -299,12 +308,26 @@ async def create_students_batch(
             class_id = int(class_id)
             print(f"[DEBUG] 转换后class_id: {class_id}", file=sys.stderr)
         except (ValueError, TypeError) as e:
-            errors.append(f"第{i+1}行: 班级ID格式错误")
+            error_msg = f"第{i+1}行: 班级ID格式错误"
+            errors.append(error_msg)
+            failed_data.append({
+                "row": i + 1,
+                "name": student_data.get("name", ""),
+                "student_no": student_data.get("student_no", ""),
+                "error": "班级ID格式错误"
+            })
             print(f"[DEBUG] 班级ID转换错误: {e}", file=sys.stderr)
             continue
         
         if class_id not in class_ids:
-            errors.append(f"第{i+1}行: 无权在该班级添加学生 (班级ID: {class_id})")
+            error_msg = f"第{i+1}行: 无权在该班级添加学生 (班级ID: {class_id})"
+            errors.append(error_msg)
+            failed_data.append({
+                "row": i + 1,
+                "name": student_data.get("name", ""),
+                "student_no": student_data.get("student_no", ""),
+                "error": "无权在该班级添加学生"
+            })
             print(f"[DEBUG] 无权访问班级 {class_id}", file=sys.stderr)
             continue
         
@@ -313,7 +336,15 @@ async def create_students_batch(
             Student.class_id == class_id
         ).first()
         if existing_in_class:
-            errors.append(f"第{i+1}行: 学号 {student_data.get('student_no')} 在该班级已存在")
+            error_msg = f"第{i+1}行: 学号 {student_data.get('student_no')} 在该班级已存在"
+            errors.append(error_msg)
+            duplicate_count += 1
+            failed_data.append({
+                "row": i + 1,
+                "name": student_data.get("name", ""),
+                "student_no": student_data.get("student_no", ""),
+                "error": "学号已存在"
+            })
             continue
         
         student = Student(
@@ -332,7 +363,7 @@ async def create_students_batch(
     
     try:
         db.commit()
-        print(f"[DEBUG] 批量导入完成 - 成功: {len(results)}, 失败: {len(errors)}", file=sys.stderr)
+        print(f"[DEBUG] 批量导入完成 - 成功: {len(results)}, 失败: {len(errors)}, 重复: {duplicate_count}", file=sys.stderr)
     except Exception as e:
         db.rollback()
         error_msg = str(e)
@@ -342,8 +373,11 @@ async def create_students_batch(
             return {
                 "success": len(results),
                 "failed": len(errors) + 1,
+                "total": len(students_list),
+                "duplicate": duplicate_count,
                 "names": results,
-                "errors": errors
+                "errors": errors,
+                "failed_data": failed_data
             }
         else:
             raise e
@@ -351,6 +385,9 @@ async def create_students_batch(
     return {
         "success": len(results),
         "failed": len(errors),
+        "total": len(students_list),
+        "duplicate": duplicate_count,
         "names": results,
-        "errors": errors
+        "errors": errors,
+        "failed_data": failed_data
     }
