@@ -121,6 +121,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Setting, Select, Refresh, View, UploadFilled } from '@element-plus/icons-vue'
+import { normalizeBrandingText } from '@/utils/branding'
 import axios from 'axios'
 
 const api = axios.create({ baseURL: '/api' })
@@ -166,7 +167,9 @@ const fetchSettings = async () => {
     const res = await api.get('/settings/all')
     const settingsData = {}
     res.data.forEach(item => {
-      settingsData[item.setting_key] = item.setting_value
+      settingsData[item.setting_key] = ['system_name', 'copyright'].includes(item.setting_key)
+        ? normalizeBrandingText(item.setting_value)
+        : item.setting_value
     })
     form.value = {
       system_name: settingsData.system_name || 'BIMSA-CLASS 班级管理系统',

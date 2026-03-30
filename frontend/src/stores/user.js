@@ -1,11 +1,20 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api, { http } from '@/api'
+import { normalizeSystemSettings } from '@/utils/branding'
+
+const cachedSystemSettings = normalizeSystemSettings(
+  JSON.parse(localStorage.getItem('system_settings') || 'null')
+)
+
+if (cachedSystemSettings) {
+  localStorage.setItem('system_settings', JSON.stringify(cachedSystemSettings))
+}
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
   const userInfo = ref(JSON.parse(localStorage.getItem('user') || 'null'))
-  const systemSettings = ref(JSON.parse(localStorage.getItem('system_settings') || 'null'))
+  const systemSettings = ref(cachedSystemSettings)
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => userInfo.value?.role === 'admin')
@@ -34,9 +43,10 @@ export const useUserStore = defineStore('user', () => {
   async function fetchSystemSettings() {
     try {
       const data = await http.get('/settings/public')
-      systemSettings.value = data
-      localStorage.setItem('system_settings', JSON.stringify(data))
-      document.title = data.system_name
+      const normalizedSettings = normalizeSystemSettings(data)
+      systemSettings.value = normalizedSettings
+      localStorage.setItem('system_settings', JSON.stringify(normalizedSettings))
+      document.title = normalizedSettings?.system_name || 'BIMSA-CLASS 管理端'
     } catch (e) {
       console.error('Failed to fetch system settings', e)
     }

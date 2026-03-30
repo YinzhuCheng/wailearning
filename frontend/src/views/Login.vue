@@ -63,6 +63,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { normalizeSystemSettings } from '@/utils/branding'
 import axios from 'axios'
 
 const api = axios.create({ baseURL: '/api' })
@@ -134,8 +135,9 @@ const rules = {
 const fetchSettings = async () => {
   try {
     const res = await api.get('/settings/public')
-    settings.value = res.data
-    document.title = res.data.system_name
+    const normalizedSettings = normalizeSystemSettings(res.data)
+    settings.value = normalizedSettings
+    document.title = normalizedSettings?.system_name || 'BIMSA-CLASS 管理端'
   } catch (e) {
     console.error('获取系统设置失败', e)
   }

@@ -1,3 +1,5 @@
+import re
+
 from app.auth import get_password_hash
 from app.config import settings
 from app.database import Base, SessionLocal, engine
@@ -24,6 +26,12 @@ LEGACY_SYSTEM_SETTING_VALUES = {
     "system_name": {"DD-CLASS", "DD-CLASS 班级管理系统"},
     "copyright": {"(c) 2026 DD-CLASS", "© 2024 DD-CLASS"},
 }
+
+
+def normalize_legacy_branding(value: str) -> str:
+    if not value:
+        return value
+    return re.sub(r"dd-class", "BIMSA-CLASS", value, flags=re.IGNORECASE)
 
 
 def seed_default_admin(db) -> None:
@@ -64,8 +72,9 @@ def seed_default_system_settings(db) -> None:
     for key, value, description in DEFAULT_SYSTEM_SETTINGS:
         exists = db.query(SystemSetting).filter(SystemSetting.setting_key == key).first()
         if exists:
-            if exists.setting_value in LEGACY_SYSTEM_SETTING_VALUES.get(key, set()):
-                exists.setting_value = value
+            normalized_value = normalize_legacy_branding(exists.setting_value)
+            if exists.setting_value in LEGACY_SYSTEM_SETTING_VALUES.get(key, set()) or normalized_value != exists.setting_value:
+                exists.setting_value = normalized_value if normalized_value else value
                 exists.description = description
                 updated += 1
             continue

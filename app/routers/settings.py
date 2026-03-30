@@ -1,6 +1,8 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+
+from app.bootstrap import normalize_legacy_branding
 from app.database import get_db
 from app.models import SystemSetting, User
 from app.schemas import SystemSettingResponse, SystemSettingUpdate, SystemSettingsResponse
@@ -17,6 +19,8 @@ def get_public_settings(db: Session = Depends(get_db)):
     """获取公开的系统设置（不需要登录）"""
     settings = db.query(SystemSetting).all()
     settings_dict = {s.setting_key: s.setting_value for s in settings}
+    settings_dict["system_name"] = normalize_legacy_branding(settings_dict.get("system_name", ""))
+    settings_dict["copyright"] = normalize_legacy_branding(settings_dict.get("copyright", ""))
     
     return SystemSettingsResponse(
         system_name=settings_dict.get('system_name', 'BIMSA-CLASS 班级管理系统'),
@@ -37,7 +41,11 @@ def get_all_settings(
     if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="只有管理员可以访问")
     
-    return db.query(SystemSetting).order_by(SystemSetting.id).all()
+    records = db.query(SystemSetting).order_by(SystemSetting.id).all()
+    for record in records:
+        if record.setting_key in {"system_name", "copyright"}:
+            record.setting_value = normalize_legacy_branding(record.setting_value)
+    return records
 
 
 @router.put("/{setting_key}")
