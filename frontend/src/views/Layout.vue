@@ -37,20 +37,20 @@
       <el-header class="header">
         <div class="header-left">
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="{ path: '/courses' }">首页</el-breadcrumb-item>
+            <el-breadcrumb-item :to="{ path: homePath }">首页</el-breadcrumb-item>
             <el-breadcrumb-item>{{ currentRouteName }}</el-breadcrumb-item>
           </el-breadcrumb>
-          <div v-if="userStore.selectedCourse" class="course-chip">
+          <div v-if="showCourseContext" class="course-chip">
             <span class="course-chip-label">当前课程</span>
-            <strong>{{ userStore.selectedCourse.name }}</strong>
+            <strong>{{ selectedCourse?.name }}</strong>
             <el-tag size="small" type="primary">
-              {{ userStore.selectedCourse.course_type === 'elective' ? '选修课' : '必修课' }}
+              {{ selectedCourse?.course_type === 'elective' ? '选修课' : '必修课' }}
             </el-tag>
           </div>
         </div>
 
         <div class="header-right">
-          <el-button v-if="userStore.selectedCourse" text @click="goToCourses">切换课程</el-button>
+          <el-button v-if="showCourseContext" text @click="goToCourses">切换课程</el-button>
           <el-dropdown @command="handleCommand">
             <div class="user-box">
               <el-avatar :size="34">{{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}</el-avatar>
@@ -62,7 +62,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="change-password">修改密码</el-dropdown-item>
-                <el-dropdown-item command="change-course">切换课程</el-dropdown-item>
+                <el-dropdown-item v-if="!userStore.isAdmin" command="change-course">切换课程</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -162,6 +162,7 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
+const adminHomePath = '/students'
 const isCollapsed = ref(false)
 const passwordDialogVisible = ref(false)
 const passwordSubmitting = ref(false)
@@ -170,6 +171,10 @@ const passwordForm = reactive({
   new_password: '',
   confirm_password: ''
 })
+
+const selectedCourse = computed(() => userStore.selectedCourse)
+const homePath = computed(() => (userStore.isAdmin ? adminHomePath : '/courses'))
+const showCourseContext = computed(() => !userStore.isAdmin && !!selectedCourse.value)
 
 const currentRouteName = computed(() => {
   const routeMap = {
@@ -216,6 +221,7 @@ const studentMenu = [
 ]
 
 const adminMenu = [
+  { path: '/students', label: '学生管理', icon: User },
   { path: '/classes', label: '班级管理', icon: School },
   { path: '/users', label: '用户管理', icon: UserFilled },
   { path: '/subjects', label: '课程管理', icon: Reading },
@@ -229,7 +235,7 @@ const menuItems = computed(() => {
     return [...baseMenu, ...studentMenu]
   }
   if (userStore.isAdmin) {
-    return [...baseMenu, teacherMenu[0], teacherMenu[1], ...adminMenu]
+    return adminMenu
   }
   return [...baseMenu, ...teacherMenu]
 })
@@ -269,6 +275,7 @@ const submitChangePassword = async () => {
     ElMessage.warning('两次输入的新密码不一致')
     return
   }
+
   passwordSubmitting.value = true
   try {
     const result = await api.auth.changePassword({ ...passwordForm })

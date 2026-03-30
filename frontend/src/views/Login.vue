@@ -139,9 +139,9 @@ const handleLogin = async () => {
 
     loading.value = true
     try {
-      await userStore.login(form.username, form.password)
+      const userData = await userStore.login(form.username, form.password)
       ElMessage.success('登录成功')
-      router.push('/courses')
+      router.push(userData?.role === 'admin' ? '/students' : '/courses')
     } catch (error) {
       console.error(error)
       ElMessage.error('登录失败，请检查用户名和密码')
