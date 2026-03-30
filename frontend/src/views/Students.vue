@@ -16,7 +16,11 @@
     <template v-else>
       <el-alert
         v-if="!isAdminView && selectedCourse"
-        :title="selectedCourse.course_type === 'elective' ? '当前为选修课，可移除学生。' : '当前为必修课，系统已自动加入班级全部学生，且不可移除。'"
+        :title="
+          selectedCourse.course_type === 'elective'
+            ? '当前为选修课，可移除学生。'
+            : '当前为必修课，系统已自动加入班级全部学生，且不可移除。'
+        "
         :type="selectedCourse.course_type === 'elective' ? 'warning' : 'info'"
         :closable="false"
         class="info-alert"
@@ -24,15 +28,36 @@
 
       <el-card shadow="never">
         <template #header>
-          <div class="card-header">
-            <div>
-              <strong>{{ isAdminView ? '全校学生名单' : '课程学生名单' }}</strong>
-              <span class="header-count">共 {{ students.length }} 人</span>
+          <div class="card-header-block">
+            <div class="card-header">
+              <div>
+                <strong>{{ isAdminView ? '全校学生名单' : '课程学生名单' }}</strong>
+                <span class="header-count">共 {{ students.length }} 人</span>
+              </div>
+
+              <div v-if="isAdminView" class="card-actions">
+                <el-button @click="downloadTemplate('xlsx')">Excel模板</el-button>
+                <el-button @click="downloadTemplate('csv')">CSV模板</el-button>
+                <el-button type="primary" :loading="importing" @click="triggerImport">
+                  一键导入名单
+                </el-button>
+                <input
+                  ref="fileInputRef"
+                  class="hidden-file-input"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  @change="handleFileChange"
+                />
+              </div>
             </div>
+
+            <p v-if="isAdminView" class="import-tip">
+              支持 Excel / CSV 文件，模板列为：姓名、性别、学号、所属班级。名单中的新班级会自动创建并加入“班级管理”。
+            </p>
           </div>
         </template>
 
-        <el-table :data="students" v-loading="loading">
+        <el-table :data="students" v-loading="loading || importing">
           <template v-if="isAdminView">
             <el-table-column prop="name" label="姓名" min-width="160" />
             <el-table-column label="性别" width="120">
@@ -59,11 +84,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column
-              v-if="canManageRoster"
-              label="操作"
-              width="140"
-            >
+            <el-table-column v-if="canManageRoster" label="操作" width="140">
               <template #default="{ row }">
                 <el-button
                   type="danger"
@@ -86,6 +107,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import * as XLSX from 'xlsx'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
@@ -93,8 +115,20 @@ import { useUserStore } from '@/stores/user'
 const router = useRouter()
 const userStore = useUserStore()
 
+const TEMPLATE_HEADERS = ['姓名', '性别', '学号', '所属班级']
+const TEMPLATE_ROWS = [
+  {
+    姓名: '张三',
+    性别: '男',
+    学号: '2026001',
+    所属班级: '高一(1)班'
+  }
+]
+
 const loading = ref(false)
+const importing = ref(false)
 const students = ref([])
+const fileInputRef = ref(null)
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const isAdminView = computed(() => userStore.isAdmin)
@@ -103,7 +137,7 @@ const showCourseEmpty = computed(() => !isAdminView.value && !selectedCourse.val
 
 const pageSubtitle = computed(() => {
   if (isAdminView.value) {
-    return '查看全部学生的姓名、性别、学号和所属班级。'
+    return '查看全校学生的姓名、性别、学号和所属班级，并支持批量导入名单。'
   }
 
   if (selectedCourse.value) {
@@ -121,6 +155,142 @@ const genderText = gender => {
     return '女'
   }
   return '-'
+}
+
+const normalizeCellValue = value => {
+  if (value === undefined || value === null) {
+    return ''
+  }
+  return String(value).trim()
+}
+
+const normalizeRowKeys = row =>
+  Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [
+      String(key).replace(/^\uFEFF/, '').trim(),
+      value
+    ])
+  )
+
+const normalizeGenderInput = value => {
+  const gender = normalizeCellValue(value).replace(/\s+/g, '').toLowerCase()
+  const genderMap = {
+    男: 'male',
+    male: 'male',
+    m: 'male',
+    '1': 'male',
+    男性: 'male',
+    女: 'female',
+    female: 'female',
+    f: 'female',
+    '0': 'female',
+    女性: 'female'
+  }
+  return genderMap[gender] || ''
+}
+
+const resetFileInput = () => {
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
+}
+
+const triggerImport = () => {
+  fileInputRef.value?.click()
+}
+
+const downloadBlob = (blob, filename) => {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  window.URL.revokeObjectURL(url)
+}
+
+const downloadTemplate = format => {
+  const worksheet = XLSX.utils.json_to_sheet(TEMPLATE_ROWS, { header: TEMPLATE_HEADERS })
+
+  if (format === 'csv') {
+    const csv = XLSX.utils.sheet_to_csv(worksheet)
+    downloadBlob(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' }), '学生导入模板.csv')
+    return
+  }
+
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, '学生名单')
+  XLSX.writeFile(workbook, '学生导入模板.xlsx')
+}
+
+const readWorkbook = async file => {
+  const buffer = await file.arrayBuffer()
+  const lowerName = file.name.toLowerCase()
+
+  if (lowerName.endsWith('.csv')) {
+    let content = new TextDecoder('utf-8').decode(buffer)
+
+    if (content.includes('\uFFFD')) {
+      try {
+        content = new TextDecoder('gbk').decode(buffer)
+      } catch (error) {
+        console.warn('CSV GBK decode failed, fallback to UTF-8', error)
+      }
+    }
+
+    return XLSX.read(content, { type: 'string' })
+  }
+
+  return XLSX.read(buffer, { type: 'array' })
+}
+
+const parseImportRows = rows => {
+  const errors = []
+  const payload = []
+
+  rows.forEach((rawRow, index) => {
+    const rowNumber = index + 2
+    const row = normalizeRowKeys(rawRow)
+    const name = normalizeCellValue(row.姓名 || row.学生姓名 || row.name)
+    const gender = normalizeGenderInput(row.性别 || row.gender)
+    const studentNo = normalizeCellValue(row.学号 || row.student_no || row.studentNo)
+    const className = normalizeCellValue(row.所属班级 || row.班级 || row.class_name)
+
+    const isEmptyRow = [name, studentNo, className, normalizeCellValue(row.性别 || row.gender)].every(
+      value => !value
+    )
+    if (isEmptyRow) {
+      return
+    }
+
+    if (!name) {
+      errors.push(`第 ${rowNumber} 行缺少“姓名”`)
+      return
+    }
+
+    if (!gender) {
+      errors.push(`第 ${rowNumber} 行“性别”仅支持 男 / 女`)
+      return
+    }
+
+    if (!studentNo) {
+      errors.push(`第 ${rowNumber} 行缺少“学号”`)
+      return
+    }
+
+    if (!className) {
+      errors.push(`第 ${rowNumber} 行缺少“所属班级”`)
+      return
+    }
+
+    payload.push({
+      name,
+      gender,
+      student_no: studentNo,
+      class_name: className
+    })
+  })
+
+  return { errors, payload }
 }
 
 const loadAllStudents = async () => {
@@ -165,6 +335,100 @@ const loadStudents = async () => {
     ElMessage.error('加载学生数据失败')
   } finally {
     loading.value = false
+  }
+}
+
+const handleFileChange = async event => {
+  const file = event.target.files?.[0]
+  if (!file) {
+    return
+  }
+
+  importing.value = true
+
+  try {
+    const workbook = await readWorkbook(file)
+    const sheetName = workbook.SheetNames?.[0]
+    if (!sheetName) {
+      ElMessage.error('导入文件为空，请检查后重试')
+      return
+    }
+
+    const worksheet = workbook.Sheets[sheetName]
+    const matrix = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false })
+    const headers = (matrix[0] || []).map(cell =>
+      normalizeCellValue(cell).replace(/^\uFEFF/, '')
+    )
+    const missingHeaders = TEMPLATE_HEADERS.filter(header => !headers.includes(header))
+
+    if (missingHeaders.length > 0) {
+      ElMessage.error(`缺少模板列：${missingHeaders.join('、')}`)
+      return
+    }
+
+    const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false })
+    const { errors, payload } = parseImportRows(rows)
+
+    if (errors.length > 0) {
+      await ElMessageBox.alert(errors.slice(0, 10).join('\n'), '文件校验未通过', {
+        confirmButtonText: '知道了'
+      })
+      return
+    }
+
+    if (!payload.length) {
+      ElMessage.warning('文件中没有可导入的数据')
+      return
+    }
+
+    const result = await api.students.batchCreate({ students: payload })
+    const createdClasses = result?.created_classes || []
+    const successCount = result?.success || 0
+    const failedCount = result?.failed || 0
+
+    if (successCount > 0) {
+      const successParts = [`成功导入 ${successCount} 名学生`]
+      if (createdClasses.length > 0) {
+        successParts.push(`自动创建 ${createdClasses.length} 个班级`)
+      }
+      if (failedCount > 0) {
+        successParts.push(`失败 ${failedCount} 条`)
+      }
+      ElMessage({
+        type: failedCount > 0 ? 'warning' : 'success',
+        message: successParts.join('，'),
+        duration: 5000
+      })
+    }
+
+    if (failedCount > 0) {
+      const detailLines = [
+        `成功：${successCount} 人`,
+        `失败：${failedCount} 条`
+      ]
+
+      if (createdClasses.length > 0) {
+        detailLines.push(`自动创建班级：${createdClasses.join('、')}`)
+      }
+
+      const errorLines = (result?.errors || []).slice(0, 10)
+      if (errorLines.length > 0) {
+        detailLines.push('')
+        detailLines.push('失败明细：')
+        detailLines.push(...errorLines)
+      }
+
+      await ElMessageBox.alert(detailLines.join('\n'), '导入结果', {
+        confirmButtonText: '知道了'
+      })
+    }
+
+    await loadStudents()
+  } catch (error) {
+    console.error('导入学生名单失败', error)
+  } finally {
+    importing.value = false
+    resetFileInput()
   }
 }
 
@@ -222,10 +486,24 @@ watch([selectedCourse, isAdminView], () => {
   margin-bottom: 20px;
 }
 
+.card-header-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .header-count {
@@ -233,9 +511,25 @@ watch([selectedCourse, isAdminView], () => {
   color: #64748b;
 }
 
+.import-tip {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
 @media (max-width: 768px) {
-  .page-header {
+  .page-header,
+  .card-header {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .card-actions {
+    justify-content: stretch;
   }
 }
 </style>
