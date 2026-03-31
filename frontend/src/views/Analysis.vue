@@ -8,14 +8,13 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button @click="router.push('/courses')">切换课程</el-button>
         <el-select v-model="semester" placeholder="选择学期" clearable style="width: 220px" @change="loadData">
           <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.name" />
         </el-select>
       </div>
     </div>
 
-    <el-empty v-if="!selectedCourse" description="请先从“我的课程”中选择一门课程。" />
+    <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
       <el-row :gutter="20">
@@ -44,13 +43,11 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 
-const router = useRouter()
 const userStore = useUserStore()
 
 const semester = ref('')

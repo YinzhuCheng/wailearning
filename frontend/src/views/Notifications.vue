@@ -8,7 +8,7 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button @click="router.push('/courses')">切换课程</el-button>
+        <el-button v-if="userStore.isStudent" @click="router.push('/courses')">切换课程</el-button>
         <el-badge :value="unreadCount" :hidden="unreadCount === 0">
           <el-button @click="markAllRead" :disabled="unreadCount === 0">全部标为已读</el-button>
         </el-badge>
@@ -18,7 +18,7 @@
       </div>
     </div>
 
-    <el-empty v-if="!selectedCourse" description="请先从“我的课程”中选择一门课程。" />
+    <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
       <el-card shadow="never">

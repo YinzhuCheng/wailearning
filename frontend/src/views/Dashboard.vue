@@ -4,7 +4,7 @@
       <div>
         <h1 class="page-title">课程仪表盘</h1>
         <p class="page-subtitle">
-          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分班级'}` : '请先从“我的课程”中选择一门课程。' }}
+          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分班级'}` : '请先选择一门课程。' }}
         </p>
       </div>
       <el-select v-model="semester" placeholder="选择学期" style="width: 220px" @change="loadAll">
@@ -15,7 +15,7 @@
 
     <el-empty
       v-if="!selectedCourse && !userStore.isAdmin"
-      description="请选择课程后查看课程仪表盘。"
+      description="请先选择一门课程。"
     />
 
     <template v-else>

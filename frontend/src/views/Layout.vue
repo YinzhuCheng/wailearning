@@ -42,7 +42,10 @@
           </el-breadcrumb>
           <div v-if="showCourseContext" class="course-chip">
             <span class="course-chip-label">当前课程</span>
-            <strong>{{ selectedCourse?.name }}</strong>
+            <div class="course-chip-meta">
+              <strong>{{ selectedCourse?.name }}</strong>
+              <span>{{ selectedCourse?.semester || '未设置学期' }}</span>
+            </div>
             <el-tag size="small" type="primary">
               {{ selectedCourse?.course_type === 'elective' ? '选修课' : '必修课' }}
             </el-tag>
@@ -50,7 +53,28 @@
         </div>
 
         <div class="header-right">
-          <el-button v-if="showCourseContext" text @click="goToCourses">切换课程</el-button>
+          <el-dropdown v-if="showTeacherCourseSwitcher" trigger="click" @command="handleCourseSwitch">
+            <el-button text>
+              切换课程
+              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu class="course-dropdown-menu">
+                <el-dropdown-item
+                  v-for="course in teacherCourses"
+                  :key="course.id"
+                  :command="course.id"
+                  :class="{ 'is-current-course': selectedCourse?.id === course.id }"
+                >
+                  <div class="course-option">
+                    <strong>{{ course.name }}</strong>
+                    <span>{{ course.semester || '未设置学期' }}</span>
+                  </div>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-button v-else-if="showStudentCourseSwitcher" text @click="goToCourses">切换课程</el-button>
           <el-dropdown @command="handleCommand">
             <div class="user-box">
               <el-avatar :size="34">{{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}</el-avatar>
@@ -62,7 +86,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="change-password">修改密码</el-dropdown-item>
-                <el-dropdown-item v-if="!userStore.isAdmin" command="change-course">切换课程</el-dropdown-item>
+                <el-dropdown-item v-if="userStore.isStudent" command="change-course">切换课程</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -136,10 +160,11 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
+  ArrowDown,
   Bell,
   Calendar,
   Coin,
@@ -173,8 +198,18 @@ const passwordForm = reactive({
 })
 
 const selectedCourse = computed(() => userStore.selectedCourse)
-const homePath = computed(() => (userStore.isAdmin ? adminHomePath : '/courses'))
+const teacherCourses = computed(() => userStore.teachingCourses || [])
+const isTeachingUser = computed(() => !userStore.isAdmin && !userStore.isStudent)
+const homePath = computed(() => {
+  if (userStore.isAdmin) {
+    return adminHomePath
+  }
+
+  return userStore.isStudent ? '/courses' : '/dashboard'
+})
 const showCourseContext = computed(() => !userStore.isAdmin && !!selectedCourse.value)
+const showTeacherCourseSwitcher = computed(() => isTeachingUser.value && teacherCourses.value.length > 0)
+const showStudentCourseSwitcher = computed(() => userStore.isStudent)
 
 const currentRouteName = computed(() => {
   if (route.meta?.title) {
@@ -203,7 +238,7 @@ const currentRouteName = computed(() => {
   return routeMap[route.path] || '页面'
 })
 
-const baseMenu = [
+const studentBaseMenu = [
   { path: '/courses', label: '我的课程', icon: Reading }
 ]
 
@@ -236,12 +271,12 @@ const adminMenu = [
 
 const menuItems = computed(() => {
   if (userStore.isStudent) {
-    return [...baseMenu, ...studentMenu]
+    return [...studentBaseMenu, ...studentMenu]
   }
   if (userStore.isAdmin) {
     return adminMenu
   }
-  return [...baseMenu, ...teacherMenu]
+  return teacherMenu
 })
 
 const roleText = role => {
@@ -290,8 +325,33 @@ const submitChangePassword = async () => {
   }
 }
 
+const syncTeacherCourses = async force => {
+  if (!isTeachingUser.value) {
+    return
+  }
+
+  try {
+    await userStore.ensureSelectedCourse(force)
+  } catch (error) {
+    console.error('加载教师课程失败', error)
+  }
+}
+
 const goToCourses = () => {
   router.push('/courses')
+}
+
+const handleCourseSwitch = courseId => {
+  const course = teacherCourses.value.find(item => String(item.id) === String(courseId))
+  if (!course) {
+    return
+  }
+
+  userStore.setSelectedCourse(course)
+
+  if (route.path === '/courses') {
+    router.push('/dashboard')
+  }
 }
 
 const handleCommand = command => {
@@ -308,6 +368,17 @@ const handleCommand = command => {
     router.push('/login')
   }
 }
+
+onMounted(() => {
+  syncTeacherCourses(false)
+})
+
+watch(
+  () => userStore.userInfo?.id,
+  () => {
+    syncTeacherCourses(true)
+  }
+)
 </script>
 
 <style scoped>
@@ -415,10 +486,37 @@ const handleCommand = command => {
   color: #64748b;
 }
 
+.course-chip-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.course-chip-meta span {
+  font-size: 12px;
+  color: #64748b;
+}
+
 .header-right {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.course-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.course-option span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.course-dropdown-menu :deep(.is-current-course) {
+  background: #eff6ff;
 }
 
 .user-box {

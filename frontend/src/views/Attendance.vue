@@ -8,13 +8,12 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button @click="router.push('/courses')">切换课程</el-button>
         <el-button v-if="selectedCourse" type="primary" @click="openCreateDialog">录入单条考勤</el-button>
         <el-button v-if="selectedCourse" type="success" @click="openBatchDialog">整课批量考勤</el-button>
       </div>
     </div>
 
-    <el-empty v-if="!selectedCourse" description="请先从“我的课程”中选择一门课程。" />
+    <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
       <el-card shadow="never" class="stats-card">
@@ -115,13 +114,11 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 
-const router = useRouter()
 const userStore = useUserStore()
 
 const loading = ref(false)

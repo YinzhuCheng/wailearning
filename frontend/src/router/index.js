@@ -14,7 +14,7 @@ const routes = [
     children: [
       {
         path: '',
-        redirect: '/courses'
+        redirect: '/dashboard'
       },
       {
         path: 'courses',
@@ -130,7 +130,7 @@ const router = createRouter({
 const adminHomePath = '/students'
 const adminHiddenPaths = ['/courses', '/dashboard', '/scores', '/attendance', '/rankings', '/analysis', '/points', '/homework', '/notifications']
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
 
   if (to.path !== '/login' && !userStore.isLoggedIn) {
@@ -139,7 +139,7 @@ router.beforeEach((to, from, next) => {
   }
 
   if (to.path === '/login' && userStore.isLoggedIn) {
-    next(userStore.isAdmin ? adminHomePath : '/courses')
+    next(userStore.isAdmin ? adminHomePath : userStore.isStudent ? '/courses' : '/dashboard')
     return
   }
 
@@ -156,6 +156,14 @@ router.beforeEach((to, from, next) => {
   if (userStore.isStudent && ['/dashboard', '/students', '/scores', '/attendance', '/rankings', '/analysis', '/points'].includes(to.path)) {
     next('/courses')
     return
+  }
+
+  if (!userStore.isAdmin && !userStore.isStudent && to.path !== '/login') {
+    try {
+      await userStore.ensureSelectedCourse(false)
+    } catch (error) {
+      console.error('Failed to preload teaching courses', error)
+    }
   }
 
   next()

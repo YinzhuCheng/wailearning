@@ -5,12 +5,11 @@
         <h1 class="page-title">学生管理</h1>
         <p class="page-subtitle">{{ pageSubtitle }}</p>
       </div>
-      <el-button v-if="!isAdminView" @click="router.push('/courses')">切换课程</el-button>
     </div>
 
     <el-empty
       v-if="showCourseEmpty"
-      description="请先从“我的课程”中选择一门课程。"
+      description="请先选择一门课程。"
     />
 
     <template v-else>

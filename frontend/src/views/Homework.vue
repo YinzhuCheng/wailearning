@@ -8,14 +8,14 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button @click="router.push('/courses')">切换课程</el-button>
+        <el-button v-if="userStore.isStudent" @click="router.push('/courses')">切换课程</el-button>
         <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
           发布作业
         </el-button>
       </div>
     </div>
 
-    <el-empty v-if="!selectedCourse" description="请先从“我的课程”中选择一门课程。" />
+    <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
       <el-card shadow="never">

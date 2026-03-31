@@ -140,8 +140,22 @@ const handleLogin = async () => {
     loading.value = true
     try {
       const userData = await userStore.login(form.username, form.password)
+      if (userData?.role === 'teacher' || userData?.role === 'class_teacher') {
+        await userStore.ensureSelectedCourse(true)
+      }
       ElMessage.success('登录成功')
-      router.push(userData?.role === 'admin' ? '/students' : '/courses')
+
+      if (userData?.role === 'admin') {
+        router.push('/students')
+        return
+      }
+
+      if (userData?.role === 'teacher' || userData?.role === 'class_teacher') {
+        router.push('/dashboard')
+        return
+      }
+
+      router.push('/courses')
     } catch (error) {
       console.error(error)
       ElMessage.error('登录失败，请检查用户名和密码')
