@@ -140,8 +140,10 @@ const handleLogin = async () => {
     loading.value = true
     try {
       const userData = await userStore.login(form.username, form.password)
-      if (userData?.role === 'teacher' || userData?.role === 'class_teacher') {
-        await userStore.ensureSelectedCourse(true)
+      const needsAutoCourse = ['teacher', 'class_teacher', 'student'].includes(userData?.role)
+      let preferredCourse = null
+      if (needsAutoCourse) {
+        preferredCourse = await userStore.ensureSelectedCourse(true)
       }
       ElMessage.success('登录成功')
 
@@ -155,7 +157,7 @@ const handleLogin = async () => {
         return
       }
 
-      router.push('/courses')
+      router.push(preferredCourse ? '/homework' : '/courses')
     } catch (error) {
       console.error(error)
       ElMessage.error('登录失败，请检查用户名和密码')

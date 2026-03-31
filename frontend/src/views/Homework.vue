@@ -8,7 +8,6 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button v-if="userStore.isStudent" @click="router.push('/courses')">切换课程</el-button>
         <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
           发布作业
         </el-button>
@@ -46,9 +45,23 @@
               {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="180">
+          <el-table-column label="操作" width="280">
             <template #default="{ row }">
               <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
+              <el-button
+                v-if="userStore.isStudent"
+                size="small"
+                @click="goToSubmitPage(row)"
+              >
+                提交
+              </el-button>
+              <el-button
+                v-else
+                size="small"
+                @click="goToSubmissionStatus(row)"
+              >
+                学生提交
+              </el-button>
               <el-button
                 v-if="!userStore.isStudent"
                 size="small"
@@ -256,6 +269,14 @@ const submitForm = async () => {
 const viewHomework = async row => {
   currentHomework.value = await api.homework.get(row.id)
   detailVisible.value = true
+}
+
+const goToSubmitPage = row => {
+  router.push(`/homework/${row.id}/submit`)
+}
+
+const goToSubmissionStatus = row => {
+  router.push(`/homework/${row.id}/submissions`)
 }
 
 const openAttachment = row => {

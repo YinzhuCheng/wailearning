@@ -29,6 +29,7 @@ export const useUserStore = defineStore('user', () => {
   const isStudent = computed(() => userInfo.value?.role === 'student')
   const classId = computed(() => userInfo.value?.class_id)
   const canManageTeaching = computed(() => ['admin', 'class_teacher', 'teacher'].includes(userInfo.value?.role))
+  const canSelectCourse = computed(() => ['class_teacher', 'teacher', 'student'].includes(userInfo.value?.role))
 
   function setSelectedCourse(course) {
     const normalizedCourse = course
@@ -86,7 +87,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function fetchTeachingCourses(force = false) {
-    if (!canManageTeaching.value || isAdmin.value || isStudent.value) {
+    if (!canSelectCourse.value || isAdmin.value) {
       teachingCourses.value = []
       teachingCoursesLoaded.value = true
       return []
@@ -173,6 +174,7 @@ export const useUserStore = defineStore('user', () => {
     isStudent,
     classId,
     canManageTeaching,
+    canSelectCourse,
     login,
     logout,
     fetchSystemSettings,

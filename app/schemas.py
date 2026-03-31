@@ -587,6 +587,62 @@ class HomeworkListResponse(BaseModel):
     data: List[HomeworkResponse]
 
 
+class HomeworkSubmissionCreate(BaseModel):
+    content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    remove_attachment: bool = False
+
+    @model_validator(mode="after")
+    def validate_submission_payload(self):
+        self.content = self.content.strip() if isinstance(self.content, str) else self.content
+        if not self.content:
+            self.content = None
+        if not self.remove_attachment and not (self.content or self.attachment_url):
+            raise ValueError("Please provide submission content or an attachment.")
+        return self
+
+
+class HomeworkSubmissionResponse(BaseModel):
+    id: int
+    homework_id: int
+    student_id: int
+    subject_id: Optional[int] = None
+    class_id: int
+    content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    submitted_at: datetime
+    updated_at: datetime
+    student_name: Optional[str] = None
+    student_no: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class HomeworkSubmissionStatusResponse(BaseModel):
+    student_id: int
+    student_name: Optional[str] = None
+    student_no: Optional[str] = None
+    class_name: Optional[str] = None
+    submission_id: Optional[int] = None
+    status: str
+    submitted_at: Optional[datetime] = None
+    content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+
+
+class HomeworkSubmissionStatusListResponse(BaseModel):
+    total: int
+    data: List[HomeworkSubmissionStatusResponse]
+
+
+class HomeworkSubmissionDownloadRequest(BaseModel):
+    submission_ids: List[int]
+
+
 class NotificationBase(BaseModel):
     title: str
     content: Optional[str] = None

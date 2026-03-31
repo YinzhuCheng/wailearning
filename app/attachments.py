@@ -68,16 +68,22 @@ async def save_attachment(file: UploadFile, request: Request) -> dict[str, objec
 
 
 def delete_attachment_file(attachment_url: str | None) -> None:
-    if not attachment_url:
+    target_path = get_attachment_file_path(attachment_url)
+    if not target_path:
         return
+    if target_path.exists():
+        target_path.unlink()
+
+
+def get_attachment_file_path(attachment_url: str | None) -> Path | None:
+    if not attachment_url:
+        return None
 
     parsed_url = urlparse(attachment_url)
     attachment_path = unquote(parsed_url.path or "")
     prefix = "/uploads/attachments/"
     if not attachment_path.startswith(prefix):
-        return
+        return None
 
     stored_name = Path(attachment_path[len(prefix):]).name
-    target_path = ATTACHMENTS_DIR / stored_name
-    if target_path.exists():
-        target_path.unlink()
+    return ATTACHMENTS_DIR / stored_name

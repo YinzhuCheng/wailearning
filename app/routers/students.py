@@ -5,10 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.attachments import delete_attachment_file
 from app.auth import get_current_active_user
 from app.course_access import sync_student_course_enrollments
 from app.database import get_db
-from app.models import Attendance, Class, CourseEnrollment, Gender, Score, Student, User, UserRole
+from app.models import Attendance, Class, CourseEnrollment, Gender, HomeworkSubmission, Score, Student, User, UserRole
 from app.routers.classes import get_accessible_class_ids
 from app.schemas import StudentCreate, StudentListResponse, StudentResponse, StudentUpdate
 
@@ -484,6 +485,10 @@ def delete_student(
 
     try:
         db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student_id).delete()
+        submissions = db.query(HomeworkSubmission).filter(HomeworkSubmission.student_id == student_id).all()
+        for submission in submissions:
+            delete_attachment_file(submission.attachment_url)
+            db.delete(submission)
         db.query(Attendance).filter(Attendance.student_id == student_id).delete()
         db.query(Score).filter(Score.student_id == student_id).delete()
         db.delete(student)

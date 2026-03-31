@@ -114,6 +114,18 @@ const routes = [
         component: () => import('@/views/Homework.vue')
       },
       {
+        path: 'homework/:id/submit',
+        name: 'HomeworkSubmit',
+        component: () => import('@/views/HomeworkSubmission.vue'),
+        meta: { title: '鎻愪氦浣滀笟' }
+      },
+      {
+        path: 'homework/:id/submissions',
+        name: 'HomeworkSubmissions',
+        component: () => import('@/views/HomeworkSubmissions.vue'),
+        meta: { title: '瀛︾敓鎻愪氦' }
+      },
+      {
         path: 'materials',
         name: 'Materials',
         component: () => import('@/views/Materials.vue')
@@ -144,12 +156,12 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.path === '/login' && userStore.isLoggedIn) {
-    next(userStore.isAdmin ? adminHomePath : userStore.isStudent ? '/courses' : '/dashboard')
+    next(userStore.isAdmin ? adminHomePath : userStore.isStudent ? '/homework' : '/dashboard')
     return
   }
 
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
-    next(userStore.isStudent ? '/courses' : '/dashboard')
+    next(userStore.isStudent ? '/homework' : '/dashboard')
     return
   }
 
@@ -159,11 +171,11 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (userStore.isStudent && ['/dashboard', '/students', '/scores', '/attendance', '/rankings', '/analysis', '/points'].includes(to.path)) {
-    next('/courses')
+    next('/homework')
     return
   }
 
-  if (!userStore.isAdmin && !userStore.isStudent && to.path !== '/login') {
+  if (!userStore.isAdmin && to.path !== '/login') {
     try {
       await userStore.ensureSelectedCourse(false)
     } catch (error) {

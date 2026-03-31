@@ -93,6 +93,7 @@ class Student(Base):
     scores = relationship("Score", back_populates="student")
     attendances = relationship("Attendance", back_populates="student")
     course_enrollments = relationship("CourseEnrollment", back_populates="student")
+    homework_submissions = relationship("HomeworkSubmission", back_populates="student")
 
 
 class Subject(Base):
@@ -310,6 +311,31 @@ class Homework(Base):
     class_obj = relationship("Class", backref="homeworks")
     subject = relationship("Subject", back_populates="homeworks")
     creator = relationship("User", backref="homeworks")
+    submissions = relationship("HomeworkSubmission", back_populates="homework")
+
+
+class HomeworkSubmission(Base):
+    __tablename__ = "homework_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    homework_id = Column(Integer, ForeignKey("homeworks.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    content = Column(String, nullable=True)
+    attachment_name = Column(String, nullable=True)
+    attachment_url = Column(String, nullable=True)
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("homework_id", "student_id", name="uq_homework_submission_student"),
+    )
+
+    homework = relationship("Homework", back_populates="submissions")
+    student = relationship("Student", back_populates="homework_submissions")
+    subject = relationship("Subject")
+    class_obj = relationship("Class")
 
 
 class Notification(Base):

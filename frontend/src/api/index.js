@@ -126,7 +126,14 @@ const api = {
     get: id => http.get(`/homeworks/${id}`),
     create: data => http.post('/homeworks', data),
     update: (id, data) => http.put(`/homeworks/${id}`, data),
-    delete: id => http.delete(`/homeworks/${id}`)
+    delete: id => http.delete(`/homeworks/${id}`),
+    getMySubmission: id => http.get(`/homeworks/${id}/submission/me`),
+    submit: (id, data) => http.post(`/homeworks/${id}/submission`, data),
+    getSubmissions: id => http.get(`/homeworks/${id}/submissions`),
+    downloadSubmissions: (id, data) =>
+      http.post(`/homeworks/${id}/submissions/download`, data, {
+        responseType: 'blob'
+      })
   },
   notifications: {
     list: params => http.get('/notifications', { params }),

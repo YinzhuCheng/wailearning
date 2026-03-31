@@ -53,7 +53,7 @@
         </div>
 
         <div class="header-right">
-          <el-dropdown v-if="showTeacherCourseSwitcher" trigger="click" @command="handleCourseSwitch">
+          <el-dropdown v-if="showCourseSwitcher" trigger="click" @command="handleCourseSwitch">
             <el-button text>
               切换课程
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -61,7 +61,7 @@
             <template #dropdown>
               <el-dropdown-menu class="course-dropdown-menu">
                 <el-dropdown-item
-                  v-for="course in teacherCourses"
+                  v-for="course in availableCourses"
                   :key="course.id"
                   :command="course.id"
                   :class="{ 'is-current-course': selectedCourse?.id === course.id }"
@@ -74,7 +74,6 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-button v-else-if="showStudentCourseSwitcher" text @click="goToCourses">切换课程</el-button>
           <el-dropdown @command="handleCommand">
             <div class="user-box">
               <el-avatar :size="34">{{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}</el-avatar>
@@ -86,7 +85,6 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="change-password">修改密码</el-dropdown-item>
-                <el-dropdown-item v-if="userStore.isStudent" command="change-course">切换课程</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -160,7 +158,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -188,6 +186,7 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const adminHomePath = '/students'
+const mobileBreakpoint = 768
 const isCollapsed = ref(false)
 const passwordDialogVisible = ref(false)
 const passwordSubmitting = ref(false)
@@ -198,18 +197,16 @@ const passwordForm = reactive({
 })
 
 const selectedCourse = computed(() => userStore.selectedCourse)
-const teacherCourses = computed(() => userStore.teachingCourses || [])
-const isTeachingUser = computed(() => !userStore.isAdmin && !userStore.isStudent)
+const availableCourses = computed(() => userStore.teachingCourses || [])
 const homePath = computed(() => {
   if (userStore.isAdmin) {
     return adminHomePath
   }
 
-  return userStore.isStudent ? '/courses' : '/dashboard'
+  return userStore.isStudent ? '/homework' : '/dashboard'
 })
 const showCourseContext = computed(() => !userStore.isAdmin && !!selectedCourse.value)
-const showTeacherCourseSwitcher = computed(() => isTeachingUser.value && teacherCourses.value.length > 0)
-const showStudentCourseSwitcher = computed(() => userStore.isStudent)
+const showCourseSwitcher = computed(() => !userStore.isAdmin && availableCourses.value.length > 0)
 
 const currentRouteName = computed(() => {
   if (route.meta?.title) {
@@ -328,8 +325,14 @@ const submitChangePassword = async () => {
   }
 }
 
+const syncResponsiveSidebar = () => {
+  if (typeof window !== 'undefined' && window.innerWidth <= mobileBreakpoint) {
+    isCollapsed.value = true
+  }
+}
+
 const syncTeacherCourses = async force => {
-  if (!isTeachingUser.value) {
+  if (!userStore.canSelectCourse) {
     return
   }
 
@@ -340,30 +343,27 @@ const syncTeacherCourses = async force => {
   }
 }
 
-const goToCourses = () => {
-  router.push('/courses')
-}
-
 const handleCourseSwitch = courseId => {
-  const course = teacherCourses.value.find(item => String(item.id) === String(courseId))
+  const course = availableCourses.value.find(item => String(item.id) === String(courseId))
   if (!course) {
     return
   }
 
   userStore.setSelectedCourse(course)
 
+  if (route.path.startsWith('/homework/')) {
+    router.push('/homework')
+    return
+  }
+
   if (route.path === '/courses') {
-    router.push('/dashboard')
+    router.push(userStore.isStudent ? '/homework' : '/dashboard')
   }
 }
 
 const handleCommand = command => {
   if (command === 'change-password') {
     openChangePasswordDialog()
-    return
-  }
-  if (command === 'change-course') {
-    goToCourses()
     return
   }
   if (command === 'logout') {
@@ -373,7 +373,13 @@ const handleCommand = command => {
 }
 
 onMounted(() => {
+  syncResponsiveSidebar()
+  window.addEventListener('resize', syncResponsiveSidebar)
   syncTeacherCourses(false)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncResponsiveSidebar)
 })
 
 watch(
