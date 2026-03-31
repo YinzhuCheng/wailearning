@@ -5,7 +5,19 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user, get_password_hash
 from app.database import get_db
-from app.models import Class, User, UserRole
+from app.models import (
+    Class,
+    CourseMaterial,
+    Homework,
+    Notification,
+    NotificationRead,
+    PointExchange,
+    PointRecord,
+    Student,
+    Subject,
+    User,
+    UserRole,
+)
 from app.schemas import UserCreate, UserResponse, UserUpdate
 from app.services import LogService
 
@@ -195,7 +207,33 @@ def delete_user(
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="不能删除自己的账号")
 
+    if user.role == UserRole.ADMIN.value:
+        raise HTTPException(status_code=400, detail="管理员账号不能删除")
+
     user_info = f"{user.real_name}({user.username})"
+
+    db.query(Student).filter(Student.teacher_id == user.id).update(
+        {Student.teacher_id: None},
+        synchronize_session=False,
+    )
+    db.query(Subject).filter(Subject.teacher_id == user.id).update(
+        {Subject.teacher_id: None},
+        synchronize_session=False,
+    )
+    db.query(PointRecord).filter(PointRecord.operator_id == user.id).update(
+        {PointRecord.operator_id: None},
+        synchronize_session=False,
+    )
+    db.query(PointExchange).filter(PointExchange.operator_id == user.id).update(
+        {PointExchange.operator_id: None},
+        synchronize_session=False,
+    )
+
+    db.query(NotificationRead).filter(NotificationRead.user_id == user.id).delete(synchronize_session=False)
+    db.query(Homework).filter(Homework.created_by == user.id).delete(synchronize_session=False)
+    db.query(Notification).filter(Notification.created_by == user.id).delete(synchronize_session=False)
+    db.query(CourseMaterial).filter(CourseMaterial.created_by == user.id).delete(synchronize_session=False)
+
     db.delete(user)
     db.commit()
 

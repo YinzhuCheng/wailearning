@@ -28,7 +28,14 @@
         <el-table-column label="操作" width="220">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
-            <el-button type="danger" size="small" @click="deleteUser(row)">删除</el-button>
+            <el-button
+              type="danger"
+              size="small"
+              :disabled="isDeleteDisabled(row)"
+              @click="deleteUser(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -118,6 +125,8 @@ const roleTag = role => ({
   teacher: 'success',
   student: 'info'
 }[role] || '')
+
+const isDeleteDisabled = user => user.role === 'admin'
 
 const showClassAssignmentField = computed(() => form.role !== 'teacher')
 
