@@ -213,12 +213,21 @@ const submitForm = async () => {
 
 const deleteUser = async user => {
   try {
-    await ElMessageBox.confirm(`确认删除用户“${user.real_name}”吗？`, '删除用户', { type: 'warning' })
+    await ElMessageBox.confirm(
+      `确认删除用户“${user.real_name}”（账号：${user.username}）吗？此操作不可恢复。`,
+      '删除用户',
+      {
+        type: 'warning',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        distinguishCancelAndClose: true
+      }
+    )
     await api.users.delete(user.id)
     ElMessage.success('用户已删除')
     await loadUsers()
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error !== 'cancel' && error !== 'close') {
       console.error('删除用户失败', error)
     }
   }

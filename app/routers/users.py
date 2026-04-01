@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.attachments import delete_attachment_file
 from app.auth import get_current_active_user, get_password_hash
 from app.database import get_db
 from app.models import (
@@ -11,6 +12,7 @@ from app.models import (
     Homework,
     Notification,
     NotificationRead,
+    OperationLog,
     PointExchange,
     PointRecord,
     Student,
@@ -41,6 +43,33 @@ def validate_class_exists(class_id: Optional[int], db: Session) -> None:
     class_obj = db.query(Class).filter(Class.id == class_id).first()
     if not class_obj:
         raise HTTPException(status_code=400, detail="班级不存在")
+
+
+def delete_user_homeworks(user_id: int, db: Session) -> None:
+    homeworks = db.query(Homework).filter(Homework.created_by == user_id).all()
+    for homework in homeworks:
+        for submission in list(homework.submissions):
+            delete_attachment_file(submission.attachment_url)
+            db.delete(submission)
+        delete_attachment_file(homework.attachment_url)
+        db.delete(homework)
+
+
+def delete_user_notifications(user_id: int, db: Session) -> None:
+    notifications = db.query(Notification).filter(Notification.created_by == user_id).all()
+    for notification in notifications:
+        delete_attachment_file(notification.attachment_url)
+        db.query(NotificationRead).filter(NotificationRead.notification_id == notification.id).delete(
+            synchronize_session=False
+        )
+        db.delete(notification)
+
+
+def delete_user_materials(user_id: int, db: Session) -> None:
+    materials = db.query(CourseMaterial).filter(CourseMaterial.created_by == user_id).all()
+    for material in materials:
+        delete_attachment_file(material.attachment_url)
+        db.delete(material)
 
 
 @router.get("", response_model=List[UserResponse])
@@ -228,11 +257,15 @@ def delete_user(
         {PointExchange.operator_id: None},
         synchronize_session=False,
     )
+    db.query(OperationLog).filter(OperationLog.user_id == user.id).update(
+        {OperationLog.user_id: None},
+        synchronize_session=False,
+    )
 
     db.query(NotificationRead).filter(NotificationRead.user_id == user.id).delete(synchronize_session=False)
-    db.query(Homework).filter(Homework.created_by == user.id).delete(synchronize_session=False)
-    db.query(Notification).filter(Notification.created_by == user.id).delete(synchronize_session=False)
-    db.query(CourseMaterial).filter(CourseMaterial.created_by == user.id).delete(synchronize_session=False)
+    delete_user_homeworks(user.id, db)
+    delete_user_notifications(user.id, db)
+    delete_user_materials(user.id, db)
 
     db.delete(user)
     db.commit()
