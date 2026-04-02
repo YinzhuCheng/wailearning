@@ -60,6 +60,25 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
+class StudentUserBatchCreateRequest(BaseModel):
+    student_ids: List[int]
+
+
+class StudentUserBatchCreateError(BaseModel):
+    student_id: Optional[int] = None
+    student_name: Optional[str] = None
+    student_no: Optional[str] = None
+    reason: str
+
+
+class StudentUserBatchCreateResponse(BaseModel):
+    total: int
+    success: int
+    failed: int
+    created_users: List[str]
+    errors: List[StudentUserBatchCreateError]
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -160,6 +179,7 @@ class StudentResponse(StudentBase):
     created_at: datetime
     class_name: Optional[str] = None
     parent_code: Optional[str] = None
+    has_user: bool = False
 
     class Config:
         from_attributes = True

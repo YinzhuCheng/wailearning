@@ -67,6 +67,13 @@
                 {{ row.class_name || '未分配班级' }}
               </template>
             </el-table-column>
+            <el-table-column label="账号状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.has_user ? 'success' : 'info'">
+                  {{ row.has_user ? '已生成' : '未生成' }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="180" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" size="small" @click="router.push(`/students/${row.id}/edit`)">

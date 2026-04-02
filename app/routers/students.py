@@ -47,8 +47,12 @@ class BatchStudentImportRequest(BaseModel):
     students: List[BatchStudentItem]
 
 
-def build_student_response(student: Student, db: Session) -> StudentResponse:
-    class_obj = db.query(Class).filter(Class.id == student.class_id).first()
+def build_student_response(
+    student: Student,
+    *,
+    class_name: Optional[str] = None,
+    has_user: bool = False,
+) -> StudentResponse:
     return StudentResponse(
         id=student.id,
         name=student.name,
@@ -60,8 +64,9 @@ def build_student_response(student: Student, db: Session) -> StudentResponse:
         class_id=student.class_id,
         teacher_id=student.teacher_id,
         created_at=student.created_at,
-        class_name=class_obj.name if class_obj else None,
+        class_name=class_name,
         parent_code=student.parent_code,
+        has_user=has_user,
     )
 
 
@@ -69,6 +74,39 @@ def clean_text(value: Optional[object]) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def serialize_students(students: List[Student], db: Session) -> List[StudentResponse]:
+    if not students:
+        return []
+
+    class_ids = {student.class_id for student in students if student.class_id is not None}
+    student_nos = {
+        clean_text(student.student_no)
+        for student in students
+        if clean_text(student.student_no)
+    }
+
+    class_map = {}
+    if class_ids:
+        class_rows = db.query(Class.id, Class.name).filter(Class.id.in_(class_ids)).all()
+        class_map = {class_id: class_name for class_id, class_name in class_rows}
+
+    existing_usernames = set()
+    if student_nos:
+        existing_usernames = {
+            username
+            for (username,) in db.query(User.username).filter(User.username.in_(student_nos)).all()
+        }
+
+    return [
+        build_student_response(
+            student,
+            class_name=class_map.get(student.class_id),
+            has_user=clean_text(student.student_no) in existing_usernames,
+        )
+        for student in students
+    ]
 
 
 def normalize_gender(value: object) -> Gender:
@@ -230,7 +268,7 @@ def get_students(
 
     return StudentListResponse(
         total=total,
-        data=[build_student_response(student, db) for student in students],
+        data=serialize_students(students, db),
     )
 
 
@@ -267,7 +305,7 @@ def create_student(
     db.commit()
     db.refresh(student)
 
-    return build_student_response(student, db)
+    return serialize_students([student], db)[0]
 
 
 @router.post("/batch")
@@ -410,7 +448,7 @@ def get_student(
     if student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权访问该学生")
 
-    return build_student_response(student, db)
+    return serialize_students([student], db)[0]
 
 
 @router.put("/{student_id}", response_model=StudentResponse)
@@ -466,7 +504,7 @@ def update_student(
     db.commit()
     db.refresh(student)
 
-    return build_student_response(student, db)
+    return serialize_students([student], db)[0]
 
 
 @router.delete("/{student_id}")

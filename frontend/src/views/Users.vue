@@ -5,7 +5,10 @@
         <h1 class="page-title">用户管理</h1>
         <p class="page-subtitle">支持管理员、班主任、任课老师和学生四类用户。</p>
       </div>
-      <el-button type="primary" @click="openCreateDialog">新建用户</el-button>
+      <div class="page-actions">
+        <el-button type="success" plain @click="openStudentImportDialog">载入学生用户</el-button>
+        <el-button type="primary" @click="openCreateDialog">新建用户</el-button>
+      </div>
     </div>
 
     <el-card shadow="never">
@@ -79,6 +82,72 @@
         <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="studentImportDialogVisible"
+      title="载入学生用户"
+      width="920px"
+      destroy-on-close
+    >
+      <div class="student-import-dialog">
+        <el-alert
+          title="将为所选学生批量生成系统账号，用户名和初始密码都使用学号，角色固定为学生。"
+          type="info"
+          :closable="false"
+        />
+
+        <div class="student-import-toolbar">
+          <div class="student-import-summary">
+            <span>待载入学生 {{ pendingStudents.length }} 人</span>
+            <span>已选择 {{ selectedPendingCount }} 人</span>
+          </div>
+
+          <div class="student-import-actions">
+            <el-button link type="primary" @click="toggleAllPendingStudents">全选</el-button>
+            <el-button link @click="clearPendingStudentSelection">清空选择</el-button>
+            <el-button :loading="pendingStudentsLoading" @click="loadPendingStudents">
+              刷新名单
+            </el-button>
+          </div>
+        </div>
+
+        <el-empty
+          v-if="!pendingStudentsLoading && !pendingStudents.length"
+          description="当前所有学生都已生成系统用户。"
+        />
+
+        <el-table
+          v-else
+          ref="pendingStudentsTableRef"
+          :data="pendingStudents"
+          v-loading="pendingStudentsLoading"
+          max-height="420"
+          @selection-change="handlePendingSelectionChange"
+        >
+          <el-table-column type="selection" width="55" />
+          <el-table-column prop="name" label="学生姓名" min-width="140" />
+          <el-table-column prop="student_no" label="学号" min-width="160" />
+          <el-table-column prop="class_name" label="所属班级" min-width="180" />
+          <el-table-column label="状态" width="120">
+            <template #default>
+              <el-tag type="info">未生成</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <template #footer>
+        <el-button @click="studentImportDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="studentImportSubmitting"
+          :disabled="!selectedPendingCount"
+          @click="submitStudentImport"
+        >
+          批量生成账号
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -91,10 +160,16 @@ import api from '@/api'
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
+const studentImportDialogVisible = ref(false)
+const pendingStudentsLoading = ref(false)
+const studentImportSubmitting = ref(false)
 const editingUser = ref(null)
 const formRef = ref(null)
+const pendingStudentsTableRef = ref(null)
 const users = ref([])
 const classes = ref([])
+const pendingStudents = ref([])
+const selectedPendingStudents = ref([])
 
 const form = reactive({
   username: '',
@@ -129,6 +204,7 @@ const roleTag = role => ({
 const isDeleteDisabled = user => user.role === 'admin'
 
 const showClassAssignmentField = computed(() => form.role !== 'teacher')
+const selectedPendingCount = computed(() => selectedPendingStudents.value.length)
 
 watch(
   () => form.role,
@@ -163,10 +239,27 @@ const loadClasses = async () => {
   classes.value = await api.classes.list()
 }
 
+const loadPendingStudents = async () => {
+  pendingStudentsLoading.value = true
+  try {
+    pendingStudents.value = await api.users.listStudentCandidates()
+    selectedPendingStudents.value = []
+    pendingStudentsTableRef.value?.clearSelection()
+  } finally {
+    pendingStudentsLoading.value = false
+  }
+}
+
 const openCreateDialog = () => {
   editingUser.value = null
   resetForm()
   dialogVisible.value = true
+}
+
+const openStudentImportDialog = async () => {
+  studentImportDialogVisible.value = true
+  clearPendingStudentSelection()
+  await loadPendingStudents()
 }
 
 const openEditDialog = user => {
@@ -233,6 +326,104 @@ const deleteUser = async user => {
   }
 }
 
+const handlePendingSelectionChange = rows => {
+  selectedPendingStudents.value = rows
+}
+
+const clearPendingStudentSelection = () => {
+  selectedPendingStudents.value = []
+  pendingStudentsTableRef.value?.clearSelection()
+}
+
+const toggleAllPendingStudents = () => {
+  pendingStudentsTableRef.value?.toggleAllSelection()
+}
+
+const submitStudentImport = async () => {
+  if (!selectedPendingCount.value) {
+    ElMessage.warning('请至少选择一名学生')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认批量生成 ${selectedPendingCount.value} 名学生的系统账号吗？用户名和初始密码都将使用学号。`,
+      '载入学生用户',
+      {
+        type: 'warning',
+        confirmButtonText: '确认生成',
+        cancelButtonText: '取消',
+        distinguishCancelAndClose: true
+      }
+    )
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('确认载入学生用户失败', error)
+    }
+    return
+  }
+
+  studentImportSubmitting.value = true
+
+  try {
+    const result = await api.users.loadStudentCandidates({
+      student_ids: selectedPendingStudents.value.map(student => student.id)
+    })
+
+    const successCount = result?.success || 0
+    const failedCount = result?.failed || 0
+    const createdUsers = result?.created_users || []
+    const errorRows = result?.errors || []
+
+    await Promise.all([loadUsers(), loadPendingStudents()])
+    clearPendingStudentSelection()
+
+    if (successCount > 0) {
+      ElMessage({
+        type: failedCount > 0 ? 'warning' : 'success',
+        message:
+          failedCount > 0
+            ? `已生成 ${successCount} 个学生账号，${failedCount} 个未生成`
+            : `已成功生成 ${successCount} 个学生账号`,
+        duration: 5000
+      })
+    } else {
+      ElMessage.warning('没有生成任何学生账号')
+    }
+
+    if (failedCount > 0) {
+      const detailLines = [`成功：${successCount} 个`, `失败：${failedCount} 个`]
+
+      if (createdUsers.length > 0) {
+        detailLines.push('')
+        detailLines.push(`已生成：${createdUsers.slice(0, 10).join('、')}`)
+      }
+
+      const errorLines = errorRows.slice(0, 10).map(item => {
+        const name = item.student_name || `学生ID ${item.student_id ?? '-'}`
+        const studentNo = item.student_no ? `（${item.student_no}）` : ''
+        return `${name}${studentNo}：${item.reason}`
+      })
+
+      if (errorLines.length > 0) {
+        detailLines.push('')
+        detailLines.push('失败明细：')
+        detailLines.push(...errorLines)
+      }
+
+      await ElMessageBox.alert(detailLines.join('\n'), '载入结果', {
+        confirmButtonText: '知道了'
+      })
+    }
+
+    if (failedCount === 0 || pendingStudents.value.length === 0) {
+      studentImportDialogVisible.value = false
+    }
+  } finally {
+    studentImportSubmitting.value = false
+  }
+}
+
 onMounted(async () => {
   await Promise.all([loadUsers(), loadClasses()])
 })
@@ -251,6 +442,13 @@ onMounted(async () => {
   margin-bottom: 24px;
 }
 
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .page-title {
   margin: 0 0 8px;
   font-size: 28px;
@@ -262,9 +460,42 @@ onMounted(async () => {
   color: #64748b;
 }
 
+.student-import-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.student-import-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.student-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #475569;
+}
+
+.student-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 @media (max-width: 768px) {
-  .page-header {
+  .page-header,
+  .student-import-toolbar {
     flex-direction: column;
+  }
+
+  .page-actions,
+  .student-import-actions {
+    justify-content: stretch;
   }
 }
 </style>
