@@ -7,6 +7,9 @@ const http = axios.create({
   baseURL: apiBaseUrl,
   timeout: 10000
 })
+const fileTransferRequestConfig = {
+  timeout: 0
+}
 
 const extractErrorMessage = async error => {
   const data = error?.response?.data
@@ -57,6 +60,8 @@ http.interceptors.response.use(
         localStorage.removeItem('selected_course')
         window.location.href = '/login'
       }
+    } else if (error.code === 'ECONNABORTED') {
+      ElMessage.error('Request timed out')
     } else {
       ElMessage.error('Network error')
     }
@@ -167,7 +172,8 @@ const api = {
     getSubmissions: id => http.get(`/homeworks/${id}/submissions`),
     downloadSubmissions: (id, data) =>
       http.post(`/homeworks/${id}/submissions/download`, data, {
-        responseType: 'blob'
+        responseType: 'blob',
+        ...fileTransferRequestConfig
       })
   },
   notifications: {
@@ -190,7 +196,8 @@ const api = {
       const formData = new FormData()
       formData.append('file', file)
       return http.post('/files/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        ...fileTransferRequestConfig
       })
     }
   }

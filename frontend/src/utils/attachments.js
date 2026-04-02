@@ -51,7 +51,8 @@ export const downloadAttachment = async (attachmentUrl, attachmentName) => {
       attachment_url: attachmentUrl,
       ...(attachmentName ? { attachment_name: attachmentName } : {})
     },
-    responseType: 'blob'
+    responseType: 'blob',
+    timeout: 0
   })
 
   const objectUrl = window.URL.createObjectURL(blob)
