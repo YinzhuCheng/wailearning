@@ -280,7 +280,7 @@ const openCreateDialog = () => {
 const selectCourse = course => {
   userStore.setSelectedCourse(course)
   if (userStore.isStudent) {
-    router.push('/homework')
+    router.push('/course-home')
     return
   }
   router.push('/dashboard')

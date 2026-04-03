@@ -8,6 +8,7 @@
         </p>
       </div>
       <div class="header-actions">
+        <el-button v-if="userStore.isStudent" @click="router.push('/courses')">切换课程</el-button>
         <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
           发布作业
         </el-button>

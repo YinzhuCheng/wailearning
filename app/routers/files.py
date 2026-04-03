@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
@@ -27,7 +29,7 @@ async def upload_attachment(
 @router.get("/download")
 def download_attachment(
     attachment_url: str,
-    attachment_name: str | None = None,
+    attachment_name: Optional[str] = None,
     _current_user: User = Depends(get_current_active_user),
 ):
     file_path = get_attachment_file_path(attachment_url)

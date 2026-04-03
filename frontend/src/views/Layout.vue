@@ -53,7 +53,10 @@
         </div>
 
         <div class="header-right">
-          <el-dropdown v-if="showCourseSwitcher" trigger="click" @command="handleCourseSwitch">
+          <el-button v-if="showStudentCourseLink" text @click="router.push('/courses')">
+            切换课程
+          </el-button>
+          <el-dropdown v-else-if="showCourseSwitcher" trigger="click" @command="handleCourseSwitch">
             <el-button text>
               切换课程
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -203,10 +206,11 @@ const homePath = computed(() => {
     return adminHomePath
   }
 
-  return userStore.isStudent ? '/homework' : '/dashboard'
+  return userStore.isStudent ? '/courses' : '/dashboard'
 })
 const showCourseContext = computed(() => !userStore.isAdmin && !!selectedCourse.value)
-const showCourseSwitcher = computed(() => !userStore.isAdmin && availableCourses.value.length > 0)
+const showStudentCourseLink = computed(() => userStore.isStudent && availableCourses.value.length > 0)
+const showCourseSwitcher = computed(() => !userStore.isAdmin && !userStore.isStudent && availableCourses.value.length > 0)
 
 const currentRouteName = computed(() => {
   if (route.meta?.title) {
@@ -215,6 +219,7 @@ const currentRouteName = computed(() => {
 
   const routeMap = {
     '/courses': '我的课程',
+    '/course-home': '课程主页',
     '/dashboard': '课程仪表盘',
     '/classes': '班级管理',
     '/students': '学生管理',
@@ -237,7 +242,8 @@ const currentRouteName = computed(() => {
 })
 
 const studentBaseMenu = [
-  { path: '/courses', label: '我的课程', icon: Reading }
+  { path: '/courses', label: '我的课程', icon: Reading },
+  { path: '/course-home', label: '课程主页', icon: School }
 ]
 
 const teacherMenu = [
@@ -337,9 +343,13 @@ const syncTeacherCourses = async force => {
   }
 
   try {
+    if (userStore.isStudent) {
+      await userStore.fetchTeachingCourses(force)
+      return
+    }
     await userStore.ensureSelectedCourse(force)
   } catch (error) {
-    console.error('加载教师课程失败', error)
+    console.error('加载课程失败', error)
   }
 }
 
@@ -357,7 +367,7 @@ const handleCourseSwitch = courseId => {
   }
 
   if (route.path === '/courses') {
-    router.push(userStore.isStudent ? '/homework' : '/dashboard')
+    router.push(userStore.isStudent ? '/course-home' : '/dashboard')
   }
 }
 

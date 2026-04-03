@@ -130,6 +130,10 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = userData
     localStorage.setItem('user', JSON.stringify(userData))
 
+    if (userData?.role === 'student') {
+      clearSelectedCourse()
+    }
+
     await fetchSystemSettings()
 
     return userData

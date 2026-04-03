@@ -22,6 +22,11 @@ const routes = [
         component: () => import('@/views/MyCourses.vue')
       },
       {
+        path: 'course-home',
+        name: 'StudentCourseHome',
+        component: () => import('@/views/StudentCourseHome.vue')
+      },
+      {
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/Dashboard.vue')
@@ -156,12 +161,12 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.path === '/login' && userStore.isLoggedIn) {
-    next(userStore.isAdmin ? adminHomePath : userStore.isStudent ? '/homework' : '/dashboard')
+    next(userStore.isAdmin ? adminHomePath : userStore.isStudent ? '/courses' : '/dashboard')
     return
   }
 
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
-    next(userStore.isStudent ? '/homework' : '/dashboard')
+    next(userStore.isStudent ? '/courses' : '/dashboard')
     return
   }
 
@@ -171,16 +176,25 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (userStore.isStudent && ['/dashboard', '/students', '/scores', '/attendance', '/rankings', '/analysis', '/points'].includes(to.path)) {
-    next('/homework')
+    next('/courses')
     return
   }
 
   if (!userStore.isAdmin && to.path !== '/login') {
     try {
-      await userStore.ensureSelectedCourse(false)
+      if (userStore.isStudent) {
+        await userStore.fetchTeachingCourses(false)
+      } else {
+        await userStore.ensureSelectedCourse(false)
+      }
     } catch (error) {
       console.error('Failed to preload teaching courses', error)
     }
+  }
+
+  if (userStore.isStudent && to.path !== '/courses' && !userStore.selectedCourse) {
+    next('/courses')
+    return
   }
 
   next()
