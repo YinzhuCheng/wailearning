@@ -137,6 +137,27 @@ const handleSelectionChange = rows => {
 
 const selectableRow = row => Boolean(row.submission_id && row.attachment_url)
 
+const getTodayZipName = () => `${new Date().toLocaleDateString('sv-SE')}.zip`
+
+const resolveDownloadFilename = headers => {
+  const disposition = headers?.['content-disposition'] || headers?.['Content-Disposition'] || ''
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1])
+    } catch {
+      return utf8Match[1]
+    }
+  }
+
+  const plainMatch = disposition.match(/filename="?([^"]+)"?/i)
+  if (plainMatch?.[1]) {
+    return plainMatch[1]
+  }
+
+  return getTodayZipName()
+}
+
 const downloadSelected = async () => {
   if (!downloadableSelection.value.length) {
     return
@@ -144,13 +165,13 @@ const downloadSelected = async () => {
 
   downloading.value = true
   try {
-    const blob = await api.homework.downloadSubmissions(route.params.id, {
+    const response = await api.homework.downloadSubmissions(route.params.id, {
       submission_ids: downloadableSelection.value.map(row => row.submission_id)
     })
-    const url = window.URL.createObjectURL(blob)
+    const url = window.URL.createObjectURL(response.data)
     const link = document.createElement('a')
     link.href = url
-    link.download = `homework-${route.params.id}-submissions.zip`
+    link.download = resolveDownloadFilename(response.headers)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

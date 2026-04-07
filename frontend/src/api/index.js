@@ -49,7 +49,7 @@ http.interceptors.request.use(
 )
 
 http.interceptors.response.use(
-  response => response.data,
+  response => (response.config?.returnFullResponse ? response : response.data),
   async error => {
     if (error.response) {
       const message = await extractErrorMessage(error)
@@ -173,6 +173,7 @@ const api = {
     downloadSubmissions: (id, data) =>
       http.post(`/homeworks/${id}/submissions/download`, data, {
         responseType: 'blob',
+        returnFullResponse: true,
         ...fileTransferRequestConfig
       })
   },

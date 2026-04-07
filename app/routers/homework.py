@@ -463,15 +463,17 @@ def download_homework_submissions(
                 continue
 
             original_name = Path(submission.attachment_name or file_path.name).name
-            student_name = submission.student.name if submission.student else f"student-{submission.student_id}"
-            student_no = submission.student.student_no if submission.student and submission.student.student_no else str(submission.student_id)
-            safe_original_name = original_name.replace("/", "-").replace("\\", "-")
-            archive_name = f"{student_no}-{student_name}-{safe_original_name}"
+            student_account_id = (
+                submission.student.student_no
+                if submission.student and submission.student.student_no
+                else str(submission.student_id)
+            )
+            safe_account_id = student_account_id.replace("/", "-").replace("\\", "-").strip() or str(submission.student_id)
+            suffix = Path(original_name).suffix or file_path.suffix
+            archive_name = f"{safe_account_id}{suffix}"
             counter = 1
             while archive_name in used_names:
-                stem = Path(safe_original_name).stem
-                suffix = Path(safe_original_name).suffix
-                archive_name = f"{student_no}-{student_name}-{stem}-{counter}{suffix}"
+                archive_name = f"{safe_account_id}-{counter}{suffix}"
                 counter += 1
 
             archive.write(file_path, archive_name)
@@ -482,7 +484,7 @@ def download_homework_submissions(
         raise HTTPException(status_code=400, detail="The selected submissions do not contain downloadable attachments.")
 
     archive_buffer.seek(0)
-    filename = f"homework-{homework.id}-submissions.zip"
+    filename = f"{datetime.now().date().isoformat()}.zip"
     headers = {
         "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
     }
