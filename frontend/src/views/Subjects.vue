@@ -30,7 +30,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="semester" label="学期" width="140" />
-        <el-table-column prop="weekly_schedule" label="每周上课时间" min-width="180" show-overflow-tooltip />
+        <el-table-column label="每周上课时间" min-width="260" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ formatScheduleDisplay(row.weekly_schedule) || '未设置' }}
+          </template>
+        </el-table-column>
         <el-table-column label="课程起止" min-width="240">
           <template #default="{ row }">
             {{ formatDateRange(row.course_start_at, row.course_end_at) }}
@@ -50,7 +54,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="editingCourse ? '编辑课程' : '新建课程'"
-      width="680px"
+      width="880px"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
@@ -85,7 +89,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="每周时间" prop="weekly_schedule">
-          <el-input v-model="form.weekly_schedule" placeholder="例如：每周三 19:00-21:00" />
+          <CourseSchedulePicker v-model="form.weekly_schedule" />
         </el-form-item>
         <el-form-item label="开始时间" prop="course_start_at">
           <el-date-picker
@@ -122,6 +126,8 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import CourseSchedulePicker from '@/components/CourseSchedulePicker.vue'
+import { formatScheduleValue, parseScheduleValue } from '@/utils/courseSchedule'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -152,6 +158,19 @@ const rules = {
   class_id: [{ required: true, message: '请选择所属班级', trigger: 'change' }],
   course_type: [{ required: true, message: '请选择课程类型', trigger: 'change' }],
   status: [{ required: true, message: '请选择课程状态', trigger: 'change' }],
+  weekly_schedule: [
+    {
+      validator: (_rule, value, callback) => {
+        if (parseScheduleValue(value).length) {
+          callback()
+          return
+        }
+
+        callback(new Error('请选择至少一个上课时间'))
+      },
+      trigger: 'change'
+    }
+  ],
   course_start_at: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
   course_end_at: [{ required: true, message: '请选择结束时间', trigger: 'change' }]
 }
@@ -218,6 +237,7 @@ const formatDate = dateStr => {
   if (!dateStr) {
     return '未设置'
   }
+
   return new Date(dateStr).toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
@@ -228,6 +248,7 @@ const formatDate = dateStr => {
 }
 
 const formatDateRange = (startAt, endAt) => `${formatDate(startAt)} - ${formatDate(endAt)}`
+const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
 
 const submitForm = async () => {
   await formRef.value.validate()

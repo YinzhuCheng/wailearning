@@ -23,7 +23,7 @@
         </article>
         <article class="overview-card">
           <span class="overview-label">每周时间</span>
-          <strong>{{ selectedCourse.weekly_schedule || '未设置' }}</strong>
+          <strong>{{ formatScheduleDisplay(selectedCourse.weekly_schedule) || '未设置' }}</strong>
         </article>
       </section>
 
@@ -119,6 +119,7 @@ import { useRouter } from 'vue-router'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { formatScheduleValue } from '@/utils/courseSchedule'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -128,6 +129,7 @@ const loading = ref(false)
 const materials = ref([])
 const homeworks = ref([])
 const notifications = ref([])
+const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
 
 const formatDate = value => {
   if (!value) {

@@ -7,7 +7,7 @@
           {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分班级'}` : '请先选择一门课程。' }}
         </p>
         <p v-if="selectedCourse?.weekly_schedule || selectedCourse?.course_start_at || selectedCourse?.course_end_at" class="page-subtitle secondary-subtitle">
-          {{ selectedCourse?.weekly_schedule || '未设置每周时间' }} · {{ formatDateRange(selectedCourse?.course_start_at, selectedCourse?.course_end_at) }}
+          {{ formatScheduleDisplay(selectedCourse?.weekly_schedule) || '未设置每周时间' }} · {{ formatDateRange(selectedCourse?.course_start_at, selectedCourse?.course_end_at) }}
         </p>
       </div>
       <div class="header-actions">
@@ -81,10 +81,12 @@ import { Clock, Collection, School, User } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { formatScheduleValue } from '@/utils/courseSchedule'
 
 const router = useRouter()
 const userStore = useUserStore()
 const selectedCourse = computed(() => userStore.selectedCourse)
+const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
 
 const semester = ref('')
 const semesters = ref([])

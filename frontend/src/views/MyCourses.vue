@@ -50,7 +50,7 @@
                 <span>班级：{{ course.class_name || '未分配' }}</span>
                 <span>任课老师：{{ course.teacher_name || '未分配' }}</span>
                 <span>学期：{{ course.semester || '未设置' }}</span>
-                <span>每周时间：{{ course.weekly_schedule || '未设置' }}</span>
+                <span>每周时间：{{ formatScheduleDisplay(course.weekly_schedule) || '未设置' }}</span>
                 <span>起止时间：{{ formatDateRange(course.course_start_at, course.course_end_at) }}</span>
                 <span>学生数：{{ course.student_count || 0 }}</span>
               </div>
@@ -95,7 +95,7 @@
                 <span>班级：{{ course.class_name || '未分配' }}</span>
                 <span>任课老师：{{ course.teacher_name || '未分配' }}</span>
                 <span>学期：{{ course.semester || '未设置' }}</span>
-                <span>每周时间：{{ course.weekly_schedule || '未设置' }}</span>
+                <span>每周时间：{{ formatScheduleDisplay(course.weekly_schedule) || '未设置' }}</span>
                 <span>起止时间：{{ formatDateRange(course.course_start_at, course.course_end_at) }}</span>
               </div>
               <div class="course-actions">
@@ -200,6 +200,7 @@ import { ElMessage } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { formatScheduleValue } from '@/utils/courseSchedule'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -319,6 +320,8 @@ const formatDateRange = (startAt, endAt) => {
   }
   return `${formatDate(startAt) || '未设置'} - ${formatDate(endAt) || '未设置'}`
 }
+
+const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
 
 const normalizeCellValue = value => {
   if (value === undefined || value === null) {
