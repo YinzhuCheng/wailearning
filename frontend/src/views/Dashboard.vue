@@ -6,13 +6,6 @@
         <p class="page-subtitle">
           {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分班级'}` : '请先选择一门课程。' }}
         </p>
-        <p
-          v-if="selectedCourse?.weekly_schedule || selectedCourse?.course_start_at || selectedCourse?.course_end_at"
-          class="page-subtitle secondary-subtitle"
-        >
-          {{ formatScheduleDisplay(selectedCourse?.weekly_schedule) || '未设置每周时间' }} ·
-          {{ formatDateRange(selectedCourse?.course_start_at, selectedCourse?.course_end_at) }}
-        </p>
       </div>
       <div v-if="showSemesterFilter" class="header-actions">
         <el-select v-model="semester" placeholder="选择学期" style="width: 220px" @change="loadAll">
@@ -27,96 +20,82 @@
       description="请先选择一门课程。"
     />
 
-    <template v-else>
-      <el-row :gutter="20" class="stats-row">
-        <el-col :span="6" v-for="card in statCards" :key="card.label">
-          <div class="stat-card">
-            <div class="stat-icon" :style="{ background: card.color }">
-              <el-icon :size="28"><component :is="card.icon" /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value">{{ card.value }}</div>
-              <div class="stat-label">{{ card.label }}</div>
-            </div>
+    <div v-else class="dashboard-grid">
+      <div class="metrics-grid">
+        <button
+          v-for="card in statCards"
+          :key="card.label"
+          type="button"
+          class="metric-card"
+          @click="goTo(card.path)"
+        >
+          <div class="metric-icon" :style="{ background: card.color }">
+            <el-icon :size="24"><component :is="card.icon" /></el-icon>
           </div>
-        </el-col>
-      </el-row>
+          <div class="metric-content">
+            <div class="metric-value">{{ card.value }}</div>
+            <div class="metric-label">{{ card.label }}</div>
+          </div>
+        </button>
+      </div>
 
-      <el-row :gutter="20" class="charts-row">
-        <el-col :span="12">
-          <div class="chart-card">
-            <h3>平均成绩</h3>
-            <div ref="scoreChartRef" class="chart-box"></div>
-          </div>
-        </el-col>
-        <el-col :span="12">
-          <div class="chart-card">
-            <h3>{{ isTeachingDashboard ? '教学日历' : '最近成绩' }}</h3>
-            <TeachingCalendar
-              v-if="isTeachingDashboard"
-              :course="selectedCourse"
-            />
-            <el-table v-else :data="stats.recent_scores" max-height="320">
-              <el-table-column prop="student_name" label="学生" />
-              <el-table-column prop="subject_name" label="课程" />
-              <el-table-column prop="score" label="成绩" width="90" />
-              <el-table-column prop="exam_type" label="考试类型" width="120" />
-            </el-table>
-          </div>
-        </el-col>
-      </el-row>
+      <div class="calendar-card">
+        <TeachingCalendar :course="selectedCourse" />
+      </div>
 
-      <el-row :gutter="20" class="charts-row">
-        <el-col :span="24">
-          <div class="chart-card">
-            <h3>班级平均成绩排名</h3>
-            <div ref="rankingChartRef" class="chart-box"></div>
-          </div>
-        </el-col>
-      </el-row>
-    </template>
+      <button
+        type="button"
+        class="score-card"
+        @click="goTo('/scores')"
+      >
+        <div class="score-card__header">
+          <h3>平均成绩</h3>
+          <span class="score-card__link">前往成绩管理</span>
+        </div>
+        <div ref="scoreChartRef" class="chart-box"></div>
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { Clock, Collection, School, User } from '@element-plus/icons-vue'
+import { Bell, CollectionTag, Document, Histogram, User } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import TeachingCalendar from '@/components/TeachingCalendar.vue'
 import { useUserStore } from '@/stores/user'
-import { formatScheduleValue } from '@/utils/courseSchedule'
 
+const router = useRouter()
 const userStore = useUserStore()
 const selectedCourse = computed(() => userStore.selectedCourse)
 const isTeachingDashboard = computed(() => userStore.isTeacher || userStore.isClassTeacher)
 const showSemesterFilter = computed(() => !isTeachingDashboard.value)
-const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
 
 const semester = ref('')
 const semesters = ref([])
 const scoreChartRef = ref(null)
-const rankingChartRef = ref(null)
 
 let scoreChart = null
-let rankingChart = null
 
 const stats = reactive({
   total_students: 0,
-  total_classes: 0,
-  total_scores: 0,
-  avg_score: 0,
-  attendance_rate: 0,
-  recent_scores: [],
-  class_rankings: []
+  avg_score: 0
+})
+
+const resourceCounts = reactive({
+  materials: 0,
+  homeworks: 0,
+  notifications: 0
 })
 
 const statCards = computed(() => [
-  { label: '学生总数', value: stats.total_students, color: '#2563eb', icon: User },
-  { label: '关联班级', value: stats.total_classes, color: '#16a34a', icon: School },
-  { label: '成绩记录', value: stats.total_scores, color: '#d97706', icon: Collection },
-  { label: '最近一次考勤率', value: `${stats.attendance_rate}%`, color: '#dc2626', icon: Clock }
+  { label: '学生总数', value: stats.total_students, color: '#2563eb', icon: User, path: '/students' },
+  { label: '资料数量', value: resourceCounts.materials, color: '#0f766e', icon: Document, path: '/materials' },
+  { label: '作业数量', value: resourceCounts.homeworks, color: '#d97706', icon: CollectionTag, path: '/homework' },
+  { label: '通知数量', value: resourceCounts.notifications, color: '#dc2626', icon: Bell, path: '/notifications' }
 ])
 
 const buildQuery = () => ({
@@ -124,25 +103,13 @@ const buildQuery = () => ({
   subject_id: selectedCourse.value?.id
 })
 
-const formatDate = value => {
-  if (!value) {
-    return '未设置'
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  })
+const resetStats = () => {
+  stats.total_students = 0
+  stats.avg_score = 0
+  resourceCounts.materials = 0
+  resourceCounts.homeworks = 0
+  resourceCounts.notifications = 0
 }
-
-const formatDateRange = (startAt, endAt) => `${formatDate(startAt)} - ${formatDate(endAt)}`
 
 const loadSemesters = async () => {
   const data = await api.semesters.list()
@@ -152,92 +119,86 @@ const loadSemesters = async () => {
   }))
 }
 
-const resetStats = () => {
-  Object.assign(stats, {
-    total_students: 0,
-    total_classes: 0,
-    total_scores: 0,
-    avg_score: 0,
-    attendance_rate: 0,
-    recent_scores: [],
-    class_rankings: []
-  })
-}
-
 const loadStats = async () => {
   const data = await api.dashboard.getStats(buildQuery())
-  Object.assign(stats, data || {})
+  stats.total_students = Number(data?.total_students || 0)
+  stats.avg_score = Number(data?.avg_score || 0)
 }
 
-const loadRankings = async () => {
-  stats.class_rankings = await api.dashboard.getClassRankings(buildQuery())
+const loadResourceCounts = async () => {
+  if (!selectedCourse.value) {
+    resourceCounts.materials = 0
+    resourceCounts.homeworks = 0
+    resourceCounts.notifications = 0
+    return
+  }
+
+  const params = {
+    class_id: selectedCourse.value.class_id,
+    subject_id: selectedCourse.value.id,
+    page: 1,
+    page_size: 1
+  }
+
+  const [materialsResult, homeworksResult, notificationsResult] = await Promise.all([
+    api.materials.list(params),
+    api.homework.list(params),
+    api.notifications.list({
+      subject_id: selectedCourse.value.id,
+      page: 1,
+      page_size: 1
+    })
+  ])
+
+  resourceCounts.materials = Number(materialsResult?.total || 0)
+  resourceCounts.homeworks = Number(homeworksResult?.total || 0)
+  resourceCounts.notifications = Number(notificationsResult?.total || 0)
 }
 
-const ensureCharts = async () => {
+const ensureChart = async () => {
   await nextTick()
 
   if (scoreChartRef.value && !scoreChart) {
     scoreChart = echarts.init(scoreChartRef.value)
   }
-
-  if (rankingChartRef.value && !rankingChart) {
-    rankingChart = echarts.init(rankingChartRef.value)
-  }
 }
 
-const updateCharts = () => {
-  if (scoreChart) {
-    scoreChart.setOption({
-      series: [{
-        type: 'gauge',
-        startAngle: 180,
-        endAngle: 0,
-        min: 0,
-        max: 100,
-        splitNumber: 8,
-        axisLine: {
-          lineStyle: {
-            width: 8,
-            color: [
-              [0.4, '#67e8f9'],
-              [0.7, '#38bdf8'],
-              [1, '#2563eb']
-            ]
-          }
-        },
-        pointer: { itemStyle: { color: '#1d4ed8' } },
-        axisTick: { show: false },
-        splitLine: { length: 12, lineStyle: { width: 2, color: '#94a3b8' } },
-        axisLabel: { color: '#64748b' },
-        detail: {
-          valueAnimation: true,
-          formatter: '{value} 分',
-          color: '#0f172a',
-          fontSize: 26
-        },
-        data: [{ value: stats.avg_score || 0 }]
-      }]
-    })
+const updateChart = () => {
+  if (!scoreChart) {
+    return
   }
 
-  if (rankingChart) {
-    rankingChart.setOption({
-      tooltip: { trigger: 'axis' },
-      xAxis: {
-        type: 'category',
-        data: (stats.class_rankings || []).map(item => item.class_name)
-      },
-      yAxis: { type: 'value', min: 0, max: 100 },
-      series: [{
-        data: (stats.class_rankings || []).map(item => item.avg_score),
-        type: 'bar',
-        itemStyle: {
-          color: '#2563eb',
-          borderRadius: [8, 8, 0, 0]
+  scoreChart.setOption({
+    series: [{
+      type: 'gauge',
+      startAngle: 180,
+      endAngle: 0,
+      min: 0,
+      max: 100,
+      splitNumber: 8,
+      axisLine: {
+        lineStyle: {
+          width: 8,
+          color: [
+            [0.4, '#67e8f9'],
+            [0.7, '#38bdf8'],
+            [1, '#2563eb']
+          ]
         }
-      }]
-    })
-  }
+      },
+      pointer: { itemStyle: { color: '#1d4ed8' } },
+      axisTick: { show: false },
+      splitLine: { length: 12, lineStyle: { width: 2, color: '#94a3b8' } },
+      axisLabel: { color: '#64748b' },
+      detail: {
+        valueAnimation: true,
+        formatter: '{value} 分',
+        color: '#0f172a',
+        fontSize: 26
+      },
+      data: [{ value: stats.avg_score || 0 }]
+    }]
+  })
 }
 
 const loadAll = async () => {
@@ -246,14 +207,17 @@ const loadAll = async () => {
     return
   }
 
-  await Promise.all([loadStats(), loadRankings()])
-  await ensureCharts()
-  updateCharts()
+  await Promise.all([loadStats(), loadResourceCounts()])
+  await ensureChart()
+  updateChart()
 }
 
-const resizeCharts = () => {
+const resizeChart = () => {
   scoreChart?.resize()
-  rankingChart?.resize()
+}
+
+const goTo = path => {
+  router.push(path)
 }
 
 onMounted(async () => {
@@ -262,13 +226,12 @@ onMounted(async () => {
   }
 
   await loadAll()
-  window.addEventListener('resize', resizeCharts)
+  window.addEventListener('resize', resizeChart)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', resizeCharts)
+  window.removeEventListener('resize', resizeChart)
   scoreChart?.dispose()
-  rankingChart?.dispose()
 })
 
 watch(selectedCourse, async () => {
@@ -308,70 +271,134 @@ watch(selectedCourse, async () => {
   color: #64748b;
 }
 
-.secondary-subtitle {
-  margin-top: 6px;
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(520px, 2.1fr);
+  gap: 20px;
+  align-items: stretch;
 }
 
-.stats-row,
-.charts-row {
-  margin-top: 20px;
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: start;
 }
 
-.stat-card,
-.chart-card {
+.metric-card,
+.calendar-card,
+.score-card {
   background: #fff;
+  border: 0;
   border-radius: 20px;
-  padding: 22px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 18px;
+.metric-card,
+.score-card {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.stat-icon {
-  width: 58px;
-  height: 58px;
+.metric-card:hover,
+.score-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(37, 99, 235, 0.14);
+}
+
+.metric-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 128px;
+  padding: 22px;
+  text-align: left;
+}
+
+.metric-icon {
+  width: 54px;
+  height: 54px;
   border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
+  flex-shrink: 0;
 }
 
-.stat-value {
-  font-size: 28px;
+.metric-value {
+  font-size: 30px;
   font-weight: 700;
   color: #0f172a;
 }
 
-.stat-label {
-  color: #64748b;
+.metric-label {
   margin-top: 6px;
+  color: #64748b;
+  font-size: 14px;
 }
 
-.chart-card h3 {
-  margin: 0 0 16px;
+.calendar-card {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 22px;
+}
+
+.score-card {
+  grid-column: 1 / span 2;
+  grid-row: 3;
+  padding: 22px;
+  text-align: left;
+}
+
+.score-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.score-card__header h3 {
+  margin: 0;
   color: #0f172a;
+}
+
+.score-card__link {
+  font-size: 13px;
+  color: #2563eb;
 }
 
 .chart-box {
   height: 320px;
 }
 
-@media (max-width: 992px) {
-  .stats-row :deep(.el-col),
-  .charts-row :deep(.el-col) {
-    max-width: 100%;
-    flex: 0 0 100%;
+@media (max-width: 1100px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-grid,
+  .calendar-card,
+  .score-card {
+    grid-column: auto;
+    grid-row: auto;
   }
 }
 
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .score-card__header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

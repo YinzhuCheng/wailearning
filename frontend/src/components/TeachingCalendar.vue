@@ -1,21 +1,31 @@
 <template>
   <div class="teaching-calendar">
-    <div class="calendar-toolbar">
-      <div class="calendar-summary">
-        <span>教学周期：{{ courseRangeLabel }}</span>
-        <span>本月上课 {{ visibleMonthStats.classDays }} 天</span>
-        <span>本月假期 {{ visibleMonthStats.holidayDays }} 天</span>
+    <div class="calendar-header">
+      <div>
+        <div class="calendar-title-row">
+          <h3>教学日历</h3>
+          <span class="calendar-range">{{ courseRangeLabel }}</span>
+        </div>
+        <div v-if="scheduleLabel" class="calendar-schedule">
+          上课时间：{{ scheduleLabel }}
+        </div>
       </div>
-      <div class="calendar-legend">
-        <span class="legend-item">
-          <i class="legend-dot legend-dot-class"></i>
-          上课日
-        </span>
-        <span class="legend-item">
-          <i class="legend-dot legend-dot-holiday"></i>
-          法定假期
-        </span>
+      <div class="calendar-actions">
+        <button type="button" class="calendar-nav" @click="goToPreviousMonth">上个月</button>
+        <div class="calendar-month">{{ currentMonthLabel }}</div>
+        <button type="button" class="calendar-nav" @click="goToNextMonth">下个月</button>
       </div>
+    </div>
+
+    <div class="calendar-legend">
+      <span class="legend-item">
+        <i class="legend-dot legend-dot-class"></i>
+        上课日
+      </span>
+      <span class="legend-item">
+        <i class="legend-dot legend-dot-holiday"></i>
+        法定假期
+      </span>
     </div>
 
     <el-alert
@@ -32,43 +42,50 @@
       description="请先完善课程的起始日期、结束日期和每周时间。"
     />
 
-    <el-calendar v-else v-model="calendarDate" class="calendar-panel">
-      <template #date-cell="{ data }">
+    <template v-else>
+      <div class="calendar-summary">
+        <span>本月上课 {{ visibleMonthStats.classDays }} 天</span>
+        <span>本月假期 {{ visibleMonthStats.holidayDays }} 天</span>
+      </div>
+
+      <div class="calendar-grid">
         <div
+          v-for="weekday in weekdayLabels"
+          :key="weekday"
+          class="calendar-weekday"
+        >
+          {{ weekday }}
+        </div>
+
+        <div
+          v-for="cell in calendarCells"
+          :key="cell.dateKey"
           class="calendar-cell"
           :class="{
-            'is-outside': !resolveCellMeta(data.day).inRange,
-            'is-holiday': Boolean(resolveCellMeta(data.day).holiday),
-            'is-class-day': Boolean(resolveCellMeta(data.day).classDay)
+            'is-outside': !cell.isCurrentMonth,
+            'is-holiday': Boolean(cell.holiday),
+            'is-class-day': Boolean(cell.classDay)
           }"
         >
-          <div class="calendar-cell__day">
-            {{ Number(data.day.slice(-2)) }}
+          <div class="calendar-cell__day">{{ cell.dayNumber }}</div>
+          <div v-if="cell.holiday" class="calendar-pill calendar-pill-holiday">
+            {{ cell.holiday.name }}
           </div>
-          <div
-            v-if="resolveCellMeta(data.day).holiday"
-            class="calendar-pill calendar-pill-holiday"
-          >
-            {{ resolveCellMeta(data.day).holiday.name }}
-          </div>
-          <div
-            v-else-if="resolveCellMeta(data.day).classDay"
-            class="calendar-pill calendar-pill-class"
-          >
+          <div v-else-if="cell.classDay" class="calendar-pill calendar-pill-class">
             上课
           </div>
-          <div v-if="resolveCellMeta(data.day).classDay" class="calendar-note">
-            {{ resolveCellMeta(data.day).classDay.summary }}
+          <div v-if="cell.classDay" class="calendar-note">
+            {{ cell.classDay.summary }}
           </div>
           <div
-            v-else-if="resolveCellMeta(data.day).holiday?.suspendsClass"
+            v-else-if="cell.holiday?.suspendsClass"
             class="calendar-note calendar-note-muted"
           >
             停课
           </div>
         </div>
-      </template>
-    </el-calendar>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -86,17 +103,18 @@ const props = defineProps({
 })
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
+const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const LEGACY_WEEKDAY_PATTERNS = [
-  { value: 1, patterns: [/周一/, /星期一/, /每周一/] },
-  { value: 2, patterns: [/周二/, /星期二/, /每周二/] },
-  { value: 3, patterns: [/周三/, /星期三/, /每周三/] },
-  { value: 4, patterns: [/周四/, /星期四/, /每周四/] },
-  { value: 5, patterns: [/周五/, /星期五/, /每周五/] },
-  { value: 6, patterns: [/周六/, /星期六/, /每周六/] },
-  { value: 7, patterns: [/周日/, /星期日/, /周天/, /星期天/, /每周日/, /每周天/] }
+  { value: 1, label: '周一', patterns: [/周一/, /星期一/, /每周一/] },
+  { value: 2, label: '周二', patterns: [/周二/, /星期二/, /每周二/] },
+  { value: 3, label: '周三', patterns: [/周三/, /星期三/, /每周三/] },
+  { value: 4, label: '周四', patterns: [/周四/, /星期四/, /每周四/] },
+  { value: 5, label: '周五', patterns: [/周五/, /星期五/, /每周五/] },
+  { value: 6, label: '周六', patterns: [/周六/, /星期六/, /每周六/] },
+  { value: 7, label: '周日', patterns: [/周日/, /星期日/, /周天/, /星期天/, /每周日/, /每周天/] }
 ]
 
-const calendarDate = ref(new Date())
+const currentMonth = ref(new Date())
 
 const toDateKey = date => {
   const year = date.getFullYear()
@@ -104,6 +122,8 @@ const toDateKey = date => {
   const day = `${date.getDate()}`.padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+
+const addDays = (date, days) => new Date(date.getTime() + days * ONE_DAY_MS)
 
 const normalizeBoundaryDate = value => {
   if (!value) {
@@ -145,21 +165,21 @@ const formatPeriodSummary = periods => {
   }
 
   const groups = []
-  let groupStart = sortedPeriods[0]
-  let groupEnd = sortedPeriods[0]
+  let start = sortedPeriods[0]
+  let end = sortedPeriods[0]
 
   for (const period of sortedPeriods.slice(1)) {
-    if (period === groupEnd + 1) {
-      groupEnd = period
+    if (period === end + 1) {
+      end = period
       continue
     }
 
-    groups.push(groupStart === groupEnd ? `第${groupStart}小节` : `第${groupStart}-${groupEnd}小节`)
-    groupStart = period
-    groupEnd = period
+    groups.push(start === end ? `${start}节` : `${start}-${end}节`)
+    start = period
+    end = period
   }
 
-  groups.push(groupStart === groupEnd ? `第${groupStart}小节` : `第${groupStart}-${groupEnd}小节`)
+  groups.push(start === end ? `${start}节` : `${start}-${end}节`)
   return groups.join('、')
 }
 
@@ -170,9 +190,9 @@ const extractLegacyWeekdays = scheduleText => {
     return []
   }
 
-  return LEGACY_WEEKDAY_PATTERNS
-    .filter(day => day.patterns.some(pattern => pattern.test(normalizedText)))
-    .map(day => day.value)
+  return LEGACY_WEEKDAY_PATTERNS.filter(day =>
+    day.patterns.some(pattern => pattern.test(normalizedText))
+  )
 }
 
 const scheduleByDay = computed(() => {
@@ -195,8 +215,8 @@ const scheduleByDay = computed(() => {
 
   const legacyWeekdays = extractLegacyWeekdays(props.course?.weekly_schedule)
 
-  return legacyWeekdays.reduce((map, dayValue) => {
-    map.set(dayValue, [])
+  return legacyWeekdays.reduce((map, day) => {
+    map.set(day.value, [])
     return map
   }, new Map())
 })
@@ -205,7 +225,9 @@ const hasSchedule = computed(() => scheduleByDay.value.size > 0)
 const hasUnsupportedSchedule = computed(() =>
   Boolean(props.course?.weekly_schedule) && !hasSchedule.value
 )
-const hasRenderableCalendar = computed(() => hasValidRange.value && hasSchedule.value && !hasUnsupportedSchedule.value)
+const hasRenderableCalendar = computed(() =>
+  hasValidRange.value && hasSchedule.value && !hasUnsupportedSchedule.value
+)
 
 const holidayMap = computed(() =>
   hasValidRange.value ? buildHolidayMap(courseStartDate.value, courseEndDate.value) : {}
@@ -217,12 +239,12 @@ const classDateMap = computed(() => {
   }
 
   const entries = {}
-  let currentDate = new Date(courseStartDate.value)
+  let currentDateValue = new Date(courseStartDate.value)
 
-  while (currentDate <= courseEndDate.value) {
-    const dayValue = currentDate.getDay() === 0 ? 7 : currentDate.getDay()
+  while (currentDateValue <= courseEndDate.value) {
+    const dayValue = currentDateValue.getDay() === 0 ? 7 : currentDateValue.getDay()
     const periods = scheduleByDay.value.get(dayValue) || []
-    const dateKey = toDateKey(currentDate)
+    const dateKey = toDateKey(currentDateValue)
 
     if (scheduleByDay.value.has(dayValue) && !holidayMap.value[dateKey]) {
       entries[dateKey] = {
@@ -231,23 +253,22 @@ const classDateMap = computed(() => {
       }
     }
 
-    currentDate = new Date(currentDate.getTime() + ONE_DAY_MS)
+    currentDateValue = addDays(currentDateValue, 1)
   }
 
   return entries
 })
 
-const resolveCellMeta = dayString => {
-  const cellDate = normalizeBoundaryDate(dayString)
+const resolveDateMeta = date => {
+  const normalizedDate = normalizeBoundaryDate(date)
 
-  if (!cellDate) {
-    return { inRange: false, holiday: null, classDay: null }
+  if (!normalizedDate) {
+    return { dateKey: '', holiday: null, classDay: null }
   }
 
-  const inRange = hasValidRange.value && cellDate >= courseStartDate.value && cellDate <= courseEndDate.value
-  const dateKey = toDateKey(cellDate)
-  const dayValue = cellDate.getDay() === 0 ? 7 : cellDate.getDay()
-  const holiday = inRange && holidayMap.value[dateKey]
+  const dateKey = toDateKey(normalizedDate)
+  const dayValue = normalizedDate.getDay() === 0 ? 7 : normalizedDate.getDay()
+  const holiday = holidayMap.value[dateKey]
     ? {
         ...holidayMap.value[dateKey],
         suspendsClass: scheduleByDay.value.has(dayValue)
@@ -255,40 +276,93 @@ const resolveCellMeta = dayString => {
     : null
 
   return {
-    inRange,
+    dateKey,
     holiday,
-    classDay: inRange ? classDateMap.value[dateKey] || null : null
+    classDay: classDateMap.value[dateKey] || null
   }
 }
 
-const visibleMonthStats = computed(() => {
-  if (!hasRenderableCalendar.value) {
-    return { classDays: 0, holidayDays: 0 }
+const currentMonthLabel = computed(() =>
+  `${currentMonth.value.getFullYear()}年${currentMonth.value.getMonth() + 1}月`
+)
+
+const scheduleLabel = computed(() => {
+  const parsedSlots = parseScheduleValue(props.course?.weekly_schedule)
+
+  if (parsedSlots.length) {
+    const grouped = new Map()
+
+    for (const slot of parsedSlots) {
+      const [dayValueRaw, periodValueRaw] = slot.split('-')
+      const dayValue = Number(dayValueRaw)
+      const periodValue = Number(periodValueRaw)
+
+      if (!grouped.has(dayValue)) {
+        grouped.set(dayValue, [])
+      }
+
+      grouped.get(dayValue).push(periodValue)
+    }
+
+    return [...grouped.entries()]
+      .sort((left, right) => left[0] - right[0])
+      .map(([dayValue, periods]) => `${weekdayLabels[dayValue - 1]} ${formatPeriodSummary(periods)}`)
+      .join('；')
   }
 
-  const targetYear = calendarDate.value.getFullYear()
-  const targetMonth = calendarDate.value.getMonth()
+  const legacyWeekdays = extractLegacyWeekdays(props.course?.weekly_schedule)
 
-  const matchMonth = dateKey => {
-    const date = normalizeBoundaryDate(dateKey)
-    return date && date.getFullYear() === targetYear && date.getMonth() === targetMonth
+  if (legacyWeekdays.length) {
+    return legacyWeekdays.map(day => `${day.label} 常规授课`).join('；')
   }
 
-  return {
-    classDays: Object.keys(classDateMap.value).filter(matchMonth).length,
-    holidayDays: Object.keys(holidayMap.value).filter(matchMonth).length
-  }
+  return ''
 })
 
 const courseRangeLabel = computed(() => {
   if (!hasValidRange.value) {
-    return '未设置'
+    return '未设置教学周期'
   }
 
   return `${toDateKey(courseStartDate.value)} 至 ${toDateKey(courseEndDate.value)}`
 })
 
-const resolveInitialCalendarDate = course => {
+const calendarCells = computed(() => {
+  const firstDayOfMonth = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth(), 1)
+  const startOffset = (firstDayOfMonth.getDay() + 6) % 7
+  const calendarStartDate = addDays(firstDayOfMonth, -startOffset)
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = addDays(calendarStartDate, index)
+    const { dateKey, holiday, classDay } = resolveDateMeta(date)
+
+    return {
+      date,
+      dateKey,
+      dayNumber: date.getDate(),
+      isCurrentMonth: date.getMonth() === currentMonth.value.getMonth(),
+      holiday,
+      classDay
+    }
+  })
+})
+
+const visibleMonthStats = computed(() => {
+  const targetYear = currentMonth.value.getFullYear()
+  const targetMonth = currentMonth.value.getMonth()
+
+  const isCurrentMonthDateKey = dateKey => {
+    const date = normalizeBoundaryDate(dateKey)
+    return date && date.getFullYear() === targetYear && date.getMonth() === targetMonth
+  }
+
+  return {
+    classDays: Object.keys(classDateMap.value).filter(isCurrentMonthDateKey).length,
+    holidayDays: Object.keys(holidayMap.value).filter(isCurrentMonthDateKey).length
+  }
+})
+
+const resolveInitialMonth = course => {
   const startDate = normalizeBoundaryDate(course?.course_start_at)
   const endDate = normalizeBoundaryDate(course?.course_end_at)
   const today = normalizeBoundaryDate(new Date())
@@ -300,10 +374,18 @@ const resolveInitialCalendarDate = course => {
   return startDate || today || new Date()
 }
 
+const goToPreviousMonth = () => {
+  currentMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() - 1, 1)
+}
+
+const goToNextMonth = () => {
+  currentMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 1, 1)
+}
+
 watch(
   () => props.course,
   course => {
-    calendarDate.value = resolveInitialCalendarDate(course)
+    currentMonth.value = resolveInitialMonth(course)
   },
   { immediate: true }
 )
@@ -314,27 +396,84 @@ watch(
   width: 100%;
 }
 
-.calendar-toolbar {
+.calendar-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
-.calendar-summary,
-.calendar-legend {
+.calendar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.calendar-title-row h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #0f172a;
+}
+
+.calendar-range,
+.calendar-schedule,
+.calendar-summary {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.calendar-schedule {
+  margin-top: 4px;
+}
+
+.calendar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calendar-nav {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.calendar-nav:hover {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.calendar-month {
+  min-width: 90px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.calendar-legend,
+.calendar-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;
-  color: #64748b;
-  font-size: 13px;
+}
+
+.calendar-legend {
+  margin-bottom: 12px;
 }
 
 .legend-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-size: 12px;
+  color: #64748b;
 }
 
 .legend-dot {
@@ -355,25 +494,34 @@ watch(
   margin-bottom: 12px;
 }
 
-.calendar-panel {
-  --el-calendar-border: #e2e8f0;
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border: 1px solid #dbe4f0;
+  border-radius: 18px;
+  overflow: hidden;
 }
 
-:deep(.el-calendar-table thead th) {
-  color: #475569;
+.calendar-weekday {
+  padding: 10px 8px;
+  text-align: center;
+  font-size: 12px;
   font-weight: 600;
-}
-
-:deep(.el-calendar-day) {
-  min-height: 108px;
-  padding: 0;
+  color: #475569;
+  background: #f8fafc;
+  border-bottom: 1px solid #dbe4f0;
 }
 
 .calendar-cell {
-  height: 100%;
-  padding: 10px 10px 8px;
+  min-height: 110px;
+  padding: 8px;
+  border-right: 1px solid #dbe4f0;
+  border-bottom: 1px solid #dbe4f0;
   background: #fff;
-  transition: background-color 0.2s ease;
+}
+
+.calendar-cell:nth-child(7n) {
+  border-right: none;
 }
 
 .calendar-cell.is-outside {
@@ -389,7 +537,7 @@ watch(
 }
 
 .calendar-cell__day {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   color: #0f172a;
 }
@@ -397,10 +545,10 @@ watch(
 .calendar-pill {
   display: inline-flex;
   align-items: center;
-  margin-top: 8px;
-  padding: 2px 8px;
+  margin-top: 6px;
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -415,8 +563,8 @@ watch(
 }
 
 .calendar-note {
-  margin-top: 8px;
-  font-size: 12px;
+  margin-top: 6px;
+  font-size: 11px;
   line-height: 1.5;
   color: #334155;
 }
@@ -426,12 +574,17 @@ watch(
 }
 
 @media (max-width: 900px) {
-  .calendar-toolbar {
+  .calendar-header {
     flex-direction: column;
   }
 
-  :deep(.el-calendar-day) {
-    min-height: 92px;
+  .calendar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .calendar-cell {
+    min-height: 96px;
   }
 }
 </style>
