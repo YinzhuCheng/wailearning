@@ -265,6 +265,7 @@ const tableRows = computed(() =>
 
 .calendar-header p {
   margin: 0;
+  font-size: 14px;
   color: #64748b;
 }
 
@@ -330,37 +331,41 @@ const tableRows = computed(() =>
 .section-cell {
   width: 150px;
   padding: 12px 10px;
+  font-size: 14px;
   text-align: center;
   background: #f8fafc;
   color: #0f172a;
 }
 
 .section-cell__title {
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.6;
 }
 
 .section-cell__time {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: 14px;
   color: #64748b;
 }
 
 .time-cell {
   width: 180px;
   padding: 10px;
+  font-size: 14px;
   text-align: center;
   background: #fcfdff;
 }
 
 .time-cell__time {
+  font-size: 14px;
   font-weight: 700;
   color: #1e293b;
 }
 
 .time-cell__label {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: #64748b;
 }
 
@@ -368,6 +373,7 @@ const tableRows = computed(() =>
   min-width: 150px;
   height: 82px;
   padding: 8px;
+  font-size: 14px;
   background: #fff;
   vertical-align: top;
 }
@@ -386,11 +392,13 @@ const tableRows = computed(() =>
 }
 
 .course-card strong {
+  font-size: 14px;
   line-height: 1.5;
 }
 
 .course-card span,
 .course-card small {
+  font-size: 14px;
   color: #475569;
   line-height: 1.5;
 }
