@@ -29,9 +29,8 @@
               :key="`${courseTime.dateRange}-${courseTime.weekday}-${index}`"
               class="course-time-card"
             >
-              <span class="course-time-card__line">{{ courseTime.dateRange }}</span>
-              <span class="course-time-card__line">{{ courseTime.weekday }}</span>
-              <span class="course-time-card__line">{{ courseTime.time }}</span>
+              <strong class="course-time-card__title">{{ formatCourseTimeTitle(courseTime) }}</strong>
+              <span v-if="courseTime.time" class="course-time-card__line">{{ courseTime.time }}</span>
             </div>
           </div>
           <strong v-else>未设置</strong>
@@ -141,6 +140,9 @@ const loading = ref(false)
 const materials = ref([])
 const homeworks = ref([])
 const notifications = ref([])
+
+const formatCourseTimeTitle = courseTime =>
+  [courseTime?.dateRange, courseTime?.weekday].filter(Boolean).join('，')
 
 const formatDate = value => {
   if (!value) {
@@ -295,8 +297,12 @@ watch(selectedCourse, () => {
   color: #64748b;
 }
 
-.course-time-card__line:first-child {
-  color: #334155;
+.course-time-card__title,
+.item-card strong {
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .workspace-grid {
@@ -338,10 +344,6 @@ watch(selectedCourse, () => {
   transform: translateY(-1px);
   border-color: #bfdbfe;
   box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
-}
-
-.item-card strong {
-  color: #0f172a;
 }
 
 @media (max-width: 1024px) {
