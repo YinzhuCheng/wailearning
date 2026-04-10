@@ -811,6 +811,7 @@ watch(
 .student-no,
 .student-class {
   color: #1e293b;
+  font-size: 14px;
 }
 
 .student-name-cell {
@@ -823,6 +824,7 @@ watch(
 .student-name-text {
   font-weight: 600;
   color: #0f172a;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
