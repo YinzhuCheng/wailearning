@@ -518,8 +518,8 @@ watch(
 }
 
 .calendar-cell {
-  min-height: 106px;
-  padding: 8px;
+  min-height: 72px;
+  padding: 6px;
   border-right: 1px solid #dbe4f0;
   border-bottom: 1px solid #dbe4f0;
   background: #fff;
@@ -589,7 +589,7 @@ watch(
   }
 
   .calendar-cell {
-    min-height: 96px;
+    min-height: 68px;
   }
 }
 </style>
