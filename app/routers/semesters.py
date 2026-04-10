@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 from app.database import get_db
-from app.models import User, Semester
+from app.models import Score, Subject, User, Semester
 from app.schemas import SemesterCreate, SemesterResponse
 from app.auth import get_current_active_user
 
@@ -11,10 +11,10 @@ router = APIRouter(prefix="/api/semesters", tags=["学期管理"])
 
 def init_default_semesters(db: Session):
     default_semesters = [
-        {"name": "2024-1", "year": 2024},
-        {"name": "2024-2", "year": 2024},
-        {"name": "2025-1", "year": 2025},
-        {"name": "2025-2", "year": 2025},
+        {"name": "2024-春季", "year": 2024},
+        {"name": "2024-秋季", "year": 2024},
+        {"name": "2025-春季", "year": 2025},
+        {"name": "2025-秋季", "year": 2025},
     ]
     
     for sem_data in default_semesters:
@@ -28,6 +28,20 @@ def init_default_semesters(db: Session):
             db.add(semester)
     
     db.commit()
+
+
+def sync_semester_name_references(db: Session, old_name: str, new_name: str) -> None:
+    if not old_name or old_name == new_name:
+        return
+
+    db.query(Subject).filter(Subject.semester == old_name).update(
+        {Subject.semester: new_name},
+        synchronize_session=False
+    )
+    db.query(Score).filter(Score.semester == old_name).update(
+        {Score.semester: new_name},
+        synchronize_session=False
+    )
 
 @router.get("", response_model=List[SemesterResponse])
 def get_semesters(
@@ -78,8 +92,10 @@ def update_semester(
     if existing:
         raise HTTPException(status_code=400, detail="学期名称已存在")
     
+    old_name = semester.name
     semester.name = semester_data.name
     semester.year = semester_data.year
+    sync_semester_name_references(db, old_name, semester_data.name)
     db.commit()
     db.refresh(semester)
     return semester

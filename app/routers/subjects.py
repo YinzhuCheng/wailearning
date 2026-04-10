@@ -12,7 +12,7 @@ from app.course_access import (
     sync_course_enrollments,
 )
 from app.database import get_db
-from app.models import Class, CourseEnrollment, Student, Subject, User, UserRole
+from app.models import Class, CourseEnrollment, Semester, Student, Subject, User, UserRole
 from app.schemas import (
     CourseEnrollmentResponse,
     CourseEnrollmentTypeUpdate,
@@ -26,6 +26,39 @@ from app.schemas import (
 router = APIRouter(prefix="/api/subjects", tags=["课程管理"])
 
 
+def _normalize_semester_label(semester: Optional[str], db: Session) -> Optional[str]:
+    if not semester:
+        return semester
+
+    normalized = semester.strip()
+    if not normalized:
+        return normalized
+
+    exact_semester = db.query(Semester).filter(Semester.name == normalized).first()
+    if exact_semester:
+        return exact_semester.name
+
+    parts = normalized.split("-")
+    if len(parts) == 2 and parts[0].isdigit():
+        year, term = parts
+        if term in {"1", "2"}:
+            candidates = (
+                db.query(Semester)
+                .filter(Semester.year == int(year))
+                .order_by(Semester.created_at.asc(), Semester.id.asc())
+                .all()
+            )
+            term_index = int(term) - 1
+            if 0 <= term_index < len(candidates):
+                return candidates[term_index].name
+        if term == "1":
+            return f"{year}-春季"
+        if term == "2":
+            return f"{year}-秋季"
+
+    return normalized
+
+
 def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
     student_count = db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).count()
     return SubjectResponse(
@@ -35,7 +68,7 @@ def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
         class_id=course.class_id,
         course_type=course.course_type or "required",
         status=course.status or "active",
-        semester=course.semester,
+        semester=_normalize_semester_label(course.semester, db),
         weekly_schedule=course.weekly_schedule,
         course_start_at=course.course_start_at,
         course_end_at=course.course_end_at,
