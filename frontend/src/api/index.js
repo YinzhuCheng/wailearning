@@ -135,6 +135,7 @@ const api = {
   semesters: {
     list: () => http.get('/semesters'),
     create: data => http.post('/semesters', data),
+    update: (id, data) => http.put(`/semesters/${id}`, data),
     delete: id => http.delete(`/semesters/${id}`)
   },
   attendance: {
