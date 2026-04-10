@@ -4,11 +4,12 @@
       <div>
         <h1 class="page-title">课程仪表盘</h1>
         <p class="page-subtitle">
-          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分班级'}` : '请先选择一门课程。' }}
+          {{ dashboardSubtitle }}
         </p>
       </div>
+
       <div v-if="showSemesterFilter" class="header-actions">
-        <el-select v-model="semester" placeholder="选择学期" style="width: 220px" @change="loadAll">
+        <el-select v-model="semester" placeholder="选择学期" style="width: 220px" @change="loadLegacyDashboard">
           <el-option label="全部学期" value="" />
           <el-option v-for="item in semesters" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
@@ -16,47 +17,81 @@
     </div>
 
     <el-empty
-      v-if="!selectedCourse && isTeachingDashboard"
-      description="请先选择一门课程。"
+      v-if="isClassTeacherDashboard && !currentClassId"
+      description="当前账号还没有绑定班级。"
     />
 
-    <div v-else class="dashboard-layout">
-      <div class="dashboard-left">
-        <div class="metrics-grid">
-          <button
-            v-for="card in statCards"
-            :key="card.label"
-            type="button"
-            class="metric-card"
-            @click="goTo(card.path)"
-          >
-            <div class="metric-icon" :style="{ background: card.color }">
-              <el-icon :size="24"><component :is="card.icon" /></el-icon>
-            </div>
-            <div class="metric-content">
-              <div class="metric-value">{{ card.value }}</div>
-              <div class="metric-label">{{ card.label }}</div>
-            </div>
-          </button>
-        </div>
-
+    <div
+      v-else-if="isClassTeacherDashboard"
+      v-loading="classDashboardLoading"
+      class="class-dashboard-layout"
+    >
+      <div class="class-dashboard-cards">
         <button
+          v-for="card in classTeacherCards"
+          :key="card.label"
           type="button"
-          class="score-card"
-          @click="goTo('/scores')"
+          class="class-metric-card"
+          @click="goTo(card.path)"
         >
-          <div class="score-card__header">
-            <h3>平均成绩</h3>
-            <span class="score-card__link">前往成绩管理</span>
+          <div class="class-metric-card__icon" :style="{ background: card.color }">
+            <el-icon :size="24"><component :is="card.icon" /></el-icon>
           </div>
-          <div ref="scoreChartRef" class="chart-box"></div>
+          <div class="class-metric-card__content">
+            <span class="class-metric-card__label">{{ card.label }}</span>
+            <strong class="class-metric-card__value">{{ card.value }}</strong>
+          </div>
         </button>
       </div>
 
-      <div class="calendar-card">
-        <TeachingCalendar :course="selectedCourse" />
-      </div>
+      <el-card shadow="never" class="class-dashboard-calendar">
+        <ClassSemesterCalendar
+          :class-name="currentClassName"
+          :courses="currentClassCourses"
+        />
+      </el-card>
     </div>
+
+    <template v-else>
+      <el-empty
+        v-if="!selectedCourse && isTeachingDashboard"
+        description="请先选择一门课程。"
+      />
+
+      <div v-else class="legacy-dashboard-layout">
+        <div class="legacy-dashboard-left">
+          <div class="metrics-grid">
+            <button
+              v-for="card in legacyStatCards"
+              :key="card.label"
+              type="button"
+              class="metric-card"
+              @click="goTo(card.path)"
+            >
+              <div class="metric-icon" :style="{ background: card.color }">
+                <el-icon :size="24"><component :is="card.icon" /></el-icon>
+              </div>
+              <div class="metric-content">
+                <div class="metric-value">{{ card.value }}</div>
+                <div class="metric-label">{{ card.label }}</div>
+              </div>
+            </button>
+          </div>
+
+          <button type="button" class="score-card" @click="goTo('/scores')">
+            <div class="score-card__header">
+              <h3>平均成绩</h3>
+              <span class="score-card__link">前往成绩管理</span>
+            </div>
+            <div ref="scoreChartRef" class="chart-box"></div>
+          </button>
+        </div>
+
+        <el-card shadow="never" class="calendar-card">
+          <TeachingCalendar :course="selectedCourse" />
+        </el-card>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -64,21 +99,30 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { Bell, CollectionTag, Document, User } from '@element-plus/icons-vue'
+import { Bell, CollectionTag, Document, Reading, User } from '@element-plus/icons-vue'
 
 import api from '@/api'
+import ClassSemesterCalendar from '@/components/ClassSemesterCalendar.vue'
 import TeachingCalendar from '@/components/TeachingCalendar.vue'
 import { useUserStore } from '@/stores/user'
+import {
+  filterCoursesByClassId,
+  filterImportantNotifications,
+  filterNotificationsForClass,
+  resolveClassTeacherClassId,
+  resolveClassTeacherClassName
+} from '@/utils/classTeacher'
+import { loadAllPages } from '@/utils/pagedFetch'
 
 const router = useRouter()
 const userStore = useUserStore()
-const selectedCourse = computed(() => userStore.selectedCourse)
-const isTeachingDashboard = computed(() => userStore.isTeacher || userStore.isClassTeacher)
-const showSemesterFilter = computed(() => !isTeachingDashboard.value)
 
 const semester = ref('')
 const semesters = ref([])
 const scoreChartRef = ref(null)
+const classDashboardLoading = ref(false)
+const classTeacherCoursePool = ref([])
+const importantNotifications = ref([])
 
 let scoreChart = null
 
@@ -93,7 +137,39 @@ const resourceCounts = reactive({
   notifications: 0
 })
 
-const statCards = computed(() => [
+const classTeacherSummary = reactive({
+  studentCount: 0,
+  courseCount: 0,
+  notificationCount: 0
+})
+
+const selectedCourse = computed(() => userStore.selectedCourse)
+const isTeachingDashboard = computed(() => userStore.isTeacher)
+const isClassTeacherDashboard = computed(() => userStore.isClassTeacher)
+const showSemesterFilter = computed(() => !isTeachingDashboard.value && !isClassTeacherDashboard.value)
+const currentClassId = computed(() => resolveClassTeacherClassId(userStore.userInfo, classTeacherCoursePool.value))
+const currentClassName = computed(() => resolveClassTeacherClassName(userStore.userInfo, classTeacherCoursePool.value) || '未分配班级')
+const currentClassCourses = computed(() => filterCoursesByClassId(classTeacherCoursePool.value, currentClassId.value))
+
+const dashboardSubtitle = computed(() => {
+  if (isClassTeacherDashboard.value) {
+    return currentClassId.value ? `当前班级：${currentClassName.value}` : '请先为班主任账号分配班级。'
+  }
+
+  if (selectedCourse.value) {
+    return `${selectedCourse.value.name} · ${selectedCourse.value.class_name || '未分班级'}`
+  }
+
+  return '请先选择一门课程。'
+})
+
+const classTeacherCards = computed(() => [
+  { label: '学生总数', value: classTeacherSummary.studentCount, color: '#2563eb', icon: User, path: '/students' },
+  { label: '课程数量', value: classTeacherSummary.courseCount, color: '#0f766e', icon: Reading, path: '/subjects' },
+  { label: '通知数量', value: classTeacherSummary.notificationCount, color: '#dc2626', icon: Bell, path: '/notifications' }
+])
+
+const legacyStatCards = computed(() => [
   { label: '学生总数', value: stats.total_students, color: '#2563eb', icon: User, path: '/students' },
   { label: '资料数量', value: resourceCounts.materials, color: '#0f766e', icon: Document, path: '/materials' },
   { label: '作业数量', value: resourceCounts.homeworks, color: '#d97706', icon: CollectionTag, path: '/homework' },
@@ -105,7 +181,7 @@ const buildQuery = () => ({
   subject_id: selectedCourse.value?.id
 })
 
-const resetStats = () => {
+const resetLegacyStats = () => {
   stats.total_students = 0
   stats.avg_score = 0
   resourceCounts.materials = 0
@@ -121,13 +197,13 @@ const loadSemesters = async () => {
   }))
 }
 
-const loadStats = async () => {
+const loadLegacyStats = async () => {
   const data = await api.dashboard.getStats(buildQuery())
   stats.total_students = Number(data?.total_students || 0)
   stats.avg_score = Number(data?.avg_score || 0)
 }
 
-const loadResourceCounts = async () => {
+const loadLegacyResourceCounts = async () => {
   if (!selectedCourse.value) {
     resourceCounts.materials = 0
     resourceCounts.homeworks = 0
@@ -203,15 +279,50 @@ const updateChart = () => {
   })
 }
 
-const loadAll = async () => {
+const loadLegacyDashboard = async () => {
   if (isTeachingDashboard.value && !selectedCourse.value) {
-    resetStats()
+    resetLegacyStats()
     return
   }
 
-  await Promise.all([loadStats(), loadResourceCounts()])
+  await Promise.all([loadLegacyStats(), loadLegacyResourceCounts()])
   await ensureChart()
   updateChart()
+}
+
+const loadClassTeacherDashboard = async () => {
+  classDashboardLoading.value = true
+
+  try {
+    classTeacherCoursePool.value = await userStore.fetchTeachingCourses(true)
+    const classId = resolveClassTeacherClassId(userStore.userInfo, classTeacherCoursePool.value)
+
+    if (!classId) {
+      classTeacherSummary.studentCount = 0
+      classTeacherSummary.courseCount = 0
+      classTeacherSummary.notificationCount = 0
+      importantNotifications.value = []
+      return
+    }
+
+    const classCourses = filterCoursesByClassId(classTeacherCoursePool.value, classId)
+    const courseIds = new Set(classCourses.map(course => Number(course.id)))
+
+    const [studentsResult, notificationRows] = await Promise.all([
+      api.students.list({ class_id: classId, page: 1, page_size: 1 }),
+      loadAllPages(params => api.notifications.list(params))
+    ])
+
+    importantNotifications.value = filterImportantNotifications(
+      filterNotificationsForClass(notificationRows, classId, courseIds)
+    )
+
+    classTeacherSummary.studentCount = Number(studentsResult?.total || 0)
+    classTeacherSummary.courseCount = classCourses.length
+    classTeacherSummary.notificationCount = importantNotifications.value.length
+  } finally {
+    classDashboardLoading.value = false
+  }
 }
 
 const resizeChart = () => {
@@ -223,12 +334,16 @@ const goTo = path => {
 }
 
 onMounted(async () => {
-  if (showSemesterFilter.value) {
-    await loadSemesters()
-  }
+  if (isClassTeacherDashboard.value) {
+    await loadClassTeacherDashboard()
+  } else {
+    if (showSemesterFilter.value) {
+      await loadSemesters()
+    }
 
-  await loadAll()
-  window.addEventListener('resize', resizeChart)
+    await loadLegacyDashboard()
+    window.addEventListener('resize', resizeChart)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -236,8 +351,19 @@ onBeforeUnmount(() => {
   scoreChart?.dispose()
 })
 
+watch(
+  () => userStore.userInfo?.id,
+  async () => {
+    if (isClassTeacherDashboard.value) {
+      await loadClassTeacherDashboard()
+    }
+  }
+)
+
 watch(selectedCourse, async () => {
-  await loadAll()
+  if (!isClassTeacherDashboard.value) {
+    await loadLegacyDashboard()
+  }
 })
 </script>
 
@@ -248,17 +374,16 @@ watch(selectedCourse, async () => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
   align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -273,18 +398,81 @@ watch(selectedCourse, async () => {
   color: #64748b;
 }
 
-.dashboard-layout {
+.class-dashboard-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.class-dashboard-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.class-metric-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 0;
+  border-radius: 22px;
+  background: #fff;
+  padding: 24px 22px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.class-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(37, 99, 235, 0.14);
+}
+
+.class-metric-card__icon {
+  display: flex;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  color: #fff;
+}
+
+.class-metric-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.class-metric-card__label {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.class-metric-card__value {
+  font-size: 34px;
+  color: #0f172a;
+}
+
+.class-dashboard-calendar {
+  border-radius: 24px;
+}
+
+.legacy-dashboard-layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   align-items: stretch;
 }
 
-.dashboard-left {
+.legacy-dashboard-left {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 20px;
-  min-width: 0;
 }
 
 .metrics-grid {
@@ -294,17 +482,12 @@ watch(selectedCourse, async () => {
 }
 
 .metric-card,
-.calendar-card,
 .score-card {
-  background: #fff;
   border: 0;
   border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-}
-
-.metric-card,
-.score-card {
+  background: #fff;
   cursor: pointer;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -316,22 +499,22 @@ watch(selectedCourse, async () => {
 
 .metric-card {
   display: flex;
+  min-height: 128px;
   align-items: center;
   gap: 16px;
-  min-height: 128px;
   padding: 22px;
   text-align: left;
 }
 
 .metric-icon {
+  display: flex;
   width: 54px;
   height: 54px;
-  border-radius: 18px;
-  display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  border-radius: 18px;
   color: #fff;
-  flex-shrink: 0;
 }
 
 .metric-value {
@@ -347,8 +530,8 @@ watch(selectedCourse, async () => {
 }
 
 .calendar-card {
-  padding: 22px;
   min-width: 0;
+  border-radius: 20px;
 }
 
 .score-card {
@@ -358,8 +541,8 @@ watch(selectedCourse, async () => {
 
 .score-card__header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
@@ -377,8 +560,9 @@ watch(selectedCourse, async () => {
   height: 280px;
 }
 
-@media (max-width: 1100px) {
-  .dashboard-layout {
+@media (max-width: 1200px) {
+  .class-dashboard-layout,
+  .legacy-dashboard-layout {
     grid-template-columns: 1fr;
   }
 }

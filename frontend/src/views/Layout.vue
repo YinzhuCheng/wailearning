@@ -40,9 +40,18 @@
             <el-breadcrumb-item :to="{ path: homePath }">首页</el-breadcrumb-item>
             <el-breadcrumb-item>{{ currentRouteName }}</el-breadcrumb-item>
           </el-breadcrumb>
-          <div v-if="showCourseContext" class="course-chip">
-            <span class="course-chip-label">当前课程</span>
-            <div class="course-chip-meta">
+
+          <div v-if="showClassContext" class="context-chip context-chip--class">
+            <span class="context-chip__label">当前班级</span>
+            <div class="context-chip__meta">
+              <strong>{{ currentClassName }}</strong>
+              <span>{{ classContextText }}</span>
+            </div>
+          </div>
+
+          <div v-else-if="showCourseContext" class="context-chip">
+            <span class="context-chip__label">当前课程</span>
+            <div class="context-chip__meta">
               <strong>{{ selectedCourse?.name }}</strong>
               <span>{{ selectedCourse?.semester || '未设置学期' }}</span>
             </div>
@@ -74,6 +83,7 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+
           <el-dropdown @command="handleCommand">
             <div class="user-box">
               <el-avatar :size="34">{{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}</el-avatar>
@@ -115,8 +125,9 @@
             readonly
             tabindex="-1"
             aria-hidden="true"
-            style="position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;"
+            class="hidden-username"
           />
+
           <el-form-item label="当前密码">
             <el-input
               v-model="passwordForm.current_password"
@@ -125,6 +136,7 @@
               autocomplete="current-password"
             />
           </el-form-item>
+
           <el-form-item label="新密码">
             <el-input
               v-model="passwordForm.new_password"
@@ -133,6 +145,7 @@
               autocomplete="new-password"
             />
           </el-form-item>
+
           <el-form-item label="确认新密码">
             <el-input
               v-model="passwordForm.confirm_password"
@@ -142,7 +155,8 @@
               @keyup.enter="submitChangePassword"
             />
           </el-form-item>
-          <el-text type="info">新密码需要 8 到 72 个字符，保存后立即生效。</el-text>
+
+          <el-text type="info">新密码需为 8 到 72 个字符，保存后立即生效。</el-text>
         </el-form>
         <template #footer>
           <span>
@@ -164,8 +178,6 @@ import { ElMessage } from 'element-plus'
 import {
   ArrowDown,
   Bell,
-  Calendar,
-  Coin,
   Collection,
   DataAnalysis,
   Expand,
@@ -173,13 +185,13 @@ import {
   Reading,
   School,
   Setting,
-  TrendCharts,
   User,
   UserFilled
 } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { filterCoursesByClassId, resolveClassTeacherClassId, resolveClassTeacherClassName } from '@/utils/classTeacher'
 
 const route = useRoute()
 const router = useRouter()
@@ -190,6 +202,7 @@ const mobileBreakpoint = 768
 const isCollapsed = ref(false)
 const passwordDialogVisible = ref(false)
 const passwordSubmitting = ref(false)
+
 const passwordForm = reactive({
   current_password: '',
   new_password: '',
@@ -198,6 +211,10 @@ const passwordForm = reactive({
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const availableCourses = computed(() => userStore.teachingCourses || [])
+const currentClassId = computed(() => resolveClassTeacherClassId(userStore.userInfo, availableCourses.value))
+const classTeacherCourses = computed(() => filterCoursesByClassId(availableCourses.value, currentClassId.value))
+const currentClassName = computed(() => resolveClassTeacherClassName(userStore.userInfo, availableCourses.value) || '未分配班级')
+
 const homePath = computed(() => {
   if (userStore.isAdmin) {
     return adminHomePath
@@ -205,51 +222,56 @@ const homePath = computed(() => {
 
   return userStore.isStudent ? '/courses' : '/dashboard'
 })
-const showCourseContext = computed(() => !userStore.isAdmin && !!selectedCourse.value)
-const showCourseSwitcher = computed(() => !userStore.isAdmin && availableCourses.value.length > 0)
 
-const currentRouteName = computed(() => {
-  if (route.meta?.title) {
-    return route.meta.title
-  }
+const showClassContext = computed(() => userStore.isClassTeacher && Boolean(currentClassId.value))
+const showCourseContext = computed(() => !userStore.isAdmin && !userStore.isClassTeacher && Boolean(selectedCourse.value))
+const showCourseSwitcher = computed(() => !userStore.isAdmin && !userStore.isClassTeacher && availableCourses.value.length > 0)
+const classContextText = computed(() => `班级课程 ${classTeacherCourses.value.length} 门`)
 
-  const routeMap = {
-    '/courses': '我的课程',
-    '/course-home': '课程主页',
-    '/dashboard': '课程仪表盘',
-    '/classes': '班级管理',
-    '/students': '学生管理',
-    '/scores': '成绩管理',
-    '/attendance': '考勤管理',
-    '/rankings': '班级排名',
-    '/analysis': '数据分析',
-    '/users': '用户管理',
-    '/subjects': '课程管理',
-    '/semesters': '学期管理',
-    '/logs': '操作日志',
-    '/points': '积分系统',
-    '/points-display': '积分展示',
-    '/settings': '系统设置',
-    '/materials': '课程资料',
-    '/homework': '作业管理',
-    '/notifications': '通知中心'
-  }
-  return routeMap[route.path] || '页面'
-})
+const routeNameMap = {
+  '/courses': '我的课程',
+  '/course-home': '课程主页',
+  '/dashboard': '课程仪表盘',
+  '/classes': '班级管理',
+  '/students': '学生信息',
+  '/scores': '成绩管理',
+  '/attendance': '考勤管理',
+  '/rankings': '班级排名',
+  '/analysis': '数据分析',
+  '/users': '用户管理',
+  '/subjects': '课程信息',
+  '/semesters': '学期管理',
+  '/logs': '操作日志',
+  '/points': '积分系统',
+  '/points-display': '积分展示',
+  '/settings': '系统设置',
+  '/materials': '课程资料',
+  '/homework': '作业管理',
+  '/notifications': '通知信息'
+}
 
-const studentBaseMenu = [
-  { path: '/courses', label: '我的课程', icon: Reading },
-  { path: '/course-home', label: '课程主页', icon: School }
+const currentRouteName = computed(() => route.meta?.title || routeNameMap[route.path] || '页面')
+
+const classTeacherMenu = [
+  { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
+  { path: '/students', label: '学生信息', icon: User },
+  { path: '/subjects', label: '课程信息', icon: Reading },
+  { path: '/notifications', label: '通知信息', icon: Bell }
 ]
 
 const teacherMenu = [
   { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
   { path: '/students', label: '学生管理', icon: User },
   { path: '/scores', label: '成绩管理', icon: Collection },
-  { path: '/attendance', label: '考勤管理', icon: Calendar },
+  { path: '/attendance', label: '考勤管理', icon: Collection },
   { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/homework', label: '作业管理', icon: Reading },
   { path: '/notifications', label: '通知中心', icon: Bell }
+]
+
+const studentBaseMenu = [
+  { path: '/courses', label: '我的课程', icon: Reading },
+  { path: '/course-home', label: '课程主页', icon: School }
 ]
 
 const studentMenu = [
@@ -272,21 +294,24 @@ const menuItems = computed(() => {
   if (userStore.isStudent) {
     return selectedCourse.value ? [...studentBaseMenu, ...studentMenu] : [studentBaseMenu[0]]
   }
+
   if (userStore.isAdmin) {
     return adminMenu
   }
+
+  if (userStore.isClassTeacher) {
+    return classTeacherMenu
+  }
+
   return teacherMenu
 })
 
-const roleText = role => {
-  const map = {
-    admin: '管理员',
-    class_teacher: '班主任',
-    teacher: '任课老师',
-    student: '学生'
-  }
-  return map[role] || '未知角色'
-}
+const roleText = role => ({
+  admin: '管理员',
+  class_teacher: '班主任',
+  teacher: '任课老师',
+  student: '学生'
+}[role] || '未知角色')
 
 const resetPasswordForm = () => {
   passwordForm.current_password = ''
@@ -306,9 +331,10 @@ const closeChangePasswordDialog = () => {
 
 const submitChangePassword = async () => {
   if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
-    ElMessage.warning('请填写完整的密码信息')
+    ElMessage.warning('请完整填写密码信息')
     return
   }
+
   if (passwordForm.new_password !== passwordForm.confirm_password) {
     ElMessage.warning('两次输入的新密码不一致')
     return
@@ -337,7 +363,7 @@ const syncTeacherCourses = async force => {
 
   try {
     await userStore.ensureSelectedCourse(force, {
-      preserveEmptySelection: userStore.isStudent
+      preserveEmptySelection: userStore.isStudent || userStore.isClassTeacher
     })
   } catch (error) {
     console.error('加载课程失败', error)
@@ -377,6 +403,7 @@ const handleCommand = command => {
     openChangePasswordDialog()
     return
   }
+
   if (command === 'logout') {
     userStore.logout()
     router.push('/login')
@@ -438,13 +465,13 @@ watch(
 }
 
 .logo-icon {
+  display: flex;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.2);
-  display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.2);
   color: #93c5fd;
 }
 
@@ -461,8 +488,8 @@ watch(
 }
 
 .collapse-btn {
-  background: transparent;
   border-color: rgba(255, 255, 255, 0.2);
+  background: transparent;
   color: #fff;
 }
 
@@ -490,11 +517,11 @@ watch(
 
 .header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid #e2e8f0;
 }
 
 .header-left {
@@ -503,27 +530,32 @@ watch(
   gap: 18px;
 }
 
-.course-chip {
+.context-chip {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px;
   border-radius: 999px;
   background: #eff6ff;
+  padding: 8px 14px;
   color: #1d4ed8;
 }
 
-.course-chip-label {
+.context-chip--class {
+  background: #ecfeff;
+  color: #0f766e;
+}
+
+.context-chip__label {
   color: #64748b;
 }
 
-.course-chip-meta {
+.context-chip__meta {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.course-chip-meta span {
+.context-chip__meta span {
   font-size: 12px;
   color: #64748b;
 }
@@ -536,9 +568,9 @@ watch(
 
 .course-option {
   display: flex;
+  min-width: 200px;
   flex-direction: column;
   gap: 4px;
-  min-width: 200px;
 }
 
 .course-option span {
@@ -580,17 +612,26 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
   font-size: 13px;
+  color: #64748b;
+}
+
+.hidden-username {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {
   .header {
     height: auto;
-    padding: 12px;
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+    padding: 12px;
   }
 
   .header-left {

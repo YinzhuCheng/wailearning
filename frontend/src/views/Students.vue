@@ -2,20 +2,20 @@
   <div class="students-page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">学生管理</h1>
+        <h1 class="page-title">{{ pageTitle }}</h1>
         <p class="page-subtitle">{{ pageSubtitle }}</p>
       </div>
     </div>
 
     <el-empty
-      v-if="showCourseEmpty"
-      description="请先选择一门课程。"
+      v-if="showEmpty"
+      :description="emptyText"
     />
 
     <template v-else>
       <el-alert
-        v-if="!isAdminView && selectedCourse"
-        title="当前课程学生名单支持手动删除学生。"
+        v-if="showTeacherAlert"
+        title="当前课程学生名单支持手动移除选课学生。"
         type="warning"
         :closable="false"
         class="info-alert"
@@ -26,13 +26,13 @@
           <div class="card-header-block">
             <div class="card-header">
               <div>
-                <strong>{{ isAdminView ? '全校学生名单' : '课程学生名单' }}</strong>
+                <strong>{{ cardTitle }}</strong>
                 <span class="header-count">共 {{ students.length }} 人</span>
               </div>
 
               <div v-if="isAdminView" class="card-actions">
-                <el-button @click="downloadTemplate('xlsx')">Excel模板</el-button>
-                <el-button @click="downloadTemplate('csv')">CSV模板</el-button>
+                <el-button @click="downloadTemplate('xlsx')">Excel 模板</el-button>
+                <el-button @click="downloadTemplate('csv')">CSV 模板</el-button>
                 <el-button type="primary" :loading="importing" @click="triggerImport">
                   一键导入名单
                 </el-button>
@@ -48,7 +48,7 @@
             </div>
 
             <p v-if="isAdminView" class="import-tip">
-              支持 Excel / CSV 文件，模板列为：姓名、性别、学号、所属班级。名单中的新班级会自动创建并加入“班级管理”。
+              支持 Excel / CSV 文件，模板列为：姓名、性别、学号、所属班级。导入时若发现新班级，会自动在系统中创建。
             </p>
           </div>
         </template>
@@ -86,6 +86,20 @@
             </el-table-column>
           </template>
 
+          <template v-else-if="isClassTeacherView">
+            <el-table-column prop="name" label="姓名" min-width="140" />
+            <el-table-column label="性别" width="100">
+              <template #default="{ row }">
+                {{ genderText(row.gender) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="student_no" label="学号" min-width="160" />
+            <el-table-column prop="class_name" label="班级" min-width="160" />
+            <el-table-column prop="phone" label="联系电话" min-width="150" />
+            <el-table-column prop="parent_phone" label="家长电话" min-width="150" />
+            <el-table-column prop="address" label="家庭住址" min-width="220" show-overflow-tooltip />
+          </template>
+
           <template v-else>
             <el-table-column prop="student_name" label="学生姓名" min-width="160" />
             <el-table-column prop="student_no" label="学号" width="160" />
@@ -109,12 +123,8 @@
             </el-table-column>
             <el-table-column v-if="canManageRoster" label="操作" width="140">
               <template #default="{ row }">
-                <el-button
-                  type="danger"
-                  size="small"
-                  @click="removeStudent(row)"
-                >
-                  删除
+                <el-button type="danger" size="small" @click="removeStudent(row)">
+                  移除
                 </el-button>
               </template>
             </el-table-column>
@@ -133,6 +143,7 @@ import * as XLSX from 'xlsx'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { resolveClassTeacherClassId, resolveClassTeacherClassName } from '@/utils/classTeacher'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -151,15 +162,30 @@ const loading = ref(false)
 const importing = ref(false)
 const students = ref([])
 const fileInputRef = ref(null)
+const classTeacherCourses = ref([])
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const isAdminView = computed(() => userStore.isAdmin)
-const canManageRoster = computed(() => userStore.canManageTeaching && !isAdminView.value)
-const showCourseEmpty = computed(() => !isAdminView.value && !selectedCourse.value)
+const isClassTeacherView = computed(() => userStore.isClassTeacher)
+const canManageRoster = computed(() => userStore.canManageTeaching && !isAdminView.value && !isClassTeacherView.value)
+const currentClassId = computed(() => resolveClassTeacherClassId(userStore.userInfo, classTeacherCourses.value))
+const currentClassName = computed(() => resolveClassTeacherClassName(userStore.userInfo, classTeacherCourses.value) || '未分配班级')
+
+const pageTitle = computed(() => {
+  if (isClassTeacherView.value) {
+    return '学生信息'
+  }
+
+  return isAdminView.value ? '学生管理' : '学生信息'
+})
 
 const pageSubtitle = computed(() => {
   if (isAdminView.value) {
     return '查看全校学生名单，并支持新增、编辑、删除和批量导入。'
+  }
+
+  if (isClassTeacherView.value) {
+    return currentClassId.value ? `${currentClassName.value} 全部学生信息` : '请先为班主任账号分配班级。'
   }
 
   if (selectedCourse.value) {
@@ -167,6 +193,33 @@ const pageSubtitle = computed(() => {
   }
 
   return '请先选择一门课程查看课程学生名单。'
+})
+
+const showEmpty = computed(() => {
+  if (isAdminView.value) {
+    return false
+  }
+
+  if (isClassTeacherView.value) {
+    return !currentClassId.value
+  }
+
+  return !selectedCourse.value
+})
+
+const emptyText = computed(() => (isClassTeacherView.value ? '当前班主任账号没有绑定班级。' : '请先选择一门课程。'))
+const showTeacherAlert = computed(() => !isAdminView.value && !isClassTeacherView.value && Boolean(selectedCourse.value))
+
+const cardTitle = computed(() => {
+  if (isAdminView.value) {
+    return '全校学生名单'
+  }
+
+  if (isClassTeacherView.value) {
+    return `${currentClassName.value} 学生名单`
+  }
+
+  return '课程学生名单'
 })
 
 const genderText = gender => {
@@ -201,12 +254,10 @@ const normalizeGenderInput = value => {
     male: 'male',
     m: 'male',
     '1': 'male',
-    男性: 'male',
     女: 'female',
     female: 'female',
     f: 'female',
-    '0': 'female',
-    女性: 'female'
+    '0': 'female'
   }
   return genderMap[gender] || ''
 }
@@ -290,7 +341,7 @@ const parseImportRows = rows => {
     }
 
     if (!gender) {
-      errors.push(`第 ${rowNumber} 行“性别”仅支持 男 / 女`)
+      errors.push(`第 ${rowNumber} 行“性别”仅支持 男/女`)
       return
     }
 
@@ -337,12 +388,37 @@ const loadAllStudents = async () => {
   return allStudents
 }
 
+const ensureClassTeacherCourses = async () => {
+  if (!isClassTeacherView.value) {
+    return
+  }
+
+  classTeacherCourses.value = await userStore.fetchTeachingCourses(true)
+}
+
 const loadStudents = async () => {
   loading.value = true
 
   try {
     if (isAdminView.value) {
       students.value = await loadAllStudents()
+      return
+    }
+
+    if (isClassTeacherView.value) {
+      await ensureClassTeacherCourses()
+
+      if (!currentClassId.value) {
+        students.value = []
+        return
+      }
+
+      const result = await api.students.list({
+        class_id: currentClassId.value,
+        page: 1,
+        page_size: 1000
+      })
+      students.value = result?.data || []
       return
     }
 
@@ -378,9 +454,7 @@ const handleFileChange = async event => {
 
     const worksheet = workbook.Sheets[sheetName]
     const matrix = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false })
-    const headers = (matrix[0] || []).map(cell =>
-      normalizeCellValue(cell).replace(/^\uFEFF/, '')
-    )
+    const headers = (matrix[0] || []).map(cell => normalizeCellValue(cell).replace(/^\uFEFF/, ''))
     const missingHeaders = TEMPLATE_HEADERS.filter(header => !headers.includes(header))
 
     if (missingHeaders.length > 0) {
@@ -457,7 +531,7 @@ const handleFileChange = async event => {
 const deleteStudent = async student => {
   try {
     await ElMessageBox.confirm(
-      `确认删除学生“${student.name}”吗？删除后将同步移除该学生的关联成绩、考勤和课程关联数据。`,
+      `确认删除学生“${student.name}”吗？删除后会同步移除该学生的关联成绩、考勤和课程关联数据。`,
       '删除学生',
       { type: 'warning' }
     )
@@ -512,9 +586,12 @@ onMounted(() => {
   loadStudents()
 })
 
-watch([selectedCourse, isAdminView], () => {
-  loadStudents()
-})
+watch(
+  () => [selectedCourse.value?.id, userStore.userInfo?.id],
+  () => {
+    loadStudents()
+  }
+)
 </script>
 
 <style scoped>
@@ -524,8 +601,8 @@ watch([selectedCourse, isAdminView], () => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -553,8 +630,8 @@ watch([selectedCourse, isAdminView], () => {
 
 .card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
 }
 

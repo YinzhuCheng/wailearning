@@ -2,22 +2,27 @@
   <div class="notifications-page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">通知中心</h1>
-        <p class="page-subtitle">
-          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先选择课程后查看通知。' }}
-        </p>
+        <h1 class="page-title">{{ pageTitle }}</h1>
+        <p class="page-subtitle">{{ pageSubtitle }}</p>
       </div>
       <div class="header-actions">
         <el-badge :value="unreadCount" :hidden="unreadCount === 0">
           <el-button @click="markAllRead" :disabled="unreadCount === 0">全部标为已读</el-button>
         </el-badge>
-        <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
+        <el-button
+          v-if="showCreateButton"
+          type="primary"
+          @click="openCreateDialog"
+        >
           发布通知
         </el-button>
       </div>
     </div>
 
-    <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
+    <el-empty
+      v-if="showEmpty"
+      :description="emptyText"
+    />
 
     <template v-else>
       <el-card shadow="never">
@@ -31,6 +36,11 @@
           <el-table-column prop="title" label="通知标题" min-width="220">
             <template #default="{ row }">
               <span :class="{ 'unread-title': !row.is_read }">{{ row.title }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="所属课程" min-width="160">
+            <template #default="{ row }">
+              {{ row.subject_name || '班级通知' }}
             </template>
           </el-table-column>
           <el-table-column label="附件" width="140">
@@ -59,7 +69,7 @@
               {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="!userStore.isStudent" label="操作" width="180">
+          <el-table-column v-if="showManageColumn" label="操作" width="180">
             <template #default="{ row }">
               <el-button
                 v-if="canManageNotification(row)"
@@ -139,10 +149,11 @@
     <el-dialog v-model="detailVisible" title="通知详情" width="620px" destroy-on-close>
       <el-descriptions v-if="currentNotification" :column="2" border>
         <el-descriptions-item label="通知标题" :span="2">{{ currentNotification.title }}</el-descriptions-item>
-        <el-descriptions-item label="课程">{{ currentNotification.subject_name || selectedCourse?.name }}</el-descriptions-item>
+        <el-descriptions-item label="班级">{{ currentNotification.class_name || currentClassName || selectedCourse?.class_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="课程">{{ currentNotification.subject_name || '班级通知' }}</el-descriptions-item>
         <el-descriptions-item label="优先级">{{ priorityText(currentNotification.priority) }}</el-descriptions-item>
         <el-descriptions-item label="发布人">{{ currentNotification.creator_name }}</el-descriptions-item>
-        <el-descriptions-item label="发布时间">{{ formatDate(currentNotification.created_at) }}</el-descriptions-item>
+        <el-descriptions-item label="发布时间" :span="2">{{ formatDate(currentNotification.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="通知内容" :span="2">{{ currentNotification.content || '暂无内容' }}</el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentNotification.attachment_url" type="primary" link @click="openAttachment(currentNotification)">
@@ -162,6 +173,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
+import {
+  filterCoursesByClassId,
+  filterImportantNotifications,
+  filterNotificationsForClass,
+  resolveClassTeacherClassId,
+  resolveClassTeacherClassName
+} from '@/utils/classTeacher'
+import { loadAllPages } from '@/utils/pagedFetch'
 
 const userStore = useUserStore()
 
@@ -175,9 +194,40 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const formRef = ref(null)
 const attachmentFile = ref(null)
+const classTeacherCoursePool = ref([])
 
 const selectedCourse = computed(() => userStore.selectedCourse)
+const isClassTeacherView = computed(() => userStore.isClassTeacher)
+const currentClassId = computed(() => resolveClassTeacherClassId(userStore.userInfo, classTeacherCoursePool.value))
+const currentClassName = computed(() => resolveClassTeacherClassName(userStore.userInfo, classTeacherCoursePool.value) || '未分配班级')
+const currentClassCourses = computed(() => filterCoursesByClassId(classTeacherCoursePool.value, currentClassId.value))
+const currentClassCourseIds = computed(() => new Set(currentClassCourses.value.map(course => Number(course.id))))
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
+
+const pageTitle = computed(() => (isClassTeacherView.value ? '通知信息' : '通知中心'))
+const pageSubtitle = computed(() => {
+  if (isClassTeacherView.value) {
+    return currentClassId.value
+      ? `${currentClassName.value} 全部课程的重要通知`
+      : '请先为班主任账号分配班级。'
+  }
+
+  return selectedCourse.value
+    ? `${selectedCourse.value.name} · ${selectedCourse.value.class_name || '未分配班级'}`
+    : '请先选择课程后查看通知。'
+})
+
+const showEmpty = computed(() => {
+  if (isClassTeacherView.value) {
+    return !currentClassId.value
+  }
+
+  return !selectedCourse.value
+})
+
+const emptyText = computed(() => (isClassTeacherView.value ? '当前班主任账号没有绑定班级。' : '请先选择一门课程。'))
+const showCreateButton = computed(() => !userStore.isStudent && !isClassTeacherView.value && Boolean(selectedCourse.value))
+const showManageColumn = computed(() => !userStore.isStudent && !isClassTeacherView.value)
 
 const form = reactive({
   title: '',
@@ -193,27 +243,6 @@ const rules = {
   title: [{ required: true, message: '请输入通知标题', trigger: 'blur' }]
 }
 
-const loadNotifications = async () => {
-  if (!selectedCourse.value) {
-    notifications.value = []
-    unreadCount.value = 0
-    return
-  }
-
-  loading.value = true
-  try {
-    const result = await api.notifications.list({
-      subject_id: selectedCourse.value.id,
-      page: 1,
-      page_size: 100
-    })
-    notifications.value = result?.data || []
-    unreadCount.value = result?.unread_count || 0
-  } finally {
-    loading.value = false
-  }
-}
-
 const resetForm = () => {
   form.title = ''
   form.content = ''
@@ -223,6 +252,53 @@ const resetForm = () => {
   form.attachment_url = ''
   form.remove_attachment = false
   attachmentFile.value = null
+}
+
+const loadClassTeacherNotifications = async () => {
+  classTeacherCoursePool.value = await userStore.fetchTeachingCourses(true)
+
+  if (!currentClassId.value) {
+    notifications.value = []
+    unreadCount.value = 0
+    return
+  }
+
+  const allNotifications = await loadAllPages(params => api.notifications.list(params))
+  const filtered = filterImportantNotifications(
+    filterNotificationsForClass(allNotifications, currentClassId.value, currentClassCourseIds.value)
+  )
+
+  notifications.value = filtered
+  unreadCount.value = filtered.filter(item => !item.is_read).length
+}
+
+const loadLegacyNotifications = async () => {
+  if (!selectedCourse.value) {
+    notifications.value = []
+    unreadCount.value = 0
+    return
+  }
+
+  const result = await api.notifications.list({
+    subject_id: selectedCourse.value.id,
+    page: 1,
+    page_size: 100
+  })
+  notifications.value = result?.data || []
+  unreadCount.value = Number(result?.unread_count || 0)
+}
+
+const loadNotifications = async () => {
+  loading.value = true
+  try {
+    if (isClassTeacherView.value) {
+      await loadClassTeacherNotifications()
+    } else {
+      await loadLegacyNotifications()
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 const openCreateDialog = () => {
@@ -306,6 +382,7 @@ const submitForm = async () => {
       class_id: selectedCourse.value.class_id,
       subject_id: selectedCourse.value.id
     }
+
     if (editingNotification.value) {
       await api.notifications.update(editingNotification.value.id, payload)
       ElMessage.success('通知已更新')
@@ -313,6 +390,7 @@ const submitForm = async () => {
       await api.notifications.create(payload)
       ElMessage.success('通知已发布')
     }
+
     dialogVisible.value = false
     await loadNotifications()
   } finally {
@@ -356,9 +434,18 @@ const deleteNotification = async row => {
 }
 
 const markAllRead = async () => {
-  await api.notifications.markAllRead({
-    subject_id: selectedCourse.value?.id
-  })
+  if (isClassTeacherView.value) {
+    await Promise.all(
+      notifications.value
+        .filter(item => !item.is_read)
+        .map(item => api.notifications.markRead(item.id))
+    )
+  } else {
+    await api.notifications.markAllRead({
+      subject_id: selectedCourse.value?.id
+    })
+  }
+
   await loadNotifications()
 }
 
@@ -383,9 +470,12 @@ onMounted(() => {
   loadNotifications()
 })
 
-watch(selectedCourse, () => {
-  loadNotifications()
-})
+watch(
+  () => [selectedCourse.value?.id, userStore.userInfo?.id],
+  () => {
+    loadNotifications()
+  }
+)
 </script>
 
 <style scoped>
@@ -395,8 +485,8 @@ watch(selectedCourse, () => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -442,10 +532,10 @@ watch(selectedCourse, () => {
 
 .attachment-preview {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-top: 10px;
-  flex-wrap: wrap;
 }
 
 @media (max-width: 768px) {
