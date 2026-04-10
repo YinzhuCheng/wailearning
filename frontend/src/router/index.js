@@ -182,11 +182,9 @@ router.beforeEach(async (to, from, next) => {
 
   if (!userStore.isAdmin && to.path !== '/login') {
     try {
-      if (userStore.isStudent) {
-        await userStore.fetchTeachingCourses(false)
-      } else {
-        await userStore.ensureSelectedCourse(false)
-      }
+      await userStore.ensureSelectedCourse(false, {
+        preserveEmptySelection: userStore.isStudent
+      })
     } catch (error) {
       console.error('Failed to preload teaching courses', error)
     }

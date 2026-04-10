@@ -336,13 +336,21 @@ const syncTeacherCourses = async force => {
   }
 
   try {
-    if (userStore.isStudent) {
-      await userStore.fetchTeachingCourses(force)
-      return
-    }
-    await userStore.ensureSelectedCourse(force)
+    await userStore.ensureSelectedCourse(force, {
+      preserveEmptySelection: userStore.isStudent
+    })
   } catch (error) {
     console.error('加载课程失败', error)
+  }
+}
+
+const handleWindowFocus = () => {
+  syncTeacherCourses(true)
+}
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    syncTeacherCourses(true)
   }
 }
 
@@ -378,15 +386,26 @@ const handleCommand = command => {
 onMounted(() => {
   syncResponsiveSidebar()
   window.addEventListener('resize', syncResponsiveSidebar)
-  syncTeacherCourses(false)
+  window.addEventListener('focus', handleWindowFocus)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  syncTeacherCourses(true)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncResponsiveSidebar)
+  window.removeEventListener('focus', handleWindowFocus)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 watch(
   () => userStore.userInfo?.id,
+  () => {
+    syncTeacherCourses(true)
+  }
+)
+
+watch(
+  () => route.fullPath,
   () => {
     syncTeacherCourses(true)
   }

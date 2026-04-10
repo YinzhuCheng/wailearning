@@ -70,7 +70,9 @@ export const useUserStore = defineStore('user', () => {
     })
   }
 
-  function resolvePreferredCourse(courses) {
+  function resolvePreferredCourse(courses, options = {}) {
+    const { preserveEmptySelection = false } = options
+
     if (!courses.length) {
       return null
     }
@@ -81,6 +83,10 @@ export const useUserStore = defineStore('user', () => {
 
     if (cachedCourse) {
       return cachedCourse
+    }
+
+    if (preserveEmptySelection) {
+      return null
     }
 
     return courses[0]
@@ -104,14 +110,17 @@ export const useUserStore = defineStore('user', () => {
     return teachingCourses.value
   }
 
-  async function ensureSelectedCourse(force = false) {
+  async function ensureSelectedCourse(force = false, options = {}) {
+    const { preserveEmptySelection = false } = options
     const courses = await fetchTeachingCourses(force)
-    const preferredCourse = resolvePreferredCourse(courses)
+    const preferredCourse = resolvePreferredCourse(courses, { preserveEmptySelection })
 
     if (preferredCourse) {
       setSelectedCourse(preferredCourse)
     } else {
-      clearSelectedCourse()
+      if (selectedCourse.value || !preserveEmptySelection) {
+        clearSelectedCourse()
+      }
     }
 
     return preferredCourse
