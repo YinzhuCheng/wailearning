@@ -87,7 +87,7 @@
             </el-table-column>
             <el-table-column label="评分" min-width="320">
               <template #default="{ row }">
-                <div v-if="row.submission_id" class="review-cell">
+                <div v-if="canReviewSubmission(row)" class="review-cell">
                   <el-input
                     v-model="row.review_score_input"
                     placeholder="分数 0-100"
@@ -111,7 +111,7 @@
                   <span v-if="row.review_score !== null && row.review_score !== undefined">当前分数：{{ formatScore(row.review_score) }}</span>
                   <span v-if="row.review_comment">评论：{{ row.review_comment }}</span>
                 </div>
-                <span v-else-if="!row.submission_id" class="muted-text">未提交</span>
+                <span v-else-if="!canReviewSubmission(row)" class="muted-text">未提交</span>
               </template>
             </el-table-column>
           </el-table>
@@ -174,6 +174,8 @@ const handleSelectionChange = rows => {
 
 const selectableRow = row => Boolean(row.submission_id && row.attachment_url)
 
+const canReviewSubmission = row => row.submission_id !== null && row.submission_id !== undefined
+
 const hasSavedReview = row =>
   row.review_score !== null && row.review_score !== undefined || Boolean(row.review_comment)
 
@@ -231,7 +233,7 @@ const downloadSelected = async () => {
 }
 
 const saveReview = async row => {
-  if (!row.submission_id) {
+  if (!canReviewSubmission(row)) {
     ElMessage.error('未提交的作业不能评分')
     return
   }
