@@ -27,15 +27,6 @@ from app.models import (
 
 
 DEFAULT_SEMESTERS = [
-    {"name": "2024-春季", "year": 2024},
-    {"name": "2024-秋季", "year": 2024},
-    {"name": "2025-春季", "year": 2025},
-    {"name": "2025-秋季", "year": 2025},
-    {"name": "2026-春季", "year": 2026},
-    {"name": "2026-秋季", "year": 2026},
-]
-
-DEFAULT_SEMESTERS = [
     {"name": "2024-\u6625\u5b63", "year": 2024},
     {"name": "2024-\u79cb\u5b63", "year": 2024},
     {"name": "2025-\u6625\u5b63", "year": 2025},
@@ -101,7 +92,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS reference_answer TEXT",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS response_language VARCHAR",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS allow_late_submission BOOLEAN DEFAULT TRUE",
-        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS late_submission_affects_score BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS late_submission_affects_score BOOLEAN DEFAULT FALSE",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_score FLOAT",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_comment VARCHAR",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_attempt_id INTEGER",
@@ -271,6 +262,7 @@ def backfill_homework_grading_data(db) -> None:
     created_attempts = 0
     created_candidates = 0
     updated_configs = 0
+    updated_submission_links = 0
 
     for homework in db.query(Homework).all():
         if homework.subject_id:
@@ -303,7 +295,7 @@ def backfill_homework_grading_data(db) -> None:
             counts_toward = True
             if homework and homework.due_date and submission.submitted_at:
                 is_late = submission.submitted_at > homework.due_date
-                counts_toward = not is_late or bool(homework.late_submission_affects_score)
+                counts_toward = (not is_late) or (not bool(homework.late_submission_affects_score))
             attempt = HomeworkAttempt(
                 homework_id=submission.homework_id,
                 student_id=submission.student_id,
@@ -324,6 +316,7 @@ def backfill_homework_grading_data(db) -> None:
 
         if submission.latest_attempt_id != attempt.id:
             submission.latest_attempt_id = attempt.id
+            updated_submission_links += 1
 
         if submission.review_score is not None:
             existing_candidate = (
@@ -351,11 +344,13 @@ def backfill_homework_grading_data(db) -> None:
                 )
                 created_candidates += 1
 
-    if created_attempts or created_candidates or updated_configs:
+    if created_attempts or created_candidates or updated_configs or updated_submission_links:
         db.commit()
     print(
         "Backfilled homework grading data. "
-        f"Attempts: {created_attempts}, candidates: {created_candidates}, configs: {updated_configs}."
+        "Attempts: "
+        f"{created_attempts}, candidates: {created_candidates}, configs: {updated_configs}, "
+        f"submission_links: {updated_submission_links}."
     )
 
 
@@ -402,7 +397,6 @@ def normalize_semester_name(name: str | None) -> str | None:
 
     year, term = match.groups()
     return f"{year}-\u6625\u5b63" if term == "1" else f"{year}-\u79cb\u5b63"
-    return f"{year}-春季" if term == "1" else f"{year}-秋季"
 
 
 def normalize_semester_catalog(db) -> None:

@@ -51,9 +51,9 @@
           </el-table-column>
           <el-table-column v-if="userStore.isStudent" label="评分任务" min-width="160">
             <template #default="{ row }">
-              <div v-if="row.task_status" class="task-status-cell">
-                <el-tag :type="taskTagType(row.task_status)" size="small">
-                  {{ formatTaskStatus(row.task_status) }}
+              <div v-if="resolveTaskStatus(row)" class="task-status-cell">
+                <el-tag :type="taskTagType(resolveTaskStatus(row))" size="small">
+                  {{ formatTaskStatus(resolveTaskStatus(row)) }}
                 </el-tag>
                 <span v-if="row.latest_submission_is_late" class="late-tip">已标记迟交</span>
               </div>
@@ -402,6 +402,8 @@ const scoreTag = score => {
   if (numericScore >= 60) return 'warning'
   return 'danger'
 }
+
+const resolveTaskStatus = row => row?.latest_task_status || row?.task_status || ''
 
 const formatTaskStatus = status => ({
   queued: '排队中',

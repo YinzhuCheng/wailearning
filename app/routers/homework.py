@@ -376,35 +376,6 @@ def _resolve_target_attempt(db: Session, submission: HomeworkSubmission, attempt
     return attempt
 
 
-def _attachment_is_still_referenced(
-    db: Session,
-    attachment_url: Optional[str],
-    *,
-    exclude_homework_id: Optional[int] = None,
-    exclude_submission_id: Optional[int] = None,
-    exclude_attempt_id: Optional[int] = None,
-) -> bool:
-    if not attachment_url:
-        return False
-
-    homework_query = db.query(Homework).filter(Homework.attachment_url == attachment_url)
-    if exclude_homework_id is not None:
-        homework_query = homework_query.filter(Homework.id != exclude_homework_id)
-    if homework_query.first():
-        return True
-
-    submission_query = db.query(HomeworkSubmission).filter(HomeworkSubmission.attachment_url == attachment_url)
-    if exclude_submission_id is not None:
-        submission_query = submission_query.filter(HomeworkSubmission.id != exclude_submission_id)
-    if submission_query.first():
-        return True
-
-    attempt_query = db.query(HomeworkAttempt).filter(HomeworkAttempt.attachment_url == attachment_url)
-    if exclude_attempt_id is not None:
-        attempt_query = attempt_query.filter(HomeworkAttempt.id != exclude_attempt_id)
-    return attempt_query.first() is not None
-
-
 def _delete_attachment_if_unreferenced(
     db: Session,
     attachment_url: Optional[str],
@@ -413,13 +384,11 @@ def _delete_attachment_if_unreferenced(
     exclude_submission_id: Optional[int] = None,
     exclude_attempt_id: Optional[int] = None,
 ) -> None:
-    if _attachment_is_still_referenced(
-        db,
-        attachment_url,
-        exclude_homework_id=exclude_homework_id,
-        exclude_submission_id=exclude_submission_id,
-        exclude_attempt_id=exclude_attempt_id,
-    ):
+    from app.attachments import attachment_is_referenced
+
+    if not attachment_url:
+        return
+    if attachment_is_referenced(db, attachment_url):
         return
     delete_attachment_file(attachment_url)
 
