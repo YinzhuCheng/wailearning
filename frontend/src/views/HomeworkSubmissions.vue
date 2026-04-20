@@ -87,7 +87,7 @@
             </el-table-column>
             <el-table-column label="评分" min-width="320">
               <template #default="{ row }">
-                <div v-if="canReviewSubmission(row)" class="review-cell">
+                <div class="review-cell">
                   <el-input
                     v-model="row.review_score_input"
                     placeholder="分数 0-100"
@@ -111,7 +111,6 @@
                   <span v-if="row.review_score !== null && row.review_score !== undefined">当前分数：{{ formatScore(row.review_score) }}</span>
                   <span v-if="row.review_comment">评论：{{ row.review_comment }}</span>
                 </div>
-                <span v-else-if="!canReviewSubmission(row)" class="muted-text">未提交</span>
               </template>
             </el-table-column>
           </el-table>
