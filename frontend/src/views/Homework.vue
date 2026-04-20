@@ -21,6 +21,16 @@
         <el-table :data="homeworks" v-loading="loading">
           <el-table-column prop="title" label="作业标题" width="190" show-overflow-tooltip />
           <el-table-column prop="subject_name" label="课程" width="160" />
+          <el-table-column label="评分规则" min-width="210">
+            <template #default="{ row }">
+              <div class="rule-cell">
+                <el-tag size="small" :type="row.auto_grading_enabled ? 'success' : 'info'">
+                  {{ row.auto_grading_enabled ? '自动评分已启用' : '仅教师评分' }}
+                </el-tag>
+                <div class="rule-text">{{ row.grading_rule_hint || '多次提交取最高分' }}</div>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="附件" width="110">
             <template #default="{ row }">
               <el-button
@@ -37,6 +47,17 @@
           <el-table-column prop="due_date" label="截止时间" width="180">
             <template #default="{ row }">
               {{ formatDate(row.due_date) }}
+            </template>
+          </el-table-column>
+          <el-table-column v-if="userStore.isStudent" label="评分任务" min-width="160">
+            <template #default="{ row }">
+              <div v-if="row.task_status" class="task-status-cell">
+                <el-tag :type="taskTagType(row.task_status)" size="small">
+                  {{ formatTaskStatus(row.task_status) }}
+                </el-tag>
+                <span v-if="row.latest_submission_is_late" class="late-tip">已标记迟交</span>
+              </div>
+              <span v-else class="muted-text">{{ row.attempt_count ? '待教师评分' : '未提交' }}</span>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="220">
@@ -77,6 +98,7 @@
                   {{ formatScore(row.review_score) }}
                 </el-tag>
                 <div v-if="row.review_comment" class="review-comment">{{ row.review_comment }}</div>
+                <div class="review-meta">共 {{ row.attempt_count || 0 }} 次提交，展示最高分对应评语</div>
               </div>
               <span v-else class="muted-text">未评分</span>
             </template>
@@ -107,6 +129,38 @@
         <el-form-item label="作业内容" prop="content">
           <el-input v-model="form.content" type="textarea" :rows="6" />
         </el-form-item>
+        <el-form-item label="满分" prop="max_score">
+          <el-input-number v-model="form.max_score" :min="1" :max="1000" :precision="1" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="分数精度">
+          <el-radio-group v-model="form.grade_precision">
+            <el-radio label="integer">整数</el-radio>
+            <el-radio label="decimal_1">1 位小数</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="自动评分">
+          <el-switch v-model="form.auto_grading_enabled" />
+          <div class="attachment-help">启用后，学生新提交会进入异步评分队列；展示分数始终按最高分规则计算。</div>
+        </el-form-item>
+        <el-form-item label="响应语言">
+          <el-input v-model="form.response_language" placeholder="例如 zh-CN / en-US，可为空" />
+        </el-form-item>
+        <el-form-item label="评分要点">
+          <el-input v-model="form.rubric_text" type="textarea" :rows="4" placeholder="可填写评分量规、评分要点或教师说明" />
+        </el-form-item>
+        <el-form-item label="参考答案">
+          <el-input v-model="form.reference_answer" type="textarea" :rows="4" placeholder="可选，供 LLM 评分参考" />
+        </el-form-item>
+        <el-form-item label="迟交规则">
+          <div class="late-rules">
+            <el-switch v-model="form.allow_late_submission" active-text="允许补交" inactive-text="禁止补交" />
+            <el-switch
+              v-model="form.late_submission_affects_score"
+              active-text="迟交影响评分"
+              inactive-text="迟交默认不影响评分"
+            />
+          </div>
+        </el-form-item>
         <el-form-item label="附件">
           <el-upload
             :auto-upload="false"
@@ -136,7 +190,12 @@
         <el-descriptions-item label="截止时间">{{ formatDate(currentHomework.due_date) }}</el-descriptions-item>
         <el-descriptions-item label="发布人">{{ currentHomework.creator_name }}</el-descriptions-item>
         <el-descriptions-item label="发布时间">{{ formatDate(currentHomework.created_at) }}</el-descriptions-item>
+          <el-descriptions-item label="满分">{{ formatScore(currentHomework.max_score) }}</el-descriptions-item>
+          <el-descriptions-item label="自动评分">{{ currentHomework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
+          <el-descriptions-item label="评分规则" :span="2">{{ currentHomework.grading_rule_hint }}</el-descriptions-item>
         <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '暂无内容' }}</el-descriptions-item>
+          <el-descriptions-item label="评分要点" :span="2">{{ currentHomework.rubric_text || '未设置' }}</el-descriptions-item>
+          <el-descriptions-item label="参考答案" :span="2">{{ currentHomework.reference_answer || '未设置' }}</el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentHomework.attachment_url" type="primary" link @click="openAttachment(currentHomework)">
             {{ currentHomework.attachment_name || '下载附件' }}
@@ -177,11 +236,20 @@ const form = reactive({
   content: '',
   due_date: null,
   attachment_name: '',
-  attachment_url: ''
+  attachment_url: '',
+  max_score: 100,
+  grade_precision: 'integer',
+  auto_grading_enabled: false,
+  rubric_text: '',
+  reference_answer: '',
+  response_language: '',
+  allow_late_submission: true,
+  late_submission_affects_score: false
 })
 
 const rules = {
-  title: [{ required: true, message: '请输入作业标题', trigger: 'blur' }]
+  title: [{ required: true, message: '请输入作业标题', trigger: 'blur' }],
+  max_score: [{ required: true, message: '请输入满分', trigger: 'change' }]
 }
 
 const buildParams = () => {
@@ -216,6 +284,14 @@ const openCreateDialog = () => {
   form.due_date = null
   form.attachment_name = ''
   form.attachment_url = ''
+  form.max_score = 100
+  form.grade_precision = 'integer'
+  form.auto_grading_enabled = false
+  form.rubric_text = ''
+  form.reference_answer = ''
+  form.response_language = ''
+  form.allow_late_submission = true
+  form.late_submission_affects_score = false
   attachmentFile.value = null
   dialogVisible.value = true
 }
@@ -270,6 +346,14 @@ const submitForm = async () => {
       attachment_name: attachment.attachment_name,
       attachment_url: attachment.attachment_url,
       due_date: form.due_date,
+      max_score: form.max_score,
+      grade_precision: form.grade_precision,
+      auto_grading_enabled: form.auto_grading_enabled,
+      rubric_text: form.rubric_text?.trim() || null,
+      reference_answer: form.reference_answer?.trim() || null,
+      response_language: form.response_language?.trim() || null,
+      allow_late_submission: form.allow_late_submission,
+      late_submission_affects_score: form.late_submission_affects_score,
       class_id: selectedCourse.value.class_id,
       subject_id: selectedCourse.value.id
     })
@@ -318,6 +402,20 @@ const scoreTag = score => {
   if (numericScore >= 60) return 'warning'
   return 'danger'
 }
+
+const formatTaskStatus = status => ({
+  queued: '排队中',
+  processing: '处理中',
+  success: '评分成功',
+  failed: '评分失败'
+}[status] || status || '未知')
+
+const taskTagType = status => ({
+  queued: 'info',
+  processing: 'warning',
+  success: 'success',
+  failed: 'danger'
+}[status] || 'info')
 
 const deleteHomework = async row => {
   try {
@@ -404,6 +502,26 @@ watch(selectedCourse, () => {
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+.review-meta,
+.rule-text,
+.late-tip {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rule-cell,
+.task-status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.late-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 @media (max-width: 768px) {

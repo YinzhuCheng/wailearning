@@ -5,6 +5,7 @@ from sqlalchemy import (
     Enum as SQLEnum,
     Float,
     ForeignKey,
+    JSON,
     Integer,
     String,
     Text,
@@ -124,6 +125,7 @@ class Subject(Base):
     notifications = relationship("Notification", back_populates="subject")
     materials = relationship("CourseMaterial", back_populates="subject")
     enrollments = relationship("CourseEnrollment", back_populates="course")
+    llm_config = relationship("CourseLLMConfig", back_populates="subject", uselist=False)
 
 
 class CourseEnrollment(Base):
@@ -329,6 +331,14 @@ class Homework(Base):
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
     due_date = Column(DateTime(timezone=True), nullable=True)
+    max_score = Column(Float, nullable=False, default=100)
+    grade_precision = Column(String, nullable=False, default="integer")
+    auto_grading_enabled = Column(Boolean, default=False)
+    rubric_text = Column(Text, nullable=True)
+    reference_answer = Column(Text, nullable=True)
+    response_language = Column(String, nullable=True)
+    allow_late_submission = Column(Boolean, default=True)
+    late_submission_affects_score = Column(Boolean, default=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -337,6 +347,7 @@ class Homework(Base):
     subject = relationship("Subject", back_populates="homeworks")
     creator = relationship("User", backref="homeworks")
     submissions = relationship("HomeworkSubmission", back_populates="homework")
+    attempts = relationship("HomeworkAttempt", back_populates="homework")
 
 
 class HomeworkSubmission(Base):
@@ -352,6 +363,9 @@ class HomeworkSubmission(Base):
     attachment_url = Column(String, nullable=True)
     review_score = Column(Float, nullable=True)
     review_comment = Column(String, nullable=True)
+    latest_attempt_id = Column(Integer, ForeignKey("homework_attempts.id"), nullable=True)
+    latest_task_status = Column(String, nullable=True)
+    latest_task_error = Column(Text, nullable=True)
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -363,6 +377,176 @@ class HomeworkSubmission(Base):
     student = relationship("Student", back_populates="homework_submissions")
     subject = relationship("Subject")
     class_obj = relationship("Class")
+    latest_attempt = relationship("HomeworkAttempt", foreign_keys=[latest_attempt_id])
+
+
+class HomeworkAttempt(Base):
+    __tablename__ = "homework_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    homework_id = Column(Integer, ForeignKey("homeworks.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    submission_summary_id = Column(Integer, ForeignKey("homework_submissions.id"), nullable=True)
+    content = Column(Text, nullable=True)
+    attachment_name = Column(String, nullable=True)
+    attachment_url = Column(String, nullable=True)
+    is_late = Column(Boolean, default=False)
+    counts_toward_final_score = Column(Boolean, default=True)
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    homework = relationship("Homework", back_populates="attempts")
+    student = relationship("Student")
+    subject = relationship("Subject")
+    class_obj = relationship("Class")
+    summary = relationship("HomeworkSubmission", foreign_keys=[submission_summary_id], backref="attempts")
+    score_candidates = relationship("HomeworkScoreCandidate", back_populates="attempt")
+    grading_tasks = relationship("HomeworkGradingTask", back_populates="attempt")
+
+
+class HomeworkScoreCandidate(Base):
+    __tablename__ = "homework_score_candidates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    attempt_id = Column(Integer, ForeignKey("homework_attempts.id"), nullable=False)
+    homework_id = Column(Integer, ForeignKey("homeworks.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    source = Column(String, nullable=False, default="auto")
+    score = Column(Float, nullable=False)
+    comment = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    source_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    attempt = relationship("HomeworkAttempt", back_populates="score_candidates")
+    homework = relationship("Homework")
+    student = relationship("Student")
+    creator = relationship("User")
+
+
+class HomeworkGradingTask(Base):
+    __tablename__ = "homework_grading_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    attempt_id = Column(Integer, ForeignKey("homework_attempts.id"), nullable=False)
+    homework_id = Column(Integer, ForeignKey("homeworks.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    status = Column(String, nullable=False, default="queued")
+    queue_reason = Column(String, nullable=True)
+    error_code = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    task_summary = Column(Text, nullable=True)
+    artifact_manifest = Column(JSON, nullable=True)
+    input_token_estimate = Column(Integer, nullable=True)
+    billed_input_tokens = Column(Integer, nullable=True)
+    billed_output_tokens = Column(Integer, nullable=True)
+    billed_total_tokens = Column(Integer, nullable=True)
+    current_endpoint_index = Column(Integer, nullable=True)
+    current_attempt = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    attempt = relationship("HomeworkAttempt", back_populates="grading_tasks")
+    homework = relationship("Homework")
+    student = relationship("Student")
+    subject = relationship("Subject")
+
+
+class LLMEndpointPreset(Base):
+    __tablename__ = "llm_endpoint_presets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    base_url = Column(String, nullable=False)
+    api_key = Column(Text, nullable=False)
+    model_name = Column(String, nullable=False)
+    connect_timeout_seconds = Column(Integer, nullable=False, default=10)
+    read_timeout_seconds = Column(Integer, nullable=False, default=120)
+    max_retries = Column(Integer, nullable=False, default=2)
+    initial_backoff_seconds = Column(Integer, nullable=False, default=2)
+    is_active = Column(Boolean, default=True)
+    supports_vision = Column(Boolean, default=False)
+    validation_status = Column(String, nullable=False, default="pending")
+    validation_message = Column(Text, nullable=True)
+    validated_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    course_links = relationship("CourseLLMConfigEndpoint", back_populates="preset")
+
+
+class CourseLLMConfig(Base):
+    __tablename__ = "course_llm_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, unique=True)
+    is_enabled = Column(Boolean, default=False)
+    response_language = Column(String, nullable=True)
+    daily_student_token_limit = Column(Integer, nullable=True)
+    daily_course_token_limit = Column(Integer, nullable=True)
+    estimated_chars_per_token = Column(Float, nullable=False, default=4.0)
+    estimated_image_tokens = Column(Integer, nullable=False, default=850)
+    max_input_tokens = Column(Integer, nullable=False, default=16000)
+    max_output_tokens = Column(Integer, nullable=False, default=1200)
+    quota_timezone = Column(String, nullable=False, default="UTC")
+    system_prompt = Column(Text, nullable=True)
+    teacher_prompt = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    subject = relationship("Subject", back_populates="llm_config")
+    creator = relationship("User", foreign_keys=[created_by])
+    updater = relationship("User", foreign_keys=[updated_by])
+    endpoints = relationship(
+        "CourseLLMConfigEndpoint",
+        back_populates="config",
+        order_by="CourseLLMConfigEndpoint.priority.asc()",
+        cascade="all, delete-orphan",
+    )
+
+
+class CourseLLMConfigEndpoint(Base):
+    __tablename__ = "course_llm_config_endpoints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    config_id = Column(Integer, ForeignKey("course_llm_configs.id"), nullable=False)
+    preset_id = Column(Integer, ForeignKey("llm_endpoint_presets.id"), nullable=False)
+    priority = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("config_id", "preset_id", name="uq_course_llm_config_endpoint"),
+    )
+
+    config = relationship("CourseLLMConfig", back_populates="endpoints")
+    preset = relationship("LLMEndpointPreset", back_populates="course_links")
+
+
+class LLMTokenUsageLog(Base):
+    __tablename__ = "llm_token_usage_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("homework_grading_tasks.id"), nullable=False, unique=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    usage_date = Column(String, nullable=False)
+    timezone = Column(String, nullable=False, default="UTC")
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    task = relationship("HomeworkGradingTask")
+    subject = relationship("Subject")
+    student = relationship("Student")
 
 
 class Notification(Base):

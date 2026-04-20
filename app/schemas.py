@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class UserRole(str, Enum):
@@ -637,6 +637,22 @@ class HomeworkBase(BaseModel):
     class_id: int
     subject_id: Optional[int] = None
     due_date: Optional[datetime] = None
+    max_score: float = Field(default=100, gt=0)
+    grade_precision: str = "integer"
+    auto_grading_enabled: bool = False
+    rubric_text: Optional[str] = None
+    reference_answer: Optional[str] = None
+    response_language: Optional[str] = None
+    allow_late_submission: bool = True
+    late_submission_affects_score: bool = False
+
+    @field_validator("grade_precision")
+    @classmethod
+    def validate_grade_precision(cls, value: str) -> str:
+        normalized = (value or "integer").strip()
+        if normalized not in {"integer", "decimal_1"}:
+            raise ValueError("grade_precision must be integer or decimal_1.")
+        return normalized
 
 
 class HomeworkCreate(HomeworkBase):
@@ -651,6 +667,24 @@ class HomeworkUpdate(BaseModel):
     remove_attachment: bool = False
     subject_id: Optional[int] = None
     due_date: Optional[datetime] = None
+    max_score: Optional[float] = Field(default=None, gt=0)
+    grade_precision: Optional[str] = None
+    auto_grading_enabled: Optional[bool] = None
+    rubric_text: Optional[str] = None
+    reference_answer: Optional[str] = None
+    response_language: Optional[str] = None
+    allow_late_submission: Optional[bool] = None
+    late_submission_affects_score: Optional[bool] = None
+
+    @field_validator("grade_precision")
+    @classmethod
+    def validate_optional_grade_precision(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        normalized = value.strip()
+        if normalized not in {"integer", "decimal_1"}:
+            raise ValueError("grade_precision must be integer or decimal_1.")
+        return normalized
 
 
 class HomeworkResponse(HomeworkBase):
@@ -663,6 +697,11 @@ class HomeworkResponse(HomeworkBase):
     creator_name: Optional[str] = None
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
+    task_status: Optional[str] = None
+    task_error: Optional[str] = None
+    attempt_count: int = 0
+    latest_submission_is_late: Optional[bool] = None
+    grading_rule_hint: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -704,13 +743,46 @@ class HomeworkSubmissionResponse(BaseModel):
     student_no: Optional[str] = None
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
+    latest_attempt_id: Optional[int] = None
+    latest_task_status: Optional[str] = None
+    latest_task_error: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
+class HomeworkAttemptResponse(BaseModel):
+    id: int
+    homework_id: int
+    student_id: int
+    subject_id: Optional[int] = None
+    class_id: int
+    submission_summary_id: Optional[int] = None
+    content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    is_late: bool = False
+    counts_toward_final_score: bool = True
+    submitted_at: datetime
+    updated_at: Optional[datetime] = None
+    review_score: Optional[float] = None
+    review_comment: Optional[str] = None
+    task_status: Optional[str] = None
+    task_error: Optional[str] = None
+    score_source: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class HomeworkSubmissionHistoryResponse(BaseModel):
+    summary: Optional[HomeworkSubmissionResponse] = None
+    attempts: List[HomeworkAttemptResponse] = Field(default_factory=list)
+
+
 class HomeworkSubmissionReviewUpdate(BaseModel):
-    review_score: float = Field(..., ge=0, le=100)
+    attempt_id: Optional[int] = None
+    review_score: float = Field(..., ge=0)
     review_comment: Optional[str] = None
 
     @model_validator(mode="after")
@@ -733,6 +805,11 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     attachment_url: Optional[str] = None
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
+    latest_attempt_id: Optional[int] = None
+    latest_attempt_is_late: Optional[bool] = None
+    latest_task_status: Optional[str] = None
+    latest_task_error: Optional[str] = None
+    attempt_count: int = 0
 
 
 class HomeworkSubmissionStatusListResponse(BaseModel):
@@ -742,6 +819,109 @@ class HomeworkSubmissionStatusListResponse(BaseModel):
 
 class HomeworkSubmissionDownloadRequest(BaseModel):
     submission_ids: List[int]
+
+
+class HomeworkRegradeRequest(BaseModel):
+    attempt_id: Optional[int] = None
+
+
+class LLMEndpointPresetBase(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    name: str
+    base_url: str
+    api_key: str
+    model_name: str
+    connect_timeout_seconds: int = Field(default=10, ge=1, le=300)
+    read_timeout_seconds: int = Field(default=120, ge=1, le=600)
+    max_retries: int = Field(default=2, ge=0, le=10)
+    initial_backoff_seconds: int = Field(default=2, ge=1, le=120)
+    is_active: bool = True
+
+
+class LLMEndpointPresetCreate(LLMEndpointPresetBase):
+    pass
+
+
+class LLMEndpointPresetUpdate(BaseModel):
+    name: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model_name: Optional[str] = None
+    connect_timeout_seconds: Optional[int] = Field(default=None, ge=1, le=300)
+    read_timeout_seconds: Optional[int] = Field(default=None, ge=1, le=600)
+    max_retries: Optional[int] = Field(default=None, ge=0, le=10)
+    initial_backoff_seconds: Optional[int] = Field(default=None, ge=1, le=120)
+    is_active: Optional[bool] = None
+
+
+class LLMEndpointPresetResponse(BaseModel):
+    id: int
+    name: str
+    base_url: str
+    model_name: str
+    connect_timeout_seconds: int
+    read_timeout_seconds: int
+    max_retries: int
+    initial_backoff_seconds: int
+    is_active: bool
+    supports_vision: bool
+    validation_status: str
+    validation_message: Optional[str] = None
+    validated_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CourseLLMConfigEndpointSelection(BaseModel):
+    preset_id: int
+    priority: int = Field(default=1, ge=1)
+
+
+class CourseLLMConfigUpdate(BaseModel):
+    is_enabled: bool = False
+    response_language: Optional[str] = None
+    daily_student_token_limit: Optional[int] = Field(default=None, ge=1)
+    daily_course_token_limit: Optional[int] = Field(default=None, ge=1)
+    estimated_chars_per_token: float = Field(default=4.0, gt=0)
+    estimated_image_tokens: int = Field(default=850, ge=1)
+    max_input_tokens: int = Field(default=16000, ge=1000)
+    max_output_tokens: int = Field(default=1200, ge=1)
+    quota_timezone: str = "UTC"
+    system_prompt: Optional[str] = None
+    teacher_prompt: Optional[str] = None
+    endpoints: List[CourseLLMConfigEndpointSelection] = Field(default_factory=list)
+
+
+class CourseLLMConfigEndpointResponse(BaseModel):
+    id: int
+    preset_id: int
+    priority: int
+    preset_name: Optional[str] = None
+    model_name: Optional[str] = None
+    validation_status: Optional[str] = None
+    supports_vision: Optional[bool] = None
+
+
+class CourseLLMConfigResponse(BaseModel):
+    id: Optional[int] = None
+    subject_id: int
+    is_enabled: bool = False
+    response_language: Optional[str] = None
+    daily_student_token_limit: Optional[int] = None
+    daily_course_token_limit: Optional[int] = None
+    estimated_chars_per_token: float = 4.0
+    estimated_image_tokens: int = 850
+    max_input_tokens: int = 16000
+    max_output_tokens: int = 1200
+    quota_timezone: str = "UTC"
+    system_prompt: Optional[str] = None
+    teacher_prompt: Optional[str] = None
+    endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)
+    visual_validation_notice: str
 
 
 class NotificationBase(BaseModel):
