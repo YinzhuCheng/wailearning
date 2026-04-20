@@ -5,11 +5,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.attachments import delete_attachment_file
+from app.attachments import delete_attachment_file_if_unreferenced
 from app.auth import get_current_active_user
 from app.course_access import sync_student_course_enrollments
 from app.database import get_db
-from app.models import Attendance, Class, CourseEnrollment, Gender, HomeworkSubmission, Score, Student, User, UserRole
+from app.models import (
+    Attendance,
+    Class,
+    CourseEnrollment,
+    Gender,
+    HomeworkAttempt,
+    HomeworkGradingTask,
+    HomeworkScoreCandidate,
+    HomeworkSubmission,
+    LLMTokenUsageLog,
+    Score,
+    Student,
+    User,
+    UserRole,
+)
 from app.routers.classes import get_accessible_class_ids
 from app.schemas import StudentCreate, StudentListResponse, StudentResponse, StudentUpdate
 
@@ -524,8 +538,22 @@ def delete_student(
     try:
         db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student_id).delete()
         submissions = db.query(HomeworkSubmission).filter(HomeworkSubmission.student_id == student_id).all()
+        attempts = db.query(HomeworkAttempt).filter(HomeworkAttempt.student_id == student_id).all()
+        for attempt in attempts:
+            db.query(HomeworkScoreCandidate).filter(HomeworkScoreCandidate.attempt_id == attempt.id).delete()
+            task_ids = [
+                item.id
+                for item in db.query(HomeworkGradingTask.id).filter(HomeworkGradingTask.attempt_id == attempt.id).all()
+            ]
+            if task_ids:
+                db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
+            db.query(HomeworkGradingTask).filter(HomeworkGradingTask.attempt_id == attempt.id).delete()
+            delete_attachment_file_if_unreferenced(db, attempt.attachment_url)
+            db.delete(attempt)
         for submission in submissions:
-            delete_attachment_file(submission.attachment_url)
+            delete_attachment_file_if_unreferenced(db, submission.attachment_url)
             db.delete(submission)
         db.query(Attendance).filter(Attendance.student_id == student_id).delete()
         db.query(Score).filter(Score.student_id == student_id).delete()

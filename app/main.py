@@ -1,10 +1,9 @@
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.attachments import UPLOADS_DIR, ensure_upload_directories
+from app.attachments import ensure_upload_directories
 from app.bootstrap import (
     backfill_homework_grading_data,
     ensure_schema_updates,
@@ -77,7 +76,6 @@ app.include_router(notifications.router)
 app.include_router(parent.router)
 
 ensure_upload_directories()
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
 @app.on_event("startup")
@@ -92,7 +90,8 @@ def startup_tasks():
         backfill_homework_grading_data(db)
     finally:
         db.close()
-    start_grading_worker()
+    if settings.ENABLE_LLM_GRADING_WORKER and settings.LLM_GRADING_WORKER_LEADER:
+        start_grading_worker()
 
 
 @app.on_event("shutdown")

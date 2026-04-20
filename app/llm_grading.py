@@ -9,7 +9,7 @@ import threading
 import time
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
 from typing import Any, Iterable, Optional
 from urllib.parse import urljoin
@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import fitz
 import httpx
 from docx import Document
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.attachments import get_attachment_file_path
@@ -227,11 +228,62 @@ def build_task_summary(task: HomeworkGradingTask) -> str:
     return status_label
 
 
+def _reclaim_stale_processing_tasks(db: Session) -> int:
+    stale_before = _now_utc() - timedelta(seconds=max(60, int(settings.LLM_GRADING_TASK_STALE_SECONDS or 600)))
+    stale_tasks = (
+        db.query(HomeworkGradingTask)
+        .filter(
+            HomeworkGradingTask.status == "processing",
+            HomeworkGradingTask.updated_at.isnot(None),
+            HomeworkGradingTask.updated_at < stale_before,
+        )
+        .all()
+    )
+    reclaimed = 0
+    for task in stale_tasks:
+        task.status = "queued"
+        task.error_code = None
+        task.error_message = None
+        task.queue_reason = "reclaimed_stale_processing"
+        task.task_summary = "已回收超时任务，等待重试"
+        task.started_at = None
+        task.finished_at = None
+        task.updated_at = _now_utc()
+        reclaimed += 1
+    if reclaimed:
+        db.commit()
+    return reclaimed
+
+
 def queue_grading_task(
     db: Session,
     attempt: HomeworkAttempt,
     queue_reason: str = "new_submission",
 ) -> HomeworkGradingTask:
+    existing_task = (
+        db.query(HomeworkGradingTask)
+        .filter(
+            HomeworkGradingTask.attempt_id == attempt.id,
+            HomeworkGradingTask.status.in_(("queued", "processing")),
+        )
+        .order_by(HomeworkGradingTask.created_at.desc(), HomeworkGradingTask.id.desc())
+        .first()
+    )
+    if existing_task:
+        summary = (
+            db.query(HomeworkSubmission)
+            .filter(
+                HomeworkSubmission.homework_id == attempt.homework_id,
+                HomeworkSubmission.student_id == attempt.student_id,
+            )
+            .first()
+        )
+        if summary:
+            summary.latest_task_status = existing_task.status
+            summary.latest_task_error = existing_task.error_message
+            refresh_submission_summary(db, summary)
+        return existing_task
+
     task = HomeworkGradingTask(
         attempt_id=attempt.id,
         homework_id=attempt.homework_id,
@@ -419,6 +471,7 @@ def record_usage_if_needed(
 def process_next_grading_task() -> bool:
     db = SessionLocal()
     try:
+        _reclaim_stale_processing_tasks(db)
         task = (
             db.query(HomeworkGradingTask)
             .filter(HomeworkGradingTask.status == "queued")
@@ -427,10 +480,25 @@ def process_next_grading_task() -> bool:
         )
         if not task:
             return False
-        task.status = "processing"
-        task.started_at = _now_utc()
-        task.updated_at = _now_utc()
-        task.task_summary = "处理中"
+        updated = (
+            db.query(HomeworkGradingTask)
+            .filter(
+                HomeworkGradingTask.id == task.id,
+                HomeworkGradingTask.status == "queued",
+            )
+            .update(
+                {
+                    HomeworkGradingTask.status: "processing",
+                    HomeworkGradingTask.started_at: _now_utc(),
+                    HomeworkGradingTask.updated_at: _now_utc(),
+                    HomeworkGradingTask.task_summary: "处理中",
+                },
+                synchronize_session=False,
+            )
+        )
+        if not updated:
+            db.rollback()
+            return False
         db.commit()
         process_grading_task(task.id)
         return True

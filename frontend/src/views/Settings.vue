@@ -204,14 +204,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, Refresh, Select, Setting, UploadFilled, View } from '@element-plus/icons-vue'
 import { normalizeBrandingText } from '@/utils/branding'
-import axios from 'axios'
-
-const api = axios.create({ baseURL: '/api' })
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+import { http } from '@/api'
 
 const loading = ref(false)
 const saving = ref(false)

@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     GUNICORN_WORKERS: int = 3
     LOG_LEVEL: str = "info"
     ENABLE_LLM_GRADING_WORKER: bool = True
+    LLM_GRADING_WORKER_LEADER: bool = False
     LLM_GRADING_WORKER_POLL_SECONDS: int = 2
+    LLM_GRADING_TASK_STALE_SECONDS: int = 600
     DEFAULT_ESTIMATED_IMAGE_TOKENS: int = 850
 
     model_config = SettingsConfigDict(

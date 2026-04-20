@@ -338,7 +338,7 @@ class Homework(Base):
     reference_answer = Column(Text, nullable=True)
     response_language = Column(String, nullable=True)
     allow_late_submission = Column(Boolean, default=True)
-    late_submission_affects_score = Column(Boolean, default=True)
+    late_submission_affects_score = Column(Boolean, default=False)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

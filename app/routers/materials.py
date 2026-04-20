@@ -5,7 +5,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
-from app.attachments import delete_attachment_file
+from app.attachments import delete_attachment_file_if_unreferenced
 from app.course_access import ensure_course_access
 from app.database import get_db
 from app.models import Class, CourseMaterial, User, UserRole
@@ -142,7 +142,8 @@ def delete_material(
     if current_user.role != UserRole.ADMIN and material.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can only delete your own materials.")
 
-    delete_attachment_file(material.attachment_url)
     db.delete(material)
+    db.flush()
+    delete_attachment_file_if_unreferenced(db, material.attachment_url)
     db.commit()
     return {"message": "Material deleted successfully."}

@@ -10,7 +10,11 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
-from app.attachments import delete_attachment_file, get_attachment_file_path
+from app.attachments import (
+    delete_attachment_file,
+    delete_attachment_file_if_unreferenced,
+    get_attachment_file_path,
+)
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access, get_enrolled_students
 from app.database import get_db
@@ -23,6 +27,7 @@ from app.models import (
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
+    LLMTokenUsageLog,
     Student,
     User,
     UserRole,
@@ -342,6 +347,18 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
     )
 
 
+def _serialize_homework_for_user(
+    homework: Homework,
+    current_user: User,
+    submission: Optional[HomeworkSubmission] = None,
+) -> HomeworkResponse:
+    response = _serialize_homework(homework, submission)
+    if current_user.role == UserRole.STUDENT:
+        response.reference_answer = None
+        response.rubric_text = None
+    return response
+
+
 def _resolve_target_attempt(db: Session, submission: HomeworkSubmission, attempt_id: Optional[int]) -> HomeworkAttempt:
     if attempt_id is not None:
         attempt = (
@@ -357,6 +374,54 @@ def _resolve_target_attempt(db: Session, submission: HomeworkSubmission, attempt
     if not attempt:
         raise HTTPException(status_code=404, detail="Homework attempt not found.")
     return attempt
+
+
+def _attachment_is_still_referenced(
+    db: Session,
+    attachment_url: Optional[str],
+    *,
+    exclude_homework_id: Optional[int] = None,
+    exclude_submission_id: Optional[int] = None,
+    exclude_attempt_id: Optional[int] = None,
+) -> bool:
+    if not attachment_url:
+        return False
+
+    homework_query = db.query(Homework).filter(Homework.attachment_url == attachment_url)
+    if exclude_homework_id is not None:
+        homework_query = homework_query.filter(Homework.id != exclude_homework_id)
+    if homework_query.first():
+        return True
+
+    submission_query = db.query(HomeworkSubmission).filter(HomeworkSubmission.attachment_url == attachment_url)
+    if exclude_submission_id is not None:
+        submission_query = submission_query.filter(HomeworkSubmission.id != exclude_submission_id)
+    if submission_query.first():
+        return True
+
+    attempt_query = db.query(HomeworkAttempt).filter(HomeworkAttempt.attachment_url == attachment_url)
+    if exclude_attempt_id is not None:
+        attempt_query = attempt_query.filter(HomeworkAttempt.id != exclude_attempt_id)
+    return attempt_query.first() is not None
+
+
+def _delete_attachment_if_unreferenced(
+    db: Session,
+    attachment_url: Optional[str],
+    *,
+    exclude_homework_id: Optional[int] = None,
+    exclude_submission_id: Optional[int] = None,
+    exclude_attempt_id: Optional[int] = None,
+) -> None:
+    if _attachment_is_still_referenced(
+        db,
+        attachment_url,
+        exclude_homework_id=exclude_homework_id,
+        exclude_submission_id=exclude_submission_id,
+        exclude_attempt_id=exclude_attempt_id,
+    ):
+        return
+    delete_attachment_file(attachment_url)
 
 
 @router.get("", response_model=HomeworkListResponse)
@@ -407,7 +472,7 @@ def get_homeworks(
 
     return HomeworkListResponse(
         total=total,
-        data=[_serialize_homework(homework, submission_map.get(homework.id)) for homework in homeworks],
+        data=[_serialize_homework_for_user(homework, current_user, submission_map.get(homework.id)) for homework in homeworks],
     )
 
 
@@ -425,7 +490,7 @@ def get_homework(
             submission = _get_submission_summary(db, homework.id, student.id)
             if submission:
                 refresh_submission_summary(db, submission)
-    return _serialize_homework(homework, submission)
+    return _serialize_homework_for_user(homework, current_user, submission)
 
 
 @router.post("", response_model=HomeworkResponse)
@@ -496,14 +561,15 @@ def update_homework(
     if data.content is not None:
         homework.content = data.content
     if data.remove_attachment:
-        delete_attachment_file(homework.attachment_url)
         homework.attachment_name = None
         homework.attachment_url = None
+        delete_attachment_file_if_unreferenced(db, homework.attachment_url)
     elif data.attachment_url is not None:
-        if homework.attachment_url and homework.attachment_url != data.attachment_url:
-            delete_attachment_file(homework.attachment_url)
+        previous_attachment_url = homework.attachment_url
         homework.attachment_name = data.attachment_name
         homework.attachment_url = data.attachment_url
+        if previous_attachment_url and previous_attachment_url != data.attachment_url:
+            delete_attachment_file_if_unreferenced(db, previous_attachment_url)
     if data.subject_id is not None:
         homework.subject_id = data.subject_id
     if data.due_date is not None:
@@ -547,6 +613,16 @@ def delete_homework(
         if attempt.attachment_url:
             attachment_urls.add(attempt.attachment_url)
         db.query(HomeworkScoreCandidate).filter(HomeworkScoreCandidate.attempt_id == attempt.id).delete()
+        task_ids = [
+            item[0]
+            for item in db.query(HomeworkGradingTask.id)
+            .filter(HomeworkGradingTask.attempt_id == attempt.id)
+            .all()
+        ]
+        if task_ids:
+            db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id.in_(task_ids)).delete(
+                synchronize_session=False
+            )
         db.query(HomeworkGradingTask).filter(HomeworkGradingTask.attempt_id == attempt.id).delete()
         db.delete(attempt)
 
@@ -556,9 +632,13 @@ def delete_homework(
         db.delete(submission)
 
     if homework.attachment_url:
-        delete_attachment_file(homework.attachment_url)
+        _delete_attachment_if_unreferenced(
+            db,
+            homework.attachment_url,
+            exclude_homework_id=homework.id,
+        )
     for attachment_url in attachment_urls:
-        delete_attachment_file(attachment_url)
+        _delete_attachment_if_unreferenced(db, attachment_url)
 
     db.delete(homework)
     db.commit()
@@ -619,13 +699,10 @@ def submit_homework(
     next_attachment_url = submission.attachment_url or None
 
     if data.remove_attachment and submission.attachment_url:
-        delete_attachment_file(submission.attachment_url)
         next_attachment_name = None
         next_attachment_url = None
 
     if data.attachment_url is not None:
-        if submission.attachment_url and submission.attachment_url != data.attachment_url:
-            delete_attachment_file(submission.attachment_url)
         next_attachment_name = data.attachment_name
         next_attachment_url = data.attachment_url
 

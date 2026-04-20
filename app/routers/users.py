@@ -4,13 +4,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.attachments import delete_attachment_file
+from app.attachments import delete_attachment_file_if_unreferenced
 from app.auth import get_current_active_user, get_password_hash
 from app.database import get_db
 from app.models import (
     Class,
     CourseMaterial,
     Homework,
+    HomeworkAttempt,
+    HomeworkGradingTask,
+    HomeworkScoreCandidate,
+    HomeworkSubmission,
+    LLMTokenUsageLog,
     Notification,
     NotificationRead,
     OperationLog,
@@ -57,17 +62,38 @@ def validate_class_exists(class_id: Optional[int], db: Session) -> None:
 def delete_user_homeworks(user_id: int, db: Session) -> None:
     homeworks = db.query(Homework).filter(Homework.created_by == user_id).all()
     for homework in homeworks:
+        attempts = db.query(HomeworkAttempt).filter(HomeworkAttempt.homework_id == homework.id).all()
+        for attempt in attempts:
+            if attempt.attachment_url:
+                attempt.attachment_url = None
+            task_ids = [
+                task_id
+                for (task_id,) in db.query(HomeworkGradingTask.id)
+                .filter(HomeworkGradingTask.attempt_id == attempt.id)
+                .all()
+            ]
+            if task_ids:
+                db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
+            db.query(HomeworkScoreCandidate).filter(HomeworkScoreCandidate.attempt_id == attempt.id).delete(
+                synchronize_session=False
+            )
+            db.delete(attempt)
         for submission in list(homework.submissions):
-            delete_attachment_file(submission.attachment_url)
+            submission.attachment_url = None
             db.delete(submission)
-        delete_attachment_file(homework.attachment_url)
+        homework.attachment_url = None
         db.delete(homework)
 
 
 def delete_user_notifications(user_id: int, db: Session) -> None:
     notifications = db.query(Notification).filter(Notification.created_by == user_id).all()
     for notification in notifications:
-        delete_attachment_file(notification.attachment_url)
+        delete_attachment_file_if_unreferenced(db, notification.attachment_url)
         db.query(NotificationRead).filter(NotificationRead.notification_id == notification.id).delete(
             synchronize_session=False
         )
@@ -77,7 +103,7 @@ def delete_user_notifications(user_id: int, db: Session) -> None:
 def delete_user_materials(user_id: int, db: Session) -> None:
     materials = db.query(CourseMaterial).filter(CourseMaterial.created_by == user_id).all()
     for material in materials:
-        delete_attachment_file(material.attachment_url)
+        delete_attachment_file_if_unreferenced(db, material.attachment_url)
         db.delete(material)
 
 
