@@ -30,6 +30,9 @@
           <el-descriptions-item label="截止时间">{{ formatDate(homework.due_date) }}</el-descriptions-item>
           <el-descriptions-item label="发布时间">{{ formatDate(homework.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="发布人">{{ homework.creator_name || '未设置' }}</el-descriptions-item>
+          <el-descriptions-item label="满分">{{ formatScore(homework.max_score) }}</el-descriptions-item>
+          <el-descriptions-item label="自动评分">{{ homework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
+          <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
             <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
               {{ homework.attachment_name || '下载附件' }}
@@ -43,15 +46,12 @@
         <template #header>
           <div class="card-header">
             <span>提交情况</span>
-            <el-text type="info">仅勾选已提交且带附件的学生，可用于批量下载。</el-text>
+            <el-text type="info">仅勾选已提交且带附件的学生，可用于批量下载；主视图评分展示最高分对应评语。</el-text>
           </div>
         </template>
 
         <div class="table-wrapper">
-          <el-table
-            :data="submissions"
-            @selection-change="handleSelectionChange"
-          >
+          <el-table :data="submissions" @selection-change="handleSelectionChange">
             <el-table-column type="selection" width="52" :selectable="selectableRow" />
             <el-table-column prop="student_name" label="学生姓名" min-width="140" />
             <el-table-column prop="student_no" label="学号" min-width="140" />
@@ -62,9 +62,25 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="任务状态" min-width="160">
+              <template #default="{ row }">
+                <div class="task-cell">
+                  <el-tag v-if="row.latest_task_status" :type="taskTagType(row.latest_task_status)" size="small">
+                    {{ formatTaskStatus(row.latest_task_status) }}
+                  </el-tag>
+                  <span v-else class="muted-text">{{ row.status === 'submitted' ? '待评分' : '未提交' }}</span>
+                  <span v-if="row.latest_attempt_is_late" class="late-tip">已标记迟交</span>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column label="提交时间" min-width="180">
               <template #default="{ row }">
                 {{ row.submitted_at ? formatDate(row.submitted_at) : '尚未提交' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="提交次数" width="100">
+              <template #default="{ row }">
+                {{ row.attempt_count || 0 }}
               </template>
             </el-table-column>
             <el-table-column label="提交说明" min-width="220">
@@ -85,12 +101,12 @@
                 <span v-else class="muted-text">无附件</span>
               </template>
             </el-table-column>
-            <el-table-column label="评分" min-width="320">
+            <el-table-column label="评分" min-width="360">
               <template #default="{ row }">
                 <div class="review-cell">
                   <el-input
                     v-model="row.review_score_input"
-                    placeholder="分数 0-100"
+                    :placeholder="`分数 0-${formatScore(homework.max_score)}`"
                     class="review-score-input"
                   />
                   <el-input
@@ -104,19 +120,116 @@
                     :loading="row.saving_review"
                     @click="saveReview(row)"
                   >
-                    确定
+                    保存评分
                   </el-button>
                 </div>
                 <div v-if="hasSavedReview(row)" class="review-result">
-                  <span v-if="row.review_score !== null && row.review_score !== undefined">当前分数：{{ formatScore(row.review_score) }}</span>
-                  <span v-if="row.review_comment">评论：{{ row.review_comment }}</span>
+                  <span v-if="row.review_score !== null && row.review_score !== undefined">当前展示分：{{ formatScore(row.review_score) }}</span>
+                  <span v-if="row.review_comment">评语：{{ row.review_comment }}</span>
                 </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="170" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  size="small"
+                  :disabled="!row.submission_id"
+                  @click="openHistory(row)"
+                >
+                  历史
+                </el-button>
+                <el-button
+                  v-if="homework.auto_grading_enabled"
+                  size="small"
+                  type="primary"
+                  :disabled="!row.submission_id"
+                  :loading="row.regrading"
+                  @click="regrade(row)"
+                >
+                  重评
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
         </div>
       </el-card>
     </template>
+
+    <el-dialog v-model="historyVisible" title="提交与评分历史" width="860px" destroy-on-close>
+      <div v-if="historyVisible && currentHistoryRow" class="history-header">
+        <div>
+          <strong>{{ currentHistoryRow.student_name }}</strong>
+          <span class="muted-text"> · {{ currentHistoryRow.student_no || '未设置学号' }}</span>
+        </div>
+        <div class="history-meta">
+          <span>主视图显示最高分及其评语</span>
+        </div>
+      </div>
+
+      <el-empty v-if="historyVisible && !historyAttempts.length" description="暂无历史记录" />
+
+      <el-timeline v-else>
+        <el-timeline-item
+          v-for="attempt in historyAttempts"
+          :key="attempt.id"
+          :timestamp="formatDate(attempt.submitted_at)"
+          placement="top"
+        >
+          <div class="attempt-card">
+            <div class="attempt-tags">
+              <el-tag size="small" type="primary">提交 #{{ attempt.id }}</el-tag>
+              <el-tag v-if="attempt.is_late" size="small" type="warning">迟交</el-tag>
+              <el-tag
+                v-if="attempt.review_score !== null && attempt.review_score !== undefined"
+                :type="scoreTag(attempt.review_score)"
+                size="small"
+              >
+                {{ formatScore(attempt.review_score) }}
+              </el-tag>
+              <el-tag v-if="attempt.task_status" :type="taskTagType(attempt.task_status)" size="small">
+                {{ formatTaskStatus(attempt.task_status) }}
+              </el-tag>
+              <el-tag v-if="attempt.score_source === 'teacher'" size="small" type="success">教师评分</el-tag>
+              <el-tag v-else-if="attempt.score_source === 'auto'" size="small" type="info">自动评分</el-tag>
+            </div>
+
+            <div class="attempt-body">
+              <div>{{ attempt.content || '无提交说明' }}</div>
+              <div v-if="attempt.attachment_url" class="attempt-link">
+                <el-button type="primary" link @click="openAttachment(attempt.attachment_url, attempt.attachment_name)">
+                  {{ attempt.attachment_name || '下载附件' }}
+                </el-button>
+              </div>
+              <div v-if="attempt.review_comment" class="attempt-comment">{{ attempt.review_comment }}</div>
+              <div v-if="attempt.task_error" class="attempt-error">{{ attempt.task_error }}</div>
+            </div>
+
+            <div class="attempt-actions">
+              <el-input
+                v-model="attempt.review_score_input"
+                :placeholder="`分数 0-${formatScore(homework?.max_score)}`"
+                class="review-score-input"
+              />
+              <el-input
+                v-model="attempt.review_comment_input"
+                placeholder="该次提交的评语"
+                class="review-comment-input"
+              />
+              <el-button type="primary" :loading="attempt.saving_review" @click="saveReview(currentHistoryRow, attempt)">
+                按此提交评分
+              </el-button>
+              <el-button
+                v-if="homework?.auto_grading_enabled"
+                :loading="attempt.regrading"
+                @click="regrade(currentHistoryRow, attempt)"
+              >
+                重评此提交
+              </el-button>
+            </div>
+          </div>
+        </el-timeline-item>
+      </el-timeline>
+    </el-dialog>
   </div>
 </template>
 
@@ -138,18 +251,29 @@ const downloading = ref(false)
 const homework = ref(null)
 const submissions = ref([])
 const selectedRows = ref([])
+const historyVisible = ref(false)
+const currentHistoryRow = ref(null)
+const historyAttempts = ref([])
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const downloadableSelection = computed(() =>
   selectedRows.value.filter(row => row.submission_id && row.attachment_url)
 )
 
+const buildAttemptHistoryRow = row => ({
+  ...row,
+  review_score_input: row.review_score === null || row.review_score === undefined ? '' : String(row.review_score),
+  review_comment_input: row.review_comment || '',
+  saving_review: false,
+  regrading: false
+})
+
 const buildSubmissionRow = row => ({
   ...row,
-  review_score_input:
-    row.review_score === null || row.review_score === undefined ? '' : String(row.review_score),
+  review_score_input: row.review_score === null || row.review_score === undefined ? '' : String(row.review_score),
   review_comment_input: row.review_comment || '',
-  saving_review: false
+  saving_review: false,
+  regrading: false
 })
 
 const loadPage = async () => {
@@ -172,9 +296,7 @@ const handleSelectionChange = rows => {
 }
 
 const selectableRow = row => Boolean(row.submission_id && row.attachment_url)
-
-const canReviewSubmission = row => row.submission_id !== null && row.submission_id !== undefined
-
+const canReviewSubmission = row => row?.submission_id !== null && row?.submission_id !== undefined
 const hasSavedReview = row =>
   row.review_score !== null && row.review_score !== undefined || Boolean(row.review_comment)
 
@@ -185,6 +307,27 @@ const formatScore = value => {
   }
   return Number.isInteger(numericValue) ? `${numericValue}` : numericValue.toFixed(1)
 }
+
+const scoreTag = score => {
+  const numericScore = Number(score)
+  if (numericScore >= 90) return 'success'
+  if (numericScore >= 60) return 'warning'
+  return 'danger'
+}
+
+const formatTaskStatus = status => ({
+  queued: '排队中',
+  processing: '处理中',
+  success: '评分成功',
+  failed: '评分失败'
+}[status] || status || '未知')
+
+const taskTagType = status => ({
+  queued: 'info',
+  processing: 'warning',
+  success: 'success',
+  failed: 'danger'
+}[status] || 'info')
 
 const getTodayZipName = () => `${new Date().toLocaleDateString('sv-SE')}.zip`
 
@@ -231,30 +374,74 @@ const downloadSelected = async () => {
   }
 }
 
-const saveReview = async row => {
+const validateReviewScore = rawValue => {
+  const rawScore = `${rawValue ?? ''}`.trim()
+  const score = Number(rawScore)
+  const maxScore = Number(homework.value?.max_score || 100)
+  if (!rawScore || !Number.isFinite(score) || score < 0 || score > maxScore) {
+    ElMessage.error(`请输入 0 到 ${formatScore(maxScore)} 之间的数字分数`)
+    return null
+  }
+  return score
+}
+
+const saveReview = async (row, attempt = null) => {
   if (!canReviewSubmission(row)) {
     ElMessage.error('未提交的作业不能评分')
     return
   }
 
-  const rawScore = `${row.review_score_input ?? ''}`.trim()
-  const score = Number(rawScore)
-  if (!rawScore || !Number.isFinite(score) || score < 0 || score > 100) {
-    ElMessage.error('请输入 0 到 100 之间的数字分数')
+  const target = attempt || row
+  const score = validateReviewScore(target.review_score_input)
+  if (score === null) {
     return
   }
 
-  row.saving_review = true
+  target.saving_review = true
   try {
     await api.homework.reviewSubmission(route.params.id, row.submission_id, {
+      attempt_id: attempt?.id || null,
       review_score: score,
-      review_comment: row.review_comment_input?.trim() || null
+      review_comment: target.review_comment_input?.trim() || null
     })
     ElMessage.success('评分已保存')
     await loadPage()
+    if (historyVisible.value && currentHistoryRow.value?.submission_id === row.submission_id) {
+      await openHistory(row)
+    }
   } finally {
-    row.saving_review = false
+    target.saving_review = false
   }
+}
+
+const regrade = async (row, attempt = null) => {
+  if (!row?.submission_id) {
+    return
+  }
+  const target = attempt || row
+  target.regrading = true
+  try {
+    await api.homework.regradeSubmission(route.params.id, row.submission_id, {
+      attempt_id: attempt?.id || null
+    })
+    ElMessage.success('已加入重评队列')
+    await loadPage()
+    if (historyVisible.value && currentHistoryRow.value?.submission_id === row.submission_id) {
+      await openHistory(row)
+    }
+  } finally {
+    target.regrading = false
+  }
+}
+
+const openHistory = async row => {
+  if (!row?.submission_id) {
+    return
+  }
+  currentHistoryRow.value = row
+  const history = await api.homework.getSubmissionHistory(route.params.id, row.submission_id)
+  historyAttempts.value = (history?.attempts || []).map(buildAttemptHistoryRow)
+  historyVisible.value = true
 }
 
 const openAttachment = async (url, attachmentName) => {
@@ -278,6 +465,9 @@ onMounted(() => {
 watch(
   () => route.params.id,
   () => {
+    historyVisible.value = false
+    currentHistoryRow.value = null
+    historyAttempts.value = []
     loadPage()
   }
 )
@@ -324,7 +514,9 @@ watch(
   gap: 12px;
 }
 
-.muted-text {
+.muted-text,
+.late-tip,
+.history-meta {
   color: #64748b;
 }
 
@@ -334,9 +526,10 @@ watch(
   overflow-x: auto;
 }
 
-.review-cell {
+.review-cell,
+.attempt-actions {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) auto;
+  grid-template-columns: 96px minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
 }
@@ -346,10 +539,11 @@ watch(
 }
 
 .review-comment-input {
-  min-width: 140px;
+  min-width: 160px;
 }
 
-.review-result {
+.review-result,
+.task-cell {
   margin-top: 8px;
   display: flex;
   flex-direction: column;
@@ -358,12 +552,55 @@ watch(
   font-size: 13px;
 }
 
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.attempt-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.attempt-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.attempt-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #475569;
+  white-space: pre-wrap;
+}
+
+.attempt-comment {
+  color: #0f172a;
+}
+
+.attempt-error {
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.attempt-actions {
+  margin-top: 12px;
+}
+
 :deep(.table-wrapper .el-table) {
-  min-width: 860px;
+  min-width: 1180px;
 }
 
 @media (max-width: 768px) {
-  .page-header {
+  .page-header,
+  .history-header {
     flex-direction: column;
   }
 
@@ -373,6 +610,15 @@ watch(
 
   .header-actions :deep(.el-button) {
     flex: 1;
+  }
+
+  .review-cell,
+  .attempt-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .review-score-input {
+    width: 100%;
   }
 }
 </style>

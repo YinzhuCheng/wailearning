@@ -3,6 +3,7 @@
 This guide targets Alibaba Cloud ECS on Ubuntu 22.04, Debian 12, and Alibaba Cloud Linux or CentOS-like systems.
 
 If you want the operational checklist for first go-live, DNS cutover, acceptance, and rollback, also read `RUNBOOK_ALIYUN.md`.
+If you want a data-safety-focused upgrade guide and a safer deployment example script, also read `ALIYUN_SAFE_UPGRADE.md` and `scripts/example_safe_upgrade_aliyun.sh`.
 
 ## Architecture
 
@@ -48,6 +49,22 @@ Generate a strong secret key:
 openssl rand -hex 32
 ```
 
+Recommended homework/LLM-related settings for the current architecture:
+
+```dotenv
+ALLOW_PUBLIC_REGISTRATION=false
+ENABLE_LLM_GRADING_WORKER=true
+LLM_GRADING_WORKER_LEADER=true
+LLM_GRADING_WORKER_POLL_SECONDS=2
+LLM_GRADING_TASK_STALE_SECONDS=600
+```
+
+Notes:
+
+- `ALLOW_PUBLIC_REGISTRATION=false` is the recommended production default.
+- Only one backend instance should normally set `LLM_GRADING_WORKER_LEADER=true`; other API instances should keep it `false`.
+- The grading worker is database-backed and runs inside the FastAPI process, so leader election is configuration-based rather than automatic.
+
 ## 3. Initialize PostgreSQL
 
 Run the SQL script with psql variables:
@@ -74,6 +91,14 @@ Check the service:
 sudo systemctl status ddclass-backend --no-pager
 sudo journalctl -u ddclass-backend -n 100 --no-pager
 ```
+
+If homework auto-grading is enabled in production, also confirm the leader instance is running with:
+
+```bash
+sudo systemctl show ddclass-backend --property=Environment --no-pager
+```
+
+And make sure the effective environment includes `LLM_GRADING_WORKER_LEADER=true` only on the intended worker leader.
 
 ## 5. Deploy the Admin Frontend
 
@@ -119,6 +144,8 @@ sudo systemctl status certbot.timer --no-pager
 - Open `http://wailearning.xyz/health` and confirm the backend health endpoint returns `healthy`
 - Log in with the bootstrap admin account configured in `.env.production`
 - Confirm there are no failing Nginx requests or backend tracebacks
+- In the admin UI, create or validate at least one LLM endpoint preset if you plan to use homework auto-grading
+- In the course UI, confirm course-level LLM configuration can be opened and saved
 
 ## 10. Logs and Troubleshooting
 
@@ -164,3 +191,5 @@ sudo tar -czf /opt/dd-class/backups/ddclass-files-$(date +%F-%H%M%S).tar.gz \
   /opt/dd-class/shared \
   /var/www/wailearning.xyz
 ```
+
+If you use homework attachments heavily, also back up the upload root defined by `UPLOADS_DIR` (or the default app `uploads/attachments` directory) so historical homework attempts remain reproducible.

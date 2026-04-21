@@ -6,6 +6,7 @@ from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
 from fastapi import HTTPException, Request, UploadFile
+from sqlalchemy.orm import Session
 
 from app.config import settings
 
@@ -30,6 +31,7 @@ BLOCKED_ATTACHMENT_CONTENT_TYPES = {
     "application/vnd.microsoft.portable-executable",
 }
 ATTACHMENT_URL_PREFIXES = (
+    "/api/files/download/",
     "/uploads/attachments/",
     "/api/uploads/attachments/",
     "uploads/attachments/",
@@ -90,7 +92,7 @@ async def save_attachment(file: UploadFile, request: Request) -> dict[str, objec
 
     return {
         "attachment_name": file.filename,
-        "attachment_url": str(request.url_for("uploads", path=f"attachments/{stored_name}")),
+        "attachment_url": str(request.url_for("download_attachment_by_name", stored_name=stored_name)),
         "content_type": file.content_type,
         "size": size,
     }
@@ -102,6 +104,30 @@ def delete_attachment_file(attachment_url: Optional[str]) -> None:
         return
     if target_path.exists():
         target_path.unlink()
+
+
+def attachment_is_referenced(db: Session, attachment_url: Optional[str]) -> bool:
+    if not attachment_url:
+        return False
+
+    from app.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification
+
+    references = [
+        db.query(Homework).filter(Homework.attachment_url == attachment_url).first(),
+        db.query(HomeworkSubmission).filter(HomeworkSubmission.attachment_url == attachment_url).first(),
+        db.query(HomeworkAttempt).filter(HomeworkAttempt.attachment_url == attachment_url).first(),
+        db.query(Notification).filter(Notification.attachment_url == attachment_url).first(),
+        db.query(CourseMaterial).filter(CourseMaterial.attachment_url == attachment_url).first(),
+    ]
+    return any(item is not None for item in references)
+
+
+def delete_attachment_file_if_unreferenced(db: Session, attachment_url: Optional[str]) -> None:
+    if not attachment_url:
+        return
+    if attachment_is_referenced(db, attachment_url):
+        return
+    delete_attachment_file(attachment_url)
 
 
 def get_attachment_file_path(attachment_url: Optional[str]) -> Optional[Path]:

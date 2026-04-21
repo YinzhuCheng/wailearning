@@ -8,17 +8,23 @@ from app.auth import get_password_hash
 from app.config import settings
 from app.course_access import sync_course_enrollments
 from app.database import Base, SessionLocal, engine
-from app.models import Score, Semester, Subject, SystemSetting, User, UserRole
+from app.models import (
+    CourseLLMConfig,
+    CourseLLMConfigEndpoint,
+    Homework,
+    HomeworkAttempt,
+    HomeworkScoreCandidate,
+    HomeworkSubmission,
+    LLMEndpointPreset,
+    LLMTokenUsageLog,
+    Score,
+    Semester,
+    Subject,
+    SystemSetting,
+    User,
+    UserRole,
+)
 
-
-DEFAULT_SEMESTERS = [
-    {"name": "2024-春季", "year": 2024},
-    {"name": "2024-秋季", "year": 2024},
-    {"name": "2025-春季", "year": 2025},
-    {"name": "2025-秋季", "year": 2025},
-    {"name": "2026-春季", "year": 2026},
-    {"name": "2026-秋季", "year": 2026},
-]
 
 DEFAULT_SEMESTERS = [
     {"name": "2024-\u6625\u5b63", "year": 2024},
@@ -79,8 +85,141 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS max_score FLOAT NOT NULL DEFAULT 100",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS grade_precision VARCHAR NOT NULL DEFAULT 'integer'",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS auto_grading_enabled BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS rubric_text TEXT",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS reference_answer TEXT",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS response_language VARCHAR",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS allow_late_submission BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS late_submission_affects_score BOOLEAN DEFAULT FALSE",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_score FLOAT",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_comment VARCHAR",
+        "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_attempt_id INTEGER",
+        "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_task_status VARCHAR",
+        "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_task_error TEXT",
+        """
+        CREATE TABLE IF NOT EXISTS homework_attempts (
+            id INTEGER PRIMARY KEY,
+            homework_id INTEGER NOT NULL REFERENCES homeworks(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            subject_id INTEGER REFERENCES subjects(id),
+            class_id INTEGER NOT NULL REFERENCES classes(id),
+            submission_summary_id INTEGER REFERENCES homework_submissions(id),
+            content TEXT,
+            attachment_name VARCHAR,
+            attachment_url VARCHAR,
+            is_late BOOLEAN DEFAULT FALSE,
+            counts_toward_final_score BOOLEAN DEFAULT TRUE,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS homework_score_candidates (
+            id INTEGER PRIMARY KEY,
+            attempt_id INTEGER NOT NULL REFERENCES homework_attempts(id),
+            homework_id INTEGER NOT NULL REFERENCES homeworks(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            source VARCHAR NOT NULL DEFAULT 'auto',
+            score FLOAT NOT NULL,
+            comment TEXT,
+            created_by INTEGER REFERENCES users(id),
+            source_metadata JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS homework_grading_tasks (
+            id INTEGER PRIMARY KEY,
+            attempt_id INTEGER NOT NULL REFERENCES homework_attempts(id),
+            homework_id INTEGER NOT NULL REFERENCES homeworks(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            subject_id INTEGER REFERENCES subjects(id),
+            status VARCHAR NOT NULL DEFAULT 'queued',
+            queue_reason VARCHAR,
+            error_code VARCHAR,
+            error_message TEXT,
+            task_summary TEXT,
+            artifact_manifest JSON,
+            input_token_estimate INTEGER,
+            billed_input_tokens INTEGER,
+            billed_output_tokens INTEGER,
+            billed_total_tokens INTEGER,
+            current_endpoint_index INTEGER,
+            current_attempt INTEGER NOT NULL DEFAULT 0,
+            started_at TIMESTAMP,
+            finished_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS llm_endpoint_presets (
+            id INTEGER PRIMARY KEY,
+            name VARCHAR NOT NULL UNIQUE,
+            base_url VARCHAR NOT NULL,
+            api_key TEXT NOT NULL,
+            model_name VARCHAR NOT NULL,
+            connect_timeout_seconds INTEGER NOT NULL DEFAULT 10,
+            read_timeout_seconds INTEGER NOT NULL DEFAULT 120,
+            max_retries INTEGER NOT NULL DEFAULT 2,
+            initial_backoff_seconds INTEGER NOT NULL DEFAULT 2,
+            is_active BOOLEAN DEFAULT TRUE,
+            supports_vision BOOLEAN DEFAULT FALSE,
+            validation_status VARCHAR NOT NULL DEFAULT 'pending',
+            validation_message TEXT,
+            validated_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS course_llm_configs (
+            id INTEGER PRIMARY KEY,
+            subject_id INTEGER NOT NULL UNIQUE REFERENCES subjects(id),
+            is_enabled BOOLEAN DEFAULT FALSE,
+            response_language VARCHAR,
+            daily_student_token_limit INTEGER,
+            daily_course_token_limit INTEGER,
+            estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0,
+            estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
+            max_input_tokens INTEGER NOT NULL DEFAULT 16000,
+            max_output_tokens INTEGER NOT NULL DEFAULT 1200,
+            quota_timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            system_prompt TEXT,
+            teacher_prompt TEXT,
+            created_by INTEGER REFERENCES users(id),
+            updated_by INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS course_llm_config_endpoints (
+            id INTEGER PRIMARY KEY,
+            config_id INTEGER NOT NULL REFERENCES course_llm_configs(id),
+            preset_id INTEGER NOT NULL REFERENCES llm_endpoint_presets(id),
+            priority INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT uq_course_llm_config_endpoint UNIQUE(config_id, preset_id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS llm_token_usage_logs (
+            id INTEGER PRIMARY KEY,
+            task_id INTEGER NOT NULL UNIQUE REFERENCES homework_grading_tasks(id),
+            subject_id INTEGER REFERENCES subjects(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            usage_date VARCHAR NOT NULL,
+            timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            input_tokens INTEGER,
+            output_tokens INTEGER,
+            total_tokens INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
     ]
@@ -117,6 +256,102 @@ def ensure_schema_updates() -> None:
                 """
             )
         )
+
+
+def backfill_homework_grading_data(db) -> None:
+    created_attempts = 0
+    created_candidates = 0
+    updated_configs = 0
+    updated_submission_links = 0
+
+    for homework in db.query(Homework).all():
+        if homework.subject_id:
+            config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == homework.subject_id).first()
+            if not config:
+                db.add(CourseLLMConfig(subject_id=homework.subject_id))
+                updated_configs += 1
+
+    submissions = db.query(HomeworkSubmission).all()
+    for submission in submissions:
+        attempt = None
+        if submission.latest_attempt_id:
+            attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == submission.latest_attempt_id).first()
+
+        if not attempt:
+            attempt = (
+                db.query(HomeworkAttempt)
+                .filter(
+                    HomeworkAttempt.homework_id == submission.homework_id,
+                    HomeworkAttempt.student_id == submission.student_id,
+                    HomeworkAttempt.submission_summary_id == submission.id,
+                )
+                .order_by(HomeworkAttempt.submitted_at.desc(), HomeworkAttempt.id.desc())
+                .first()
+            )
+
+        if not attempt:
+            homework = db.query(Homework).filter(Homework.id == submission.homework_id).first()
+            is_late = False
+            counts_toward = True
+            if homework and homework.due_date and submission.submitted_at:
+                is_late = submission.submitted_at > homework.due_date
+                counts_toward = (not is_late) or (not bool(homework.late_submission_affects_score))
+            attempt = HomeworkAttempt(
+                homework_id=submission.homework_id,
+                student_id=submission.student_id,
+                subject_id=submission.subject_id,
+                class_id=submission.class_id,
+                submission_summary_id=submission.id,
+                content=submission.content,
+                attachment_name=submission.attachment_name,
+                attachment_url=submission.attachment_url,
+                is_late=is_late,
+                counts_toward_final_score=counts_toward,
+                submitted_at=submission.submitted_at,
+                updated_at=submission.updated_at,
+            )
+            db.add(attempt)
+            db.flush()
+            created_attempts += 1
+
+        if submission.latest_attempt_id != attempt.id:
+            submission.latest_attempt_id = attempt.id
+            updated_submission_links += 1
+
+        if submission.review_score is not None:
+            existing_candidate = (
+                db.query(HomeworkScoreCandidate)
+                .filter(
+                    HomeworkScoreCandidate.attempt_id == attempt.id,
+                    HomeworkScoreCandidate.source == "teacher",
+                    HomeworkScoreCandidate.score == submission.review_score,
+                )
+                .first()
+            )
+            if not existing_candidate:
+                db.add(
+                    HomeworkScoreCandidate(
+                        attempt_id=attempt.id,
+                        homework_id=submission.homework_id,
+                        student_id=submission.student_id,
+                        source="teacher",
+                        score=submission.review_score,
+                        comment=submission.review_comment,
+                        source_metadata={"legacy_migration": True},
+                        created_at=submission.updated_at or submission.submitted_at,
+                        updated_at=submission.updated_at or submission.submitted_at,
+                    )
+                )
+                created_candidates += 1
+
+    if created_attempts or created_candidates or updated_configs or updated_submission_links:
+        db.commit()
+    print(
+        "Backfilled homework grading data. "
+        "Attempts: "
+        f"{created_attempts}, candidates: {created_candidates}, configs: {updated_configs}, "
+        f"submission_links: {updated_submission_links}."
+    )
 
 
 def seed_default_admin(db) -> None:
@@ -162,7 +397,6 @@ def normalize_semester_name(name: str | None) -> str | None:
 
     year, term = match.groups()
     return f"{year}-\u6625\u5b63" if term == "1" else f"{year}-\u79cb\u5b63"
-    return f"{year}-春季" if term == "1" else f"{year}-秋季"
 
 
 def normalize_semester_catalog(db) -> None:
@@ -301,6 +535,7 @@ def bootstrap() -> None:
         normalize_teacher_class_assignments(db)
         normalize_semester_catalog(db)
         sync_subject_semester_links(db)
+        backfill_homework_grading_data(db)
         if settings.INIT_DEFAULT_DATA:
             seed_default_admin(db)
             seed_default_semesters(db)
@@ -308,6 +543,7 @@ def bootstrap() -> None:
             sync_subject_semester_links(db)
             seed_default_system_settings(db)
             sync_existing_courses(db)
+            backfill_homework_grading_data(db)
         else:
             print("INIT_DEFAULT_DATA is false. Table creation completed without seed data.")
     finally:

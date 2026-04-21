@@ -8,6 +8,7 @@ from app.schemas import ChangePasswordRequest, MessageResponse, Token, UserCreat
 from app.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from app.config import settings
 from app.services import LogService
+from app.models import UserRole
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -49,16 +50,23 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 @router.post("/register", response_model=UserResponse)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    if not settings.ALLOW_PUBLIC_REGISTRATION:
+        raise HTTPException(status_code=403, detail="Public registration is disabled.")
+
     existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered")
+
+    normalized_role = (user_data.role or "").strip()
+    if normalized_role not in {UserRole.STUDENT.value}:
+        raise HTTPException(status_code=403, detail="Public registration can only create student accounts.")
 
     hashed_password = get_password_hash(user_data.password)
     user = User(
         username=user_data.username,
         hashed_password=hashed_password,
         real_name=user_data.real_name,
-        role=user_data.role,
+        role=UserRole.STUDENT.value,
         class_id=user_data.class_id
     )
     db.add(user)

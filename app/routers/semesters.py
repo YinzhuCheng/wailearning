@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import Score, Subject, User, Semester
 from app.schemas import SemesterCreate, SemesterResponse
 from app.auth import get_current_active_user
+from app.permissions import is_admin
 
 router = APIRouter(prefix="/api/semesters", tags=["学期管理"])
 
@@ -20,17 +21,8 @@ def normalize_semester_name(name: str) -> str:
 
     year, term = matched.groups()
     return f"{year}-\u6625\u5b63" if term == "1" else f"{year}-\u79cb\u5b63"
-    return f"{year}-春季" if term == "1" else f"{year}-秋季"
 
 def init_default_semesters(db: Session):
-    default_semesters = [
-        {"name": "2024-春季", "year": 2024},
-        {"name": "2024-秋季", "year": 2024},
-        {"name": "2025-春季", "year": 2025},
-        {"name": "2025-秋季", "year": 2025},
-        {"name": "2026-春季", "year": 2026},
-        {"name": "2026-秋季", "year": 2026},
-    ]
     default_semesters = [
         {"name": "2024-\u6625\u5b63", "year": 2024},
         {"name": "2024-\u79cb\u5b63", "year": 2024},
@@ -83,6 +75,8 @@ def create_semester(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以创建学期")
     normalized_name = normalize_semester_name(semester_data.name)
     existing = db.query(Semester).filter(Semester.name == normalized_name).first()
     if existing:
@@ -105,6 +99,8 @@ def update_semester(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以修改学期")
     semester = db.query(Semester).filter(Semester.id == semester_id).first()
     if not semester:
         raise HTTPException(status_code=404, detail="学期不存在")
@@ -131,6 +127,8 @@ def delete_semester(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以删除学期")
     semester = db.query(Semester).filter(Semester.id == semester_id).first()
     if not semester:
         raise HTTPException(status_code=404, detail="学期不存在")
@@ -144,6 +142,8 @@ def initialize_semesters(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以初始化学期")
     init_default_semesters(db)
     semesters = db.query(Semester).order_by(Semester.year.desc(), Semester.name.desc()).all()
     return {

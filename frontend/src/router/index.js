@@ -128,7 +128,7 @@ const routes = [
         path: 'homework/:id/submissions',
         name: 'HomeworkSubmissions',
         component: () => import('@/views/HomeworkSubmissions.vue'),
-        meta: { title: '学生提交' }
+        meta: { title: '学生提交', requiresTeacher: true }
       },
       {
         path: 'materials',
@@ -167,6 +167,11 @@ router.beforeEach(async (to, from, next) => {
 
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
     next(userStore.isStudent ? '/courses' : '/dashboard')
+    return
+  }
+
+  if (to.meta.requiresTeacher && (userStore.isStudent || userStore.isAdmin)) {
+    next(userStore.isStudent ? '/homework' : adminHomePath)
     return
   }
 

@@ -169,16 +169,29 @@ const api = {
     update: (id, data) => http.put(`/homeworks/${id}`, data),
     delete: id => http.delete(`/homeworks/${id}`),
     getMySubmission: id => http.get(`/homeworks/${id}/submission/me`),
+    getMySubmissionHistory: id => http.get(`/homeworks/${id}/submission/me/history`),
     submit: (id, data) => http.post(`/homeworks/${id}/submission`, data),
     getSubmissions: id => http.get(`/homeworks/${id}/submissions`),
+    getSubmissionHistory: (homeworkId, submissionId) =>
+      http.get(`/homeworks/${homeworkId}/submissions/${submissionId}/history`),
     reviewSubmission: (homeworkId, submissionId, data) =>
       http.put(`/homeworks/${homeworkId}/submissions/${submissionId}/review`, data),
+    regradeSubmission: (homeworkId, submissionId, data = {}) =>
+      http.post(`/homeworks/${homeworkId}/submissions/${submissionId}/regrade`, data),
     downloadSubmissions: (id, data) =>
       http.post(`/homeworks/${id}/submissions/download`, data, {
         responseType: 'blob',
         returnFullResponse: true,
         ...fileTransferRequestConfig
       })
+  },
+  llmSettings: {
+    listPresets: () => http.get('/llm-settings/presets'),
+    createPreset: data => http.post('/llm-settings/presets', data),
+    updatePreset: (id, data) => http.put(`/llm-settings/presets/${id}`, data),
+    validatePreset: id => http.post(`/llm-settings/presets/${id}/validate`),
+    getCourseConfig: subjectId => http.get(`/llm-settings/courses/${subjectId}`),
+    updateCourseConfig: (subjectId, data) => http.put(`/llm-settings/courses/${subjectId}`, data)
   },
   notifications: {
     list: params => http.get('/notifications', { params }),

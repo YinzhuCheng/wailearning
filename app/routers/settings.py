@@ -12,6 +12,15 @@ from app.schemas import SystemSettingResponse, SystemSettingUpdate, SystemSettin
 
 router = APIRouter(prefix="/api/settings", tags=["系统设置"])
 
+PUBLIC_SETTING_KEYS = {
+    "system_name",
+    "login_background",
+    "system_logo",
+    "system_intro",
+    "copyright",
+    "use_bing_background",
+}
+
 
 def is_admin(user: User) -> bool:
     return user.role.lower() == "admin" if user.role else False
@@ -19,7 +28,7 @@ def is_admin(user: User) -> bool:
 
 @router.get("/public", response_model=SystemSettingsResponse)
 def get_public_settings(db: Session = Depends(get_db)):
-    settings = db.query(SystemSetting).all()
+    settings = db.query(SystemSetting).filter(SystemSetting.setting_key.in_(PUBLIC_SETTING_KEYS)).all()
     settings_dict = {item.setting_key: item.setting_value for item in settings}
     settings_dict["system_name"] = normalize_legacy_branding(settings_dict.get("system_name", ""))
     settings_dict["copyright"] = normalize_legacy_branding(settings_dict.get("copyright", ""))

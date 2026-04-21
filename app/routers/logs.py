@@ -1,13 +1,19 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
 from datetime import datetime
+from app.auth import get_current_active_user
 from app.database import get_db
-from app.models import OperationLog
+from app.models import OperationLog, User, UserRole
 from app.schemas import OperationLogResponse, OperationLogListResponse
 
 router = APIRouter(prefix="/api/logs", tags=["操作日志"])
+
+
+def _ensure_admin(current_user: User) -> None:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only administrators can access logs.")
 
 @router.get("", response_model=OperationLogListResponse)
 def get_logs(
@@ -18,8 +24,10 @@ def get_logs(
     end_date: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
+    _ensure_admin(current_user)
     query = db.query(OperationLog)
 
     if user_id:
@@ -52,10 +60,14 @@ def get_logs(
     return OperationLogListResponse(total=total, data=logs)
 
 @router.get("/{log_id}", response_model=OperationLogResponse)
-def get_log(log_id: int, db: Session = Depends(get_db)):
+def get_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    _ensure_admin(current_user)
     log = db.query(OperationLog).filter(OperationLog.id == log_id).first()
     if not log:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="日志不存在")
     return log
 
@@ -63,8 +75,10 @@ def get_log(log_id: int, db: Session = Depends(get_db)):
 def get_log_stats(
     start_date: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     end_date: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
+    _ensure_admin(current_user)
     query = db.query(OperationLog)
 
     if start_date:
@@ -85,24 +99,31 @@ def get_log_stats(
     total_logs = query.count()
 
     from sqlalchemy import func
+    stats_start_datetime = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    if start_date:
+        try:
+            stats_start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            pass
+
     action_stats = db.query(
         OperationLog.action,
         func.count(OperationLog.id)
     ).filter(
-        OperationLog.created_at >= (datetime.now().replace(hour=0, minute=0, second=0) if not start_date else start_date)
+        OperationLog.created_at >= stats_start_datetime
     ).group_by(OperationLog.action).all()
 
     target_stats = db.query(
         OperationLog.target_type,
         func.count(OperationLog.id)
     ).filter(
-        OperationLog.created_at >= (datetime.now().replace(hour=0, minute=0, second=0) if not start_date else start_date)
+        OperationLog.created_at >= stats_start_datetime
     ).group_by(OperationLog.target_type).all()
 
     return {
         "total": total_logs,
         "today": db.query(OperationLog).filter(
-            OperationLog.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
+            OperationLog.created_at >= datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         ).count(),
         "action_stats": [{"action": a, "count": c} for a, c in action_stats],
         "target_stats": [{"type": t, "count": c} for t, c in target_stats]

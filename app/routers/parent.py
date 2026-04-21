@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from typing import List, Optional
-from datetime import datetime, timedelta, timezone
-from app.database import get_db
-from app.models import Student, Class, Score, Attendance, Notification, User, Homework
-from app.auth import get_current_active_user
 import secrets
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import desc
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_active_user
+from app.course_access import get_accessible_class_ids_from_courses
+from app.database import get_db
+from app.models import Attendance, Class, Homework, Notification, Score, Student, User
 
 router = APIRouter(prefix="/api/parent", tags=["家长端口"])
 
@@ -16,21 +19,38 @@ def generate_parent_code():
     return secrets.token_hex(4).upper()
 
 
+def _now_naive() -> datetime:
+    return datetime.now()
+
+
+def _get_parent_bound_student_or_404(parent_code: str, db: Session) -> Student:
+    student = db.query(Student).filter(Student.parent_code == parent_code).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="家长码无效")
+    if student.parent_code_expires and student.parent_code_expires < _now_naive():
+        raise HTTPException(status_code=403, detail="家长码已过期")
+    return student
+
+
+def _ensure_teacher_can_manage_student(student: Student, current_user: User, db: Session) -> None:
+    if current_user.role == "admin":
+        return
+
+    accessible_class_ids = get_accessible_class_ids_from_courses(current_user, db)
+    if student.class_id not in accessible_class_ids:
+        raise HTTPException(status_code=403, detail="无权操作该学生")
+
+
 @router.get("/verify/{parent_code}")
 def verify_parent_code(
     parent_code: str,
     db: Session = Depends(get_db)
 ):
     """验证家长码是否有效"""
-    student = db.query(Student).filter(
-        Student.parent_code == parent_code
-    ).first()
-
-    if not student:
-        return {"valid": False, "message": "家长码无效"}
-
-    if student.parent_code_expires and student.parent_code_expires < datetime.now():
-        return {"valid": False, "message": "家长码已过期"}
+    try:
+        student = _get_parent_bound_student_or_404(parent_code, db)
+    except HTTPException as exc:
+        return {"valid": False, "message": exc.detail}
 
     class_obj = db.query(Class).filter(Class.id == student.class_id).first()
 
@@ -48,15 +68,7 @@ def get_student_by_parent_code(
     db: Session = Depends(get_db)
 ):
     """通过家长码获取学生信息"""
-    student = db.query(Student).filter(
-        Student.parent_code == parent_code
-    ).first()
-
-    if not student:
-        raise HTTPException(status_code=404, detail="家长码无效")
-
-    if student.parent_code_expires and student.parent_code_expires < datetime.now():
-        raise HTTPException(status_code=403, detail="家长码已过期")
+    student = _get_parent_bound_student_or_404(parent_code, db)
 
     class_obj = db.query(Class).filter(Class.id == student.class_id).first()
 
@@ -67,7 +79,6 @@ def get_student_by_parent_code(
         "class_id": student.class_id,
         "class_name": class_obj.name if class_obj else None,
         "gender": student.gender.value if student.gender else None,
-        "parent_code": student.parent_code
     }
 
 
@@ -80,15 +91,7 @@ def get_student_scores_by_parent_code(
     db: Session = Depends(get_db)
 ):
     """通过家长码获取学生成绩"""
-    student = db.query(Student).filter(
-        Student.parent_code == parent_code
-    ).first()
-
-    if not student:
-        raise HTTPException(status_code=404, detail="家长码无效")
-
-    if student.parent_code_expires and student.parent_code_expires < datetime.now():
-        raise HTTPException(status_code=403, detail="家长码已过期")
+    student = _get_parent_bound_student_or_404(parent_code, db)
 
     query = db.query(Score).filter(Score.student_id == student.id)
 
@@ -123,15 +126,7 @@ def get_class_notifications_by_parent_code(
     db: Session = Depends(get_db)
 ):
     """通过家长码获取班级通知"""
-    student = db.query(Student).filter(
-        Student.parent_code == parent_code
-    ).first()
-
-    if not student:
-        raise HTTPException(status_code=404, detail="家长码无效")
-
-    if student.parent_code_expires and student.parent_code_expires < datetime.now():
-        raise HTTPException(status_code=403, detail="家长码已过期")
+    student = _get_parent_bound_student_or_404(parent_code, db)
 
     query = db.query(Notification).filter(
         (Notification.class_id == None) |
@@ -169,15 +164,7 @@ def get_class_homework_by_parent_code(
     db: Session = Depends(get_db)
 ):
     """通过家长码获取班级作业"""
-    student = db.query(Student).filter(
-        Student.parent_code == parent_code
-    ).first()
-
-    if not student:
-        raise HTTPException(status_code=404, detail="家长码无效")
-
-    if student.parent_code_expires and student.parent_code_expires < datetime.now():
-        raise HTTPException(status_code=403, detail="家长码已过期")
+    student = _get_parent_bound_student_or_404(parent_code, db)
 
     query = db.query(Homework).filter(Homework.class_id == student.class_id)
 
@@ -208,15 +195,7 @@ def get_student_stats_by_parent_code(
     db: Session = Depends(get_db)
 ):
     """通过家长码获取学生统计数据"""
-    student = db.query(Student).filter(
-        Student.parent_code == parent_code
-    ).first()
-
-    if not student:
-        raise HTTPException(status_code=404, detail="家长码无效")
-
-    if student.parent_code_expires and student.parent_code_expires < datetime.now():
-        raise HTTPException(status_code=403, detail="家长码已过期")
+    student = _get_parent_bound_student_or_404(parent_code, db)
 
     score_query = db.query(Score).filter(Score.student_id == student.id)
     if semester:
@@ -256,17 +235,12 @@ def generate_student_parent_code(
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
 
-    if current_user.role != 'admin':
-        if current_user.role in ['class_teacher', 'teacher']:
-            if current_user.class_id and student.class_id != current_user.class_id:
-                raise HTTPException(status_code=403, detail="只能操作自己班级的学生")
-        else:
-            raise HTTPException(status_code=403, detail="无权操作")
+    _ensure_teacher_can_manage_student(student, current_user, db)
 
     parent_code = generate_parent_code()
 
     student.parent_code = parent_code
-    student.parent_code_expires = datetime.now() + timedelta(days=365)
+    student.parent_code_expires = _now_naive() + timedelta(days=365)
 
     db.commit()
 
@@ -295,16 +269,14 @@ def batch_generate_student_parent_codes(
         if not student:
             continue
 
-        if current_user.role != 'admin':
-            if current_user.role in ['class_teacher', 'teacher']:
-                if current_user.class_id and student.class_id != current_user.class_id:
-                    continue
-            else:
-                continue
+        try:
+            _ensure_teacher_can_manage_student(student, current_user, db)
+        except HTTPException:
+            continue
 
         parent_code = generate_parent_code()
         student.parent_code = parent_code
-        student.parent_code_expires = datetime.now() + timedelta(days=365)
+        student.parent_code_expires = _now_naive() + timedelta(days=365)
 
         results.append({
             "student_id": student.id,
@@ -334,12 +306,7 @@ def revoke_student_parent_code(
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
 
-    if current_user.role != 'admin':
-        if current_user.role in ['class_teacher', 'teacher']:
-            if current_user.class_id and student.class_id != current_user.class_id:
-                raise HTTPException(status_code=403, detail="只能操作自己班级的学生")
-        else:
-            raise HTTPException(status_code=403, detail="无权操作")
+    _ensure_teacher_can_manage_student(student, current_user, db)
 
     student.parent_code = None
     student.parent_code_expires = None

@@ -1,11 +1,11 @@
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.attachments import UPLOADS_DIR, ensure_upload_directories
+from app.attachments import ensure_upload_directories
 from app.bootstrap import (
+    backfill_homework_grading_data,
     ensure_schema_updates,
     normalize_semester_catalog,
     normalize_teacher_class_assignments,
@@ -13,6 +13,7 @@ from app.bootstrap import (
 )
 from app.config import settings
 from app.database import Base, SessionLocal, engine
+from app.llm_grading import start_grading_worker, worker_manager
 from app.routers import (
     attendance,
     auth,
@@ -31,6 +32,7 @@ from app.routers import (
     students,
     subjects,
     users,
+    llm_settings,
 )
 
 if settings.APP_ENV != "production":
@@ -66,6 +68,7 @@ app.include_router(semesters.router)
 app.include_router(logs.router)
 app.include_router(points.router)
 app.include_router(system_settings.router)
+app.include_router(llm_settings.router)
 app.include_router(files.router)
 app.include_router(homework.router)
 app.include_router(materials.router)
@@ -73,7 +76,6 @@ app.include_router(notifications.router)
 app.include_router(parent.router)
 
 ensure_upload_directories()
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
 @app.on_event("startup")
@@ -85,8 +87,16 @@ def startup_tasks():
         normalize_teacher_class_assignments(db)
         normalize_semester_catalog(db)
         sync_subject_semester_links(db)
+        backfill_homework_grading_data(db)
     finally:
         db.close()
+    if settings.ENABLE_LLM_GRADING_WORKER and settings.LLM_GRADING_WORKER_LEADER:
+        start_grading_worker()
+
+
+@app.on_event("shutdown")
+def shutdown_tasks():
+    worker_manager.stop()
 
 
 @app.get("/")

@@ -120,9 +120,10 @@
           </el-table-column>
           <el-table-column prop="student_count" label="学生数" width="100" />
           <el-table-column prop="description" label="课程简介" min-width="220" show-overflow-tooltip />
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="280" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
+              <el-button type="success" size="small" @click="openLlmConfigDialog(row)">LLM 配置</el-button>
               <el-button type="danger" size="small" @click="deleteCourse(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -234,6 +235,101 @@
           <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
         </template>
       </el-dialog>
+
+      <el-dialog
+        v-model="llmDialogVisible"
+        :title="llmDialogCourse ? `${llmDialogCourse.name} · LLM 配置` : 'LLM 配置'"
+        width="960px"
+        destroy-on-close
+      >
+        <el-form v-if="llmDialogCourse" :model="llmForm" label-width="140px" v-loading="llmLoading">
+          <el-alert
+            class="llm-notice"
+            type="info"
+            :closable="false"
+            :title="llmVisualValidationNotice"
+          />
+
+          <el-form-item label="启用自动评分">
+            <el-switch v-model="llmForm.is_enabled" />
+          </el-form-item>
+
+          <el-form-item label="响应语言">
+            <el-input v-model="llmForm.response_language" placeholder="例如 zh-CN / en-US，可为空" />
+          </el-form-item>
+
+          <el-form-item label="学生日 token 限额">
+            <el-input-number v-model="llmForm.daily_student_token_limit" :min="1" :step="1000" style="width: 100%" />
+          </el-form-item>
+
+          <el-form-item label="课程日 token 限额">
+            <el-input-number v-model="llmForm.daily_course_token_limit" :min="1" :step="1000" style="width: 100%" />
+          </el-form-item>
+
+          <el-form-item label="输入 token 上限">
+            <el-input-number v-model="llmForm.max_input_tokens" :min="1000" :step="1000" style="width: 100%" />
+          </el-form-item>
+
+          <el-form-item label="输出 token 上限">
+            <el-input-number v-model="llmForm.max_output_tokens" :min="1" :step="100" style="width: 100%" />
+          </el-form-item>
+
+          <el-form-item label="字符/token 估算">
+            <el-input-number v-model="llmForm.estimated_chars_per_token" :min="0.5" :step="0.5" :precision="1" style="width: 100%" />
+          </el-form-item>
+
+          <el-form-item label="单图 token 估算">
+            <el-input-number v-model="llmForm.estimated_image_tokens" :min="1" :step="100" style="width: 100%" />
+          </el-form-item>
+
+          <el-form-item label="额度时区">
+            <el-input v-model="llmForm.quota_timezone" placeholder="例如 UTC / Asia/Shanghai" />
+          </el-form-item>
+
+          <el-form-item label="系统提示词">
+            <el-input v-model="llmForm.system_prompt" type="textarea" :rows="5" placeholder="可选。若为空则使用系统默认提示词。" />
+          </el-form-item>
+
+          <el-form-item label="教师提示词">
+            <el-input v-model="llmForm.teacher_prompt" type="textarea" :rows="5" placeholder="可选。可补充课程评分偏好、风格与要求。" />
+          </el-form-item>
+
+          <el-form-item label="端点顺序">
+            <div class="llm-endpoints">
+              <el-empty v-if="!llmPresets.length" description="暂无可用端点，请先由管理员创建并完成视觉校验。" />
+              <div
+                v-for="preset in llmPresets"
+                :key="preset.id"
+                class="llm-endpoint-row"
+              >
+                <el-checkbox
+                  :model-value="isPresetSelected(preset.id)"
+                  :disabled="preset.validation_status !== 'validated' || !preset.supports_vision"
+                  @change="checked => togglePresetSelection(preset, checked)"
+                >
+                  <div class="llm-endpoint-meta">
+                    <strong>{{ preset.name }}</strong>
+                    <span>{{ preset.model_name }}</span>
+                    <span>状态：{{ preset.validation_status === 'validated' ? '已通过视觉校验' : preset.validation_message || '未校验' }}</span>
+                  </div>
+                </el-checkbox>
+
+                <el-input-number
+                  v-if="isPresetSelected(preset.id)"
+                  :model-value="getPresetPriority(preset.id)"
+                  :min="1"
+                  @update:model-value="value => updatePresetPriority(preset.id, value)"
+                />
+              </div>
+            </div>
+          </el-form-item>
+        </el-form>
+
+        <template #footer>
+          <el-button @click="llmDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="llmSaving" @click="saveLlmConfig">保存配置</el-button>
+        </template>
+      </el-dialog>
     </template>
   </div>
 </template>
@@ -269,6 +365,12 @@ const formRef = ref(null)
 const courseDetailVisible = ref(false)
 const courseDetailLoading = ref(false)
 const detailCourse = ref(null)
+const llmDialogVisible = ref(false)
+const llmDialogCourse = ref(null)
+const llmLoading = ref(false)
+const llmSaving = ref(false)
+const llmPresets = ref([])
+const llmVisualValidationNotice = ref('LLM 连通性验证会同时校验视觉接口。只有通过视觉能力校验的端点，才能被加入课程配置并用于作业自动评分。')
 
 const courses = ref([])
 const classes = ref([])
@@ -276,6 +378,21 @@ const teachers = ref([])
 const semesters = ref([])
 const classTeacherCoursePool = ref([])
 const courseDetailRows = ref([])
+
+const llmForm = reactive({
+  is_enabled: false,
+  response_language: '',
+  daily_student_token_limit: null,
+  daily_course_token_limit: null,
+  estimated_chars_per_token: 4.0,
+  estimated_image_tokens: 850,
+  max_input_tokens: 16000,
+  max_output_tokens: 1200,
+  quota_timezone: 'UTC',
+  system_prompt: '',
+  teacher_prompt: '',
+  endpoints: []
+})
 
 const isClassTeacherView = computed(() => userStore.isClassTeacher)
 const currentClassId = computed(() => resolveClassTeacherClassId(userStore.userInfo, classTeacherCoursePool.value))
@@ -449,6 +566,119 @@ const submitForm = async () => {
     await loadCourses()
   } finally {
     submitting.value = false
+  }
+}
+
+const resetLlmForm = () => {
+  Object.assign(llmForm, {
+    is_enabled: false,
+    response_language: '',
+    daily_student_token_limit: null,
+    daily_course_token_limit: null,
+    estimated_chars_per_token: 4.0,
+    estimated_image_tokens: 850,
+    max_input_tokens: 16000,
+    max_output_tokens: 1200,
+    quota_timezone: 'UTC',
+    system_prompt: '',
+    teacher_prompt: '',
+    endpoints: []
+  })
+}
+
+const normalizeNullableNumber = value => value || null
+
+const applyLlmConfig = config => {
+  resetLlmForm()
+  if (!config) {
+    return
+  }
+  llmVisualValidationNotice.value = config.visual_validation_notice || llmVisualValidationNotice.value
+  llmForm.is_enabled = Boolean(config.is_enabled)
+  llmForm.response_language = config.response_language || ''
+  llmForm.daily_student_token_limit = config.daily_student_token_limit || null
+  llmForm.daily_course_token_limit = config.daily_course_token_limit || null
+  llmForm.estimated_chars_per_token = config.estimated_chars_per_token ?? 4.0
+  llmForm.estimated_image_tokens = config.estimated_image_tokens ?? 850
+  llmForm.max_input_tokens = config.max_input_tokens ?? 16000
+  llmForm.max_output_tokens = config.max_output_tokens ?? 1200
+  llmForm.quota_timezone = config.quota_timezone || 'UTC'
+  llmForm.system_prompt = config.system_prompt || ''
+  llmForm.teacher_prompt = config.teacher_prompt || ''
+  llmForm.endpoints = (config.endpoints || []).map(item => ({
+    preset_id: item.preset_id,
+    priority: item.priority
+  }))
+}
+
+const openLlmConfigDialog = async course => {
+  llmDialogCourse.value = course
+  llmDialogVisible.value = true
+  llmLoading.value = true
+  try {
+    const [presets, config] = await Promise.all([
+      api.llmSettings.listPresets(),
+      api.llmSettings.getCourseConfig(course.id)
+    ])
+    llmPresets.value = presets || []
+    applyLlmConfig(config)
+  } finally {
+    llmLoading.value = false
+  }
+}
+
+const isPresetSelected = presetId =>
+  llmForm.endpoints.some(item => String(item.preset_id) === String(presetId))
+
+const getPresetPriority = presetId =>
+  llmForm.endpoints.find(item => String(item.preset_id) === String(presetId))?.priority || 1
+
+const togglePresetSelection = (preset, checked) => {
+  const existingIndex = llmForm.endpoints.findIndex(item => String(item.preset_id) === String(preset.id))
+  if (!checked && existingIndex >= 0) {
+    llmForm.endpoints.splice(existingIndex, 1)
+    return
+  }
+  if (checked && existingIndex < 0) {
+    llmForm.endpoints.push({
+      preset_id: preset.id,
+      priority: llmForm.endpoints.length + 1
+    })
+  }
+}
+
+const updatePresetPriority = (presetId, value) => {
+  const target = llmForm.endpoints.find(item => String(item.preset_id) === String(presetId))
+  if (!target) {
+    return
+  }
+  target.priority = value || 1
+}
+
+const saveLlmConfig = async () => {
+  if (!llmDialogCourse.value) {
+    return
+  }
+  llmSaving.value = true
+  try {
+    await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
+      is_enabled: llmForm.is_enabled,
+      response_language: llmForm.response_language?.trim() || null,
+      daily_student_token_limit: normalizeNullableNumber(llmForm.daily_student_token_limit),
+      daily_course_token_limit: normalizeNullableNumber(llmForm.daily_course_token_limit),
+      estimated_chars_per_token: llmForm.estimated_chars_per_token,
+      estimated_image_tokens: llmForm.estimated_image_tokens,
+      max_input_tokens: llmForm.max_input_tokens,
+      max_output_tokens: llmForm.max_output_tokens,
+      quota_timezone: llmForm.quota_timezone?.trim() || 'UTC',
+      system_prompt: llmForm.system_prompt?.trim() || null,
+      teacher_prompt: llmForm.teacher_prompt?.trim() || null,
+      endpoints: [...llmForm.endpoints].sort((left, right) => left.priority - right.priority)
+    })
+    ElMessage.success('LLM 配置已保存')
+    llmDialogVisible.value = false
+  } finally {
+    llmSaving.value = false
   }
 }
 
@@ -666,6 +896,39 @@ watch(
 
 .course-times-editor__add {
   align-self: flex-start;
+}
+
+.llm-notice {
+  margin-bottom: 18px;
+}
+
+.llm-endpoints {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.llm-endpoint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.llm-endpoint-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.llm-endpoint-meta span {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .course-time-panel {
