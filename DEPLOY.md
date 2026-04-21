@@ -67,14 +67,19 @@ Notes:
 
 ## 3. Initialize PostgreSQL
 
-Run the SQL script with psql variables:
+Run the SQL script with psql variables.
+
+If your repository is under `/root/...`, avoid passing a file path inside `/root` to the `postgres` user directly.
+Using `/tmp/init_db.sql` works reliably across environments:
 
 ```bash
+cp scripts/init_db.sql /tmp/init_db.sql
+chmod 644 /tmp/init_db.sql
 sudo -u postgres psql \
   -v db_name='ddclass' \
   -v db_user='ddclass' \
   -v db_password='REPLACE_WITH_A_STRONG_DB_PASSWORD' \
-  -f scripts/init_db.sql
+  -f /tmp/init_db.sql
 ```
 
 Make sure the values match `DATABASE_URL` in `/opt/dd-class/shared/.env.production`.
@@ -174,6 +179,13 @@ After updating the code on the server:
 ```bash
 sudo bash scripts/deploy_all.sh
 sudo bash scripts/post_deploy_check.sh
+```
+
+If the backend is slow to become ready on your server size, you can increase health check retry behavior:
+
+```bash
+LOCAL_HEALTH_RETRIES=60 LOCAL_HEALTH_INTERVAL_SECONDS=1 \
+  sudo bash scripts/post_deploy_check.sh
 ```
 
 ## 12. Backups
