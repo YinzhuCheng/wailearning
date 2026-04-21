@@ -4,6 +4,7 @@ This runbook is for the first production go-live of `wailearning.xyz` on Alibaba
 
 If you want the concise deployment guide, read `DEPLOY.md`.
 If you want the execution order, expected results, acceptance checks, and rollback steps, use this file.
+If you want a deployment/upgrade guide that focuses specifically on **protecting original homework, materials, scores, and user data during code updates**, also read `ALIYUN_SAFE_UPGRADE.md`.
 
 ## 0. Target Topology
 
