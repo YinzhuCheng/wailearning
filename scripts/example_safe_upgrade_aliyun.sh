@@ -6,6 +6,11 @@ set -euo pipefail
 # that prioritizes preserving PostgreSQL data and uploaded attachments.
 # Review and adapt it to your environment before production use.
 
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "Please run this script as root."
+  exit 1
+fi
+
 APP_ROOT="${APP_ROOT:-/opt/dd-class}"
 SOURCE_DIR="${SOURCE_DIR:-${APP_ROOT}/source}"
 SHARED_DIR="${SHARED_DIR:-${APP_ROOT}/shared}"
@@ -121,3 +126,15 @@ If rollback is needed:
 4. restore ${SHARED_DIR} if uploads or env were damaged
 5. systemctl start ${APP_SERVICE}
 EOF
+
+# Domain / HTTPS follow-up (manual):
+# 1) Point DNS A records to your ECS public IP:
+#    - wailearning.xyz
+#    - www.wailearning.xyz
+# 2) Verify DNS resolution from server/client:
+#    nslookup wailearning.xyz
+#    nslookup www.wailearning.xyz
+# 3) Issue TLS cert with Certbot (Nginx plugin):
+#    certbot --nginx -d wailearning.xyz -d www.wailearning.xyz
+# 4) Verify renewal timer:
+#    systemctl status certbot.timer --no-pager
