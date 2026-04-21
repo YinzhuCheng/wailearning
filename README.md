@@ -1,6 +1,6 @@
-# 班级管理系统 (DD-CLASS)
+# 班级管理系统 (BIMSA-CLASS)
 
-一个现代化的班级管理系统，使用 FastAPI 后端和 Vue3 前端构建，支持学生管理、成绩管理、考勤管理、积分系统等核心功能。
+一个现代化的教学管理系统，使用 FastAPI 后端和 Vue 3 前端构建，支持学生管理、课程管理、成绩、考勤、积分、作业、家长端口，以及课程级 LLM 辅助评分。
 
 ![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
@@ -72,9 +72,10 @@
 
 ### 1. 用户认证与权限管理
 - ✅ 用户登录（JWT Token认证）
-- ✅ 角色权限管理（管理员/班主任/任课教师）
+- ✅ 角色权限管理（管理员 / 班主任 / 任课教师 / 学生）
 - ✅ 班级访问权限控制
 - ✅ 操作日志记录
+- ✅ 默认关闭公开注册，可通过配置显式开启学生自注册
 
 ### 2. 班级管理
 - ✅ 创建、编辑、删除班级
@@ -136,11 +137,16 @@
 - ✅ 用户创建、编辑、删除
 - ✅ 班主任绑定班级
 
-### 12. 作业管理 ✨
-- ✅ 布置作业：选择班级、科目、设置截止日期
-- ✅ 作业列表：按班级、科目筛选查看
-- ✅ 作业详情：查看作业内容和截止时间
-- ✅ 权限控制：班主任/教师只能管理本班作业
+### 12. 作业管理与 LLM 辅助评分 ✨
+- ✅ 布置作业：选择班级、科目、设置截止日期、满分、分数精度
+- ✅ 作业规则：支持允许补交、迟交标记、迟交是否影响最终评分
+- ✅ 多次提交：每次提交生成独立历史记录，对外展示最高分
+- ✅ 教师评分：可对最新提交或任意历史提交手动评分
+- ✅ 异步自动评分：新提交可进入评分任务队列，展示排队/处理中/成功/失败
+- ✅ 课程级 LLM 配置：教师在课程维度配置自动评分开关、配额、提示词与端点顺序
+- ✅ 管理员端点预设：集中维护模型端点并执行视觉能力连通性校验
+- ✅ 附件处理：支持普通附件、zip、嵌套 zip、PDF、ipynb、图片与文本统一处理
+- ✅ 权限控制：教师/班主任在可访问课程范围内管理作业，学生只能查看/提交自己的作业
 
 ### 13. 通知中心 ✨
 - ✅ 发布通知：设置标题、内容、优先级、是否置顶
@@ -156,12 +162,15 @@
 - ✅ 班级作业：查看班级作业和截止日期
 - ✅ 数据统计：查看平均成绩、出勤率等统计
 - ✅ 手机端适配：专为手机端优化的界面
+- ✅ 家长码接口统一校验过期时间，不再在学生信息接口重复回显家长码
 
-### 15. 系统设置 ✨
+### 15. 系统设置与模型管理 ✨
 - ✅ Bing每日一图：自动获取Bing每日背景图
 - ✅ 自定义登录背景：可上传自定义登录页面背景
 - ✅ 系统Logo：可自定义系统Logo
 - ✅ 系统名称：可自定义系统名称
+- ✅ LLM 端点预设：管理员可维护 base URL、模型名、超时、重试与启用状态
+- ✅ 视觉能力校验：端点通过视觉校验后才能被课程配置引用
 
 ## 🛠 技术栈
 
@@ -171,6 +180,9 @@
 - **ORM**: SQLAlchemy
 - **认证**: JWT (PyJWT)
 - **验证**: Pydantic
+- **文档/Office 处理**: python-docx
+- **PDF处理**: PyMuPDF
+- **图片处理**: Pillow
 
 ### 前端
 - **框架**: Vue.js 3.4+
@@ -247,7 +259,9 @@ npm run dev
 密码: admin123
 ```
 
-⚠️ **重要**: 请在生产环境中修改默认密码！
+⚠️ **重要**:
+- 请在生产环境中修改默认密码和默认 `SECRET_KEY`
+- 默认关闭公开注册，若要启用请在环境变量中显式开启
 
 ## 📦 安装指南
 
@@ -278,6 +292,10 @@ GRANT ALL PRIVILEGES ON DATABASE ddclass TO ddclass_user;
 DATABASE_URL=postgresql://ddclass_user:your_password@localhost:5432/ddclass
 SECRET_KEY=your-super-secret-key-change-in-production
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
+ALLOW_PUBLIC_REGISTRATION=false
+ENABLE_LLM_GRADING_WORKER=true
+LLM_GRADING_WORKER_LEADER=false
+LLM_GRADING_TASK_STALE_SECONDS=600
 ```
 
 ### 前端安装
@@ -305,6 +323,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24小时
+    ALLOW_PUBLIC_REGISTRATION: bool = False
+    ENABLE_LLM_GRADING_WORKER: bool = True
+    LLM_GRADING_WORKER_LEADER: bool = False
+    LLM_GRADING_TASK_STALE_SECONDS: int = 600
 ```
 
 #### 环境变量
@@ -314,6 +336,15 @@ class Settings(BaseSettings):
 1. `.env` 文件
 2. 系统环境变量
 3. 默认值
+
+建议重点关注以下配置：
+
+- `SECRET_KEY`: 生产环境必须替换
+- `ALLOW_PUBLIC_REGISTRATION`: 默认关闭，开启后也仅允许学生注册
+- `ENABLE_LLM_GRADING_WORKER`: 是否启用评分 worker
+- `LLM_GRADING_WORKER_LEADER`: 多实例部署时仅一个实例应设为 `true`
+- `LLM_GRADING_TASK_STALE_SECONDS`: 处理中任务回收阈值
+- `UPLOADS_DIR`: 附件存储目录
 
 ### 前端配置
 
@@ -385,6 +416,19 @@ proxy: {
 - 分析成绩趋势
 - 监控考勤率
 
+#### 5. 作业与自动评分
+- 在课程管理中由管理员维护 LLM 端点预设，并执行视觉能力校验
+- 任课教师在课程信息页打开“LLM 配置”，选择已通过校验的端点顺序
+- 教师发布作业时可设置：
+  - 满分
+  - 分数精度（整数 / 1 位小数）
+  - 是否启用自动评分
+  - 评分要点 / 参考答案 / 响应语言
+  - 是否允许补交
+  - 迟交是否影响最终评分
+- 学生每次提交都会保留历史 attempt，系统对外展示最高分
+- 自动评分任务异步执行，状态包括：排队中 / 处理中 / 成功 / 失败
+
 ### 批量导入说明
 
 #### Excel模板格式
@@ -416,6 +460,39 @@ proxy: {
 4. 系统自动验证并导入
 5. 查看导入结果
 
+## 🧭 最新系统结构
+
+### 核心角色
+- **管理员**：维护系统设置、用户、课程目录、LLM 端点预设
+- **班主任**：管理本班学生、家长码、通知、课程查看
+- **任课教师**：管理课程、作业、评分、课程级 LLM 配置
+- **学生**：查看课程内容、提交作业、查看评分与历史
+
+### 作业与评分核心实体
+- `Homework`: 作业主体与规则配置
+- `HomeworkSubmission`: 每个学生每个作业的汇总行
+- `HomeworkAttempt`: 每次提交的历史记录
+- `HomeworkScoreCandidate`: 自动或教师产生的候选分
+- `HomeworkGradingTask`: 异步自动评分任务
+- `CourseLLMConfig`: 课程级 LLM 配置
+- `LLMEndpointPreset`: 管理员维护的端点预设
+- `LLMTokenUsageLog`: 成功调用后的 token 记账日志
+
+### 权限与附件安全
+- 附件不再通过公开静态目录直接暴露
+- 所有附件下载统一走鉴权接口
+- 下载时会检查当前用户是否对所属作业/通知/资料具有访问权限
+- 日志与学期写操作收敛为管理员可用
+
+### 自动评分任务模型
+- Worker 为数据库驱动的轮询型异步处理器
+- 支持：
+  - stale `processing` 任务回收
+  - 重复排队抑制
+  - 多端点顺序故障转移
+  - 单端点内有限次退避重试
+- 多实例部署时建议仅一个实例设置 `LLM_GRADING_WORKER_LEADER=true`
+
 ## 📁 项目结构
 
 ```
@@ -434,12 +511,14 @@ DD-CLASS/
 │   │   ├── logs.py              # 操作日志API
 │   │   ├── points.py            # 积分系统API
 │   │   ├── homework.py           # 作业管理API
+│   │   ├── llm_settings.py      # LLM端点预设与课程级配置API
 │   │   ├── notifications.py     # 通知中心API
 │   │   ├── parent.py             # 家长端口API
 │   │   └── settings.py          # 系统设置API
 │   ├── models.py                # 数据库模型
 │   ├── schemas.py               # Pydantic模型
 │   ├── services.py              # 业务服务层
+│   ├── llm_grading.py           # 附件处理、自动评分与任务worker
 │   ├── auth.py                  # 认证逻辑
 │   ├── config.py                # 配置文件
 │   ├── database.py              # 数据库连接
@@ -480,7 +559,7 @@ DD-CLASS/
 | 模块 | 方法 | 端点 | 描述 |
 |------|------|------|------|
 | 认证 | POST | /api/auth/login | 用户登录 |
-| 认证 | POST | /api/auth/register | 用户注册 |
+| 认证 | POST | /api/auth/register | 公共注册（默认关闭，仅允许学生） |
 | 班级 | GET | /api/classes | 获取班级列表 |
 | 班级 | POST | /api/classes | 创建班级 |
 | 学生 | GET | /api/students | 获取学生列表 |
@@ -492,8 +571,18 @@ DD-CLASS/
 | 考勤 | POST | /api/attendance/class-batch | 班级批量考勤 |
 | 学期 | GET | /api/semesters | 获取学期列表 |
 | 学期 | POST | /api/semesters | 创建学期 |
+| 作业 | GET | /api/homeworks | 获取作业列表 |
+| 作业 | POST | /api/homeworks/{id}/submission | 学生提交作业 |
+| 作业 | GET | /api/homeworks/{id}/submission/me/history | 获取我的提交历史 |
+| 作业 | GET | /api/homeworks/{id}/submissions | 教师查看提交状态 |
+| 作业 | PUT | /api/homeworks/{id}/submissions/{submission_id}/review | 教师评分 |
+| 作业 | POST | /api/homeworks/{id}/submissions/{submission_id}/regrade | 教师触发重评 |
+| LLM | GET | /api/llm-settings/presets | 获取端点预设 |
+| LLM | POST | /api/llm-settings/presets/{id}/validate | 校验端点视觉能力 |
+| LLM | GET | /api/llm-settings/courses/{subject_id} | 获取课程级 LLM 配置 |
+| LLM | PUT | /api/llm-settings/courses/{subject_id} | 更新课程级 LLM 配置 |
 | 统计 | GET | /api/dashboard/stats | 获取统计数据 |
-| 日志 | GET | /api/logs | 获取操作日志 |
+| 日志 | GET | /api/logs | 获取操作日志（管理员） |
 | 积分 | GET | /api/points/stats | 获取积分统计 |
 | 积分 | GET | /api/points/ranking | 获取积分排行 |
 | 积分 | POST | /api/points/students/{id}/add | 发放积分 |
@@ -509,29 +598,17 @@ cd app
 python init_db.py
 ```
 
-### 执行数据库迁移
+### 当前迁移方式
 
-当模型更新时，运行迁移脚本：
+当前仓库使用 **SQLAlchemy `create_all` + 启动时 schema update/backfill** 的增量方式，而不是 Alembic。
 
-```bash
-python migrate_v2.py
-```
+启动时会自动执行：
+- 表结构补齐
+- 学期目录规范化
+- 课程学期链接同步
+- 作业评分历史与课程级 LLM 配置回填
 
-### 积分系统初始化
-
-运行积分系统相关脚本：
-
-```bash
-python create_points_tables.py
-python create_logs_table.py
-```
-
-### 迁移脚本说明
-
-- `init_db.py`: 创建默认管理员账户和基础数据
-- `migrate_v2.py`: 数据库结构迁移（学期表、约束更新等）
-- `create_logs_table.py`: 创建操作日志表
-- `create_points_tables.py`: 创建积分系统相关表和默认数据
+> 建议后续升级为正式 migration 体系，但当前实现仍可用于持续迭代。
 
 ## ❓ 常见问题
 

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     INIT_ADMIN_PASSWORD: str = "ChangeMe123!"
     INIT_ADMIN_REAL_NAME: str = "System Administrator"
     INIT_DEFAULT_DATA: bool = True
+    ALLOW_PUBLIC_REGISTRATION: bool = False
 
     GUNICORN_WORKERS: int = 3
     LOG_LEVEL: str = "info"

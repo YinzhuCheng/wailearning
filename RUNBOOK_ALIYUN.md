@@ -121,9 +121,20 @@ INIT_ADMIN_USERNAME=admin
 INIT_ADMIN_PASSWORD=<YOUR_STRONG_ADMIN_PASSWORD>
 INIT_ADMIN_REAL_NAME=System Administrator
 INIT_DEFAULT_DATA=true
+ALLOW_PUBLIC_REGISTRATION=false
+ENABLE_LLM_GRADING_WORKER=true
+LLM_GRADING_WORKER_LEADER=true
+LLM_GRADING_WORKER_POLL_SECONDS=2
+LLM_GRADING_TASK_STALE_SECONDS=600
 ```
 
 Do not keep any `CHANGE_ME` values.
+
+Additional notes for the current homework grading architecture:
+
+- `ALLOW_PUBLIC_REGISTRATION` should stay `false` in production unless you intentionally expose a student self-registration flow.
+- `LLM_GRADING_WORKER_LEADER=true` should only be enabled on one backend instance at a time. If you deploy multiple FastAPI processes or multiple ECS nodes, select a single worker leader.
+- The grading worker is currently a database-backed in-process worker. It can safely reclaim stale tasks, but it is still not a replacement for a dedicated external queue.
 
 ## 5. Initialize PostgreSQL
 
@@ -164,6 +175,7 @@ This will:
 - Create or update the Python virtualenv
 - Install backend dependencies
 - Bootstrap database tables and default data
+- Apply schema patching and homework grading data backfill on startup
 - Install the `systemd` service
 - Build the admin frontend
 - Build the parent portal frontend
@@ -247,6 +259,9 @@ Then manually validate from a browser:
 5. Confirm the parent portal login page loads
 6. Open `https://wailearning.xyz/health`
 7. Confirm the API responds normally
+8. As admin, open the system settings page and confirm LLM endpoint preset management is available
+9. As teacher, open a course and confirm the LLM configuration dialog is available
+10. Create a homework with auto-grading enabled, submit once as a student, and confirm the grading task transitions from queued/processing to success or failed
 
 ## 11. Frequently Used Operations
 
