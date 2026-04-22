@@ -55,7 +55,7 @@ sudo nano /opt/dd-class/shared/.env.production
 
 - `DATABASE_URL=postgresql://ddclass:<与下面 init_db 相同密码>@127.0.0.1:5432/ddclass`
 - `SECRET_KEY=<openssl rand -hex 32 生成的值>`
-- `BACKEND_CORS_ORIGINS`、`TRUSTED_HOSTS` 含你的域名
+- `BACKEND_CORS_ORIGINS`、`TRUSTED_HOSTS` 含你的**域名**；若暂时**只用公网 IP 访问**，见下文「用公网 IP 访问」
 - 无 `CHANGE_ME` 残留
 
 示例（**勿照抄弱密码**）：
@@ -111,13 +111,47 @@ curl -fsS http://127.0.0.1:8001/api/health
 sudo APP_URL=https://wailearning.xyz API_HEALTH_URL="https://wailearning.xyz/health" bash scripts/post_deploy_check.sh
 ```
 
-### 8. DNS 与 HTTPS（对公网访问必做）
+### 8. DNS 与 HTTPS（有域名时）
 
-在 DNS 控制台将 `wailearning.xyz`、`www` 指到 ECS 公网 IP，解析生效后：
+在 DNS 控制台将域名指到 ECS 公网 IP，解析生效后：
 
 ```bash
 sudo certbot --nginx -d wailearning.xyz -d www.wailearning.xyz
 ```
+
+### 8b. 无域名，只用公网 IP 访问
+
+1. **安全组/防火墙**放行 **80**、**22**；浏览器用 `http://` 即可，**还不需要 443**。
+
+2. **`.env.production` 要允许「Host 为公网 IP」**（`TrustedHostMiddleware` 会校验）。把 `ECS_PUBLIC_IP` 换成你控制台里的**公网 IP**（如 `47.x.x.x`）：
+
+   ```dotenv
+   # 在原有基础上追加公网 IP；保持逗号分隔、无多余空格
+   TRUSTED_HOSTS=你的公网IP,127.0.0.1,localhost
+   BACKEND_CORS_ORIGINS=http://你的公网IP,http://127.0.0.1,http://127.0.0.1:3000,http://127.0.0.1:5174
+   ```
+
+3. 改完环境后重启后端让配置生效：
+
+   ```bash
+   sudo systemctl restart ddclass-backend
+   ```
+
+4. **Nginx**：无证书时使用的是 `nginx/wailearning.xyz.http.conf`；已包含**默认虚拟主机**（`default_server`），用 `http://公网IP` 打开时会进本站而不是落到 Ubuntu 欢迎页。若你仍是旧版仓库，请 `git pull` 后执行：
+
+   ```bash
+   cd /root/wailearning
+   sudo bash scripts/deploy_frontend.sh
+   ```
+
+5. 浏览器访问：
+
+   - 管理端：`http://<ECS公网IP>/`
+   - 家长端：`http://<ECS公网IP>/parent/`
+   - 健康检查：`http://<ECS公网IP>/health`
+   - 直连 API（不经过 Nginx 时，仅作排障）：`http://127.0.0.1:8001/api/health`（需在服务器上或做 SSH 隧道；公网不要单独暴露 8001 除非你知道风险）
+
+6. 以后买了域名、做好 DNS 后，把 `TRUSTED_HOSTS` / `BACKEND_CORS_ORIGINS` 加上域名，再按上文执行 **certbot** 切到 **HTTPS** 即可。
 
 ---
 
