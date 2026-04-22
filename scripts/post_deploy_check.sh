@@ -32,7 +32,13 @@ fi
 echo
 
 echo "==> public health"
-curl -fsS "${API_HEALTH_URL}"
+# Follow HTTP->HTTPS redirects so a 301 from certbot-managed nginx is not a false failure.
+if curl -fsSL "${API_HEALTH_URL}"; then
+  :
+else
+  echo "Public health check failed. If you use HTTPS only, set API_HEALTH_URL to https://.../health" >&2
+  exit 1
+fi
 echo
 
 echo "==> nginx config test"

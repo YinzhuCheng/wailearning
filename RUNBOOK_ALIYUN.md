@@ -139,15 +139,22 @@ Additional notes for the current homework grading architecture:
 
 ## 5. Initialize PostgreSQL
 
-Create the database and database user:
+Create the database and database user. The password **must** match `DATABASE_URL` in `/opt/dd-class/shared/.env.production`.
+
+If the repository lives under `/root/...`, run `psql` from a world-readable working directory and pass a path `postgres` can read (avoids the harmless "could not change directory" message):
 
 ```bash
+cd /tmp
+cp /root/dd-class/scripts/init_db.sql /tmp/init_db.sql
+chmod 644 /tmp/init_db.sql
 sudo -u postgres psql \
   -v db_name='ddclass' \
   -v db_user='ddclass' \
   -v db_password='REPLACE_WITH_A_STRONG_DB_PASSWORD' \
-  -f scripts/init_db.sql
+  -f /tmp/init_db.sql
 ```
+
+Adjust `/root/dd-class` to your clone path. See also `DEPLOY.md` and `docs/FRESH_SERVER_DEPLOY_CN.md`.
 
 Validate:
 

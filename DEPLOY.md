@@ -2,6 +2,8 @@
 
 This guide targets Alibaba Cloud ECS on Ubuntu 22.04, Debian 12, and Alibaba Cloud Linux or CentOS-like systems.
 
+**First-time / empty server (order of steps + why DB must come before `deploy_all`):** see `docs/FRESH_SERVER_DEPLOY_CN.md` (Chinese).
+
 If you want the operational checklist for first go-live, DNS cutover, acceptance, and rollback, also read `RUNBOOK_ALIYUN.md`.
 If you want a data-safety-focused upgrade guide and a safer deployment example script, also read `ALIYUN_SAFE_UPGRADE.md` and `scripts/example_safe_upgrade_aliyun.sh`.
 
