@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import mimetypes
 import re
 import threading
@@ -584,6 +585,8 @@ def process_grading_task(task_id: int) -> None:
             },
         )
         db.add(candidate)
+        # Ensure ORM-visible before refresh_submission_summary queries candidates in this session.
+        db.flush()
 
         task.status = "success"
         task.error_code = None
@@ -678,7 +681,9 @@ def _grade_with_endpoint_group(
                     int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
                     120,
                 )
-                time.sleep(wait_seconds)
+                # Skip real sleeps in automated tests (pytest sets this in conftest).
+                if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
+                    time.sleep(wait_seconds)
             except NonRetryableLLMError as exc:
                 last_error = str(exc)
                 break

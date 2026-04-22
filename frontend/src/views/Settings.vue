@@ -206,6 +206,27 @@ import { Connection, Refresh, Select, Setting, UploadFilled, View } from '@eleme
 import { normalizeBrandingText } from '@/utils/branding'
 import { http } from '@/api'
 
+/** Axios errors carry response; thrown sync errors (e.g. ReferenceError) do not. */
+const formatApiError = error => {
+  const detail = error?.response?.data?.detail
+  if (detail == null) {
+    return error?.message || '未知错误'
+  }
+  if (typeof detail === 'string') {
+    return detail
+  }
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map(item => (typeof item === 'object' && item != null ? item.msg || JSON.stringify(item) : String(item)))
+      .filter(Boolean)
+    return parts.length ? parts.join('；') : '请求参数无效'
+  }
+  if (typeof detail === 'object' && detail.msg) {
+    return detail.msg
+  }
+  return String(detail)
+}
+
 const loading = ref(false)
 const saving = ref(false)
 const uploadDialogVisible = ref(false)
@@ -256,9 +277,9 @@ const backgroundStyle = computed(() => {
 const fetchSettings = async () => {
   loading.value = true
   try {
-    const res = await api.get('/settings/all')
+    const rows = await http.get('/settings/all')
     const settingsData = {}
-    res.data.forEach(item => {
+    rows.forEach(item => {
       settingsData[item.setting_key] = ['system_name', 'copyright'].includes(item.setting_key)
         ? normalizeBrandingText(item.setting_value)
         : item.setting_value
@@ -282,8 +303,8 @@ const fetchSettings = async () => {
 const fetchPresets = async () => {
   presetsLoading.value = true
   try {
-    const data = await api.get('/llm-settings/presets')
-    presets.value = (data.data || data || []).map(item => ({
+    const data = await http.get('/llm-settings/presets')
+    presets.value = (Array.isArray(data) ? data : []).map(item => ({
       ...item,
       validating: false
     }))
@@ -297,11 +318,11 @@ const fetchPresets = async () => {
 const saveSettings = async () => {
   saving.value = true
   try {
-    await api.post('/settings/batch-update', form.value)
+    await http.post('/settings/batch-update', form.value)
     ElMessage.success('设置保存成功')
     originalForm.value = { ...form.value }
   } catch (error) {
-    ElMessage.error(`保存失败：${error.response?.data?.detail || '未知错误'}`)
+    ElMessage.error(`保存失败：${formatApiError(error)}`)
   } finally {
     saving.value = false
   }
@@ -398,16 +419,16 @@ const savePreset = async () => {
       if (!payload.api_key) {
         delete payload.api_key
       }
-      await api.put(`/llm-settings/presets/${editingPresetId.value}`, payload)
+      await http.put(`/llm-settings/presets/${editingPresetId.value}`, payload)
       ElMessage.success('端点预设已更新')
     } else {
-      await api.post('/llm-settings/presets', payload)
+      await http.post('/llm-settings/presets', payload)
       ElMessage.success('端点预设已创建')
     }
     presetDialogVisible.value = false
     await fetchPresets()
   } catch (error) {
-    ElMessage.error(`保存端点失败：${error.response?.data?.detail || '未知错误'}`)
+    ElMessage.error(`保存端点失败：${formatApiError(error)}`)
   } finally {
     presetSaving.value = false
   }
@@ -416,11 +437,11 @@ const savePreset = async () => {
 const validatePreset = async row => {
   row.validating = true
   try {
-    await api.post(`/llm-settings/presets/${row.id}/validate`)
+    await http.post(`/llm-settings/presets/${row.id}/validate`)
     ElMessage.success('端点校验已完成')
     await fetchPresets()
   } catch (error) {
-    ElMessage.error(`端点校验失败：${error.response?.data?.detail || '未知错误'}`)
+    ElMessage.error(`端点校验失败：${formatApiError(error)}`)
   } finally {
     row.validating = false
   }
