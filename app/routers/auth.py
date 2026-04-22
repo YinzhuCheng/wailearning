@@ -1,4 +1,6 @@
 from datetime import timedelta
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -12,6 +14,13 @@ from app.models import UserRole
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
+
+def _client_ip(request: Optional[Request]) -> Optional[str]:
+    if request is None or request.client is None:
+        return None
+    return request.client.host
+
+
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db), request: Request = None):
     user = db.query(User).filter(User.username == form_data.username).first()
@@ -20,7 +29,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             db=db,
             user_id=None,
             username=form_data.username,
-            ip_address=request.client.host if request else None,
+            ip_address=_client_ip(request),
             user_agent=str(request.headers.get("user-agent")) if request else None,
             success=False
         )
@@ -41,7 +50,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         db=db,
         user_id=user.id,
         username=user.username,
-        ip_address=request.client.host if request else None,
+        ip_address=_client_ip(request),
         user_agent=str(request.headers.get("user-agent")) if request else None,
         success=True
     )
@@ -95,9 +104,9 @@ def change_password(
             target_id=current_user.id,
             target_name=current_user.username,
             details="Current password verification failed.",
-            ip_address=request.client.host if request else None,
-            user_agent=str(request.headers.get("user-agent")) if request else None,
-            result="failed"
+        ip_address=_client_ip(request),
+        user_agent=str(request.headers.get("user-agent")) if request else None,
+        result="failed"
         )
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
@@ -114,7 +123,7 @@ def change_password(
         target_id=current_user.id,
         target_name=current_user.username,
         details="User changed their own password.",
-        ip_address=request.client.host if request else None,
+        ip_address=_client_ip(request),
         user_agent=str(request.headers.get("user-agent")) if request else None,
         result="success"
     )

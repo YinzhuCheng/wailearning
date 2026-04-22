@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import mimetypes
 import re
 import threading
@@ -133,6 +134,17 @@ class _WorkerManager:
 
 worker_manager = _WorkerManager()
 
+# Serialize grading for a single task id in-process (duplicate worker wakeups / tests).
+_task_grading_locks: dict[int, threading.Lock] = {}
+_task_grading_locks_mutex = threading.Lock()
+
+
+def _grading_lock_for_task(task_id: int) -> threading.Lock:
+    with _task_grading_locks_mutex:
+        if task_id not in _task_grading_locks:
+            _task_grading_locks[task_id] = threading.Lock()
+        return _task_grading_locks[task_id]
+
 
 def start_grading_worker() -> None:
     worker_manager.start()
@@ -149,37 +161,61 @@ def normalize_score_for_homework(homework: Homework, score: float | int) -> floa
     return float(round(value))
 
 
-def _candidate_priority(candidate: HomeworkScoreCandidate) -> tuple[float, int, datetime]:
-    source_rank = 1 if candidate.source == "teacher" else 0
-    timestamp = candidate.updated_at or candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
-    return (float(candidate.score), source_rank, timestamp)
+def _teacher_candidate_sort_key(candidate: HomeworkScoreCandidate) -> tuple[float, datetime]:
+    """Higher score first, then newer; used only among teacher rows."""
+    ts = candidate.updated_at or candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    return (float(candidate.score or 0), ts)
+
+
+def _auto_candidate_sort_key(candidate: HomeworkScoreCandidate) -> tuple[float, datetime]:
+    """Among auto rows: higher score, then newer."""
+    ts = candidate.updated_at or candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    return (float(candidate.score or 0), ts)
 
 
 def get_best_score_candidate(
     db: Session,
     homework_id: int,
     student_id: int,
+    *,
+    latest_attempt_id: Optional[int] = None,
 ) -> Optional[HomeworkScoreCandidate]:
-    candidates = (
+    """
+    Best visible score for the submission summary: only the **latest attempt**'s
+    candidates apply (if latest_attempt_id is set). On that attempt, any **teacher**
+    score takes precedence over automatic scores so LLM output cannot override a
+    teacher's grade in the UI.
+    """
+    query = (
         db.query(HomeworkScoreCandidate)
         .filter(
             HomeworkScoreCandidate.homework_id == homework_id,
             HomeworkScoreCandidate.student_id == student_id,
         )
-        .all()
     )
+    if latest_attempt_id is not None:
+        query = query.filter(HomeworkScoreCandidate.attempt_id == latest_attempt_id)
+    candidates = query.all()
     valid_candidates = [
-        candidate
-        for candidate in candidates
-        if candidate.score is not None and getattr(candidate.attempt, "counts_toward_final_score", True)
+        c
+        for c in candidates
+        if c.score is not None and getattr(c.attempt, "counts_toward_final_score", True)
     ]
     if not valid_candidates:
         return None
-    return max(valid_candidates, key=_candidate_priority)
+    teacher_rows = [c for c in valid_candidates if c.source == "teacher"]
+    if teacher_rows:
+        return max(teacher_rows, key=_teacher_candidate_sort_key)
+    auto_rows = [c for c in valid_candidates if c.source == "auto"]
+    if auto_rows:
+        return max(auto_rows, key=_auto_candidate_sort_key)
+    return max(valid_candidates, key=_auto_candidate_sort_key)
 
 
 def refresh_submission_summary(db: Session, summary: HomeworkSubmission) -> HomeworkSubmission:
-    best_candidate = get_best_score_candidate(db, summary.homework_id, summary.student_id)
+    best_candidate = get_best_score_candidate(
+        db, summary.homework_id, summary.student_id, latest_attempt_id=summary.latest_attempt_id
+    )
     summary.review_score = best_candidate.score if best_candidate else None
     summary.review_comment = (best_candidate.comment or None) if best_candidate else None
 
@@ -403,6 +439,9 @@ def _get_used_tokens_for_scope(
     return total
 
 
+_quota_serialization_lock = threading.Lock()
+
+
 def precheck_quota(
     db: Session,
     config: CourseLLMConfig,
@@ -411,27 +450,29 @@ def precheck_quota(
     subject_id: Optional[int],
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
-    if config.daily_student_token_limit:
-        used_by_student = _get_used_tokens_for_scope(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            student_id=student_id,
-        )
-        if used_by_student + estimated_tokens > config.daily_student_token_limit:
-            return False, "quota_exceeded"
-    if config.daily_course_token_limit and subject_id:
-        used_by_course = _get_used_tokens_for_scope(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            subject_id=subject_id,
-        )
-        if used_by_course + estimated_tokens > config.daily_course_token_limit:
-            return False, "quota_exceeded"
-    return True, None
+    """Serialize read of usage vs limits to reduce double-spend under concurrent workers."""
+    with _quota_serialization_lock:
+        timezone_name = config.quota_timezone or "UTC"
+        usage_date = _get_usage_date(timezone_name)
+        if config.daily_student_token_limit:
+            used_by_student = _get_used_tokens_for_scope(
+                db,
+                usage_date=usage_date,
+                timezone_name=timezone_name,
+                student_id=student_id,
+            )
+            if used_by_student + estimated_tokens > config.daily_student_token_limit:
+                return False, "quota_exceeded"
+        if config.daily_course_token_limit and subject_id:
+            used_by_course = _get_used_tokens_for_scope(
+                db,
+                usage_date=usage_date,
+                timezone_name=timezone_name,
+                subject_id=subject_id,
+            )
+            if used_by_course + estimated_tokens > config.daily_course_token_limit:
+                return False, "quota_exceeded"
+        return True, None
 
 
 def record_usage_if_needed(
@@ -443,29 +484,48 @@ def record_usage_if_needed(
     existing = db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == task.id).first()
     if existing:
         return
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
-    prompt_tokens = usage.get("prompt_tokens")
-    completion_tokens = usage.get("completion_tokens")
-    total_tokens = usage.get("total_tokens")
-    if total_tokens is None:
-        total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+    with _quota_serialization_lock:
+        timezone_name = config.quota_timezone or "UTC"
+        usage_date = _get_usage_date(timezone_name)
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        total_tokens = usage.get("total_tokens")
+        if total_tokens is None:
+            total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+        if config.daily_student_token_limit:
+            used_by_student = _get_used_tokens_for_scope(
+                db,
+                usage_date=usage_date,
+                timezone_name=timezone_name,
+                student_id=task.student_id,
+            )
+            if used_by_student + int(total_tokens or 0) > config.daily_student_token_limit:
+                return
+        if config.daily_course_token_limit and task.subject_id:
+            used_by_course = _get_used_tokens_for_scope(
+                db,
+                usage_date=usage_date,
+                timezone_name=timezone_name,
+                subject_id=task.subject_id,
+            )
+            if used_by_course + int(total_tokens or 0) > config.daily_course_token_limit:
+                return
 
-    db.add(
-        LLMTokenUsageLog(
-            task_id=task.id,
-            subject_id=task.subject_id,
-            student_id=task.student_id,
-            usage_date=usage_date,
-            timezone=timezone_name,
-            input_tokens=prompt_tokens,
-            output_tokens=completion_tokens,
-            total_tokens=total_tokens,
+        db.add(
+            LLMTokenUsageLog(
+                task_id=task.id,
+                subject_id=task.subject_id,
+                student_id=task.student_id,
+                usage_date=usage_date,
+                timezone=timezone_name,
+                input_tokens=prompt_tokens,
+                output_tokens=completion_tokens,
+                total_tokens=total_tokens,
+            )
         )
-    )
-    task.billed_input_tokens = prompt_tokens
-    task.billed_output_tokens = completion_tokens
-    task.billed_total_tokens = total_tokens
+        task.billed_input_tokens = prompt_tokens
+        task.billed_output_tokens = completion_tokens
+        task.billed_total_tokens = total_tokens
 
 
 def process_next_grading_task() -> bool:
@@ -507,91 +567,115 @@ def process_next_grading_task() -> bool:
 
 
 def process_grading_task(task_id: int) -> None:
+    with _grading_lock_for_task(task_id):
+        _process_grading_task_unlocked(task_id)
+
+
+def _process_grading_task_unlocked(task_id: int) -> None:
     db = SessionLocal()
     try:
         task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
         if not task:
             return
-        attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
-        if not attempt:
-            _mark_task_failed(db, task, "attempt_not_found", "找不到对应的提交记录。")
+        if task.status in ("success", "failed"):
             return
-        homework = db.query(Homework).filter(Homework.id == task.homework_id).first()
-        if not homework:
-            _mark_task_failed(db, task, "homework_not_found", "找不到对应的作业。")
+        if task.status == "queued":
+            # Claim the task (tests call process_grading_task directly; worker uses process_next which pre-sets processing).
+            now = _now_utc()
+            n = (
+                db.query(HomeworkGradingTask)
+                .filter(HomeworkGradingTask.id == task_id, HomeworkGradingTask.status == "queued")
+                .update(
+                    {
+                        HomeworkGradingTask.status: "processing",
+                        HomeworkGradingTask.started_at: now,
+                        HomeworkGradingTask.updated_at: now,
+                        HomeworkGradingTask.task_summary: "处理中",
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not n:
+                return
+            db.commit()
+            task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
+        elif task.status != "processing":
             return
-        if not homework.auto_grading_enabled:
-            _mark_task_failed(db, task, "auto_grading_disabled", "当前作业未启用自动评分。")
-            return
-        if not task.subject_id:
-            _mark_task_failed(db, task, "course_missing", "当前作业未关联课程，无法使用课程级 LLM 配置。")
-            return
+        try:
+            _run_grading_after_claim(db, task_id, task)
+        except Exception as exc:
+            db.rollback()
+            task2 = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
+            if task2:
+                _mark_task_failed(db, task2, "unexpected_error", f"评分任务异常：{exc}")
+    finally:
+        db.close()
 
-        config = (
-            db.query(CourseLLMConfig)
-            .filter(CourseLLMConfig.subject_id == task.subject_id)
-            .first()
+
+def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTask) -> None:
+    attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
+    if not attempt:
+        _mark_task_failed(db, task, "attempt_not_found", "找不到对应的提交记录。")
+        return
+    homework = db.query(Homework).filter(Homework.id == task.homework_id).first()
+    if not homework:
+        _mark_task_failed(db, task, "homework_not_found", "找不到对应的作业。")
+        return
+    if not homework.auto_grading_enabled:
+        _mark_task_failed(db, task, "auto_grading_disabled", "当前作业未启用自动评分。")
+        return
+    if not task.subject_id:
+        _mark_task_failed(db, task, "course_missing", "当前作业未关联课程，无法使用课程级 LLM 配置。")
+        return
+
+    config = (
+        db.query(CourseLLMConfig)
+        .filter(CourseLLMConfig.subject_id == task.subject_id)
+        .first()
+    )
+    if not config or not config.is_enabled:
+        _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
+        return
+
+    endpoint_links = list(config.endpoints or [])
+    if not endpoint_links:
+        _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
+        return
+
+    material = _build_student_material(homework, attempt, config)
+    task.artifact_manifest = material["artifact_manifest"]
+    task.input_token_estimate = material["estimated_tokens"]
+    task.task_summary = material["summary"]
+
+    if material["all_empty"]:
+        _mark_task_failed(db, task, "no_usable_content", "附件处理后没有可评分内容。")
+        return
+
+    allowed, error_code = precheck_quota(
+        db,
+        config,
+        student_id=task.student_id,
+        subject_id=task.subject_id,
+        estimated_tokens=material["estimated_tokens"],
+    )
+    if not allowed:
+        _mark_task_failed(db, task, error_code or "quota_exceeded", "今日额度已用尽，自动评分未执行。")
+        return
+
+    teacher_exists = (
+        db.query(HomeworkScoreCandidate)
+        .filter(
+            HomeworkScoreCandidate.attempt_id == attempt.id,
+            HomeworkScoreCandidate.source == "teacher",
         )
-        if not config or not config.is_enabled:
-            _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
-            return
-
-        endpoint_links = list(config.endpoints or [])
-        if not endpoint_links:
-            _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
-            return
-
-        material = _build_student_material(homework, attempt, config)
-        task.artifact_manifest = material["artifact_manifest"]
-        task.input_token_estimate = material["estimated_tokens"]
-        task.task_summary = material["summary"]
-
-        if material["all_empty"]:
-            _mark_task_failed(db, task, "no_usable_content", "附件处理后没有可评分内容。")
-            return
-
-        allowed, error_code = precheck_quota(
-            db,
-            config,
-            student_id=task.student_id,
-            subject_id=task.subject_id,
-            estimated_tokens=material["estimated_tokens"],
-        )
-        if not allowed:
-            _mark_task_failed(db, task, error_code or "quota_exceeded", "今日额度已用尽，自动评分未执行。")
-            return
-
-        response = _grade_with_endpoint_group(
-            task=task,
-            homework=homework,
-            attempt=attempt,
-            config=config,
-            endpoint_links=endpoint_links,
-            material=material,
-        )
-
-        candidate = HomeworkScoreCandidate(
-            attempt_id=attempt.id,
-            homework_id=homework.id,
-            student_id=attempt.student_id,
-            source="auto",
-            score=normalize_score_for_homework(homework, response["score"]),
-            comment=response["comment"],
-            source_metadata={
-                "task_id": task.id,
-                "endpoint_id": response["endpoint_id"],
-                "raw_response_excerpt": response["raw_response"][:1000],
-            },
-        )
-        db.add(candidate)
-
+        .first()
+    )
+    if teacher_exists:
         task.status = "success"
         task.error_code = None
         task.error_message = None
         task.finished_at = _now_utc()
-        task.task_summary = "评分成功"
-        record_usage_if_needed(db, task, config, response["usage"])
-
+        task.task_summary = "已跳过：该次提交已有教师评分，未调用模型。"
         summary = (
             db.query(HomeworkSubmission)
             .filter(
@@ -604,15 +688,55 @@ def process_grading_task(task_id: int) -> None:
             summary.latest_task_status = task.status
             summary.latest_task_error = None
             refresh_submission_summary(db, summary)
-
         db.commit()
-    except Exception as exc:
-        db.rollback()
-        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
-        if task:
-            _mark_task_failed(db, task, "unexpected_error", f"评分任务异常：{exc}")
-    finally:
-        db.close()
+        return
+
+    response = _grade_with_endpoint_group(
+        task=task,
+        homework=homework,
+        attempt=attempt,
+        config=config,
+        endpoint_links=endpoint_links,
+        material=material,
+    )
+
+    candidate = HomeworkScoreCandidate(
+        attempt_id=attempt.id,
+        homework_id=homework.id,
+        student_id=attempt.student_id,
+        source="auto",
+        score=normalize_score_for_homework(homework, response["score"]),
+        comment=response["comment"],
+        source_metadata={
+            "task_id": task.id,
+            "endpoint_id": response["endpoint_id"],
+            "raw_response_excerpt": response["raw_response"][:1000],
+        },
+    )
+    db.add(candidate)
+    db.flush()
+
+    task.status = "success"
+    task.error_code = None
+    task.error_message = None
+    task.finished_at = _now_utc()
+    task.task_summary = "评分成功"
+    record_usage_if_needed(db, task, config, response["usage"])
+
+    summary = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.homework_id == attempt.homework_id,
+            HomeworkSubmission.student_id == attempt.student_id,
+        )
+        .first()
+    )
+    if summary:
+        summary.latest_task_status = task.status
+        summary.latest_task_error = None
+        refresh_submission_summary(db, summary)
+
+    db.commit()
 
 
 def _mark_task_failed(
@@ -678,7 +802,9 @@ def _grade_with_endpoint_group(
                     int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
                     120,
                 )
-                time.sleep(wait_seconds)
+                # Skip real sleeps in automated tests (pytest sets this in conftest).
+                if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
+                    time.sleep(wait_seconds)
             except NonRetryableLLMError as exc:
                 last_error = str(exc)
                 break
