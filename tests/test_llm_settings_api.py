@@ -135,8 +135,9 @@ def test_duplicate_preset_name_400(client: TestClient, admin_headers):
     assert "exists" in r2.json().get("detail", "")
 
 
-@mock.patch("app.routers.llm_settings.validate_endpoint_connectivity", return_value=(True, "ok"))
-def test_validate_marks_validated(mock_val, client: TestClient, admin_headers):
+@mock.patch("app.routers.llm_settings.validate_vision_connectivity", return_value=(True, "vision ok"))
+@mock.patch("app.routers.llm_settings.validate_text_connectivity", return_value=(True, "text ok"))
+def test_validate_marks_validated(mock_txt, mock_vis, client: TestClient, admin_headers):
     c = client.post(
         "/api/llm-settings/presets",
         headers=admin_headers,
@@ -148,11 +149,13 @@ def test_validate_marks_validated(mock_val, client: TestClient, admin_headers):
     d = v.json()
     assert d["validation_status"] == "validated"
     assert d["supports_vision"] is True
-    assert mock_val.called
+    assert mock_txt.called
+    assert mock_vis.called
 
 
-@mock.patch("app.routers.llm_settings.validate_endpoint_connectivity", return_value=(True, "ok"))
-def test_get_put_course_config(_, client: TestClient, admin_headers, teacher_headers, teacher_course_context):
+@mock.patch("app.routers.llm_settings.validate_vision_connectivity", return_value=(True, "vision ok"))
+@mock.patch("app.routers.llm_settings.validate_text_connectivity", return_value=(True, "text ok"))
+def test_get_put_course_config(_, __, client: TestClient, admin_headers, teacher_headers, teacher_course_context):
     c = client.post(
         "/api/llm-settings/presets",
         headers=admin_headers,

@@ -505,9 +505,33 @@ class CourseLLMConfig(Base):
     subject = relationship("Subject", back_populates="llm_config")
     creator = relationship("User", foreign_keys=[created_by])
     updater = relationship("User", foreign_keys=[updated_by])
+    groups = relationship(
+        "LLMGroup",
+        back_populates="config",
+        order_by="LLMGroup.priority.asc()",
+        cascade="all, delete-orphan",
+    )
     endpoints = relationship(
         "CourseLLMConfigEndpoint",
         back_populates="config",
+        order_by="CourseLLMConfigEndpoint.priority.asc()",
+        cascade="all, delete-orphan",
+    )
+
+
+class LLMGroup(Base):
+    __tablename__ = "llm_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    config_id = Column(Integer, ForeignKey("course_llm_configs.id", ondelete="CASCADE"), nullable=False)
+    priority = Column(Integer, nullable=False, default=1)
+    name = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    config = relationship("CourseLLMConfig", back_populates="groups")
+    members = relationship(
+        "CourseLLMConfigEndpoint",
+        back_populates="group",
         order_by="CourseLLMConfigEndpoint.priority.asc()",
         cascade="all, delete-orphan",
     )
@@ -517,7 +541,8 @@ class CourseLLMConfigEndpoint(Base):
     __tablename__ = "course_llm_config_endpoints"
 
     id = Column(Integer, primary_key=True, index=True)
-    config_id = Column(Integer, ForeignKey("course_llm_configs.id"), nullable=False)
+    config_id = Column(Integer, ForeignKey("course_llm_configs.id", ondelete="CASCADE"), nullable=False)
+    group_id = Column(Integer, ForeignKey("llm_groups.id", ondelete="CASCADE"), nullable=True)
     preset_id = Column(Integer, ForeignKey("llm_endpoint_presets.id"), nullable=False)
     priority = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -527,6 +552,7 @@ class CourseLLMConfigEndpoint(Base):
     )
 
     config = relationship("CourseLLMConfig", back_populates="endpoints")
+    group = relationship("LLMGroup", back_populates="members")
     preset = relationship("LLMEndpointPreset", back_populates="course_links")
 
 
