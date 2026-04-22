@@ -7,7 +7,6 @@ See tests/conftest.py for env (SQLite, skip worker thread, skip retry backoff sl
 
 from __future__ import annotations
 
-import json as json_stdlib
 import uuid
 from unittest import mock
 
@@ -16,26 +15,19 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.auth import get_password_hash
 from app.database import Base, SessionLocal, engine
 from app.llm_grading import process_grading_task
 from app.main import app
 from app.models import (
-    Class,
-    CourseEnrollment,
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
-    Homework,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
     LLMEndpointPreset,
     LLMTokenUsageLog,
-    Student,
-    Subject,
-    User,
-    UserRole,
 )
+from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
 @pytest.fixture(autouse=True)
@@ -60,150 +52,15 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def _login(client: TestClient, username: str, password: str) -> dict[str, str]:
-    r = client.post("/api/auth/login", data={"username": username, "password": password})
-    assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
-
-
-def _make_grading_course_with_homework(
-    *,
-    auto_grading: bool = True,
-    course_llm_enabled: bool = True,
-    preset_max_retries: int = 2,
-    daily_student_token_limit: int | None = None,
-) -> dict:
-    """Insert minimal rows for one course, validated LLM preset, config, and homework."""
-    uid = uuid.uuid4().hex[:10]
-    db = SessionLocal()
-    try:
-        klass = Class(name=f"pytest-class-{uid}", grade=2026)
-        db.add(klass)
-        db.flush()
-
-        teacher = User(
-            username=f"pytest_teacher_{uid}",
-            hashed_password=get_password_hash("pytest_teacher_pass"),
-            real_name="Pytest Teacher",
-            role=UserRole.TEACHER.value,
-        )
-        db.add(teacher)
-        db.flush()
-
-        stu_username = f"stu_{uid}"
-        student_user = User(
-            username=stu_username,
-            hashed_password=get_password_hash("stu_pass"),
-            real_name="Student One",
-            role=UserRole.STUDENT.value,
-            class_id=klass.id,
-        )
-        db.add(student_user)
-        db.flush()
-
-        stud = Student(name="Student One", student_no=stu_username, class_id=klass.id)
-        db.add(stud)
-        db.flush()
-
-        course = Subject(name=f"pytest-course-{uid}", teacher_id=teacher.id, class_id=klass.id)
-        db.add(course)
-        db.flush()
-
-        db.add(
-            CourseEnrollment(
-                subject_id=course.id,
-                student_id=stud.id,
-                class_id=klass.id,
-                enrollment_type="required",
-            )
-        )
-
-        preset = LLMEndpointPreset(
-            name=f"pytest-llm-preset-{uid}",
-            base_url="https://api.virtual.test/v1/",
-            api_key="sk-test",
-            model_name="virtual",
-            max_retries=preset_max_retries,
-            initial_backoff_seconds=1,
-            is_active=True,
-            supports_vision=True,
-            validation_status="validated",
-        )
-        db.add(preset)
-        db.flush()
-
-        cfg = CourseLLMConfig(
-            subject_id=course.id,
-            is_enabled=course_llm_enabled,
-            daily_student_token_limit=daily_student_token_limit,
-            max_input_tokens=16000,
-            max_output_tokens=1200,
-            quota_timezone="UTC",
-        )
-        db.add(cfg)
-        db.flush()
-        db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=preset.id, priority=1))
-
-        hw = Homework(
-            title="pytest homework",
-            content="Do the thing.",
-            class_id=klass.id,
-            subject_id=course.id,
-            max_score=100,
-            auto_grading_enabled=auto_grading,
-            created_by=teacher.id,
-        )
-        db.add(hw)
-        db.commit()
-        db.refresh(hw)
-        db.refresh(preset)
-        db.refresh(stud)
-        db.refresh(teacher)
-        return {
-            "homework_id": hw.id,
-            "preset_id": preset.id,
-            "student_id": stud.id,
-            "teacher_id": teacher.id,
-            "subject_id": course.id,
-            "student_username": stu_username,
-            "student_password": "stu_pass",
-            "teacher_username": teacher.username,
-            "teacher_password": "pytest_teacher_pass",
-        }
-    finally:
-        db.close()
-
-
 @pytest.fixture
 def grading_context(client: TestClient) -> dict:
-    ctx = _make_grading_course_with_homework()
-    db = SessionLocal()
-    try:
-        if not db.query(User).filter(User.username == "pytest_admin").first():
-            db.add(
-                User(
-                    username="pytest_admin",
-                    hashed_password=get_password_hash("pytest_admin_pass"),
-                    real_name="Pytest Admin",
-                    role=UserRole.ADMIN.value,
-                )
-            )
-            db.commit()
-    finally:
-        db.close()
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
     ctx["client"] = client
-    ctx["admin_headers"] = _login(client, "pytest_admin", "pytest_admin_pass")
-    ctx["teacher_headers"] = _login(client, ctx["teacher_username"], ctx["teacher_password"])
-    ctx["student_headers"] = _login(client, ctx["student_username"], ctx["student_password"])
+    ctx["admin_headers"] = login_api(client, "pytest_admin", "pytest_admin_pass")
+    ctx["teacher_headers"] = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    ctx["student_headers"] = login_api(client, ctx["student_username"], ctx["student_password"])
     return ctx
-
-
-def _json_llm_response(score: float, comment: str) -> dict:
-    payload = json_stdlib.dumps({"score": score, "comment": comment}, ensure_ascii=False)
-    return {
-        "choices": [{"message": {"content": payload}}],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-    }
 
 
 def test_submit_queues_task_and_retry_then_success_updates_submission(grading_context: dict):
@@ -230,7 +87,7 @@ def test_submit_queues_task_and_retry_then_success_updates_submission(grading_co
 
     responses = [
         httpx.Response(503, json={"error": "upstream"}),
-        httpx.Response(200, json=_json_llm_response(88.0, "auto comment")),
+        httpx.Response(200, json=json_llm_response(88.0, "auto comment")),
     ]
 
     def fake_post(self, url, **kwargs):
@@ -260,9 +117,9 @@ def test_submit_queues_task_and_retry_then_success_updates_submission(grading_co
 
 
 def test_auto_grading_disabled_no_task(grading_context: dict):
-    ctx = _make_grading_course_with_homework(auto_grading=False)
+    ctx = make_grading_course_with_homework(auto_grading=False)
     client = grading_context["client"]
-    student_h = _login(client, ctx["student_username"], ctx["student_password"])
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
 
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
@@ -279,9 +136,9 @@ def test_auto_grading_disabled_no_task(grading_context: dict):
 
 
 def test_course_llm_disabled_task_fails(grading_context: dict):
-    ctx = _make_grading_course_with_homework(course_llm_enabled=False)
+    ctx = make_grading_course_with_homework(course_llm_enabled=False)
     client = grading_context["client"]
-    student_h = _login(client, ctx["student_username"], ctx["student_password"])
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
 
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
@@ -310,9 +167,9 @@ def test_course_llm_disabled_task_fails(grading_context: dict):
 
 
 def test_non_retryable_http_fails_without_extra_llm_calls(grading_context: dict):
-    ctx = _make_grading_course_with_homework(preset_max_retries=0)
+    ctx = make_grading_course_with_homework(preset_max_retries=0)
     client = grading_context["client"]
-    student_h = _login(client, ctx["student_username"], ctx["student_password"])
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
 
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
@@ -364,7 +221,7 @@ def test_teacher_review_overrides_auto_score(grading_context: dict):
     with mock.patch.object(
         httpx.Client,
         "post",
-        lambda self, url, **kwargs: httpx.Response(200, json=_json_llm_response(70.0, "llm")),
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(70.0, "llm")),
     ):
         process_grading_task(tid)
 
@@ -389,7 +246,7 @@ def test_teacher_review_overrides_auto_score(grading_context: dict):
 
 def test_second_endpoint_used_when_first_keeps_retryable(grading_context: dict):
     """Two presets on the course; first returns 503 until exhausted; second succeeds."""
-    base_ctx = _make_grading_course_with_homework(preset_max_retries=0)
+    base_ctx = make_grading_course_with_homework(preset_max_retries=0)
     uid = uuid.uuid4().hex[:8]
     db = SessionLocal()
     try:
@@ -413,7 +270,7 @@ def test_second_endpoint_used_when_first_keeps_retryable(grading_context: dict):
         db.close()
 
     client: TestClient = grading_context["client"]
-    student_h = _login(client, base_ctx["student_username"], base_ctx["student_password"])
+    student_h = login_api(client, base_ctx["student_username"], base_ctx["student_password"])
 
     r = client.post(
         f"/api/homeworks/{base_ctx['homework_id']}/submission",
@@ -432,7 +289,7 @@ def test_second_endpoint_used_when_first_keeps_retryable(grading_context: dict):
         auth = (kwargs.get("headers") or {}).get("Authorization", "")
         if "sk-test" in auth:
             return httpx.Response(503, json={"error": "bad"})
-        return httpx.Response(200, json=_json_llm_response(81.0, "from B"))
+        return httpx.Response(200, json=json_llm_response(81.0, "from B"))
 
     with mock.patch.object(httpx.Client, "post", fake_post):
         process_grading_task(tid)
@@ -453,9 +310,9 @@ def test_second_endpoint_used_when_first_keeps_retryable(grading_context: dict):
 
 
 def test_quota_precheck_fails_without_llm_post(grading_context: dict):
-    ctx = _make_grading_course_with_homework(daily_student_token_limit=1)
+    ctx = make_grading_course_with_homework(daily_student_token_limit=1)
     client = grading_context["client"]
-    student_h = _login(client, ctx["student_username"], ctx["student_password"])
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
 
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
@@ -474,7 +331,7 @@ def test_quota_precheck_fails_without_llm_post(grading_context: dict):
 
     def fake_post(self, url, **kwargs):
         calls.append(1)
-        return httpx.Response(200, json=_json_llm_response(50.0, "should not"))
+        return httpx.Response(200, json=json_llm_response(50.0, "should not"))
 
     with mock.patch.object(httpx.Client, "post", fake_post):
         process_grading_task(tid)
@@ -508,7 +365,7 @@ def test_regrade_queues_new_task(grading_context: dict):
     with mock.patch.object(
         httpx.Client,
         "post",
-        lambda self, url, **kwargs: httpx.Response(200, json=_json_llm_response(60.0, "first")),
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(60.0, "first")),
     ):
         process_grading_task(first_tid)
 
@@ -532,7 +389,7 @@ def test_regrade_queues_new_task(grading_context: dict):
     with mock.patch.object(
         httpx.Client,
         "post",
-        lambda self, url, **kwargs: httpx.Response(200, json=_json_llm_response(77.0, "regrade")),
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(77.0, "regrade")),
     ):
         process_grading_task(second_id)
 
@@ -561,7 +418,7 @@ def test_token_usage_recorded_after_success(grading_context: dict):
     with mock.patch.object(
         httpx.Client,
         "post",
-        lambda self, url, **kwargs: httpx.Response(200, json=_json_llm_response(50.0, "x")),
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(50.0, "x")),
     ):
         process_grading_task(tid)
 
@@ -578,9 +435,9 @@ def test_token_usage_recorded_after_success(grading_context: dict):
 
 def test_all_endpoints_exhausted_fails(grading_context: dict):
     """Single preset, max_retries=0: 503 and no more attempts → task fails."""
-    ctx = _make_grading_course_with_homework(preset_max_retries=0)
+    ctx = make_grading_course_with_homework(preset_max_retries=0)
     client = grading_context["client"]
-    student_h = _login(client, ctx["student_username"], ctx["student_password"])
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
 
     r = client.post(f"/api/homeworks/{ctx['homework_id']}/submission", headers=student_h, json={"content": "fail all"})
     assert r.status_code == 200, r.text

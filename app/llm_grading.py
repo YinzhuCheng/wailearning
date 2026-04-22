@@ -150,37 +150,61 @@ def normalize_score_for_homework(homework: Homework, score: float | int) -> floa
     return float(round(value))
 
 
-def _candidate_priority(candidate: HomeworkScoreCandidate) -> tuple[float, int, datetime]:
-    source_rank = 1 if candidate.source == "teacher" else 0
-    timestamp = candidate.updated_at or candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
-    return (float(candidate.score), source_rank, timestamp)
+def _teacher_candidate_sort_key(candidate: HomeworkScoreCandidate) -> tuple[float, datetime]:
+    """Higher score first, then newer; used only among teacher rows."""
+    ts = candidate.updated_at or candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    return (float(candidate.score or 0), ts)
+
+
+def _auto_candidate_sort_key(candidate: HomeworkScoreCandidate) -> tuple[float, datetime]:
+    """Among auto rows: higher score, then newer."""
+    ts = candidate.updated_at or candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    return (float(candidate.score or 0), ts)
 
 
 def get_best_score_candidate(
     db: Session,
     homework_id: int,
     student_id: int,
+    *,
+    latest_attempt_id: Optional[int] = None,
 ) -> Optional[HomeworkScoreCandidate]:
-    candidates = (
+    """
+    Best visible score for the submission summary: only the **latest attempt**'s
+    candidates apply (if latest_attempt_id is set). On that attempt, any **teacher**
+    score takes precedence over automatic scores so LLM output cannot override a
+    teacher's grade in the UI.
+    """
+    query = (
         db.query(HomeworkScoreCandidate)
         .filter(
             HomeworkScoreCandidate.homework_id == homework_id,
             HomeworkScoreCandidate.student_id == student_id,
         )
-        .all()
     )
+    if latest_attempt_id is not None:
+        query = query.filter(HomeworkScoreCandidate.attempt_id == latest_attempt_id)
+    candidates = query.all()
     valid_candidates = [
-        candidate
-        for candidate in candidates
-        if candidate.score is not None and getattr(candidate.attempt, "counts_toward_final_score", True)
+        c
+        for c in candidates
+        if c.score is not None and getattr(c.attempt, "counts_toward_final_score", True)
     ]
     if not valid_candidates:
         return None
-    return max(valid_candidates, key=_candidate_priority)
+    teacher_rows = [c for c in valid_candidates if c.source == "teacher"]
+    if teacher_rows:
+        return max(teacher_rows, key=_teacher_candidate_sort_key)
+    auto_rows = [c for c in valid_candidates if c.source == "auto"]
+    if auto_rows:
+        return max(auto_rows, key=_auto_candidate_sort_key)
+    return max(valid_candidates, key=_auto_candidate_sort_key)
 
 
 def refresh_submission_summary(db: Session, summary: HomeworkSubmission) -> HomeworkSubmission:
-    best_candidate = get_best_score_candidate(db, summary.homework_id, summary.student_id)
+    best_candidate = get_best_score_candidate(
+        db, summary.homework_id, summary.student_id, latest_attempt_id=summary.latest_attempt_id
+    )
     summary.review_score = best_candidate.score if best_candidate else None
     summary.review_comment = (best_candidate.comment or None) if best_candidate else None
 
@@ -404,6 +428,9 @@ def _get_used_tokens_for_scope(
     return total
 
 
+_quota_serialization_lock = threading.Lock()
+
+
 def precheck_quota(
     db: Session,
     config: CourseLLMConfig,
@@ -412,27 +439,29 @@ def precheck_quota(
     subject_id: Optional[int],
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
-    if config.daily_student_token_limit:
-        used_by_student = _get_used_tokens_for_scope(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            student_id=student_id,
-        )
-        if used_by_student + estimated_tokens > config.daily_student_token_limit:
-            return False, "quota_exceeded"
-    if config.daily_course_token_limit and subject_id:
-        used_by_course = _get_used_tokens_for_scope(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            subject_id=subject_id,
-        )
-        if used_by_course + estimated_tokens > config.daily_course_token_limit:
-            return False, "quota_exceeded"
-    return True, None
+    """Serialize read of usage vs limits to reduce double-spend under concurrent workers."""
+    with _quota_serialization_lock:
+        timezone_name = config.quota_timezone or "UTC"
+        usage_date = _get_usage_date(timezone_name)
+        if config.daily_student_token_limit:
+            used_by_student = _get_used_tokens_for_scope(
+                db,
+                usage_date=usage_date,
+                timezone_name=timezone_name,
+                student_id=student_id,
+            )
+            if used_by_student + estimated_tokens > config.daily_student_token_limit:
+                return False, "quota_exceeded"
+        if config.daily_course_token_limit and subject_id:
+            used_by_course = _get_used_tokens_for_scope(
+                db,
+                usage_date=usage_date,
+                timezone_name=timezone_name,
+                subject_id=subject_id,
+            )
+            if used_by_course + estimated_tokens > config.daily_course_token_limit:
+                return False, "quota_exceeded"
+        return True, None
 
 
 def record_usage_if_needed(
@@ -444,29 +473,48 @@ def record_usage_if_needed(
     existing = db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == task.id).first()
     if existing:
         return
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
-    prompt_tokens = usage.get("prompt_tokens")
-    completion_tokens = usage.get("completion_tokens")
-    total_tokens = usage.get("total_tokens")
-    if total_tokens is None:
-        total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+    with _quota_serialization_lock:
+        timezone_name = config.quota_timezone or "UTC"
+        usage_date = _get_usage_date(timezone_name)
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        total_tokens = usage.get("total_tokens")
+        if total_tokens is None:
+            total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+        if config.daily_student_token_limit:
+            used_by_student = _get_used_tokens_for_scope(
+                db,
+                usage_date=usage_date,
+                timezone_name=timezone_name,
+                student_id=task.student_id,
+            )
+            if used_by_student + int(total_tokens or 0) > config.daily_student_token_limit:
+                return
+        if config.daily_course_token_limit and task.subject_id:
+            used_by_course = _get_used_tokens_for_scope(
+                db,
+                usage_date=usage_date,
+                timezone_name=timezone_name,
+                subject_id=task.subject_id,
+            )
+            if used_by_course + int(total_tokens or 0) > config.daily_course_token_limit:
+                return
 
-    db.add(
-        LLMTokenUsageLog(
-            task_id=task.id,
-            subject_id=task.subject_id,
-            student_id=task.student_id,
-            usage_date=usage_date,
-            timezone=timezone_name,
-            input_tokens=prompt_tokens,
-            output_tokens=completion_tokens,
-            total_tokens=total_tokens,
+        db.add(
+            LLMTokenUsageLog(
+                task_id=task.id,
+                subject_id=task.subject_id,
+                student_id=task.student_id,
+                usage_date=usage_date,
+                timezone=timezone_name,
+                input_tokens=prompt_tokens,
+                output_tokens=completion_tokens,
+                total_tokens=total_tokens,
+            )
         )
-    )
-    task.billed_input_tokens = prompt_tokens
-    task.billed_output_tokens = completion_tokens
-    task.billed_total_tokens = total_tokens
+        task.billed_input_tokens = prompt_tokens
+        task.billed_output_tokens = completion_tokens
+        task.billed_total_tokens = total_tokens
 
 
 def process_next_grading_task() -> bool:
@@ -560,6 +608,35 @@ def process_grading_task(task_id: int) -> None:
         )
         if not allowed:
             _mark_task_failed(db, task, error_code or "quota_exceeded", "今日额度已用尽，自动评分未执行。")
+            return
+
+        teacher_exists = (
+            db.query(HomeworkScoreCandidate)
+            .filter(
+                HomeworkScoreCandidate.attempt_id == attempt.id,
+                HomeworkScoreCandidate.source == "teacher",
+            )
+            .first()
+        )
+        if teacher_exists:
+            task.status = "success"
+            task.error_code = None
+            task.error_message = None
+            task.finished_at = _now_utc()
+            task.task_summary = "已跳过：该次提交已有教师评分，未调用模型。"
+            summary = (
+                db.query(HomeworkSubmission)
+                .filter(
+                    HomeworkSubmission.homework_id == attempt.homework_id,
+                    HomeworkSubmission.student_id == attempt.student_id,
+                )
+                .first()
+            )
+            if summary:
+                summary.latest_task_status = task.status
+                summary.latest_task_error = None
+                refresh_submission_summary(db, summary)
+            db.commit()
             return
 
         response = _grade_with_endpoint_group(
