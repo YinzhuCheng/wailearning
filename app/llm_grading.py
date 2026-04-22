@@ -134,6 +134,17 @@ class _WorkerManager:
 
 worker_manager = _WorkerManager()
 
+# Serialize grading for a single task id in-process (duplicate worker wakeups / tests).
+_task_grading_locks: dict[int, threading.Lock] = {}
+_task_grading_locks_mutex = threading.Lock()
+
+
+def _grading_lock_for_task(task_id: int) -> threading.Lock:
+    with _task_grading_locks_mutex:
+        if task_id not in _task_grading_locks:
+            _task_grading_locks[task_id] = threading.Lock()
+        return _task_grading_locks[task_id]
+
 
 def start_grading_worker() -> None:
     worker_manager.start()
@@ -556,122 +567,115 @@ def process_next_grading_task() -> bool:
 
 
 def process_grading_task(task_id: int) -> None:
+    with _grading_lock_for_task(task_id):
+        _process_grading_task_unlocked(task_id)
+
+
+def _process_grading_task_unlocked(task_id: int) -> None:
     db = SessionLocal()
     try:
         task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
         if not task:
             return
-        attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
-        if not attempt:
-            _mark_task_failed(db, task, "attempt_not_found", "找不到对应的提交记录。")
+        if task.status in ("success", "failed"):
             return
-        homework = db.query(Homework).filter(Homework.id == task.homework_id).first()
-        if not homework:
-            _mark_task_failed(db, task, "homework_not_found", "找不到对应的作业。")
-            return
-        if not homework.auto_grading_enabled:
-            _mark_task_failed(db, task, "auto_grading_disabled", "当前作业未启用自动评分。")
-            return
-        if not task.subject_id:
-            _mark_task_failed(db, task, "course_missing", "当前作业未关联课程，无法使用课程级 LLM 配置。")
-            return
-
-        config = (
-            db.query(CourseLLMConfig)
-            .filter(CourseLLMConfig.subject_id == task.subject_id)
-            .first()
-        )
-        if not config or not config.is_enabled:
-            _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
-            return
-
-        endpoint_links = list(config.endpoints or [])
-        if not endpoint_links:
-            _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
-            return
-
-        material = _build_student_material(homework, attempt, config)
-        task.artifact_manifest = material["artifact_manifest"]
-        task.input_token_estimate = material["estimated_tokens"]
-        task.task_summary = material["summary"]
-
-        if material["all_empty"]:
-            _mark_task_failed(db, task, "no_usable_content", "附件处理后没有可评分内容。")
-            return
-
-        allowed, error_code = precheck_quota(
-            db,
-            config,
-            student_id=task.student_id,
-            subject_id=task.subject_id,
-            estimated_tokens=material["estimated_tokens"],
-        )
-        if not allowed:
-            _mark_task_failed(db, task, error_code or "quota_exceeded", "今日额度已用尽，自动评分未执行。")
-            return
-
-        teacher_exists = (
-            db.query(HomeworkScoreCandidate)
-            .filter(
-                HomeworkScoreCandidate.attempt_id == attempt.id,
-                HomeworkScoreCandidate.source == "teacher",
-            )
-            .first()
-        )
-        if teacher_exists:
-            task.status = "success"
-            task.error_code = None
-            task.error_message = None
-            task.finished_at = _now_utc()
-            task.task_summary = "已跳过：该次提交已有教师评分，未调用模型。"
-            summary = (
-                db.query(HomeworkSubmission)
-                .filter(
-                    HomeworkSubmission.homework_id == attempt.homework_id,
-                    HomeworkSubmission.student_id == attempt.student_id,
+        if task.status == "queued":
+            # Claim the task (tests call process_grading_task directly; worker uses process_next which pre-sets processing).
+            now = _now_utc()
+            n = (
+                db.query(HomeworkGradingTask)
+                .filter(HomeworkGradingTask.id == task_id, HomeworkGradingTask.status == "queued")
+                .update(
+                    {
+                        HomeworkGradingTask.status: "processing",
+                        HomeworkGradingTask.started_at: now,
+                        HomeworkGradingTask.updated_at: now,
+                        HomeworkGradingTask.task_summary: "处理中",
+                    },
+                    synchronize_session=False,
                 )
-                .first()
             )
-            if summary:
-                summary.latest_task_status = task.status
-                summary.latest_task_error = None
-                refresh_submission_summary(db, summary)
+            if not n:
+                return
             db.commit()
+            task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
+        elif task.status != "processing":
             return
+        try:
+            _run_grading_after_claim(db, task_id, task)
+        except Exception as exc:
+            db.rollback()
+            task2 = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
+            if task2:
+                _mark_task_failed(db, task2, "unexpected_error", f"评分任务异常：{exc}")
+    finally:
+        db.close()
 
-        response = _grade_with_endpoint_group(
-            task=task,
-            homework=homework,
-            attempt=attempt,
-            config=config,
-            endpoint_links=endpoint_links,
-            material=material,
+
+def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTask) -> None:
+    attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
+    if not attempt:
+        _mark_task_failed(db, task, "attempt_not_found", "找不到对应的提交记录。")
+        return
+    homework = db.query(Homework).filter(Homework.id == task.homework_id).first()
+    if not homework:
+        _mark_task_failed(db, task, "homework_not_found", "找不到对应的作业。")
+        return
+    if not homework.auto_grading_enabled:
+        _mark_task_failed(db, task, "auto_grading_disabled", "当前作业未启用自动评分。")
+        return
+    if not task.subject_id:
+        _mark_task_failed(db, task, "course_missing", "当前作业未关联课程，无法使用课程级 LLM 配置。")
+        return
+
+    config = (
+        db.query(CourseLLMConfig)
+        .filter(CourseLLMConfig.subject_id == task.subject_id)
+        .first()
+    )
+    if not config or not config.is_enabled:
+        _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
+        return
+
+    endpoint_links = list(config.endpoints or [])
+    if not endpoint_links:
+        _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
+        return
+
+    material = _build_student_material(homework, attempt, config)
+    task.artifact_manifest = material["artifact_manifest"]
+    task.input_token_estimate = material["estimated_tokens"]
+    task.task_summary = material["summary"]
+
+    if material["all_empty"]:
+        _mark_task_failed(db, task, "no_usable_content", "附件处理后没有可评分内容。")
+        return
+
+    allowed, error_code = precheck_quota(
+        db,
+        config,
+        student_id=task.student_id,
+        subject_id=task.subject_id,
+        estimated_tokens=material["estimated_tokens"],
+    )
+    if not allowed:
+        _mark_task_failed(db, task, error_code or "quota_exceeded", "今日额度已用尽，自动评分未执行。")
+        return
+
+    teacher_exists = (
+        db.query(HomeworkScoreCandidate)
+        .filter(
+            HomeworkScoreCandidate.attempt_id == attempt.id,
+            HomeworkScoreCandidate.source == "teacher",
         )
-
-        candidate = HomeworkScoreCandidate(
-            attempt_id=attempt.id,
-            homework_id=homework.id,
-            student_id=attempt.student_id,
-            source="auto",
-            score=normalize_score_for_homework(homework, response["score"]),
-            comment=response["comment"],
-            source_metadata={
-                "task_id": task.id,
-                "endpoint_id": response["endpoint_id"],
-                "raw_response_excerpt": response["raw_response"][:1000],
-            },
-        )
-        db.add(candidate)
-        # Ensure ORM-visible before refresh_submission_summary queries candidates in this session.
-        db.flush()
-
+        .first()
+    )
+    if teacher_exists:
         task.status = "success"
         task.error_code = None
         task.error_message = None
         task.finished_at = _now_utc()
-        task.task_summary = "评分成功"
-        record_usage_if_needed(db, task, config, response["usage"])
-
+        task.task_summary = "已跳过：该次提交已有教师评分，未调用模型。"
         summary = (
             db.query(HomeworkSubmission)
             .filter(
@@ -684,15 +688,55 @@ def process_grading_task(task_id: int) -> None:
             summary.latest_task_status = task.status
             summary.latest_task_error = None
             refresh_submission_summary(db, summary)
-
         db.commit()
-    except Exception as exc:
-        db.rollback()
-        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
-        if task:
-            _mark_task_failed(db, task, "unexpected_error", f"评分任务异常：{exc}")
-    finally:
-        db.close()
+        return
+
+    response = _grade_with_endpoint_group(
+        task=task,
+        homework=homework,
+        attempt=attempt,
+        config=config,
+        endpoint_links=endpoint_links,
+        material=material,
+    )
+
+    candidate = HomeworkScoreCandidate(
+        attempt_id=attempt.id,
+        homework_id=homework.id,
+        student_id=attempt.student_id,
+        source="auto",
+        score=normalize_score_for_homework(homework, response["score"]),
+        comment=response["comment"],
+        source_metadata={
+            "task_id": task.id,
+            "endpoint_id": response["endpoint_id"],
+            "raw_response_excerpt": response["raw_response"][:1000],
+        },
+    )
+    db.add(candidate)
+    db.flush()
+
+    task.status = "success"
+    task.error_code = None
+    task.error_message = None
+    task.finished_at = _now_utc()
+    task.task_summary = "评分成功"
+    record_usage_if_needed(db, task, config, response["usage"])
+
+    summary = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.homework_id == attempt.homework_id,
+            HomeworkSubmission.student_id == attempt.student_id,
+        )
+        .first()
+    )
+    if summary:
+        summary.latest_task_status = task.status
+        summary.latest_task_error = None
+        refresh_submission_summary(db, summary)
+
+    db.commit()
 
 
 def _mark_task_failed(
