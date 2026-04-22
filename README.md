@@ -65,6 +65,7 @@
 - [项目结构](#项目结构)
 - [API文档](#api文档)
 - [阿里云安全升级说明](#阿里云安全升级说明)
+- [安全与运维（角色、数据落点、升级重部署）](docs/SECURITY-AND-OPERATIONS.md)
 - [数据库迁移](#数据库迁移)
 - [常见问题](#常见问题)
 - [使用许可](#使用许可)
@@ -350,6 +351,7 @@ class Settings(BaseSettings):
 
 请优先阅读：
 
+- `docs/SECURITY-AND-OPERATIONS.md`（角色与权限、数据存储、通用升级重部署示例）
 - `ALIYUN_SAFE_UPGRADE.md`
 - `DEPLOY.md`
 - `RUNBOOK_ALIYUN.md`
