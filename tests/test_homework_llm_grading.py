@@ -30,6 +30,7 @@ from app.models import (
     HomeworkScoreCandidate,
     HomeworkSubmission,
     LLMEndpointPreset,
+    LLMTokenUsageLog,
     Student,
     Subject,
     User,
@@ -539,5 +540,64 @@ def test_regrade_queues_new_task(grading_context: dict):
     try:
         sub_row = db.query(HomeworkSubmission).filter(HomeworkSubmission.id == sub_id).first()
         assert sub_row.review_score == 77.0
+    finally:
+        db.close()
+
+
+def test_token_usage_recorded_after_success(grading_context: dict):
+    client: TestClient = grading_context["client"]
+    hid = grading_context["homework_id"]
+    student_h = grading_context["student_headers"]
+
+    r = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "token log test"})
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(200, json=_json_llm_response(50.0, "x")),
+    ):
+        process_grading_task(tid)
+
+    db = SessionLocal()
+    try:
+        log = db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == tid).first()
+        assert log is not None
+        assert log.total_tokens is not None
+        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
+        assert task.billed_total_tokens is not None
+    finally:
+        db.close()
+
+
+def test_all_endpoints_exhausted_fails(grading_context: dict):
+    """Single preset, max_retries=0: 503 and no more attempts → task fails."""
+    ctx = _make_grading_course_with_homework(preset_max_retries=0)
+    client = grading_context["client"]
+    student_h = _login(client, ctx["student_username"], ctx["student_password"])
+
+    r = client.post(f"/api/homeworks/{ctx['homework_id']}/submission", headers=student_h, json={"content": "fail all"})
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    with mock.patch.object(httpx.Client, "post", lambda self, url, **kwargs: httpx.Response(503, json={})):
+        process_grading_task(tid)
+
+    db = SessionLocal()
+    try:
+        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
+        assert task.status == "failed"
+        assert "503" in (task.error_message or "") or "暂时不可用" in (task.error_message or "")
     finally:
         db.close()
