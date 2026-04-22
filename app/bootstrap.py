@@ -11,6 +11,7 @@ from app.database import Base, SessionLocal, engine
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
+    LLMGroup,
     Homework,
     HomeworkAttempt,
     HomeworkScoreCandidate,
@@ -222,6 +223,16 @@ def ensure_schema_updates() -> None:
         """,
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
+        """
+        CREATE TABLE IF NOT EXISTS llm_groups (
+            id INTEGER PRIMARY KEY,
+            config_id INTEGER NOT NULL REFERENCES course_llm_configs(id) ON DELETE CASCADE,
+            priority INTEGER NOT NULL DEFAULT 1,
+            name VARCHAR(128),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "ALTER TABLE course_llm_config_endpoints ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES llm_groups(id) ON DELETE SET NULL",
     ]
 
     with engine.begin() as connection:
@@ -256,6 +267,35 @@ def ensure_schema_updates() -> None:
                 """
             )
         )
+
+    _backfill_default_llm_groups_for_existing_configs()
+
+
+def _backfill_default_llm_groups_for_existing_configs() -> None:
+    """Orphan course_llm_config_endpoints -> single default group per config."""
+    db = SessionLocal()
+    try:
+        for cfg in db.query(CourseLLMConfig).all():
+            orphan_links = [row for row in (cfg.endpoints or []) if getattr(row, "group_id", None) is None]
+            if not orphan_links:
+                continue
+            g = (
+                db.query(LLMGroup)
+                .filter(LLMGroup.config_id == cfg.id, LLMGroup.priority == 1, LLMGroup.name == "default")
+                .first()
+            )
+            if not g:
+                g = LLMGroup(config_id=cfg.id, priority=1, name="default")
+                db.add(g)
+                db.flush()
+            for item in sorted(orphan_links, key=lambda r: (r.priority, r.id)):
+                item.group_id = g.id
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def backfill_homework_grading_data(db) -> None:

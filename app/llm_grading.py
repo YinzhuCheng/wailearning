@@ -12,7 +12,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
@@ -20,19 +20,22 @@ import fitz
 import httpx
 from docx import Document
 from sqlalchemy import and_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.attachments import get_attachment_file_path
 from app.config import settings
 from app.database import SessionLocal
+from app.llm_group_routing import GroupRoutingContext
 from app.models import (
     CourseLLMConfig,
+    CourseLLMConfigEndpoint,
     Homework,
     HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
     LLMEndpointPreset,
+    LLMGroup,
     LLMTokenUsageLog,
 )
 
@@ -345,7 +348,54 @@ def queue_grading_task(
     return task
 
 
-def validate_endpoint_connectivity(
+def validate_text_connectivity(
+    base_url: str,
+    api_key: str,
+    model_name: str,
+    connect_timeout_seconds: int,
+    read_timeout_seconds: int,
+) -> tuple[bool, str]:
+    """OpenAI-style chat: text-only smoke test before multimodal check."""
+    timeout = httpx.Timeout(connect=connect_timeout_seconds, read=read_timeout_seconds, write=read_timeout_seconds, pool=connect_timeout_seconds)
+    messages = [
+        {
+            "role": "user",
+            "content": "Please reply with the single word: OK",
+        }
+    ]
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0,
+        "max_tokens": 8,
+    }
+    endpoint_url = _build_chat_completion_url(base_url)
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(
+                endpoint_url,
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+    except httpx.HTTPError as exc:
+        return False, f"纯文本连通性校验失败：{exc}"
+
+    if response.status_code >= 400:
+        return False, f"纯文本连通性校验失败：HTTP {response.status_code} {response.text[:300]}"
+
+    try:
+        data = response.json()
+    except ValueError:
+        return False, "纯文本连通性校验失败：返回内容不是 JSON。"
+
+    content = _extract_message_content(data)
+    if not content.strip():
+        return False, "纯文本连通性校验失败：模型未返回可读文本。"
+
+    return True, "纯文本请求校验通过。"
+
+
+def validate_vision_connectivity(
     base_url: str,
     api_key: str,
     model_name: str,
@@ -378,7 +428,7 @@ def validate_endpoint_connectivity(
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             )
     except httpx.HTTPError as exc:
-        return False, f"连通性校验失败：{exc}"
+        return False, f"视觉能力校验失败：{exc}"
 
     if response.status_code >= 400:
         return False, f"视觉能力校验失败：HTTP {response.status_code} {response.text[:300]}"
@@ -392,7 +442,27 @@ def validate_endpoint_connectivity(
     if not content.strip():
         return False, "视觉能力校验失败：模型未返回可读文本。"
 
-    return True, "端点连通性与视觉输入校验通过。"
+    return True, "多模态（图像）输入校验通过。"
+
+
+def validate_endpoint_connectivity(
+    base_url: str,
+    api_key: str,
+    model_name: str,
+    connect_timeout_seconds: int,
+    read_timeout_seconds: int,
+) -> tuple[bool, str]:
+    ok, msg = validate_text_connectivity(
+        base_url, api_key, model_name, connect_timeout_seconds, read_timeout_seconds
+    )
+    if not ok:
+        return False, msg
+    ok2, msg2 = validate_vision_connectivity(
+        base_url, api_key, model_name, connect_timeout_seconds, read_timeout_seconds
+    )
+    if not ok2:
+        return False, msg2
+    return True, "端点连通性校验通过：已验证纯文本与多模态（图像）输入。"
 
 
 def estimate_task_tokens(
@@ -630,6 +700,12 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
 
     config = (
         db.query(CourseLLMConfig)
+        .options(
+            joinedload(CourseLLMConfig.groups)
+            .joinedload(LLMGroup.members)
+            .joinedload(CourseLLMConfigEndpoint.preset),
+            joinedload(CourseLLMConfig.endpoints).joinedload(CourseLLMConfigEndpoint.preset),
+        )
         .filter(CourseLLMConfig.subject_id == task.subject_id)
         .first()
     )
@@ -637,13 +713,15 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
         return
 
-    endpoint_links = list(config.endpoints or [])
-    if not endpoint_links:
+    if not (config.groups or []) and not (config.endpoints or []):
         _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
         return
 
     material = _build_student_material(homework, attempt, config)
-    task.artifact_manifest = material["artifact_manifest"]
+    base_manifest = material["artifact_manifest"] or {}
+    if not isinstance(base_manifest, dict):
+        base_manifest = {}
+    task.artifact_manifest = {**base_manifest, "llm_routing": {"version": 1, "status": "pending"}}
     task.input_token_estimate = material["estimated_tokens"]
     task.task_summary = material["summary"]
 
@@ -696,7 +774,6 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         homework=homework,
         attempt=attempt,
         config=config,
-        endpoint_links=endpoint_links,
         material=material,
     )
 
@@ -765,20 +842,104 @@ def _mark_task_failed(
     db.commit()
 
 
+def _collect_grading_endpoints_for_config(
+    config: CourseLLMConfig,
+) -> tuple[list[LLMGroup], list[CourseLLMConfigEndpoint]]:
+    """Return (ordered groups, flat legacy endpoints when no groups are defined)."""
+    groups = sorted(
+        [g for g in (config.groups or []) if g is not None],
+        key=lambda x: (x.priority, x.id),
+    )
+    if groups and any((g.members or []) for g in groups):
+        return groups, []
+    flat = sorted(
+        (config.endpoints or []),
+        key=lambda row: (row.priority, row.id),
+    )
+    return [], flat
+
+
 def _grade_with_endpoint_group(
     *,
     task: HomeworkGradingTask,
     homework: Homework,
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
-    endpoint_links: Iterable[Any],
     material: dict[str, Any],
 ) -> dict[str, Any]:
-    last_error: Optional[str] = None
-    for endpoint_index, link in enumerate(endpoint_links, start=1):
+    group_rows, flat_endpoints = _collect_grading_endpoints_for_config(config)
+    if group_rows:
+        routing = GroupRoutingContext.from_config(group_rows, task_id=task.id)
+
+        def _update_routing_artifact(merge: dict[str, Any]) -> None:
+            if not isinstance(task.artifact_manifest, dict):
+                return
+            base = dict(routing.routing_payload())
+            base.update(merge)
+            task.artifact_manifest["llm_routing"] = base
+
+        _update_routing_artifact({"status": "routing"})
+
+        last_error: Optional[str] = None
+        global_index = 0
+        for group_state, group_links in routing.iter_group_then_members():
+            for link in group_links:
+                global_index += 1
+                preset: LLMEndpointPreset = link.preset
+                if not preset or not preset.is_active or preset.validation_status != "validated" or not preset.supports_vision:
+                    last_error = f"端点 {getattr(preset, 'name', global_index)} 不可用或未通过视觉校验。"
+                    continue
+                task.current_endpoint_index = global_index
+                attempt_limit = max(1, int(preset.max_retries or 0) + 1)
+                for request_attempt in range(1, attempt_limit + 1):
+                    task.current_attempt = request_attempt
+                    try:
+                        score_result = _request_grade_from_endpoint(
+                            preset=preset,
+                            homework=homework,
+                            attempt=attempt,
+                            config=config,
+                            material=material,
+                        )
+                        score_result["endpoint_id"] = preset.id
+                        _update_routing_artifact({"status": "ok"})
+                        return score_result
+                    except RetryableLLMError as exc:
+                        last_error = str(exc)
+                        routing.note_failure(group_state, link, exc)
+                        if request_attempt >= attempt_limit:
+                            _update_routing_artifact(
+                                {
+                                    "status": "adaptive_shift",
+                                    "last_error": last_error,
+                                }
+                            )
+                            break
+                        _update_routing_artifact(
+                            {
+                                "status": "retry_backoff",
+                                "last_error": last_error,
+                            }
+                        )
+                        wait_seconds = min(
+                            int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
+                            120,
+                        )
+                        if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
+                            time.sleep(wait_seconds)
+                    except NonRetryableLLMError as exc:
+                        last_error = str(exc)
+                        routing.note_failure(group_state, link, exc)
+                        _update_routing_artifact({"status": "endpoint_error", "last_error": last_error})
+                        break
+        _update_routing_artifact({"status": "failed", "message": last_error or ""})
+        raise NonRetryableLLMError(last_error or "所有组内端点都调用失败。")
+
+    last_error_flat: Optional[str] = None
+    for endpoint_index, link in enumerate(flat_endpoints, start=1):
         preset: LLMEndpointPreset = link.preset
         if not preset or not preset.is_active or preset.validation_status != "validated" or not preset.supports_vision:
-            last_error = f"端点 {getattr(preset, 'name', endpoint_index)} 不可用或未通过视觉校验。"
+            last_error_flat = f"端点 {getattr(preset, 'name', endpoint_index)} 不可用或未通过视觉校验。"
             continue
         task.current_endpoint_index = endpoint_index
         attempt_limit = max(1, int(preset.max_retries or 0) + 1)
@@ -793,22 +954,33 @@ def _grade_with_endpoint_group(
                     material=material,
                 )
                 score_result["endpoint_id"] = preset.id
+                if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
+                    task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
+                        "version": 1,
+                        "mode": "legacy_priority",
+                        "status": "ok",
+                    }
                 return score_result
             except RetryableLLMError as exc:
-                last_error = str(exc)
+                last_error_flat = str(exc)
                 if request_attempt >= attempt_limit:
                     break
                 wait_seconds = min(
                     int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
                     120,
                 )
-                # Skip real sleeps in automated tests (pytest sets this in conftest).
                 if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
                     time.sleep(wait_seconds)
             except NonRetryableLLMError as exc:
-                last_error = str(exc)
+                last_error_flat = str(exc)
                 break
-    raise NonRetryableLLMError(last_error or "所有端点都调用失败。")
+    if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
+        task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
+            "version": 1,
+            "mode": "legacy_priority",
+            "status": "failed",
+        }
+    raise NonRetryableLLMError(last_error_flat or "所有端点都调用失败。")
 
 
 def _build_chat_completion_url(base_url: str) -> str:

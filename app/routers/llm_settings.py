@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,11 +9,12 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
-from app.llm_grading import ensure_course_llm_config, validate_endpoint_connectivity
+from app.llm_grading import ensure_course_llm_config, validate_text_connectivity, validate_vision_connectivity
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
     LLMEndpointPreset,
+    LLMGroup,
     User,
     UserRole,
 )
@@ -20,6 +22,7 @@ from app.schemas import (
     CourseLLMConfigResponse,
     CourseLLMConfigUpdate,
     CourseLLMConfigEndpointResponse,
+    LLMGroupResponse,
     LLMEndpointPresetCreate,
     LLMEndpointPresetResponse,
     LLMEndpointPresetUpdate,
@@ -59,7 +62,32 @@ def _serialize_preset(preset: LLMEndpointPreset) -> LLMEndpointPresetResponse:
     )
 
 
+def _serialize_endpoint_item(item: CourseLLMConfigEndpoint) -> CourseLLMConfigEndpointResponse:
+    return CourseLLMConfigEndpointResponse(
+        id=item.id,
+        preset_id=item.preset_id,
+        priority=item.priority,
+        group_id=getattr(item, "group_id", None),
+        preset_name=item.preset.name if item.preset else None,
+        model_name=item.preset.model_name if item.preset else None,
+        validation_status=item.preset.validation_status if item.preset else None,
+        supports_vision=item.preset.supports_vision if item.preset else None,
+    )
+
+
 def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse:
+    group_rows = sorted(
+        [g for g in (config.groups or []) if g is not None],
+        key=lambda row: (row.priority, row.id),
+    )
+    if group_rows and any((g.members or []) for g in group_rows):
+        flat: list[CourseLLMConfigEndpoint] = []
+        for g in group_rows:
+            for m in sorted(g.members or [], key=lambda row: (row.priority, row.id)):
+                flat.append(m)
+    else:
+        flat = list(config.endpoints or [])
+
     return CourseLLMConfigResponse(
         id=config.id,
         subject_id=config.subject_id,
@@ -74,17 +102,15 @@ def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse
         quota_timezone=config.quota_timezone,
         system_prompt=config.system_prompt,
         teacher_prompt=config.teacher_prompt,
-        endpoints=[
-            CourseLLMConfigEndpointResponse(
-                id=item.id,
-                preset_id=item.preset_id,
-                priority=item.priority,
-                preset_name=item.preset.name if item.preset else None,
-                model_name=item.preset.model_name if item.preset else None,
-                validation_status=item.preset.validation_status if item.preset else None,
-                supports_vision=item.preset.supports_vision if item.preset else None,
+        endpoints=[_serialize_endpoint_item(item) for item in sorted(flat, key=lambda row: (row.priority, row.id))],
+        groups=[
+            LLMGroupResponse(
+                id=g.id,
+                priority=g.priority,
+                name=g.name,
+                members=[_serialize_endpoint_item(m) for m in sorted(g.members or [], key=lambda row: (row.priority, row.id))],
             )
-            for item in sorted(config.endpoints or [], key=lambda row: (row.priority, row.id))
+            for g in group_rows
         ],
         visual_validation_notice=VISION_NOTICE,
     )
@@ -179,16 +205,30 @@ def validate_preset(
     if not preset:
         raise HTTPException(status_code=404, detail="Endpoint preset not found.")
 
-    ok, message = validate_endpoint_connectivity(
+    ok_t, msg_t = validate_text_connectivity(
         base_url=preset.base_url,
         api_key=preset.api_key,
         model_name=preset.model_name,
         connect_timeout_seconds=preset.connect_timeout_seconds,
         read_timeout_seconds=preset.read_timeout_seconds,
     )
-    preset.validation_status = "validated" if ok else "failed"
-    preset.validation_message = message
-    preset.supports_vision = bool(ok)
+    if not ok_t:
+        preset.validation_status = "failed"
+        preset.validation_message = msg_t
+        preset.supports_vision = False
+    else:
+        ok_v, msg_v = validate_vision_connectivity(
+            base_url=preset.base_url,
+            api_key=preset.api_key,
+            model_name=preset.model_name,
+            connect_timeout_seconds=preset.connect_timeout_seconds,
+            read_timeout_seconds=preset.read_timeout_seconds,
+        )
+        ok = ok_v
+        message = f"{msg_t} {msg_v}" if ok_v else msg_v
+        preset.validation_status = "validated" if ok else "failed"
+        preset.validation_message = message
+        preset.supports_vision = bool(ok_v)
     preset.validated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(preset)
@@ -247,11 +287,13 @@ def update_course_llm_config(
     config.updated_by = current_user.id
 
     db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == config.id).delete()
+    db.query(LLMGroup).filter(LLMGroup.config_id == config.id).delete()
     db.flush()
-    for item in sorted(payload.endpoints, key=lambda row: (row.priority, row.preset_id)):
-        preset = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.id == item.preset_id).first()
+
+    def _bind_endpoint_row(priority: int, preset_id: int, group_id: Optional[int] = None) -> None:
+        preset = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.id == preset_id).first()
         if not preset:
-            raise HTTPException(status_code=400, detail=f"Endpoint preset {item.preset_id} not found.")
+            raise HTTPException(status_code=400, detail=f"Endpoint preset {preset_id} not found.")
         if preset.validation_status != "validated" or not preset.supports_vision:
             raise HTTPException(
                 status_code=400,
@@ -260,10 +302,28 @@ def update_course_llm_config(
         db.add(
             CourseLLMConfigEndpoint(
                 config_id=config.id,
+                group_id=group_id,
                 preset_id=preset.id,
-                priority=item.priority,
+                priority=priority,
             )
         )
+
+    if payload.groups and len(payload.groups) > 0:
+        for gi, grp in enumerate(payload.groups):
+            if not grp.members or len(grp.members) == 0:
+                raise HTTPException(status_code=400, detail="每个 LLM 组至少需要包含一个已校验的端点。")
+            g = LLMGroup(
+                config_id=config.id,
+                priority=gi + 1,
+                name=(grp.name or "").strip() or f"group {gi + 1}",
+            )
+            db.add(g)
+            db.flush()
+            for mj, mem in enumerate(grp.members):
+                _bind_endpoint_row(priority=mj + 1, preset_id=mem.preset_id, group_id=g.id)
+    else:
+        for item in sorted(payload.endpoints, key=lambda row: (row.priority, row.preset_id)):
+            _bind_endpoint_row(priority=item.priority, preset_id=item.preset_id, group_id=None)
 
     db.commit()
     db.refresh(config)

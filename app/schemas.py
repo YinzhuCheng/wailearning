@@ -881,6 +881,17 @@ class CourseLLMConfigEndpointSelection(BaseModel):
     priority: int = Field(default=1, ge=1)
 
 
+class LLMGroupMemberSelection(BaseModel):
+    preset_id: int
+    priority: int = Field(default=1, ge=1)
+
+
+class LLMGroupSelection(BaseModel):
+    priority: int = Field(default=1, ge=1)
+    name: Optional[str] = None
+    members: List[LLMGroupMemberSelection] = Field(default_factory=list)
+
+
 class CourseLLMConfigUpdate(BaseModel):
     is_enabled: bool = False
     response_language: Optional[str] = None
@@ -894,16 +905,25 @@ class CourseLLMConfigUpdate(BaseModel):
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointSelection] = Field(default_factory=list)
+    groups: List[LLMGroupSelection] = Field(default_factory=list)
 
 
 class CourseLLMConfigEndpointResponse(BaseModel):
     id: int
     preset_id: int
     priority: int
+    group_id: Optional[int] = None
     preset_name: Optional[str] = None
     model_name: Optional[str] = None
     validation_status: Optional[str] = None
     supports_vision: Optional[bool] = None
+
+
+class LLMGroupResponse(BaseModel):
+    id: int
+    priority: int
+    name: Optional[str] = None
+    members: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)
 
 
 class CourseLLMConfigResponse(BaseModel):
@@ -921,6 +941,7 @@ class CourseLLMConfigResponse(BaseModel):
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)
+    groups: List[LLMGroupResponse] = Field(default_factory=list)
     visual_validation_notice: str
 
 
