@@ -36,13 +36,9 @@ from app.schemas import (
     UserUpdate,
 )
 from app.services import LogService
-from app.permissions import is_admin as is_admin_user
+from app.permissions import is_admin
 
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
-
-
-def is_admin(user: User) -> bool:
-    return is_admin_user(user)
 
 
 def normalize_managed_class_id(role: Optional[str], class_id: Optional[int]) -> Optional[int]:

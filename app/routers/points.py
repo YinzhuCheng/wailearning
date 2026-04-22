@@ -13,23 +13,12 @@ from app.schemas import (
     PointRankingResponse, PointStatsResponse
 )
 from app.auth import get_current_active_user
-from app.permissions import can_manage_students, is_admin as _perm_is_admin
+from app.permissions import can_manage_students, is_admin
 from app.routers.classes import get_accessible_class_ids
 from datetime import datetime
 
 router = APIRouter(prefix="/api/points", tags=["积分系统"])
 
-
-def is_admin(user: User) -> bool:
-    return _perm_is_admin(user)
-
-
-def is_class_teacher(user: User) -> bool:
-    return user.role == UserRole.CLASS_TEACHER
-
-
-def is_teacher(user: User) -> bool:
-    return can_manage_students(user)
 
 @router.get("/stats", response_model=PointStatsResponse)
 def get_point_stats(
@@ -199,7 +188,7 @@ def add_points(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    if not is_teacher(current_user):
+    if not can_manage_students(current_user):
         raise HTTPException(status_code=403, detail="只有教师可以添加积分")
 
     student = db.query(Student).filter(Student.id == student_id).first()
@@ -342,7 +331,7 @@ def exchange_item(
 ):
     student_id = None
     
-    if is_teacher(current_user):
+    if can_manage_students(current_user):
         if not data.student_id:
             raise HTTPException(status_code=400, detail="教师帮学生兑换时需要提供student_id")
         student_id = data.student_id
@@ -355,9 +344,21 @@ def exchange_item(
         if student.class_id not in accessible_class_ids:
             raise HTTPException(status_code=403, detail="无权为该学生兑换")
     else:
-        student = db.query(Student).filter(Student.teacher_id == current_user.id).first()
+        if current_user.role != UserRole.STUDENT or not current_user.class_id:
+            raise HTTPException(status_code=400, detail="仅学生可自助兑换，且需已分配班级。")
+        student = (
+            db.query(Student)
+            .filter(
+                Student.class_id == current_user.class_id,
+                Student.student_no == current_user.username,
+            )
+            .first()
+        )
         if not student:
-            raise HTTPException(status_code=404, detail="未找到对应的学生账号")
+            raise HTTPException(
+                status_code=404,
+                detail="未找到与当前登录账号学号一致的学生档案，请联系管理员。",
+            )
         student_id = student.id
 
     item = db.query(PointItem).filter(PointItem.id == data.item_id, PointItem.is_active == True).first()
@@ -460,7 +461,7 @@ def complete_exchange(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    if not is_teacher(current_user):
+    if not can_manage_students(current_user):
         raise HTTPException(status_code=403, detail="只有教师可以确认兑换")
 
     exchange = db.query(PointExchange).filter(PointExchange.id == exchange_id).first()

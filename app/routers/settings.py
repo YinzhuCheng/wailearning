@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_active_user
 from app.bootstrap import normalize_legacy_branding
 from app.database import get_db
-from app.models import SystemSetting, User, UserRole
+from app.models import SystemSetting, User
 from app.schemas import SystemSettingResponse, SystemSettingUpdate, SystemSettingsResponse
+from app.permissions import is_admin
 
 
 router = APIRouter(prefix="/api/settings", tags=["系统设置"])
@@ -20,10 +21,6 @@ PUBLIC_SETTING_KEYS = {
     "copyright",
     "use_bing_background",
 }
-
-
-def is_admin(user: User) -> bool:
-    return user.role == UserRole.ADMIN
 
 
 @router.get("/public", response_model=SystemSettingsResponse)
