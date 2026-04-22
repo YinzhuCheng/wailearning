@@ -260,6 +260,7 @@ def make_multi_student_scenario(
         return {
             "homework_id": hw.id,
             "subject_id": course.id,
+            "preset_id": preset.id,
             "teacher_username": teacher.username,
             "teacher_password": "tp",
             "students": students,
