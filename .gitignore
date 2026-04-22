@@ -56,4 +56,6 @@ parent-portal/.vite/
 create_*.py
 add_*.py
 test_*.py
+!tests/
+!tests/**/*.py
 temp_*.py
