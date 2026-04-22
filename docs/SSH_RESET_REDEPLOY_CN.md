@@ -17,21 +17,32 @@
 
 ## 一次性多行执行（推荐）
 
-> 先根据你的真实环境修改前 8 个变量，再整体粘贴执行。
+> 除了管理员账号/密码占位符外，其他参数已按你给的信息写死：仓库 `https://github.com/YinzhuCheng/wailearning`、分支 `main`、服务器 `47.242.58.29`。
 
 ```bash
 sudo bash -euxo pipefail <<'SH'
-# ====== 0) 按需修改变量 ======
-REPO_URL="<YOUR_GIT_REMOTE_URL>"
-BRANCH="<YOUR_BRANCH>"
+# ====== 0) 固定参数（按当前环境写死） ======
+REPO_URL="https://github.com/YinzhuCheng/wailearning"
+BRANCH="main"
 REPO_DIR="/opt/dd-class/source"
 APP_ROOT="/opt/dd-class"
 ENV_FILE="/opt/dd-class/shared/.env.production"
 DB_NAME="ddclass"
 DB_USER="ddclass"
-DB_PASS="<DB_PASSWORD_PLACEHOLDER>"
 ADMIN_USER="<ADMIN_USERNAME_PLACEHOLDER>"
 ADMIN_PASS="<ADMIN_PASSWORD_PLACEHOLDER>"
+PUBLIC_IP="47.242.58.29"
+
+# 从现有生产环境读取 DB 密码（避免额外占位符）
+if [ ! -f "${ENV_FILE}" ]; then
+  echo "缺少 ${ENV_FILE}，无法读取 DATABASE_URL 中的数据库密码。请先准备环境文件。"
+  exit 1
+fi
+DB_PASS="$(sed -n 's/^DATABASE_URL=postgresql:\/\/[^:]*:\([^@]*\)@.*/\1/p' "${ENV_FILE}" | head -n1)"
+if [ -z "${DB_PASS}" ]; then
+  echo "无法从 ${ENV_FILE} 解析 DB 密码，请检查 DATABASE_URL 格式。"
+  exit 1
+fi
 
 # ====== 1) 停服务，避免删除时有进程占用 ======
 systemctl stop ddclass-backend || true
@@ -68,11 +79,6 @@ sudo -u postgres psql \
   -f /tmp/init_db.sql
 
 # ====== 5) 配置管理员占位符（写入生产环境变量） ======
-# 如果 ENV 文件不存在，先从模板安装
-if [ ! -f "${ENV_FILE}" ]; then
-  install -m 640 .env.production "${ENV_FILE}"
-fi
-
 # 确保这两个变量存在并被替换为你传入的占位符/真实值
 sed -i "s|^INIT_ADMIN_USERNAME=.*|INIT_ADMIN_USERNAME=${ADMIN_USER}|" "${ENV_FILE}" || true
 sed -i "s|^INIT_ADMIN_PASSWORD=.*|INIT_ADMIN_PASSWORD=${ADMIN_PASS}|" "${ENV_FILE}" || true
@@ -85,6 +91,7 @@ bash scripts/deploy_all.sh
 
 # ====== 7) 健康检查 ======
 API_HEALTH_URL="http://127.0.0.1:8001/health" bash scripts/post_deploy_check.sh
+APP_URL="http://${PUBLIC_IP}" bash scripts/post_deploy_check.sh || true
 systemctl status ddclass-backend --no-pager -l | sed -n '1,60p'
 SH
 ```
@@ -111,5 +118,5 @@ sudo REPO_DIR=/opt/dd-class/source \
 3. 如果你只想“重拉 + 重新部署，不删数据”，直接用：
 
 ```bash
-sudo REPO_DIR=/opt/dd-class/source GIT_BRANCH=<YOUR_BRANCH> bash scripts/redeploy.sh
+sudo REPO_DIR=/opt/dd-class/source GIT_BRANCH=main bash scripts/redeploy.sh
 ```
