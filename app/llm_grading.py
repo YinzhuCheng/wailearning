@@ -882,15 +882,25 @@ def _grade_with_endpoint_group(
 
         last_error: Optional[str] = None
         global_index = 0
-        for group_state, group_links in routing.iter_group_then_members():
-            for link in group_links:
+        for group_state in routing.group_states:
+            group_state.apply_round_robin_start(task.id)
+            while group_state.current_order:
+                link = group_state.current_order[0]
                 global_index += 1
                 preset: LLMEndpointPreset = link.preset
                 if not preset or not preset.is_active or preset.validation_status != "validated" or not preset.supports_vision:
                     last_error = f"端点 {getattr(preset, 'name', global_index)} 不可用或未通过视觉校验。"
+                    group_state.remove_member(link)
+                    _update_routing_artifact(
+                        {
+                            "status": "invalid_member_skipped",
+                            "last_error": last_error,
+                        }
+                    )
                     continue
                 task.current_endpoint_index = global_index
                 attempt_limit = max(1, int(preset.max_retries or 0) + 1)
+                member_done = False
                 for request_attempt in range(1, attempt_limit + 1):
                     task.current_attempt = request_attempt
                     try:
@@ -906,14 +916,18 @@ def _grade_with_endpoint_group(
                         return score_result
                     except RetryableLLMError as exc:
                         last_error = str(exc)
+                        n_before = len(group_state.current_order)
                         routing.note_failure(group_state, link, exc)
                         if request_attempt >= attempt_limit:
+                            if n_before == 1:
+                                group_state.remove_member(link)
                             _update_routing_artifact(
                                 {
                                     "status": "adaptive_shift",
                                     "last_error": last_error,
                                 }
                             )
+                            member_done = True
                             break
                         _update_routing_artifact(
                             {
@@ -931,6 +945,8 @@ def _grade_with_endpoint_group(
                         last_error = str(exc)
                         routing.note_failure(group_state, link, exc)
                         _update_routing_artifact({"status": "endpoint_error", "last_error": last_error})
+                        group_state.remove_member(link)
+                        member_done = True
                         break
         _update_routing_artifact({"status": "failed", "message": last_error or ""})
         raise NonRetryableLLMError(last_error or "所有组内端点都调用失败。")

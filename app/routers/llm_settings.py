@@ -86,7 +86,10 @@ def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse
             for m in sorted(g.members or [], key=lambda row: (row.priority, row.id)):
                 flat.append(m)
     else:
-        flat = list(config.endpoints or [])
+        flat = sorted(
+            (config.endpoints or []),
+            key=lambda row: (row.priority, row.id),
+        )
 
     return CourseLLMConfigResponse(
         id=config.id,
@@ -102,7 +105,7 @@ def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse
         quota_timezone=config.quota_timezone,
         system_prompt=config.system_prompt,
         teacher_prompt=config.teacher_prompt,
-        endpoints=[_serialize_endpoint_item(item) for item in sorted(flat, key=lambda row: (row.priority, row.id))],
+        endpoints=[_serialize_endpoint_item(item) for item in flat],
         groups=[
             LLMGroupResponse(
                 id=g.id,
@@ -290,7 +293,15 @@ def update_course_llm_config(
     db.query(LLMGroup).filter(LLMGroup.config_id == config.id).delete()
     db.flush()
 
+    seen_preset_ids: set[int] = set()
+
     def _bind_endpoint_row(priority: int, preset_id: int, group_id: Optional[int] = None) -> None:
+        if preset_id in seen_preset_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="每个端点在同一课程中只能出现一次。若需多副本，请为同一供应商另建不同名称的端点配置。",
+            )
+        seen_preset_ids.add(preset_id)
         preset = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.id == preset_id).first()
         if not preset:
             raise HTTPException(status_code=400, detail=f"Endpoint preset {preset_id} not found.")

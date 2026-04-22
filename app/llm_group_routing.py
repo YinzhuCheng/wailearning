@@ -6,8 +6,6 @@ Used by app.llm_grading to pick endpoints without calling the network; actual HT
 
 from __future__ import annotations
 
-import random
-import time
 from dataclasses import dataclass, field
 from typing import Any, Optional, TYPE_CHECKING
 
@@ -22,7 +20,6 @@ NON_RETRYABLE_STATUS_CODES = {401, 403}
 class _GroupState:
     base_order: list[CourseLLMConfigEndpoint]
     current_order: list[CourseLLMConfigEndpoint]
-    next_rr_index: int = 0
 
     @classmethod
     def from_group(cls, group: "LLMGroup") -> Optional["_GroupState"]:
@@ -30,22 +27,17 @@ class _GroupState:
         if not members:
             return None
         ordered = sorted(members, key=lambda m: (m.priority, m.id))
-        return cls(base_order=ordered, current_order=list(ordered), next_rr_index=0)
+        return cls(base_order=ordered, current_order=list(ordered))
 
-    def pick_start_index(self) -> int:
+    def apply_round_robin_start(self, task_id: int) -> None:
+        """Rotate member order so different grading tasks start at different presets (task_id % n)."""
         if not self.current_order:
-            return 0
+            return
         n = len(self.current_order)
-        idx = self.next_rr_index % n
-        self.next_rr_index = (self.next_rr_index + 1) % max(n, 1)
-        return idx
-
-    def rotate_to_start(self, start: int) -> list[CourseLLMConfigEndpoint]:
-        if not self.current_order or start <= 0:
-            return list(self.current_order)
-        n = len(self.current_order)
-        s = start % n
-        return self.current_order[s:] + self.current_order[:s]
+        if n == 0:
+            return
+        start = int(task_id) % n
+        self.current_order = self.current_order[start:] + self.current_order[:start]
 
     def after_failed_attempt(
         self,
@@ -64,6 +56,9 @@ class _GroupState:
         for m in matches:
             self.current_order.remove(m)
             self.current_order.append(m)
+
+    def remove_member(self, link: CourseLLMConfigEndpoint) -> None:
+        self.current_order = [x for x in self.current_order if x.id != link.id]
 
     @staticmethod
     def _should_move_to_end(exc: Exception) -> bool:
@@ -98,9 +93,7 @@ class GroupRoutingContext:
                 states.append(st)
         if not states:
             return cls(group_states=[], task_id=task_id, _artifact={})
-        ctx = cls(group_states=states, task_id=task_id, _artifact={})
-        random.seed((task_id << 8) ^ int(time.time() * 1000) & 0xFFFF)
-        return ctx
+        return cls(group_states=states, task_id=task_id, _artifact={})
 
     def routing_payload(self) -> dict[str, Any]:
         return {
@@ -119,16 +112,6 @@ class GroupRoutingContext:
 
     def build_artifact(self) -> dict[str, Any]:
         return {"llm_routing": self.routing_payload()}
-
-    def iter_group_then_members(
-        self,
-    ) -> list[tuple[_GroupState, list[CourseLLMConfigEndpoint]]]:
-        out: list[tuple[_GroupState, list[CourseLLMConfigEndpoint]]] = []
-        for g in self.group_states:
-            start = g.pick_start_index()
-            order = g.rotate_to_start(start)
-            out.append((g, order))
-        return out
 
     def note_failure(self, group_state: _GroupState, link: CourseLLMConfigEndpoint, exc: Exception) -> None:
         group_state.after_failed_attempt(link, exc)
