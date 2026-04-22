@@ -1,4 +1,6 @@
+from pathlib import Path
 from typing import Optional
+from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -95,6 +97,51 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         return False
 
     return False
+
+
+def _first_attachment_url_for_stored_name(db: Session, stored_name: str) -> Optional[str]:
+    """Find a row whose attachment_url ends with the stored file name (uuid + ext)."""
+    if not stored_name or Path(stored_name).name in {"", ".", "..", "attachments"}:
+        return None
+    like_pattern = f"%{Path(unquote(stored_name)).name}"
+    for model in (HomeworkSubmission, HomeworkAttempt, Homework, CourseMaterial, Notification):
+        if not hasattr(model, "attachment_url"):
+            continue
+        row = (
+            db.query(model)
+            .filter(model.attachment_url.isnot(None), model.attachment_url.like(like_pattern))
+            .first()
+        )
+        if row and getattr(row, "attachment_url", None):
+            return str(row.attachment_url)
+    return None
+
+
+@router.get("/download/{stored_name:path}", name="download_attachment_by_name")
+def download_attachment_by_stored_name(
+    stored_name: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Serves a file from storage by the stored file name; access matches DB-referenced attachment URLs."""
+    safe_name = unquote(stored_name).strip().replace("\\", "/")
+    if not safe_name or Path(safe_name).name in {"", ".", "..", "attachments"}:
+        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+    url = _first_attachment_url_for_stored_name(db, safe_name)
+    if not url:
+        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+    if not _has_attachment_access(current_user, url, db):
+        raise HTTPException(status_code=403, detail="You do not have access to this attachment.")
+
+    file_path = get_attachment_file_path(url)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+
+    return FileResponse(
+        path=file_path,
+        filename=get_attachment_download_name(url, None),
+        media_type="application/octet-stream",
+    )
 
 
 @router.get("/download")
