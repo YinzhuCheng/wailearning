@@ -294,7 +294,37 @@
             <el-input v-model="llmForm.teacher_prompt" type="textarea" :rows="5" placeholder="可选。可补充课程评分偏好、风格与要求。" />
           </el-form-item>
 
-          <el-form-item label="端点顺序">
+          <el-form-item
+            v-if="llmForm.groups && llmForm.groups.length"
+            label="组级路由"
+          >
+            <el-alert
+              class="llm-notice"
+              type="success"
+              :closable="false"
+              show-icon
+              title="本课程已配置多组/故障转移路由。下方仅可编辑「平铺顺序」以外的选项；若需改为仅平铺端点，请联系管理员在保存接口中显式设置。"
+            />
+            <ul class="llm-group-list">
+              <li
+                v-for="(g, gi) in llmForm.groups"
+                :key="`g-${gi}`"
+              >
+                <strong>{{ g.name || `组 ${g.priority || gi + 1}` }}</strong>（顺序 {{ g.priority }})
+                <ol>
+                  <li
+                    v-for="(m, mi) in (g.members || [])"
+                    :key="`m-${gi}-${mi}`"
+                  >
+                    端点 #{{ m.preset_id }} · 优先级 {{ m.priority }}
+                  </li>
+                </ol>
+              </li>
+            </ul>
+            <p class="llm-group-hint">保存本对话框时，不会清除上述组级配置；只更新开关、预算与提示词等字段。</p>
+          </el-form-item>
+
+          <el-form-item v-show="!llmForm.groups || !llmForm.groups.length" label="端点顺序">
             <div class="llm-endpoints">
               <el-empty v-if="!llmPresets.length" description="暂无可用端点，请先由管理员创建并完成视觉校验。" />
               <div
@@ -391,7 +421,9 @@ const llmForm = reactive({
   quota_timezone: 'UTC',
   system_prompt: '',
   teacher_prompt: '',
-  endpoints: []
+  endpoints: [],
+  // API-only group routing: shown read-only; saving flat endpoints will not clear it unless you switch to flat-only save path
+  groups: []
 })
 
 const isClassTeacherView = computed(() => userStore.isClassTeacher)
@@ -582,7 +614,8 @@ const resetLlmForm = () => {
     quota_timezone: 'UTC',
     system_prompt: '',
     teacher_prompt: '',
-    endpoints: []
+    endpoints: [],
+    groups: []
   })
 }
 
@@ -608,6 +641,11 @@ const applyLlmConfig = config => {
   llmForm.endpoints = (config.endpoints || []).map(item => ({
     preset_id: item.preset_id,
     priority: item.priority
+  }))
+  llmForm.groups = (config.groups || []).map(g => ({
+    name: g.name || '',
+    priority: g.priority,
+    members: (g.members || []).map(m => ({ preset_id: m.preset_id, priority: m.priority }))
   }))
 }
 
@@ -661,6 +699,16 @@ const saveLlmConfig = async () => {
   }
   llmSaving.value = true
   try {
+    const hasGroupRouting = Array.isArray(llmForm.groups) && llmForm.groups.length > 0
+    const groupPayload = hasGroupRouting
+      ? llmForm.groups.map((g, idx) => ({
+        priority: g.priority != null ? g.priority : idx + 1,
+        name: (g.name || '').trim() || `group ${idx + 1}`,
+        members: (g.members || [])
+          .map((m, mj) => ({ preset_id: m.preset_id, priority: m.priority != null ? m.priority : mj + 1 }))
+          .sort((a, b) => a.priority - b.priority)
+      }))
+      : null
     await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
       is_enabled: llmForm.is_enabled,
       response_language: llmForm.response_language?.trim() || null,
@@ -673,7 +721,12 @@ const saveLlmConfig = async () => {
       quota_timezone: llmForm.quota_timezone?.trim() || 'UTC',
       system_prompt: llmForm.system_prompt?.trim() || null,
       teacher_prompt: llmForm.teacher_prompt?.trim() || null,
-      endpoints: [...llmForm.endpoints].sort((left, right) => left.priority - right.priority)
+      ...(
+        hasGroupRouting
+          ? { groups: groupPayload, endpoints: [] }
+          : { endpoints: [...llmForm.endpoints].sort((left, right) => left.priority - right.priority) }
+      ),
+      replace_group_routing_with_flat_endpoints: hasGroupRouting ? false : true
     })
     ElMessage.success('LLM 配置已保存')
     llmDialogVisible.value = false
@@ -926,6 +979,16 @@ watch(
   gap: 4px;
 }
 
+.llm-group-list {
+  margin: 8px 0 0 16px;
+  padding: 0;
+  list-style: disc;
+}
+.llm-group-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
 .llm-endpoint-meta span {
   font-size: 12px;
   color: #64748b;

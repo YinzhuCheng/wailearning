@@ -637,6 +637,11 @@ def process_next_grading_task() -> bool:
 
 
 def process_grading_task(task_id: int) -> None:
+    db = SessionLocal()
+    try:
+        _reclaim_stale_processing_tasks(db)
+    finally:
+        db.close()
     with _grading_lock_for_task(task_id):
         _process_grading_task_unlocked(task_id)
 

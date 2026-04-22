@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.attachments import (
     get_attachment_download_name,
     get_attachment_file_path,
+    get_attachment_stored_name,
     save_attachment,
 )
 from app.auth import get_current_active_user
@@ -99,22 +100,19 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
     return False
 
 
-def _first_attachment_url_for_stored_name(db: Session, stored_name: str) -> Optional[str]:
-    """Find a row whose attachment_url ends with the stored file name (uuid + ext)."""
-    if not stored_name or Path(stored_name).name in {"", ".", "..", "attachments"}:
-        return None
-    like_pattern = f"%{Path(unquote(stored_name)).name}"
+def _attachment_urls_with_exact_stored_basename(db: Session, stored_basename: str) -> list[str]:
+    """All DB attachment_url values whose parsed stored file name exactly matches (no LIKE ambiguity)."""
+    if not stored_basename or Path(stored_basename).name in {"", ".", "..", "attachments"}:
+        return []
+    urls: list[str] = []
     for model in (HomeworkSubmission, HomeworkAttempt, Homework, CourseMaterial, Notification):
         if not hasattr(model, "attachment_url"):
             continue
-        row = (
-            db.query(model)
-            .filter(model.attachment_url.isnot(None), model.attachment_url.like(like_pattern))
-            .first()
-        )
-        if row and getattr(row, "attachment_url", None):
-            return str(row.attachment_url)
-    return None
+        for row in db.query(model).filter(model.attachment_url.isnot(None)).all():
+            u = getattr(row, "attachment_url", None)
+            if u and get_attachment_stored_name(str(u)) == stored_basename:
+                urls.append(str(u))
+    return urls
 
 
 @router.get("/download/{stored_name:path}", name="download_attachment_by_name")
@@ -127,11 +125,20 @@ def download_attachment_by_stored_name(
     safe_name = unquote(stored_name).strip().replace("\\", "/")
     if not safe_name or Path(safe_name).name in {"", ".", "..", "attachments"}:
         raise HTTPException(status_code=404, detail="Attachment file not found on server.")
-    url = _first_attachment_url_for_stored_name(db, safe_name)
-    if not url:
+    target_base = Path(safe_name).name
+    candidates = _attachment_urls_with_exact_stored_basename(db, target_base)
+    if not candidates:
         raise HTTPException(status_code=404, detail="Attachment file not found on server.")
-    if not _has_attachment_access(current_user, url, db):
+    allowed = [u for u in candidates if _has_attachment_access(current_user, u, db)]
+    if len(allowed) == 1:
+        url = allowed[0]
+    elif not allowed:
         raise HTTPException(status_code=403, detail="You do not have access to this attachment.")
+    else:
+        raise HTTPException(
+            status_code=409,
+            detail="多个附件冲突：存储文件名重复，请使用带 attachment_url 的下载方式或联系管理员。",
+        )
 
     file_path = get_attachment_file_path(url)
     if not file_path or not file_path.exists():

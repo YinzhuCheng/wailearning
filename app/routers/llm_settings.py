@@ -276,6 +276,17 @@ def update_course_llm_config(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     config = ensure_course_llm_config(db, subject_id, current_user.id)
+    existing_has_group_rows = (
+        db.query(LLMGroup).filter(LLMGroup.config_id == config.id).first() is not None
+    )
+    # Teacher UI only sends flat "endpoints" and often omits "groups": do not delete API-configured
+    # group routing unless explicitly requested.
+    preserve_group_routing = (
+        existing_has_group_rows
+        and not (payload.groups or [])
+        and not payload.replace_group_routing_with_flat_endpoints
+    )
+
     config.is_enabled = payload.is_enabled
     config.response_language = payload.response_language
     config.daily_student_token_limit = payload.daily_student_token_limit
@@ -288,6 +299,11 @@ def update_course_llm_config(
     config.system_prompt = payload.system_prompt
     config.teacher_prompt = payload.teacher_prompt
     config.updated_by = current_user.id
+
+    if preserve_group_routing:
+        db.commit()
+        db.refresh(config)
+        return _serialize_course_config(config)
 
     db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == config.id).delete()
     db.query(LLMGroup).filter(LLMGroup.config_id == config.id).delete()

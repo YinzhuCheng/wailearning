@@ -41,6 +41,14 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
+    @model_validator(mode="after")
+    def _require_class_for_students(self):
+        r = (self.role or "").strip()
+        if r in (UserRole.STUDENT.value,):
+            if self.class_id is None:
+                raise ValueError("class_id is required for student accounts.")
+        return self
+
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -906,6 +914,9 @@ class CourseLLMConfigUpdate(BaseModel):
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointSelection] = Field(default_factory=list)
     groups: List[LLMGroupSelection] = Field(default_factory=list)
+    # When the client sends only flat "endpoints" and empty "groups" (e.g. teacher UI), do not wipe an
+    # existing group-based routing that was set via API/DB. Set true to force flat rebind and drop groups.
+    replace_group_routing_with_flat_endpoints: bool = False
 
 
 class CourseLLMConfigEndpointResponse(BaseModel):

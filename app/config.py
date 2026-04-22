@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     GUNICORN_WORKERS: int = 3
     LOG_LEVEL: str = "info"
     ENABLE_LLM_GRADING_WORKER: bool = True
-    LLM_GRADING_WORKER_LEADER: bool = False
+    # If True, only the leader process runs the in-process grader (multi-worker gunicorn safe).
+    # If False, every app process with ENABLE_LLM_GRADING_WORKER runs a worker (each drains the same SQL queue; OK for single-uvicorn).
+    LLM_GRADING_WORKER_LEADER: bool = True
     LLM_GRADING_WORKER_POLL_SECONDS: int = 2
     LLM_GRADING_TASK_STALE_SECONDS: int = 600
     DEFAULT_ESTIMATED_IMAGE_TOKENS: int = 850

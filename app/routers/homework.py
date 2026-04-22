@@ -530,9 +530,10 @@ def update_homework(
     if data.content is not None:
         homework.content = data.content
     if data.remove_attachment:
+        previous_homework_attachment = homework.attachment_url
         homework.attachment_name = None
         homework.attachment_url = None
-        delete_attachment_file_if_unreferenced(db, homework.attachment_url)
+        delete_attachment_file_if_unreferenced(db, previous_homework_attachment)
     elif data.attachment_url is not None:
         previous_attachment_url = homework.attachment_url
         homework.attachment_name = data.attachment_name
