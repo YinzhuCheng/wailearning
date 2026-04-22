@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_active_user
 from app.bootstrap import normalize_legacy_branding
 from app.database import get_db
-from app.models import SystemSetting, User
+from app.models import SystemSetting, User, UserRole
 from app.schemas import SystemSettingResponse, SystemSettingUpdate, SystemSettingsResponse
 
 
@@ -23,7 +23,7 @@ PUBLIC_SETTING_KEYS = {
 
 
 def is_admin(user: User) -> bool:
-    return user.role.lower() == "admin" if user.role else False
+    return user.role == UserRole.ADMIN
 
 
 @router.get("/public", response_model=SystemSettingsResponse)

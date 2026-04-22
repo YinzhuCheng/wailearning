@@ -36,12 +36,13 @@ from app.schemas import (
     UserUpdate,
 )
 from app.services import LogService
+from app.permissions import is_admin as is_admin_user
 
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
 
 
 def is_admin(user: User) -> bool:
-    return user.role.lower() == UserRole.ADMIN.value if user.role else False
+    return is_admin_user(user)
 
 
 def normalize_managed_class_id(role: Optional[str], class_id: Optional[int]) -> Optional[int]:
@@ -57,6 +58,11 @@ def validate_class_exists(class_id: Optional[int], db: Session) -> None:
     class_obj = db.query(Class).filter(Class.id == class_id).first()
     if not class_obj:
         raise HTTPException(status_code=400, detail="班级不存在")
+
+
+def _require_class_id_for_student(role: str, class_id: Optional[int]) -> None:
+    if (role or "").strip() == UserRole.STUDENT.value and class_id is None:
+        raise HTTPException(status_code=400, detail="学生账号必须分配班级 (class_id)。")
 
 
 def delete_user_homeworks(user_id: int, db: Session) -> None:
@@ -334,6 +340,7 @@ def create_user(
         raise HTTPException(status_code=400, detail="用户名已存在")
 
     managed_class_id = normalize_managed_class_id(user_data.role, user_data.class_id)
+    _require_class_id_for_student(user_data.role, managed_class_id)
     validate_class_exists(managed_class_id, db)
 
     user = User(
@@ -401,6 +408,7 @@ def update_user(
         if requested_class_change or next_role == UserRole.TEACHER.value
         else user.class_id
     )
+    _require_class_id_for_student(next_role, next_class_id)
     validate_class_exists(next_class_id, db)
 
     changes = []

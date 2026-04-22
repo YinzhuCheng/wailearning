@@ -80,22 +80,11 @@ def _ensure_homework_access(homework: Homework, current_user: User, db: Session)
     return homework
 
 
-def _match_student_for_user(student_query, current_user: User, *, raise_on_multiple: bool = False) -> Optional[Student]:
-    student = None
-    if current_user.username:
-        student = student_query.filter(Student.student_no == current_user.username).first()
-
-    if not student and current_user.real_name:
-        matches = student_query.filter(Student.name == current_user.real_name).all()
-        if len(matches) == 1:
-            student = matches[0]
-        elif len(matches) > 1 and raise_on_multiple:
-            raise HTTPException(
-                status_code=400,
-                detail="Multiple student records match the current account. Please contact an administrator.",
-            )
-
-    return student
+def _match_student_for_user(student_query, current_user: User) -> Optional[Student]:
+    """Map login user -> Student by student_no (must match user.username)."""
+    if not current_user.username:
+        return None
+    return student_query.filter(Student.student_no == current_user.username).first()
 
 
 def _resolve_student_for_user(homework: Homework, current_user: User, db: Session) -> Student:
@@ -103,7 +92,7 @@ def _resolve_student_for_user(homework: Homework, current_user: User, db: Sessio
         raise HTTPException(status_code=403, detail="Only students can submit homework.")
 
     student_query = db.query(Student).filter(Student.class_id == homework.class_id)
-    student = _match_student_for_user(student_query, current_user, raise_on_multiple=True)
+    student = _match_student_for_user(student_query, current_user)
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found for the current account.")
 

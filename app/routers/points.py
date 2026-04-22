@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List, Optional
 from app.database import get_db
-from app.models import User, Student, Class, PointRule, StudentPoint, PointRecord, PointItem, PointExchange
+from app.models import User, Student, Class, PointRule, StudentPoint, PointRecord, PointItem, PointExchange, UserRole
 from app.schemas import (
     PointRuleResponse, PointRuleCreate, PointRuleUpdate,
     StudentPointResponse, PointRecordResponse, PointRecordListResponse,
@@ -13,19 +13,23 @@ from app.schemas import (
     PointRankingResponse, PointStatsResponse
 )
 from app.auth import get_current_active_user
+from app.permissions import can_manage_students, is_admin as _perm_is_admin
 from app.routers.classes import get_accessible_class_ids
 from datetime import datetime
 
 router = APIRouter(prefix="/api/points", tags=["积分系统"])
 
+
 def is_admin(user: User) -> bool:
-    return user.role.lower() == "admin" if user.role else False
+    return _perm_is_admin(user)
+
 
 def is_class_teacher(user: User) -> bool:
-    return user.role.lower() == "class_teacher" if user.role else False
+    return user.role == UserRole.CLASS_TEACHER
+
 
 def is_teacher(user: User) -> bool:
-    return user.role.lower() in ["admin", "class_teacher", "teacher"] if user.role else False
+    return can_manage_students(user)
 
 @router.get("/stats", response_model=PointStatsResponse)
 def get_point_stats(
@@ -118,15 +122,25 @@ def get_my_points(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    if is_admin(current_user) or is_class_teacher(current_user):
-        raise HTTPException(status_code=400, detail="教师账号没有个人积分")
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=400, detail="仅学生可查看个人积分")
 
     if not current_user.class_id:
         raise HTTPException(status_code=400, detail="未分配班级")
 
-    student = db.query(Student).filter(Student.teacher_id == current_user.id).first()
+    student = (
+        db.query(Student)
+        .filter(
+            Student.class_id == current_user.class_id,
+            Student.student_no == current_user.username,
+        )
+        .first()
+    )
     if not student:
-        raise HTTPException(status_code=404, detail="未找到对应的学生账号")
+        raise HTTPException(
+            status_code=404,
+            detail="未找到与当前登录账号学号一致的学生档案，请联系管理员。",
+        )
 
     sp = db.query(StudentPoint).filter(StudentPoint.student_id == student.id).first()
     if not sp:
