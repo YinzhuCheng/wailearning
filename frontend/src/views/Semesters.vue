@@ -2,10 +2,15 @@
   <div class="semesters">
     <div class="page-header">
       <h1 class="page-title">学期管理</h1>
-      <el-button type="primary" @click="handleAdd">
-        <el-icon><Plus /></el-icon>
-        新增学期
-      </el-button>
+      <div class="page-header-actions">
+        <el-button @click="handleInitDefaults" :loading="initLoading">
+          初始化学期
+        </el-button>
+        <el-button type="primary" @click="handleAdd">
+          <el-icon><Plus /></el-icon>
+          新增学期
+        </el-button>
+      </div>
     </div>
 
     <div class="table-container">
@@ -46,6 +51,7 @@ import { Plus } from '@element-plus/icons-vue'
 import api from '@/api'
 
 const semesters = ref([])
+const initLoading = ref(false)
 const dialogVisible = ref(false)
 const formRef = ref(null)
 const editingSemesterId = ref(null)
@@ -72,6 +78,26 @@ const resetForm = () => {
 
 const loadSemesters = async () => {
   semesters.value = await api.semesters.list()
+}
+
+const handleInitDefaults = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '将写入系统默认学期数据（若已存在同名学期可能跳过或合并，以服务端为准）。是否继续？',
+      '初始化学期',
+      { type: 'warning' }
+    )
+    initLoading.value = true
+    const res = await api.semesters.initDefaults()
+    ElMessage.success(res?.message || '初始化成功')
+    await loadSemesters()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('初始化学期失败', error)
+    }
+  } finally {
+    initLoading.value = false
+  }
 }
 
 const openDialog = async () => {
@@ -141,10 +167,17 @@ onMounted(() => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 20px;
+}
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .page-title {

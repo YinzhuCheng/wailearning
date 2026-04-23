@@ -185,14 +185,7 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, UserFilled, Coin, ShoppingCart, Star, Box } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import axios from 'axios'
-
-const api = axios.create({ baseURL: '/api' })
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+import { http } from '@/api'
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin)
@@ -236,8 +229,7 @@ const formatDate = (date) => {
 
 const fetchStats = async () => {
   try {
-    const res = await api.get('/points/stats')
-    stats.value = res.data
+    stats.value = await http.get('/points/stats')
   } catch (e) {
     console.error('获取统计失败', e)
   }
@@ -245,8 +237,7 @@ const fetchStats = async () => {
 
 const fetchRanking = async () => {
   try {
-    const res = await api.get('/points/ranking?limit=50')
-    ranking.value = res.data
+    ranking.value = await http.get('/points/ranking', { params: { limit: 50 } })
   } catch (e) {
     console.error('获取排行失败', e)
   }
@@ -254,8 +245,7 @@ const fetchRanking = async () => {
 
 const fetchRules = async () => {
   try {
-    const res = await api.get('/points/rules')
-    rules.value = res.data
+    rules.value = await http.get('/points/rules')
   } catch (e) {
     console.error('获取规则失败', e)
   }
@@ -263,8 +253,7 @@ const fetchRules = async () => {
 
 const fetchItems = async () => {
   try {
-    const res = await api.get('/points/items')
-    items.value = res.data
+    items.value = await http.get('/points/items')
   } catch (e) {
     console.error('获取商品失败', e)
   }
@@ -272,8 +261,8 @@ const fetchItems = async () => {
 
 const fetchExchanges = async () => {
   try {
-    const res = await api.get('/points/exchanges')
-    exchanges.value = res.data.data
+    const res = await http.get('/points/exchanges')
+    exchanges.value = res?.data ?? []
   } catch (e) {
     console.error('获取兑换记录失败', e)
   }
@@ -281,8 +270,9 @@ const fetchExchanges = async () => {
 
 const fetchStudents = async () => {
   try {
-    const res = await api.get('/students?page_size=1000')
-    students.value = res.data.data.map(s => ({ ...s, class_name: s.class_name || '' }))
+    const res = await http.get('/students', { params: { page_size: 1000 } })
+    const rows = res?.data ?? []
+    students.value = rows.map(s => ({ ...s, class_name: s.class_name || '' }))
   } catch (e) {
     console.error('获取学生列表失败', e)
   }
@@ -299,7 +289,7 @@ const submitAddPoints = async () => {
     return
   }
   try {
-    await api.post(`/points/students/${addPointsForm.value.student_id}/add`, addPointsForm.value)
+    await http.post(`/points/students/${addPointsForm.value.student_id}/add`, addPointsForm.value)
     ElMessage.success('积分发放成功')
     addPointsDialog.value = false
     fetchStats()
@@ -325,7 +315,7 @@ const submitExchange = async () => {
     if (isTeacher.value) {
       payload.student_id = exchangeForm.value.student_id
     }
-    await api.post('/points/exchange', payload)
+    await http.post('/points/exchange', payload)
     ElMessage.success('兑换成功！')
     exchangeDialog.value = false
     fetchExchanges()
@@ -337,7 +327,7 @@ const submitExchange = async () => {
 
 const completeExchange = async (exchange) => {
   try {
-    await api.put(`/points/exchanges/${exchange.id}/complete`)
+    await http.put(`/points/exchanges/${exchange.id}/complete`)
     ElMessage.success('兑换已完成')
     fetchExchanges()
   } catch (e) {

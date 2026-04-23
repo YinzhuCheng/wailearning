@@ -30,7 +30,7 @@
                 <span class="header-count">共 {{ students.length }} 人</span>
               </div>
 
-              <div v-if="isAdminView" class="card-actions">
+              <div v-if="showRosterImportToolbar" class="card-actions">
                 <el-button @click="downloadTemplate('xlsx')">Excel 模板</el-button>
                 <el-button @click="downloadTemplate('csv')">CSV 模板</el-button>
                 <el-button type="primary" :loading="importing" @click="triggerImport">
@@ -47,8 +47,16 @@
               </div>
             </div>
 
-            <p v-if="isAdminView" class="import-tip">
-              支持 Excel / CSV 文件，模板列为：姓名、性别、学号、所属班级。导入时若发现新班级，会自动在系统中创建。
+            <p v-if="showRosterImportToolbar" class="import-tip">
+              <template v-if="isAdminView">
+                支持 Excel / CSV 文件，模板列为：姓名、性别、学号、所属班级。导入时若发现新班级，会自动在系统中创建。
+              </template>
+              <template v-else-if="isClassTeacherView">
+                支持 Excel / CSV，模板列为：姓名、性别、学号、所属班级（可留空，留空则导入到当前班主任班级）。
+              </template>
+              <template v-else>
+                支持 Excel / CSV，模板列为：姓名、性别、学号、所属班级（可留空，留空则导入到当前所选课程所在班级）。
+              </template>
             </p>
           </div>
         </template>
@@ -168,6 +176,13 @@ const selectedCourse = computed(() => userStore.selectedCourse)
 const isAdminView = computed(() => userStore.isAdmin)
 const isClassTeacherView = computed(() => userStore.isClassTeacher)
 const canManageRoster = computed(() => userStore.canManageTeaching && !isAdminView.value && !isClassTeacherView.value)
+const showRosterImportToolbar = computed(
+  () =>
+    isAdminView.value ||
+    (userStore.canManageTeaching &&
+      !isAdminView.value &&
+      (isClassTeacherView.value ? Boolean(currentClassId.value) : Boolean(selectedCourse.value)))
+)
 const currentClassId = computed(() => resolveClassTeacherClassId(userStore.userInfo, classTeacherCourses.value))
 const currentClassName = computed(() => resolveClassTeacherClassName(userStore.userInfo, classTeacherCourses.value) || '未分配班级')
 
@@ -316,7 +331,8 @@ const readWorkbook = async file => {
   return XLSX.read(buffer, { type: 'array' })
 }
 
-const parseImportRows = rows => {
+const parseImportRows = (rows, options = {}) => {
+  const { defaultClassId = null, defaultClassName = '', classColumnOptional = false } = options
   const errors = []
   const payload = []
 
@@ -350,20 +366,55 @@ const parseImportRows = rows => {
       return
     }
 
-    if (!className) {
+    if (!className && !classColumnOptional) {
       errors.push(`第 ${rowNumber} 行缺少“所属班级”`)
       return
     }
 
-    payload.push({
+    if (!className && classColumnOptional && !defaultClassId) {
+      errors.push(`第 ${rowNumber} 行缺少“所属班级”，且当前上下文未绑定班级`)
+      return
+    }
+
+    const item = {
       name,
       gender,
-      student_no: studentNo,
-      class_name: className
-    })
+      student_no: studentNo
+    }
+    if (className) {
+      item.class_name = className
+    } else if (defaultClassId) {
+      item.class_id = defaultClassId
+      if (defaultClassName) {
+        item.class_name = defaultClassName
+      }
+    }
+
+    payload.push(item)
   })
 
   return { errors, payload }
+}
+
+const getImportParseOptions = () => {
+  if (isAdminView.value) {
+    return { classColumnOptional: false }
+  }
+  if (isClassTeacherView.value && currentClassId.value) {
+    return {
+      classColumnOptional: true,
+      defaultClassId: currentClassId.value,
+      defaultClassName: currentClassName.value || ''
+    }
+  }
+  if (selectedCourse.value?.class_id) {
+    return {
+      classColumnOptional: true,
+      defaultClassId: selectedCourse.value.class_id,
+      defaultClassName: selectedCourse.value.class_name || ''
+    }
+  }
+  return { classColumnOptional: false }
 }
 
 const loadAllStudents = async () => {
@@ -463,7 +514,7 @@ const handleFileChange = async event => {
     }
 
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false })
-    const { errors, payload } = parseImportRows(rows)
+    const { errors, payload } = parseImportRows(rows, getImportParseOptions())
 
     if (errors.length > 0) {
       await ElMessageBox.alert(errors.slice(0, 10).join('\n'), '文件校验未通过', {
