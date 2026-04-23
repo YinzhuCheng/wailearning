@@ -7,6 +7,8 @@ This guide targets Alibaba Cloud ECS on Ubuntu 22.04, Debian 12, and Alibaba Clo
 If you want the operational checklist for first go-live, DNS cutover, acceptance, and rollback, also read `RUNBOOK_ALIYUN.md`.
 If you want a data-safety-focused upgrade guide and a safer deployment example script, also read `ALIYUN_SAFE_UPGRADE.md` and `scripts/example_safe_upgrade_aliyun.sh`.
 
+**Git on the server (branch checkout vs. “real” deploy failures):** when you deploy from a clone on ECS, failures often come from fragile `checkout` / `pull --ff-only` rather than from the application build. Read **`docs/DEPLOY_GIT_ROBUSTNESS.md`** for the recommended `fetch` → `checkout -B` → `reset --hard` → `clean -fd` flow; **`scripts/redeploy.sh`** and **`scripts/pull_and_deploy.sh`** follow that pattern by default.
+
 ## Architecture
 
 - Nginx serves the admin SPA at `/`

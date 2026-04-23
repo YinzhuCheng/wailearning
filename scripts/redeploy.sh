@@ -5,7 +5,9 @@
 # 可选环境变量：
 #   REPO_DIR=/root/wailearning     代码仓库路径（默认：本脚本所在仓库根目录）
 #   GIT_BRANCH=main               要检出的分支
-#   SKIP_GIT=1                    跳过 git fetch/checkout/pull（已在目标目录准备好代码时）
+#   GIT_REMOTE=origin             远端名称
+#   GIT_CLEAN=1                   是否 git clean -fd（0=跳过，保留未跟踪文件时请慎用）
+#   SKIP_GIT=1                    跳过 git 同步（已在目标目录准备好代码时）
 #   FRONTEND_ONLY=1               只跑 deploy_frontend.sh（例如仅修复管理端静态资源）
 #   APP_URL=https://你的域名       部署后 post_deploy_check 使用的公网健康检查地址
 set -euo pipefail
@@ -18,6 +20,8 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd -P)}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
+GIT_REMOTE="${GIT_REMOTE:-origin}"
+GIT_CLEAN="${GIT_CLEAN:-1}"
 SKIP_GIT="${SKIP_GIT:-0}"
 FRONTEND_ONLY="${FRONTEND_ONLY:-0}"
 APP_URL="${APP_URL:-}"
@@ -31,9 +35,19 @@ if [[ "${SKIP_GIT}" != "1" ]]; then
     exit 1
   fi
   cd "${REPO_DIR}"
-  git fetch origin "${GIT_BRANCH}"
-  git checkout "${GIT_BRANCH}"
-  git pull --ff-only "origin" "${GIT_BRANCH}"
+  echo "==> Git: fetch ${GIT_REMOTE} ${GIT_BRANCH}"
+  git fetch "${GIT_REMOTE}" "${GIT_BRANCH}"
+  echo "==> Git: 强制对齐 ${GIT_REMOTE}/${GIT_BRANCH}（见 docs/DEPLOY_GIT_ROBUSTNESS.md）"
+  git checkout -B "${GIT_BRANCH}" "${GIT_REMOTE}/${GIT_BRANCH}"
+  git reset --hard "${GIT_REMOTE}/${GIT_BRANCH}"
+  if [[ -f .gitmodules ]]; then
+    git submodule update --init --recursive
+  fi
+  if [[ "${GIT_CLEAN}" == "1" ]]; then
+    git clean -fd
+  else
+    echo "==> GIT_CLEAN=0，跳过 git clean"
+  fi
 else
   echo "==> 已 SKIP_GIT=1，跳过 git 更新"
 fi

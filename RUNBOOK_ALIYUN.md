@@ -299,16 +299,17 @@ sudo tail -f /var/log/nginx/access.log /var/log/nginx/error.log
 
 ## 12. Upgrade Procedure
 
-When you update the code:
+When you update the code, **avoid a bare `git pull` on the server** if the machine may have local drift or tracking issues. Prefer aligning the checkout to the remote branch, then deploy (see **`docs/DEPLOY_GIT_ROBUSTNESS.md`** for rationale):
 
 ```bash
 cd /root/dd-class
-git pull
-sudo bash scripts/deploy_all.sh
-sudo bash scripts/post_deploy_check.sh
+GIT_BRANCH=main GIT_REMOTE=origin sudo bash scripts/redeploy.sh
+# or: BRANCH=main sudo bash scripts/pull_and_deploy.sh
 ```
 
-If you uploaded files manually, replace `git pull` with your preferred sync method.
+`redeploy.sh` runs the full stack (backend + frontends + nginx reload as configured). For code-only refresh without the full redeploy path, still use **`git fetch` + `git checkout -B <branch> origin/<branch>` + `git reset --hard origin/<branch>` + `git clean -fd`** before `deploy_all.sh`.
+
+If you uploaded files manually, replace the Git block with your preferred sync method.
 
 ## 13. Backup Procedure
 
