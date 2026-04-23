@@ -4,7 +4,8 @@ export const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024
 
 const BLOCKED_ATTACHMENT_EXTENSIONS = ['.apk', '.app', '.bat', '.cmd', '.com', '.exe', '.msi', '.ps1', '.scr']
 
-export const attachmentHintText = '支持压缩包、Office 文档、PDF、TXT、图片等常见格式，禁止 .exe，可选，最大 20 MB。'
+export const attachmentHintText =
+  '支持压缩包、Office 文档、PDF、TXT、图片、Jupyter 笔记本（.ipynb）等常见格式，禁止 .exe，可选，最大 20 MB。'
 
 export const validateAttachmentFile = file => {
   if (!file) {
