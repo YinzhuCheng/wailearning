@@ -72,6 +72,15 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description VARCHAR",
         "ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR NOT NULL DEFAULT 'required'",
         """
+        CREATE TABLE IF NOT EXISTS course_enrollment_blocks (
+            id INTEGER PRIMARY KEY,
+            subject_id INTEGER NOT NULL REFERENCES subjects(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT uq_course_enrollment_block UNIQUE(subject_id, student_id)
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS course_exam_weights (
             id INTEGER PRIMARY KEY,
             subject_id INTEGER NOT NULL REFERENCES subjects(id),

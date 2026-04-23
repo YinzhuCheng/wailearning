@@ -83,6 +83,8 @@ def _ensure_homework_access(homework: Homework, current_user: User, db: Session)
         raise HTTPException(status_code=403, detail="You do not have access to this homework.")
 
     if homework.subject_id:
+        if current_user.role == UserRole.STUDENT:
+            _resolve_student_for_user(homework, current_user, db)
         try:
             ensure_course_access(homework.subject_id, current_user, db)
         except ValueError as exc:
