@@ -13,6 +13,7 @@ from sqlalchemy import text
 from app.auth import get_password_hash
 from app.database import Base, SessionLocal, engine
 from app.main import app
+from app.llm_grading import VISION_TEST_IMAGE_DATA_URL
 from app.models import (
     Class,
     CourseEnrollment,
@@ -68,6 +69,13 @@ def admin_headers(client: TestClient) -> dict[str, str]:
     finally:
         db.close()
     return _login(client, "t_admin", "t_admin_pass")
+
+
+def _tiny_test_png() -> bytes:
+    import base64
+
+    b64 = VISION_TEST_IMAGE_DATA_URL.split("base64,", 1)[1]
+    return base64.b64decode(b64)
 
 
 @pytest.fixture
@@ -144,10 +152,16 @@ def test_validate_marks_validated(mock_txt, mock_vis, client: TestClient, admin_
         json={"name": "p-val", "base_url": "https://a.test/v1/", "api_key": "k", "model_name": "m"},
     )
     pid = c.json()["id"]
-    v = client.post(f"/api/llm-settings/presets/{pid}/validate", headers=admin_headers)
+    v = client.post(
+        f"/api/llm-settings/presets/{pid}/validate",
+        headers=admin_headers,
+        files={"image": ("t.png", _tiny_test_png(), "image/png")},
+    )
     assert v.status_code == 200
     d = v.json()
     assert d["validation_status"] == "validated"
+    assert d["text_validation_status"] == "passed"
+    assert d["vision_validation_status"] == "passed"
     assert d["supports_vision"] is True
     assert mock_txt.called
     assert mock_vis.called
@@ -162,7 +176,11 @@ def test_get_put_course_config(_, __, client: TestClient, admin_headers, teacher
         json={"name": "p-course", "base_url": "https://a.test/v1/", "api_key": "k", "model_name": "m"},
     )
     pid = c.json()["id"]
-    client.post(f"/api/llm-settings/presets/{pid}/validate", headers=admin_headers)
+    client.post(
+        f"/api/llm-settings/presets/{pid}/validate",
+        headers=admin_headers,
+        files={"image": ("t.png", _tiny_test_png(), "image/png")},
+    )
 
     sid = teacher_course_context["subject_id"]
     payload = {

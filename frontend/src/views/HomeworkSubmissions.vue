@@ -17,6 +17,15 @@
         >
           一键下载
         </el-button>
+        <el-button
+          v-if="homework?.auto_grading_enabled"
+          type="warning"
+          :disabled="!regradableSelection.length"
+          :loading="batchRegrading"
+          @click="batchRegradeSelected"
+        >
+          批量 LLM 重评
+        </el-button>
       </div>
     </div>
 
@@ -46,13 +55,13 @@
         <template #header>
           <div class="card-header">
             <span>提交情况</span>
-            <el-text type="info">仅勾选已提交且带附件的学生，可用于批量下载；主视图评分展示最高分对应评语。</el-text>
+            <el-text type="info">勾选行可用于批量下载（需带附件）或批量 LLM 重评（需已提交）；重评仅针对每名学生的最新一次提交。</el-text>
           </div>
         </template>
 
         <div class="table-wrapper">
           <el-table :data="submissions" @selection-change="handleSelectionChange">
-            <el-table-column type="selection" width="52" :selectable="selectableRow" />
+            <el-table-column type="selection" width="52" :selectable="selectableForAnyBatchAction" />
             <el-table-column prop="student_name" label="学生姓名" min-width="140" />
             <el-table-column prop="student_no" label="学号" min-width="140" />
             <el-table-column label="提交状态" width="120">
@@ -248,6 +257,7 @@ const userStore = useUserStore()
 
 const loading = ref(false)
 const downloading = ref(false)
+const batchRegrading = ref(false)
 const homework = ref(null)
 const submissions = ref([])
 const selectedRows = ref([])
@@ -258,6 +268,10 @@ const historyAttempts = ref([])
 const selectedCourse = computed(() => userStore.selectedCourse)
 const downloadableSelection = computed(() =>
   selectedRows.value.filter(row => row.submission_id && row.attachment_url)
+)
+
+const regradableSelection = computed(() =>
+  selectedRows.value.filter(row => row.submission_id && row.status === 'submitted' && homework.value?.auto_grading_enabled)
 )
 
 const buildAttemptHistoryRow = row => ({
@@ -295,7 +309,8 @@ const handleSelectionChange = rows => {
   selectedRows.value = rows
 }
 
-const selectableRow = row => Boolean(row.submission_id && row.attachment_url)
+const selectableForAnyBatchAction = row =>
+  Boolean(row.submission_id && (row.attachment_url || row.status === 'submitted'))
 const canReviewSubmission = row => row?.submission_id !== null && row?.submission_id !== undefined
 const hasSavedReview = row =>
   row.review_score !== null && row.review_score !== undefined || Boolean(row.review_comment)
@@ -348,6 +363,25 @@ const resolveDownloadFilename = headers => {
   }
 
   return getTodayZipName()
+}
+
+const batchRegradeSelected = async () => {
+  if (!regradableSelection.value.length) {
+    return
+  }
+  batchRegrading.value = true
+  try {
+    const res = await api.homework.batchRegrade(route.params.id, {
+      submission_ids: regradableSelection.value.map(r => r.submission_id),
+      only_latest_attempt: true
+    })
+    ElMessage.success(`已入队 ${res.queued} 条，跳过 ${res.skipped} 条`)
+    await loadPage()
+  } catch {
+    /* http 拦截器已提示 */
+  } finally {
+    batchRegrading.value = false
+  }
 }
 
 const downloadSelected = async () => {

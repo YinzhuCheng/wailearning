@@ -233,6 +233,10 @@ def ensure_schema_updates() -> None:
         )
         """,
         "ALTER TABLE course_llm_config_endpoints ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES llm_groups(id) ON DELETE SET NULL",
+        "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS text_validation_status VARCHAR",
+        "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS text_validation_message TEXT",
+        "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS vision_validation_status VARCHAR",
+        "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS vision_validation_message TEXT",
     ]
 
     with engine.begin() as connection:

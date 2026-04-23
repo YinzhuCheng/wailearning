@@ -8,6 +8,12 @@
         </p>
       </div>
       <div class="header-actions">
+        <el-button
+          v-if="!userStore.isStudent && selectedCourse && homeworks.length"
+          @click="openBatchLateDialog"
+        >
+          批量迟交策略
+        </el-button>
         <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
           发布作业
         </el-button>
@@ -18,7 +24,19 @@
 
     <template v-else>
       <el-card shadow="never">
-        <el-table :data="homeworks" v-loading="loading">
+        <el-table
+          ref="homeworkTableRef"
+          :data="homeworks"
+          v-loading="loading"
+          row-key="id"
+          @selection-change="onHomeworkSelectionChange"
+        >
+          <el-table-column
+            v-if="!userStore.isStudent"
+            type="selection"
+            width="48"
+            :reserve-selection="true"
+          />
           <el-table-column prop="title" label="作业标题" width="190" show-overflow-tooltip />
           <el-table-column prop="subject_name" label="课程" width="160" />
           <el-table-column label="评分规则" min-width="210">
@@ -112,6 +130,23 @@
         </el-table>
       </el-card>
     </template>
+
+    <el-dialog v-model="batchLateDialogVisible" title="批量设置迟交策略" width="520px" destroy-on-close>
+      <p class="batch-late-hint">将应用于下方勾选的作业（当前课程列表）。至少修改一项。</p>
+      <el-form label-width="140px">
+        <el-form-item label="允许截止后提交">
+          <el-switch v-model="batchLateForm.allow_late_submission" />
+        </el-form-item>
+        <el-form-item label="迟交影响评分">
+          <el-switch v-model="batchLateForm.late_submission_affects_score" />
+        </el-form-item>
+      </el-form>
+      <p class="batch-late-tip">若希望补交仅作标记、尽量不纳入展示分，可开启「允许截止后提交」并关闭「迟交影响评分」（具体仍受多次提交取最高规则约束）。</p>
+      <template #footer>
+        <el-button @click="batchLateDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="batchLateSaving" @click="applyBatchLatePolicy">保存</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" title="发布作业" width="620px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -208,7 +243,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -225,6 +260,14 @@ const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const currentHomework = ref(null)
 const homeworks = ref([])
+const homeworkTableRef = ref(null)
+const selectedHomeworkRows = ref([])
+const batchLateDialogVisible = ref(false)
+const batchLateSaving = ref(false)
+const batchLateForm = reactive({
+  allow_late_submission: true,
+  late_submission_affects_score: false
+})
 const formRef = ref(null)
 const attachmentFile = ref(null)
 
@@ -264,17 +307,58 @@ const buildParams = () => {
   }
 }
 
+const onHomeworkSelectionChange = rows => {
+  selectedHomeworkRows.value = rows || []
+}
+
 const loadHomeworks = async () => {
   if (!selectedCourse.value) {
     homeworks.value = []
+    selectedHomeworkRows.value = []
     return
   }
   loading.value = true
   try {
     const result = await api.homework.list(buildParams())
     homeworks.value = result?.data || []
+    selectedHomeworkRows.value = []
+    await nextTick()
+    homeworkTableRef.value?.clearSelection?.()
   } finally {
     loading.value = false
+  }
+}
+
+const openBatchLateDialog = () => {
+  if (!selectedHomeworkRows.value.length) {
+    ElMessage.warning('请先在表格中勾选要批量设置的作业')
+    return
+  }
+  const first = selectedHomeworkRows.value[0]
+  batchLateForm.allow_late_submission = Boolean(first.allow_late_submission)
+  batchLateForm.late_submission_affects_score = Boolean(first.late_submission_affects_score)
+  batchLateDialogVisible.value = true
+}
+
+const applyBatchLatePolicy = async () => {
+  if (!selectedHomeworkRows.value.length) {
+    return
+  }
+  batchLateSaving.value = true
+  try {
+    const res = await api.homework.batchLateSubmission({
+      homework_ids: selectedHomeworkRows.value.map(r => r.id),
+      allow_late_submission: batchLateForm.allow_late_submission,
+      late_submission_affects_score: batchLateForm.late_submission_affects_score
+    })
+    const skipped = (res.forbidden_ids?.length || 0) + (res.missing_ids?.length || 0)
+    ElMessage.success(`已更新 ${res.updated} 份作业${skipped ? `，未处理 ${skipped} 条` : ''}`)
+    batchLateDialogVisible.value = false
+    await loadHomeworks()
+  } catch {
+    /* 全局拦截器已提示 */
+  } finally {
+    batchLateSaving.value = false
   }
 }
 
@@ -483,6 +567,19 @@ watch(selectedCourse, () => {
 
 .attachment-help {
   margin-top: 8px;
+}
+
+.batch-late-hint {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.batch-late-tip {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
 }
 
 .attachment-preview {

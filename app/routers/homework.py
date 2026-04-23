@@ -35,6 +35,10 @@ from app.models import (
 from app.routers.classes import get_accessible_class_ids
 from app.schemas import (
     HomeworkAttemptResponse,
+    HomeworkBatchLateSubmissionUpdate,
+    HomeworkBatchRegradeItemResult,
+    HomeworkBatchRegradeRequest,
+    HomeworkBatchRegradeResponse,
     HomeworkCreate,
     HomeworkListResponse,
     HomeworkRegradeRequest,
@@ -434,6 +438,56 @@ def get_homeworks(
     )
 
 
+@router.post("/batch-late-submission", response_model=dict)
+def batch_update_late_submission_policy(
+    payload: HomeworkBatchLateSubmissionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """批量更新作业的「允许迟交」「迟交是否影响评分」。仅处理当前用户有权限的作业。"""
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can update homework.")
+
+    allowed_class_ids = get_accessible_class_ids(current_user, db)
+    if current_user.role != UserRole.ADMIN and not allowed_class_ids:
+        raise HTTPException(status_code=403, detail="You do not have access to any classes.")
+
+    ids = list(dict.fromkeys(payload.homework_ids))
+    rows = db.query(Homework).filter(Homework.id.in_(ids)).all()
+    found = {h.id: h for h in rows}
+    missing = [i for i in ids if i not in found]
+    forbidden: list[int] = []
+    updated = 0
+    for hid in ids:
+        hw = found.get(hid)
+        if not hw:
+            continue
+        if current_user.role != UserRole.ADMIN and hw.class_id not in allowed_class_ids:
+            forbidden.append(hid)
+            continue
+        if hw.subject_id:
+            try:
+                ensure_course_access(hw.subject_id, current_user, db)
+            except ValueError:
+                forbidden.append(hid)
+                continue
+            except PermissionError:
+                forbidden.append(hid)
+                continue
+        if payload.allow_late_submission is not None:
+            hw.allow_late_submission = payload.allow_late_submission
+        if payload.late_submission_affects_score is not None:
+            hw.late_submission_affects_score = payload.late_submission_affects_score
+        updated += 1
+
+    db.commit()
+    return {
+        "updated": updated,
+        "missing_ids": missing,
+        "forbidden_ids": forbidden,
+    }
+
+
 @router.get("/{homework_id}", response_model=HomeworkResponse)
 def get_homework(
     homework_id: int,
@@ -737,6 +791,61 @@ def get_homework_submissions(
             rows.append(_serialize_submission_status(db, None, submission_map.get(student.id), student))
 
     return HomeworkSubmissionStatusListResponse(total=len(rows), data=rows)
+
+
+@router.post("/{homework_id}/submissions/batch-regrade", response_model=HomeworkBatchRegradeResponse)
+def batch_regrade_homework_submissions(
+    homework_id: int,
+    payload: HomeworkBatchRegradeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can regrade homework submissions.")
+
+    homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    if not homework.auto_grading_enabled:
+        raise HTTPException(status_code=400, detail="This homework does not have auto grading enabled.")
+
+    if not payload.only_latest_attempt:
+        raise HTTPException(status_code=400, detail="only_latest_attempt=false is not supported yet.")
+
+    q = db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == homework.id)
+    if payload.submission_ids:
+        q = q.filter(HomeworkSubmission.id.in_(payload.submission_ids))
+    submissions = q.order_by(HomeworkSubmission.id.asc()).all()
+
+    results: list[HomeworkBatchRegradeItemResult] = []
+    queued = 0
+    skipped = 0
+    for sub in submissions:
+        if not sub.latest_attempt_id:
+            results.append(
+                HomeworkBatchRegradeItemResult(submission_id=sub.id, status="skipped", reason="no_attempt")
+            )
+            skipped += 1
+            continue
+        attempt = (
+            db.query(HomeworkAttempt)
+            .filter(
+                HomeworkAttempt.id == sub.latest_attempt_id,
+                HomeworkAttempt.submission_summary_id == sub.id,
+            )
+            .first()
+        )
+        if not attempt:
+            results.append(
+                HomeworkBatchRegradeItemResult(submission_id=sub.id, status="skipped", reason="attempt_not_found")
+            )
+            skipped += 1
+            continue
+        queue_grading_task(db, attempt, "regrade")
+        refresh_submission_summary(db, sub)
+        results.append(HomeworkBatchRegradeItemResult(submission_id=sub.id, status="queued", reason=None))
+        queued += 1
+
+    db.commit()
+    return HomeworkBatchRegradeResponse(queued=queued, skipped=skipped, results=results)
 
 
 @router.get("/{homework_id}/submissions/{submission_id}/history", response_model=HomeworkSubmissionHistoryResponse)

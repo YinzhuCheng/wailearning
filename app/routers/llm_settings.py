@@ -3,13 +3,18 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
-from app.llm_grading import ensure_course_llm_config, validate_text_connectivity, validate_vision_connectivity
+from app.llm_grading import (
+    build_png_data_url_from_image_bytes,
+    ensure_course_llm_config,
+    validate_text_connectivity,
+    validate_vision_connectivity,
+)
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
@@ -56,6 +61,10 @@ def _serialize_preset(preset: LLMEndpointPreset) -> LLMEndpointPresetResponse:
         supports_vision=bool(preset.supports_vision),
         validation_status=preset.validation_status,
         validation_message=preset.validation_message,
+        text_validation_status=getattr(preset, "text_validation_status", None),
+        text_validation_message=getattr(preset, "text_validation_message", None),
+        vision_validation_status=getattr(preset, "vision_validation_status", None),
+        vision_validation_message=getattr(preset, "vision_validation_message", None),
         validated_at=preset.validated_at,
         created_at=preset.created_at,
         updated_at=preset.updated_at,
@@ -196,8 +205,9 @@ def update_endpoint_preset(
 
 
 @router.post("/presets/{preset_id}/validate", response_model=LLMEndpointPresetResponse)
-def validate_preset(
+async def validate_preset(
     preset_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -208,6 +218,26 @@ def validate_preset(
     if not preset:
         raise HTTPException(status_code=404, detail="Endpoint preset not found.")
 
+    image_data_url: Optional[str] = None
+    ct = (request.headers.get("content-type") or "").lower()
+    if "multipart/form-data" in ct:
+        form = await request.form()
+        up = form.get("image")
+        if up is not None:
+            if not isinstance(up, UploadFile):
+                raise HTTPException(status_code=400, detail="Field 'image' must be a file upload.")
+            body = await up.read()
+            try:
+                image_data_url = build_png_data_url_from_image_bytes(body)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # Vision step requires a user image (gateways that reject the built-in 1x1 test should use a real file).
+    if not image_data_url:
+        raise HTTPException(
+            status_code=400,
+            detail="请在上传图片后再执行视觉校验：选择一张本地图片（JPEG/PNG/WebP 等）作为多模态测试用图。",
+        )
+
     ok_t, msg_t = validate_text_connectivity(
         base_url=preset.base_url,
         api_key=preset.api_key,
@@ -215,10 +245,14 @@ def validate_preset(
         connect_timeout_seconds=preset.connect_timeout_seconds,
         read_timeout_seconds=preset.read_timeout_seconds,
     )
+    preset.text_validation_status = "passed" if ok_t else "failed"
+    preset.text_validation_message = msg_t
     if not ok_t:
         preset.validation_status = "failed"
         preset.validation_message = msg_t
         preset.supports_vision = False
+        preset.vision_validation_status = "skipped"
+        preset.vision_validation_message = "未执行：纯文本未通过。"
     else:
         ok_v, msg_v = validate_vision_connectivity(
             base_url=preset.base_url,
@@ -226,9 +260,12 @@ def validate_preset(
             model_name=preset.model_name,
             connect_timeout_seconds=preset.connect_timeout_seconds,
             read_timeout_seconds=preset.read_timeout_seconds,
+            image_data_url=image_data_url,
         )
+        preset.vision_validation_status = "passed" if ok_v else "failed"
+        preset.vision_validation_message = msg_v
         ok = ok_v
-        message = f"{msg_t} {msg_v}" if ok_v else msg_v
+        message = f"{msg_t} {msg_v}" if ok_v else f"{msg_t} {msg_v}"
         preset.validation_status = "validated" if ok else "failed"
         preset.validation_message = message
         preset.supports_vision = bool(ok_v)

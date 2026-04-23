@@ -69,7 +69,35 @@ http.interceptors.response.use(
   }
 )
 
-export { http, apiBaseUrl }
+/** Same as `http` but no global ElMessage on error (caller handles toasts) and unbounded timeout for long LLM calls. */
+const httpQuiet = axios.create({
+  baseURL: apiBaseUrl,
+  timeout: 0
+})
+httpQuiet.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  error => Promise.reject(error)
+)
+httpQuiet.interceptors.response.use(
+  response => (response.config?.returnFullResponse ? response : response.data),
+  error => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      localStorage.removeItem('selected_course')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
+export { http, httpQuiet, apiBaseUrl }
 
 const subjectsApi = {
   list: params => http.get('/subjects', { params }),
@@ -168,6 +196,9 @@ const api = {
     create: data => http.post('/homeworks', data),
     update: (id, data) => http.put(`/homeworks/${id}`, data),
     delete: id => http.delete(`/homeworks/${id}`),
+    batchLateSubmission: data => http.post('/homeworks/batch-late-submission', data),
+    batchRegrade: (homeworkId, data) =>
+      http.post(`/homeworks/${homeworkId}/submissions/batch-regrade`, data),
     getMySubmission: id => http.get(`/homeworks/${id}/submission/me`),
     getMySubmissionHistory: id => http.get(`/homeworks/${id}/submission/me/history`),
     submit: (id, data) => http.post(`/homeworks/${id}/submission`, data),
@@ -189,7 +220,12 @@ const api = {
     listPresets: () => http.get('/llm-settings/presets'),
     createPreset: data => http.post('/llm-settings/presets', data),
     updatePreset: (id, data) => http.put(`/llm-settings/presets/${id}`, data),
-    validatePreset: id => http.post(`/llm-settings/presets/${id}/validate`),
+    /** multipart with field `image` (File); do not set Content-Type manually. */
+    validatePreset: (id, imageFile) => {
+      const form = new FormData()
+      form.append('image', imageFile)
+      return httpQuiet.post(`/llm-settings/presets/${id}/validate`, form)
+    },
     getCourseConfig: subjectId => http.get(`/llm-settings/courses/${subjectId}`),
     updateCourseConfig: (subjectId, data) => http.put(`/llm-settings/courses/${subjectId}`, data)
   },
