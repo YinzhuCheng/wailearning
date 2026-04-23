@@ -11,9 +11,11 @@ from sqlalchemy import text
 from app.database import Base, SessionLocal, engine
 from app.llm_grading import (
     VISION_TEST_IMAGE_DATA_URL,
+    MaterialBlock,
     _build_chat_completion_url,
     _parse_scoring_json,
     build_png_data_url_from_image_bytes,
+    estimate_request_tokens_from_material,
     estimate_task_tokens,
     precheck_quota,
     validate_endpoint_connectivity,
@@ -86,6 +88,39 @@ def test_estimate_task_tokens():
     assert t > 500
 
 
+def test_estimate_request_tokens_from_material_counts_data_url_payload():
+    cfg = CourseLLMConfig(
+        subject_id=1,
+        estimated_chars_per_token=4.0,
+        estimated_image_tokens=800,
+        max_input_tokens=8000,
+        max_output_tokens=500,
+    )
+    tiny_png_b64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/w8AAusB9Y9nKXUAAAAASUVORK5CYII="
+    )
+    material = {
+        "student_blocks": [
+            MaterialBlock(
+                priority=2,
+                path="x.png",
+                block_type="image",
+                image_data_url=f"data:image/png;base64,{tiny_png_b64}",
+                estimated_tokens=100,
+            )
+        ],
+        "notes_text": "",
+    }
+    t = estimate_request_tokens_from_material(
+        cfg,
+        material,
+        assignment_text="A" * 100,
+        teacher_prompt="T",
+        student_intro="S",
+    )
+    assert t > 500
+
+
 def test_precheck_quota_allows_unlimited():
     db = SessionLocal()
     try:
@@ -110,7 +145,7 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
         with mock.patch("app.llm_grading._get_used_tokens_for_scope", return_value=95):
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=10)
         assert ok is False
-        assert code == "quota_exceeded"
+        assert code == "quota_exceeded_student"
     finally:
         db.close()
 
@@ -133,7 +168,7 @@ def test_precheck_quota_blocks_course_when_mocked_usage_high():
         with mock.patch("app.llm_grading._get_used_tokens_for_scope", side_effect=_mock_used):
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=7, estimated_tokens=10)
         assert ok is False
-        assert code == "quota_exceeded"
+        assert code == "quota_exceeded_course"
     finally:
         db.close()
 

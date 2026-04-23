@@ -991,6 +991,7 @@ class CourseLLMConfigResponse(BaseModel):
     endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)
     groups: List[LLMGroupResponse] = Field(default_factory=list)
     visual_validation_notice: str
+    quota_usage: Optional[dict] = None
 
 
 class NotificationBase(BaseModel):

@@ -289,6 +289,18 @@
             <el-input v-model="llmForm.quota_timezone" placeholder="例如 UTC / Asia/Shanghai" />
           </el-form-item>
 
+          <el-alert
+            v-if="llmQuotaUsage && llmQuotaUsage.course_used_tokens_today != null"
+            class="llm-notice"
+            type="info"
+            :closable="false"
+            :title="`本日课程用量（${llmQuotaUsage.usage_date}，${llmQuotaUsage.quota_timezone}）：已用 ${llmQuotaUsage.course_used_tokens_today} / 限额 ${llmForm.daily_course_token_limit || '—'}，剩余约 ${llmQuotaUsage.course_remaining_tokens_today}`"
+          />
+          <div v-if="llmForm.is_enabled" class="attachment-help" style="margin-bottom: 12px">
+            自动评分会将作业说明、学生文字与附件解析结果分段送入模型；大附件、PDF 多页或 zip 可能被截断或跳过。学生与课程日 token
+            限额分别计数；单次调用若略超日限额仍会记录实际用量并标注超出（用于审计）。
+          </div>
+
           <el-form-item label="系统提示词">
             <el-input v-model="llmForm.system_prompt" type="textarea" :rows="5" placeholder="可选。若为空则使用系统默认提示词。" />
           </el-form-item>
@@ -409,6 +421,7 @@ const llmLoading = ref(false)
 const llmSaving = ref(false)
 const llmPresets = ref([])
 const llmVisualValidationNotice = ref('端点需由管理员在系统设置中完成「文本+视觉」校验；视觉校验收需要上传测试图。只有通过视觉能力校验的端点，才能加入本课程并用于带图作业自动评分。')
+const llmQuotaUsage = ref(null)
 
 const courses = ref([])
 const classes = ref([])
@@ -656,6 +669,7 @@ const submitForm = async () => {
 }
 
 const resetLlmForm = () => {
+  llmQuotaUsage.value = null
   Object.assign(llmForm, {
     is_enabled: false,
     response_language: '',
@@ -701,6 +715,7 @@ const applyLlmConfig = config => {
     priority: g.priority,
     members: (g.members || []).map(m => ({ preset_id: m.preset_id, priority: m.priority }))
   }))
+  llmQuotaUsage.value = config.quota_usage || null
 }
 
 const openLlmConfigDialog = async course => {

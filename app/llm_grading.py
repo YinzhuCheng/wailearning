@@ -124,6 +124,10 @@ class MaterialBlock:
     text: Optional[str] = None
     image_data_url: Optional[str] = None
     estimated_tokens: int = 0
+    logical_path: Optional[str] = None
+    mime_hint: Optional[str] = None
+    origin: Optional[str] = None
+    truncated: bool = False
 
 
 class RetryableLLMError(Exception):
@@ -509,6 +513,135 @@ def estimate_task_tokens(
     return text_tokens + image_tokens + int(config.max_output_tokens or 0)
 
 
+# Stable section markers for the scoring prompt (model + debugging)
+SECTION_ASSIGNMENT = "[SECTION:INSTRUCTOR_ASSIGNMENT]"
+SECTION_STUDENT_BODY = "[SECTION:STUDENT_TEXT_RESPONSE]"
+SECTION_ATTACHMENT = "[SECTION:ATTACHMENT_CONTENT]"
+SECTION_IMAGES = "[SECTION:STUDENT_IMAGES]"
+SECTION_NOTES = "[SECTION:PIPELINE_NOTES]"
+
+
+def _attachment_block_meta_text(block: "MaterialBlock") -> str:
+    """Short human-readable line for prompts (no raw base64)."""
+    if block.block_type != "text" or not (block.origin or "").startswith("attachment"):
+        return ""
+    name = (block.logical_path or block.path or "attachment").strip()
+    mime = (block.mime_hint or "").strip()
+    origin = (block.origin or "").strip()
+    flags: list[str] = []
+    if block.truncated:
+        flags.append("truncated")
+    flag_s = f" flags={','.join(flags)}" if flags else ""
+    mime_s = f" mime={mime}" if mime else ""
+    return f"[ATTACHMENT_META path={name} origin={origin}{mime_s}{flag_s}]\n"
+
+
+def _data_url_payload_chars(data_url: Optional[str]) -> int:
+    if not data_url:
+        return 0
+    if ";base64," in data_url:
+        return max(0, len(data_url) - data_url.find(";base64,") - len(";base64,"))
+    return len(data_url)
+
+
+def estimate_request_tokens_from_material(
+    config: CourseLLMConfig,
+    material: dict[str, Any],
+    *,
+    assignment_text: str,
+    teacher_prompt: str,
+    student_intro: str,
+) -> int:
+    """
+    Approximate request-side tokens using text char counts (incl. base64 payload length
+    for image data URLs) plus configured image/output heuristics.
+    """
+    chars_per_token = float(config.estimated_chars_per_token or 4.0)
+    per_image = int(config.estimated_image_tokens or 850)
+
+    section_overhead = len(SECTION_ASSIGNMENT) + len(SECTION_STUDENT_BODY)
+    section_overhead += len(SECTION_ATTACHMENT) + len(SECTION_IMAGES) + len(SECTION_NOTES)
+
+    text_chars = (
+        len(assignment_text or "")
+        + len(teacher_prompt or "")
+        + len(student_intro or "")
+        + section_overhead
+    )
+    text_chars += len(material.get("notes_text") or "")
+
+    for block in material.get("student_blocks") or []:
+        if block.block_type == "text":
+            text_chars += len(block.text or "")
+            meta = _attachment_block_meta_text(block)
+            if meta:
+                text_chars += len(meta)
+        elif block.block_type == "image":
+            text_chars += _data_url_payload_chars(block.image_data_url)
+
+    text_tokens = int(text_chars / chars_per_token) + 200
+    image_count = len([b for b in (material.get("student_blocks") or []) if b.block_type == "image"])
+    image_tokens = int(image_count * per_image)
+    return text_tokens + image_tokens + int(config.max_output_tokens or 0)
+
+
+def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, Any]:
+    """Aggregated usage for the LLM config's quota day (for teacher-facing UI)."""
+    timezone_name = config.quota_timezone or "UTC"
+    usage_date = _get_usage_date(timezone_name)
+    snap: dict[str, Any] = {
+        "usage_date": usage_date,
+        "quota_timezone": timezone_name,
+        "daily_student_token_limit": config.daily_student_token_limit,
+        "daily_course_token_limit": config.daily_course_token_limit,
+        "course_used_tokens_today": None,
+        "course_remaining_tokens_today": None,
+    }
+    if config.daily_course_token_limit and config.subject_id:
+        used = _get_used_tokens_for_scope(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            subject_id=config.subject_id,
+        )
+        lim = int(config.daily_course_token_limit)
+        snap["course_used_tokens_today"] = used
+        snap["course_remaining_tokens_today"] = max(0, lim - used)
+    return snap
+
+
+def _quota_delta_violations(
+    db: Session,
+    config: CourseLLMConfig,
+    *,
+    usage_date: str,
+    timezone_name: str,
+    student_id: int,
+    subject_id: Optional[int],
+    delta_tokens: int,
+) -> list[str]:
+    violations: list[str] = []
+    if config.daily_student_token_limit:
+        used_by_student = _get_used_tokens_for_scope(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            student_id=student_id,
+        )
+        if used_by_student + delta_tokens > int(config.daily_student_token_limit):
+            violations.append("student")
+    if config.daily_course_token_limit and subject_id:
+        used_by_course = _get_used_tokens_for_scope(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            subject_id=subject_id,
+        )
+        if used_by_course + delta_tokens > int(config.daily_course_token_limit):
+            violations.append("course")
+    return violations
+
+
 def _get_usage_date(timezone_name: str) -> str:
     try:
         tz = ZoneInfo(timezone_name or "UTC")
@@ -564,8 +697,8 @@ def precheck_quota(
                 timezone_name=timezone_name,
                 student_id=student_id,
             )
-            if used_by_student + estimated_tokens > config.daily_student_token_limit:
-                return False, "quota_exceeded"
+            if used_by_student + estimated_tokens > int(config.daily_student_token_limit):
+                return False, "quota_exceeded_student"
         if config.daily_course_token_limit and subject_id:
             used_by_course = _get_used_tokens_for_scope(
                 db,
@@ -573,8 +706,8 @@ def precheck_quota(
                 timezone_name=timezone_name,
                 subject_id=subject_id,
             )
-            if used_by_course + estimated_tokens > config.daily_course_token_limit:
-                return False, "quota_exceeded"
+            if used_by_course + estimated_tokens > int(config.daily_course_token_limit):
+                return False, "quota_exceeded_course"
         return True, None
 
 
@@ -595,24 +728,18 @@ def record_usage_if_needed(
         total_tokens = usage.get("total_tokens")
         if total_tokens is None:
             total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
-        if config.daily_student_token_limit:
-            used_by_student = _get_used_tokens_for_scope(
-                db,
-                usage_date=usage_date,
-                timezone_name=timezone_name,
-                student_id=task.student_id,
-            )
-            if used_by_student + int(total_tokens or 0) > config.daily_student_token_limit:
-                return
-        if config.daily_course_token_limit and task.subject_id:
-            used_by_course = _get_used_tokens_for_scope(
-                db,
-                usage_date=usage_date,
-                timezone_name=timezone_name,
-                subject_id=task.subject_id,
-            )
-            if used_by_course + int(total_tokens or 0) > config.daily_course_token_limit:
-                return
+        billing_note: Optional[str] = None
+        violations = _quota_delta_violations(
+            db,
+            config,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            student_id=task.student_id,
+            subject_id=task.subject_id,
+            delta_tokens=int(total_tokens or 0),
+        )
+        if violations:
+            billing_note = "over_daily_limit:" + ",".join(violations)
 
         db.add(
             LLMTokenUsageLog(
@@ -624,6 +751,7 @@ def record_usage_if_needed(
                 input_tokens=prompt_tokens,
                 output_tokens=completion_tokens,
                 total_tokens=total_tokens,
+                billing_note=billing_note,
             )
         )
         task.billed_input_tokens = prompt_tokens
@@ -775,7 +903,11 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         estimated_tokens=material["estimated_tokens"],
     )
     if not allowed:
-        _mark_task_failed(db, task, error_code or "quota_exceeded", "今日额度已用尽，自动评分未执行。")
+        quota_msg = {
+            "quota_exceeded_student": "已达到本日学生 token 上限，自动评分未执行。",
+            "quota_exceeded_course": "已达到本日课程 token 上限，自动评分未执行。",
+        }.get(error_code or "", "今日额度已用尽，自动评分未执行。")
+        _mark_task_failed(db, task, error_code or "quota_exceeded_student", quota_msg)
         return
 
     teacher_exists = (
@@ -1207,8 +1339,12 @@ def _build_scoring_messages(
     )
     response_language = homework.response_language or config.response_language or "zh-CN"
     teacher_prompt = config.teacher_prompt or ""
-    assignment_text = "\n\n".join(material["assignment_texts"])
+    assignment_body = "\n\n".join(material["assignment_texts"])
+    assignment_text = f"{SECTION_ASSIGNMENT}\n### 教师侧作业说明与材料\n{assignment_body}"
+    if teacher_prompt.strip():
+        assignment_text += f"\n\n### 教师补充提示（课程 LLM 配置）\n{teacher_prompt}"
     student_intro = (
+        f"{SECTION_STUDENT_BODY}\n### 提交元数据\n"
         f"作业标题：{homework.title}\n"
         f"满分：{normalize_score_for_homework(homework, homework.max_score)}\n"
         f"评分精度：{'1 位小数' if homework.grade_precision == 'decimal_1' else '整数'}\n"
@@ -1216,14 +1352,31 @@ def _build_scoring_messages(
         f"提交是否迟交：{'是' if attempt.is_late else '否'}\n"
         f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
     )
-    user_parts: list[dict[str, Any]] = [{"type": "text", "text": assignment_text + "\n\n" + teacher_prompt + "\n\n" + student_intro}]
-    for block in material["student_blocks"]:
-        if block.block_type == "text":
-            user_parts.append({"type": "text", "text": block.text or ""})
-        elif block.block_type == "image":
+    user_parts: list[dict[str, Any]] = [{"type": "text", "text": assignment_text}]
+    user_parts.append({"type": "text", "text": student_intro})
+    text_blocks = [b for b in material["student_blocks"] if b.block_type == "text"]
+    image_blocks = [b for b in material["student_blocks"] if b.block_type == "image"]
+    if text_blocks:
+        user_parts.append(
+            {
+                "type": "text",
+                "text": f"{SECTION_ATTACHMENT}\n（以下为学生在表单中的说明文字，以及从附件解析出的可读文本）",
+            }
+        )
+        for block in text_blocks:
+            meta = _attachment_block_meta_text(block)
+            user_parts.append({"type": "text", "text": (meta + (block.text or "")).strip()})
+    if image_blocks:
+        user_parts.append({"type": "text", "text": f"{SECTION_IMAGES}\n（以下为提交中的图片/PDF 页渲染，按顺序评分）"})
+        for block in image_blocks:
+            cap = (
+                f"[IMAGE_META path={block.logical_path or block.path} "
+                f"mime={block.mime_hint or 'image'} origin={block.origin or 'attachment'}]"
+            )
+            user_parts.append({"type": "text", "text": cap})
             user_parts.append({"type": "image_url", "image_url": {"url": block.image_data_url}})
     if material["notes_text"]:
-        user_parts.append({"type": "text", "text": material["notes_text"]})
+        user_parts.append({"type": "text", "text": f"{SECTION_NOTES}\n{material['notes_text']}"})
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_parts},
@@ -1280,13 +1433,17 @@ def _extract_pdf_images(content: bytes, path: str) -> list[MaterialBlock]:
         for index, page in enumerate(document, start=1):
             pixmap = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
             image_bytes = pixmap.tobytes("png")
+            logical = f"{path}#page-{index}"
             blocks.append(
                 MaterialBlock(
                     priority=3,
-                    path=f"{path}#page-{index}",
+                    path=logical,
                     block_type="image",
                     image_data_url=f"data:image/png;base64,{base64.b64encode(image_bytes).decode('ascii')}",
                     estimated_tokens=settings.DEFAULT_ESTIMATED_IMAGE_TOKENS,
+                    logical_path=logical,
+                    mime_hint="image/png",
+                    origin="attachment",
                 )
             )
     finally:
@@ -1322,26 +1479,35 @@ def _extract_ipynb_blocks(content: bytes, path: str) -> list[MaterialBlock]:
             if image_png:
                 if isinstance(image_png, list):
                     image_png = "".join(image_png)
+                logical_img = f"{path}#cell-{index}-output"
                 blocks.append(
                     MaterialBlock(
                         priority=3,
-                        path=f"{path}#cell-{index}-output",
+                        path=logical_img,
                         block_type="image",
                         image_data_url=f"data:image/png;base64,{image_png}",
                         estimated_tokens=settings.DEFAULT_ESTIMATED_IMAGE_TOKENS,
+                        logical_path=logical_img,
+                        mime_hint="image/png",
+                        origin="attachment",
                     )
                 )
     if text_fragments:
         text, truncated = _truncate_text("\n\n".join(text_fragments))
         suffix = "\n\n[说明] Ipynb 文本输出已截断。" if truncated else ""
+        mime_nb = "application/x-ipynb+json"
         blocks.insert(
             0,
             MaterialBlock(
                 priority=2,
                 path=path,
                 block_type="text",
-                text=f"### {path}\n{text}{suffix}",
+                text=f"### 附件（Jupyter 解析）\n**文件**: {path}\n**类型**: {mime_nb}\n\n{text}{suffix}",
                 estimated_tokens=int(len(text) / 4) + 50,
+                logical_path=path,
+                mime_hint=mime_nb,
+                origin="attachment",
+                truncated=truncated,
             ),
         )
     return blocks
@@ -1354,6 +1520,7 @@ def _classify_and_extract(path: str, content: bytes) -> list[MaterialBlock]:
     if suffix in IPYNB_EXTENSIONS:
         return _extract_ipynb_blocks(content, path)
     if suffix in SUPPORTED_IMAGE_EXTENSIONS:
+        mime_img = _guess_mime_type(path)
         return [
             MaterialBlock(
                 priority=3,
@@ -1361,6 +1528,9 @@ def _classify_and_extract(path: str, content: bytes) -> list[MaterialBlock]:
                 block_type="image",
                 image_data_url=_bytes_to_data_url(path, content),
                 estimated_tokens=settings.DEFAULT_ESTIMATED_IMAGE_TOKENS,
+                logical_path=path,
+                mime_hint=mime_img,
+                origin="attachment",
             )
         ]
     if suffix == ".docx":
@@ -1374,13 +1544,18 @@ def _classify_and_extract(path: str, content: bytes) -> list[MaterialBlock]:
         return []
     text, truncated = _truncate_text(text)
     suffix_note = "\n\n[说明] 文件内容过长，已截断。" if truncated else ""
+    mime_doc = _guess_mime_type(path)
     return [
         MaterialBlock(
             priority=2,
             path=path,
             block_type="text",
-            text=f"### {path}\n{text}{suffix_note}",
+            text=f"### 附件（解析文本）\n**文件**: {path}\n**类型**: {mime_doc}\n\n{text}{suffix_note}",
             estimated_tokens=int(len(text) / 4) + 50,
+            logical_path=path,
+            mime_hint=mime_doc,
+            origin="attachment",
+            truncated=truncated,
         )
     ]
 
@@ -1467,8 +1642,12 @@ def _build_student_material(
                 priority=2,
                 path="submission-note",
                 block_type="text",
-                text=f"### 提交说明\n{text}{note}",
+                text=f"### 学生正文（提交说明）\n{text}{note}",
                 estimated_tokens=int(len(text) / 4) + 50,
+                logical_path="submission-note",
+                mime_hint="text/plain",
+                origin="submission_body",
+                truncated=truncated,
             )
         )
     if attempt.attachment_url:
@@ -1501,6 +1680,10 @@ def _build_student_material(
                         block_type="text",
                         text=truncated_text,
                         estimated_tokens=int(len(truncated_text) / 4) + 50,
+                        logical_path=block.logical_path,
+                        mime_hint=block.mime_hint,
+                        origin=block.origin,
+                        truncated=True,
                     )
                 )
                 truncation_notes.append(f"{block.path} 已按预算截断")
@@ -1523,14 +1706,37 @@ def _build_student_material(
         skipped_lines = [f"{item['path']}：{item['reason']}" for item in skipped]
         notes_text_parts.append("未纳入内容：\n- " + "\n- ".join(skipped_lines))
     notes_text = "\n\n".join(notes_text_parts)
-    estimated_tokens = estimate_task_tokens(
+    teacher_prompt = config.teacher_prompt or ""
+    assignment_joined = "\n\n".join(assignment_texts)
+    student_intro = (
+        f"作业标题：{homework.title}\n"
+        f"满分：{normalize_score_for_homework(homework, homework.max_score)}\n"
+        f"评分精度：{'1 位小数' if homework.grade_precision == 'decimal_1' else '整数'}\n"
+        f"响应语言：{homework.response_language or config.response_language or 'zh-CN'}\n"
+        f"提交是否迟交：{'是' if attempt.is_late else '否'}\n"
+        f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
+    )
+    temp_material = {
+        "student_blocks": final_blocks,
+        "notes_text": notes_text,
+    }
+    estimated_tokens = estimate_request_tokens_from_material(
         config,
-        text_length=len(reserved_text) + sum(len(block.text or "") for block in final_blocks if block.block_type == "text") + len(notes_text),
-        image_count=len([block for block in final_blocks if block.block_type == "image"]),
+        temp_material,
+        assignment_text=f"{SECTION_ASSIGNMENT}\n{assignment_joined}",
+        teacher_prompt=teacher_prompt,
+        student_intro=student_intro,
     )
     artifact_manifest = {
         "included": [
-            {"path": block.path, "type": block.block_type}
+            {
+                "path": block.path,
+                "type": block.block_type,
+                "logical_path": block.logical_path,
+                "mime_hint": block.mime_hint,
+                "origin": block.origin,
+                "truncated": block.truncated,
+            }
             for block in final_blocks
         ],
         "skipped": skipped,

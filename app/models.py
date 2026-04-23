@@ -593,6 +593,7 @@ class LLMTokenUsageLog(Base):
     input_tokens = Column(Integer, nullable=True)
     output_tokens = Column(Integer, nullable=True)
     total_tokens = Column(Integer, nullable=True)
+    billing_note = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     task = relationship("HomeworkGradingTask")

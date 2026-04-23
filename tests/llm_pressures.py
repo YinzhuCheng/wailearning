@@ -304,7 +304,7 @@ def test_course_daily_token_limit_blocks_second_student(client: TestClient):
         err = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tasks[1]).one().error_code
     finally:
         db.close()
-    assert err == "quota_exceeded"
+    assert err == "quota_exceeded_course"
 
 
 # --- 5) HTTP 429 then success on same member (retryable) ---

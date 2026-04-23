@@ -312,7 +312,7 @@ def test_second_task_hits_token_cap_after_first_billed(client: TestClient):
     with patch_httpx_post(
         lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(90.0, "c"))
     ), mock.patch(
-        "app.llm_grading.precheck_quota", side_effect=[(True, None), (False, "quota_exceeded")]
+        "app.llm_grading.precheck_quota", side_effect=[(True, None), (False, "quota_exceeded_student")]
     ):
         process_grading_task(tids[0])
         process_grading_task(tids[1])

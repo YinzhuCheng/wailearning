@@ -227,9 +227,11 @@ def ensure_schema_updates() -> None:
             input_tokens INTEGER,
             output_tokens INTEGER,
             total_tokens INTEGER,
+            billing_note VARCHAR,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        "ALTER TABLE llm_token_usage_logs ADD COLUMN IF NOT EXISTS billing_note VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
         """

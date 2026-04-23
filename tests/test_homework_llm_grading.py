@@ -341,7 +341,7 @@ def test_quota_precheck_fails_without_llm_post(grading_context: dict):
     try:
         task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
         assert task.status == "failed"
-        assert task.error_code == "quota_exceeded"
+        assert task.error_code == "quota_exceeded_student"
     finally:
         db.close()
 

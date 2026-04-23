@@ -12,6 +12,7 @@ from app.database import get_db
 from app.llm_grading import (
     build_png_data_url_from_image_bytes,
     ensure_course_llm_config,
+    get_quota_usage_snapshot,
     validate_text_connectivity,
     validate_vision_connectivity,
 )
@@ -84,7 +85,7 @@ def _serialize_endpoint_item(item: CourseLLMConfigEndpoint) -> CourseLLMConfigEn
     )
 
 
-def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse:
+def _serialize_course_config(config: CourseLLMConfig, db: Optional[Session] = None) -> CourseLLMConfigResponse:
     group_rows = sorted(
         [g for g in (config.groups or []) if g is not None],
         key=lambda row: (row.priority, row.id),
@@ -100,6 +101,7 @@ def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse
             key=lambda row: (row.priority, row.id),
         )
 
+    quota_usage = get_quota_usage_snapshot(db, config) if db is not None else None
     return CourseLLMConfigResponse(
         id=config.id,
         subject_id=config.subject_id,
@@ -125,6 +127,7 @@ def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse
             for g in group_rows
         ],
         visual_validation_notice=VISION_NOTICE,
+        quota_usage=quota_usage,
     )
 
 
@@ -294,7 +297,7 @@ def get_course_llm_config(
     config = ensure_course_llm_config(db, subject_id, current_user.id)
     db.commit()
     db.refresh(config)
-    return _serialize_course_config(config)
+    return _serialize_course_config(config, db)
 
 
 @router.put("/courses/{subject_id}", response_model=CourseLLMConfigResponse)
@@ -341,7 +344,7 @@ def update_course_llm_config(
     if preserve_group_routing:
         db.commit()
         db.refresh(config)
-        return _serialize_course_config(config)
+        return _serialize_course_config(config, db)
 
     db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == config.id).delete()
     db.query(LLMGroup).filter(LLMGroup.config_id == config.id).delete()
@@ -392,4 +395,4 @@ def update_course_llm_config(
 
     db.commit()
     db.refresh(config)
-    return _serialize_course_config(config)
+    return _serialize_course_config(config, db)
