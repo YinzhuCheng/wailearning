@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 import fitz
 import httpx
+from PIL import Image, ImageFile, UnidentifiedImageError
 from docx import Document
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, joinedload
@@ -44,6 +45,34 @@ VISION_TEST_IMAGE_DATA_URL = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8"
     "/w8AAusB9Y9nKXUAAAAASUVORK5CYII="
 )
+# Cap encoded image size for multi-modal test requests (avoids huge payloads to LLM APIs).
+MAX_VISION_TEST_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def build_png_data_url_from_image_bytes(data: bytes) -> str:
+    """Load common formats (jpeg/png/webp/gif/bmp) and emit an OpenAI-compatible data:image/png;base64,... URL."""
+    if not data or len(data) > MAX_VISION_TEST_IMAGE_BYTES:
+        raise ValueError(f"Image must be non-empty and at most {MAX_VISION_TEST_IMAGE_BYTES} bytes.")
+    prev_truncated = ImageFile.LOAD_TRUNCATED_IMAGES
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
+    try:
+        im = Image.open(io.BytesIO(data))
+        im.load()
+    except (UnidentifiedImageError, OSError) as exc:
+        raise ValueError("无法将文件识别为支持的图片（请使用 JPEG/PNG/WebP 等）。") from exc
+    finally:
+        ImageFile.LOAD_TRUNCATED_IMAGES = prev_truncated
+    if im.mode not in ("RGB", "RGBA"):
+        im = im.convert("RGBA" if (getattr(im, "info", None) and im.info.get("transparency") is not None) else "RGB")
+    out = io.BytesIO()
+    im.save(out, format="PNG", optimize=True)
+    raw = out.getvalue()
+    if len(raw) > MAX_VISION_TEST_IMAGE_BYTES:
+        raise ValueError("转码为 PNG 后仍过大，请使用更小的图片。")
+    b64 = base64.b64encode(raw).decode("ascii")
+    return f"data:image/png;base64,{b64}"
+
+
 JSON_FENCE_PATTERN = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL | re.IGNORECASE)
 MAX_ZIP_DEPTH = 4
 MAX_ZIP_FILES = 100
@@ -401,14 +430,18 @@ def validate_vision_connectivity(
     model_name: str,
     connect_timeout_seconds: int,
     read_timeout_seconds: int,
+    image_data_url: Optional[str] = None,
 ) -> tuple[bool, str]:
+    if image_data_url and not (image_data_url.startswith("data:image/") and "base64," in image_data_url):
+        return False, "视觉能力校验失败：图片数据格式无效（需为 data:image/...;base64,...）。"
+    data_url = image_data_url or VISION_TEST_IMAGE_DATA_URL
     timeout = httpx.Timeout(connect=connect_timeout_seconds, read=read_timeout_seconds, write=read_timeout_seconds, pool=connect_timeout_seconds)
     messages = [
         {
             "role": "user",
             "content": [
                 {"type": "text", "text": "Please reply with OK."},
-                {"type": "image_url", "image_url": {"url": VISION_TEST_IMAGE_DATA_URL}},
+                {"type": "image_url", "image_url": {"url": data_url}},
             ],
         }
     ]

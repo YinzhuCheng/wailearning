@@ -447,13 +447,26 @@ def test_admin_validate_calls_text_then_vision_in_order(client: TestClient):
     assert c.status_code == 200, c.text
     pid = c.json()["id"]
 
+    from app.llm_grading import VISION_TEST_IMAGE_DATA_URL
+
+    _b = VISION_TEST_IMAGE_DATA_URL.split("base64,", 1)[1]
+    import base64 as _b64
+
+    tiny_png = _b64.b64decode(_b)
+
     with (
         mock.patch.object(llm_settings, "validate_text_connectivity", side_effect=t_txt),
         mock.patch.object(llm_settings, "validate_vision_connectivity", side_effect=t_vis),
     ):
-        r = client.post(f"/api/llm-settings/presets/{pid}/validate", headers=admin_h)
+        r = client.post(
+            f"/api/llm-settings/presets/{pid}/validate",
+            headers=admin_h,
+            files={"image": ("t.png", tiny_png, "image/png")},
+        )
     assert r.status_code == 200, r.text
     assert r.json().get("validation_status") == "validated"
+    assert r.json().get("text_validation_status") == "passed"
+    assert r.json().get("vision_validation_status") == "passed"
     assert call_order == ["text", "vision"]
 
 

@@ -340,7 +340,11 @@
                   <div class="llm-endpoint-meta">
                     <strong>{{ preset.name }}</strong>
                     <span>{{ preset.model_name }}</span>
-                    <span>状态：{{ preset.validation_status === 'validated' ? '已通过视觉校验' : preset.validation_message || '未校验' }}</span>
+                    <span class="llm-validate-pills">
+                      文本<el-tag size="small" :type="llmStepTagType(preset.text_validation_status)">{{ llmStepLabel(preset.text_validation_status) }}</el-tag>
+                      视觉<el-tag size="small" :type="llmStepTagType(preset.vision_validation_status)">{{ llmStepLabel(preset.vision_validation_status) }}</el-tag>
+                    </span>
+                    <span v-if="llmPresetDetailLine(preset)" class="llm-validate-detail">{{ llmPresetDetailLine(preset) }}</span>
                   </div>
                 </el-checkbox>
 
@@ -400,7 +404,7 @@ const llmDialogCourse = ref(null)
 const llmLoading = ref(false)
 const llmSaving = ref(false)
 const llmPresets = ref([])
-const llmVisualValidationNotice = ref('LLM 连通性验证会同时校验视觉接口。只有通过视觉能力校验的端点，才能被加入课程配置并用于作业自动评分。')
+const llmVisualValidationNotice = ref('端点需由管理员在系统设置中完成「文本+视觉」校验；视觉校验收需要上传测试图。只有通过视觉能力校验的端点，才能加入本课程并用于带图作业自动评分。')
 
 const courses = ref([])
 const classes = ref([])
@@ -425,6 +429,32 @@ const llmForm = reactive({
   // API-only group routing: shown read-only; saving flat endpoints will not clear it unless you switch to flat-only save path
   groups: []
 })
+
+const llmStepLabel = s => {
+  if (s === 'passed') return '通过'
+  if (s === 'failed') return '失败'
+  if (s === 'skipped') return '跳过'
+  return '未测'
+}
+
+const llmStepTagType = s => {
+  if (s === 'passed') return 'success'
+  if (s === 'failed') return 'danger'
+  if (s === 'skipped') return 'info'
+  return 'info'
+}
+
+const llmPresetDetailLine = p => {
+  if (!p) {
+    return ''
+  }
+  const t = p.text_validation_message
+  const v = p.vision_validation_message
+  if (!t && !v) {
+    return p.validation_message || ''
+  }
+  return [t ? `文本：${t}` : null, v ? `视觉：${v}` : null].filter(Boolean).join('；')
+}
 
 const isClassTeacherView = computed(() => userStore.isClassTeacher)
 const currentClassId = computed(() => resolveClassTeacherClassId(userStore.userInfo, classTeacherCoursePool.value))
@@ -989,9 +1019,19 @@ watch(
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
-.llm-endpoint-meta span {
+.llm-validate-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #64748b;
+}
+
+.llm-validate-detail {
+  line-height: 1.45;
+  max-width: 100%;
+  word-break: break-word;
 }
 
 .course-time-panel {

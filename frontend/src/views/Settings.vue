@@ -101,36 +101,50 @@
         type="info"
         :closable="false"
         class="llm-notice"
-        title="LLM 连通性验证会同时校验视觉接口。只有通过视觉能力校验的端点，才能被教师配置到课程中并用于作业自动评分。"
+        title="连通性会依次测试：先纯文本，再使用你上传的测试图做多模态校验（服务端将图片规范为 PNG + base64）。通过视觉能力校验的端点，才可被教师配置到课程中并用于带图作业自动评分。"
       />
 
       <el-table :data="presets" v-loading="presetsLoading">
         <el-table-column prop="name" label="名称" min-width="140" />
         <el-table-column prop="model_name" label="模型" min-width="180" />
         <el-table-column prop="base_url" label="Base URL" min-width="220" show-overflow-tooltip />
-        <el-table-column label="视觉校验" width="150">
+        <el-table-column label="文本" width="110">
+          <template #default="{ row }">
+            <el-tag :type="presetStepTagType(row.text_validation_status)" size="small">
+              {{ presetStepLabel(row.text_validation_status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="视觉" width="110">
+          <template #default="{ row }">
+            <el-tag :type="presetStepTagType(row.vision_validation_status)" size="small">
+              {{ presetStepLabel(row.vision_validation_status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="总状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.validation_status === 'validated' ? 'success' : row.validation_status === 'failed' ? 'danger' : 'info'">
               {{ row.validation_status === 'validated' ? '已通过' : row.validation_status === 'failed' ? '失败' : '未校验' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="120">
+        <el-table-column label="启用" width="90">
           <template #default="{ row }">
             <el-tag :type="row.is_active ? 'success' : 'info'">
-              {{ row.is_active ? '启用' : '停用' }}
+              {{ row.is_active ? '是' : '否' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="提示" min-width="220" show-overflow-tooltip>
+        <el-table-column label="详情" min-width="240" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ row.validation_message || '尚未执行连通性与视觉校验' }}
+            {{ formatPresetDetail(row) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" @click="openPresetDialog(row)">编辑</el-button>
-            <el-button size="small" :loading="row.validating" @click="validatePreset(row)">校验</el-button>
+            <el-button size="small" :loading="row.validating" @click="openValidateDialog(row)">校验</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -158,6 +172,28 @@
       <template #footer>
         <el-button @click="uploadDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmUpload">确认</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="validateDialogVisible" title="端点连通性校验" width="480px" destroy-on-close>
+      <p class="validate-hint">
+        请先选一张本地图片（JPEG/PNG/WebP 等，建议小于 5MB）用于多模态测试。校验顺序：纯文本 → 带图请求。
+      </p>
+      <el-upload
+        :auto-upload="false"
+        :limit="1"
+        accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp"
+        :on-change="onValidateFileChange"
+        :on-exceed="() => ElMessage.warning('只需选择一张图片')"
+      >
+        <el-button type="primary">选择测试图</el-button>
+        <template #tip>
+          <div v-if="validateFileName" class="validate-file-name">已选：{{ validateFileName }}</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="validateDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="validateDialogLoading" @click="runValidate">开始校验</el-button>
       </template>
     </el-dialog>
 
@@ -205,6 +241,7 @@ import { ElMessage } from 'element-plus'
 import { Connection, Refresh, Select, Setting, UploadFilled, View } from '@element-plus/icons-vue'
 import { normalizeBrandingText } from '@/utils/branding'
 import { http } from '@/api'
+import api from '@/api'
 
 /** Axios errors carry response; thrown sync errors (e.g. ReferenceError) do not. */
 const formatApiError = error => {
@@ -237,6 +274,11 @@ const presetsLoading = ref(false)
 const presetDialogVisible = ref(false)
 const presetSaving = ref(false)
 const editingPresetId = ref(null)
+const validateDialogVisible = ref(false)
+const validateDialogLoading = ref(false)
+const validateRow = ref(null)
+const validateFile = ref(null)
+const validateFileName = ref('')
 
 const form = ref({
   system_name: 'BIMSA-CLASS 大学生教学管理系统',
@@ -434,15 +476,70 @@ const savePreset = async () => {
   }
 }
 
-const validatePreset = async row => {
+const presetStepLabel = s => {
+  if (s === 'passed') return '通过'
+  if (s === 'failed') return '失败'
+  if (s === 'skipped') return '跳过'
+  return '—'
+}
+
+const presetStepTagType = s => {
+  if (s === 'passed') return 'success'
+  if (s === 'failed') return 'danger'
+  if (s === 'skipped') return 'info'
+  return 'info'
+}
+
+const formatPresetDetail = row => {
+  const parts = []
+  if (row.text_validation_message) {
+    parts.push(`文本：${row.text_validation_message}`)
+  }
+  if (row.vision_validation_message) {
+    parts.push(`视觉：${row.vision_validation_message}`)
+  }
+  if (parts.length) {
+    return parts.join('；')
+  }
+  return row.validation_message || '尚未执行连通性校验。请点击「校验」并上传测试图。'
+}
+
+const openValidateDialog = row => {
+  validateRow.value = row
+  validateFile.value = null
+  validateFileName.value = ''
+  validateDialogVisible.value = true
+}
+
+const onValidateFileChange = upload => {
+  const raw = upload?.raw
+  if (!raw) {
+    return
+  }
+  validateFile.value = raw
+  validateFileName.value = raw.name || 'image'
+}
+
+const runValidate = async () => {
+  if (!validateRow.value) {
+    return
+  }
+  if (!validateFile.value) {
+    ElMessage.warning('请选择一张用于多模态测试的本地图片')
+    return
+  }
+  const row = presets.value.find(p => p.id === validateRow.value.id) || validateRow.value
+  validateDialogLoading.value = true
   row.validating = true
   try {
-    await http.post(`/llm-settings/presets/${row.id}/validate`)
+    await api.llmSettings.validatePreset(row.id, validateFile.value)
     ElMessage.success('端点校验已完成')
+    validateDialogVisible.value = false
     await fetchPresets()
   } catch (error) {
     ElMessage.error(`端点校验失败：${formatApiError(error)}`)
   } finally {
+    validateDialogLoading.value = false
     row.validating = false
   }
 }

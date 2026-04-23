@@ -10,12 +10,15 @@ from sqlalchemy import text
 
 from app.database import Base, SessionLocal, engine
 from app.llm_grading import (
+    VISION_TEST_IMAGE_DATA_URL,
     _build_chat_completion_url,
     _parse_scoring_json,
+    build_png_data_url_from_image_bytes,
     estimate_task_tokens,
     precheck_quota,
     validate_endpoint_connectivity,
 )
+import base64
 from app.models import CourseLLMConfig, Homework
 
 
@@ -34,6 +37,12 @@ def _reset_db():
     ensure_schema_updates()
     yield
     SessionLocal().close()
+
+
+def test_build_png_data_url_from_raster_bytes():
+    raw = base64.b64decode(VISION_TEST_IMAGE_DATA_URL.split("base64,", 1)[1])
+    d = build_png_data_url_from_image_bytes(raw)
+    assert d.startswith("data:image/png;base64,")
 
 
 def test_build_chat_completion_url():

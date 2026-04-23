@@ -715,6 +715,39 @@ class HomeworkResponse(HomeworkBase):
         from_attributes = True
 
 
+class HomeworkBatchLateSubmissionUpdate(BaseModel):
+    """批量更新多份作业的迟交策略（用于截止后统一允许补交等场景）。"""
+
+    homework_ids: list[int] = Field(default_factory=list, min_length=1)
+    allow_late_submission: Optional[bool] = None
+    late_submission_affects_score: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> "HomeworkBatchLateSubmissionUpdate":
+        if self.allow_late_submission is None and self.late_submission_affects_score is None:
+            raise ValueError("至少需要设置 allow_late_submission 或 late_submission_affects_score 之一。")
+        return self
+
+
+class HomeworkBatchRegradeRequest(BaseModel):
+    """对某作业下多条学生提交批量入队 LLM 重评（仅 latest attempt）。"""
+
+    submission_ids: Optional[list[int]] = None
+    only_latest_attempt: bool = True
+
+
+class HomeworkBatchRegradeItemResult(BaseModel):
+    submission_id: int
+    status: str  # "queued" | "skipped"
+    reason: Optional[str] = None
+
+
+class HomeworkBatchRegradeResponse(BaseModel):
+    queued: int
+    skipped: int
+    results: list[HomeworkBatchRegradeItemResult] = Field(default_factory=list)
+
+
 class HomeworkListResponse(BaseModel):
     total: int
     data: List[HomeworkResponse]
@@ -876,6 +909,10 @@ class LLMEndpointPresetResponse(BaseModel):
     supports_vision: bool
     validation_status: str
     validation_message: Optional[str] = None
+    text_validation_status: Optional[str] = None
+    text_validation_message: Optional[str] = None
+    vision_validation_status: Optional[str] = None
+    vision_validation_message: Optional[str] = None
     validated_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
