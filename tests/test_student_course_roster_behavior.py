@@ -5,8 +5,11 @@
 1. 测试数据常为「理想全套」，缺少只满足账号或只满足花名册其一的状态。
 2. 若课程列表用「班级内全部课程」并集、而提交用「选课表」，两套规则分叉时仍可能 HTTP 200。
 3. 教师端 student_count 与名单接口若未对账，人数为 0 或不一致也不易发现。
+4. 学生端列表与详情都走「选课 + 花名册同班」时，单测若只断言列表为空，仍漏掉「详情 403 / 提交 404」等路径。
+5. 退选后若仅删 CourseEnrollment 而不记 block，prepare 会在下次登录把人选回去，问题看起来像「偶发又能交了」。
+6. 教师用「同步选课」把花名册与选课表对齐是运维上的合法恢复手段，应对 CourseEnrollmentBlock 清掉并允许再次提交。
 
-以下用例覆盖运营顺序、学号与用户名不一致、跨班作业、教师移除选课后不得被登录同步悄悄恢复等场景。
+以下用例覆盖运营顺序、学号与用户名不一致、跨班作业、教师移除选课后不得被登录同步悄悄恢复、同步选课后的有意恢复、同班重复学号等场景。
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from app.main import app
 from app.models import (
     Class,
     CourseEnrollment,
+    CourseEnrollmentBlock,
     Gender,
     Homework,
     Student,
@@ -699,3 +703,120 @@ def test_get_homework_list_for_student_submission_map_consistent(client: TestCli
 
     r_bad = client.post(f"/api/homeworks/{hw_other_id}/submission", headers=sh, json={"content": "no"})
     assert r_bad.status_code in (403, 404)
+
+
+def test_teacher_sync_enrollments_after_drop_clears_block_and_allows_submit(client: TestClient):
+    """教师从课程退选后 block 生效；教师「同步选课」应清 block 并恢复选课，学生可再次提交。"""
+    ctx = _teacher_and_class(client)
+    db = SessionLocal()
+    try:
+        st = Student(
+            name="同步恢复",
+            student_no=f"sync_{ctx['suffix']}",
+            gender=Gender.MALE,
+            class_id=ctx["class_id"],
+        )
+        db.add(st)
+        db.flush()
+        db.add(
+            CourseEnrollment(
+                subject_id=ctx["course_id"],
+                student_id=st.id,
+                class_id=ctx["class_id"],
+                enrollment_type="required",
+                can_remove=False,
+            )
+        )
+        stu = User(
+            username=st.student_no,
+            hashed_password=get_password_hash("sp"),
+            real_name="同步恢复",
+            role=UserRole.STUDENT.value,
+            class_id=ctx["class_id"],
+        )
+        db.add(stu)
+        db.flush()
+        tid = db.query(User).filter(User.username == ctx["teacher_username"]).first().id
+        hw = Homework(
+            title="同步作业",
+            content="c",
+            class_id=ctx["class_id"],
+            subject_id=ctx["course_id"],
+            max_score=100,
+            grade_precision="integer",
+            auto_grading_enabled=False,
+            allow_late_submission=True,
+            late_submission_affects_score=False,
+            created_by=tid,
+        )
+        db.add(hw)
+        db.commit()
+        hw_id = hw.id
+        st_id = st.id
+        sync_no = st.student_no
+    finally:
+        db.close()
+
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    assert client.delete(f"/api/subjects/{ctx['course_id']}/students/{st_id}", headers=th).status_code == 200
+
+    db = SessionLocal()
+    try:
+        assert (
+            db.query(CourseEnrollmentBlock)
+            .filter(
+                CourseEnrollmentBlock.subject_id == ctx["course_id"],
+                CourseEnrollmentBlock.student_id == st_id,
+            )
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
+
+    r_sync = client.post(f"/api/subjects/{ctx['course_id']}/sync-enrollments", headers=th)
+    assert r_sync.status_code == 200, r_sync.text
+
+    db = SessionLocal()
+    try:
+        assert (
+            db.query(CourseEnrollmentBlock)
+            .filter(
+                CourseEnrollmentBlock.subject_id == ctx["course_id"],
+                CourseEnrollmentBlock.student_id == st_id,
+            )
+            .first()
+            is None
+        )
+        assert (
+            db.query(CourseEnrollment)
+            .filter(
+                CourseEnrollment.subject_id == ctx["course_id"],
+                CourseEnrollment.student_id == st_id,
+            )
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
+
+    sh = login_api(client, sync_no, "sp")
+    r_sub = client.post(f"/api/homeworks/{hw_id}/submission", headers=sh, json={"content": "after sync"})
+    assert r_sub.status_code == 200, r_sub.text
+
+
+def test_create_student_duplicate_student_no_same_class_returns_400(client: TestClient):
+    """同班学号唯一：第二次 POST /api/students 应 400，不产生第二条花名册。"""
+    ctx = _teacher_and_class(client)
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    shared_no = f"dup_cls_{ctx['suffix']}"
+    body = {"name": "甲", "student_no": shared_no, "gender": "male", "class_id": ctx["class_id"]}
+    assert client.post("/api/students", headers=th, json=body).status_code == 200
+    r2 = client.post("/api/students", headers=th, json={**body, "name": "乙"})
+    assert r2.status_code == 400
+    db = SessionLocal()
+    try:
+        n = db.query(Student).filter(Student.student_no == shared_no, Student.class_id == ctx["class_id"]).count()
+        assert n == 1
+    finally:
+        db.close()
