@@ -4,7 +4,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import Class, CourseEnrollment, Student, Subject, User, UserRole
+from app.models import Class, CourseEnrollment, CourseEnrollmentBlock, Student, Subject, User, UserRole
 
 
 def prepare_student_course_context(user: User, db: Session) -> None:
@@ -28,7 +28,7 @@ def prepare_student_course_context(user: User, db: Session) -> None:
 
     student = get_student_profile_for_user(user, db)
     if student:
-        sync_student_course_enrollments(student, db)
+        sync_student_course_enrollments(student, db, respect_enrollment_blocks=True)
     db.flush()
 
 
@@ -62,11 +62,7 @@ def get_accessible_courses_query(user: User, db: Session):
             .filter(CourseEnrollment.student_id == student.id)
             .all()
         ]
-        class_subject_ids = [
-            row[0]
-            for row in db.query(Subject.id).filter(Subject.class_id == user.class_id).all()
-        ]
-        visible_ids = sorted(set(enrolled_subject_ids) | set(class_subject_ids))
+        visible_ids = sorted(set(enrolled_subject_ids))
         if not visible_ids:
             return query.filter(False)
         return query.filter(Subject.id.in_(visible_ids))
@@ -95,6 +91,8 @@ def get_accessible_class_ids_from_courses(user: User, db: Session) -> list[int]:
 
     class_ids = set()
     if user.role == UserRole.CLASS_TEACHER and user.class_id:
+        class_ids.add(user.class_id)
+    if user.role == UserRole.STUDENT and user.class_id:
         class_ids.add(user.class_id)
 
     for course in get_accessible_courses_query(user, db).all():
@@ -133,6 +131,10 @@ def sync_course_enrollments(course: Subject, db: Session) -> int:
     for student in class_students:
         if student.id in existing_student_ids:
             continue
+        db.query(CourseEnrollmentBlock).filter(
+            CourseEnrollmentBlock.subject_id == course.id,
+            CourseEnrollmentBlock.student_id == student.id,
+        ).delete(synchronize_session=False)
         db.add(
             CourseEnrollment(
                 subject_id=course.id,
@@ -147,7 +149,9 @@ def sync_course_enrollments(course: Subject, db: Session) -> int:
     return created
 
 
-def sync_student_course_enrollments(student: Student, db: Session) -> int:
+def sync_student_course_enrollments(
+    student: Student, db: Session, *, respect_enrollment_blocks: bool = True
+) -> int:
     if not student.class_id:
         return 0
 
@@ -157,9 +161,20 @@ def sync_student_course_enrollments(student: Student, db: Session) -> int:
         for enrollment in db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student.id).all()
     }
 
+    blocked_subject_ids: set[int] = set()
+    if respect_enrollment_blocks:
+        blocked_subject_ids = {
+            row[0]
+            for row in db.query(CourseEnrollmentBlock.subject_id).filter(
+                CourseEnrollmentBlock.student_id == student.id
+            )
+        }
+
     created = 0
     for course in courses:
         if course.id in existing_course_ids:
+            continue
+        if course.id in blocked_subject_ids:
             continue
         db.add(
             CourseEnrollment(
@@ -188,6 +203,11 @@ def remove_course_enrollment(course_id: int, student_id: int, db: Session) -> bo
         return False
 
     db.delete(enrollment)
+    if not db.query(CourseEnrollmentBlock).filter(
+        CourseEnrollmentBlock.subject_id == course_id,
+        CourseEnrollmentBlock.student_id == student_id,
+    ).first():
+        db.add(CourseEnrollmentBlock(subject_id=course_id, student_id=student_id))
     return True
 
 

@@ -1,4 +1,4 @@
-"""Student course visibility: class roster union + enrollments after prepare."""
+"""Student course visibility: explicit CourseEnrollment rows after prepare (matches ensure_course_access)."""
 
 import uuid
 

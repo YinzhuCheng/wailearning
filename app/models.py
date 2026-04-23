@@ -148,6 +148,27 @@ class CourseEnrollment(Base):
     class_obj = relationship("Class")
 
 
+class CourseEnrollmentBlock(Base):
+    """
+    Records that a student was explicitly removed from a course enrollment.
+    Student-side auto sync (prepare_student_course_context) must not recreate
+    that row; teacher roster sync (sync_course_enrollments) clears the block
+    when re-adding the student from the class roster.
+    """
+
+    __tablename__ = "course_enrollment_blocks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("subject_id", "student_id", name="uq_course_enrollment_block"),)
+
+    course = relationship("Subject")
+    student = relationship("Student")
+
+
 class Score(Base):
     __tablename__ = "scores"
 
