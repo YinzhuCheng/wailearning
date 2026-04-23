@@ -21,8 +21,9 @@
       >
         <template #title>课程花名册与选课</template>
         <p class="alert-body">
-          学生登录用户名须与<strong>学号</strong>一致才能交作业。可在此维护本班花名册并导入；导入时「所属班级」可留空，将默认填入当前课程班级。
-          若人数为 0 或新生进班后未出现，请点击<strong>同步选课名单</strong>与行政班花名册对齐。
+          选课名单与<strong>行政班花名册必须一致</strong>：只能给「本课程所属班级」里已有的学生加选课；进课方式包括<strong>同步选课名单</strong>（全班对齐）或在<strong>课程管理</strong>中从花名册勾选进课。
+          学生登录用户名须与<strong>学号</strong>一致才能交作业。可在此维护花名册：支持<strong>文件导入</strong>或<strong>粘贴批量导入</strong>；导入时「所属班级」可留空，将默认填入当前课程班级。
+          若人数为 0 或新生进班后未出现，请先确认花名册中已有该生，再点<strong>同步选课名单</strong>。
         </p>
       </el-alert>
 
@@ -39,7 +40,10 @@
                 <el-button @click="downloadTemplate('xlsx')">Excel 模板</el-button>
                 <el-button @click="downloadTemplate('csv')">CSV 模板</el-button>
                 <el-button type="primary" :loading="importing" @click="triggerImport">
-                  一键导入名单
+                  文件导入名单
+                </el-button>
+                <el-button type="primary" plain @click="openPasteImportDialog">
+                  粘贴批量导入
                 </el-button>
                 <el-button @click="router.push('/students/new')">新增学生</el-button>
                 <input
@@ -55,7 +59,10 @@
                 <el-button @click="downloadTemplate('xlsx')">Excel 模板</el-button>
                 <el-button @click="downloadTemplate('csv')">CSV 模板</el-button>
                 <el-button type="primary" :loading="importing" @click="triggerImport">
-                  导入花名册
+                  文件导入花名册
+                </el-button>
+                <el-button type="primary" plain @click="openPasteImportDialog">
+                  粘贴批量导入
                 </el-button>
                 <el-button type="success" :loading="syncingEnrollments" @click="syncCourseEnrollments">
                   同步选课名单
@@ -72,10 +79,10 @@
             </div>
 
             <p v-if="isAdminView" class="import-tip">
-              支持 Excel / CSV 文件，模板列为：姓名、性别、学号、所属班级。导入时若发现新班级，会自动在系统中创建。
+              支持 Excel / CSV 文件或「粘贴批量导入」。列为：姓名、性别、学号、所属班级（每行一条，可用 Tab 或英文逗号分隔）。导入时若发现新班级，仅管理员可自动创建班级。
             </p>
             <p v-else-if="canManageRoster" class="import-tip">
-              任课教师可导入当前课程所属班级的花名册；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）。仅管理员可创建登录账号。
+              可文件导入或粘贴批量导入当前课程所属班级的花名册；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）。仅管理员可创建登录账号；进课后请在课程管理中从花名册勾选或同步选课。
             </p>
           </div>
         </template>
@@ -161,6 +168,65 @@
           </template>
         </el-table>
       </el-card>
+
+      <el-dialog
+        v-model="pasteDialogVisible"
+        title="粘贴批量导入"
+        width="720px"
+        destroy-on-close
+        @closed="resetPasteDialog"
+      >
+        <el-alert type="info" :closable="false" class="paste-alert">
+          <template #title>格式说明</template>
+          <p class="alert-body">
+            每行一名学生，列为：<strong>姓名、性别、学号、所属班级</strong>，中间用 <strong>Tab</strong> 或<strong>英文逗号</strong>分隔（与 Excel 复制到记事本一致）。
+            任课教师场景下「所属班级」可省略，将使用当前课程班级。表头行（以「姓名」开头）会自动跳过。
+          </p>
+        </el-alert>
+
+        <el-input
+          v-model="pasteText"
+          type="textarea"
+          :rows="10"
+          placeholder="从 Excel 或表格中复制后粘贴到此处…"
+          class="paste-textarea"
+        />
+
+        <div class="paste-actions">
+          <el-button @click="previewPasteImport">解析并预览</el-button>
+        </div>
+
+        <el-alert v-if="pasteParseErrors.length" type="error" :closable="false" class="paste-errors">
+          <template #title>解析问题（最多显示 15 条）</template>
+          <ul class="paste-error-list">
+            <li v-for="(msg, idx) in pasteParseErrors.slice(0, 15)" :key="`pe-${idx}`">{{ msg }}</li>
+          </ul>
+        </el-alert>
+
+        <div v-if="pastePreviewRows.length" class="paste-preview">
+          <p class="paste-preview-title">预览（共 {{ pastePreviewRows.length }} 人，提交后将写入花名册）</p>
+          <el-table :data="pastePreviewRows" max-height="280" size="small" border>
+            <el-table-column prop="name" label="姓名" min-width="100" />
+            <el-table-column label="性别" width="80">
+              <template #default="{ row }">{{ row.gender === 'male' ? '男' : '女' }}</template>
+            </el-table-column>
+            <el-table-column prop="student_no" label="学号" min-width="120" />
+            <el-table-column prop="class_name" label="所属班级" min-width="140" />
+          </el-table>
+        </div>
+
+        <template #footer>
+          <el-button @click="pasteDialogVisible = false">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="pasteSubmitting"
+            :disabled="!pastePreviewPayload.length"
+            @click="submitPasteImport"
+          >
+            确认导入
+          </el-button>
+        </template>
+      </el-dialog>
     </template>
   </div>
 </template>
@@ -194,6 +260,13 @@ const syncingEnrollments = ref(false)
 const students = ref([])
 const fileInputRef = ref(null)
 const classTeacherCourses = ref([])
+
+const pasteDialogVisible = ref(false)
+const pasteText = ref('')
+const pasteParseErrors = ref([])
+const pastePreviewRows = ref([])
+const pastePreviewPayload = ref([])
+const pasteSubmitting = ref(false)
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const isAdminView = computed(() => userStore.isAdmin)
@@ -301,6 +374,146 @@ const resetFileInput = () => {
 
 const triggerImport = () => {
   fileInputRef.value?.click()
+}
+
+const splitPasteLine = line => {
+  const t = String(line).trim()
+  if (!t) {
+    return []
+  }
+  if (t.includes('\t')) {
+    return t.split('\t').map(cell => normalizeCellValue(cell))
+  }
+  return t.split(/[,，]/).map(cell => normalizeCellValue(cell))
+}
+
+const parsePasteTableLines = raw => {
+  const lines = String(raw || '')
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean)
+
+  const rows = []
+  for (const line of lines) {
+    const cells = splitPasteLine(line)
+    if (!cells.length) {
+      continue
+    }
+    const first = cells[0]
+    if (first === '姓名' || /^name$/i.test(first)) {
+      continue
+    }
+    const classDefault = !isAdminView.value ? defaultTeacherImportClassName.value : ''
+    if (cells.length >= 4) {
+      rows.push({
+        姓名: cells[0],
+        性别: cells[1],
+        学号: cells[2],
+        所属班级: cells[3]
+      })
+    } else if (cells.length === 3 && classDefault) {
+      rows.push({
+        姓名: cells[0],
+        性别: cells[1],
+        学号: cells[2],
+        所属班级: classDefault
+      })
+    } else {
+      rows.push({
+        姓名: cells[0] || '',
+        性别: cells[1] || '',
+        学号: cells[2] || '',
+        所属班级: cells[3] || ''
+      })
+    }
+  }
+  return rows
+}
+
+const openPasteImportDialog = () => {
+  pasteParseErrors.value = []
+  pastePreviewRows.value = []
+  pastePreviewPayload.value = []
+  pasteText.value = ''
+  pasteDialogVisible.value = true
+}
+
+const resetPasteDialog = () => {
+  pasteText.value = ''
+  pasteParseErrors.value = []
+  pastePreviewRows.value = []
+  pastePreviewPayload.value = []
+}
+
+const previewPasteImport = () => {
+  const tableRows = parsePasteTableLines(pasteText.value)
+  if (!tableRows.length) {
+    pasteParseErrors.value = ['未识别到任何数据行，请检查是否包含姓名、性别、学号等列。']
+    pastePreviewRows.value = []
+    pastePreviewPayload.value = []
+    return
+  }
+
+  const defaultClassName = isAdminView.value ? '' : defaultTeacherImportClassName.value
+  const { errors, payload } = parseImportRows(tableRows, { defaultClassName })
+  pasteParseErrors.value = errors
+  pastePreviewRows.value = payload.map(p => ({
+    name: p.name,
+    gender: p.gender,
+    student_no: p.student_no,
+    class_name: p.class_name
+  }))
+  pastePreviewPayload.value = payload
+}
+
+const submitPasteImport = async () => {
+  if (!pastePreviewPayload.value.length) {
+    ElMessage.warning('请先点击「解析并预览」且确保无错误')
+    return
+  }
+
+  if (pasteParseErrors.value.length) {
+    ElMessage.error('请先修正解析错误后再导入')
+    return
+  }
+
+  pasteSubmitting.value = true
+  try {
+    const result = await api.students.batchCreate({ students: pastePreviewPayload.value })
+    const createdClasses = result?.created_classes || []
+    const successCount = result?.success || 0
+    const failedCount = result?.failed || 0
+
+    if (successCount > 0) {
+      ElMessage({
+        type: failedCount > 0 ? 'warning' : 'success',
+        message: [
+          `成功导入 ${successCount} 名学生`,
+          createdClasses.length ? `自动创建 ${createdClasses.length} 个班级` : '',
+          failedCount > 0 ? `失败 ${failedCount} 条` : ''
+        ]
+          .filter(Boolean)
+          .join('，'),
+        duration: 5000
+      })
+    }
+
+    if (failedCount > 0) {
+      const detailLines = [`成功：${successCount} 人`, `失败：${failedCount} 条`]
+      const errorLines = (result?.errors || []).slice(0, 15)
+      if (errorLines.length) {
+        detailLines.push('', '失败明细：', ...errorLines)
+      }
+      await ElMessageBox.alert(detailLines.join('\n'), '导入结果', { confirmButtonText: '知道了' })
+    }
+
+    pasteDialogVisible.value = false
+    await loadStudents()
+  } catch (error) {
+    console.error('粘贴导入失败', error)
+  } finally {
+    pasteSubmitting.value = false
+  }
 }
 
 const downloadBlob = (blob, filename) => {
@@ -736,6 +949,37 @@ watch(
 
 .hidden-file-input {
   display: none;
+}
+
+.paste-alert {
+  margin-bottom: 12px;
+}
+
+.paste-textarea {
+  margin-top: 8px;
+}
+
+.paste-actions {
+  margin-top: 12px;
+}
+
+.paste-errors {
+  margin-top: 12px;
+}
+
+.paste-error-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.paste-preview {
+  margin-top: 16px;
+}
+
+.paste-preview-title {
+  margin: 0 0 8px;
+  color: #475569;
+  font-size: 14px;
 }
 
 .alert-body {

@@ -107,6 +107,7 @@ const subjectsApi = {
   delete: id => http.delete(`/subjects/${id}`),
   getStudents: id => http.get(`/subjects/${id}/students`),
   syncEnrollments: id => http.post(`/subjects/${id}/sync-enrollments`),
+  rosterEnroll: (subjectId, data) => http.post(`/subjects/${subjectId}/roster-enroll`, data),
   removeStudent: (subjectId, studentId) => http.delete(`/subjects/${subjectId}/students/${studentId}`),
   updateEnrollmentType: (subjectId, studentId, data) => http.put(`/subjects/${subjectId}/students/${studentId}/enrollment-type`, data)
 }
@@ -122,6 +123,7 @@ const api = {
     list: params => http.get('/users', { params }),
     listStudentCandidates: () => http.get('/users/student-candidates'),
     loadStudentCandidates: data => http.post('/users/student-candidates/load', data),
+    batchSetClass: data => http.post('/users/batch-set-class', data),
     get: id => http.get(`/users/${id}`),
     create: data => http.post('/users', data),
     update: (id, data) => http.put(`/users/${id}`, data),

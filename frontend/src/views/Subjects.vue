@@ -80,6 +80,13 @@
           <el-table-column prop="missing_homework_count" label="缺交次数" width="120" />
           <el-table-column prop="final_score_text" label="最终成绩" width="140" />
         </el-table>
+
+        <template v-if="detailCourse?.class_id" #footer>
+          <div class="course-detail-footer">
+            <el-button @click="courseDetailVisible = false">关闭</el-button>
+            <el-button type="warning" plain @click="openRosterEnrollFromDetail">从花名册进课…</el-button>
+          </div>
+        </template>
       </el-dialog>
     </template>
 
@@ -124,6 +131,9 @@
             <template #default="{ row }">
               <el-button type="warning" size="small" :loading="syncingId === row.id" @click="syncEnrollments(row)">
                 同步选课
+              </el-button>
+              <el-button type="success" size="small" plain @click="openRosterEnrollDialog(row)">
+                从花名册进课
               </el-button>
               <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
               <el-button type="success" size="small" @click="openLlmConfigDialog(row)">LLM 配置</el-button>
@@ -236,6 +246,62 @@
         <template #footer>
           <el-button @click="dialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+        </template>
+      </el-dialog>
+
+      <el-dialog
+        v-model="rosterEnrollVisible"
+        :title="rosterEnrollCourse ? `从花名册进课 · ${rosterEnrollCourse.name}` : '从花名册进课'"
+        width="820px"
+        destroy-on-close
+        @closed="resetRosterEnrollDialog"
+      >
+        <el-alert type="warning" :closable="false" class="roster-enroll-alert">
+          <template #title>与花名册一致</template>
+          <p class="roster-enroll-alert-body">
+            仅允许将<strong>本课程所属行政班花名册</strong>中的学生加入选课；不会把外班学生写入本课。
+            若某生尚未出现在下列名单中，请先在「学生信息」中维护该班花名册（或粘贴批量导入），再返回此处勾选。
+            「同步选课」会一次性把<strong>全班</strong>花名册与选课对齐；此处适合只勾选部分学生。
+          </p>
+        </el-alert>
+
+        <el-empty v-if="rosterEnrollCourse && !rosterEnrollCourse.class_id" description="当前课程未绑定班级，无法从花名册进课。" />
+
+        <template v-else>
+          <div v-if="rosterEnrollCourse" class="roster-enroll-meta">
+            <span>班级：{{ rosterEnrollCourse.class_name || '—' }}</span>
+          </div>
+
+          <el-table
+            ref="rosterEnrollTableRef"
+            :data="rosterEnrollRows"
+            v-loading="rosterEnrollLoading"
+            max-height="420"
+            row-key="id"
+            @selection-change="onRosterEnrollSelectionChange"
+          >
+            <el-table-column type="selection" width="48" :selectable="row => !row._enrolled" />
+            <el-table-column prop="name" label="姓名" min-width="120" />
+            <el-table-column prop="student_no" label="学号" min-width="140" />
+            <el-table-column label="选课状态" width="120">
+              <template #default="{ row }">
+                <el-tag v-if="row._enrolled" type="success" size="small">已在课</el-tag>
+                <el-tag v-else type="info" size="small">未在课</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
+
+        <template #footer>
+          <el-button @click="rosterEnrollVisible = false">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="rosterEnrollSubmitting"
+            :disabled="!rosterEnrollSelection.length || rosterEnrollLoading"
+            @click="submitRosterEnroll"
+          >
+            加入选课
+          </el-button>
         </template>
       </el-dialog>
 
@@ -430,6 +496,14 @@ const semesters = ref([])
 const classTeacherCoursePool = ref([])
 const courseDetailRows = ref([])
 
+const rosterEnrollVisible = ref(false)
+const rosterEnrollCourse = ref(null)
+const rosterEnrollLoading = ref(false)
+const rosterEnrollSubmitting = ref(false)
+const rosterEnrollRows = ref([])
+const rosterEnrollSelection = ref([])
+const rosterEnrollTableRef = ref(null)
+
 const llmForm = reactive({
   is_enabled: false,
   response_language: '',
@@ -577,6 +651,96 @@ const syncEnrollments = async course => {
     console.error('同步选课失败', error)
   } finally {
     syncingId.value = null
+  }
+}
+
+const resetRosterEnrollDialog = () => {
+  rosterEnrollCourse.value = null
+  rosterEnrollRows.value = []
+  rosterEnrollSelection.value = []
+  rosterEnrollTableRef.value?.clearSelection?.()
+}
+
+const onRosterEnrollSelectionChange = rows => {
+  rosterEnrollSelection.value = rows
+}
+
+const openRosterEnrollFromDetail = () => {
+  const course = detailCourse.value
+  courseDetailVisible.value = false
+  if (course?.id) {
+    openRosterEnrollDialog(course)
+  }
+}
+
+const openRosterEnrollDialog = async course => {
+  rosterEnrollCourse.value = course
+  rosterEnrollVisible.value = true
+  rosterEnrollRows.value = []
+  rosterEnrollSelection.value = []
+
+  if (!course?.class_id) {
+    return
+  }
+
+  rosterEnrollLoading.value = true
+  try {
+    const [roster, enrolled] = await Promise.all([
+      loadAllPages(params =>
+        api.students.list({
+          ...params,
+          class_id: course.class_id,
+          page_size: 500
+        })
+      ),
+      api.courses.getStudents(course.id)
+    ])
+    const enrolledIds = new Set((enrolled || []).map(r => r.student_id))
+    rosterEnrollRows.value = (roster || []).map(row => ({
+      ...row,
+      _enrolled: enrolledIds.has(row.id)
+    }))
+  } catch (error) {
+    console.error('加载花名册失败', error)
+  } finally {
+    rosterEnrollLoading.value = false
+  }
+}
+
+const submitRosterEnroll = async () => {
+  const course = rosterEnrollCourse.value
+  if (!course?.id || !rosterEnrollSelection.value.length) {
+    return
+  }
+
+  const ids = rosterEnrollSelection.value.map(r => r.id).filter(Boolean)
+  if (!ids.length) {
+    return
+  }
+
+  rosterEnrollSubmitting.value = true
+  try {
+    const result = await api.courses.rosterEnroll(course.id, { student_ids: ids })
+    const parts = []
+    if (result?.created > 0) {
+      parts.push(`新增选课 ${result.created} 人`)
+    }
+    if (result?.skipped_already_enrolled > 0) {
+      parts.push(`已在课 ${result.skipped_already_enrolled} 人`)
+    }
+    if (result?.skipped_not_in_class_roster > 0) {
+      parts.push(`非本班花名册 ${result.skipped_not_in_class_roster} 人`)
+    }
+    if (result?.skipped_not_found > 0) {
+      parts.push(`无效学号 ${result.skipped_not_found} 条`)
+    }
+    ElMessage.success(parts.length ? parts.join('；') : '未产生变更')
+    rosterEnrollVisible.value = false
+    await loadCourses()
+  } catch (error) {
+    console.error('从花名册进课失败', error)
+  } finally {
+    rosterEnrollSubmitting.value = false
   }
 }
 
@@ -998,6 +1162,12 @@ watch(
   color: #334155;
 }
 
+.course-detail-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .course-time-list {
   display: flex;
   flex-direction: column;
@@ -1134,5 +1304,21 @@ watch(
   .course-time-panel__fields {
     grid-template-columns: 1fr;
   }
+}
+
+.roster-enroll-alert {
+  margin-bottom: 16px;
+}
+
+.roster-enroll-alert-body {
+  margin: 0;
+  line-height: 1.65;
+  color: #334155;
+}
+
+.roster-enroll-meta {
+  margin-bottom: 12px;
+  color: #475569;
+  font-size: 14px;
 }
 </style>
