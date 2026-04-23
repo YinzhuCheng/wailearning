@@ -518,6 +518,33 @@ def get_subject_students(
     return [_serialize_enrollment(enrollment) for enrollment in enrollments]
 
 
+@router.post("/{subject_id}/sync-enrollments")
+def sync_subject_enrollments(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Reconcile course_enrollments with the course class roster (idempotent)."""
+    if current_user.role == UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Students cannot modify course rosters.")
+
+    try:
+        course = ensure_course_access(subject_id, current_user, db)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="You do not have access to this course.")
+
+    created = sync_course_enrollments(course, db)
+    db.commit()
+    db.refresh(course)
+    return {
+        "message": "Course enrollments synchronized.",
+        "created": created,
+        "student_count": db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).count(),
+    }
+
+
 @router.put("/{subject_id}/students/{student_id}/enrollment-type", response_model=CourseEnrollmentResponse)
 def update_subject_student_enrollment_type(
     subject_id: int,

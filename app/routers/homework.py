@@ -16,7 +16,7 @@ from app.attachments import (
     get_attachment_file_path,
 )
 from app.auth import get_current_active_user
-from app.course_access import ensure_course_access, get_enrolled_students
+from app.course_access import ensure_course_access, get_enrolled_students, get_student_profile_for_user
 from app.database import get_db
 from app.llm_grading import normalize_score_for_homework, queue_grading_task, refresh_submission_summary
 from app.models import (
@@ -95,10 +95,34 @@ def _resolve_student_for_user(homework: Homework, current_user: User, db: Sessio
     if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Only students can submit homework.")
 
-    student_query = db.query(Student).filter(Student.class_id == homework.class_id)
-    student = _match_student_for_user(student_query, current_user)
-    if not student:
-        raise HTTPException(status_code=404, detail="Student profile not found for the current account.")
+    if not current_user.username:
+        raise HTTPException(
+            status_code=404,
+            detail="学生账号缺少登录名，无法匹配花名册学号。请联系管理员。",
+        )
+
+    roster = get_student_profile_for_user(current_user, db)
+    if not roster:
+        same_no_other_class = (
+            db.query(Student).filter(Student.student_no == current_user.username).first()
+        )
+        if same_no_other_class:
+            raise HTTPException(
+                status_code=404,
+                detail="花名册中有相同学号，但所在班级与当前账号班级不一致。请管理员核对班级与学号。",
+            )
+        raise HTTPException(
+            status_code=404,
+            detail="未找到与当前账号匹配的花名册：请确认学号与登录用户名一致，且已在学生管理中录入本班。",
+        )
+
+    if roster.class_id != homework.class_id:
+        raise HTTPException(
+            status_code=404,
+            detail="该作业所属班级与花名册班级不一致，无法以当前账号提交。请管理员核对作业班级或花名册班级。",
+        )
+
+    student = roster
 
     if homework.subject_id:
         enrollment = (
@@ -110,7 +134,10 @@ def _resolve_student_for_user(homework: Homework, current_user: User, db: Sessio
             .first()
         )
         if not enrollment:
-            raise HTTPException(status_code=403, detail="You are not enrolled in this course.")
+            raise HTTPException(
+                status_code=403,
+                detail="未加入该课程的选课名单，无法提交。请任课教师在课程学生名单中同步或联系管理员。",
+            )
 
     return student
 

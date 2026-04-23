@@ -2,13 +2,20 @@
   <div class="student-form-page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">{{ isEdit ? '编辑学生' : '新增学生' }}</h1>
-        <p class="page-subtitle">
-          {{ isEdit ? '修改学生信息并保存到学生管理列表。' : '手动新增一名学生并关联到对应班级。' }}
-        </p>
+        <h1 class="page-title">{{ pageTitle }}</h1>
+        <p class="page-subtitle">{{ pageSubtitle }}</p>
       </div>
-      <el-button @click="router.push('/students')">返回学生管理</el-button>
+      <el-button @click="goBack">返回</el-button>
     </div>
+
+    <el-alert
+      v-if="isRosterMode"
+      type="info"
+      :closable="false"
+      class="roster-tip"
+      title="花名册说明"
+      description="此处维护的是班级花名册（学号须与学生登录用户名一致才能交作业）。登录账号仍由管理员在用户管理中创建。"
+    />
 
     <el-card shadow="never" v-loading="loading">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="96px" class="student-form">
@@ -28,7 +35,12 @@
         </el-form-item>
 
         <el-form-item label="所属班级" prop="class_id">
-          <el-select v-model="form.class_id" placeholder="请选择班级" style="width: 100%">
+          <el-select
+            v-model="form.class_id"
+            placeholder="请选择班级"
+            style="width: 100%"
+            :disabled="isRosterMode && lockClassSelect"
+          >
             <el-option
               v-for="item in classes"
               :key="item.id"
@@ -51,7 +63,7 @@
         </el-form-item>
 
         <el-form-item class="form-actions">
-          <el-button @click="router.push('/students')">取消</el-button>
+          <el-button @click="goBack">取消</el-button>
           <el-button type="primary" :loading="submitting" @click="submitForm">
             {{ isEdit ? '保存修改' : '创建学生' }}
           </el-button>
@@ -67,9 +79,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const formRef = ref(null)
 const loading = ref(false)
@@ -86,7 +100,35 @@ const form = reactive({
   address: ''
 })
 
-const isEdit = computed(() => Boolean(route.params.id))
+const isRosterMode = computed(() => route.name === 'RosterStudentCreate' || route.name === 'RosterStudentEdit')
+const isEdit = computed(() => Boolean(route.params.id) && route.name !== 'RosterStudentCreate')
+
+const rosterQueryClassId = computed(() => {
+  const raw = route.query.class_id
+  if (raw === undefined || raw === null || raw === '') {
+    return null
+  }
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+})
+
+const lockClassSelect = computed(() => rosterQueryClassId.value != null)
+
+const pageTitle = computed(() => {
+  if (isRosterMode.value) {
+    return isEdit.value ? '编辑花名册学生' : '新增花名册学生'
+  }
+  return isEdit.value ? '编辑学生' : '新增学生'
+})
+
+const pageSubtitle = computed(() => {
+  if (isRosterMode.value) {
+    return isEdit.value
+      ? '修改本班花名册信息；保存后已选课程将按新班级自动同步（若调班）。'
+      : '向当前课程所属班级添加一名花名册学生，保存后将自动加入本班已有课程的选课名单。'
+  }
+  return isEdit.value ? '修改学生信息并保存到学生管理列表。' : '手动新增一名学生并关联到对应班级。'
+})
 
 const rules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
@@ -109,6 +151,21 @@ const loadClasses = async () => {
   classes.value = await api.classes.list()
 }
 
+const applyRosterDefaults = async () => {
+  if (!isRosterMode.value || isEdit.value) {
+    return
+  }
+  if (rosterQueryClassId.value != null) {
+    form.class_id = rosterQueryClassId.value
+    return
+  }
+  await userStore.ensureSelectedCourse(false, { preserveEmptySelection: true })
+  const cid = userStore.selectedCourse?.class_id
+  if (cid != null) {
+    form.class_id = cid
+  }
+}
+
 const loadStudent = async () => {
   if (!isEdit.value) {
     return
@@ -116,6 +173,10 @@ const loadStudent = async () => {
 
   const student = await api.students.get(route.params.id)
   fillForm(student)
+}
+
+const goBack = () => {
+  router.push('/students')
 }
 
 const submitForm = async () => {
@@ -135,13 +196,21 @@ const submitForm = async () => {
 
     if (isEdit.value) {
       await api.students.update(route.params.id, payload)
-      ElMessage.success('学生信息已更新')
+      ElMessage.success(isRosterMode.value ? '花名册已更新' : '学生信息已更新')
     } else {
       await api.students.create(payload)
-      ElMessage.success('学生已创建')
+      ElMessage.success(isRosterMode.value ? '花名册学生已添加并已尝试加入本班课程选课' : '学生已创建')
     }
 
-    router.push('/students')
+    if (isRosterMode.value && userStore.selectedCourse?.id) {
+      try {
+        await api.courses.syncEnrollments(userStore.selectedCourse.id)
+      } catch {
+        /* sync is best-effort after create */
+      }
+    }
+
+    goBack()
   } finally {
     submitting.value = false
   }
@@ -151,6 +220,7 @@ onMounted(async () => {
   loading.value = true
   try {
     await loadClasses()
+    await applyRosterDefaults()
     await loadStudent()
   } finally {
     loading.value = false
@@ -180,6 +250,11 @@ onMounted(async () => {
 .page-subtitle {
   margin: 0;
   color: #64748b;
+}
+
+.roster-tip {
+  margin-bottom: 16px;
+  max-width: 760px;
 }
 
 .student-form {

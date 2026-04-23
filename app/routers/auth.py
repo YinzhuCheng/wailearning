@@ -9,6 +9,7 @@ from app.models import User
 from app.schemas import ChangePasswordRequest, MessageResponse, Token, UserCreate, UserResponse
 from app.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from app.config import settings
+from app.course_access import get_student_profile_for_user, sync_student_course_enrollments
 from app.services import LogService
 from app.models import UserRole
 
@@ -54,6 +55,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         user_agent=str(request.headers.get("user-agent")) if request else None,
         success=True
     )
+
+    if user.role == UserRole.STUDENT.value and user.class_id:
+        student = get_student_profile_for_user(user, db)
+        if student:
+            sync_student_course_enrollments(student, db)
+            db.commit()
 
     return {"access_token": access_token, "token_type": "bearer"}
 

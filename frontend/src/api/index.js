@@ -106,6 +106,7 @@ const subjectsApi = {
   update: (id, data) => http.put(`/subjects/${id}`, data),
   delete: id => http.delete(`/subjects/${id}`),
   getStudents: id => http.get(`/subjects/${id}/students`),
+  syncEnrollments: id => http.post(`/subjects/${id}/sync-enrollments`),
   removeStudent: (subjectId, studentId) => http.delete(`/subjects/${subjectId}/students/${studentId}`),
   updateEnrollmentType: (subjectId, studentId, data) => http.put(`/subjects/${subjectId}/students/${studentId}/enrollment-type`, data)
 }
