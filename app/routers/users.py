@@ -325,7 +325,34 @@ def upsert_student_roster_from_student_users(
             class_id=user.class_id,
         )
         db.add(roster)
-        db.flush()
+        try:
+            with db.begin_nested():
+                db.flush()
+        except IntegrityError:
+            # Concurrent create or race after pre-check: align with existing row.
+            db.expunge(roster)
+            raced = (
+                db.query(Student)
+                .filter(Student.student_no == student_no, Student.class_id == user.class_id)
+                .first()
+            )
+            if raced:
+                if (raced.name or "").strip() != display_name:
+                    raced.name = display_name
+                    updated += 1
+                else:
+                    skipped += 1
+                prepare_student_course_context(user, db)
+                continue
+            errors.append(
+                StudentRosterUpsertFromUsersError(
+                    user_id=user.id,
+                    username=user.username,
+                    reason="花名册写入冲突，请重试或检查学号是否重复",
+                )
+            )
+            continue
+
         created += 1
         prepare_student_course_context(user, db)
 
