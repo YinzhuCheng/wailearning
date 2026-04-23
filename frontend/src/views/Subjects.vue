@@ -120,8 +120,11 @@
           </el-table-column>
           <el-table-column prop="student_count" label="学生数" width="100" />
           <el-table-column prop="description" label="课程简介" min-width="220" show-overflow-tooltip />
-          <el-table-column label="操作" width="280" fixed="right">
+          <el-table-column label="操作" width="360" fixed="right">
             <template #default="{ row }">
+              <el-button type="warning" size="small" :loading="syncingId === row.id" @click="syncEnrollments(row)">
+                同步选课
+              </el-button>
               <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
               <el-button type="success" size="small" @click="openLlmConfigDialog(row)">LLM 配置</el-button>
               <el-button type="danger" size="small" @click="deleteCourse(row)">删除</el-button>
@@ -392,6 +395,7 @@ import {
 const userStore = useUserStore()
 
 const loading = ref(false)
+const syncingId = ref(null)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const editingCourse = ref(null)
@@ -540,6 +544,26 @@ const loadCourses = async () => {
     courses.value = await api.courses.list()
   } finally {
     loading.value = false
+  }
+}
+
+const syncEnrollments = async course => {
+  if (!course?.id) {
+    return
+  }
+  syncingId.value = course.id
+  try {
+    const result = await api.courses.syncEnrollments(course.id)
+    ElMessage.success(
+      result?.created > 0
+        ? `已根据花名册同步选课，新增 ${result.created} 人`
+        : '选课名单已与花名册一致'
+    )
+    await loadCourses()
+  } catch (error) {
+    console.error('同步选课失败', error)
+  } finally {
+    syncingId.value = null
   }
 }
 

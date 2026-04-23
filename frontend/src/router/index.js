@@ -49,10 +49,22 @@ const routes = [
         meta: { requiresAdmin: true, title: '新增学生' }
       },
       {
+        path: 'students/roster/new',
+        name: 'RosterStudentCreate',
+        component: () => import('@/views/StudentForm.vue'),
+        meta: { requiresTeachingStaff: true, title: '新增花名册学生' }
+      },
+      {
         path: 'students/:id/edit',
         name: 'StudentEdit',
         component: () => import('@/views/StudentForm.vue'),
         meta: { requiresAdmin: true, title: '编辑学生' }
+      },
+      {
+        path: 'students/:id/roster-edit',
+        name: 'RosterStudentEdit',
+        component: () => import('@/views/StudentForm.vue'),
+        meta: { requiresTeachingStaff: true, title: '编辑花名册学生' }
       },
       {
         path: 'scores',
@@ -166,6 +178,16 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
+    next(userStore.isStudent ? '/courses' : '/dashboard')
+    return
+  }
+
+  if (
+    to.meta.requiresTeachingStaff &&
+    !userStore.isAdmin &&
+    !userStore.isTeacher &&
+    !userStore.isClassTeacher
+  ) {
     next(userStore.isStudent ? '/courses' : '/dashboard')
     return
   }

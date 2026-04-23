@@ -15,11 +15,16 @@
     <template v-else>
       <el-alert
         v-if="showTeacherAlert"
-        title="当前课程学生名单支持手动移除选课学生。"
-        type="warning"
+        type="info"
         :closable="false"
         class="info-alert"
-      />
+      >
+        <template #title>课程花名册与选课</template>
+        <p class="alert-body">
+          学生登录用户名须与<strong>学号</strong>一致才能交作业。可在此维护本班花名册并导入；导入时「所属班级」可留空，将默认填入当前课程班级。
+          若人数为 0 或新生进班后未出现，请点击<strong>同步选课名单</strong>与行政班花名册对齐。
+        </p>
+      </el-alert>
 
       <el-card shadow="never">
         <template #header>
@@ -45,10 +50,32 @@
                   @change="handleFileChange"
                 />
               </div>
+
+              <div v-else-if="canManageRoster" class="card-actions">
+                <el-button @click="downloadTemplate('xlsx')">Excel 模板</el-button>
+                <el-button @click="downloadTemplate('csv')">CSV 模板</el-button>
+                <el-button type="primary" :loading="importing" @click="triggerImport">
+                  导入花名册
+                </el-button>
+                <el-button type="success" :loading="syncingEnrollments" @click="syncCourseEnrollments">
+                  同步选课名单
+                </el-button>
+                <el-button @click="goRosterNew">新增花名册学生</el-button>
+                <input
+                  ref="fileInputRef"
+                  class="hidden-file-input"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  @change="handleFileChange"
+                />
+              </div>
             </div>
 
             <p v-if="isAdminView" class="import-tip">
               支持 Excel / CSV 文件，模板列为：姓名、性别、学号、所属班级。导入时若发现新班级，会自动在系统中创建。
+            </p>
+            <p v-else-if="canManageRoster" class="import-tip">
+              任课教师可导入当前课程所属班级的花名册；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）。仅管理员可创建登录账号。
             </p>
           </div>
         </template>
@@ -121,10 +148,13 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column v-if="canManageRoster" label="操作" width="140">
+            <el-table-column v-if="canManageRoster" label="操作" width="220" fixed="right">
               <template #default="{ row }">
+                <el-button type="primary" link size="small" @click="goRosterEdit(row.student_id)">
+                  编辑花名册
+                </el-button>
                 <el-button type="danger" size="small" @click="removeStudent(row)">
-                  移除
+                  移除选课
                 </el-button>
               </template>
             </el-table-column>
@@ -160,6 +190,7 @@ const TEMPLATE_ROWS = [
 
 const loading = ref(false)
 const importing = ref(false)
+const syncingEnrollments = ref(false)
 const students = ref([])
 const fileInputRef = ref(null)
 const classTeacherCourses = ref([])
@@ -316,7 +347,13 @@ const readWorkbook = async file => {
   return XLSX.read(buffer, { type: 'array' })
 }
 
-const parseImportRows = rows => {
+const defaultTeacherImportClassName = computed(() => {
+  const name = selectedCourse.value?.class_name
+  return name ? String(name).trim() : ''
+})
+
+const parseImportRows = (rows, options = {}) => {
+  const { defaultClassName = '' } = options
   const errors = []
   const payload = []
 
@@ -326,7 +363,10 @@ const parseImportRows = rows => {
     const name = normalizeCellValue(row.姓名 || row.学生姓名 || row.name)
     const gender = normalizeGenderInput(row.性别 || row.gender)
     const studentNo = normalizeCellValue(row.学号 || row.student_no || row.studentNo)
-    const className = normalizeCellValue(row.所属班级 || row.班级 || row.class_name)
+    let className = normalizeCellValue(row.所属班级 || row.班级 || row.class_name)
+    if (!className && defaultClassName) {
+      className = defaultClassName
+    }
 
     const isEmptyRow = [name, studentNo, className, normalizeCellValue(row.性别 || row.gender)].every(
       value => !value
@@ -396,6 +436,46 @@ const ensureClassTeacherCourses = async () => {
   classTeacherCourses.value = await userStore.fetchTeachingCourses(true)
 }
 
+const syncCourseEnrollments = async () => {
+  if (!selectedCourse.value?.id) {
+    return
+  }
+
+  syncingEnrollments.value = true
+  try {
+    const result = await api.courses.syncEnrollments(selectedCourse.value.id)
+    ElMessage.success(
+      result?.created > 0
+        ? `已同步选课，新增 ${result.created} 条`
+        : '选课名单已与花名册一致，无需新增'
+    )
+    await userStore.fetchTeachingCourses(true)
+    await loadStudents()
+  } catch (error) {
+    console.error('同步选课失败', error)
+  } finally {
+    syncingEnrollments.value = false
+  }
+}
+
+const goRosterNew = () => {
+  if (!selectedCourse.value?.class_id) {
+    ElMessage.warning('当前课程未绑定班级，无法新增花名册学生')
+    return
+  }
+  router.push({
+    path: '/students/roster/new',
+    query: { class_id: String(selectedCourse.value.class_id) }
+  })
+}
+
+const goRosterEdit = studentId => {
+  if (!studentId) {
+    return
+  }
+  router.push(`/students/${studentId}/roster-edit`)
+}
+
 const loadStudents = async () => {
   loading.value = true
 
@@ -463,7 +543,8 @@ const handleFileChange = async event => {
     }
 
     const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false })
-    const { errors, payload } = parseImportRows(rows)
+    const defaultClassName = isAdminView.value ? '' : defaultTeacherImportClassName.value
+    const { errors, payload } = parseImportRows(rows, { defaultClassName })
 
     if (errors.length > 0) {
       await ElMessageBox.alert(errors.slice(0, 10).join('\n'), '文件校验未通过', {
@@ -548,12 +629,12 @@ const deleteStudent = async student => {
 const removeStudent = async row => {
   try {
     await ElMessageBox.confirm(
-      `确认将 ${row.student_name} 从 ${selectedCourse.value.name} 中移除吗？`,
-      '移除学生',
+      `确认将 ${row.student_name} 从 ${selectedCourse.value.name} 的选课名单中移除吗？（不会删除花名册记录）`,
+      '移除选课',
       { type: 'warning' }
     )
     await api.courses.removeStudent(selectedCourse.value.id, row.student_id)
-    ElMessage.success('学生已从课程中移除')
+    ElMessage.success('已从本课程选课名单中移除')
     await loadStudents()
   } catch (error) {
     if (error !== 'cancel') {
@@ -655,6 +736,12 @@ watch(
 
 .hidden-file-input {
   display: none;
+}
+
+.alert-body {
+  margin: 0;
+  line-height: 1.6;
+  color: #334155;
 }
 
 @media (max-width: 768px) {
