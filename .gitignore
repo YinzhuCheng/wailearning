@@ -49,6 +49,8 @@ Thumbs.db
 # Frontend
 frontend/dist/
 frontend/.vite/
+frontend/e2e/.cache/
+frontend/test-results/
 
 # Parent Portal
 parent-portal/dist/

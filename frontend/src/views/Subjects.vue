@@ -129,10 +129,22 @@
           <el-table-column prop="description" label="课程简介" min-width="220" show-overflow-tooltip />
           <el-table-column label="操作" width="360" fixed="right">
             <template #default="{ row }">
-              <el-button type="warning" size="small" :loading="syncingId === row.id" @click="syncEnrollments(row)">
+              <el-button
+                type="warning"
+                size="small"
+                :loading="syncingId === row.id"
+                :data-testid="`btn-sync-enroll-${row.id}`"
+                @click="syncEnrollments(row)"
+              >
                 同步选课
               </el-button>
-              <el-button type="success" size="small" plain @click="openRosterEnrollDialog(row)">
+              <el-button
+                type="success"
+                size="small"
+                plain
+                :data-testid="`btn-roster-enroll-${row.id}`"
+                @click="openRosterEnrollDialog(row)"
+              >
                 从花名册进课
               </el-button>
               <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
@@ -251,6 +263,7 @@
 
       <el-dialog
         v-model="rosterEnrollVisible"
+        data-testid="dialog-roster-enroll"
         :title="rosterEnrollCourse ? `从花名册进课 · ${rosterEnrollCourse.name}` : '从花名册进课'"
         width="820px"
         destroy-on-close
@@ -274,6 +287,7 @@
 
           <el-table
             ref="rosterEnrollTableRef"
+            data-testid="table-roster-enroll-pick"
             :data="rosterEnrollRows"
             v-loading="rosterEnrollLoading"
             max-height="420"
@@ -296,6 +310,7 @@
           <el-button @click="rosterEnrollVisible = false">取消</el-button>
           <el-button
             type="primary"
+            data-testid="btn-roster-enroll-submit"
             :loading="rosterEnrollSubmitting"
             :disabled="!rosterEnrollSelection.length || rosterEnrollLoading"
             @click="submitRosterEnroll"

@@ -42,7 +42,7 @@
                 <el-button type="primary" :loading="importing" @click="triggerImport">
                   文件导入名单
                 </el-button>
-                <el-button type="primary" plain @click="openPasteImportDialog">
+                <el-button type="primary" plain data-testid="students-open-paste-import" @click="openPasteImportDialog">
                   粘贴批量导入
                 </el-button>
                 <el-button @click="router.push('/students/new')">新增学生</el-button>
@@ -61,10 +61,15 @@
                 <el-button type="primary" :loading="importing" @click="triggerImport">
                   文件导入花名册
                 </el-button>
-                <el-button type="primary" plain @click="openPasteImportDialog">
+                <el-button type="primary" plain data-testid="students-open-paste-import" @click="openPasteImportDialog">
                   粘贴批量导入
                 </el-button>
-                <el-button type="success" :loading="syncingEnrollments" @click="syncCourseEnrollments">
+                <el-button
+                  type="success"
+                  data-testid="students-sync-enrollments"
+                  :loading="syncingEnrollments"
+                  @click="syncCourseEnrollments"
+                >
                   同步选课名单
                 </el-button>
                 <el-button @click="goRosterNew">新增花名册学生</el-button>
@@ -171,6 +176,7 @@
 
       <el-dialog
         v-model="pasteDialogVisible"
+        data-testid="dialog-paste-import-students"
         title="粘贴批量导入"
         width="720px"
         destroy-on-close
@@ -190,10 +196,11 @@
           :rows="10"
           placeholder="从 Excel 或表格中复制后粘贴到此处…"
           class="paste-textarea"
+          data-testid="paste-import-textarea"
         />
 
         <div class="paste-actions">
-          <el-button @click="previewPasteImport">解析并预览</el-button>
+          <el-button data-testid="paste-import-preview" @click="previewPasteImport">解析并预览</el-button>
         </div>
 
         <el-alert v-if="pasteParseErrors.length" type="error" :closable="false" class="paste-errors">
@@ -219,6 +226,7 @@
           <el-button @click="pasteDialogVisible = false">取消</el-button>
           <el-button
             type="primary"
+            data-testid="paste-import-submit"
             :loading="pasteSubmitting"
             :disabled="!pastePreviewPayload.length"
             @click="submitPasteImport"

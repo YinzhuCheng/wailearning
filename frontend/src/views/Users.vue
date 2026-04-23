@@ -8,7 +8,9 @@
         </p>
       </div>
       <div class="page-actions">
-        <el-button type="warning" plain @click="openBatchClassDialog">批量调班</el-button>
+        <el-button type="warning" plain data-testid="users-open-batch-class" @click="openBatchClassDialog">
+          批量调班
+        </el-button>
         <el-button type="success" plain @click="openStudentImportDialog">载入学生用户</el-button>
         <el-button type="primary" @click="openCreateDialog">新建用户</el-button>
       </div>
@@ -99,6 +101,7 @@
 
     <el-dialog
       v-model="batchClassDialogVisible"
+      data-testid="dialog-batch-class"
       title="批量调班（学生账号）"
       width="560px"
       destroy-on-close
@@ -114,7 +117,13 @@
 
       <el-form label-width="100px" class="batch-class-form">
         <el-form-item label="目标班级" required>
-          <el-select v-model="batchTargetClassId" placeholder="请选择班级" style="width: 100%" filterable>
+          <el-select
+            v-model="batchTargetClassId"
+            placeholder="请选择班级"
+            style="width: 100%"
+            filterable
+            data-testid="batch-class-target-select"
+          >
             <el-option v-for="c in classes" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
@@ -130,6 +139,7 @@
         <el-button @click="batchClassDialogVisible = false">取消</el-button>
         <el-button
           type="primary"
+          data-testid="batch-class-confirm"
           :loading="batchClassSubmitting"
           :disabled="!batchSelectedStudents.length || !batchTargetClassId"
           @click="submitBatchClass"

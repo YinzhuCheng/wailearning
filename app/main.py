@@ -21,6 +21,7 @@ from app.routers import (
     auth,
     classes,
     dashboard,
+    e2e_dev,
     files,
     homework,
     logs,
@@ -96,6 +97,7 @@ app.include_router(homework.router)
 app.include_router(materials.router)
 app.include_router(notifications.router)
 app.include_router(parent.router)
+app.include_router(e2e_dev.router)
 
 ensure_upload_directories()
 

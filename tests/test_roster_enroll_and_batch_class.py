@@ -1,34 +1,13 @@
 """
 花名册进课（POST /api/subjects/{id}/roster-enroll）与管理员批量调班（POST /api/users/batch-set-class）。
 
-## 已实现（本文件内 active tests）
-- roster-enroll：仅本班花名册学生可写入；外班 / 不存在 ID 计入 skipped；已在课计入 skipped；第二次部分成功。
-- batch-set-class：管理员将学生用户调到目标班后，User.class_id 与同学号 Student.class_id 一致。
-
-## API 扩展规格（下一轮实现：下方 test_* 占位已 pytest.skip）
-
-### POST …/roster-enroll
-| # | 场景 | Given | When | Then |
-|---|------|--------|------|------|
-| R1 | 学生禁止 | 学生 JWT | POST roster-enroll | 403 |
-| R2 | 无关教师禁止 | 另一任课教师 JWT（无该课权限） | POST | 403 |
-| R3 | 退选后恢复并清 block | 本班学生曾被 DELETE …/students/{id} 退选，存在 CourseEnrollmentBlock，无 CourseEnrollment | 任课教师 POST roster-enroll 含该 student_id | 200；选课行存在；block 行删除；可选：作业提交由 403 恢复为 200（与 test_student_course_roster_behavior 对齐） |
-| R4 | 选修课类型 | course.course_type = elective | roster-enroll 一名本班生 | CourseEnrollment.enrollment_type == elective 且 can_remove True |
-| R5 | 课程无班级 | Subject.class_id IS NULL | POST | 400 |
-| R6 | 空 student_ids | 合法教师 | POST {"student_ids":[]} | 200；各计数为 0 |
-
-### POST …/batch-set-class
-| # | 场景 | Given | When | Then |
-|---|------|--------|------|------|
-| B1 | 非管理员禁止 | 教师 JWT | POST batch-set-class | 403 |
-| B2 | 混合 user_ids | 同一请求含学生用户 + 教师用户 ID | 管理员 POST | updated 仅学生；errors 含教师项 reason |
-| B3 | 无效 class_id | class_id 不存在 | 管理员 POST | 400 |
-| B4 | 幂等同班 | 学生 user.class_id 已是目标班 | 管理员 POST | updated == 0；库中 class_id 不变 |
-| B5 | 花名册与账号曾不一致 | User.class_id 与 Student(student_no=user.username).class_id 不同 | 管理员 batch-set-class 到目标班 | 二者均变为目标班；prepare 后选课与 test_admin_user_class_change 行为一致 |
-
-## UI → 后端全链路（E2E，下一轮）
-自动化使用 Playwright，规格写在 frontend/e2e/roster-and-users.spec.ts 顶部注释；默认整包 skip，见该文件。与上表 R/B 编号做追溯矩阵即可。
+覆盖：R1–R6（权限、退选恢复+作业提交、选修类型、无班级 400、空列表）与 B1–B5（权限、混合 ID、无效班级、幂等、花名册对齐）。
+UI 全链路见 frontend/e2e/roster-and-users.spec.js + app/routers/e2e_dev.py。
 """
+
+from __future__ import annotations
+
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -37,9 +16,18 @@ from sqlalchemy import text
 from app.auth import get_password_hash
 from app.database import Base, SessionLocal, engine
 from app.main import app
-from app.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
-
-_ROUND2 = "Round 2: implement per module docstring (API table R1–R6, B1–B5)"
+from app.models import (
+    Class,
+    CourseEnrollment,
+    CourseEnrollmentBlock,
+    Gender,
+    Homework,
+    Student,
+    Subject,
+    User,
+    UserRole,
+)
+from tests.llm_scenario import login_api
 
 
 @pytest.fixture(autouse=True)
@@ -200,7 +188,7 @@ def test_admin_batch_set_class_syncs_student_user(client: TestClient):
     finally:
         db.close()
 
-    ah = {"Authorization": f"Bearer {client.post('/api/auth/login', data={'username': 'adm', 'password': 'a'}).json()['access_token']}"}
+    ah = login_api(client, "adm", "a")
     r = client.post(
         "/api/users/batch-set-class",
         headers=ah,
@@ -220,59 +208,468 @@ def test_admin_batch_set_class_syncs_student_user(client: TestClient):
         db.close()
 
 
-# --- Round 2: API extensions (spec only; implementations deferred) ---
-
-
 def test_roster_enroll_forbidden_for_student(client: TestClient):
-    """Table R1."""
-    pytest.skip(_ROUND2)
+    ctx = _seed_teacher_course(client)
+    db = SessionLocal()
+    try:
+        st = db.query(Student).filter(Student.id == ctx["s1"]).first()
+        u = User(
+            username=f"stu_r1_{uuid.uuid4().hex[:8]}",
+            hashed_password=get_password_hash("sp"),
+            real_name="学生",
+            role=UserRole.STUDENT.value,
+            class_id=st.class_id,
+        )
+        db.add(u)
+        db.commit()
+        uname = u.username
+    finally:
+        db.close()
+    sh = login_api(client, uname, "sp")
+    r = client.post(
+        f"/api/subjects/{ctx['course_id']}/roster-enroll",
+        headers=sh,
+        json={"student_ids": [ctx["s1"]]},
+    )
+    assert r.status_code == 403
 
 
 def test_roster_enroll_forbidden_for_unrelated_teacher(client: TestClient):
-    """Table R2."""
-    pytest.skip(_ROUND2)
+    ctx = _seed_teacher_course(client)
+    db = SessionLocal()
+    try:
+        t2 = User(
+            username=f"t2_{uuid.uuid4().hex[:8]}",
+            hashed_password=get_password_hash("tp2"),
+            real_name="别班老师",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(t2)
+        db.commit()
+        uname = t2.username
+    finally:
+        db.close()
+    h2 = login_api(client, uname, "tp2")
+    r = client.post(
+        f"/api/subjects/{ctx['course_id']}/roster-enroll",
+        headers=h2,
+        json={"student_ids": [ctx["s1"]]},
+    )
+    assert r.status_code == 403
 
 
 def test_roster_enroll_after_drop_clears_enrollment_block(client: TestClient):
-    """Table R3: DELETE student from course then roster-enroll restores enrollment and removes block."""
-    pytest.skip(_ROUND2)
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        klass = Class(name=f"班R3_{suffix}", grade=2026)
+        db.add(klass)
+        db.flush()
+        t = User(
+            username=f"tr3_{suffix}",
+            hashed_password=get_password_hash("tp"),
+            real_name="教师R3",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(t)
+        db.flush()
+        st = Student(
+            name="退选恢复",
+            student_no=f"sr3_{suffix}",
+            gender=Gender.MALE,
+            class_id=klass.id,
+        )
+        db.add(st)
+        db.flush()
+        course = Subject(
+            name=f"课R3_{suffix}",
+            teacher_id=t.id,
+            class_id=klass.id,
+            course_type="required",
+            status="active",
+        )
+        db.add(course)
+        db.flush()
+        enr = CourseEnrollment(
+            subject_id=course.id,
+            student_id=st.id,
+            class_id=klass.id,
+            enrollment_type="required",
+            can_remove=False,
+        )
+        db.add(enr)
+        db.flush()
+        hw = Homework(
+            title="作业R3",
+            content="c",
+            class_id=klass.id,
+            subject_id=course.id,
+            max_score=100,
+            grade_precision="integer",
+            auto_grading_enabled=False,
+            allow_late_submission=True,
+            late_submission_affects_score=False,
+            created_by=t.id,
+        )
+        db.add(hw)
+        db.flush()
+        cid, sid, stid, hwid, tuname, klass_id = course.id, st.id, st.id, hw.id, t.username, klass.id
+        db.commit()
+    finally:
+        db.close()
+
+    th = login_api(client, tuname, "tp")
+    assert client.delete(f"/api/subjects/{cid}/students/{sid}", headers=th).status_code == 200
+
+    db = SessionLocal()
+    try:
+        assert db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == cid, CourseEnrollment.student_id == stid).first() is None
+        blk = (
+            db.query(CourseEnrollmentBlock)
+            .filter(CourseEnrollmentBlock.subject_id == cid, CourseEnrollmentBlock.student_id == stid)
+            .first()
+        )
+        assert blk is not None
+    finally:
+        db.close()
+
+    r = client.post(f"/api/subjects/{cid}/roster-enroll", headers=th, json={"student_ids": [stid]})
+    assert r.status_code == 200, r.text
+    assert r.json()["created"] == 1
+
+    db = SessionLocal()
+    try:
+        en = db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == cid, CourseEnrollment.student_id == stid).first()
+        assert en is not None
+        blk2 = (
+            db.query(CourseEnrollmentBlock)
+            .filter(CourseEnrollmentBlock.subject_id == cid, CourseEnrollmentBlock.student_id == stid)
+            .first()
+        )
+        assert blk2 is None
+    finally:
+        db.close()
+
+    stu = User(
+        username=f"sr3_{suffix}",
+        hashed_password=get_password_hash("sp"),
+        real_name="退选恢复",
+        role=UserRole.STUDENT.value,
+        class_id=klass_id,
+    )
+    db = SessionLocal()
+    try:
+        db.add(stu)
+        db.commit()
+    finally:
+        db.close()
+    sh = login_api(client, f"sr3_{suffix}", "sp")
+    r_sub = client.post(f"/api/homeworks/{hwid}/submission", headers=sh, json={"content": "ok"})
+    assert r_sub.status_code == 200, r_sub.text
 
 
 def test_roster_enroll_elective_course_sets_enrollment_flags(client: TestClient):
-    """Table R4."""
-    pytest.skip(_ROUND2)
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        klass = Class(name=f"班R4_{suffix}", grade=2026)
+        db.add(klass)
+        db.flush()
+        t = User(
+            username=f"tr4_{suffix}",
+            hashed_password=get_password_hash("tp"),
+            real_name="教师R4",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(t)
+        db.flush()
+        st = Student(
+            name="选修生",
+            student_no=f"sr4_{suffix}",
+            gender=Gender.FEMALE,
+            class_id=klass.id,
+        )
+        db.add(st)
+        db.flush()
+        course = Subject(
+            name=f"选修课_{suffix}",
+            teacher_id=t.id,
+            class_id=klass.id,
+            course_type="elective",
+            status="active",
+        )
+        db.add(course)
+        db.flush()
+        cid, stid, tuname = course.id, st.id, t.username
+        db.commit()
+    finally:
+        db.close()
+
+    th = login_api(client, tuname, "tp")
+    r = client.post(f"/api/subjects/{cid}/roster-enroll", headers=th, json={"student_ids": [stid]})
+    assert r.status_code == 200
+    assert r.json()["created"] == 1
+
+    db = SessionLocal()
+    try:
+        en = db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == cid, CourseEnrollment.student_id == stid).first()
+        assert en.enrollment_type == "elective"
+        assert en.can_remove is True
+    finally:
+        db.close()
 
 
 def test_roster_enroll_rejects_when_course_has_no_class(client: TestClient):
-    """Table R5."""
-    pytest.skip(_ROUND2)
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        t = User(
+            username=f"tnoclass_{suffix}",
+            hashed_password=get_password_hash("tp"),
+            real_name="教师无班课",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(t)
+        db.flush()
+        course = Subject(
+            name=f"孤儿课_{suffix}",
+            teacher_id=t.id,
+            class_id=None,
+            course_type="required",
+            status="active",
+        )
+        db.add(course)
+        db.flush()
+        cid, tuname = course.id, t.username
+        db.commit()
+    finally:
+        db.close()
+
+    th = login_api(client, tuname, "tp")
+    r = client.post(f"/api/subjects/{cid}/roster-enroll", headers=th, json={"student_ids": [1]})
+    assert r.status_code == 400
 
 
 def test_roster_enroll_empty_student_ids_is_noop(client: TestClient):
-    """Table R6."""
-    pytest.skip(_ROUND2)
+    ctx = _seed_teacher_course(client)
+    r = client.post(
+        f"/api/subjects/{ctx['course_id']}/roster-enroll",
+        headers=ctx["th"],
+        json={"student_ids": []},
+    )
+    assert r.status_code == 200
+    b = r.json()
+    assert b["created"] == 0
+    assert b["skipped_already_enrolled"] == 0
+    assert b["skipped_not_in_class_roster"] == 0
+    assert b["skipped_not_found"] == 0
 
 
 def test_batch_set_class_forbidden_for_non_admin(client: TestClient):
-    """Table B1."""
-    pytest.skip(_ROUND2)
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        k = Class(name=f"班B1_{suffix}", grade=1)
+        db.add(k)
+        db.flush()
+        t = User(
+            username=f"tb1_{suffix}",
+            hashed_password=get_password_hash("tp"),
+            real_name="老师",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(t)
+        db.flush()
+        st = Student(
+            name="S",
+            student_no=f"sb1_{suffix}",
+            gender=Gender.MALE,
+            class_id=k.id,
+        )
+        db.add(st)
+        db.flush()
+        u = User(
+            username=st.student_no,
+            hashed_password=get_password_hash("sp"),
+            real_name="S",
+            role=UserRole.STUDENT.value,
+            class_id=k.id,
+        )
+        db.add(u)
+        db.flush()
+        uid, kid = u.id, k.id
+        db.commit()
+    finally:
+        db.close()
+
+    th = login_api(client, f"tb1_{suffix}", "tp")
+    r = client.post("/api/users/batch-set-class", headers=th, json={"user_ids": [uid], "class_id": kid})
+    assert r.status_code == 403
 
 
 def test_batch_set_class_mixed_student_and_teacher_ids(client: TestClient):
-    """Table B2."""
-    pytest.skip(_ROUND2)
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        k1 = Class(name=f"K1_{suffix}", grade=1)
+        k2 = Class(name=f"K2_{suffix}", grade=1)
+        db.add_all([k1, k2])
+        db.flush()
+        t = User(
+            username=f"teacher_b2_{suffix}",
+            hashed_password=get_password_hash("tp"),
+            real_name="老师B2",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(t)
+        db.flush()
+        st = Student(
+            name="学生B2",
+            student_no=f"sb2_{suffix}",
+            gender=Gender.MALE,
+            class_id=k1.id,
+        )
+        db.add(st)
+        db.flush()
+        u = User(
+            username=st.student_no,
+            hashed_password=get_password_hash("sp"),
+            real_name="学生B2",
+            role=UserRole.STUDENT.value,
+            class_id=k1.id,
+        )
+        db.add(u)
+        db.flush()
+        uid_s, uid_t, k2id = u.id, t.id, k2.id
+        db.commit()
+    finally:
+        db.close()
+
+    ah = login_api(client, "adm", "a")
+    r = client.post(
+        "/api/users/batch-set-class",
+        headers=ah,
+        json={"user_ids": [uid_s, uid_t], "class_id": k2id},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["updated"] == 1
+    assert len(body["errors"]) == 1
+    assert body["errors"][0]["user_id"] == uid_t
 
 
 def test_batch_set_class_rejects_invalid_class_id(client: TestClient):
-    """Table B3."""
-    pytest.skip(_ROUND2)
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        k = Class(name=f"KB3_{suffix}", grade=1)
+        db.add(k)
+        db.flush()
+        st = Student(
+            name="SB3",
+            student_no=f"sb3_{suffix}",
+            gender=Gender.MALE,
+            class_id=k.id,
+        )
+        db.add(st)
+        db.flush()
+        u = User(
+            username=st.student_no,
+            hashed_password=get_password_hash("sp"),
+            real_name="SB3",
+            role=UserRole.STUDENT.value,
+            class_id=k.id,
+        )
+        db.add(u)
+        db.flush()
+        uid = u.id
+        db.commit()
+    finally:
+        db.close()
+
+    ah = login_api(client, "adm", "a")
+    r = client.post(
+        "/api/users/batch-set-class",
+        headers=ah,
+        json={"user_ids": [uid], "class_id": 999999999},
+    )
+    assert r.status_code == 400
 
 
 def test_batch_set_class_idempotent_when_already_in_target_class(client: TestClient):
-    """Table B4."""
-    pytest.skip(_ROUND2)
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        k = Class(name=f"KB4_{suffix}", grade=1)
+        db.add(k)
+        db.flush()
+        st = Student(
+            name="SB4",
+            student_no=f"sb4_{suffix}",
+            gender=Gender.MALE,
+            class_id=k.id,
+        )
+        db.add(st)
+        db.flush()
+        u = User(
+            username=st.student_no,
+            hashed_password=get_password_hash("sp"),
+            real_name="SB4",
+            role=UserRole.STUDENT.value,
+            class_id=k.id,
+        )
+        db.add(u)
+        db.flush()
+        uid, kid = u.id, k.id
+        db.commit()
+    finally:
+        db.close()
+
+    ah = login_api(client, "adm", "a")
+    r = client.post("/api/users/batch-set-class", headers=ah, json={"user_ids": [uid], "class_id": kid})
+    assert r.status_code == 200
+    assert r.json()["updated"] == 0
 
 
 def test_batch_set_class_aligns_roster_when_mismatched_with_user(client: TestClient):
-    """Table B5: User.class_id differs from Student.class_id before batch; both match target after."""
-    pytest.skip(_ROUND2)
+    """花名册在 k1，账号误在 k2；批量调到 k1 后二者一致。"""
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        k1 = Class(name=f"KB5a_{suffix}", grade=1)
+        k2 = Class(name=f"KB5b_{suffix}", grade=1)
+        db.add_all([k1, k2])
+        db.flush()
+        st = Student(
+            name="错位",
+            student_no=f"sb5_{suffix}",
+            gender=Gender.MALE,
+            class_id=k1.id,
+        )
+        db.add(st)
+        db.flush()
+        u = User(
+            username=st.student_no,
+            hashed_password=get_password_hash("sp"),
+            real_name="错位",
+            role=UserRole.STUDENT.value,
+            class_id=k2.id,
+        )
+        db.add(u)
+        db.flush()
+        uid, k1id = u.id, k1.id
+        db.commit()
+    finally:
+        db.close()
+
+    ah = login_api(client, "adm", "a")
+    assert client.post("/api/users/batch-set-class", headers=ah, json={"user_ids": [uid], "class_id": k1id}).status_code == 200
+
+    db = SessionLocal()
+    try:
+        st2 = db.query(Student).filter(Student.student_no == f"sb5_{suffix}").first()
+        u2 = db.query(User).filter(User.id == uid).first()
+        assert st2.class_id == k1id
+        assert u2.class_id == k1id
+    finally:
+        db.close()

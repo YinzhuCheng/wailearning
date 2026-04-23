@@ -1,0 +1,78 @@
+"""E2E dev seed endpoint (disabled by default)."""
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+
+from app.auth import get_password_hash
+from app.config import settings
+from app.database import Base, SessionLocal, engine
+from app.main import app
+from app.models import User, UserRole
+
+
+@pytest.fixture(autouse=True)
+def _reset_e2e_settings():
+    yield
+    settings.E2E_DEV_SEED_ENABLED = False
+    settings.E2E_DEV_SEED_TOKEN = ""
+
+
+@pytest.fixture(autouse=True)
+def _reset_db():
+    if engine.dialect.name == "sqlite":
+        with engine.begin() as conn:
+            conn.execute(text("PRAGMA foreign_keys=OFF"))
+            Base.metadata.drop_all(bind=conn)
+            conn.execute(text("PRAGMA foreign_keys=ON"))
+    else:
+        Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    from app.bootstrap import ensure_schema_updates
+
+    ensure_schema_updates()
+    db = SessionLocal()
+    try:
+        if not db.query(User).filter(User.username == "adm").first():
+            db.add(
+                User(
+                    username="adm",
+                    hashed_password=get_password_hash("a"),
+                    real_name="Admin",
+                    role=UserRole.ADMIN.value,
+                )
+            )
+            db.commit()
+    finally:
+        db.close()
+    yield
+    SessionLocal().close()
+
+
+@pytest.fixture
+def client() -> TestClient:
+    return TestClient(app)
+
+
+def test_e2e_seed_disabled_returns_404(client: TestClient):
+    settings.E2E_DEV_SEED_ENABLED = False
+    settings.E2E_DEV_SEED_TOKEN = ""
+    r = client.post("/api/e2e/dev/reset-scenario", headers={"X-E2E-Seed-Token": "any"})
+    assert r.status_code == 404
+
+
+def test_e2e_seed_wrong_token_returns_403(client: TestClient):
+    settings.E2E_DEV_SEED_ENABLED = True
+    settings.E2E_DEV_SEED_TOKEN = "secret-xyz"
+    r = client.post("/api/e2e/dev/reset-scenario", headers={"X-E2E-Seed-Token": "wrong"})
+    assert r.status_code == 403
+
+
+def test_e2e_seed_ok_when_enabled(client: TestClient):
+    settings.E2E_DEV_SEED_ENABLED = True
+    settings.E2E_DEV_SEED_TOKEN = "tok-e2e-1"
+    r = client.post("/api/e2e/dev/reset-scenario", headers={"X-E2E-Seed-Token": "tok-e2e-1"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "suffix" in body
+    assert "course_required_id" in body
