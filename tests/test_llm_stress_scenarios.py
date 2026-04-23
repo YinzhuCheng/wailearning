@@ -84,7 +84,7 @@ def test_llm_returns_json_without_score_comment_then_fails_task(client: TestClie
         process_grading_task(tid)
     db = SessionLocal()
     try:
-        t = db.query(HomeworkGradingTask).get(tid)
+        t = db.get(HomeworkGradingTask, tid)
         assert t.status == "failed"
     finally:
         db.close()
@@ -106,7 +106,7 @@ def test_llm_empty_choices_fails_task(client: TestClient):
         process_grading_task(tid)
     db = SessionLocal()
     try:
-        t = db.query(HomeworkGradingTask).get(tid)
+        t = db.get(HomeworkGradingTask, tid)
         assert t.status == "failed"
     finally:
         db.close()
@@ -147,7 +147,7 @@ def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
         process_grading_task(tid)
     db = SessionLocal()
     try:
-        t = db.query(HomeworkGradingTask).get(tid)
+        t = db.get(HomeworkGradingTask, tid)
         assert t.error_code == "endpoint_missing" or t.status == "failed"
     finally:
         db.close()
@@ -194,7 +194,7 @@ def test_disable_course_llm_before_grading_fails(client: TestClient):
     process_grading_task(tid)
     db = SessionLocal()
     try:
-        t = db.query(HomeworkGradingTask).get(tid)
+        t = db.get(HomeworkGradingTask, tid)
         assert t.error_code == "llm_config_disabled"
     finally:
         db.close()
@@ -472,7 +472,7 @@ def test_second_preset_when_first_inactive(client: TestClient):
     th = login_api(client, base["teacher_username"], base["teacher_password"])
     db = SessionLocal()
     try:
-        p1 = db.query(LLMEndpointPreset).get(base["preset_id"])
+        p1 = db.get(LLMEndpointPreset, base["preset_id"])
         p1.is_active = False
         p2 = LLMEndpointPreset(
             name=f"p2_{uuid.uuid4().hex[:4]}",
@@ -551,7 +551,7 @@ def test_500_then_success_second_endpoint(client: TestClient):
         process_grading_task(tid)
     db = SessionLocal()
     try:
-        t = db.query(HomeworkGradingTask).get(tid)
+        t = db.get(HomeworkGradingTask, tid)
         assert t.status == "success"
     finally:
         db.close()

@@ -1,3 +1,5 @@
+import contextlib
+
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,14 +37,34 @@ from app.routers import (
     llm_settings,
 )
 
-if settings.APP_ENV != "production":
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_schema_updates()
+    db = SessionLocal()
+    try:
+        normalize_teacher_class_assignments(db)
+        normalize_semester_catalog(db)
+        sync_subject_semester_links(db)
+        backfill_homework_grading_data(db)
+    finally:
+        db.close()
+    if settings.ENABLE_LLM_GRADING_WORKER and settings.LLM_GRADING_WORKER_LEADER:
+        start_grading_worker()
+    yield
+    worker_manager.stop()
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="FastAPI backend for the BIMSA-CLASS school management system.",
     version="1.0.0",
+    lifespan=lifespan,
 )
+
+if settings.APP_ENV != "production":
+    Base.metadata.create_all(bind=engine)
 
 if settings.TRUSTED_HOSTS and "*" not in settings.TRUSTED_HOSTS:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
@@ -76,27 +98,6 @@ app.include_router(notifications.router)
 app.include_router(parent.router)
 
 ensure_upload_directories()
-
-
-@app.on_event("startup")
-def startup_tasks():
-    Base.metadata.create_all(bind=engine)
-    ensure_schema_updates()
-    db = SessionLocal()
-    try:
-        normalize_teacher_class_assignments(db)
-        normalize_semester_catalog(db)
-        sync_subject_semester_links(db)
-        backfill_homework_grading_data(db)
-    finally:
-        db.close()
-    if settings.ENABLE_LLM_GRADING_WORKER and settings.LLM_GRADING_WORKER_LEADER:
-        start_grading_worker()
-
-
-@app.on_event("shutdown")
-def shutdown_tasks():
-    worker_manager.stop()
 
 
 @app.get("/")
