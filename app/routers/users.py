@@ -31,6 +31,9 @@ from app.schemas import (
     StudentUserBatchCreateError,
     StudentUserBatchCreateRequest,
     StudentUserBatchCreateResponse,
+    UserBatchSetClassError,
+    UserBatchSetClassRequest,
+    UserBatchSetClassResponse,
     UserCreate,
     UserResponse,
     UserUpdate,
@@ -166,6 +169,48 @@ def get_student_user_candidates(
     )
 
     return [build_student_candidate_response(student, class_name) for student, class_name in rows]
+
+
+@router.post("/batch-set-class", response_model=UserBatchSetClassResponse)
+def batch_set_user_class(
+    payload: UserBatchSetClassRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Move multiple student accounts to the same class (admin only). Syncs roster linkage via prepare_student_course_context."""
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以批量调整班级")
+
+    validate_class_exists(payload.class_id, db)
+
+    user_ids = list(dict.fromkeys(payload.user_ids))
+    if not user_ids:
+        return UserBatchSetClassResponse()
+
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    user_map = {u.id: u for u in users}
+
+    updated = 0
+    errors: list[UserBatchSetClassError] = []
+
+    for uid in user_ids:
+        user = user_map.get(uid)
+        if not user:
+            errors.append(UserBatchSetClassError(user_id=uid, reason="用户不存在"))
+            continue
+        if (user.role or "").strip() != UserRole.STUDENT.value:
+            errors.append(UserBatchSetClassError(user_id=uid, reason="仅支持学生账号批量调班"))
+            continue
+        if user.class_id == payload.class_id:
+            continue
+        user.class_id = payload.class_id
+        if user.username and user.class_id:
+            prepare_student_course_context(user, db)
+        updated += 1
+
+    db.commit()
+
+    return UserBatchSetClassResponse(updated=updated, errors=errors)
 
 
 @router.post("/student-candidates/load", response_model=StudentUserBatchCreateResponse)

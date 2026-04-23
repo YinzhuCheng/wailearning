@@ -3,16 +3,28 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">用户管理</h1>
-        <p class="page-subtitle">支持管理员、班主任、任课老师和学生四类用户。</p>
+        <p class="page-subtitle">
+          支持管理员、班主任、任课老师和学生四类用户。可勾选学生行后使用「批量调班」。
+        </p>
       </div>
       <div class="page-actions">
+        <el-button type="warning" plain data-testid="users-open-batch-class" @click="openBatchClassDialog">
+          批量调班
+        </el-button>
         <el-button type="success" plain @click="openStudentImportDialog">载入学生用户</el-button>
         <el-button type="primary" @click="openCreateDialog">新建用户</el-button>
       </div>
     </div>
 
     <el-card shadow="never">
-      <el-table :data="users" v-loading="loading">
+      <el-table
+        ref="usersTableRef"
+        :data="users"
+        v-loading="loading"
+        row-key="id"
+        @selection-change="handleUserSelectionChange"
+      >
+        <el-table-column type="selection" width="48" :selectable="row => row.role === 'student'" />
         <el-table-column prop="username" label="用户名" min-width="160" />
         <el-table-column prop="real_name" label="姓名" min-width="140" />
         <el-table-column label="角色" width="140">
@@ -20,7 +32,11 @@
             <el-tag :type="roleTag(row.role)">{{ roleText(row.role) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="class_id" label="班级ID" width="120" />
+        <el-table-column label="所属班级" min-width="160">
+          <template #default="{ row }">
+            {{ classNameById(row.class_id) }}
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
             <el-tag :type="row.is_active ? 'success' : 'info'">
@@ -80,6 +96,56 @@
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="batchClassDialogVisible"
+      data-testid="dialog-batch-class"
+      title="批量调班（学生账号）"
+      width="560px"
+      destroy-on-close
+      @closed="resetBatchClassDialog"
+    >
+      <el-alert type="info" :closable="false" class="batch-class-alert">
+        <template #title>说明</template>
+        <p class="batch-class-alert-body">
+          仅支持<strong>学生</strong>角色。将把所选账号的「所属班级」统一改到下方班级，并自动与<strong>学号相同</strong>的花名册记录对齐（含选课同步）。
+          若花名册中尚无对应学号，请先由教务在「学生管理」中补录花名册。
+        </p>
+      </el-alert>
+
+      <el-form label-width="100px" class="batch-class-form">
+        <el-form-item label="目标班级" required>
+          <el-select
+            v-model="batchTargetClassId"
+            placeholder="请选择班级"
+            style="width: 100%"
+            filterable
+            data-testid="batch-class-target-select"
+          >
+            <el-option v-for="c in classes" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="已选学生">
+          <span>{{ batchSelectedStudents.length }} 人</span>
+          <el-button link type="primary" class="batch-clear-link" @click="clearUserTableSelection">
+            清空表格勾选
+          </el-button>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="batchClassDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          data-testid="batch-class-confirm"
+          :loading="batchClassSubmitting"
+          :disabled="!batchSelectedStudents.length || !batchTargetClassId"
+          @click="submitBatchClass"
+        >
+          确认调班
+        </el-button>
       </template>
     </el-dialog>
 
@@ -161,15 +227,20 @@ const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const studentImportDialogVisible = ref(false)
+const batchClassDialogVisible = ref(false)
+const batchTargetClassId = ref(null)
+const batchClassSubmitting = ref(false)
 const pendingStudentsLoading = ref(false)
 const studentImportSubmitting = ref(false)
 const editingUser = ref(null)
 const formRef = ref(null)
 const pendingStudentsTableRef = ref(null)
+const usersTableRef = ref(null)
 const users = ref([])
 const classes = ref([])
 const pendingStudents = ref([])
 const selectedPendingStudents = ref([])
+const batchSelectedStudents = ref([])
 
 const form = reactive({
   username: '',
@@ -237,6 +308,79 @@ const loadUsers = async () => {
 
 const loadClasses = async () => {
   classes.value = await api.classes.list()
+}
+
+const classNameById = classId => {
+  if (classId == null) {
+    return '—'
+  }
+  const row = classes.value.find(c => c.id === classId)
+  return row ? row.name : `班级 #${classId}`
+}
+
+const handleUserSelectionChange = rows => {
+  batchSelectedStudents.value = (rows || []).filter(r => r.role === 'student')
+}
+
+const clearUserTableSelection = () => {
+  batchSelectedStudents.value = []
+  usersTableRef.value?.clearSelection()
+}
+
+const openBatchClassDialog = () => {
+  if (!batchSelectedStudents.value.length) {
+    ElMessage.warning('请先在表格中勾选需要调班的学生账号')
+    return
+  }
+  batchTargetClassId.value = null
+  batchClassDialogVisible.value = true
+}
+
+const resetBatchClassDialog = () => {
+  batchTargetClassId.value = null
+}
+
+const submitBatchClass = async () => {
+  if (!batchSelectedStudents.value.length || !batchTargetClassId.value) {
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认将 ${batchSelectedStudents.value.length} 名学生账号调至「${classNameById(batchTargetClassId.value)}」吗？`,
+      '批量调班',
+      { type: 'warning', distinguishCancelAndClose: true }
+    )
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') {
+      console.error(e)
+    }
+    return
+  }
+
+  batchClassSubmitting.value = true
+  try {
+    const result = await api.users.batchSetClass({
+      user_ids: batchSelectedStudents.value.map(u => u.id),
+      class_id: batchTargetClassId.value
+    })
+    const updated = result?.updated ?? 0
+    const errors = result?.errors || []
+    if (errors.length) {
+      const lines = errors.slice(0, 12).map(e => `用户 #${e.user_id}：${e.reason}`)
+      await ElMessageBox.alert(['部分未处理：', ...lines].join('\n'), '调班结果', {
+        confirmButtonText: '知道了'
+      })
+    }
+    ElMessage.success(`已更新 ${updated} 个学生账号的班级`)
+    batchClassDialogVisible.value = false
+    clearUserTableSelection()
+    await loadUsers()
+  } catch (e) {
+    console.error('批量调班失败', e)
+  } finally {
+    batchClassSubmitting.value = false
+  }
 }
 
 const loadPendingStudents = async () => {
@@ -458,6 +602,24 @@ onMounted(async () => {
 .page-subtitle {
   margin: 0;
   color: #64748b;
+}
+
+.batch-class-alert {
+  margin-bottom: 16px;
+}
+
+.batch-class-alert-body {
+  margin: 0;
+  line-height: 1.65;
+  color: #334155;
+}
+
+.batch-class-form {
+  margin-top: 8px;
+}
+
+.batch-clear-link {
+  margin-left: 12px;
 }
 
 .student-import-dialog {

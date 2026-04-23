@@ -295,6 +295,34 @@ class CourseEnrollmentTypeUpdate(BaseModel):
     enrollment_type: str
 
 
+class SubjectRosterEnrollRequest(BaseModel):
+    """Add enrollments only for students already on the course class roster (same class_id)."""
+
+    student_ids: List[int] = Field(default_factory=list)
+
+
+class SubjectRosterEnrollResult(BaseModel):
+    created: int = 0
+    skipped_already_enrolled: int = 0
+    skipped_not_in_class_roster: int = 0
+    skipped_not_found: int = 0
+
+
+class UserBatchSetClassRequest(BaseModel):
+    user_ids: List[int] = Field(default_factory=list)
+    class_id: int
+
+
+class UserBatchSetClassError(BaseModel):
+    user_id: int
+    reason: str
+
+
+class UserBatchSetClassResponse(BaseModel):
+    updated: int = 0
+    errors: List[UserBatchSetClassError] = Field(default_factory=list)
+
+
 SubjectCreate.model_rebuild()
 
 

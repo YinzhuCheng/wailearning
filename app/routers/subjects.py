@@ -13,7 +13,7 @@ from app.course_access import (
     sync_course_enrollments,
 )
 from app.database import get_db
-from app.models import Class, CourseEnrollment, Semester, Student, Subject, User, UserRole
+from app.models import Class, CourseEnrollment, CourseEnrollmentBlock, Semester, Student, Subject, User, UserRole
 from app.schemas import (
     CourseTimeItem,
     CourseEnrollmentResponse,
@@ -22,6 +22,8 @@ from app.schemas import (
     SubjectCreate,
     SubjectResponse,
     SubjectUpdate,
+    SubjectRosterEnrollRequest,
+    SubjectRosterEnrollResult,
 )
 
 
@@ -543,6 +545,85 @@ def sync_subject_enrollments(
         "created": created,
         "student_count": db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).count(),
     }
+
+
+@router.post("/{subject_id}/roster-enroll", response_model=SubjectRosterEnrollResult)
+def enroll_roster_students_on_subject(
+    subject_id: int,
+    payload: SubjectRosterEnrollRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Add CourseEnrollment rows only for students who already belong to the course's class roster.
+    Does not create Student rows or move students between classes — use roster / 调班 flows first.
+    """
+    if current_user.role == UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Students cannot modify course rosters.")
+
+    try:
+        course = ensure_course_access(subject_id, current_user, db)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="You do not have access to this course.")
+
+    if not course.class_id:
+        raise HTTPException(status_code=400, detail="Course has no class; cannot roster-enroll.")
+
+    student_ids = list(dict.fromkeys(payload.student_ids))
+    if not student_ids:
+        return SubjectRosterEnrollResult()
+
+    enrolled_ids = {
+        row[0]
+        for row in db.query(CourseEnrollment.student_id).filter(CourseEnrollment.subject_id == course.id).all()
+    }
+
+    created = 0
+    skipped_already = 0
+    skipped_wrong_class = 0
+    skipped_missing = 0
+    enrollment_type = course.course_type or "required"
+    can_remove = enrollment_type == "elective"
+
+    for student_id in student_ids:
+        if student_id in enrolled_ids:
+            skipped_already += 1
+            continue
+
+        student = db.query(Student).filter(Student.id == student_id).first()
+        if not student:
+            skipped_missing += 1
+            continue
+
+        if student.class_id != course.class_id:
+            skipped_wrong_class += 1
+            continue
+
+        db.query(CourseEnrollmentBlock).filter(
+            CourseEnrollmentBlock.subject_id == course.id,
+            CourseEnrollmentBlock.student_id == student.id,
+        ).delete(synchronize_session=False)
+        db.add(
+            CourseEnrollment(
+                subject_id=course.id,
+                student_id=student.id,
+                class_id=course.class_id,
+                enrollment_type=enrollment_type,
+                can_remove=can_remove,
+            )
+        )
+        enrolled_ids.add(student.id)
+        created += 1
+
+    db.commit()
+    return SubjectRosterEnrollResult(
+        created=created,
+        skipped_already_enrolled=skipped_already,
+        skipped_not_in_class_roster=skipped_wrong_class,
+        skipped_not_found=skipped_missing,
+    )
 
 
 @router.put("/{subject_id}/students/{student_id}/enrollment-type", response_model=CourseEnrollmentResponse)
