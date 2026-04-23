@@ -309,6 +309,17 @@
         <template #footer>
           <el-button @click="rosterEnrollVisible = false">取消</el-button>
           <el-button
+            v-if="userStore.isAdmin && rosterEnrollCourse?.class_id"
+            type="warning"
+            plain
+            data-testid="btn-roster-enroll-all-class"
+            :loading="rosterEnrollSubmitting"
+            :disabled="rosterEnrollLoading"
+            @click="submitRosterEnrollAllFromClass"
+          >
+            全班加入选课
+          </el-button>
+          <el-button
             type="primary"
             data-testid="btn-roster-enroll-submit"
             :loading="rosterEnrollSubmitting"
@@ -719,6 +730,28 @@ const openRosterEnrollDialog = async course => {
     console.error('加载花名册失败', error)
   } finally {
     rosterEnrollLoading.value = false
+  }
+}
+
+const submitRosterEnrollAllFromClass = async () => {
+  const course = rosterEnrollCourse.value
+  if (!course?.id || !course.class_id) {
+    return
+  }
+  rosterEnrollSubmitting.value = true
+  try {
+    const result = await api.courses.syncEnrollments(course.id)
+    ElMessage.success(
+      result?.created > 0
+        ? `已将本班花名册全部对齐到选课，新增 ${result.created} 人`
+        : '选课名单已与花名册一致'
+    )
+    rosterEnrollVisible.value = false
+    await loadCourses()
+  } catch (error) {
+    console.error('全班进课失败', error)
+  } finally {
+    rosterEnrollSubmitting.value = false
   }
 }
 

@@ -124,6 +124,7 @@ const api = {
     listStudentCandidates: () => http.get('/users/student-candidates'),
     loadStudentCandidates: data => http.post('/users/student-candidates/load', data),
     batchSetClass: data => http.post('/users/batch-set-class', data),
+    upsertStudentRosterFromUsers: data => http.post('/users/student-roster/from-users', data),
     get: id => http.get(`/users/${id}`),
     create: data => http.post('/users', data),
     update: (id, data) => http.put(`/users/${id}`, data),

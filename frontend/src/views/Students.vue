@@ -7,6 +7,22 @@
       </div>
     </div>
 
+    <el-alert
+      v-if="isAdminView && adminFilterClassId"
+      type="info"
+      :closable="false"
+      class="admin-class-filter-alert"
+      data-testid="students-admin-class-filter-banner"
+    >
+      <template #title>班级筛选</template>
+      <p>
+        当前仅显示「<strong>{{ adminFilterClassName }}</strong>」的花名册。
+        <el-button link type="primary" data-testid="students-clear-class-filter" @click="clearAdminClassFilter">
+          查看全校名单
+        </el-button>
+      </p>
+    </el-alert>
+
     <el-empty
       v-if="showEmpty"
       :description="emptyText"
@@ -241,7 +257,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as XLSX from 'xlsx'
 
@@ -250,7 +266,27 @@ import { useUserStore } from '@/stores/user'
 import { resolveClassTeacherClassId, resolveClassTeacherClassName } from '@/utils/classTeacher'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
+
+const adminClasses = ref([])
+
+const adminFilterClassId = computed(() => {
+  const raw = route.query.class_id
+  if (raw == null || raw === '') {
+    return null
+  }
+  const n = Number(Array.isArray(raw) ? raw[0] : raw)
+  return Number.isFinite(n) && n > 0 ? n : null
+})
+
+const adminFilterClassName = computed(() => {
+  if (!adminFilterClassId.value) {
+    return ''
+  }
+  const row = adminClasses.value.find(c => c.id === adminFilterClassId.value)
+  return row?.name || `班级 #${adminFilterClassId.value}`
+})
 
 const TEMPLATE_HEADERS = ['姓名', '性别', '学号', '所属班级']
 const TEMPLATE_ROWS = [
@@ -293,7 +329,9 @@ const pageTitle = computed(() => {
 
 const pageSubtitle = computed(() => {
   if (isAdminView.value) {
-    return '查看全校学生名单，并支持新增、编辑、删除和批量导入。'
+    return adminFilterClassId.value
+      ? `当前为按班级筛选视图；默认可查看全校名单，并支持新增、编辑、删除和批量导入。`
+      : '查看全校学生名单，并支持新增、编辑、删除和批量导入。'
   }
 
   if (isClassTeacherView.value) {
@@ -324,7 +362,7 @@ const showTeacherAlert = computed(() => !isAdminView.value && !isClassTeacherVie
 
 const cardTitle = computed(() => {
   if (isAdminView.value) {
-    return '全校学生名单'
+    return adminFilterClassId.value ? `${adminFilterClassName.value} · 花名册` : '全校学生名单'
   }
 
   if (isClassTeacherView.value) {
@@ -627,6 +665,10 @@ const parseImportRows = (rows, options = {}) => {
   return { errors, payload }
 }
 
+const clearAdminClassFilter = () => {
+  router.replace({ path: '/students', query: {} })
+}
+
 const loadAllStudents = async () => {
   const allStudents = []
   const pageSize = 1000
@@ -702,7 +744,16 @@ const loadStudents = async () => {
 
   try {
     if (isAdminView.value) {
-      students.value = await loadAllStudents()
+      if (adminFilterClassId.value) {
+        const result = await api.students.list({
+          class_id: adminFilterClassId.value,
+          page: 1,
+          page_size: 2000
+        })
+        students.value = result?.data || []
+      } else {
+        students.value = await loadAllStudents()
+      }
       return
     }
 
@@ -884,13 +935,34 @@ const updateEnrollmentType = async (row, value) => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (isAdminView.value) {
+    try {
+      adminClasses.value = await api.classes.list()
+    } catch (e) {
+      console.error(e)
+    }
+  }
   loadStudents()
 })
 
 watch(
   () => [selectedCourse.value?.id, userStore.userInfo?.id],
   () => {
+    loadStudents()
+  }
+)
+
+watch(
+  () => [route.query.class_id, isAdminView.value],
+  async () => {
+    if (isAdminView.value && !adminClasses.value.length) {
+      try {
+        adminClasses.value = await api.classes.list()
+      } catch (e) {
+        console.error(e)
+      }
+    }
     loadStudents()
   }
 )
@@ -922,6 +994,10 @@ watch(
 
 .info-alert {
   margin-bottom: 20px;
+}
+
+.admin-class-filter-alert {
+  margin-bottom: 16px;
 }
 
 .card-header-block {

@@ -87,6 +87,24 @@ class StudentUserBatchCreateResponse(BaseModel):
     errors: List[StudentUserBatchCreateError]
 
 
+class StudentRosterUpsertFromUsersRequest(BaseModel):
+    user_ids: List[int]
+
+
+class StudentRosterUpsertFromUsersError(BaseModel):
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    reason: str
+
+
+class StudentRosterUpsertFromUsersResponse(BaseModel):
+    total: int
+    created: int
+    updated: int
+    skipped: int
+    errors: List[StudentRosterUpsertFromUsersError]
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
