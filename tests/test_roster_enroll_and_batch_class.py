@@ -1,4 +1,34 @@
-"""Roster-only course enrollment and admin batch class assignment."""
+"""
+花名册进课（POST /api/subjects/{id}/roster-enroll）与管理员批量调班（POST /api/users/batch-set-class）。
+
+## 已实现（本文件内 active tests）
+- roster-enroll：仅本班花名册学生可写入；外班 / 不存在 ID 计入 skipped；已在课计入 skipped；第二次部分成功。
+- batch-set-class：管理员将学生用户调到目标班后，User.class_id 与同学号 Student.class_id 一致。
+
+## API 扩展规格（下一轮实现：下方 test_* 占位已 pytest.skip）
+
+### POST …/roster-enroll
+| # | 场景 | Given | When | Then |
+|---|------|--------|------|------|
+| R1 | 学生禁止 | 学生 JWT | POST roster-enroll | 403 |
+| R2 | 无关教师禁止 | 另一任课教师 JWT（无该课权限） | POST | 403 |
+| R3 | 退选后恢复并清 block | 本班学生曾被 DELETE …/students/{id} 退选，存在 CourseEnrollmentBlock，无 CourseEnrollment | 任课教师 POST roster-enroll 含该 student_id | 200；选课行存在；block 行删除；可选：作业提交由 403 恢复为 200（与 test_student_course_roster_behavior 对齐） |
+| R4 | 选修课类型 | course.course_type = elective | roster-enroll 一名本班生 | CourseEnrollment.enrollment_type == elective 且 can_remove True |
+| R5 | 课程无班级 | Subject.class_id IS NULL | POST | 400 |
+| R6 | 空 student_ids | 合法教师 | POST {"student_ids":[]} | 200；各计数为 0 |
+
+### POST …/batch-set-class
+| # | 场景 | Given | When | Then |
+|---|------|--------|------|------|
+| B1 | 非管理员禁止 | 教师 JWT | POST batch-set-class | 403 |
+| B2 | 混合 user_ids | 同一请求含学生用户 + 教师用户 ID | 管理员 POST | updated 仅学生；errors 含教师项 reason |
+| B3 | 无效 class_id | class_id 不存在 | 管理员 POST | 400 |
+| B4 | 幂等同班 | 学生 user.class_id 已是目标班 | 管理员 POST | updated == 0；库中 class_id 不变 |
+| B5 | 花名册与账号曾不一致 | User.class_id 与 Student(student_no=user.username).class_id 不同 | 管理员 batch-set-class 到目标班 | 二者均变为目标班；prepare 后选课与 test_admin_user_class_change 行为一致 |
+
+## UI → 后端全链路（E2E，下一轮）
+自动化使用 Playwright，规格写在 frontend/e2e/roster-and-users.spec.ts 顶部注释；默认整包 skip，见该文件。与上表 R/B 编号做追溯矩阵即可。
+"""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +38,8 @@ from app.auth import get_password_hash
 from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
+
+_ROUND2 = "Round 2: implement per module docstring (API table R1–R6, B1–B5)"
 
 
 @pytest.fixture(autouse=True)
@@ -186,3 +218,61 @@ def test_admin_batch_set_class_syncs_student_user(client: TestClient):
         assert st2.class_id == k2_id
     finally:
         db.close()
+
+
+# --- Round 2: API extensions (spec only; implementations deferred) ---
+
+
+def test_roster_enroll_forbidden_for_student(client: TestClient):
+    """Table R1."""
+    pytest.skip(_ROUND2)
+
+
+def test_roster_enroll_forbidden_for_unrelated_teacher(client: TestClient):
+    """Table R2."""
+    pytest.skip(_ROUND2)
+
+
+def test_roster_enroll_after_drop_clears_enrollment_block(client: TestClient):
+    """Table R3: DELETE student from course then roster-enroll restores enrollment and removes block."""
+    pytest.skip(_ROUND2)
+
+
+def test_roster_enroll_elective_course_sets_enrollment_flags(client: TestClient):
+    """Table R4."""
+    pytest.skip(_ROUND2)
+
+
+def test_roster_enroll_rejects_when_course_has_no_class(client: TestClient):
+    """Table R5."""
+    pytest.skip(_ROUND2)
+
+
+def test_roster_enroll_empty_student_ids_is_noop(client: TestClient):
+    """Table R6."""
+    pytest.skip(_ROUND2)
+
+
+def test_batch_set_class_forbidden_for_non_admin(client: TestClient):
+    """Table B1."""
+    pytest.skip(_ROUND2)
+
+
+def test_batch_set_class_mixed_student_and_teacher_ids(client: TestClient):
+    """Table B2."""
+    pytest.skip(_ROUND2)
+
+
+def test_batch_set_class_rejects_invalid_class_id(client: TestClient):
+    """Table B3."""
+    pytest.skip(_ROUND2)
+
+
+def test_batch_set_class_idempotent_when_already_in_target_class(client: TestClient):
+    """Table B4."""
+    pytest.skip(_ROUND2)
+
+
+def test_batch_set_class_aligns_roster_when_mismatched_with_user(client: TestClient):
+    """Table B5: User.class_id differs from Student.class_id before batch; both match target after."""
+    pytest.skip(_ROUND2)
