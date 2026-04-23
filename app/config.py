@@ -1,7 +1,11 @@
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEFAULT_DATABASE_URL = "postgresql://ddclass:change-me@127.0.0.1:5432/ddclass"
+_DEFAULT_SECRET_KEY = "change-me-in-production"
+_MIN_SECRET_KEY_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -11,8 +15,8 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8001
 
-    DATABASE_URL: str = "postgresql://ddclass:change-me@127.0.0.1:5432/ddclass"
-    SECRET_KEY: str = "change-me-in-production"
+    DATABASE_URL: str = _DEFAULT_DATABASE_URL
+    SECRET_KEY: str = _DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     UPLOADS_DIR: str = ""
@@ -41,6 +45,9 @@ class Settings(BaseSettings):
     LLM_GRADING_WORKER_POLL_SECONDS: int = 2
     LLM_GRADING_TASK_STALE_SECONDS: int = 600
     DEFAULT_ESTIMATED_IMAGE_TOKENS: int = 850
+
+    # When True, refuse weak SECRET_KEY / default DATABASE_URL even if APP_ENV is not production.
+    REQUIRE_STRONG_SECRETS: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -71,6 +78,33 @@ class Settings(BaseSettings):
     @property
     def TRUSTED_HOSTS(self) -> list[str]:
         return self._split_csv(self.TRUSTED_HOSTS_RAW)
+
+    @staticmethod
+    def _is_production_env(app_env: str) -> bool:
+        name = (app_env or "").strip().lower()
+        return name in ("production", "prod")
+
+    @model_validator(mode="after")
+    def reject_weak_secrets_in_production(self) -> "Settings":
+        require = bool(self.REQUIRE_STRONG_SECRETS) or self._is_production_env(self.APP_ENV)
+        if not require:
+            return self
+
+        sk = (self.SECRET_KEY or "").strip()
+        if len(sk) < _MIN_SECRET_KEY_LENGTH or sk == _DEFAULT_SECRET_KEY:
+            raise ValueError(
+                "SECRET_KEY must be set to a strong random value (at least "
+                f"{_MIN_SECRET_KEY_LENGTH} characters) when APP_ENV is production or REQUIRE_STRONG_SECRETS is true."
+            )
+
+        db_url = (self.DATABASE_URL or "").strip()
+        if db_url == _DEFAULT_DATABASE_URL or "change-me" in db_url.lower():
+            raise ValueError(
+                "DATABASE_URL must not use the default placeholder credentials when APP_ENV is production "
+                "or REQUIRE_STRONG_SECRETS is true."
+            )
+
+        return self
 
 
 settings = Settings()

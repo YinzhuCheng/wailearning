@@ -135,10 +135,8 @@ def download_attachment_by_stored_name(
     elif not allowed:
         raise HTTPException(status_code=403, detail="You do not have access to this attachment.")
     else:
-        raise HTTPException(
-            status_code=409,
-            detail="多个附件冲突：存储文件名重复，请使用带 attachment_url 的下载方式或联系管理员。",
-        )
+        # Same on-disk file referenced by multiple rows; content is identical — serve one copy.
+        url = sorted(allowed)[0]
 
     file_path = get_attachment_file_path(url)
     if not file_path or not file_path.exists():
