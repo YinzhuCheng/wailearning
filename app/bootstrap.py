@@ -231,6 +231,18 @@ def ensure_schema_updates() -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS llm_quota_reservations (
+            id INTEGER PRIMARY KEY,
+            task_id INTEGER NOT NULL UNIQUE REFERENCES homework_grading_tasks(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            subject_id INTEGER REFERENCES subjects(id),
+            usage_date VARCHAR NOT NULL,
+            timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            reserved_tokens INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
         "ALTER TABLE llm_token_usage_logs ADD COLUMN IF NOT EXISTS billing_note VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",

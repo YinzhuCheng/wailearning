@@ -339,6 +339,8 @@ class Settings(BaseSettings):
 2. 系统环境变量
 3. 默认值
 
+生产环境请将 `APP_ENV` 设为 `production`（或 `prod`），并设置足够长的随机 `SECRET_KEY`（至少 32 字符）以及非占位符的 `DATABASE_URL`。若需在非生产环境也强制校验，可设置 `REQUIRE_STRONG_SECRETS=true`。
+
 ### 阿里云安全升级说明
 
 如果你要在阿里云 ECS 上更新代码，同时尽量保护：

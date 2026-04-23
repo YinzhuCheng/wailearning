@@ -601,6 +601,26 @@ class LLMTokenUsageLog(Base):
     student = relationship("Student")
 
 
+class LLMQuotaReservation(Base):
+    """
+    In-flight reservation of estimated tokens against daily caps (PostgreSQL advisory lock + row).
+    Released after billing or on task failure so concurrent workers share one global budget.
+    """
+
+    __tablename__ = "llm_quota_reservations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("homework_grading_tasks.id"), nullable=False, unique=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    usage_date = Column(String, nullable=False)
+    timezone = Column(String, nullable=False, default="UTC")
+    reserved_tokens = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    task = relationship("HomeworkGradingTask")
+
+
 class Notification(Base):
     __tablename__ = "notifications"
 

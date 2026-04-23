@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import os
@@ -20,12 +21,13 @@ import fitz
 import httpx
 from PIL import Image, ImageFile, UnidentifiedImageError
 from docx import Document
-from sqlalchemy import and_
+from sqlalchemy import and_, func, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.attachments import get_attachment_file_path
 from app.config import settings
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.llm_group_routing import GroupRoutingContext
 from app.models import (
     CourseLLMConfig,
@@ -37,6 +39,7 @@ from app.models import (
     HomeworkSubmission,
     LLMEndpointPreset,
     LLMGroup,
+    LLMQuotaReservation,
     LLMTokenUsageLog,
 )
 
@@ -604,6 +607,12 @@ def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, 
             timezone_name=timezone_name,
             subject_id=config.subject_id,
         )
+        used += _sum_reserved_tokens(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            subject_id=config.subject_id,
+        )
         lim = int(config.daily_course_token_limit)
         snap["course_used_tokens_today"] = used
         snap["course_remaining_tokens_today"] = max(0, lim - used)
@@ -675,7 +684,100 @@ def _get_used_tokens_for_scope(
     return total
 
 
+def _sum_reserved_tokens(
+    db: Session,
+    *,
+    usage_date: str,
+    timezone_name: str,
+    student_id: Optional[int] = None,
+    subject_id: Optional[int] = None,
+) -> int:
+    q = db.query(func.coalesce(func.sum(LLMQuotaReservation.reserved_tokens), 0)).filter(
+        LLMQuotaReservation.usage_date == usage_date,
+        LLMQuotaReservation.timezone == timezone_name,
+    )
+    if student_id is not None:
+        q = q.filter(LLMQuotaReservation.student_id == student_id)
+    if subject_id is not None:
+        q = q.filter(LLMQuotaReservation.subject_id == subject_id)
+    val = q.scalar()
+    return int(val or 0)
+
+
+def _hash_to_pg_advisory_key(label: str) -> int:
+    digest = hashlib.sha256(label.encode("utf-8")).digest()[:8]
+    return int.from_bytes(digest, "big", signed=False) % (2**62)
+
+
+def _pg_quota_advisory_keys(
+    config: CourseLLMConfig,
+    *,
+    student_id: int,
+    subject_id: Optional[int],
+    usage_date: str,
+    timezone_name: str,
+) -> list[int]:
+    keys: list[int] = []
+    if config.daily_student_token_limit:
+        keys.append(
+            _hash_to_pg_advisory_key(f"llm_quota|student|{student_id}|{usage_date}|{timezone_name}")
+        )
+    if config.daily_course_token_limit and subject_id:
+        keys.append(
+            _hash_to_pg_advisory_key(f"llm_quota|subject|{subject_id}|{usage_date}|{timezone_name}")
+        )
+    return sorted(set(keys))
+
+
 _quota_serialization_lock = threading.Lock()
+
+
+def release_quota_reservation(db: Session, task_id: int) -> None:
+    db.query(LLMQuotaReservation).filter(LLMQuotaReservation.task_id == task_id).delete(synchronize_session=False)
+
+
+def _quota_precheck_in_session(
+    db: Session,
+    config: CourseLLMConfig,
+    *,
+    student_id: int,
+    subject_id: Optional[int],
+    estimated_tokens: int,
+) -> tuple[bool, Optional[str]]:
+    """Committed usage plus in-flight reservations vs daily caps."""
+    timezone_name = config.quota_timezone or "UTC"
+    usage_date = _get_usage_date(timezone_name)
+    if config.daily_student_token_limit:
+        used_by_student = _get_used_tokens_for_scope(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            student_id=student_id,
+        )
+        used_by_student += _sum_reserved_tokens(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            student_id=student_id,
+        )
+        if used_by_student + estimated_tokens > int(config.daily_student_token_limit):
+            return False, "quota_exceeded_student"
+    if config.daily_course_token_limit and subject_id:
+        used_by_course = _get_used_tokens_for_scope(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            subject_id=subject_id,
+        )
+        used_by_course += _sum_reserved_tokens(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            subject_id=subject_id,
+        )
+        if used_by_course + estimated_tokens > int(config.daily_course_token_limit):
+            return False, "quota_exceeded_course"
+    return True, None
 
 
 def precheck_quota(
@@ -686,29 +788,75 @@ def precheck_quota(
     subject_id: Optional[int],
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
-    """Serialize read of usage vs limits to reduce double-spend under concurrent workers."""
-    with _quota_serialization_lock:
-        timezone_name = config.quota_timezone or "UTC"
-        usage_date = _get_usage_date(timezone_name)
-        if config.daily_student_token_limit:
-            used_by_student = _get_used_tokens_for_scope(
-                db,
-                usage_date=usage_date,
-                timezone_name=timezone_name,
-                student_id=student_id,
-            )
-            if used_by_student + estimated_tokens > int(config.daily_student_token_limit):
-                return False, "quota_exceeded_student"
-        if config.daily_course_token_limit and subject_id:
-            used_by_course = _get_used_tokens_for_scope(
-                db,
-                usage_date=usage_date,
-                timezone_name=timezone_name,
-                subject_id=subject_id,
-            )
-            if used_by_course + estimated_tokens > int(config.daily_course_token_limit):
-                return False, "quota_exceeded_course"
+    """Best-effort check including in-flight reservations (see reserve_quota_tokens for DB-locked reserve)."""
+    return _quota_precheck_in_session(db, config, student_id=student_id, subject_id=subject_id, estimated_tokens=estimated_tokens)
+
+
+def reserve_quota_tokens(
+    db: Session,
+    task: HomeworkGradingTask,
+    config: CourseLLMConfig,
+    estimated_tokens: int,
+) -> tuple[bool, Optional[str]]:
+    """
+    Reserve estimated tokens against daily caps so concurrent workers share one budget.
+    PostgreSQL: short transaction + pg_advisory_xact_lock per scope.
+    SQLite / others: process-wide lock + same-session row (tests).
+    """
+    if not (config.daily_student_token_limit or (config.daily_course_token_limit and task.subject_id)):
         return True, None
+
+    timezone_name = config.quota_timezone or "UTC"
+    usage_date = _get_usage_date(timezone_name)
+
+    def _try_insert_reservation(sess: Session) -> tuple[bool, Optional[str]]:
+        release_quota_reservation(sess, task.id)
+        ok, err = _quota_precheck_in_session(
+            sess,
+            config,
+            student_id=task.student_id,
+            subject_id=task.subject_id,
+            estimated_tokens=estimated_tokens,
+        )
+        if not ok:
+            return ok, err
+        sess.add(
+            LLMQuotaReservation(
+                task_id=task.id,
+                student_id=task.student_id,
+                subject_id=task.subject_id,
+                usage_date=usage_date,
+                timezone=timezone_name,
+                reserved_tokens=int(estimated_tokens),
+            )
+        )
+        sess.flush()
+        return True, None
+
+    if engine.dialect.name == "postgresql":
+        keys = _pg_quota_advisory_keys(
+            config,
+            student_id=task.student_id,
+            subject_id=task.subject_id,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+        )
+        with engine.begin() as conn:
+            for k in keys:
+                conn.execute(text("SELECT pg_advisory_xact_lock(CAST(:k AS BIGINT))"), {"k": k})
+            inner = Session(bind=conn, autoflush=False, autocommit=False)
+            try:
+                ok, err = _try_insert_reservation(inner)
+                if not ok:
+                    return ok, err
+            except IntegrityError:
+                return True, None
+            finally:
+                inner.close()
+        return True, None
+
+    with _quota_serialization_lock:
+        return _try_insert_reservation(db)
 
 
 def record_usage_if_needed(
@@ -720,43 +868,43 @@ def record_usage_if_needed(
     existing = db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == task.id).first()
     if existing:
         return
-    with _quota_serialization_lock:
-        timezone_name = config.quota_timezone or "UTC"
-        usage_date = _get_usage_date(timezone_name)
-        prompt_tokens = usage.get("prompt_tokens")
-        completion_tokens = usage.get("completion_tokens")
-        total_tokens = usage.get("total_tokens")
-        if total_tokens is None:
-            total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
-        billing_note: Optional[str] = None
-        violations = _quota_delta_violations(
-            db,
-            config,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            student_id=task.student_id,
-            subject_id=task.subject_id,
-            delta_tokens=int(total_tokens or 0),
-        )
-        if violations:
-            billing_note = "over_daily_limit:" + ",".join(violations)
+    release_quota_reservation(db, task.id)
+    timezone_name = config.quota_timezone or "UTC"
+    usage_date = _get_usage_date(timezone_name)
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    total_tokens = usage.get("total_tokens")
+    if total_tokens is None:
+        total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+    billing_note: Optional[str] = None
+    violations = _quota_delta_violations(
+        db,
+        config,
+        usage_date=usage_date,
+        timezone_name=timezone_name,
+        student_id=task.student_id,
+        subject_id=task.subject_id,
+        delta_tokens=int(total_tokens or 0),
+    )
+    if violations:
+        billing_note = "over_daily_limit:" + ",".join(violations)
 
-        db.add(
-            LLMTokenUsageLog(
-                task_id=task.id,
-                subject_id=task.subject_id,
-                student_id=task.student_id,
-                usage_date=usage_date,
-                timezone=timezone_name,
-                input_tokens=prompt_tokens,
-                output_tokens=completion_tokens,
-                total_tokens=total_tokens,
-                billing_note=billing_note,
-            )
+    db.add(
+        LLMTokenUsageLog(
+            task_id=task.id,
+            subject_id=task.subject_id,
+            student_id=task.student_id,
+            usage_date=usage_date,
+            timezone=timezone_name,
+            input_tokens=prompt_tokens,
+            output_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            billing_note=billing_note,
         )
-        task.billed_input_tokens = prompt_tokens
-        task.billed_output_tokens = completion_tokens
-        task.billed_total_tokens = total_tokens
+    )
+    task.billed_input_tokens = prompt_tokens
+    task.billed_output_tokens = completion_tokens
+    task.billed_total_tokens = total_tokens
 
 
 def process_next_grading_task() -> bool:
@@ -895,12 +1043,11 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         _mark_task_failed(db, task, "no_usable_content", "附件处理后没有可评分内容。")
         return
 
-    allowed, error_code = precheck_quota(
+    allowed, error_code = reserve_quota_tokens(
         db,
+        task,
         config,
-        student_id=task.student_id,
-        subject_id=task.subject_id,
-        estimated_tokens=material["estimated_tokens"],
+        estimated_tokens=int(material["estimated_tokens"] or 0),
     )
     if not allowed:
         quota_msg = {
@@ -919,6 +1066,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         .first()
     )
     if teacher_exists:
+        release_quota_reservation(db, task.id)
         task.status = "success"
         task.error_code = None
         task.error_message = None
@@ -992,6 +1140,7 @@ def _mark_task_failed(
     error_code: str,
     error_message: str,
 ) -> None:
+    release_quota_reservation(db, task.id)
     task.status = "failed"
     task.error_code = error_code
     task.error_message = error_message
