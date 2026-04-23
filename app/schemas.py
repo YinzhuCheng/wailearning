@@ -326,6 +326,31 @@ class SubjectRosterEnrollResult(BaseModel):
     skipped_not_found: int = 0
 
 
+class StudentElectiveSelfEnrollResult(BaseModel):
+    """Student voluntarily joined an elective course."""
+
+    subject_id: int
+    created: bool = False
+    already_enrolled: bool = False
+
+
+class StudentElectiveSelfDropResult(BaseModel):
+    subject_id: int
+    removed: bool = False
+
+
+class StudentLLMQuotaUsageResponse(BaseModel):
+    subject_id: int
+    usage_date: str
+    quota_timezone: str
+    daily_student_token_limit: Optional[int] = None
+    daily_course_token_limit: Optional[int] = None
+    student_used_tokens_today: Optional[int] = None
+    student_remaining_tokens_today: Optional[int] = None
+    course_used_tokens_today: Optional[int] = None
+    course_remaining_tokens_today: Optional[int] = None
+
+
 class UserBatchSetClassRequest(BaseModel):
     user_ids: List[int] = Field(default_factory=list)
     class_id: int

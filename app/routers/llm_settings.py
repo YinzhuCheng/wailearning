@@ -9,10 +9,12 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
+from app.course_access import ensure_course_access, get_student_profile_for_user, prepare_student_course_context
 from app.llm_grading import (
     build_png_data_url_from_image_bytes,
     ensure_course_llm_config,
     get_quota_usage_snapshot,
+    get_student_quota_usage_snapshot,
     validate_text_connectivity,
     validate_vision_connectivity,
 )
@@ -32,6 +34,7 @@ from app.schemas import (
     LLMEndpointPresetCreate,
     LLMEndpointPresetResponse,
     LLMEndpointPresetUpdate,
+    StudentLLMQuotaUsageResponse,
 )
 
 
@@ -277,6 +280,52 @@ async def validate_preset(
     db.commit()
     db.refresh(preset)
     return _serialize_preset(preset)
+
+
+@router.get("/courses/student-quota/{subject_id}", response_model=StudentLLMQuotaUsageResponse)
+def get_student_llm_quota_for_course(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Token usage vs daily limits for the logged-in student on a course (read-only, no presets)."""
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Only students can view personal LLM quota.")
+
+    prepare_student_course_context(current_user, db)
+    db.commit()
+    student = get_student_profile_for_user(current_user, db)
+    if not student:
+        raise HTTPException(status_code=400, detail="未找到与账号匹配的花名册。")
+
+    try:
+        ensure_course_access(subject_id, current_user, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+    if not config:
+        usage_date = datetime.now(timezone.utc).date().isoformat()
+        return StudentLLMQuotaUsageResponse(
+            subject_id=subject_id,
+            usage_date=usage_date,
+            quota_timezone="UTC",
+        )
+
+    snap = get_student_quota_usage_snapshot(db, config, student_id=student.id)
+    return StudentLLMQuotaUsageResponse(
+        subject_id=subject_id,
+        usage_date=snap["usage_date"],
+        quota_timezone=snap["quota_timezone"],
+        daily_student_token_limit=snap.get("daily_student_token_limit"),
+        daily_course_token_limit=snap.get("daily_course_token_limit"),
+        student_used_tokens_today=snap.get("student_used_tokens_today"),
+        student_remaining_tokens_today=snap.get("student_remaining_tokens_today"),
+        course_used_tokens_today=snap.get("course_used_tokens_today"),
+        course_remaining_tokens_today=snap.get("course_remaining_tokens_today"),
+    )
 
 
 @router.get("/courses/{subject_id}", response_model=CourseLLMConfigResponse)
