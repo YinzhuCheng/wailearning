@@ -1,4 +1,6 @@
-"""Student course visibility is driven by CourseEnrollment + roster match."""
+"""Student course visibility: class roster union + enrollments after prepare."""
+
+import uuid
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.main import app
 from app.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
+from app.course_access import prepare_student_course_context
 
 
 def _seed_student_two_courses(db: Session):
@@ -74,3 +77,46 @@ def test_student_course_list_only_enrolled_subjects():
     ids = {item["id"] for item in res.json()}
     assert course_a.id in ids
     assert course_b.id not in ids
+
+
+def test_prepare_moves_unique_roster_to_user_class_and_enrolls():
+    suffix = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        klass_a = Class(name=f"A班_{suffix}", grade=1)
+        klass_b = Class(name=f"B班_{suffix}", grade=1)
+        db.add_all([klass_a, klass_b])
+        db.flush()
+
+        course_a = Subject(name=f"语文A_{suffix}", class_id=klass_a.id, course_type="required", status="active")
+        db.add(course_a)
+        db.flush()
+
+        stu_no = f"stu_move_{suffix}"
+        st = Student(name="李四", student_no=stu_no, gender=Gender.MALE, class_id=klass_b.id)
+        db.add(st)
+        db.flush()
+
+        user = User(
+            username=stu_no,
+            hashed_password="x",
+            real_name="李四",
+            role=UserRole.STUDENT.value,
+            class_id=klass_a.id,
+        )
+        db.add(user)
+        db.commit()
+
+        prepare_student_course_context(user, db)
+        db.commit()
+
+        db.refresh(st)
+        assert st.class_id == klass_a.id
+        enr = (
+            db.query(CourseEnrollment)
+            .filter(CourseEnrollment.student_id == st.id, CourseEnrollment.subject_id == course_a.id)
+            .first()
+        )
+        assert enr is not None
+    finally:
+        db.close()

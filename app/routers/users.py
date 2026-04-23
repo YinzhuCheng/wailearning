@@ -35,6 +35,7 @@ from app.schemas import (
     UserResponse,
     UserUpdate,
 )
+from app.course_access import prepare_student_course_context, sync_student_course_enrollments
 from app.services import LogService
 from app.permissions import is_admin
 
@@ -273,6 +274,7 @@ def load_student_users(
                     )
                     db.add(user)
                     db.flush()
+                    sync_student_course_enrollments(student, db)
                 existing_usernames.add(student_no)
                 created_users.append(f"{student_name}（{student_no}）")
             except IntegrityError:
@@ -347,6 +349,9 @@ def create_user(
         class_id=managed_class_id,
     )
     db.add(user)
+    db.flush()
+    if user.role == UserRole.STUDENT.value and user.class_id:
+        prepare_student_course_context(user, db)
     db.commit()
     db.refresh(user)
 
@@ -434,6 +439,9 @@ def update_user(
     if user_data.is_active is not None and is_admin(current_user):
         changes.append(f"状态: {user.is_active} -> {user_data.is_active}")
         user.is_active = user_data.is_active
+
+    if user.role == UserRole.STUDENT.value and user.username and user.class_id:
+        prepare_student_course_context(user, db)
 
     db.commit()
     db.refresh(user)

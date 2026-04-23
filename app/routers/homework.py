@@ -16,7 +16,12 @@ from app.attachments import (
     get_attachment_file_path,
 )
 from app.auth import get_current_active_user
-from app.course_access import ensure_course_access, get_enrolled_students, get_student_profile_for_user
+from app.course_access import (
+    ensure_course_access,
+    get_enrolled_students,
+    get_student_profile_for_user,
+    prepare_student_course_context,
+)
 from app.database import get_db
 from app.llm_grading import normalize_score_for_homework, queue_grading_task, refresh_submission_summary
 from app.models import (
@@ -69,6 +74,10 @@ def _get_homework_or_404(homework_id: int, db: Session) -> Homework:
 
 
 def _ensure_homework_access(homework: Homework, current_user: User, db: Session) -> Homework:
+    if current_user.role == UserRole.STUDENT and homework.subject_id:
+        prepare_student_course_context(current_user, db)
+        db.commit()
+
     allowed_class_ids = get_accessible_class_ids(current_user, db)
     if current_user.role != UserRole.ADMIN and homework.class_id not in allowed_class_ids:
         raise HTTPException(status_code=403, detail="You do not have access to this homework.")

@@ -7,6 +7,31 @@ from sqlalchemy.orm import Session
 from app.models import Class, CourseEnrollment, Student, Subject, User, UserRole
 
 
+def prepare_student_course_context(user: User, db: Session) -> None:
+    """
+    For student accounts: align roster class with account class when unambiguous,
+    then ensure CourseEnrollment rows exist for all courses in that class.
+
+    Idempotent aside from one-time roster class_id correction when username matches
+    exactly one Student row in another class.
+    """
+    if user.role != UserRole.STUDENT or not user.username or not user.class_id:
+        return
+
+    roster_matches = db.query(Student).filter(Student.student_no == user.username).all()
+    if len(roster_matches) == 1:
+        st = roster_matches[0]
+        if st.class_id != user.class_id:
+            db.query(CourseEnrollment).filter(CourseEnrollment.student_id == st.id).delete(synchronize_session=False)
+            st.class_id = user.class_id
+            db.flush()
+
+    student = get_student_profile_for_user(user, db)
+    if student:
+        sync_student_course_enrollments(student, db)
+    db.flush()
+
+
 def get_student_profile_for_user(user: User, db: Session) -> Optional[Student]:
     """Roster student for this login: same class as the account and student_no == username."""
     if not user.username or not user.class_id:
@@ -25,6 +50,9 @@ def get_accessible_courses_query(user: User, db: Session):
         return query
 
     if user.role == UserRole.STUDENT:
+        prepare_student_course_context(user, db)
+        db.commit()
+
         student = get_student_profile_for_user(user, db)
         if not student:
             return query.filter(False)
@@ -34,9 +62,14 @@ def get_accessible_courses_query(user: User, db: Session):
             .filter(CourseEnrollment.student_id == student.id)
             .all()
         ]
-        if not enrolled_subject_ids:
+        class_subject_ids = [
+            row[0]
+            for row in db.query(Subject.id).filter(Subject.class_id == user.class_id).all()
+        ]
+        visible_ids = sorted(set(enrolled_subject_ids) | set(class_subject_ids))
+        if not visible_ids:
             return query.filter(False)
-        return query.filter(Subject.id.in_(enrolled_subject_ids))
+        return query.filter(Subject.id.in_(visible_ids))
 
     if user.role == UserRole.TEACHER:
         return query.filter(Subject.teacher_id == user.id)
