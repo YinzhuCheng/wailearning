@@ -1,28 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=lib_deploy.sh
+source "${SCRIPT_DIR}/lib_deploy.sh"
+
 APP_URL="${APP_URL:-https://wailearning.xyz}"
 API_HEALTH_URL="${API_HEALTH_URL:-${APP_URL}/health}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-ddclass-backend}"
 LOCAL_HEALTH_RETRIES="${LOCAL_HEALTH_RETRIES:-30}"
 LOCAL_HEALTH_INTERVAL_SECONDS="${LOCAL_HEALTH_INTERVAL_SECONDS:-1}"
 
-wait_for_local_health() {
-  local attempt
-  for ((attempt = 1; attempt <= LOCAL_HEALTH_RETRIES; attempt++)); do
-    if curl -fsS http://127.0.0.1:8001/health >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep "${LOCAL_HEALTH_INTERVAL_SECONDS}"
-  done
-  return 1
-}
-
 echo "==> systemd status"
 systemctl --no-pager --full status "${BACKEND_SERVICE}" || true
 
 echo "==> local backend health"
-if wait_for_local_health; then
+if wait_for_local_backend_health; then
   curl -fsS http://127.0.0.1:8001/health
 else
   echo "Local backend health check failed after ${LOCAL_HEALTH_RETRIES} attempts."
