@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import fitz
 import httpx
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageFile, UnidentifiedImageError
 from docx import Document
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, joinedload
@@ -53,11 +53,15 @@ def build_png_data_url_from_image_bytes(data: bytes) -> str:
     """Load common formats (jpeg/png/webp/gif/bmp) and emit an OpenAI-compatible data:image/png;base64,... URL."""
     if not data or len(data) > MAX_VISION_TEST_IMAGE_BYTES:
         raise ValueError(f"Image must be non-empty and at most {MAX_VISION_TEST_IMAGE_BYTES} bytes.")
+    prev_truncated = ImageFile.LOAD_TRUNCATED_IMAGES
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
     try:
         im = Image.open(io.BytesIO(data))
         im.load()
     except (UnidentifiedImageError, OSError) as exc:
         raise ValueError("无法将文件识别为支持的图片（请使用 JPEG/PNG/WebP 等）。") from exc
+    finally:
+        ImageFile.LOAD_TRUNCATED_IMAGES = prev_truncated
     if im.mode not in ("RGB", "RGBA"):
         im = im.convert("RGBA" if (getattr(im, "info", None) and im.info.get("transparency") is not None) else "RGB")
     out = io.BytesIO()

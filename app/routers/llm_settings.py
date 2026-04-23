@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
@@ -224,9 +224,10 @@ async def validate_preset(
         form = await request.form()
         up = form.get("image")
         if up is not None:
-            if not isinstance(up, UploadFile):
+            read_fn = getattr(up, "read", None)
+            if read_fn is None or not callable(read_fn):
                 raise HTTPException(status_code=400, detail="Field 'image' must be a file upload.")
-            body = await up.read()
+            body = await read_fn()
             try:
                 image_data_url = build_png_data_url_from_image_bytes(body)
             except ValueError as exc:
