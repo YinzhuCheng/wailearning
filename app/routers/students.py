@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.routers.classes import get_accessible_class_ids
 from app.schemas import StudentCreate, StudentListResponse, StudentResponse, StudentUpdate
+from app.student_user_sync import sync_user_from_roster_student
 
 
 router = APIRouter(prefix="/api/students", tags=["学生管理"])
@@ -301,21 +302,40 @@ def create_student(
         Student.class_id == student_data.class_id,
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="该班级中学号已存在")
-
-    student = Student(
-        name=student_data.name,
-        student_no=student_data.student_no,
-        gender=student_data.gender,
-        phone=student_data.phone,
-        parent_phone=student_data.parent_phone,
-        address=student_data.address,
-        class_id=student_data.class_id,
-        teacher_id=current_user.id if current_user.role == UserRole.TEACHER.value else None,
-    )
-    db.add(student)
+        if current_user.role == UserRole.ADMIN.value:
+            raise HTTPException(status_code=400, detail="该班级中学号已存在")
+        linked_user = db.query(User).filter(User.username == student_data.student_no).first()
+        if not (
+            linked_user
+            and (linked_user.role or "").strip() == UserRole.STUDENT.value
+            and linked_user.class_id == student_data.class_id
+            and existing.teacher_id is None
+        ):
+            raise HTTPException(status_code=400, detail="该班级中学号已存在")
+        # Idempotent: roster row was auto-created from the student account; teacher (re)submits the same pupil.
+        existing.name = student_data.name
+        existing.gender = student_data.gender
+        existing.phone = student_data.phone
+        existing.parent_phone = student_data.parent_phone
+        existing.address = student_data.address
+        if current_user.role == UserRole.TEACHER.value:
+            existing.teacher_id = current_user.id
+        student = existing
+    else:
+        student = Student(
+            name=student_data.name,
+            student_no=student_data.student_no,
+            gender=student_data.gender,
+            phone=student_data.phone,
+            parent_phone=student_data.parent_phone,
+            address=student_data.address,
+            class_id=student_data.class_id,
+            teacher_id=current_user.id if current_user.role == UserRole.TEACHER.value else None,
+        )
+        db.add(student)
     db.flush()
     sync_student_course_enrollments(student, db)
+    sync_user_from_roster_student(db, student)
     db.commit()
     db.refresh(student)
 
@@ -431,6 +451,7 @@ def create_students_batch(
         db.flush()
         for student in new_students:
             sync_student_course_enrollments(student, db)
+            sync_user_from_roster_student(db, student)
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -480,6 +501,8 @@ def update_student(
     if student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权修改该学生")
 
+    previous_student_no = clean_text(student.student_no)
+
     if student_data.name is not None:
         student.name = student_data.name
 
@@ -514,6 +537,13 @@ def update_student(
         db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student.id).delete()
         db.flush()
         sync_student_course_enrollments(student, db)
+
+    cur_no = clean_text(student.student_no)
+    sync_user_from_roster_student(
+        db,
+        student,
+        previous_student_no=previous_student_no if previous_student_no != cur_no else None,
+    )
 
     db.commit()
     db.refresh(student)

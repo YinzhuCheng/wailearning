@@ -17,6 +17,7 @@ from app.course_access import (
 )
 from app.database import get_db
 from app.models import Class, CourseEnrollment, CourseEnrollmentBlock, Semester, Student, Subject, User, UserRole
+from app.student_user_sync import sync_user_from_roster_student
 from app.schemas import (
     CourseTimeItem,
     CourseEnrollmentResponse,
@@ -511,6 +512,8 @@ def create_subject(
                 normalized_enrollment_type = enrollment_type.strip().lower()
                 enrollment.enrollment_type = normalized_enrollment_type
                 enrollment.can_remove = normalized_enrollment_type == "elective"
+        for student, _ in enrollment_overrides:
+            sync_user_from_roster_student(db, student)
     db.commit()
     db.refresh(course)
     return _serialize_course(course, db)

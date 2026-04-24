@@ -43,6 +43,7 @@ from app.schemas import (
     UserUpdate,
 )
 from app.course_access import prepare_student_course_context, sync_student_course_enrollments
+from app.student_user_sync import sync_roster_from_student_user, sync_user_from_roster_student
 from app.services import LogService
 from app.permissions import is_admin
 
@@ -289,7 +290,7 @@ def upsert_student_roster_from_student_users(
                 updated += 1
             else:
                 skipped += 1
-            prepare_student_course_context(user, db)
+            sync_user_from_roster_student(db, existing_same_class)
             continue
 
         conflict = (
@@ -342,7 +343,7 @@ def upsert_student_roster_from_student_users(
                     updated += 1
                 else:
                     skipped += 1
-                prepare_student_course_context(user, db)
+                sync_user_from_roster_student(db, raced)
                 continue
             errors.append(
                 StudentRosterUpsertFromUsersError(
@@ -354,7 +355,7 @@ def upsert_student_roster_from_student_users(
             continue
 
         created += 1
-        prepare_student_course_context(user, db)
+        sync_user_from_roster_student(db, roster)
 
     db.commit()
 
@@ -474,6 +475,7 @@ def load_student_users(
                     db.add(user)
                     db.flush()
                     sync_student_course_enrollments(student, db)
+                    sync_roster_from_student_user(db, user)
                 existing_usernames.add(student_no)
                 created_users.append(f"{student_name}（{student_no}）")
             except IntegrityError:
@@ -550,7 +552,7 @@ def create_user(
     db.add(user)
     db.flush()
     if user.role == UserRole.STUDENT.value and user.class_id:
-        prepare_student_course_context(user, db)
+        sync_roster_from_student_user(db, user)
     db.commit()
     db.refresh(user)
 
@@ -596,6 +598,9 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
+    orig_username = user.username
+    orig_class_id = user.class_id
+
     requested_role_change = "role" in user_data.model_fields_set
     requested_class_change = "class_id" in user_data.model_fields_set
 
@@ -640,7 +645,12 @@ def update_user(
         user.is_active = user_data.is_active
 
     if user.role == UserRole.STUDENT.value and user.username and user.class_id:
-        prepare_student_course_context(user, db)
+        sync_roster_from_student_user(
+            db,
+            user,
+            orig_username=orig_username,
+            orig_class_id=orig_class_id,
+        )
 
     db.commit()
     db.refresh(user)
