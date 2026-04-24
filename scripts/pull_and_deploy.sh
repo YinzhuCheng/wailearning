@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 与 scripts/redeploy.sh 共用 Git 同步逻辑（见 docs/DEPLOY_GIT_ROBUSTNESS.md）。
 # 需 root（与 deploy_all.sh 内各脚本一致）。分支可用 BRANCH 或 GIT_BRANCH。
+# GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT、SAFE_BACKUP_BEFORE_DEPLOY 与 redeploy.sh 相同。
 set -euo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -20,8 +21,24 @@ GIT_REMOTE="${GIT_REMOTE:-origin}"
 GIT_CLEAN="${GIT_CLEAN:-1}"
 GIT_RESET_WORKTREE_BEFORE_FETCH="${GIT_RESET_WORKTREE_BEFORE_FETCH:-0}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/dd-class/backups}"
+SAFE_BACKUP_BEFORE_DEPLOY="${SAFE_BACKUP_BEFORE_DEPLOY:-0}"
+DB_NAME="${DB_NAME:-ddclass}"
+SHARED_DIR="${SHARED_DIR:-/opt/dd-class/shared}"
 
 cd "${REPO_DIR}"
+
+if [[ "${SAFE_BACKUP_BEFORE_DEPLOY}" == "1" ]]; then
+  install -d -m 0755 "${BACKUP_DIR}"
+  local_ts="$(date +%F-%H%M%S)"
+  echo "==> SAFE_BACKUP_BEFORE_DEPLOY=1: pg_dump ${DB_NAME} + tar shared -> ${BACKUP_DIR}"
+  (cd /tmp && sudo -u postgres pg_dump -Fc "${DB_NAME}" >"${BACKUP_DIR}/${DB_NAME}-${local_ts}.dump")
+  if [[ -d "${SHARED_DIR}" ]]; then
+    tar -czf "${BACKUP_DIR}/shared-${local_ts}.tar.gz" "${SHARED_DIR}"
+  else
+    echo "==> 警告: SHARED_DIR=${SHARED_DIR} 不存在，跳过 shared 归档" >&2
+  fi
+fi
+
 echo "==> pull_and_deploy: REPO_DIR=${REPO_DIR} 分支=${BRANCH}"
 if [[ -d .git ]]; then
   echo "==> 同步前提交: $(git rev-parse --short HEAD)"

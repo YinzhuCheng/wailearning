@@ -14,7 +14,7 @@
   git reset --hard "$GIT_REMOTE/$BRANCH"
   ```
 
-- **工作区不干净**（未提交修改）时，`checkout` 会被 Git 保护性拒绝。部署机应只保留可重建状态：先 **`git diff` 备份到 patch**（可选），再 **`git reset --hard`** + **`git clean -ffd`**，然后再 fetch。仓库脚本中可通过 **`GIT_RESET_WORKTREE_BEFORE_FETCH=1`** 启用该前置步骤（见下）。
+- **工作区不干净**（未提交修改）时，`checkout` 会被 Git 保护性拒绝。可选做法：① **`GIT_RESET_WORKTREE_BEFORE_FETCH=1`**：先备份 diff、再 **`reset --hard`** + **`clean -ffd`** 再 fetch；② 默认 **`GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=1`**：`checkout -B` 若因「会被覆盖的本地改动」失败，则向 **`BACKUP_DIR`** 写入 patch、**`git stash -u`** 后重试一次（设为 **`0`** 则直接失败，便于 CI）。
 - **子模块**：存在 `.gitmodules` 时，在更新主仓库后执行 **`git submodule sync --recursive`** 与 **`git submodule update --init --recursive`**。
 - **「Git 对齐」≠「已上线该版本」**：还必须完整执行 **`deploy_all.sh`**（或等价流程）、**`post_deploy_check.sh`** 通过、**systemd** 后端为 **active**。详见下文「部署完成的判定」。
 
@@ -46,6 +46,10 @@ git checkout -B "$BRANCH" "origin/$BRANCH"
 | `REPO_DIR` | 未设置时：**若存在** `/opt/dd-class/source/.git` **则默认使用该路径**，否则为 redeploy 脚本所在仓库根目录；仍可通过环境变量显式指定 | 服务器上的仓库路径（须与 `deploy_*` 使用的 `SOURCE_DIR` 一致） |
 | `DD_DEFAULT_REPO_DIR` | `/opt/dd-class/source` | 覆盖「首选生产 clone 路径」（与 `DEPLOY.md` 目录约定一致） |
 | `BRANCH` / `GIT_BRANCH` | `pull_and_deploy` 接受 **`BRANCH`** 或 **`GIT_BRANCH`**（前者优先）；`redeploy` 使用 **`GIT_BRANCH`** | 要部署的远端分支名 |
+| `GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT` | `1` | `checkout` 因本地改动被拒时自动 patch + **`stash -u`** 并重试；`0` 关闭 |
+| `SAFE_BACKUP_BEFORE_DEPLOY` | `0` | `1` 时在 Git 同步前备份 **`DB_NAME`** 数据库与 **`SHARED_DIR`** 到 **`BACKUP_DIR`**；**`pg_dump` 在 `/tmp` 下执行**，减轻 **`sudo -u postgres` 当前目录在 `/root` 时「could not change directory」** 的噪音（一般不影响 dump 成功） |
+| `DB_NAME` | `ddclass` | 与 `SAFE_BACKUP_BEFORE_DEPLOY` 配套 |
+| `SHARED_DIR` | `/opt/dd-class/shared` | 与 `SAFE_BACKUP_BEFORE_DEPLOY` 配套 |
 
 ## SSH / heredoc 注意
 

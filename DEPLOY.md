@@ -23,6 +23,12 @@ The browser loads static files from **`/var/www/.../admin`**, rebuilt only when 
 
 **`redeploy.sh`** and **`pull_and_deploy.sh`** print the short **`HEAD`** before **`deploy_all`** so logs show which commit was built.
 
+### Upgrade gotchas (already-deployed servers)
+
+- **`checkout` blocked by local edits**: If you see *local changes would be overwritten by checkout*, either set **`GIT_RESET_WORKTREE_BEFORE_FETCH=1`** (hard reset + clean before fetch) or rely on the default **`GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=1`**, which saves a patch under **`BACKUP_DIR`** and runs **`git stash -u`** once before retrying checkout. Set **`GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0`** to fail fast instead.
+- **`sudo -u postgres pg_dump` from `/root`**: PostgreSQL may log *could not change directory to "/root"*; it is usually harmless. Run dumps from a neutral cwd (the scripts use **`(cd /tmp && sudo -u postgres pg_dump ...)`** when **`SAFE_BACKUP_BEFORE_DEPLOY=1`**).
+- **Optional pre-upgrade backup**: Set **`SAFE_BACKUP_BEFORE_DEPLOY=1`** on **`redeploy.sh`** / **`pull_and_deploy.sh`** to archive **`DB_NAME`** (default `ddclass`) and **`SHARED_DIR`** (default `/opt/dd-class/shared`) into **`BACKUP_DIR`** before Git sync.
+
 ## Architecture
 
 - Nginx serves the admin SPA at `/`
@@ -203,6 +209,19 @@ If the tree on the server must be wiped before pull (uncommitted edits blocking 
 
 ```bash
 sudo GIT_RESET_WORKTREE_BEFORE_FETCH=1 GIT_BRANCH=main bash scripts/redeploy.sh
+```
+
+For a conservative upgrade (database + shared tarball before Git sync), use:
+
+```bash
+cd /opt/dd-class/source
+sudo SAFE_BACKUP_BEFORE_DEPLOY=1 GIT_BRANCH=main GIT_REMOTE=origin bash scripts/redeploy.sh
+```
+
+If you prefer not to auto-stash when checkout conflicts (fail fast instead):
+
+```bash
+sudo GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0 GIT_BRANCH=main bash scripts/redeploy.sh
 ```
 
 After updating the code on the server without `redeploy.sh`, still run checks:

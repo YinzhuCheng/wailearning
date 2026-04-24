@@ -13,6 +13,9 @@
 #   FRONTEND_ONLY=1               只跑 deploy_frontend.sh（仍会 npm run build 管理端；须保证 REPO_DIR 已是目标版本）
 #   APP_URL=https://你的域名       部署后 post_deploy_check 使用的公网健康检查地址
 #   DD_DEFAULT_REPO_DIR=/opt/dd-class/source  未设置 REPO_DIR 时的首选 clone 路径（与 DEPLOY.md 一致）
+#   GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=1  checkout 因本地改动被拒时自动 patch + stash -u 并重试（0=关闭）
+#   SAFE_BACKUP_BEFORE_DEPLOY=0  设为 1 时在 Git 同步前备份 PostgreSQL 与 shared（pg_dump 在 /tmp 下执行，减轻 postgres 无法 cd /root 的告警）
+#   DB_NAME=ddclass  SHARED_DIR=/opt/dd-class/shared  与备份路径相关
 set -euo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -32,6 +35,9 @@ BACKUP_DIR="${BACKUP_DIR:-/opt/dd-class/backups}"
 SKIP_GIT="${SKIP_GIT:-0}"
 FRONTEND_ONLY="${FRONTEND_ONLY:-0}"
 APP_URL="${APP_URL:-}"
+SAFE_BACKUP_BEFORE_DEPLOY="${SAFE_BACKUP_BEFORE_DEPLOY:-0}"
+DB_NAME="${DB_NAME:-ddclass}"
+SHARED_DIR="${SHARED_DIR:-/opt/dd-class/shared}"
 
 echo "==> 仓库目录: ${REPO_DIR}"
 echo "==> 分支: ${GIT_BRANCH}"
@@ -40,6 +46,18 @@ if [[ "${SKIP_GIT}" == "1" ]]; then
 fi
 if [[ "${FRONTEND_ONLY}" == "1" ]]; then
   echo "==> 提示: FRONTEND_ONLY=1 — 仅部署管理端静态资源，不跑后端/家长端。请确认已用正确分支更新 ${REPO_DIR}。" >&2
+fi
+
+if [[ "${SAFE_BACKUP_BEFORE_DEPLOY}" == "1" ]]; then
+  install -d -m 0755 "${BACKUP_DIR}"
+  local_ts="$(date +%F-%H%M%S)"
+  echo "==> SAFE_BACKUP_BEFORE_DEPLOY=1: pg_dump ${DB_NAME} + tar shared -> ${BACKUP_DIR}"
+  (cd /tmp && sudo -u postgres pg_dump -Fc "${DB_NAME}" >"${BACKUP_DIR}/${DB_NAME}-${local_ts}.dump")
+  if [[ -d "${SHARED_DIR}" ]]; then
+    tar -czf "${BACKUP_DIR}/shared-${local_ts}.tar.gz" "${SHARED_DIR}"
+  else
+    echo "==> 警告: SHARED_DIR=${SHARED_DIR} 不存在，跳过 shared 归档" >&2
+  fi
 fi
 
 if [[ "${SKIP_GIT}" != "1" ]]; then
