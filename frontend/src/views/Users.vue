@@ -4,13 +4,12 @@
       <div>
         <h1 class="page-title">用户管理</h1>
         <p class="page-subtitle">
-          支持管理员、班主任、任课老师和学生四类用户。可勾选学生行后使用「批量调班」；管理员可将所选学生账号
-          <strong>补录到学生管理花名册</strong>（用户名即学号），或加入指定课程选课。
+          支持管理员、班主任、任课老师和学生四类用户。<strong>学生登录用户名即学号</strong>，与行政班花名册一致；新建学生账号且分配班级后会自动写入花名册。
+          勾选学生后可使用「同步到学生管理」（补录/对齐花名册）、「加入课程…」、「批量调班」。
         </p>
       </div>
       <div class="page-actions">
         <el-button
-          v-if="isAdmin"
           type="primary"
           plain
           data-testid="users-sync-roster"
@@ -21,7 +20,6 @@
           同步到学生管理
         </el-button>
         <el-button
-          v-if="isAdmin"
           type="primary"
           plain
           data-testid="users-open-add-course"
@@ -132,8 +130,8 @@
       <el-alert type="info" :closable="false" class="batch-class-alert">
         <template #title>说明</template>
         <p class="batch-class-alert-body">
-          仅支持<strong>学生</strong>角色。将把所选账号的「所属班级」统一改到下方班级，并自动与<strong>学号相同</strong>的花名册记录对齐（含选课同步）。
-          若花名册中尚无对应学号，请先由教务在「学生管理」中补录花名册。
+          仅支持<strong>学生</strong>角色。将把所选账号的「所属班级」统一改到下方班级，并<strong>自动在本班花名册创建或对齐</strong>记录（用户名即学号，含选课同步）。
+          若同一学号已在其他班花名册中存在，调班会失败并提示，需先处理重复。
         </p>
       </el-alert>
 

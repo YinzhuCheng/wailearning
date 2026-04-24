@@ -10,7 +10,6 @@ from app.database import get_db
 from app.models import (
     Class,
     CourseMaterial,
-    Gender,
     Homework,
     HomeworkAttempt,
     HomeworkGradingTask,
@@ -43,6 +42,7 @@ from app.schemas import (
     UserUpdate,
 )
 from app.course_access import prepare_student_course_context, sync_student_course_enrollments
+from app.roster_sync import upsert_student_roster_for_user
 from app.services import LogService
 from app.permissions import is_admin
 
@@ -207,9 +207,20 @@ def batch_set_user_class(
             continue
         if user.class_id == payload.class_id:
             continue
+        prev_class_id = user.class_id
         user.class_id = payload.class_id
         if user.username and user.class_id:
             prepare_student_course_context(user, db)
+            roster_res = upsert_student_roster_for_user(db, user)
+            if roster_res.error_reason:
+                user.class_id = prev_class_id
+                errors.append(
+                    UserBatchSetClassError(
+                        user_id=uid,
+                        reason=roster_res.error_reason,
+                    )
+                )
+                continue
         updated += 1
 
     db.commit()
@@ -276,85 +287,19 @@ def upsert_student_roster_from_student_users(
             )
             continue
 
-        display_name = (user.real_name or "").strip() or student_no
-
-        existing_same_class = (
-            db.query(Student)
-            .filter(Student.student_no == student_no, Student.class_id == user.class_id)
-            .first()
-        )
-        if existing_same_class:
-            if (existing_same_class.name or "").strip() != display_name:
-                existing_same_class.name = display_name
-                updated += 1
-            else:
-                skipped += 1
-            prepare_student_course_context(user, db)
-            continue
-
-        conflict = (
-            db.query(Student)
-            .filter(Student.student_no == student_no, Student.class_id != user.class_id)
-            .first()
-        )
-        if conflict:
+        res = upsert_student_roster_for_user(db, user)
+        if res.error_reason:
             errors.append(
                 StudentRosterUpsertFromUsersError(
                     user_id=user.id,
-                    username=user.username,
-                    reason="该学号已在其他班级的花名册中，请先处理重复或调整班级后再同步",
+                    username=res.error_username or user.username,
+                    reason=res.error_reason,
                 )
             )
             continue
-
-        class_obj = db.query(Class).filter(Class.id == user.class_id).first()
-        if not class_obj:
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id,
-                    username=user.username,
-                    reason="所属班级不存在",
-                )
-            )
-            continue
-
-        roster = Student(
-            name=display_name,
-            student_no=student_no,
-            gender=Gender.MALE,
-            class_id=user.class_id,
-        )
-        db.add(roster)
-        try:
-            with db.begin_nested():
-                db.flush()
-        except IntegrityError:
-            # Concurrent create or race after pre-check: align with existing row.
-            db.expunge(roster)
-            raced = (
-                db.query(Student)
-                .filter(Student.student_no == student_no, Student.class_id == user.class_id)
-                .first()
-            )
-            if raced:
-                if (raced.name or "").strip() != display_name:
-                    raced.name = display_name
-                    updated += 1
-                else:
-                    skipped += 1
-                prepare_student_course_context(user, db)
-                continue
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id,
-                    username=user.username,
-                    reason="花名册写入冲突，请重试或检查学号是否重复",
-                )
-            )
-            continue
-
-        created += 1
-        prepare_student_course_context(user, db)
+        created += res.created
+        updated += res.updated
+        skipped += res.skipped
 
     db.commit()
 
@@ -473,9 +418,21 @@ def load_student_users(
                     )
                     db.add(user)
                     db.flush()
+                    roster_res = upsert_student_roster_for_user(db, user)
+                    if roster_res.error_reason:
+                        raise ValueError(roster_res.error_reason)
                     sync_student_course_enrollments(student, db)
                 existing_usernames.add(student_no)
                 created_users.append(f"{student_name}（{student_no}）")
+            except ValueError as ve:
+                errors.append(
+                    StudentUserBatchCreateError(
+                        student_id=student.id,
+                        student_name=student_name,
+                        student_no=student_no,
+                        reason=str(ve),
+                    )
+                )
             except IntegrityError:
                 errors.append(
                     StudentUserBatchCreateError(
@@ -549,8 +506,11 @@ def create_user(
     )
     db.add(user)
     db.flush()
-    if user.role == UserRole.STUDENT.value and user.class_id:
-        prepare_student_course_context(user, db)
+    if user.role == UserRole.STUDENT.value and user.class_id and user.username:
+        roster_res = upsert_student_roster_for_user(db, user)
+        if roster_res.error_reason:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=roster_res.error_reason)
     db.commit()
     db.refresh(user)
 
@@ -640,7 +600,10 @@ def update_user(
         user.is_active = user_data.is_active
 
     if user.role == UserRole.STUDENT.value and user.username and user.class_id:
-        prepare_student_course_context(user, db)
+        roster_res = upsert_student_roster_for_user(db, user)
+        if roster_res.error_reason:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=roster_res.error_reason)
 
     db.commit()
     db.refresh(user)

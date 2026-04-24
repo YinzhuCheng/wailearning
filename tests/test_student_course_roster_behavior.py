@@ -582,7 +582,7 @@ def test_batch_import_students_existing_course_all_get_enrollment(client: TestCl
 
 
 def test_public_register_student_then_roster_same_username_gets_enrollments(client: TestClient, monkeypatch):
-    """公开注册学生后补同用户名花名册：应有该班课程的选课。"""
+    """公开注册学生且带班级：应自动写入花名册（用户名=学号）并同步该班必修课选课。"""
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
     from app.config import settings
 
@@ -602,13 +602,18 @@ def test_public_register_student_then_roster_same_username_gets_enrollments(clie
     )
     assert r.status_code == 200, r.text
 
-    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
-    r2 = client.post(
-        "/api/students",
-        headers=th,
-        json={"name": "自注册", "student_no": reg_no, "gender": "male", "class_id": ctx["class_id"]},
-    )
-    assert r2.status_code == 200, r2.text
+    db = SessionLocal()
+    try:
+        st = db.query(Student).filter(Student.student_no == reg_no, Student.class_id == ctx["class_id"]).first()
+        assert st is not None
+        enr = (
+            db.query(CourseEnrollment)
+            .filter(CourseEnrollment.student_id == st.id, CourseEnrollment.subject_id == ctx["course_id"])
+            .first()
+        )
+        assert enr is not None
+    finally:
+        db.close()
 
     sh = login_api(client, reg_no, "rp")
     r_list = client.get("/api/subjects", headers=sh)
