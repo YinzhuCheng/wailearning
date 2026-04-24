@@ -107,7 +107,12 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item v-if="showClassAssignmentField" label="所属班级" prop="class_id">
-          <el-select v-model="form.class_id" placeholder="可选" style="width: 100%" clearable>
+          <el-select
+            v-model="form.class_id"
+            :placeholder="form.role === 'student' ? '请选择班级' : '可选'"
+            style="width: 100%"
+            :clearable="form.role !== 'student'"
+          >
             <el-option v-for="item in classes" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
@@ -332,12 +337,18 @@ const form = reactive({
   is_active: true
 })
 
-const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }]
-}
+const rules = computed(() => {
+  const base = {
+    username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+    password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+    real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+    role: [{ required: true, message: '请选择角色', trigger: 'change' }]
+  }
+  if (form.role === 'student') {
+    base.class_id = [{ required: true, message: '学生账号必须选择所属班级', trigger: 'change' }]
+  }
+  return base
+})
 
 const roleText = role => ({
   admin: '管理员',
@@ -363,6 +374,9 @@ watch(
   role => {
     if (role === 'teacher') {
       form.class_id = null
+    }
+    if (role !== 'student') {
+      formRef.value?.clearValidate?.(['class_id'])
     }
   }
 )
