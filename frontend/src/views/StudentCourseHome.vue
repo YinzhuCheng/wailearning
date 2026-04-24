@@ -12,109 +12,152 @@
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
-      <section class="course-overview">
-        <article class="overview-card">
-          <span class="overview-label">学期</span>
-          <strong>{{ selectedCourse.semester || '未设置' }}</strong>
-        </article>
-        <article class="overview-card">
-          <span class="overview-label">任课老师</span>
-          <strong>{{ selectedCourse.teacher_name || '未分配' }}</strong>
-        </article>
-        <article class="overview-card overview-card-schedule">
-          <span class="overview-label">课程时间</span>
-          <div v-if="courseTimeCards.length" class="course-time-list">
-            <div
-              v-for="(courseTime, index) in courseTimeCards"
-              :key="`${courseTime.dateRange}-${courseTime.weekday}-${index}`"
-              class="course-time-card"
-            >
-              <strong class="course-time-card__title">{{ formatCourseTimeTitle(courseTime) }}</strong>
-              <span v-if="courseTime.time" class="course-time-card__line">{{ courseTime.time }}</span>
-            </div>
+      <!-- 统一：标题行 + 内容区 -->
+      <section class="panel-card panel-card--overview">
+        <header class="panel-header">
+          <div class="panel-header__titles">
+            <h2 class="panel-title">课程概览</h2>
+            <p class="panel-desc">学期、任课教师与上课时间</p>
           </div>
-          <strong v-else>未设置</strong>
-        </article>
+        </header>
+        <div class="overview-body">
+          <div class="overview-meta">
+            <span class="meta-item">
+              <el-icon class="meta-icon"><Calendar /></el-icon>
+              <span class="meta-label">学期</span>
+              <span class="meta-value">{{ selectedCourse.semester || '未设置' }}</span>
+            </span>
+            <span class="meta-divider" aria-hidden="true" />
+            <span class="meta-item">
+              <el-icon class="meta-icon"><User /></el-icon>
+              <span class="meta-label">任课老师</span>
+              <span class="meta-value">{{ selectedCourse.teacher_name || '未分配' }}</span>
+            </span>
+          </div>
+          <div class="overview-schedule">
+            <div class="schedule-head">
+              <span class="schedule-label">
+                <el-icon><Clock /></el-icon>
+                课程时间
+              </span>
+              <el-button
+                v-if="courseTimeCards.length > 1"
+                text
+                type="primary"
+                class="panel-link"
+                @click="scheduleExpanded = !scheduleExpanded"
+              >
+                {{ scheduleExpanded ? '收起' : `展开全部（${courseTimeCards.length} 条）` }}
+              </el-button>
+            </div>
+            <template v-if="visibleCourseTimes.length">
+              <ul class="schedule-list">
+                <li
+                  v-for="(courseTime, index) in visibleCourseTimes"
+                  :key="`${courseTime.dateRange}-${courseTime.weekday}-${index}`"
+                  class="schedule-row"
+                >
+                  <span class="schedule-row__title">{{ formatCourseTimeTitle(courseTime) }}</span>
+                  <span v-if="courseTime.time" class="schedule-row__time">{{ courseTime.time }}</span>
+                </li>
+              </ul>
+            </template>
+            <p v-else class="empty-inline">未设置上课时间</p>
+          </div>
+        </div>
       </section>
 
-      <el-row :gutter="20" class="workspace-grid">
-        <el-col :xs="24" :lg="8">
-          <section class="workspace-panel">
-            <div class="panel-header">
-              <div>
-                <h2>课程资料</h2>
-                <p>最近发布的资料</p>
+      <!-- 主区：作业优先全宽 -->
+      <section class="panel-card panel-card--homework">
+        <header class="panel-header">
+          <div class="panel-header__titles">
+            <h2 class="panel-title">课程作业</h2>
+            <p class="panel-desc">最近布置的作业</p>
+          </div>
+          <el-button text type="primary" class="panel-link panel-link--strong" @click="router.push('/homework')">
+            查看全部
+          </el-button>
+        </header>
+        <el-skeleton :loading="loading" animated :rows="3">
+          <template v-if="!homeworks.length">
+            <p class="empty-inline">暂无作业。有新作业时会显示在这里。</p>
+            <el-button type="primary" size="small" plain class="empty-cta" @click="router.push('/homework')">
+              去作业列表
+            </el-button>
+          </template>
+          <ul v-else class="item-list item-list--homework">
+            <li v-for="item in homeworksPreview" :key="item.id">
+              <button class="item-row item-row--homework" type="button" @click="router.push('/homework')">
+                <el-icon class="item-row__icon"><EditPen /></el-icon>
+                <span class="item-row__main">
+                  <span class="item-row__title">{{ item.title }}</span>
+                  <span class="item-row__meta item-row__meta--accent">截止 {{ formatDate(item.due_date) }}</span>
+                </span>
+              </button>
+            </li>
+          </ul>
+        </el-skeleton>
+      </section>
+
+      <!-- 次要：资料 + 通知并排 -->
+      <el-row :gutter="16" class="secondary-row">
+        <el-col :xs="24" :md="12">
+          <section class="panel-card">
+            <header class="panel-header">
+              <div class="panel-header__titles">
+                <h2 class="panel-title">课程资料</h2>
+                <p class="panel-desc">最近发布的资料</p>
               </div>
-              <el-button text @click="router.push('/materials')">查看全部</el-button>
-            </div>
-            <el-skeleton :loading="loading" animated :rows="4">
-              <el-empty v-if="!materials.length" description="暂无课程资料" />
-              <div v-else class="item-list">
-                <button
-                  v-for="item in materials"
-                  :key="item.id"
-                  class="item-card"
-                  type="button"
-                  @click="router.push('/materials')"
-                >
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.creator_name || '教师' }} · {{ formatDate(item.created_at) }}</span>
-                </button>
-              </div>
+              <el-button text type="primary" class="panel-link" @click="router.push('/materials')">查看全部</el-button>
+            </header>
+            <el-skeleton :loading="loading" animated :rows="2">
+              <template v-if="!materials.length">
+                <p class="empty-inline">暂无资料。</p>
+                <el-button text type="primary" size="small" class="empty-cta empty-cta--text" @click="router.push('/materials')">
+                  去资料库
+                </el-button>
+              </template>
+              <ul v-else class="item-list">
+                <li v-for="item in materialsPreview" :key="item.id">
+                  <button class="item-row" type="button" @click="router.push('/materials')">
+                    <el-icon class="item-row__icon item-row__icon--muted"><Document /></el-icon>
+                    <span class="item-row__main">
+                      <span class="item-row__title">{{ item.title }}</span>
+                      <span class="item-row__meta">{{ item.creator_name || '教师' }} · {{ formatDate(item.created_at) }}</span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
             </el-skeleton>
           </section>
         </el-col>
-
-        <el-col :xs="24" :lg="8">
-          <section class="workspace-panel">
-            <div class="panel-header">
-              <div>
-                <h2>课程作业</h2>
-                <p>最近布置的作业</p>
+        <el-col :xs="24" :md="12">
+          <section class="panel-card">
+            <header class="panel-header">
+              <div class="panel-header__titles">
+                <h2 class="panel-title">课程通知</h2>
+                <p class="panel-desc">最近收到的通知</p>
               </div>
-              <el-button text @click="router.push('/homework')">查看全部</el-button>
-            </div>
-            <el-skeleton :loading="loading" animated :rows="4">
-              <el-empty v-if="!homeworks.length" description="暂无课程作业" />
-              <div v-else class="item-list">
-                <button
-                  v-for="item in homeworks"
-                  :key="item.id"
-                  class="item-card"
-                  type="button"
-                  @click="router.push('/homework')"
-                >
-                  <strong>{{ item.title }}</strong>
-                  <span>截止：{{ formatDate(item.due_date) }}</span>
-                </button>
-              </div>
-            </el-skeleton>
-          </section>
-        </el-col>
-
-        <el-col :xs="24" :lg="8">
-          <section class="workspace-panel">
-            <div class="panel-header">
-              <div>
-                <h2>课程通知</h2>
-                <p>最近收到的通知</p>
-              </div>
-              <el-button text @click="router.push('/notifications')">查看全部</el-button>
-            </div>
-            <el-skeleton :loading="loading" animated :rows="4">
-              <el-empty v-if="!notifications.length" description="暂无课程通知" />
-              <div v-else class="item-list">
-                <button
-                  v-for="item in notifications"
-                  :key="item.id"
-                  class="item-card"
-                  type="button"
-                  @click="router.push('/notifications')"
-                >
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ priorityText(item.priority) }} · {{ formatDate(item.created_at) }}</span>
-                </button>
-              </div>
+              <el-button text type="primary" class="panel-link" @click="router.push('/notifications')">查看全部</el-button>
+            </header>
+            <el-skeleton :loading="loading" animated :rows="2">
+              <template v-if="!notifications.length">
+                <p class="empty-inline">暂无通知。</p>
+                <el-button text type="primary" size="small" class="empty-cta empty-cta--text" @click="router.push('/notifications')">
+                  去通知中心
+                </el-button>
+              </template>
+              <ul v-else class="item-list">
+                <li v-for="item in notificationsPreview" :key="item.id">
+                  <button class="item-row" type="button" @click="router.push('/notifications')">
+                    <el-icon class="item-row__icon item-row__icon--muted"><Bell /></el-icon>
+                    <span class="item-row__main">
+                      <span class="item-row__title">{{ item.title }}</span>
+                      <span class="item-row__meta">{{ priorityText(item.priority) }} · {{ formatDate(item.created_at) }}</span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
             </el-skeleton>
           </section>
         </el-col>
@@ -124,6 +167,7 @@
 </template>
 
 <script setup>
+import { Bell, Calendar, Clock, Document, EditPen, User } from '@element-plus/icons-vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -134,12 +178,28 @@ import { buildCourseTimeCards } from '@/utils/courseTimes'
 const router = useRouter()
 const userStore = useUserStore()
 
+const PREVIEW_COUNT = 3
+
 const selectedCourse = computed(() => userStore.selectedCourse)
 const courseTimeCards = computed(() => buildCourseTimeCards(selectedCourse.value))
+const scheduleExpanded = ref(false)
+
+const visibleCourseTimes = computed(() => {
+  const cards = courseTimeCards.value || []
+  if (scheduleExpanded.value || cards.length <= 1) {
+    return cards
+  }
+  return cards.slice(0, 1)
+})
+
 const loading = ref(false)
 const materials = ref([])
 const homeworks = ref([])
 const notifications = ref([])
+
+const materialsPreview = computed(() => (materials.value || []).slice(0, PREVIEW_COUNT))
+const homeworksPreview = computed(() => (homeworks.value || []).slice(0, PREVIEW_COUNT))
+const notificationsPreview = computed(() => (notifications.value || []).slice(0, PREVIEW_COUNT))
 
 const formatCourseTimeTitle = courseTime =>
   [courseTime?.dateRange, courseTime?.weekday].filter(Boolean).join('，')
@@ -175,6 +235,7 @@ const loadWorkspace = async () => {
     return
   }
 
+  scheduleExpanded.value = false
   loading.value = true
 
   try {
@@ -217,96 +278,61 @@ watch(selectedCourse, () => {
 
 <style scoped>
 .student-course-home {
+  --sch-radius: 12px;
+  --sch-radius-sm: 8px;
+  --sch-gap: 16px;
+  --sch-border: #e2e8f0;
+  --sch-surface: #ffffff;
+  --sch-muted: #64748b;
+  --sch-text: #0f172a;
+  --sch-accent: #2563eb;
+  --sch-accent-soft: #eff6ff;
+  --sch-row-bg: #f8fafc;
+
   padding: 24px;
+  max-width: 1100px;
 }
 
 .page-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--sch-gap);
+  margin-bottom: var(--sch-gap);
 }
 
 .page-title {
   margin: 0;
-  font-size: 28px;
-  color: #0f172a;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--sch-text);
+  letter-spacing: -0.02em;
 }
 
 .page-subtitle {
-  margin: 8px 0 0;
-  color: #64748b;
-}
-
-.course-overview {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-  align-items: stretch;
-}
-
-.overview-card,
-.workspace-panel {
-  padding: 20px;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
-}
-
-.overview-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.overview-card-schedule {
-  gap: 12px;
-}
-
-.overview-label {
-  font-size: 13px;
-  color: #64748b;
-}
-
-.course-time-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.course-time-card,
-.item-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #f8fafc;
-  text-align: left;
-}
-
-.course-time-card__line,
-.item-card span {
-  font-size: 13px;
-  line-height: 1.6;
-  color: #64748b;
-}
-
-.course-time-card__title,
-.item-card strong {
-  font-size: 16px;
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--sch-muted);
   line-height: 1.5;
-  font-weight: 700;
-  color: #0f172a;
 }
 
-.workspace-grid {
-  margin-top: 0;
+/* 统一卡片外壳 */
+.panel-card {
+  padding: 18px 20px;
+  border: 1px solid var(--sch-border);
+  border-radius: var(--sch-radius);
+  background: var(--sch-surface);
+  margin-bottom: var(--sch-gap);
+}
+
+.panel-card--overview {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.panel-card--homework {
+  border-color: #bfdbfe;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.06);
+  background: linear-gradient(180deg, #fafbff 0%, #fff 48%);
 }
 
 .panel-header {
@@ -314,48 +340,239 @@ watch(selectedCourse, () => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
-.panel-header h2 {
+.panel-header__titles {
+  min-width: 0;
+}
+
+.panel-title {
   margin: 0;
-  font-size: 20px;
-  color: #0f172a;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--sch-text);
+  line-height: 1.35;
 }
 
-.panel-header p {
-  margin: 6px 0 0;
-  color: #64748b;
+.panel-desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--sch-muted);
+  line-height: 1.45;
+}
+
+.panel-link {
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.panel-link--strong {
+  font-weight: 600;
+}
+
+/* 概览：高密度 meta + 时间表 */
+.overview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.overview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 12px;
+  background: var(--sch-row-bg);
+  border-radius: var(--sch-radius-sm);
+  border: 1px solid #f1f5f9;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
 }
 
-.item-list {
+.meta-icon {
+  font-size: 16px;
+  color: var(--sch-muted);
+}
+
+.meta-label {
+  color: var(--sch-muted);
+}
+
+.meta-value {
+  font-weight: 600;
+  color: var(--sch-text);
+}
+
+.meta-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--sch-border);
+}
+
+.overview-schedule {
+  padding-top: 2px;
+}
+
+.schedule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.schedule-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sch-text);
+}
+
+.schedule-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--sch-radius-sm);
+  background: var(--sch-row-bg);
+  border: 1px solid #f1f5f9;
+}
+
+.schedule-row__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sch-text);
+}
+
+.schedule-row__time {
+  font-size: 13px;
+  color: var(--sch-muted);
+}
+
+/* 列表行 */
+.item-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-row {
+  display: flex;
+  align-items: flex-start;
   gap: 12px;
-}
-
-.item-card {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--sch-border);
+  border-radius: var(--sch-radius-sm);
+  background: var(--sch-surface);
+  text-align: left;
   cursor: pointer;
-  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.item-card:hover {
-  transform: translateY(-1px);
-  border-color: #bfdbfe;
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+.item-row:hover {
+  border-color: #cbd5e1;
+  background: #fafbfc;
 }
 
-@media (max-width: 1024px) {
-  .course-overview {
-    grid-template-columns: 1fr;
-  }
+.item-row--homework {
+  border-color: #dbeafe;
+  background: var(--sch-accent-soft);
+}
+
+.item-row--homework:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.item-row__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 18px;
+  color: var(--sch-accent);
+}
+
+.item-row__icon--muted {
+  color: #94a3b8;
+}
+
+.item-row__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item-row__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sch-text);
+  line-height: 1.4;
+}
+
+.item-row__meta {
+  font-size: 12px;
+  color: var(--sch-muted);
+}
+
+.item-row__meta--accent {
+  color: #1d4ed8;
+  font-weight: 500;
+}
+
+.empty-inline {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--sch-muted);
+  line-height: 1.5;
+}
+
+.empty-cta {
+  margin-top: 2px;
+}
+
+.empty-cta--text {
+  padding-left: 0;
+  height: auto;
+}
+
+.secondary-row {
+  margin-top: 0;
 }
 
 @media (max-width: 768px) {
-  .page-header {
+  .student-course-home {
+    padding: 16px;
+  }
+
+  .meta-divider {
+    display: none;
+  }
+
+  .overview-meta {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
   }
 }
 </style>
