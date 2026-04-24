@@ -231,10 +231,11 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     assert n == 2
 
 
-# --- 4) Course cap hits before a student with remaining headroom (multi-student course) ---
+# --- 4) Multi-student course: per-student pool only (no shared course cap) ---
 
 
-def test_course_daily_token_limit_blocks_second_student(client: TestClient):
+def test_second_student_grading_succeeds_after_first_high_usage(client: TestClient):
+    """Without a course-wide daily cap, another student's submission still gets LLM grading."""
     from tests.llm_scenario import make_multi_student_scenario
 
     ensure_admin()
@@ -244,7 +245,6 @@ def test_course_daily_token_limit_blocks_second_student(client: TestClient):
     p = {
         "is_enabled": True,
         "daily_student_token_limit": 1_000_000,
-        "daily_course_token_limit": 4_000,
         "max_input_tokens": 16000,
         "max_output_tokens": 1200,
         "response_language": "zh-CN",
@@ -286,25 +286,24 @@ def test_course_daily_token_limit_blocks_second_student(client: TestClient):
         "usage": u400,
     }
 
-    def first_big_usage(self, url, **kwargs):
+    posts = []
+
+    def track_post(self, url, **kwargs):
+        posts.append(1)
         return httpx.Response(200, json=u2800)
 
-    with mock.patch.object(httpx.Client, "post", first_big_usage):
+    with mock.patch.object(httpx.Client, "post", track_post):
         process_grading_task(tasks[0])
-
-    def second_should_not_post(self, url, **kwargs):
-        raise AssertionError("LLM should not be called for second student (course cap)")
-
-    with mock.patch.object(httpx.Client, "post", second_should_not_post):
         process_grading_task(tasks[1])
+    assert len(posts) == 2
     db = SessionLocal()
     try:
         from app.models import HomeworkGradingTask
 
-        err = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tasks[1]).one().error_code
+        t2 = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tasks[1]).one()
     finally:
         db.close()
-    assert err == "quota_exceeded"
+    assert t2.status == "success"
 
 
 # --- 5) HTTP 429 then success on same member (retryable) ---

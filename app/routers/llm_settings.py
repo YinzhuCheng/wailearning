@@ -97,7 +97,6 @@ def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse
         is_enabled=bool(config.is_enabled),
         response_language=config.response_language,
         daily_student_token_limit=config.daily_student_token_limit,
-        daily_course_token_limit=config.daily_course_token_limit,
         estimated_chars_per_token=config.estimated_chars_per_token,
         estimated_image_tokens=config.estimated_image_tokens,
         max_input_tokens=config.max_input_tokens,
@@ -279,7 +278,6 @@ def update_course_llm_config(
     config.is_enabled = payload.is_enabled
     config.response_language = payload.response_language
     config.daily_student_token_limit = payload.daily_student_token_limit
-    config.daily_course_token_limit = payload.daily_course_token_limit
     config.estimated_chars_per_token = payload.estimated_chars_per_token
     config.estimated_image_tokens = payload.estimated_image_tokens
     config.max_input_tokens = payload.max_input_tokens

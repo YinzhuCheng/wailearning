@@ -262,10 +262,6 @@
             <el-input-number v-model="llmForm.daily_student_token_limit" :min="1" :step="1000" style="width: 100%" />
           </el-form-item>
 
-          <el-form-item label="课程日 token 限额">
-            <el-input-number v-model="llmForm.daily_course_token_limit" :min="1" :step="1000" style="width: 100%" />
-          </el-form-item>
-
           <el-form-item label="输入 token 上限">
             <el-input-number v-model="llmForm.max_input_tokens" :min="1000" :step="1000" style="width: 100%" />
           </el-form-item>
@@ -383,7 +379,6 @@ const llmForm = reactive({
   is_enabled: false,
   response_language: '',
   daily_student_token_limit: null,
-  daily_course_token_limit: null,
   estimated_chars_per_token: 4.0,
   estimated_image_tokens: 850,
   max_input_tokens: 16000,
@@ -574,7 +569,6 @@ const resetLlmForm = () => {
     is_enabled: false,
     response_language: '',
     daily_student_token_limit: null,
-    daily_course_token_limit: null,
     estimated_chars_per_token: 4.0,
     estimated_image_tokens: 850,
     max_input_tokens: 16000,
@@ -597,7 +591,6 @@ const applyLlmConfig = config => {
   llmForm.is_enabled = Boolean(config.is_enabled)
   llmForm.response_language = config.response_language || ''
   llmForm.daily_student_token_limit = config.daily_student_token_limit || null
-  llmForm.daily_course_token_limit = config.daily_course_token_limit || null
   llmForm.estimated_chars_per_token = config.estimated_chars_per_token ?? 4.0
   llmForm.estimated_image_tokens = config.estimated_image_tokens ?? 850
   llmForm.max_input_tokens = config.max_input_tokens ?? 16000
@@ -665,7 +658,6 @@ const saveLlmConfig = async () => {
       is_enabled: llmForm.is_enabled,
       response_language: llmForm.response_language?.trim() || null,
       daily_student_token_limit: normalizeNullableNumber(llmForm.daily_student_token_limit),
-      daily_course_token_limit: normalizeNullableNumber(llmForm.daily_course_token_limit),
       estimated_chars_per_token: llmForm.estimated_chars_per_token,
       estimated_image_tokens: llmForm.estimated_image_tokens,
       max_input_tokens: llmForm.max_input_tokens,

@@ -517,7 +517,6 @@ def precheck_quota(
     config: CourseLLMConfig,
     *,
     student_id: int,
-    subject_id: Optional[int],
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
     """Serialize read of usage vs limits to reduce double-spend under concurrent workers."""
@@ -532,15 +531,6 @@ def precheck_quota(
                 student_id=student_id,
             )
             if used_by_student + estimated_tokens > config.daily_student_token_limit:
-                return False, "quota_exceeded"
-        if config.daily_course_token_limit and subject_id:
-            used_by_course = _get_used_tokens_for_scope(
-                db,
-                usage_date=usage_date,
-                timezone_name=timezone_name,
-                subject_id=subject_id,
-            )
-            if used_by_course + estimated_tokens > config.daily_course_token_limit:
                 return False, "quota_exceeded"
         return True, None
 
@@ -570,15 +560,6 @@ def record_usage_if_needed(
                 student_id=task.student_id,
             )
             if used_by_student + int(total_tokens or 0) > config.daily_student_token_limit:
-                return
-        if config.daily_course_token_limit and task.subject_id:
-            used_by_course = _get_used_tokens_for_scope(
-                db,
-                usage_date=usage_date,
-                timezone_name=timezone_name,
-                subject_id=task.subject_id,
-            )
-            if used_by_course + int(total_tokens or 0) > config.daily_course_token_limit:
                 return
 
         db.add(
@@ -733,7 +714,6 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         db,
         config,
         student_id=task.student_id,
-        subject_id=task.subject_id,
         estimated_tokens=material["estimated_tokens"],
     )
     if not allowed:

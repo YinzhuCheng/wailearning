@@ -183,7 +183,6 @@ def ensure_schema_updates() -> None:
             is_enabled BOOLEAN DEFAULT FALSE,
             response_language VARCHAR,
             daily_student_token_limit INTEGER,
-            daily_course_token_limit INTEGER,
             estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0,
             estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             max_input_tokens INTEGER NOT NULL DEFAULT 16000,
@@ -268,7 +267,23 @@ def ensure_schema_updates() -> None:
             )
         )
 
+    _drop_legacy_daily_course_token_limit_column()
     _backfill_default_llm_groups_for_existing_configs()
+
+
+def _drop_legacy_daily_course_token_limit_column() -> None:
+    """Remove per-course daily pool column; quotas are student-only (see CourseLLMConfig)."""
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS daily_course_token_limit"))
+        return
+    if engine.dialect.name == "sqlite":
+        with engine.begin() as conn:
+            rows = conn.execute(text("PRAGMA table_info(course_llm_configs)")).fetchall()
+            colnames = {row[1] for row in rows}
+            if "daily_course_token_limit" in colnames:
+                conn.execute(text("ALTER TABLE course_llm_configs DROP COLUMN daily_course_token_limit"))
+        return
 
 
 def _backfill_default_llm_groups_for_existing_configs() -> None:
