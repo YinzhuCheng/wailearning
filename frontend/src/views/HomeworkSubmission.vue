@@ -22,6 +22,13 @@
           <el-descriptions-item label="发布人">{{ homework.creator_name || '未设置' }}</el-descriptions-item>
           <el-descriptions-item label="满分">{{ formatScore(homework.max_score) }}</el-descriptions-item>
           <el-descriptions-item label="自动评分">{{ homework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
+          <el-descriptions-item label="提交次数">
+            <template v-if="homework.max_submissions != null">
+              已用 {{ homework.attempt_count || 0 }} / 上限 {{ homework.max_submissions }}，
+              还可提交 {{ homework.submissions_remaining ?? 0 }} 次
+            </template>
+            <template v-else>不限制（{{ homework.attempt_count || 0 }} 次已提交）</template>
+          </el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
             {{ homework.content || '暂无作业说明。' }}
@@ -85,6 +92,12 @@
             :closable="false"
             title="已超过截止时间且该作业不允许补交。"
           />
+          <el-alert
+            v-else-if="isMaxSubmissionsReached"
+            type="warning"
+            :closable="false"
+            title="已达到该作业允许的最大提交次数，无法再提交。"
+          />
         </div>
 
         <el-form label-position="top" @submit.prevent>
@@ -93,7 +106,7 @@
               v-model="form.content"
               type="textarea"
               :rows="6"
-              :disabled="isSubmissionLocked"
+              :disabled="isSubmitDisabled"
               placeholder="可填写作业说明、答题思路或补充信息。"
             />
           </el-form-item>
@@ -103,10 +116,10 @@
               :auto-upload="false"
               :show-file-list="false"
               :limit="1"
-              :disabled="isSubmissionLocked"
+              :disabled="isSubmitDisabled"
               :on-change="handleAttachmentChange"
             >
-              <el-button :disabled="isSubmissionLocked">选择附件</el-button>
+              <el-button :disabled="isSubmitDisabled">选择附件</el-button>
             </el-upload>
             <div class="attachment-help">{{ attachmentHintText }}</div>
             <div v-if="attachmentDisplayName" class="attachment-preview">
@@ -119,13 +132,20 @@
                 {{ attachmentDisplayName }}
               </el-button>
               <span v-else>{{ attachmentDisplayName }}</span>
-              <el-button link type="danger" :disabled="isSubmissionLocked" @click="removeAttachment">移除</el-button>
+                <el-button link type="danger" :disabled="isSubmitDisabled" @click="removeAttachment">移除</el-button>
             </div>
           </el-form-item>
 
           <div class="form-actions">
             <el-button @click="router.push('/homework')">取消</el-button>
-            <el-button type="primary" :loading="submitting" :disabled="isSubmissionLocked" @click="submitForm">保存提交</el-button>
+            <el-button
+              type="primary"
+              :loading="submitting"
+              :disabled="isSubmitDisabled"
+              @click="submitForm"
+            >
+              保存提交
+            </el-button>
           </div>
         </el-form>
       </el-card>
@@ -218,6 +238,20 @@ const isSubmissionLocked = computed(() => {
   return isPastDue.value && !homework.value?.allow_late_submission
 })
 
+const isMaxSubmissionsReached = computed(() => {
+  const cap = homework.value?.max_submissions
+  if (cap == null) {
+    return false
+  }
+  const rem = homework.value?.submissions_remaining
+  if (rem != null) {
+    return rem <= 0
+  }
+  return (homework.value?.attempt_count || 0) >= Number(cap)
+})
+
+const isSubmitDisabled = computed(() => isSubmissionLocked.value || isMaxSubmissionsReached.value)
+
 const form = reactive({
   content: '',
   attachment_name: '',
@@ -256,7 +290,7 @@ const loadPage = async () => {
 }
 
 const handleAttachmentChange = uploadFile => {
-  if (isSubmissionLocked.value) {
+  if (isSubmitDisabled.value) {
     return false
   }
 
@@ -275,7 +309,7 @@ const handleAttachmentChange = uploadFile => {
 }
 
 const removeAttachment = () => {
-  if (isSubmissionLocked.value) {
+  if (isSubmitDisabled.value) {
     return
   }
 

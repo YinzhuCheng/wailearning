@@ -101,6 +101,9 @@ export { http, httpQuiet, apiBaseUrl }
 
 const subjectsApi = {
   list: params => http.get('/subjects', { params }),
+  electiveCatalog: () => http.get('/subjects/elective-catalog'),
+  studentSelfEnroll: subjectId => http.post(`/subjects/${subjectId}/student-self-enroll`),
+  studentSelfDrop: subjectId => http.post(`/subjects/${subjectId}/student-self-drop`),
   get: id => http.get(`/subjects/${id}`),
   create: data => http.post('/subjects', data),
   update: (id, data) => http.put(`/subjects/${id}`, data),
@@ -124,6 +127,7 @@ const api = {
     listStudentCandidates: () => http.get('/users/student-candidates'),
     loadStudentCandidates: data => http.post('/users/student-candidates/load', data),
     batchSetClass: data => http.post('/users/batch-set-class', data),
+    upsertStudentRosterFromUsers: data => http.post('/users/student-roster/from-users', data),
     get: id => http.get(`/users/${id}`),
     create: data => http.post('/users', data),
     update: (id, data) => http.put(`/users/${id}`, data),
@@ -162,6 +166,9 @@ const api = {
     getStudentScores: (studentId, params) => http.get(`/scores/student/${studentId}`, { params }),
     getWeights: subjectId => http.get(`/scores/weights/${subjectId}`),
     updateWeights: (subjectId, data) => http.put(`/scores/weights/${subjectId}`, data)
+  },
+  llmSettings: {
+    getStudentQuota: subjectId => http.get(`/llm-settings/courses/student-quota/${subjectId}`)
   },
   semesters: {
     list: () => http.get('/semesters'),

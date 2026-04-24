@@ -81,6 +81,26 @@ def get_accessible_courses_query(user: User, db: Session):
     return query.filter(False)
 
 
+def get_student_elective_catalog_query(user: User, db: Session):
+    """
+    Active elective courses system-wide for voluntary student enrollment.
+    Restricted to students with a resolved roster profile and account class_id.
+    """
+    query = db.query(Subject)
+    if user.role != UserRole.STUDENT:
+        return query.filter(False)
+    prepare_student_course_context(user, db)
+    db.commit()
+    student = get_student_profile_for_user(user, db)
+    if not student or not user.class_id:
+        return query.filter(False)
+    return query.filter(
+        Subject.status == "active",
+        Subject.course_type == "elective",
+        Subject.class_id.isnot(None),
+    )
+
+
 def get_accessible_course_ids(user: User, db: Session) -> list[int]:
     return [course.id for course in get_accessible_courses_query(user, db).all() if course.id]
 

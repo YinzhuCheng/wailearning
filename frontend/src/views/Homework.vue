@@ -38,6 +38,11 @@
             :reserve-selection="true"
           />
           <el-table-column prop="title" label="作业标题" width="190" show-overflow-tooltip />
+          <el-table-column v-if="!userStore.isStudent" label="提交上限" width="100">
+            <template #default="{ row }">
+              {{ row.max_submissions != null ? `${row.max_submissions} 次` : '不限' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="subject_name" label="课程" width="160" />
           <el-table-column label="评分规则" min-width="210">
             <template #default="{ row }">
@@ -95,6 +100,9 @@
               >
                 学生提交
               </el-button>
+              <el-button v-if="!userStore.isStudent" size="small" plain @click="openEditDialog(row)">
+                编辑
+              </el-button>
               <el-button
                 v-if="!userStore.isStudent"
                 size="small"
@@ -148,7 +156,13 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" title="发布作业" width="620px" destroy-on-close>
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editingHomeworkId ? '编辑作业' : '发布作业'"
+      width="620px"
+      destroy-on-close
+      @closed="onHomeworkDialogClosed"
+    >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="作业标题" prop="title">
           <el-input v-model="form.title" />
@@ -199,6 +213,19 @@
             />
           </div>
         </el-form-item>
+        <el-form-item label="提交次数">
+          <div class="late-rules">
+            <el-switch v-model="form.max_submissions_enabled" active-text="限制每人最多提交次数" inactive-text="不限制" />
+            <el-input-number
+              v-if="form.max_submissions_enabled"
+              v-model="form.max_submissions_value"
+              :min="1"
+              :max="200"
+              style="width: 160px; margin-left: 8px"
+            />
+          </div>
+          <div class="attachment-help">达到上限后学生无法再提交新 attempt；教师下调上限时不能低于任一学生已提交次数。</div>
+        </el-form-item>
         <el-form-item label="附件">
           <el-upload
             :auto-upload="false"
@@ -229,6 +256,9 @@
         <el-descriptions-item label="发布人">{{ currentHomework.creator_name }}</el-descriptions-item>
         <el-descriptions-item label="发布时间">{{ formatDate(currentHomework.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="满分">{{ formatScore(currentHomework.max_score) }}</el-descriptions-item>
+          <el-descriptions-item label="提交上限">
+            {{ currentHomework.max_submissions != null ? `${currentHomework.max_submissions} 次/人` : '不限' }}
+          </el-descriptions-item>
           <el-descriptions-item label="自动评分">{{ currentHomework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ currentHomework.grading_rule_hint }}</el-descriptions-item>
         <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '暂无内容' }}</el-descriptions-item>
@@ -260,6 +290,7 @@ const userStore = useUserStore()
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
+const editingHomeworkId = ref(null)
 const detailVisible = ref(false)
 const currentHomework = ref(null)
 const homeworks = ref([])
@@ -290,7 +321,9 @@ const form = reactive({
   reference_answer: '',
   response_language: '',
   allow_late_submission: true,
-  late_submission_affects_score: false
+  late_submission_affects_score: false,
+  max_submissions_enabled: false,
+  max_submissions_value: 3
 })
 
 const rules = {
@@ -365,7 +398,8 @@ const applyBatchLatePolicy = async () => {
   }
 }
 
-const openCreateDialog = () => {
+const resetHomeworkForm = () => {
+  editingHomeworkId.value = null
   form.title = ''
   form.content = ''
   form.due_date = null
@@ -379,8 +413,47 @@ const openCreateDialog = () => {
   form.response_language = ''
   form.allow_late_submission = true
   form.late_submission_affects_score = false
+  form.max_submissions_enabled = false
+  form.max_submissions_value = 3
+  attachmentFile.value = null
+}
+
+const openCreateDialog = () => {
+  resetHomeworkForm()
+  dialogVisible.value = true
+}
+
+const openEditDialog = row => {
+  if (!row?.id) {
+    return
+  }
+  editingHomeworkId.value = row.id
+  form.title = row.title || ''
+  form.content = row.content || ''
+  form.due_date = row.due_date || null
+  form.attachment_name = row.attachment_name || ''
+  form.attachment_url = row.attachment_url || ''
+  form.max_score = row.max_score ?? 100
+  form.grade_precision = row.grade_precision || 'integer'
+  form.auto_grading_enabled = Boolean(row.auto_grading_enabled)
+  form.rubric_text = row.rubric_text || ''
+  form.reference_answer = row.reference_answer || ''
+  form.response_language = row.response_language || ''
+  form.allow_late_submission = row.allow_late_submission !== false
+  form.late_submission_affects_score = Boolean(row.late_submission_affects_score)
+  if (row.max_submissions != null && row.max_submissions !== '') {
+    form.max_submissions_enabled = true
+    form.max_submissions_value = Number(row.max_submissions) || 3
+  } else {
+    form.max_submissions_enabled = false
+    form.max_submissions_value = 3
+  }
   attachmentFile.value = null
   dialogVisible.value = true
+}
+
+const onHomeworkDialogClosed = () => {
+  resetHomeworkForm()
 }
 
 const handleAttachmentChange = uploadFile => {
@@ -427,7 +500,8 @@ const submitForm = async () => {
   submitting.value = true
   try {
     const attachment = await uploadAttachmentIfNeeded()
-    await api.homework.create({
+    const maxSubmissions = form.max_submissions_enabled ? Number(form.max_submissions_value) : null
+    const payload = {
       title: form.title,
       content: form.content,
       attachment_name: attachment.attachment_name,
@@ -441,10 +515,19 @@ const submitForm = async () => {
       response_language: form.response_language?.trim() || null,
       allow_late_submission: form.allow_late_submission,
       late_submission_affects_score: form.late_submission_affects_score,
-      class_id: selectedCourse.value.class_id,
-      subject_id: selectedCourse.value.id
-    })
-    ElMessage.success('作业已发布')
+      max_submissions: maxSubmissions
+    }
+    if (editingHomeworkId.value) {
+      await api.homework.update(editingHomeworkId.value, payload)
+      ElMessage.success('作业已更新')
+    } else {
+      await api.homework.create({
+        ...payload,
+        class_id: selectedCourse.value.class_id,
+        subject_id: selectedCourse.value.id
+      })
+      ElMessage.success('作业已发布')
+    }
     dialogVisible.value = false
     await loadHomeworks()
   } finally {
