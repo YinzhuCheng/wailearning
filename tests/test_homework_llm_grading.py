@@ -138,7 +138,41 @@ def test_auto_grading_disabled_no_task(grading_context: dict):
         db.close()
 
 
-def test_course_llm_disabled_task_fails(grading_context: dict):
+def test_enabling_auto_grading_after_submission_queues_regrade(grading_context: dict):
+    ctx = make_grading_course_with_homework(auto_grading=False)
+    client = grading_context["client"]
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+
+    r = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_h,
+        json={"content": "late enable"},
+    )
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        assert db.query(HomeworkGradingTask).count() == 0
+    finally:
+        db.close()
+
+    r2 = client.put(
+        f"/api/homeworks/{ctx['homework_id']}",
+        headers=teacher_h,
+        json={"auto_grading_enabled": True},
+    )
+    assert r2.status_code == 200, r2.text
+
+    db = SessionLocal()
+    try:
+        assert db.query(HomeworkGradingTask).filter(HomeworkGradingTask.status == "queued").count() >= 1
+    finally:
+        db.close()
+
+
+def test_course_llm_disabled_uses_global_validated_preset(grading_context: dict):
+    """Course LLM disabled but a global validated preset exists: grading still runs."""
     ctx = make_grading_course_with_homework(course_llm_enabled=False)
     client = grading_context["client"]
     student_h = login_api(client, ctx["student_username"], ctx["student_password"])
@@ -158,13 +192,18 @@ def test_course_llm_disabled_task_fails(grading_context: dict):
     finally:
         db.close()
 
-    process_grading_task(tid)
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(77.0, "global fallback")),
+    ):
+        process_grading_task(tid)
 
     db = SessionLocal()
     try:
         task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
-        assert task.status == "failed"
-        assert task.error_code == "llm_config_disabled"
+        assert task.status == "success"
+        assert (task.artifact_manifest or {}).get("llm_global_fallback")
     finally:
         db.close()
 

@@ -524,6 +524,66 @@ def _material_needs_vision(material: dict[str, Any]) -> bool:
     return False
 
 
+def pick_latest_validated_preset_for_grading(db: Session, *, need_vision: bool) -> Optional[LLMEndpointPreset]:
+    """
+    Global LLM presets: newest passing validation first (same ordering as admin connectivity checks).
+    Used when a course has LLM disabled or no endpoints configured.
+    """
+    candidates = (
+        db.query(LLMEndpointPreset)
+        .filter(
+            LLMEndpointPreset.is_active.is_(True),
+            LLMEndpointPreset.validation_status == "validated",
+        )
+        .order_by(LLMEndpointPreset.validated_at.desc().nullslast(), LLMEndpointPreset.id.desc())
+        .all()
+    )
+    for preset in candidates:
+        ok, _ = _preset_eligible_for_grading(preset, need_vision=need_vision)
+        if ok:
+            return preset
+    return None
+
+
+def _synthetic_endpoint_for_global_preset(config: CourseLLMConfig, preset: LLMEndpointPreset):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        id=-preset.id,
+        config_id=config.id,
+        group_id=None,
+        preset_id=preset.id,
+        priority=1,
+        preset=preset,
+    )
+
+
+def queue_auto_regrade_all_latest_attempts(db: Session, homework: Homework, *, queue_reason: str = "auto_grading_enabled") -> int:
+    """Enqueue grading for every student's latest attempt (e.g. after auto_grading is turned on)."""
+    if not homework.auto_grading_enabled:
+        return 0
+    subs = (
+        db.query(HomeworkSubmission)
+        .filter(HomeworkSubmission.homework_id == homework.id, HomeworkSubmission.latest_attempt_id.isnot(None))
+        .all()
+    )
+    n = 0
+    for sub in subs:
+        attempt = (
+            db.query(HomeworkAttempt)
+            .filter(
+                HomeworkAttempt.id == sub.latest_attempt_id,
+                HomeworkAttempt.homework_id == homework.id,
+            )
+            .first()
+        )
+        if not attempt:
+            continue
+        queue_grading_task(db, attempt, queue_reason=queue_reason)
+        n += 1
+    return n
+
+
 def _preset_text_ready(preset: Optional[LLMEndpointPreset]) -> bool:
     if not preset or not preset.is_active:
         return False
@@ -1283,20 +1343,40 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         .filter(CourseLLMConfig.subject_id == task.subject_id)
         .first()
     )
-    if not config or not config.is_enabled:
-        _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
-        return
+    if not config:
+        config = ensure_course_llm_config(db, task.subject_id, user_id=None)
 
-    if not (config.groups or []) and not (config.endpoints or []):
-        _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
-        return
+    use_global_fallback = False
+    global_fallback_preset: Optional[LLMEndpointPreset] = None
+    if not config.is_enabled:
+        use_global_fallback = True
+    elif not (config.groups or []) and not (config.endpoints or []):
+        use_global_fallback = True
+
+    if use_global_fallback:
+        material = _build_student_material(db, homework, attempt, config)
+        need_vision = _material_needs_vision(material)
+        global_fallback_preset = pick_latest_validated_preset_for_grading(db, need_vision=need_vision)
+        if not global_fallback_preset:
+            if not config.is_enabled:
+                _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置，且无通过校验的全局端点可用。")
+            else:
+                _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点，且无通过校验的全局端点可用。")
+            return
+    else:
+        material = _build_student_material(db, homework, attempt, config)
 
     routing_warnings = _homework_routing_warnings(db, homework, config)
-    material = _build_student_material(db, homework, attempt, config)
     base_manifest = material["artifact_manifest"] or {}
     if not isinstance(base_manifest, dict):
         base_manifest = {}
     task.artifact_manifest = {**base_manifest, "llm_routing": {"version": 1, "status": "pending"}}
+    if global_fallback_preset is not None:
+        task.artifact_manifest["llm_global_fallback"] = {
+            "preset_id": global_fallback_preset.id,
+            "preset_name": global_fallback_preset.name,
+        }
+        _flag_artifact_manifest_modified(task)
     if routing_warnings:
         task.artifact_manifest["homework_routing_warnings"] = routing_warnings
         _flag_artifact_manifest_modified(task)
@@ -1363,6 +1443,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
             attempt=attempt,
             config=config,
             material=material,
+            force_global_preset=use_global_fallback,
         )
     except NonRetryableLLMError as exc:
         msg = str(exc) or "LLM 调用失败。"
@@ -1483,12 +1564,30 @@ def _grade_with_endpoint_group(
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
     material: dict[str, Any],
+    force_global_preset: bool = False,
 ) -> dict[str, Any]:
     from types import SimpleNamespace
 
     need_vision = _material_needs_vision(material)
     spec = homework.llm_routing_spec if isinstance(homework.llm_routing_spec, dict) else None
     group_rows, flat_endpoints = _collect_grading_endpoints_for_config(config)
+
+    if force_global_preset:
+        preset = pick_latest_validated_preset_for_grading(db, need_vision=need_vision)
+        if not preset:
+            raise NonRetryableLLMError("无通过校验的全局 LLM 端点可用。")
+        _append_llm_call_log(
+            task,
+            {
+                "phase": "routing",
+                "level": "info",
+                "preset": preset.name,
+                "message": "课程 LLM 未启用或未配端点，使用全局最新通过校验的端点。",
+            },
+        )
+        flat_endpoints = [_synthetic_endpoint_for_global_preset(config, preset)]
+        group_rows = []
+        spec = None
 
     if spec and spec.get("mode") == "latest_passing_validated":
         preset = (

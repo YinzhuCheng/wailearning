@@ -112,8 +112,8 @@ def test_llm_empty_choices_fails_task(client: TestClient):
         db.close()
 
 
-# 3) After submit, admin clears all course endpoint links -> grading fails
-def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
+# 3) After submit, course endpoints cleared -> grading uses global validated preset
+def test_course_endpoints_cleared_before_grading_uses_global_fallback(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework()
     h, sid, th, sh = (
@@ -148,13 +148,14 @@ def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
     db = SessionLocal()
     try:
         t = db.get(HomeworkGradingTask, tid)
-        assert t.error_code == "endpoint_missing" or t.status == "failed"
+        assert t.status == "success"
+        assert (t.artifact_manifest or {}).get("llm_global_fallback")
     finally:
         db.close()
 
 
-# 4) Disable course LLM after submit, before process
-def test_disable_course_llm_before_grading_fails(client: TestClient):
+# 4) Disable course LLM after submit -> grading still uses global preset
+def test_disable_course_llm_before_grading_uses_global_fallback(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework()
     h, sid, th, sh = ctx["homework_id"], ctx["subject_id"], login_api(
@@ -191,11 +192,15 @@ def test_disable_course_llm_before_grading_fails(client: TestClient):
         tid = db.query(HomeworkGradingTask).one().id
     finally:
         db.close()
-    process_grading_task(tid)
+    with patch_httpx_post(
+        lambda s, u, **k: httpx.Response(200, json=json_llm_response(55, "after disable"))
+    ):
+        process_grading_task(tid)
     db = SessionLocal()
     try:
         t = db.get(HomeworkGradingTask, tid)
-        assert t.error_code == "llm_config_disabled"
+        assert t.status == "success"
+        assert (t.artifact_manifest or {}).get("llm_global_fallback")
     finally:
         db.close()
 

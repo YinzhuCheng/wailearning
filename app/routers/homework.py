@@ -655,6 +655,8 @@ def update_homework(
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
 
+    prev_auto_grading_enabled = bool(homework.auto_grading_enabled)
+
     if data.subject_id is not None:
         course = ensure_course_access(data.subject_id, current_user, db)
         if course.class_id and course.class_id != homework.class_id:
@@ -717,6 +719,15 @@ def update_homework(
                     detail=f"提交次数上限不能低于已有学生的最多提交次数（当前最大 {max_per_student} 次）。",
                 )
         homework.max_submissions = new_cap
+
+    if (
+        data.auto_grading_enabled is not None
+        and bool(data.auto_grading_enabled)
+        and not prev_auto_grading_enabled
+    ):
+        from app.llm_grading import queue_auto_regrade_all_latest_attempts
+
+        queue_auto_regrade_all_latest_attempts(db, homework, queue_reason="auto_grading_enabled")
 
     db.commit()
     db.refresh(homework)
