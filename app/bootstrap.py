@@ -11,6 +11,7 @@ from app.database import Base, SessionLocal, engine
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
+    LLMGlobalQuotaPolicy,
     LLMGroup,
     Homework,
     HomeworkAttempt,
@@ -193,13 +194,11 @@ def ensure_schema_updates() -> None:
             subject_id INTEGER NOT NULL UNIQUE REFERENCES subjects(id),
             is_enabled BOOLEAN DEFAULT FALSE,
             response_language VARCHAR,
-            daily_student_token_limit INTEGER,
-            daily_course_token_limit INTEGER,
             estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0,
             estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             max_input_tokens INTEGER NOT NULL DEFAULT 16000,
             max_output_tokens INTEGER NOT NULL DEFAULT 1200,
-            quota_timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            quota_timezone VARCHAR NOT NULL DEFAULT 'Asia/Shanghai',
             system_prompt TEXT,
             teacher_prompt TEXT,
             created_by INTEGER REFERENCES users(id),
@@ -243,6 +242,25 @@ def ensure_schema_updates() -> None:
             timezone VARCHAR NOT NULL DEFAULT 'UTC',
             reserved_tokens INTEGER NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS llm_global_quota_policies (
+            id INTEGER PRIMARY KEY,
+            default_daily_student_tokens INTEGER NOT NULL DEFAULT 100000,
+            quota_timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            max_parallel_grading_tasks INTEGER NOT NULL DEFAULT 3,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS max_parallel_grading_tasks INTEGER NOT NULL DEFAULT 3",
+        "UPDATE llm_global_quota_policies SET max_parallel_grading_tasks = 3 WHERE max_parallel_grading_tasks IS NULL",
+        """
+        CREATE TABLE IF NOT EXISTS llm_student_token_overrides (
+            id INTEGER PRIMARY KEY,
+            student_id INTEGER NOT NULL UNIQUE REFERENCES students(id),
+            daily_tokens INTEGER NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
         "ALTER TABLE llm_token_usage_logs ADD COLUMN IF NOT EXISTS billing_note VARCHAR",
@@ -296,8 +314,48 @@ def ensure_schema_updates() -> None:
                 """
             )
         )
+        if engine.dialect.name == "postgresql":
+            connection.execute(
+                text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS daily_student_token_limit")
+            )
+            connection.execute(
+                text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS daily_course_token_limit")
+            )
+        else:
+            for _col in ("daily_student_token_limit", "daily_course_token_limit"):
+                try:
+                    connection.execute(text(f"ALTER TABLE course_llm_configs DROP COLUMN {_col}"))
+                except OperationalError:
+                    pass
 
     _backfill_default_llm_groups_for_existing_configs()
+    _ensure_llm_global_quota_policy_row()
+
+
+def _ensure_llm_global_quota_policy_row() -> None:
+    """Single global policy row (id=1) for default per-student daily cap and billing calendar timezone."""
+    db = SessionLocal()
+    try:
+        row = db.query(LLMGlobalQuotaPolicy).filter(LLMGlobalQuotaPolicy.id == 1).first()
+        if row:
+            if getattr(row, "max_parallel_grading_tasks", None) is None:
+                row.max_parallel_grading_tasks = 3
+            db.commit()
+            return
+        db.add(
+            LLMGlobalQuotaPolicy(
+                id=1,
+                default_daily_student_tokens=100_000,
+                quota_timezone="Asia/Shanghai",
+                max_parallel_grading_tasks=3,
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _backfill_default_llm_groups_for_existing_configs() -> None:

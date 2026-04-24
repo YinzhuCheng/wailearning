@@ -13,6 +13,7 @@ from app.models import (
     Class,
     CourseLLMConfig,
     Gender,
+    LLMStudentTokenOverride,
     Student,
     Subject,
     User,
@@ -157,14 +158,15 @@ def test_student_quota_endpoint(client: TestClient):
 
     db = SessionLocal()
     try:
+        stu_row = db.query(Student).filter(Student.student_no == "stu_e1").first()
+        assert stu_row is not None
         cfg = CourseLLMConfig(
             subject_id=eid,
             is_enabled=True,
-            daily_student_token_limit=1000,
-            daily_course_token_limit=5000,
             quota_timezone="UTC",
         )
         db.add(cfg)
+        db.add(LLMStudentTokenOverride(student_id=stu_row.id, daily_tokens=1000))
         db.commit()
     finally:
         db.close()
@@ -174,7 +176,6 @@ def test_student_quota_endpoint(client: TestClient):
     body = r.json()
     assert body["subject_id"] == eid
     assert body["daily_student_token_limit"] == 1000
-    assert body["daily_course_token_limit"] == 5000
     assert body["student_remaining_tokens_today"] == 1000
 
 

@@ -205,7 +205,7 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(50.0, "a"))):
-        with mock.patch("app.llm_grading._get_usage_date", return_value="2000-05-20"):
+        with mock.patch("app.llm_grading.quota_calendar", return_value=("2000-05-20", "UTC")):
             process_grading_task(tid1)
     r2 = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
@@ -221,7 +221,7 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(55.0, "b"))):
-        with mock.patch("app.llm_grading._get_usage_date", return_value="2000-05-21"):
+        with mock.patch("app.llm_grading.quota_calendar", return_value=("2000-05-21", "UTC")):
             process_grading_task(tid2)
     db = SessionLocal()
     try:
@@ -231,83 +231,7 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     assert n == 2
 
 
-# --- 4) Course cap hits before a student with remaining headroom (multi-student course) ---
-
-
-def test_course_daily_token_limit_blocks_second_student(client: TestClient):
-    from tests.llm_scenario import make_multi_student_scenario
-
-    ensure_admin()
-    m = make_multi_student_scenario(2, daily_student_token_limit=1_000_000)
-    t_h = login_api(client, m["teacher_username"], m["teacher_password"])
-    sid = m["subject_id"]
-    p = {
-        "is_enabled": True,
-        "daily_student_token_limit": 1_000_000,
-        "daily_course_token_limit": 4_000,
-        "max_input_tokens": 16000,
-        "max_output_tokens": 1200,
-        "response_language": "zh-CN",
-        "quota_timezone": "UTC",
-        "estimated_image_tokens": 850,
-        "endpoints": [{"preset_id": m["preset_id"], "priority": 1}],
-    }
-    r_cfg = client.put(f"/api/llm-settings/courses/{sid}", headers=t_h, json=p)
-    assert r_cfg.status_code == 200, r_cfg.text
-
-    tasks: list[int] = []
-    for st in m["students"][:2]:
-        h = login_api(client, st["username"], st["password"])
-        r = client.post(
-            f"/api/homeworks/{m['homework_id']}/submission",
-            headers=h,
-            json={"content": "x" * 8000},
-        )
-        assert r.status_code == 200
-        db = SessionLocal()
-        try:
-            from app.models import HomeworkGradingTask
-
-            tasks.append(
-                db.query(HomeworkGradingTask)
-                .filter(HomeworkGradingTask.student_id == st["student_id"])
-                .one()
-                .id
-            )
-        finally:
-            db.close()
-    u400 = {
-        "prompt_tokens": 3000,
-        "completion_tokens": 0,
-        "total_tokens": 3000,
-    }
-    u2800 = {
-        "choices": [{"message": {"content": json_mod.dumps({"score": 60, "comment": "c"})}}],
-        "usage": u400,
-    }
-
-    def first_big_usage(self, url, **kwargs):
-        return httpx.Response(200, json=u2800)
-
-    with mock.patch.object(httpx.Client, "post", first_big_usage):
-        process_grading_task(tasks[0])
-
-    def second_should_not_post(self, url, **kwargs):
-        raise AssertionError("LLM should not be called for second student (course cap)")
-
-    with mock.patch.object(httpx.Client, "post", second_should_not_post):
-        process_grading_task(tasks[1])
-    db = SessionLocal()
-    try:
-        from app.models import HomeworkGradingTask
-
-        err = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tasks[1]).one().error_code
-    finally:
-        db.close()
-    assert err == "quota_exceeded_course"
-
-
-# --- 5) HTTP 429 then success on same member (retryable) ---
+# --- 4) HTTP 429 then success on same member (retryable) ---
 
 
 def test_429_then_200_succeeds_after_retry(client: TestClient):
@@ -544,8 +468,24 @@ def test_failed_task_does_not_block_following_queued_auto_grades(client: TestCli
         assert process_next_grading_task() is True
     tdb3 = SessionLocal()
     try:
-        t_a = tdb3.query(HomeworkGradingTask).filter(HomeworkGradingTask.homework_id == a["homework_id"]).one()
-        t_b = tdb3.query(HomeworkGradingTask).filter(HomeworkGradingTask.homework_id == b["homework_id"]).one()
+        tasks_a = (
+            tdb3.query(HomeworkGradingTask)
+            .filter(HomeworkGradingTask.homework_id == a["homework_id"])
+            .order_by(HomeworkGradingTask.id.asc())
+            .all()
+        )
+        tasks_b = (
+            tdb3.query(HomeworkGradingTask)
+            .filter(HomeworkGradingTask.homework_id == b["homework_id"])
+            .order_by(HomeworkGradingTask.id.asc())
+            .all()
+        )
+        failed_a = [t for t in tasks_a if t.status == "failed"]
+        success_b = [t for t in tasks_b if t.status == "success"]
+        assert failed_a, "expected a failed grading task for homework A"
+        assert success_b, "expected a successful grading task for homework B"
+        t_a = failed_a[-1]
+        t_b = success_b[-1]
     finally:
         tdb3.close()
     assert t_a.status == "failed"

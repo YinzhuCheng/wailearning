@@ -18,11 +18,20 @@ from app.llm_grading import (
     validate_text_connectivity,
     validate_vision_connectivity,
 )
+from app.llm_token_quota import (
+    apply_student_daily_token_overrides,
+    get_or_create_global_quota_policy,
+    quota_calendar,
+    resolve_effective_daily_student_tokens,
+    resolve_student_ids_for_scope,
+)
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
     LLMEndpointPreset,
     LLMGroup,
+    LLMStudentTokenOverride,
+    Student,
     User,
     UserRole,
 )
@@ -30,7 +39,12 @@ from app.schemas import (
     CourseLLMConfigResponse,
     CourseLLMConfigUpdate,
     CourseLLMConfigEndpointResponse,
+    LLMGlobalQuotaPolicyResponse,
+    LLMGlobalQuotaPolicyUpdate,
     LLMGroupResponse,
+    LLMQuotaBulkOverrideRequest,
+    LLMQuotaBulkOverrideResponse,
+    LLMStudentQuotaOverrideUpsert,
     LLMEndpointPresetCreate,
     LLMEndpointPresetResponse,
     LLMEndpointPresetUpdate,
@@ -110,8 +124,6 @@ def _serialize_course_config(config: CourseLLMConfig, db: Optional[Session] = No
         subject_id=config.subject_id,
         is_enabled=bool(config.is_enabled),
         response_language=config.response_language,
-        daily_student_token_limit=config.daily_student_token_limit,
-        daily_course_token_limit=config.daily_course_token_limit,
         estimated_chars_per_token=config.estimated_chars_per_token,
         estimated_image_tokens=config.estimated_image_tokens,
         max_input_tokens=config.max_input_tokens,
@@ -160,7 +172,7 @@ def create_endpoint_preset(
     preset = LLMEndpointPreset(
         name=payload.name.strip(),
         base_url=payload.base_url.strip(),
-        api_key=payload.api_key.strip(),
+        api_key=(payload.api_key or "").strip(),
         model_name=payload.model_name.strip(),
         connect_timeout_seconds=payload.connect_timeout_seconds,
         read_timeout_seconds=payload.read_timeout_seconds,
@@ -305,13 +317,29 @@ def get_student_llm_quota_for_course(
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
+    pol = get_or_create_global_quota_policy(db)
+    db.commit()
+    usage_date, tz = quota_calendar(db)
+    lim = resolve_effective_daily_student_tokens(db, student.id)
+    ov = db.query(LLMStudentTokenOverride).filter(LLMStudentTokenOverride.student_id == student.id).first()
+    uses_override = ov is not None
+    from app.llm_grading import _get_used_tokens_for_scope, _sum_reserved_tokens
+
+    used_stu = _get_used_tokens_for_scope(
+        db, usage_date=usage_date, timezone_name=tz, student_id=student.id
+    ) + _sum_reserved_tokens(db, usage_date=usage_date, timezone_name=tz, student_id=student.id)
+
     config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
     if not config:
-        usage_date = datetime.now(timezone.utc).date().isoformat()
         return StudentLLMQuotaUsageResponse(
             subject_id=subject_id,
             usage_date=usage_date,
-            quota_timezone="UTC",
+            quota_timezone=tz,
+            daily_student_token_limit=lim,
+            global_default_daily_student_tokens=int(pol.default_daily_student_tokens),
+            uses_personal_override=uses_override,
+            student_used_tokens_today=used_stu,
+            student_remaining_tokens_today=max(0, lim - used_stu),
         )
 
     snap = get_student_quota_usage_snapshot(db, config, student_id=student.id)
@@ -320,11 +348,107 @@ def get_student_llm_quota_for_course(
         usage_date=snap["usage_date"],
         quota_timezone=snap["quota_timezone"],
         daily_student_token_limit=snap.get("daily_student_token_limit"),
-        daily_course_token_limit=snap.get("daily_course_token_limit"),
+        global_default_daily_student_tokens=int(pol.default_daily_student_tokens),
+        uses_personal_override=uses_override,
         student_used_tokens_today=snap.get("student_used_tokens_today"),
         student_remaining_tokens_today=snap.get("student_remaining_tokens_today"),
-        course_used_tokens_today=snap.get("course_used_tokens_today"),
-        course_remaining_tokens_today=snap.get("course_remaining_tokens_today"),
+    )
+
+
+@router.get("/admin/quota-policy", response_model=LLMGlobalQuotaPolicyResponse)
+def get_llm_global_quota_policy(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only administrators can view LLM quota policy.")
+    row = get_or_create_global_quota_policy(db)
+    db.commit()
+    return LLMGlobalQuotaPolicyResponse(
+        id=row.id,
+        default_daily_student_tokens=int(row.default_daily_student_tokens),
+        quota_timezone=row.quota_timezone or "UTC",
+        max_parallel_grading_tasks=int(getattr(row, "max_parallel_grading_tasks", None) or 3),
+    )
+
+
+@router.put("/admin/quota-policy", response_model=LLMGlobalQuotaPolicyResponse)
+def update_llm_global_quota_policy(
+    payload: LLMGlobalQuotaPolicyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only administrators can update LLM quota policy.")
+    row = get_or_create_global_quota_policy(db)
+    if payload.default_daily_student_tokens is not None:
+        row.default_daily_student_tokens = int(payload.default_daily_student_tokens)
+    if payload.quota_timezone is not None:
+        row.quota_timezone = (payload.quota_timezone or "UTC").strip() or "UTC"
+    if payload.max_parallel_grading_tasks is not None:
+        row.max_parallel_grading_tasks = int(payload.max_parallel_grading_tasks)
+    db.commit()
+    db.refresh(row)
+    return LLMGlobalQuotaPolicyResponse(
+        id=row.id,
+        default_daily_student_tokens=int(row.default_daily_student_tokens),
+        quota_timezone=row.quota_timezone or "UTC",
+        max_parallel_grading_tasks=int(getattr(row, "max_parallel_grading_tasks", None) or 3),
+    )
+
+
+@router.put("/admin/students/{student_id}/quota-override", response_model=LLMQuotaBulkOverrideResponse)
+def upsert_one_student_llm_quota_override(
+    student_id: int,
+    payload: LLMStudentQuotaOverrideUpsert,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only administrators can set LLM quota overrides.")
+    if not db.query(Student).filter(Student.id == student_id).first():
+        raise HTTPException(status_code=404, detail="Student not found.")
+    get_or_create_global_quota_policy(db)
+    n = apply_student_daily_token_overrides(
+        db,
+        [student_id],
+        int(payload.daily_tokens or 0),
+        clear_only=bool(payload.clear_override),
+    )
+    pol = get_or_create_global_quota_policy(db)
+    db.commit()
+    return LLMQuotaBulkOverrideResponse(
+        affected_students=n,
+        default_daily_student_tokens=int(pol.default_daily_student_tokens),
+    )
+
+
+@router.post("/admin/quota-overrides/bulk", response_model=LLMQuotaBulkOverrideResponse)
+def bulk_set_llm_student_quota_overrides(
+    payload: LLMQuotaBulkOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only administrators can set LLM quota overrides.")
+    get_or_create_global_quota_policy(db)
+    ids = resolve_student_ids_for_scope(
+        db,
+        payload.scope,  # type: ignore[arg-type]
+        class_id=payload.class_id,
+        subject_id=payload.subject_id,
+    )
+    n = apply_student_daily_token_overrides(
+        db,
+        ids,
+        int(payload.daily_tokens or 0),
+        clear_only=bool(payload.clear_override),
+    )
+    pol = get_or_create_global_quota_policy(db)
+    db.commit()
+    return LLMQuotaBulkOverrideResponse(
+        affected_students=n,
+        default_daily_student_tokens=int(pol.default_daily_student_tokens),
     )
 
 
@@ -379,8 +503,6 @@ def update_course_llm_config(
 
     config.is_enabled = payload.is_enabled
     config.response_language = payload.response_language
-    config.daily_student_token_limit = payload.daily_student_token_limit
-    config.daily_course_token_limit = payload.daily_course_token_limit
     config.estimated_chars_per_token = payload.estimated_chars_per_token
     config.estimated_image_tokens = payload.estimated_image_tokens
     config.max_input_tokens = payload.max_input_tokens
