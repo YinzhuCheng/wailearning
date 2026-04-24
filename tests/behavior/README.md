@@ -1,13 +1,9 @@
-# Behavior / E2E skeleton tests
+# Behavior tests (API-level)
 
-These tests live under `tests/behavior/` and are **skipped by default** via
-`pytest_collection_modifyitems` in `conftest.py` so normal CI runs stay fast.
-
-**Next round:** remove or narrow the skip hook, add Playwright (or similar) +
-shared seed helpers, then fill the page objects and assertions.
-
-Run only this package (still skipped until hook removed):
+Tests under `tests/behavior/` exercise multi-role LLM flows via `TestClient` (same stack as other tests in `tests/`).
 
 ```bash
 pytest tests/behavior -v
 ```
+
+SQLite CI skips `test_r3_*` (PostgreSQL-only column guard).

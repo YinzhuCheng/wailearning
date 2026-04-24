@@ -1,25 +1,57 @@
-"""
-R1–R3: Regression guards after removing course-level token caps.
+"""R1–R3: Regression guards for removed course-level token pool."""
 
-Execution deferred — see tests/behavior/conftest.py.
-"""
+from __future__ import annotations
 
+from pathlib import Path
 
-def test_r1_no_quota_exceeded_course_in_api_responses() -> None:
-    """
-    R1: Grep-level or contract test: student/teacher flows never surface quota_exceeded_course
-    (grep fixture or forbidden substring in error_code JSON from homework submission APIs).
-    """
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import text
 
-
-def test_r2_course_llm_config_schema_no_removed_fields() -> None:
-    """
-    R2: GET /llm-settings/courses/{id} body lacks daily_course_token_limit / daily_student_token_limit;
-    quota_usage only exposes agreed keys (usage_date, quota_timezone).
-    """
+from app.database import SessionLocal, engine
+from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
-def test_r3_orm_no_legacy_columns_postgres_migration() -> None:
-    """
-    R3: On PostgreSQL, information_schema confirms columns dropped (skip on SQLite weak mode).
-    """
+def test_r1_no_quota_exceeded_course_in_app_sources() -> None:
+    root = Path(__file__).resolve().parents[2] / "app"
+    hits: list[str] = []
+    for p in sorted(root.rglob("*.py")):
+        try:
+            content = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "quota_exceeded_course" in content:
+            hits.append(str(p.relative_to(root.parent)))
+    assert not hits, f"quota_exceeded_course still referenced in: {hits}"
+
+
+def test_r2_course_llm_config_response_shape(client: TestClient) -> None:
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.get(f"/api/llm-settings/courses/{ctx['subject_id']}", headers=th)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "daily_course_token_limit" not in body
+    assert "daily_student_token_limit" not in body
+    qu = body.get("quota_usage")
+    if qu is not None:
+        assert set(qu.keys()) <= {"usage_date", "quota_timezone"}
+
+
+@pytest.mark.skipif(engine.dialect.name != "postgresql", reason="information_schema column check is for PostgreSQL")
+def test_r3_course_llm_config_columns_no_legacy_token_limits() -> None:
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            text(
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'course_llm_configs'
+                  AND column_name IN ('daily_course_token_limit', 'daily_student_token_limit')
+                """
+            )
+        ).fetchall()
+        assert rows == []
+    finally:
+        db.close()

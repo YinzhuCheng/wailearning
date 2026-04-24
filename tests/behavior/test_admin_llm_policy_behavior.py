@@ -1,93 +1,107 @@
-"""
-A1–A5: Admin global LLM policy (daily cap, timezone, max_parallel_grading_tasks, bulk overrides).
-
-Execution deferred — see tests/behavior/conftest.py (collection hook skips this package).
-"""
+"""A1–A5: Admin global LLM quota policy and bulk overrides (HTTP API)."""
 
 from __future__ import annotations
 
-from typing import Any
+from fastapi.testclient import TestClient
+
+from app.database import SessionLocal
+from app.models import LLMStudentTokenOverride
+from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
-class AdminLlmPolicyPage:
-    """Playwright page object placeholder (next round)."""
-
-    def __init__(self, base_url: str, session: Any) -> None:
-        self._base_url = base_url
-        self._session = session
-
-    def open_settings_llm_section(self) -> None:
-        """Navigate: login as admin → Settings → LLM 用量与额度 card."""
-
-    def read_displayed_defaults(self) -> dict[str, Any]:
-        """Return UI snapshot: default_daily_student_tokens, quota_timezone, max_parallel."""
-        return {}
-
-    def set_default_daily_tokens(self, value: int) -> None:
-        """Change 默认每人每日 token → save."""
-
-    def set_quota_timezone(self, tz: str) -> None:
-        """Change 额度统计时区 → save."""
-
-    def set_max_parallel_grading_tasks(self, n: int) -> None:
-        """Change 并发评分任务数 → save."""
-
-    def apply_bulk_override(
-        self,
-        *,
-        scope: str,
-        class_id: int | None,
-        subject_id: int | None,
-        daily_tokens: int | None,
-        clear_override: bool,
-    ) -> None:
-        """Submit bulk override form."""
+def test_a1_quota_policy_get_matches_defaults(client: TestClient) -> None:
+    ensure_admin()
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    r = client.get("/api/llm-settings/admin/quota-policy", headers=ah)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["default_daily_student_tokens"] >= 1
+    assert body["quota_timezone"]
+    assert 1 <= body["max_parallel_grading_tasks"] <= 64
 
 
-def test_a1_first_open_settings_shows_policy_defaults(behavior_base_url: str) -> None:
-    """
-    A1: Admin opens Settings → LLM block loads with 100k / Asia/Shanghai / 3 parallel.
-    Cross-check: GET /api/llm-settings/admin/quota-policy matches UI.
-    """
-    page = AdminLlmPolicyPage(behavior_base_url, session=None)
-    page.open_settings_llm_section()
-    page.read_displayed_defaults()
+def test_a2_change_default_student_cap_visible_on_student_quota(client: TestClient) -> None:
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    st = login_api(client, ctx["student_username"], ctx["student_password"])
+
+    client.put(
+        "/api/llm-settings/admin/quota-policy",
+        headers=ah,
+        json={"default_daily_student_tokens": 88_888},
+    )
+    sq = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    assert sq["daily_student_token_limit"] == 88_888
+    assert sq["global_default_daily_student_tokens"] == 88_888
 
 
-def test_a2_change_default_student_cap_refreshes_student_card(behavior_base_url: str) -> None:
-    """
-    A2: Admin lowers/raises default cap → student session (My Courses) shows new
-    daily_student_token_limit + global_default alignment when no override.
-    """
-    page = AdminLlmPolicyPage(behavior_base_url, session=None)
-    page.set_default_daily_tokens(50_000)
+def test_a3_timezone_change_updates_student_quota_calendar(client: TestClient) -> None:
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    st = login_api(client, ctx["student_username"], ctx["student_password"])
+
+    client.put("/api/llm-settings/admin/quota-policy", headers=ah, json={"quota_timezone": "UTC"})
+    u1 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    assert u1["quota_timezone"] == "UTC"
+
+    client.put(
+        "/api/llm-settings/admin/quota-policy",
+        headers=ah,
+        json={"quota_timezone": "Asia/Shanghai"},
+    )
+    u2 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    assert u2["quota_timezone"] == "Asia/Shanghai"
 
 
-def test_a3_timezone_flip_changes_usage_date_boundary(behavior_base_url: str) -> None:
-    """
-    A3: Toggle global quota_timezone near calendar boundary; student quota usage_date shifts.
-    Precondition: optional time freeze or controlled clock (next round).
-    """
-    page = AdminLlmPolicyPage(behavior_base_url, session=None)
-    page.set_quota_timezone("UTC")
-    page.set_quota_timezone("Asia/Shanghai")
+def test_a4_parallel_policy_persists(client: TestClient) -> None:
+    ensure_admin()
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    r = client.put(
+        "/api/llm-settings/admin/quota-policy",
+        headers=ah,
+        json={"max_parallel_grading_tasks": 2},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["max_parallel_grading_tasks"] == 2
+    r2 = client.get("/api/llm-settings/admin/quota-policy", headers=ah)
+    assert r2.json()["max_parallel_grading_tasks"] == 2
 
 
-def test_a4_parallel_cap_change_with_queue_backlog(behavior_base_url: str) -> None:
-    """
-    A4: Seed N queued grading tasks → set parallel=3 → observe ≤3 processing;
-    then set parallel=1 → next wave obeys cap.
-    """
-    page = AdminLlmPolicyPage(behavior_base_url, session=None)
-    page.set_max_parallel_grading_tasks(3)
-    page.set_max_parallel_grading_tasks(1)
+def test_a5_bulk_override_then_clear(client: TestClient) -> None:
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    st = login_api(client, ctx["student_username"], ctx["student_password"])
 
+    r_bulk = client.post(
+        "/api/llm-settings/admin/quota-overrides/bulk",
+        headers=ah,
+        json={"scope": "subject", "subject_id": ctx["subject_id"], "daily_tokens": 77_777},
+    )
+    assert r_bulk.status_code == 200, r_bulk.text
+    assert r_bulk.json()["affected_students"] >= 1
 
-def test_a5_bulk_override_then_clear(behavior_base_url: str) -> None:
-    """
-    A5: Bulk scope class/subject/all → verify LLMStudentTokenOverride rows;
-    clear_override → rows removed; student API uses_personal_override flips.
-    """
-    page = AdminLlmPolicyPage(behavior_base_url, session=None)
-    page.apply_bulk_override(scope="class", class_id=1, subject_id=None, daily_tokens=77_777, clear_override=False)
-    page.apply_bulk_override(scope="class", class_id=1, subject_id=None, daily_tokens=None, clear_override=True)
+    sq = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    assert sq["daily_student_token_limit"] == 77_777
+    assert sq["uses_personal_override"] is True
+
+    r_clear = client.post(
+        "/api/llm-settings/admin/quota-overrides/bulk",
+        headers=ah,
+        json={"scope": "subject", "subject_id": ctx["subject_id"], "clear_override": True},
+    )
+    assert r_clear.status_code == 200, r_clear.text
+
+    db = SessionLocal()
+    try:
+        assert (
+            db.query(LLMStudentTokenOverride).filter(LLMStudentTokenOverride.student_id == ctx["student_id"]).first()
+            is None
+        )
+    finally:
+        db.close()
+
+    sq2 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    assert sq2["uses_personal_override"] is False
