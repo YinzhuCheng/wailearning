@@ -119,14 +119,7 @@ import {
   Refresh, Plus
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
-
-const api = axios.create({ baseURL: '/api' })
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+import { http } from '@/api'
 
 const ranking = ref([])
 const stats = ref({ total_students: 0, active_students: 0, total_points_distributed: 0, total_points_exchanged: 0 })
@@ -169,12 +162,12 @@ const updateTime = () => {
 const fetchData = async () => {
   loading.value = true
   try {
-    const [statsRes, rankingRes] = await Promise.all([
-      api.get('/points/stats'),
-      api.get('/points/ranking?limit=20')
+    const [statsData, rankingData] = await Promise.all([
+      http.get('/points/stats'),
+      http.get('/points/ranking', { params: { limit: 20 } })
     ])
-    stats.value = statsRes.data
-    ranking.value = rankingRes.data
+    stats.value = statsData
+    ranking.value = rankingData
   } catch (e) {
     console.error('获取数据失败', e)
     ElMessage.error('获取数据失败')

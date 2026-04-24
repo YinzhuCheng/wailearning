@@ -28,7 +28,12 @@
         </el-form-item>
 
         <el-form-item label="所属班级" prop="class_id">
-          <el-select v-model="form.class_id" placeholder="请选择班级" style="width: 100%">
+          <el-select
+            v-model="form.class_id"
+            placeholder="请选择班级"
+            style="width: 100%"
+            :disabled="isEdit && !isAdmin"
+          >
             <el-option
               v-for="item in classes"
               :key="item.id"
@@ -67,9 +72,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.isAdmin)
 
 const formRef = ref(null)
 const loading = ref(false)
@@ -134,7 +142,17 @@ const submitForm = async () => {
     }
 
     if (isEdit.value) {
-      await api.students.update(route.params.id, payload)
+      const updatePayload = isAdmin.value
+        ? payload
+        : {
+            name: payload.name,
+            gender: payload.gender,
+            student_no: payload.student_no,
+            phone: payload.phone,
+            parent_phone: payload.parent_phone,
+            address: payload.address
+          }
+      await api.students.update(route.params.id, updatePayload)
       ElMessage.success('学生信息已更新')
     } else {
       await api.students.create(payload)

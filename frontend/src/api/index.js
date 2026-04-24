@@ -79,7 +79,8 @@ const subjectsApi = {
   delete: id => http.delete(`/subjects/${id}`),
   getStudents: id => http.get(`/subjects/${id}/students`),
   removeStudent: (subjectId, studentId) => http.delete(`/subjects/${subjectId}/students/${studentId}`),
-  updateEnrollmentType: (subjectId, studentId, data) => http.put(`/subjects/${subjectId}/students/${studentId}/enrollment-type`, data)
+  updateEnrollmentType: (subjectId, studentId, data) => http.put(`/subjects/${subjectId}/students/${studentId}/enrollment-type`, data),
+  syncEnrollments: subjectId => http.post(`/subjects/${subjectId}/sync-enrollments`)
 }
 
 const api = {
@@ -136,7 +137,8 @@ const api = {
     list: () => http.get('/semesters'),
     create: data => http.post('/semesters', data),
     update: (id, data) => http.put(`/semesters/${id}`, data),
-    delete: id => http.delete(`/semesters/${id}`)
+    delete: id => http.delete(`/semesters/${id}`),
+    initDefaults: () => http.post('/semesters/init')
   },
   attendance: {
     list: params => http.get('/attendance', { params }),
