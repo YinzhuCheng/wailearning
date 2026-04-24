@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.attachments import delete_attachment_file_if_unreferenced
 from app.auth import get_current_active_user
-from app.course_access import sync_student_course_enrollments
+from app.course_access import prepare_student_course_context, sync_student_course_enrollments
 from app.database import get_db
 from app.models import (
     Attendance,
@@ -301,7 +301,22 @@ def create_student(
         Student.class_id == student_data.class_id,
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="该班级中学号已存在")
+        # Idempotent: same class + student_no (e.g. roster already created by user-management sync or public register).
+        existing.name = student_data.name
+        existing.gender = student_data.gender
+        existing.phone = student_data.phone
+        existing.parent_phone = student_data.parent_phone
+        existing.address = student_data.address
+        if current_user.role == UserRole.TEACHER.value and existing.teacher_id is None:
+            existing.teacher_id = current_user.id
+        db.flush()
+        sync_student_course_enrollments(existing, db)
+        linked = db.query(User).filter(User.username == existing.student_no).first()
+        if linked and linked.role == UserRole.STUDENT.value:
+            prepare_student_course_context(linked, db)
+        db.commit()
+        db.refresh(existing)
+        return serialize_students([existing], db)[0]
 
     student = Student(
         name=student_data.name,

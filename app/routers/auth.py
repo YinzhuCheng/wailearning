@@ -10,6 +10,7 @@ from app.schemas import ChangePasswordRequest, MessageResponse, Token, UserCreat
 from app.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from app.config import settings
 from app.course_access import prepare_student_course_context
+from app.student_user_roster import sync_student_roster_from_user_accounts
 from app.services import LogService
 from app.models import UserRole
 
@@ -86,7 +87,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.flush()
     if user.role == UserRole.STUDENT.value and user.class_id:
-        prepare_student_course_context(user, db)
+        sync_student_roster_from_user_accounts(db, [user.id])
     db.commit()
     db.refresh(user)
     return user
