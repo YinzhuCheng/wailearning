@@ -691,6 +691,29 @@ const loadAllStudents = async () => {
   return allStudents
 }
 
+/** GET /students enforces page_size <= 1000; paginate when loading a full class roster. */
+const loadAllStudentsForClass = async classId => {
+  const rows = []
+  const pageSize = 1000
+  let page = 1
+  let total = 0
+
+  do {
+    const result = await api.students.list({ class_id: classId, page, page_size: pageSize })
+    const pageData = result?.data || []
+    total = result?.total ?? pageData.length
+    rows.push(...pageData)
+
+    if (pageData.length < pageSize) {
+      break
+    }
+
+    page += 1
+  } while (rows.length < total)
+
+  return rows
+}
+
 const ensureClassTeacherCourses = async () => {
   if (!isClassTeacherView.value) {
     return
@@ -745,12 +768,7 @@ const loadStudents = async () => {
   try {
     if (isAdminView.value) {
       if (adminFilterClassId.value) {
-        const result = await api.students.list({
-          class_id: adminFilterClassId.value,
-          page: 1,
-          page_size: 2000
-        })
-        students.value = result?.data || []
+        students.value = await loadAllStudentsForClass(adminFilterClassId.value)
       } else {
         students.value = await loadAllStudents()
       }
@@ -765,12 +783,7 @@ const loadStudents = async () => {
         return
       }
 
-      const result = await api.students.list({
-        class_id: currentClassId.value,
-        page: 1,
-        page_size: 1000
-      })
-      students.value = result?.data || []
+      students.value = await loadAllStudentsForClass(currentClassId.value)
       return
     }
 
