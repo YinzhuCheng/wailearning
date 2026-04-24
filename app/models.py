@@ -489,7 +489,6 @@ class CourseLLMConfig(Base):
     is_enabled = Column(Boolean, default=False)
     response_language = Column(String, nullable=True)
     daily_student_token_limit = Column(Integer, nullable=True)
-    daily_course_token_limit = Column(Integer, nullable=True)
     estimated_chars_per_token = Column(Float, nullable=False, default=4.0)
     estimated_image_tokens = Column(Integer, nullable=False, default=850)
     max_input_tokens = Column(Integer, nullable=False, default=16000)

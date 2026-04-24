@@ -896,7 +896,6 @@ class CourseLLMConfigUpdate(BaseModel):
     is_enabled: bool = False
     response_language: Optional[str] = None
     daily_student_token_limit: Optional[int] = Field(default=None, ge=1)
-    daily_course_token_limit: Optional[int] = Field(default=None, ge=1)
     estimated_chars_per_token: float = Field(default=4.0, gt=0)
     estimated_image_tokens: int = Field(default=850, ge=1)
     max_input_tokens: int = Field(default=16000, ge=1000)
@@ -932,7 +931,6 @@ class CourseLLMConfigResponse(BaseModel):
     is_enabled: bool = False
     response_language: Optional[str] = None
     daily_student_token_limit: Optional[int] = None
-    daily_course_token_limit: Optional[int] = None
     estimated_chars_per_token: float = 4.0
     estimated_image_tokens: int = 850
     max_input_tokens: int = 16000
