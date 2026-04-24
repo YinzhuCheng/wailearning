@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
@@ -45,6 +46,8 @@ DEFAULT_SYSTEM_SETTINGS = [
     ("copyright", "(c) 2026 BIMSA-CLASS", "Footer copyright text."),
     ("use_bing_background", "true", "Whether the login page should use the daily Bing background."),
 ]
+
+DEFAULT_LLM_PRESET_NAME = "gpt-5.4"
 
 LEGACY_SYSTEM_SETTING_VALUES = {
     "system_name": {"DD-CLASS", "DD-CLASS 班级管理系统"},
@@ -330,6 +333,51 @@ def ensure_schema_updates() -> None:
 
     _backfill_default_llm_groups_for_existing_configs()
     _ensure_llm_global_quota_policy_row()
+    _ensure_default_llm_endpoint_preset()
+
+
+def _ensure_default_llm_endpoint_preset() -> None:
+    """
+    Seed the built-in LLM preset (name = DEFAULT_LLM_PRESET_NAME) when missing so new installs
+    match admin UI defaults. Does not overwrite an existing preset of the same name.
+
+    Set DEFAULT_LLM_API_KEY in the environment to supply the API key on first insert (never
+    committed to the repository).
+    """
+    db = SessionLocal()
+    try:
+        row = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.name == DEFAULT_LLM_PRESET_NAME).first()
+        if row:
+            return
+        api_key = (settings.DEFAULT_LLM_API_KEY or "").strip()
+        now = datetime.now(timezone.utc)
+        db.add(
+            LLMEndpointPreset(
+                name=DEFAULT_LLM_PRESET_NAME,
+                base_url="https://yunwu.ai/v1",
+                api_key=api_key,
+                model_name="gpt-5.4",
+                connect_timeout_seconds=30,
+                read_timeout_seconds=180,
+                max_retries=3,
+                initial_backoff_seconds=5,
+                is_active=True,
+                supports_vision=True,
+                validation_status="validated",
+                validation_message="系统默认端点（首次安装种子）。请在设置中运行连通性校验以刷新状态。",
+                text_validation_status="passed",
+                text_validation_message=None,
+                vision_validation_status="skipped",
+                vision_validation_message=None,
+                validated_at=now,
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _ensure_llm_global_quota_policy_row() -> None:

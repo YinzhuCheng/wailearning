@@ -526,13 +526,13 @@ const resetPresetForm = () => {
   editingPresetId.value = null
   Object.assign(presetForm, {
     name: '',
-    base_url: 'https://api.openai.com/v1/',
+    base_url: 'https://yunwu.ai/v1',
     api_key: '',
-    model_name: 'gpt-4o-mini',
-    connect_timeout_seconds: 10,
-    read_timeout_seconds: 120,
-    max_retries: 2,
-    initial_backoff_seconds: 2,
+    model_name: 'gpt-5.4',
+    connect_timeout_seconds: 30,
+    read_timeout_seconds: 180,
+    max_retries: 3,
+    initial_backoff_seconds: 5,
     is_active: true
   })
 }

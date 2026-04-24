@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     LLM_GRADING_TASK_STALE_SECONDS: int = 600
     DEFAULT_ESTIMATED_IMAGE_TOKENS: int = 850
 
+    # Optional: seed / override API key for the default LLM preset name (see bootstrap).
+    DEFAULT_LLM_API_KEY: str = ""
+
     # When True, refuse weak SECRET_KEY / default DATABASE_URL even if APP_ENV is not production.
     REQUIRE_STRONG_SECRETS: bool = False
 

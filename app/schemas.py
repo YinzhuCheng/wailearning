@@ -1038,13 +1038,13 @@ class LLMEndpointPresetBase(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     name: str
-    base_url: str = "https://api.openai.com/v1/"
+    base_url: str = "https://yunwu.ai/v1"
     api_key: str = ""
-    model_name: str = "gpt-4o-mini"
-    connect_timeout_seconds: int = Field(default=10, ge=1, le=300)
-    read_timeout_seconds: int = Field(default=120, ge=1, le=600)
-    max_retries: int = Field(default=2, ge=0, le=10)
-    initial_backoff_seconds: int = Field(default=2, ge=1, le=120)
+    model_name: str = "gpt-5.4"
+    connect_timeout_seconds: int = Field(default=30, ge=1, le=300)
+    read_timeout_seconds: int = Field(default=180, ge=1, le=600)
+    max_retries: int = Field(default=3, ge=0, le=10)
+    initial_backoff_seconds: int = Field(default=5, ge=1, le=120)
     is_active: bool = True
 
 
