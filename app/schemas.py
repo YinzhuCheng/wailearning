@@ -724,6 +724,21 @@ class HomeworkBase(BaseModel):
     response_language: Optional[str] = None
     allow_late_submission: bool = True
     late_submission_affects_score: bool = False
+    max_submissions: Optional[int] = Field(
+        default=None,
+        description="Maximum submission attempts per student; null means unlimited.",
+    )
+
+    @field_validator("max_submissions")
+    @classmethod
+    def validate_max_submissions(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return value
+        if int(value) < 1:
+            raise ValueError("max_submissions must be at least 1 when set.")
+        if int(value) > 200:
+            raise ValueError("max_submissions cannot exceed 200.")
+        return int(value)
 
     @field_validator("grade_precision")
     @classmethod
@@ -754,6 +769,18 @@ class HomeworkUpdate(BaseModel):
     response_language: Optional[str] = None
     allow_late_submission: Optional[bool] = None
     late_submission_affects_score: Optional[bool] = None
+    max_submissions: Optional[int] = None
+
+    @field_validator("max_submissions")
+    @classmethod
+    def validate_max_submissions_update(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return value
+        if int(value) < 1:
+            raise ValueError("max_submissions must be at least 1 when set.")
+        if int(value) > 200:
+            raise ValueError("max_submissions cannot exceed 200.")
+        return int(value)
 
     @field_validator("grade_precision")
     @classmethod
@@ -779,6 +806,7 @@ class HomeworkResponse(HomeworkBase):
     task_status: Optional[str] = None
     task_error: Optional[str] = None
     attempt_count: int = 0
+    submissions_remaining: Optional[int] = None
     latest_submission_is_late: Optional[bool] = None
     grading_rule_hint: Optional[str] = None
 

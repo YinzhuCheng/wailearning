@@ -103,6 +103,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS response_language VARCHAR",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS allow_late_submission BOOLEAN DEFAULT TRUE",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS late_submission_affects_score BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS max_submissions INTEGER",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_score FLOAT",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_comment VARCHAR",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_attempt_id INTEGER",
