@@ -82,6 +82,10 @@ MAX_ZIP_FILES = 100
 MAX_ZIP_TOTAL_BYTES = 80 * 1024 * 1024
 MAX_FILE_TEXT_CHARS = 12000
 MAX_IPYNB_OUTPUT_CHARS = 6000
+# Prior attempts included in the grading prompt (text-only summary); older rounds omitted for token cost.
+ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS = 2
+ITERATION_PRIOR_NOTE_CHAR_MAX = 900
+ITERATION_PRIOR_COMMENT_CHAR_MAX = 500
 SUPPORTED_TEXT_EXTENSIONS = {
     ".c",
     ".cc",
@@ -1254,7 +1258,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         return
 
     routing_warnings = _homework_routing_warnings(db, homework, config)
-    material = _build_student_material(homework, attempt, config)
+    material = _build_student_material(db, homework, attempt, config)
     base_manifest = material["artifact_manifest"] or {}
     if not isinstance(base_manifest, dict):
         base_manifest = {}
@@ -2202,7 +2206,81 @@ def _collect_attachment_blocks(summary_path: str, attachment_name: str) -> tuple
     return [], [{"path": attachment_name or file_path.name, "reason": "无法识别或提取为空"}]
 
 
+def _best_score_candidate_for_attempt(db: Session, attempt_id: int) -> Optional[HomeworkScoreCandidate]:
+    """Pick the display score row for one attempt (same rule as teacher submission history)."""
+    candidates = (
+        db.query(HomeworkScoreCandidate)
+        .filter(HomeworkScoreCandidate.attempt_id == attempt_id)
+        .order_by(HomeworkScoreCandidate.updated_at.desc(), HomeworkScoreCandidate.id.desc())
+        .all()
+    )
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda item: (
+            float(item.score or 0),
+            1 if item.source == "teacher" else 0,
+            item.updated_at or item.created_at,
+        ),
+    )
+
+
+def _format_iteration_context_for_prompt(db: Session, homework: Homework, attempt: HomeworkAttempt) -> Optional[str]:
+    """
+    Text-only summary of the last N prior attempts for the same student+homework (same submission summary).
+    Full multimodal re-parse of old attachments is intentionally omitted to save tokens.
+    """
+    summary_id = attempt.submission_summary_id
+    if not summary_id:
+        return None
+    priors = (
+        db.query(HomeworkAttempt)
+        .filter(
+            HomeworkAttempt.homework_id == homework.id,
+            HomeworkAttempt.student_id == attempt.student_id,
+            HomeworkAttempt.submission_summary_id == summary_id,
+            HomeworkAttempt.id < attempt.id,
+        )
+        .order_by(HomeworkAttempt.id.desc())
+        .limit(ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS)
+        .all()
+    )
+    if not priors:
+        return None
+    priors_chrono = list(reversed(priors))
+    lines: list[str] = [
+        "### 迭代上下文（仅保留最近 "
+        f"{ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS} 次历史提交的文字摘要；更早轮次已省略以节省 token）",
+        "以下为该学生此前提交的要点，供你判断是否在反馈基础上有改进（当前要评的是最新一次提交，见后文）。",
+    ]
+    for idx, prev in enumerate(priors_chrono, start=1):
+        cand = _best_score_candidate_for_attempt(db, prev.id)
+        score_part = ""
+        if cand is not None and cand.score is not None:
+            src = "教师" if cand.source == "teacher" else "自动"
+            score_part = f"当时展示分（{src}）：{normalize_score_for_homework(homework, cand.score)}。"
+        comment = (cand.comment or "").strip() if cand else ""
+        if len(comment) > ITERATION_PRIOR_COMMENT_CHAR_MAX:
+            comment = comment[:ITERATION_PRIOR_COMMENT_CHAR_MAX] + "…"
+        body = (prev.content or "").strip()
+        if len(body) > ITERATION_PRIOR_NOTE_CHAR_MAX:
+            body = body[:ITERATION_PRIOR_NOTE_CHAR_MAX] + "…"
+        att = "有附件" if prev.attachment_url else "无附件"
+        att_name = f"（{prev.attachment_name}）" if prev.attachment_name else ""
+        lines.append(f"- 历史第 {idx} 轮：{att}{att_name}。{score_part}")
+        if body:
+            lines.append(f"  学生说明摘录：{body}")
+        if comment:
+            lines.append(f"  当时评语摘录：{comment}")
+    lines.append(
+        "请结合上述有限历史与当前稿评分；若当前稿明显回应了此前评语中的问题，可在 score 上合理体现进步。"
+    )
+    return "\n".join(lines)
+
+
 def _build_student_material(
+    db: Session,
     homework: Homework,
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
@@ -2211,6 +2289,9 @@ def _build_student_material(
         f"作业标题：{homework.title}",
         f"作业要求：\n{homework.content or '无'}",
     ]
+    iteration_ctx = _format_iteration_context_for_prompt(db, homework, attempt)
+    if iteration_ctx:
+        assignment_texts.append(iteration_ctx)
     if homework.reference_answer:
         assignment_texts.append(f"参考答案或提示：\n{homework.reference_answer}")
     if homework.rubric_text:

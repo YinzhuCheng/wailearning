@@ -7,6 +7,7 @@ See tests/conftest.py for env (SQLite, skip worker thread, skip retry backoff sl
 
 from __future__ import annotations
 
+import json
 import uuid
 from unittest import mock
 
@@ -22,6 +23,7 @@ from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
     Homework,
+    HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
@@ -535,6 +537,100 @@ def test_submissions_api_includes_task_log(grading_context: dict):
     assert row is not None
     assert row.get("latest_task_error_code") == "llm_call_failed"
     assert isinstance(row.get("latest_task_log"), list)
+
+
+def test_grading_prompt_includes_two_round_iteration_context(grading_context: dict):
+    """Prior attempt text + best comment are injected; older than 2 priors omitted (token cap)."""
+    ctx = make_grading_course_with_homework()
+    client: TestClient = grading_context["client"]
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    hid = ctx["homework_id"]
+
+    r1 = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "第一版草稿缺少第二节"})
+    assert r1.status_code == 200, r1.text
+    db = SessionLocal()
+    try:
+        t1 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(40.0, "请补充第二节推导")),
+    ):
+        process_grading_task(t1)
+
+    r2 = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "第二版已补充第二节推导"})
+    assert r2.status_code == 200, r2.text
+    db = SessionLocal()
+    try:
+        t2 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    captured: list[str] = []
+
+    def capture_post(self, url, **kwargs):
+        payload = kwargs.get("json") or {}
+        captured.append(json.dumps(payload.get("messages") or [], ensure_ascii=False))
+        return httpx.Response(200, json=json_llm_response(72.0, "改进可见"))
+
+    with mock.patch.object(httpx.Client, "post", capture_post):
+        process_grading_task(t2)
+
+    assert len(captured) == 1
+    blob = captured[0]
+    assert "迭代上下文" in blob
+    assert "第一版草稿缺少第二节" in blob
+    assert "请补充第二节推导" in blob
+
+    # Third prior: only two newest priors should appear when grading the 4th attempt.
+    r3 = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "第三版微调格式"})
+    assert r3.status_code == 200, r3.text
+    db = SessionLocal()
+    try:
+        t3 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(73.0, "ok3")),
+    ):
+        process_grading_task(t3)
+
+    r4 = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "第四版终稿"})
+    assert r4.status_code == 200, r4.text
+    db = SessionLocal()
+    try:
+        t4 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+        a1 = (
+            db.query(HomeworkAttempt)
+            .filter(HomeworkAttempt.homework_id == hid, HomeworkAttempt.student_id == ctx["student_id"])
+            .order_by(HomeworkAttempt.id.asc())
+            .first()
+        )
+        assert a1 is not None
+        first_note = (a1.content or "").strip()
+    finally:
+        db.close()
+
+    captured2: list[str] = []
+
+    def capture2(self, url, **kwargs):
+        payload = kwargs.get("json") or {}
+        captured2.append(json.dumps(payload.get("messages") or [], ensure_ascii=False))
+        return httpx.Response(200, json=json_llm_response(80.0, "done"))
+
+    with mock.patch.object(httpx.Client, "post", capture2):
+        process_grading_task(t4)
+
+    assert len(captured2) == 1
+    b2 = captured2[0]
+    assert "第二版已补充第二节推导" in b2
+    assert "第三版微调格式" in b2
+    assert first_note not in b2
 
 
 def test_latest_passing_validated_routes_to_newest_preset(grading_context: dict):

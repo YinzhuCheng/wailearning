@@ -642,7 +642,7 @@ def test_artifact_manifest_includes_block_metadata_after_material_build():
         db.commit()
         db.refresh(hw)
         db.refresh(att)
-        material = _build_student_material(hw, att, cfg)
+        material = _build_student_material(db, hw, att, cfg)
         inc = (material.get("artifact_manifest") or {}).get("included") or []
         assert len(inc) >= 1
         row = inc[0]
@@ -706,7 +706,7 @@ def test_scoring_messages_have_distinct_sections_for_instructor_and_submission()
         db.commit()
         db.refresh(hw)
         db.refresh(att)
-        material = _build_student_material(hw, att, cfg)
+        material = _build_student_material(db, hw, att, cfg)
         msgs = _build_scoring_messages(hw, att, cfg, material)
         assert msgs[0]["role"] == "system"
         user_content = msgs[1]["content"]
@@ -784,7 +784,7 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
         db.refresh(hw)
         db.refresh(att)
         with mock.patch("app.llm_grading.MAX_ZIP_FILES", 1):
-            material = _build_student_material(hw, att, cfg)
+            material = _build_student_material(db, hw, att, cfg)
         skipped = (material.get("artifact_manifest") or {}).get("skipped") or []
         assert any("超出展开文件数" in (s.get("reason") or "") for s in skipped)
         notes = material.get("notes_text") or ""
