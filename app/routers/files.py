@@ -4,6 +4,7 @@ from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.attachments import (
@@ -101,15 +102,21 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
 
 
 def _attachment_urls_with_exact_stored_basename(db: Session, stored_basename: str) -> list[str]:
-    """All DB attachment_url values whose parsed stored file name exactly matches (no LIKE ambiguity)."""
+    """All DB attachment_url values whose parsed stored file name exactly matches (no full-table scan)."""
     if not stored_basename or Path(stored_basename).name in {"", ".", "..", "attachments"}:
         return []
     urls: list[str] = []
+    suffixes = (
+        f"/{stored_basename}",
+        f"\\{stored_basename}",
+        stored_basename,
+    )
     for model in (HomeworkSubmission, HomeworkAttempt, Homework, CourseMaterial, Notification):
         if not hasattr(model, "attachment_url"):
             continue
-        for row in db.query(model).filter(model.attachment_url.isnot(None)).all():
-            u = getattr(row, "attachment_url", None)
+        conditions = [model.attachment_url.endswith(s) for s in suffixes]
+        q = db.query(model.attachment_url).filter(model.attachment_url.isnot(None), or_(*conditions))
+        for (u,) in q.all():
             if u and get_attachment_stored_name(str(u)) == stored_basename:
                 urls.append(str(u))
     return urls

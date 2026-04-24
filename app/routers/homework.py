@@ -6,7 +6,7 @@ from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
@@ -154,7 +154,12 @@ def _resolve_student_for_user(homework: Homework, current_user: User, db: Sessio
 
 
 def _grade_rule_hint(homework: Homework) -> str:
-    return f"多次提交取最高分；迟交默认{'影响' if homework.late_submission_affects_score else '不影响'}评分，系统会标记迟交。"
+    cap = homework.max_submissions
+    cap_part = f"每人最多提交 {int(cap)} 次。" if cap is not None else "提交次数不限（未设置上限）。"
+    return (
+        f"多次提交取最高分；{cap_part}"
+        f"迟交默认{'影响' if homework.late_submission_affects_score else '不影响'}评分，系统会标记迟交。"
+    )
 
 
 def _is_homework_submission_closed(homework: Homework) -> bool:
@@ -345,6 +350,11 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         attempt_count = 0
         latest_submission_is_late = None
 
+    cap = homework.max_submissions
+    remaining: Optional[int] = None
+    if cap is not None:
+        remaining = max(0, int(cap) - int(attempt_count))
+
     return HomeworkResponse(
         id=homework.id,
         title=homework.title,
@@ -362,6 +372,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         response_language=homework.response_language,
         allow_late_submission=homework.allow_late_submission,
         late_submission_affects_score=homework.late_submission_affects_score,
+        max_submissions=homework.max_submissions,
         created_by=homework.created_by,
         created_at=homework.created_at,
         updated_at=homework.updated_at,
@@ -373,6 +384,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         task_status=task_status,
         task_error=task_error,
         attempt_count=attempt_count,
+        submissions_remaining=remaining,
         latest_submission_is_late=latest_submission_is_late,
         grading_rule_hint=_grade_rule_hint(homework),
     )
@@ -581,6 +593,7 @@ def create_homework(
         response_language=data.response_language,
         allow_late_submission=data.allow_late_submission,
         late_submission_affects_score=data.late_submission_affects_score,
+        max_submissions=data.max_submissions,
         created_by=current_user.id,
     )
     db.add(homework)
@@ -641,6 +654,25 @@ def update_homework(
         homework.allow_late_submission = data.allow_late_submission
     if data.late_submission_affects_score is not None:
         homework.late_submission_affects_score = data.late_submission_affects_score
+
+    update_payload = data.model_dump(exclude_unset=True)
+    if "max_submissions" in update_payload:
+        new_cap = update_payload["max_submissions"]
+        if new_cap is not None:
+            counts = [
+                int(n or 0)
+                for (n,) in db.query(func.count(HomeworkAttempt.id))
+                .filter(HomeworkAttempt.homework_id == homework.id)
+                .group_by(HomeworkAttempt.student_id)
+                .all()
+            ]
+            max_per_student = max(counts) if counts else 0
+            if int(new_cap) < max_per_student:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"提交次数上限不能低于已有学生的最多提交次数（当前最大 {max_per_student} 次）。",
+                )
+        homework.max_submissions = new_cap
 
     db.commit()
     db.refresh(homework)
@@ -734,6 +766,19 @@ def submit_homework(
     submission = _get_submission_summary(db, homework.id, student.id)
 
     _ensure_homework_submission_open(homework, data, submission)
+
+    if homework.max_submissions is not None:
+        used = (
+            db.query(func.count(HomeworkAttempt.id))
+            .filter(HomeworkAttempt.homework_id == homework.id, HomeworkAttempt.student_id == student.id)
+            .scalar()
+            or 0
+        )
+        if int(used) >= int(homework.max_submissions):
+            raise HTTPException(
+                status_code=400,
+                detail=f"已达到该作业允许的最大提交次数（{int(homework.max_submissions)} 次）。",
+            )
 
     if submission is None:
         submission = HomeworkSubmission(

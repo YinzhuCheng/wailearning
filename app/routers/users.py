@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models import (
     Class,
     CourseMaterial,
+    Gender,
     Homework,
     HomeworkAttempt,
     HomeworkGradingTask,
@@ -28,9 +29,15 @@ from app.models import (
 )
 from app.schemas import (
     StudentResponse,
+    StudentRosterUpsertFromUsersError,
+    StudentRosterUpsertFromUsersRequest,
+    StudentRosterUpsertFromUsersResponse,
     StudentUserBatchCreateError,
     StudentUserBatchCreateRequest,
     StudentUserBatchCreateResponse,
+    UserBatchSetClassError,
+    UserBatchSetClassRequest,
+    UserBatchSetClassResponse,
     UserCreate,
     UserResponse,
     UserUpdate,
@@ -166,6 +173,198 @@ def get_student_user_candidates(
     )
 
     return [build_student_candidate_response(student, class_name) for student, class_name in rows]
+
+
+@router.post("/batch-set-class", response_model=UserBatchSetClassResponse)
+def batch_set_user_class(
+    payload: UserBatchSetClassRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Move multiple student accounts to the same class (admin only). Syncs roster linkage via prepare_student_course_context."""
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以批量调整班级")
+
+    validate_class_exists(payload.class_id, db)
+
+    user_ids = list(dict.fromkeys(payload.user_ids))
+    if not user_ids:
+        return UserBatchSetClassResponse()
+
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    user_map = {u.id: u for u in users}
+
+    updated = 0
+    errors: list[UserBatchSetClassError] = []
+
+    for uid in user_ids:
+        user = user_map.get(uid)
+        if not user:
+            errors.append(UserBatchSetClassError(user_id=uid, reason="用户不存在"))
+            continue
+        if (user.role or "").strip() != UserRole.STUDENT.value:
+            errors.append(UserBatchSetClassError(user_id=uid, reason="仅支持学生账号批量调班"))
+            continue
+        if user.class_id == payload.class_id:
+            continue
+        user.class_id = payload.class_id
+        if user.username and user.class_id:
+            prepare_student_course_context(user, db)
+        updated += 1
+
+    db.commit()
+
+    return UserBatchSetClassResponse(updated=updated, errors=errors)
+
+
+@router.post("/student-roster/from-users", response_model=StudentRosterUpsertFromUsersResponse)
+def upsert_student_roster_from_student_users(
+    payload: StudentRosterUpsertFromUsersRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    For admin: ensure Student roster rows exist for selected student accounts
+    (username -> student_no, same class as user.class_id). Creates missing rows
+    or refreshes the display name; then runs prepare_student_course_context.
+    """
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以同步学生花名册")
+
+    user_ids = list(dict.fromkeys(payload.user_ids))
+    if not user_ids:
+        return StudentRosterUpsertFromUsersResponse(
+            total=0, created=0, updated=0, skipped=0, errors=[]
+        )
+
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    user_map = {u.id: u for u in users}
+
+    created = 0
+    updated = 0
+    skipped = 0
+    errors: list[StudentRosterUpsertFromUsersError] = []
+
+    for uid in user_ids:
+        user = user_map.get(uid)
+        if not user:
+            errors.append(StudentRosterUpsertFromUsersError(user_id=uid, reason="用户不存在"))
+            continue
+        if (user.role or "").strip() != UserRole.STUDENT.value:
+            errors.append(
+                StudentRosterUpsertFromUsersError(
+                    user_id=user.id, username=user.username, reason="仅支持学生角色账号"
+                )
+            )
+            continue
+        if not user.class_id:
+            errors.append(
+                StudentRosterUpsertFromUsersError(
+                    user_id=user.id,
+                    username=user.username,
+                    reason="学生账号未分配班级，无法写入花名册",
+                )
+            )
+            continue
+
+        student_no = (user.username or "").strip()
+        if not student_no:
+            errors.append(
+                StudentRosterUpsertFromUsersError(
+                    user_id=user.id, username=user.username, reason="用户名为空，无法作为学号写入花名册"
+                )
+            )
+            continue
+
+        display_name = (user.real_name or "").strip() or student_no
+
+        existing_same_class = (
+            db.query(Student)
+            .filter(Student.student_no == student_no, Student.class_id == user.class_id)
+            .first()
+        )
+        if existing_same_class:
+            if (existing_same_class.name or "").strip() != display_name:
+                existing_same_class.name = display_name
+                updated += 1
+            else:
+                skipped += 1
+            prepare_student_course_context(user, db)
+            continue
+
+        conflict = (
+            db.query(Student)
+            .filter(Student.student_no == student_no, Student.class_id != user.class_id)
+            .first()
+        )
+        if conflict:
+            errors.append(
+                StudentRosterUpsertFromUsersError(
+                    user_id=user.id,
+                    username=user.username,
+                    reason="该学号已在其他班级的花名册中，请先处理重复或调整班级后再同步",
+                )
+            )
+            continue
+
+        class_obj = db.query(Class).filter(Class.id == user.class_id).first()
+        if not class_obj:
+            errors.append(
+                StudentRosterUpsertFromUsersError(
+                    user_id=user.id,
+                    username=user.username,
+                    reason="所属班级不存在",
+                )
+            )
+            continue
+
+        roster = Student(
+            name=display_name,
+            student_no=student_no,
+            gender=Gender.MALE,
+            class_id=user.class_id,
+        )
+        db.add(roster)
+        try:
+            with db.begin_nested():
+                db.flush()
+        except IntegrityError:
+            # Concurrent create or race after pre-check: align with existing row.
+            db.expunge(roster)
+            raced = (
+                db.query(Student)
+                .filter(Student.student_no == student_no, Student.class_id == user.class_id)
+                .first()
+            )
+            if raced:
+                if (raced.name or "").strip() != display_name:
+                    raced.name = display_name
+                    updated += 1
+                else:
+                    skipped += 1
+                prepare_student_course_context(user, db)
+                continue
+            errors.append(
+                StudentRosterUpsertFromUsersError(
+                    user_id=user.id,
+                    username=user.username,
+                    reason="花名册写入冲突，请重试或检查学号是否重复",
+                )
+            )
+            continue
+
+        created += 1
+        prepare_student_course_context(user, db)
+
+    db.commit()
+
+    return StudentRosterUpsertFromUsersResponse(
+        total=len(user_ids),
+        created=created,
+        updated=updated,
+        skipped=skipped,
+        errors=errors,
+    )
 
 
 @router.post("/student-candidates/load", response_model=StudentUserBatchCreateResponse)

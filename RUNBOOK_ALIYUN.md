@@ -299,16 +299,19 @@ sudo tail -f /var/log/nginx/access.log /var/log/nginx/error.log
 
 ## 12. Upgrade Procedure
 
-When you update the code:
+When you update the code, **avoid a bare `git pull` on the server** if the machine may have local drift or tracking issues. Prefer aligning the checkout to the remote branch, then deploy (see **`docs/DEPLOY_GIT_ROBUSTNESS.md`** for rationale):
 
 ```bash
-cd /root/dd-class
-git pull
-sudo bash scripts/deploy_all.sh
-sudo bash scripts/post_deploy_check.sh
+cd /opt/dd-class/source
+GIT_BRANCH=main GIT_REMOTE=origin sudo bash scripts/redeploy.sh
+# or: REPO_DIR=/opt/dd-class/source BRANCH=main sudo bash scripts/pull_and_deploy.sh
 ```
 
-If you uploaded files manually, replace `git pull` with your preferred sync method.
+If the server clone has local modifications that block checkout, run once with **`GIT_RESET_WORKTREE_BEFORE_FETCH=1`** (backs up `git diff` under `/opt/dd-class/backups` by default). See **`docs/DEPLOY_GIT_ROBUSTNESS.md`**.
+
+`redeploy.sh` runs the full stack (backend + frontends + nginx reload as configured). For a manual code-only refresh, mirror **`scripts/lib/git_sync_server.sh`**: explicit refspec **`git fetch <remote> refs/heads/<branch>:refs/remotes/<remote>/<branch>`**, then **`git checkout -B`** + **`git reset --hard`** + **`git clean -ffd`**, then `deploy_all.sh`.
+
+If you uploaded files manually, replace the Git block with your preferred sync method.
 
 ## 13. Backup Procedure
 

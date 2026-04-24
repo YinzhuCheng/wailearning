@@ -18,9 +18,11 @@ from app.database import Base, SessionLocal, engine
 from app.llm_grading import (
     _collect_grading_endpoints_for_config,
     process_grading_task,
+    queue_grading_task,
     validate_text_connectivity,
     validate_vision_connectivity,
 )
+from app.llm_group_routing import _GroupState
 from app.main import app
 from app.models import (
     Class,
@@ -28,6 +30,7 @@ from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
     Homework,
+    HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
@@ -733,30 +736,33 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             created_by=teacher.id,
         )
         db.add(h)
+        db.flush()
+        sub = HomeworkSubmission(
+            homework_id=h.id,
+            student_id=stud.id,
+            subject_id=course.id,
+            class_id=klass.id,
+            content="seed",
+        )
+        db.add(sub)
+        db.flush()
+        att = HomeworkAttempt(
+            homework_id=h.id,
+            student_id=stud.id,
+            subject_id=course.id,
+            class_id=klass.id,
+            submission_summary_id=sub.id,
+            content="seed",
+            is_late=False,
+        )
+        db.add(att)
+        db.flush()
+        sub.latest_attempt_id = att.id
+        task = queue_grading_task(db, att, "pytest_group_rr")
         db.commit()
-        h_id = h.id
+        tid = task.id
     finally:
         db.close()
-
-    client = TestClient(app)
-    stu_h = login_api(client, "r_s2", "s2")
-    tid = None
-    for n in range(32):
-        client.post(f"/api/homeworks/{h_id}/submission", headers=stu_h, json={"content": f"turn{n}"})
-        db4 = SessionLocal()
-        try:
-            trow = (
-                db4.query(HomeworkGradingTask)
-                .order_by(HomeworkGradingTask.id.desc())
-                .first()
-            )
-        finally:
-            db4.close()
-        if trow and trow.id % 2 == 0:
-            tid = trow.id
-            break
-    if tid is None:
-        pytest.skip("could not get a grading task with even id for group rotation test")
 
     calls: list[str] = []
 
@@ -769,8 +775,10 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             return httpx.Response(200, json=json_llm_response(10.0, "ok b2"))
         return httpx.Response(500)
 
-    with mock.patch.object(httpx.Client, "post", fake_post):
-        process_grading_task(tid)
+    # Avoid depending on task_id % n rotation (SQLite rowids are often odd on first insert).
+    with mock.patch.object(_GroupState, "apply_round_robin_start", lambda self, task_id: None):
+        with mock.patch.object(httpx.Client, "post", fake_post):
+            process_grading_task(tid)
 
     assert "ma2" in calls
     assert "mb2" in calls

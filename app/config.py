@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     INIT_DEFAULT_DATA: bool = True
     ALLOW_PUBLIC_REGISTRATION: bool = False
 
+    # Ephemeral E2E seed API (/api/e2e/dev/reset-scenario). Never enable in production.
+    E2E_DEV_SEED_ENABLED: bool = False
+    E2E_DEV_SEED_TOKEN: str = ""
+
     GUNICORN_WORKERS: int = 3
     LOG_LEVEL: str = "info"
     ENABLE_LLM_GRADING_WORKER: bool = True
@@ -86,6 +90,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def reject_weak_secrets_in_production(self) -> "Settings":
+        if self.E2E_DEV_SEED_ENABLED and self._is_production_env(self.APP_ENV):
+            raise ValueError("E2E_DEV_SEED_ENABLED must be false when APP_ENV is production.")
+
         require = bool(self.REQUIRE_STRONG_SECRETS) or self._is_production_env(self.APP_ENV)
         if not require:
             return self

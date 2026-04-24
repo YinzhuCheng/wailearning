@@ -19,8 +19,11 @@
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180">
+        <el-table-column label="操作" width="280">
           <template #default="{ row }">
+            <el-button type="success" size="small" data-testid="classes-open-roster" @click="goClassRoster(row)">
+              花名册
+            </el-button>
             <el-button type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -46,10 +49,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import api from '@/api'
+
+const router = useRouter()
 
 const classes = ref([])
 const dialogVisible = ref(false)
@@ -70,6 +76,13 @@ const rules = {
 const loadClasses = async () => {
   const data = await api.classes.list()
   classes.value = data || []
+}
+
+const goClassRoster = row => {
+  if (!row?.id) {
+    return
+  }
+  router.push({ path: '/students', query: { class_id: String(row.id) } })
 }
 
 const handleAdd = () => {

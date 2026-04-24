@@ -5,7 +5,11 @@
 # 可选环境变量：
 #   REPO_DIR=/root/wailearning     代码仓库路径（默认：本脚本所在仓库根目录）
 #   GIT_BRANCH=main               要检出的分支
-#   SKIP_GIT=1                    跳过 git fetch/checkout/pull（已在目标目录准备好代码时）
+#   GIT_REMOTE=origin             远端名称
+#   GIT_CLEAN=1                   是否在同步末尾 git clean -ffd（0=跳过，保留未跟踪文件时请慎用）
+#   GIT_RESET_WORKTREE_BEFORE_FETCH=0  设为 1 时：先备份 git diff 到 BACKUP_DIR，再 reset --hard + clean -ffd，再 fetch（解决服务器手工改文件导致 checkout 被拒）
+#   BACKUP_DIR=/opt/dd-class/backups   GIT_RESET 为 1 时写入 working-tree patch 的目录
+#   SKIP_GIT=1                    跳过 git 同步（已在目标目录准备好代码时）
 #   FRONTEND_ONLY=1               只跑 deploy_frontend.sh（例如仅修复管理端静态资源）
 #   APP_URL=https://你的域名       部署后 post_deploy_check 使用的公网健康检查地址
 set -euo pipefail
@@ -18,6 +22,10 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd -P)}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
+GIT_REMOTE="${GIT_REMOTE:-origin}"
+GIT_CLEAN="${GIT_CLEAN:-1}"
+GIT_RESET_WORKTREE_BEFORE_FETCH="${GIT_RESET_WORKTREE_BEFORE_FETCH:-0}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/dd-class/backups}"
 SKIP_GIT="${SKIP_GIT:-0}"
 FRONTEND_ONLY="${FRONTEND_ONLY:-0}"
 APP_URL="${APP_URL:-}"
@@ -31,9 +39,20 @@ if [[ "${SKIP_GIT}" != "1" ]]; then
     exit 1
   fi
   cd "${REPO_DIR}"
-  git fetch origin "${GIT_BRANCH}"
-  git checkout "${GIT_BRANCH}"
-  git pull --ff-only "origin" "${GIT_BRANCH}"
+  # shellcheck source=scripts/lib/git_sync_server.sh
+  source "${SCRIPT_DIR}/lib/git_sync_server.sh"
+  git_final_clean_flag="0"
+  if [[ "${GIT_CLEAN}" == "1" ]]; then
+    git_final_clean_flag="1"
+  else
+    echo "==> GIT_CLEAN=0，跳过末尾 git clean"
+  fi
+  __dd_git_sync_to_remote_branch \
+    "${GIT_REMOTE}" \
+    "${GIT_BRANCH}" \
+    "${GIT_RESET_WORKTREE_BEFORE_FETCH}" \
+    "${BACKUP_DIR}" \
+    "${git_final_clean_flag}"
 else
   echo "==> 已 SKIP_GIT=1，跳过 git 更新"
 fi

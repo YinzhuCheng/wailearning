@@ -619,6 +619,56 @@ def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, 
     return snap
 
 
+def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, student_id: int) -> dict[str, Any]:
+    """Per-student usage for quota day (student-facing UI; excludes API keys)."""
+    timezone_name = config.quota_timezone or "UTC"
+    usage_date = _get_usage_date(timezone_name)
+    snap: dict[str, Any] = {
+        "subject_id": config.subject_id,
+        "usage_date": usage_date,
+        "quota_timezone": timezone_name,
+        "daily_student_token_limit": config.daily_student_token_limit,
+        "daily_course_token_limit": config.daily_course_token_limit,
+        "student_used_tokens_today": None,
+        "student_remaining_tokens_today": None,
+        "course_used_tokens_today": None,
+        "course_remaining_tokens_today": None,
+    }
+    if config.daily_student_token_limit:
+        used_stu = _get_used_tokens_for_scope(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            student_id=student_id,
+        )
+        used_stu += _sum_reserved_tokens(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            student_id=student_id,
+        )
+        lim_stu = int(config.daily_student_token_limit)
+        snap["student_used_tokens_today"] = used_stu
+        snap["student_remaining_tokens_today"] = max(0, lim_stu - used_stu)
+    if config.daily_course_token_limit and config.subject_id:
+        used_course = _get_used_tokens_for_scope(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            subject_id=config.subject_id,
+        )
+        used_course += _sum_reserved_tokens(
+            db,
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            subject_id=config.subject_id,
+        )
+        lim_course = int(config.daily_course_token_limit)
+        snap["course_used_tokens_today"] = used_course
+        snap["course_remaining_tokens_today"] = max(0, lim_course - used_course)
+    return snap
+
+
 def _quota_delta_violations(
     db: Session,
     config: CourseLLMConfig,

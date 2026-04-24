@@ -87,6 +87,24 @@ class StudentUserBatchCreateResponse(BaseModel):
     errors: List[StudentUserBatchCreateError]
 
 
+class StudentRosterUpsertFromUsersRequest(BaseModel):
+    user_ids: List[int]
+
+
+class StudentRosterUpsertFromUsersError(BaseModel):
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    reason: str
+
+
+class StudentRosterUpsertFromUsersResponse(BaseModel):
+    total: int
+    created: int
+    updated: int
+    skipped: int
+    errors: List[StudentRosterUpsertFromUsersError]
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -293,6 +311,59 @@ class CourseRosterStudentInput(BaseModel):
 
 class CourseEnrollmentTypeUpdate(BaseModel):
     enrollment_type: str
+
+
+class SubjectRosterEnrollRequest(BaseModel):
+    """Add enrollments only for students already on the course class roster (same class_id)."""
+
+    student_ids: List[int] = Field(default_factory=list)
+
+
+class SubjectRosterEnrollResult(BaseModel):
+    created: int = 0
+    skipped_already_enrolled: int = 0
+    skipped_not_in_class_roster: int = 0
+    skipped_not_found: int = 0
+
+
+class StudentElectiveSelfEnrollResult(BaseModel):
+    """Student voluntarily joined an elective course."""
+
+    subject_id: int
+    created: bool = False
+    already_enrolled: bool = False
+
+
+class StudentElectiveSelfDropResult(BaseModel):
+    subject_id: int
+    removed: bool = False
+
+
+class StudentLLMQuotaUsageResponse(BaseModel):
+    subject_id: int
+    usage_date: str
+    quota_timezone: str
+    daily_student_token_limit: Optional[int] = None
+    daily_course_token_limit: Optional[int] = None
+    student_used_tokens_today: Optional[int] = None
+    student_remaining_tokens_today: Optional[int] = None
+    course_used_tokens_today: Optional[int] = None
+    course_remaining_tokens_today: Optional[int] = None
+
+
+class UserBatchSetClassRequest(BaseModel):
+    user_ids: List[int] = Field(default_factory=list)
+    class_id: int
+
+
+class UserBatchSetClassError(BaseModel):
+    user_id: int
+    reason: str
+
+
+class UserBatchSetClassResponse(BaseModel):
+    updated: int = 0
+    errors: List[UserBatchSetClassError] = Field(default_factory=list)
 
 
 SubjectCreate.model_rebuild()
@@ -653,6 +724,21 @@ class HomeworkBase(BaseModel):
     response_language: Optional[str] = None
     allow_late_submission: bool = True
     late_submission_affects_score: bool = False
+    max_submissions: Optional[int] = Field(
+        default=None,
+        description="Maximum submission attempts per student; null means unlimited.",
+    )
+
+    @field_validator("max_submissions")
+    @classmethod
+    def validate_max_submissions(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return value
+        if int(value) < 1:
+            raise ValueError("max_submissions must be at least 1 when set.")
+        if int(value) > 200:
+            raise ValueError("max_submissions cannot exceed 200.")
+        return int(value)
 
     @field_validator("grade_precision")
     @classmethod
@@ -683,6 +769,18 @@ class HomeworkUpdate(BaseModel):
     response_language: Optional[str] = None
     allow_late_submission: Optional[bool] = None
     late_submission_affects_score: Optional[bool] = None
+    max_submissions: Optional[int] = None
+
+    @field_validator("max_submissions")
+    @classmethod
+    def validate_max_submissions_update(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return value
+        if int(value) < 1:
+            raise ValueError("max_submissions must be at least 1 when set.")
+        if int(value) > 200:
+            raise ValueError("max_submissions cannot exceed 200.")
+        return int(value)
 
     @field_validator("grade_precision")
     @classmethod
@@ -708,6 +806,7 @@ class HomeworkResponse(HomeworkBase):
     task_status: Optional[str] = None
     task_error: Optional[str] = None
     attempt_count: int = 0
+    submissions_remaining: Optional[int] = None
     latest_submission_is_late: Optional[bool] = None
     grading_rule_hint: Optional[str] = None
 

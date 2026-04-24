@@ -66,6 +66,7 @@
 - [API文档](#api文档)
 - [阿里云安全升级说明](#阿里云安全升级说明)
 - [安全与运维（角色、数据落点、升级重部署）](docs/SECURITY-AND-OPERATIONS.md)
+- [升级与 LLM / 作业自动批改说明](docs/UPGRADE_AND_LLM_SYSTEM.md)
 - [数据库迁移](#数据库迁移)
 - [常见问题](#常见问题)
 - [使用许可](#使用许可)
@@ -357,6 +358,8 @@ class Settings(BaseSettings):
 - `ALIYUN_SAFE_UPGRADE.md`
 - `DEPLOY.md`
 - `RUNBOOK_ALIYUN.md`
+- `docs/DEPLOY_GIT_ROBUSTNESS.md`（服务器上 Git 显式 refspec、工作区清理、验收标准）
+- `docs/DEPLOYMENT_POSTMORTEM_CN.md`（一次生产部署复盘：fetch/checkout、脏工作区、heredoc、何谓“部署完成”）
 
 仓库还提供了一个可直接参考改造的安全升级脚本示例：
 

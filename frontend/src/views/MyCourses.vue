@@ -15,6 +15,34 @@
       >
         当前课程：{{ userStore.selectedCourse.name }}
       </el-alert>
+      <el-card
+        v-if="userStore.isStudent && userStore.selectedCourse?.id"
+        shadow="never"
+        class="quota-card"
+      >
+        <template #header>
+          <span>当前课程 · LLM 用量（个人）</span>
+        </template>
+        <div v-loading="quotaLoading" class="quota-body">
+          <template v-if="quotaInfo">
+            <p class="quota-line">
+              统计日：{{ quotaInfo.usage_date }}（时区 {{ quotaInfo.quota_timezone }}）
+            </p>
+            <p v-if="quotaInfo.daily_student_token_limit != null" class="quota-line">
+              个人日限额：{{ quotaInfo.daily_student_token_limit }}，
+              已用 {{ quotaInfo.student_used_tokens_today ?? 0 }}，
+              剩余约 {{ quotaInfo.student_remaining_tokens_today ?? '—' }}
+            </p>
+            <p v-else class="quota-line muted">未设置个人日 token 限额。</p>
+            <p v-if="quotaInfo.daily_course_token_limit != null" class="quota-line">
+              本课程当日总量：已用 {{ quotaInfo.course_used_tokens_today ?? 0 }} / 限额
+              {{ quotaInfo.daily_course_token_limit }}，剩余约 {{ quotaInfo.course_remaining_tokens_today ?? '—' }}
+            </p>
+            <p v-else class="quota-line muted">未设置课程日 token 限额。</p>
+          </template>
+          <p v-else-if="!quotaLoading" class="quota-line muted">暂无用量数据。</p>
+        </div>
+      </el-card>
       <el-button
         v-if="canCreateCourse"
         type="primary"
@@ -23,6 +51,52 @@
         新建课程
       </el-button>
     </div>
+
+    <el-card
+      v-if="userStore.isStudent"
+      shadow="never"
+      class="elective-catalog-card"
+    >
+      <template #header>
+        <div class="elective-header">
+          <span>全校选修课 · 自主选课</span>
+          <el-button size="small" :loading="electiveLoading" @click="loadElectiveCatalog">刷新目录</el-button>
+        </div>
+      </template>
+      <p class="elective-tip">
+        仅显示<strong>进行中</strong>的<strong>选修课</strong>。你只能选修<strong>本班开设</strong>的课程；其他班级的课可浏览，选课按钮不可用。
+      </p>
+      <el-table :data="electiveCatalog" v-loading="electiveLoading" max-height="360" empty-text="暂无可选选修课">
+        <el-table-column prop="name" label="课程" min-width="160" />
+        <el-table-column prop="class_name" label="开设班级" width="140" />
+        <el-table-column prop="teacher_name" label="任课教师" width="120" />
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="!isEnrolled(row.id)"
+              type="primary"
+              size="small"
+              :disabled="!canSelfEnrollElective(row)"
+              :loading="selfEnrollingId === row.id"
+              @click="selfEnroll(row)"
+            >
+              选课
+            </el-button>
+            <el-button
+              v-else
+              type="danger"
+              plain
+              size="small"
+              :disabled="!isElectiveEnrollment(row.id)"
+              :loading="selfDroppingId === row.id"
+              @click="selfDrop(row)"
+            >
+              退选
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
 
     <el-row :gutter="20" v-loading="loading">
       <el-col :span="24">
@@ -194,7 +268,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 
@@ -222,6 +296,12 @@ const TEMPLATE_ROWS = [
 const loading = ref(false)
 const submitting = ref(false)
 const courses = ref([])
+const electiveCatalog = ref([])
+const electiveLoading = ref(false)
+const selfEnrollingId = ref(null)
+const selfDroppingId = ref(null)
+const quotaInfo = ref(null)
+const quotaLoading = ref(false)
 const semesters = ref([])
 const dialogVisible = ref(false)
 const formRef = ref(null)
@@ -264,6 +344,95 @@ const loadCourses = async () => {
     ElMessage.error('加载课程失败')
   } finally {
     loading.value = false
+  }
+}
+
+const loadElectiveCatalog = async () => {
+  if (!userStore.isStudent) {
+    return
+  }
+  electiveLoading.value = true
+  try {
+    electiveCatalog.value = await api.courses.electiveCatalog()
+  } catch (error) {
+    console.error('加载选修目录失败', error)
+  } finally {
+    electiveLoading.value = false
+  }
+}
+
+const myClassId = computed(() => userStore.userInfo?.class_id ?? null)
+
+const canSelfEnrollElective = row =>
+  userStore.isStudent && row?.class_id != null && myClassId.value != null && Number(row.class_id) === Number(myClassId.value)
+
+const isEnrolled = courseId =>
+  (courses.value || []).some(c => String(c.id) === String(courseId))
+
+const isElectiveEnrollment = courseId => {
+  const c = (courses.value || []).find(x => String(x.id) === String(courseId))
+  return Boolean(c && c.course_type === 'elective')
+}
+
+const selfEnroll = async row => {
+  if (!row?.id) {
+    return
+  }
+  selfEnrollingId.value = row.id
+  try {
+    const res = await api.courses.studentSelfEnroll(row.id)
+    if (res?.already_enrolled) {
+      ElMessage.info('已在该课程选课名单中')
+    } else {
+      ElMessage.success('选课成功')
+    }
+    await Promise.all([loadCourses(), loadElectiveCatalog()])
+    if (String(userStore.selectedCourse?.id) === String(row.id)) {
+      await loadStudentQuota()
+    }
+  } catch (error) {
+    console.error('选课失败', error)
+  } finally {
+    selfEnrollingId.value = null
+  }
+}
+
+const selfDrop = async row => {
+  if (!row?.id) {
+    return
+  }
+  selfDroppingId.value = row.id
+  try {
+    const res = await api.courses.studentSelfDrop(row.id)
+    if (!res?.removed) {
+      ElMessage.warning('未找到选课记录')
+    } else {
+      ElMessage.success('已退选')
+    }
+    await Promise.all([loadCourses(), loadElectiveCatalog()])
+    if (String(userStore.selectedCourse?.id) === String(row.id)) {
+      await loadStudentQuota()
+    }
+  } catch (error) {
+    console.error('退选失败', error)
+  } finally {
+    selfDroppingId.value = null
+  }
+}
+
+const loadStudentQuota = async () => {
+  if (!userStore.isStudent || !userStore.selectedCourse?.id) {
+    quotaInfo.value = null
+    return
+  }
+  quotaLoading.value = true
+  try {
+    quotaInfo.value = await api.llmSettings.getStudentQuota(userStore.selectedCourse.id)
+  } catch (error) {
+    console.error('加载 token 用量失败', error)
+    quotaInfo.value = null
+  } finally {
+    quotaLoading.value = false
   }
 }
 
@@ -568,8 +737,24 @@ const submitForm = async () => {
 }
 
 onMounted(() => {
-  Promise.all([loadCourses(), loadSemesters()])
+  const tasks = [loadCourses(), loadSemesters()]
+  if (userStore.isStudent) {
+    tasks.push(loadElectiveCatalog())
+  }
+  Promise.all(tasks)
 })
+
+watch(
+  () => [userStore.isStudent, userStore.selectedCourse?.id],
+  () => {
+    if (userStore.isStudent) {
+      loadStudentQuota()
+    } else {
+      quotaInfo.value = null
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -600,6 +785,42 @@ onMounted(() => {
 
 .current-course-alert {
   width: 320px;
+}
+
+.quota-card {
+  width: 100%;
+  max-width: 560px;
+  margin-bottom: 16px;
+}
+
+.quota-body {
+  font-size: 14px;
+  color: #334155;
+}
+
+.quota-line {
+  margin: 0 0 8px;
+}
+
+.quota-line.muted {
+  color: #94a3b8;
+}
+
+.elective-catalog-card {
+  margin-bottom: 20px;
+}
+
+.elective-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.elective-tip {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
 }
 
 .roster-tools {

@@ -9,19 +9,26 @@ from app.course_access import (
     ensure_course_access,
     get_accessible_courses_query,
     get_enrolled_students,
+    get_student_elective_catalog_query,
+    get_student_profile_for_user,
+    prepare_student_course_context,
     remove_course_enrollment,
     sync_course_enrollments,
 )
 from app.database import get_db
-from app.models import Class, CourseEnrollment, Semester, Student, Subject, User, UserRole
+from app.models import Class, CourseEnrollment, CourseEnrollmentBlock, Semester, Student, Subject, User, UserRole
 from app.schemas import (
     CourseTimeItem,
     CourseEnrollmentResponse,
     CourseEnrollmentTypeUpdate,
     CourseRosterStudentInput,
+    StudentElectiveSelfDropResult,
+    StudentElectiveSelfEnrollResult,
     SubjectCreate,
     SubjectResponse,
     SubjectUpdate,
+    SubjectRosterEnrollRequest,
+    SubjectRosterEnrollResult,
 )
 
 
@@ -281,6 +288,116 @@ def get_subjects(
         .all()
     )
     return [_serialize_course(course, db) for course in courses]
+
+
+@router.get("/elective-catalog", response_model=List[SubjectResponse])
+def list_elective_catalog_for_student(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Active elective courses available for voluntary student self-enrollment."""
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Only students can browse the elective catalog.")
+
+    courses = (
+        get_student_elective_catalog_query(current_user, db)
+        .order_by(Subject.created_at.desc())
+        .all()
+    )
+    return [_serialize_course(course, db) for course in courses]
+
+
+@router.post("/{subject_id}/student-self-enroll", response_model=StudentElectiveSelfEnrollResult)
+def student_self_enroll_elective(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Only students can self-enroll.")
+
+    prepare_student_course_context(current_user, db)
+    db.commit()
+    student = get_student_profile_for_user(current_user, db)
+    if not student:
+        raise HTTPException(status_code=400, detail="未找到与账号匹配的花名册，无法选课。")
+
+    course = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    if (course.status or "").strip() != "active":
+        raise HTTPException(status_code=400, detail="课程未开放选课。")
+    if (course.course_type or "").strip() != "elective":
+        raise HTTPException(status_code=400, detail="仅选修课支持学生自主选课。")
+    if not course.class_id:
+        raise HTTPException(status_code=400, detail="课程未绑定班级，无法选课。")
+
+    if student.class_id != course.class_id:
+        raise HTTPException(
+            status_code=400,
+            detail="只能选修所属行政班开设的选修课；如需调整班级请联系管理员。",
+        )
+
+    existing = (
+        db.query(CourseEnrollment)
+        .filter(CourseEnrollment.subject_id == course.id, CourseEnrollment.student_id == student.id)
+        .first()
+    )
+    if existing:
+        return StudentElectiveSelfEnrollResult(subject_id=course.id, created=False, already_enrolled=True)
+
+    db.query(CourseEnrollmentBlock).filter(
+        CourseEnrollmentBlock.subject_id == course.id,
+        CourseEnrollmentBlock.student_id == student.id,
+    ).delete(synchronize_session=False)
+    db.add(
+        CourseEnrollment(
+            subject_id=course.id,
+            student_id=student.id,
+            class_id=course.class_id,
+            enrollment_type="elective",
+            can_remove=True,
+        )
+    )
+    db.commit()
+    return StudentElectiveSelfEnrollResult(subject_id=course.id, created=True, already_enrolled=False)
+
+
+@router.post("/{subject_id}/student-self-drop", response_model=StudentElectiveSelfDropResult)
+def student_self_drop_elective(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Only students can drop electives.")
+
+    prepare_student_course_context(current_user, db)
+    db.commit()
+    student = get_student_profile_for_user(current_user, db)
+    if not student:
+        raise HTTPException(status_code=400, detail="未找到与账号匹配的花名册。")
+
+    enrollment = (
+        db.query(CourseEnrollment)
+        .filter(CourseEnrollment.subject_id == subject_id, CourseEnrollment.student_id == student.id)
+        .first()
+    )
+    if not enrollment:
+        return StudentElectiveSelfDropResult(subject_id=subject_id, removed=False)
+
+    et = (enrollment.enrollment_type or "").strip().lower()
+    if et != "elective" and not enrollment.can_remove:
+        raise HTTPException(status_code=400, detail="必修课不可退选。")
+
+    db.delete(enrollment)
+    if not db.query(CourseEnrollmentBlock).filter(
+        CourseEnrollmentBlock.subject_id == subject_id,
+        CourseEnrollmentBlock.student_id == student.id,
+    ).first():
+        db.add(CourseEnrollmentBlock(subject_id=subject_id, student_id=student.id))
+    db.commit()
+    return StudentElectiveSelfDropResult(subject_id=subject_id, removed=True)
 
 
 @router.get("/{subject_id}", response_model=SubjectResponse)
@@ -543,6 +660,85 @@ def sync_subject_enrollments(
         "created": created,
         "student_count": db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).count(),
     }
+
+
+@router.post("/{subject_id}/roster-enroll", response_model=SubjectRosterEnrollResult)
+def enroll_roster_students_on_subject(
+    subject_id: int,
+    payload: SubjectRosterEnrollRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Add CourseEnrollment rows only for students who already belong to the course's class roster.
+    Does not create Student rows or move students between classes — use roster / 调班 flows first.
+    """
+    if current_user.role == UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Students cannot modify course rosters.")
+
+    try:
+        course = ensure_course_access(subject_id, current_user, db)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="You do not have access to this course.")
+
+    if not course.class_id:
+        raise HTTPException(status_code=400, detail="Course has no class; cannot roster-enroll.")
+
+    student_ids = list(dict.fromkeys(payload.student_ids))
+    if not student_ids:
+        return SubjectRosterEnrollResult()
+
+    enrolled_ids = {
+        row[0]
+        for row in db.query(CourseEnrollment.student_id).filter(CourseEnrollment.subject_id == course.id).all()
+    }
+
+    created = 0
+    skipped_already = 0
+    skipped_wrong_class = 0
+    skipped_missing = 0
+    enrollment_type = course.course_type or "required"
+    can_remove = enrollment_type == "elective"
+
+    for student_id in student_ids:
+        if student_id in enrolled_ids:
+            skipped_already += 1
+            continue
+
+        student = db.query(Student).filter(Student.id == student_id).first()
+        if not student:
+            skipped_missing += 1
+            continue
+
+        if student.class_id != course.class_id:
+            skipped_wrong_class += 1
+            continue
+
+        db.query(CourseEnrollmentBlock).filter(
+            CourseEnrollmentBlock.subject_id == course.id,
+            CourseEnrollmentBlock.student_id == student.id,
+        ).delete(synchronize_session=False)
+        db.add(
+            CourseEnrollment(
+                subject_id=course.id,
+                student_id=student.id,
+                class_id=course.class_id,
+                enrollment_type=enrollment_type,
+                can_remove=can_remove,
+            )
+        )
+        enrolled_ids.add(student.id)
+        created += 1
+
+    db.commit()
+    return SubjectRosterEnrollResult(
+        created=created,
+        skipped_already_enrolled=skipped_already,
+        skipped_not_in_class_roster=skipped_wrong_class,
+        skipped_not_found=skipped_missing,
+    )
 
 
 @router.put("/{subject_id}/students/{student_id}/enrollment-type", response_model=CourseEnrollmentResponse)

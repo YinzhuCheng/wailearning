@@ -17,6 +17,7 @@
             :prefix-icon="User"
             size="large"
             clearable
+            data-testid="login-username"
           />
         </el-form-item>
 
@@ -28,6 +29,7 @@
             :prefix-icon="Lock"
             size="large"
             show-password
+            data-testid="login-password"
             @keyup.enter="handleLogin"
           />
         </el-form-item>
@@ -37,6 +39,7 @@
             type="primary"
             size="large"
             :loading="loading"
+            data-testid="login-submit"
             @click="handleLogin"
             class="login-btn"
           >
