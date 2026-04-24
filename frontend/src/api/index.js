@@ -11,6 +11,30 @@ const fileTransferRequestConfig = {
   timeout: 0
 }
 
+/** FastAPI/Pydantic 422: { detail: [{ loc, msg, type }, ...] } — must stringify for ElMessage. */
+const formatValidationDetail = detail => {
+  if (!Array.isArray(detail) || !detail.length) {
+    return null
+  }
+  const parts = detail
+    .map(item => {
+      if (typeof item === 'string') {
+        return item
+      }
+      if (item && typeof item === 'object') {
+        if (typeof item.msg === 'string') {
+          return item.msg
+        }
+        if (typeof item.message === 'string') {
+          return item.message
+        }
+      }
+      return null
+    })
+    .filter(Boolean)
+  return parts.length ? parts.join('；') : null
+}
+
 const extractErrorMessage = async error => {
   const data = error?.response?.data
 
@@ -20,7 +44,14 @@ const extractErrorMessage = async error => {
       if (text) {
         try {
           const parsed = JSON.parse(text)
-          return parsed?.detail || parsed?.message || text
+          const d = parsed?.detail
+          if (Array.isArray(d)) {
+            return formatValidationDetail(d) || parsed?.message || text
+          }
+          if (typeof d === 'string') {
+            return d
+          }
+          return parsed?.message || text
         } catch {
           return text
         }
@@ -34,7 +65,23 @@ const extractErrorMessage = async error => {
     return data
   }
 
-  return data?.detail || 'Request failed'
+  const detail = data?.detail
+  if (Array.isArray(detail)) {
+    return formatValidationDetail(detail) || data?.message || 'Request failed'
+  }
+  if (detail != null && typeof detail === 'object') {
+    if (typeof detail.msg === 'string') {
+      return detail.msg
+    }
+    if (typeof detail.message === 'string') {
+      return detail.message
+    }
+  }
+  if (typeof detail === 'string') {
+    return detail
+  }
+
+  return data?.message || 'Request failed'
 }
 
 http.interceptors.request.use(
