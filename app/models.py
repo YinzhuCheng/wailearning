@@ -515,13 +515,11 @@ class CourseLLMConfig(Base):
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, unique=True)
     is_enabled = Column(Boolean, default=False)
     response_language = Column(String, nullable=True)
-    daily_student_token_limit = Column(Integer, nullable=True)
-    daily_course_token_limit = Column(Integer, nullable=True)
     estimated_chars_per_token = Column(Float, nullable=False, default=4.0)
     estimated_image_tokens = Column(Integer, nullable=False, default=850)
     max_input_tokens = Column(Integer, nullable=False, default=16000)
     max_output_tokens = Column(Integer, nullable=False, default=1200)
-    quota_timezone = Column(String, nullable=False, default="UTC")
+    quota_timezone = Column(String, nullable=False, default="Asia/Shanghai")
     system_prompt = Column(Text, nullable=True)
     teacher_prompt = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -633,7 +631,8 @@ class LLMGlobalQuotaPolicy(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     default_daily_student_tokens = Column(Integer, nullable=False, default=100_000)
-    quota_timezone = Column(String, nullable=False, default="UTC")
+    quota_timezone = Column(String, nullable=False, default="Asia/Shanghai")
+    max_parallel_grading_tasks = Column(Integer, nullable=False, default=3)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

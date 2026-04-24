@@ -17,10 +17,20 @@ def get_or_create_global_quota_policy(db: Session) -> LLMGlobalQuotaPolicy:
     row = db.query(LLMGlobalQuotaPolicy).filter(LLMGlobalQuotaPolicy.id == 1).first()
     if row:
         return row
-    row = LLMGlobalQuotaPolicy(id=1, default_daily_student_tokens=100_000, quota_timezone="UTC")
+    row = LLMGlobalQuotaPolicy(
+        id=1,
+        default_daily_student_tokens=100_000,
+        quota_timezone="Asia/Shanghai",
+        max_parallel_grading_tasks=3,
+    )
     db.add(row)
     db.flush()
     return row
+
+
+def resolve_max_parallel_grading_tasks(db: Session) -> int:
+    pol = get_or_create_global_quota_policy(db)
+    return max(1, int(getattr(pol, "max_parallel_grading_tasks", None) or 3))
 
 
 def quota_calendar(db: Session) -> tuple[str, str]:

@@ -37,11 +37,6 @@
               </span>
             </p>
             <p v-else class="quota-line muted">未设置个人日 token 限额。</p>
-            <p v-if="quotaInfo.daily_course_token_limit != null" class="quota-line">
-              本课程当日总量：已用 {{ quotaInfo.course_used_tokens_today ?? 0 }} / 限额
-              {{ quotaInfo.daily_course_token_limit }}，剩余约 {{ quotaInfo.course_remaining_tokens_today ?? '—' }}
-            </p>
-            <p v-else class="quota-line muted">未设置课程日 token 限额。</p>
           </template>
           <p v-else-if="!quotaLoading" class="quota-line muted">暂无用量数据。</p>
         </div>

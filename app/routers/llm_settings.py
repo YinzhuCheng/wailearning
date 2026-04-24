@@ -124,8 +124,6 @@ def _serialize_course_config(config: CourseLLMConfig, db: Optional[Session] = No
         subject_id=config.subject_id,
         is_enabled=bool(config.is_enabled),
         response_language=config.response_language,
-        daily_student_token_limit=None,
-        daily_course_token_limit=config.daily_course_token_limit,
         estimated_chars_per_token=config.estimated_chars_per_token,
         estimated_image_tokens=config.estimated_image_tokens,
         max_input_tokens=config.max_input_tokens,
@@ -174,7 +172,7 @@ def create_endpoint_preset(
     preset = LLMEndpointPreset(
         name=payload.name.strip(),
         base_url=payload.base_url.strip(),
-        api_key=payload.api_key.strip(),
+        api_key=(payload.api_key or "").strip(),
         model_name=payload.model_name.strip(),
         connect_timeout_seconds=payload.connect_timeout_seconds,
         read_timeout_seconds=payload.read_timeout_seconds,
@@ -340,11 +338,8 @@ def get_student_llm_quota_for_course(
             daily_student_token_limit=lim,
             global_default_daily_student_tokens=int(pol.default_daily_student_tokens),
             uses_personal_override=uses_override,
-            daily_course_token_limit=None,
             student_used_tokens_today=used_stu,
             student_remaining_tokens_today=max(0, lim - used_stu),
-            course_used_tokens_today=None,
-            course_remaining_tokens_today=None,
         )
 
     snap = get_student_quota_usage_snapshot(db, config, student_id=student.id)
@@ -355,11 +350,8 @@ def get_student_llm_quota_for_course(
         daily_student_token_limit=snap.get("daily_student_token_limit"),
         global_default_daily_student_tokens=int(pol.default_daily_student_tokens),
         uses_personal_override=uses_override,
-        daily_course_token_limit=snap.get("daily_course_token_limit"),
         student_used_tokens_today=snap.get("student_used_tokens_today"),
         student_remaining_tokens_today=snap.get("student_remaining_tokens_today"),
-        course_used_tokens_today=snap.get("course_used_tokens_today"),
-        course_remaining_tokens_today=snap.get("course_remaining_tokens_today"),
     )
 
 
@@ -376,6 +368,7 @@ def get_llm_global_quota_policy(
         id=row.id,
         default_daily_student_tokens=int(row.default_daily_student_tokens),
         quota_timezone=row.quota_timezone or "UTC",
+        max_parallel_grading_tasks=int(getattr(row, "max_parallel_grading_tasks", None) or 3),
     )
 
 
@@ -392,12 +385,15 @@ def update_llm_global_quota_policy(
         row.default_daily_student_tokens = int(payload.default_daily_student_tokens)
     if payload.quota_timezone is not None:
         row.quota_timezone = (payload.quota_timezone or "UTC").strip() or "UTC"
+    if payload.max_parallel_grading_tasks is not None:
+        row.max_parallel_grading_tasks = int(payload.max_parallel_grading_tasks)
     db.commit()
     db.refresh(row)
     return LLMGlobalQuotaPolicyResponse(
         id=row.id,
         default_daily_student_tokens=int(row.default_daily_student_tokens),
         quota_timezone=row.quota_timezone or "UTC",
+        max_parallel_grading_tasks=int(getattr(row, "max_parallel_grading_tasks", None) or 3),
     )
 
 
@@ -507,8 +503,6 @@ def update_course_llm_config(
 
     config.is_enabled = payload.is_enabled
     config.response_language = payload.response_language
-    config.daily_student_token_limit = None
-    config.daily_course_token_limit = payload.daily_course_token_limit
     config.estimated_chars_per_token = payload.estimated_chars_per_token
     config.estimated_image_tokens = payload.estimated_image_tokens
     config.max_input_tokens = payload.max_input_tokens

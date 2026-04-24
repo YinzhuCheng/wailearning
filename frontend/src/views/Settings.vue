@@ -158,14 +158,17 @@
         type="info"
         :closable="false"
         class="llm-notice"
-        title="学生个人日 token 为全课共用同一池；统计日与「额度时区」由下方全局策略决定。教师可在课程 LLM 配置中设置「课程日 token 上限」（按单科合计）。"
+        title="学生个人日 token 为全课共用同一池；统计日与「额度时区」由下方全局策略决定。并发数为同时处理的自动评分任务数上限。"
       />
       <el-form v-loading="llmQuotaLoading" label-width="200px" style="max-width: 640px">
         <el-form-item label="默认每人每日 token">
           <el-input-number v-model="llmQuotaForm.default_daily_student_tokens" :min="1" :step="10000" style="width: 100%" />
         </el-form-item>
+        <el-form-item label="并发评分任务数">
+          <el-input-number v-model="llmQuotaForm.max_parallel_grading_tasks" :min="1" :max="64" :step="1" style="width: 100%" />
+        </el-form-item>
         <el-form-item label="额度统计时区">
-          <el-input v-model="llmQuotaForm.quota_timezone" placeholder="例如 UTC / Asia/Shanghai" />
+          <el-input v-model="llmQuotaForm.quota_timezone" placeholder="例如 Asia/Shanghai" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="llmQuotaSaving" @click="saveLlmQuotaPolicy">保存全局策略</el-button>
@@ -333,7 +336,8 @@ const llmQuotaLoading = ref(false)
 const llmQuotaSaving = ref(false)
 const llmQuotaForm = reactive({
   default_daily_student_tokens: 100000,
-  quota_timezone: 'UTC'
+  quota_timezone: 'Asia/Shanghai',
+  max_parallel_grading_tasks: 3
 })
 const bulkQuotaLoading = ref(false)
 const bulkQuotaForm = reactive({
@@ -411,7 +415,8 @@ const fetchLlmQuotaPolicy = async () => {
   try {
     const row = await api.llmSettings.getGlobalQuotaPolicy()
     llmQuotaForm.default_daily_student_tokens = row.default_daily_student_tokens ?? 100000
-    llmQuotaForm.quota_timezone = row.quota_timezone || 'UTC'
+    llmQuotaForm.quota_timezone = row.quota_timezone || 'Asia/Shanghai'
+    llmQuotaForm.max_parallel_grading_tasks = row.max_parallel_grading_tasks ?? 3
   } catch (error) {
     ElMessage.error(`获取 LLM 额度策略失败：${formatApiError(error)}`)
   } finally {
@@ -424,7 +429,8 @@ const saveLlmQuotaPolicy = async () => {
   try {
     await api.llmSettings.updateGlobalQuotaPolicy({
       default_daily_student_tokens: llmQuotaForm.default_daily_student_tokens,
-      quota_timezone: (llmQuotaForm.quota_timezone || 'UTC').trim()
+      quota_timezone: (llmQuotaForm.quota_timezone || 'Asia/Shanghai').trim(),
+      max_parallel_grading_tasks: llmQuotaForm.max_parallel_grading_tasks
     })
     ElMessage.success('LLM 全局额度策略已保存')
     await fetchLlmQuotaPolicy()
@@ -520,9 +526,9 @@ const resetPresetForm = () => {
   editingPresetId.value = null
   Object.assign(presetForm, {
     name: '',
-    base_url: '',
+    base_url: 'https://api.openai.com/v1/',
     api_key: '',
-    model_name: '',
+    model_name: 'gpt-4o-mini',
     connect_timeout_seconds: 10,
     read_timeout_seconds: 120,
     max_retries: 2,
@@ -567,11 +573,6 @@ const savePreset = async () => {
     ElMessage.warning('请完整填写端点名称、Base URL 和模型名')
     return
   }
-  if (!editingPresetId.value && !presetForm.api_key.trim()) {
-    ElMessage.warning('新增端点时必须填写 API Key')
-    return
-  }
-
   presetSaving.value = true
   try {
     const payload = buildPresetPayload()

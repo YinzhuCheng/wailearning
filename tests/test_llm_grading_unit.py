@@ -140,7 +140,6 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
         cfg = CourseLLMConfig(
             subject_id=1,
             is_enabled=True,
-            daily_student_token_limit=None,
             quota_timezone="UTC",
         )
         with mock.patch("app.llm_grading._get_used_tokens_for_scope", return_value=95), mock.patch(
@@ -149,29 +148,6 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=10)
         assert ok is False
         assert code == "quota_exceeded_student"
-    finally:
-        db.close()
-
-
-def test_precheck_quota_blocks_course_when_mocked_usage_high():
-    db = SessionLocal()
-    try:
-        cfg = CourseLLMConfig(
-            subject_id=7,
-            is_enabled=True,
-            daily_course_token_limit=200,
-            quota_timezone="UTC",
-        )
-
-        def _mock_used(db_inner, **kwargs):
-            if kwargs.get("subject_id") == 7:
-                return 195
-            return 0
-
-        with mock.patch("app.llm_grading._get_used_tokens_for_scope", side_effect=_mock_used):
-            ok, code = precheck_quota(db, cfg, student_id=1, subject_id=7, estimated_tokens=10)
-        assert ok is False
-        assert code == "quota_exceeded_course"
     finally:
         db.close()
 

@@ -163,8 +163,6 @@ def test_student_quota_endpoint(client: TestClient):
         cfg = CourseLLMConfig(
             subject_id=eid,
             is_enabled=True,
-            daily_student_token_limit=None,
-            daily_course_token_limit=5000,
             quota_timezone="UTC",
         )
         db.add(cfg)
@@ -178,7 +176,6 @@ def test_student_quota_endpoint(client: TestClient):
     body = r.json()
     assert body["subject_id"] == eid
     assert body["daily_student_token_limit"] == 1000
-    assert body["daily_course_token_limit"] == 5000
     assert body["student_remaining_tokens_today"] == 1000
 
 

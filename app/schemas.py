@@ -347,22 +347,21 @@ class StudentLLMQuotaUsageResponse(BaseModel):
     daily_student_token_limit: Optional[int] = None
     global_default_daily_student_tokens: Optional[int] = None
     uses_personal_override: bool = False
-    daily_course_token_limit: Optional[int] = None
     student_used_tokens_today: Optional[int] = None
     student_remaining_tokens_today: Optional[int] = None
-    course_used_tokens_today: Optional[int] = None
-    course_remaining_tokens_today: Optional[int] = None
 
 
 class LLMGlobalQuotaPolicyResponse(BaseModel):
     id: int
     default_daily_student_tokens: int
     quota_timezone: str
+    max_parallel_grading_tasks: int = 3
 
 
 class LLMGlobalQuotaPolicyUpdate(BaseModel):
     default_daily_student_tokens: Optional[int] = Field(default=None, ge=1)
     quota_timezone: Optional[str] = None
+    max_parallel_grading_tasks: Optional[int] = Field(default=None, ge=1, le=64)
 
 
 class LLMQuotaBulkOverrideRequest(BaseModel):
@@ -1039,9 +1038,9 @@ class LLMEndpointPresetBase(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     name: str
-    base_url: str
-    api_key: str
-    model_name: str
+    base_url: str = "https://api.openai.com/v1/"
+    api_key: str = ""
+    model_name: str = "gpt-4o-mini"
     connect_timeout_seconds: int = Field(default=10, ge=1, le=300)
     read_timeout_seconds: int = Field(default=120, ge=1, le=600)
     max_retries: int = Field(default=2, ge=0, le=10)
@@ -1107,16 +1106,15 @@ class LLMGroupSelection(BaseModel):
 
 
 class CourseLLMConfigUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     is_enabled: bool = False
     response_language: Optional[str] = None
-    # Ignored: per-student caps are admin-managed (see /llm-settings/admin/quota-policy).
-    daily_student_token_limit: Optional[int] = Field(default=None, ge=1)
-    daily_course_token_limit: Optional[int] = Field(default=None, ge=1)
     estimated_chars_per_token: float = Field(default=4.0, gt=0)
     estimated_image_tokens: int = Field(default=850, ge=1)
     max_input_tokens: int = Field(default=16000, ge=1000)
     max_output_tokens: int = Field(default=1200, ge=1)
-    quota_timezone: str = "UTC"
+    quota_timezone: str = "Asia/Shanghai"
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointSelection] = Field(default_factory=list)
@@ -1149,14 +1147,11 @@ class CourseLLMConfigResponse(BaseModel):
     subject_id: int
     is_enabled: bool = False
     response_language: Optional[str] = None
-    # Always null in API responses; personal caps are global (admin).
-    daily_student_token_limit: Optional[int] = None
-    daily_course_token_limit: Optional[int] = None
     estimated_chars_per_token: float = 4.0
     estimated_image_tokens: int = 850
     max_input_tokens: int = 16000
     max_output_tokens: int = 1200
-    quota_timezone: str = "UTC"
+    quota_timezone: str = "Asia/Shanghai"
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)

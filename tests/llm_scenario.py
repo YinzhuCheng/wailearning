@@ -62,7 +62,6 @@ def make_grading_course_with_homework(
     course_llm_enabled: bool = True,
     preset_max_retries: int = 2,
     daily_student_token_limit: int | None = None,
-    daily_course_token_limit: int | None = None,
 ) -> dict:
     uid = uuid.uuid4().hex[:10]
     db = SessionLocal()
@@ -125,8 +124,6 @@ def make_grading_course_with_homework(
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=course_llm_enabled,
-            daily_student_token_limit=None,
-            daily_course_token_limit=daily_course_token_limit,
             max_input_tokens=16000,
             max_output_tokens=1200,
             quota_timezone="UTC",
@@ -208,7 +205,6 @@ def make_multi_student_scenario(
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=True,
-            daily_student_token_limit=None,
             max_input_tokens=16000,
             max_output_tokens=1200,
             quota_timezone="UTC",

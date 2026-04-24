@@ -213,7 +213,7 @@ def test_bulk_class_scope_updates_all_students_in_class(client: TestClient):
 
 def test_teacher_course_config_response_omits_student_limit_field(client: TestClient):
     ensure_admin()
-    ctx = make_grading_course_with_homework(daily_student_token_limit=99, daily_course_token_limit=1000)
+    ctx = make_grading_course_with_homework(daily_student_token_limit=99)
     admin_h = login_api(client, "pytest_admin", "pytest_admin_pass")
     teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
     pid = ctx["preset_id"]
@@ -229,7 +229,6 @@ def test_teacher_course_config_response_omits_student_limit_field(client: TestCl
         json={
             "is_enabled": True,
             "quota_timezone": "UTC",
-            "daily_course_token_limit": 800,
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 850,
             "max_input_tokens": 8000,
@@ -240,6 +239,21 @@ def test_teacher_course_config_response_omits_student_limit_field(client: TestCl
     g = client.get(f"/api/llm-settings/courses/{sid}", headers=teacher_h)
     assert g.status_code == 200
     assert g.json().get("daily_student_token_limit") is None
+
+
+def test_global_quota_policy_includes_max_parallel_grading_tasks(client: TestClient):
+    ensure_admin()
+    admin_h = login_api(client, "pytest_admin", "pytest_admin_pass")
+    r = client.get("/api/llm-settings/admin/quota-policy", headers=admin_h)
+    assert r.status_code == 200
+    assert r.json().get("max_parallel_grading_tasks") == 3
+    r2 = client.put(
+        "/api/llm-settings/admin/quota-policy",
+        headers=admin_h,
+        json={"max_parallel_grading_tasks": 5},
+    )
+    assert r2.status_code == 200
+    assert r2.json()["max_parallel_grading_tasks"] == 5
 
 
 def test_non_admin_cannot_change_global_policy(client: TestClient):
