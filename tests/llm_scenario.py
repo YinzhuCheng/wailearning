@@ -117,6 +117,8 @@ def make_grading_course_with_homework(
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         db.add(preset)
         db.flush()
@@ -198,6 +200,8 @@ def make_multi_student_scenario(
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         db.add(preset)
         db.flush()

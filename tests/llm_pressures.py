@@ -841,7 +841,8 @@ def test_long_submission_respects_truncate_and_succeeds(client: TestClient):
 # --- 14) HTTP 403: non-retry, flat second endpoint used --- (merged into 11; 14 = student error message is human-readable) ---
 
 
-def test_student_sees_friendly_error_when_config_disabled(client: TestClient):
+def test_student_grading_succeeds_after_course_llm_disabled_mid_queue(client: TestClient):
+    """Course toggle off after submit no longer blocks: global validated preset is used."""
     ensure_admin()
     ctx = make_grading_course_with_homework(course_llm_enabled=False)
     t_h, s_h = (
@@ -864,10 +865,14 @@ def test_student_sees_friendly_error_when_config_disabled(client: TestClient):
         tid = tdb.query(HomeworkGradingTask).one().id
     finally:
         tdb.close()
-    process_grading_task(tid)
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(63.0, "ok mid-disable")),
+    ):
+        process_grading_task(tid)
     v = client.get(
         f"/api/homeworks/{ctx['homework_id']}/submission/me", headers=s_h
     ).json()
-    assert v["latest_task_status"] == "failed"
-    assert v["latest_task_error"]  # not empty; human language
-    assert "LLM" in (v["latest_task_error"] or "")
+    assert v["latest_task_status"] == "success"
+    assert v.get("review_score") == 63.0

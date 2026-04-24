@@ -112,8 +112,8 @@ def test_llm_empty_choices_fails_task(client: TestClient):
         db.close()
 
 
-# 3) After submit, admin clears all course endpoint links -> grading fails
-def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
+# 3) After submit, course endpoint list cleared -> grading still uses global validated preset
+def test_course_endpoints_cleared_before_grading_uses_global_preset(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework()
     h, sid, th, sh = (
@@ -148,13 +148,14 @@ def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
     db = SessionLocal()
     try:
         t = db.get(HomeworkGradingTask, tid)
-        assert t.error_code == "endpoint_missing" or t.status == "failed"
+        assert t.status == "success"
+        assert t.error_code is None
     finally:
         db.close()
 
 
-# 4) Disable course LLM after submit, before process
-def test_disable_course_llm_before_grading_fails(client: TestClient):
+# 4) Disable course LLM after submit: grading uses global multimodal-validated preset
+def test_disable_course_llm_before_grading_still_succeeds(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework()
     h, sid, th, sh = ctx["homework_id"], ctx["subject_id"], login_api(
@@ -191,11 +192,17 @@ def test_disable_course_llm_before_grading_fails(client: TestClient):
         tid = db.query(HomeworkGradingTask).one().id
     finally:
         db.close()
-    process_grading_task(tid)
+
+    def fake_post(self, url, **kwargs):
+        return httpx.Response(200, json=json_llm_response(62.0, "after disable"))
+
+    with mock.patch.object(httpx.Client, "post", fake_post):
+        process_grading_task(tid)
     db = SessionLocal()
     try:
         t = db.get(HomeworkGradingTask, tid)
-        assert t.error_code == "llm_config_disabled"
+        assert t.status == "success"
+        assert t.error_code is None
     finally:
         db.close()
 
@@ -483,13 +490,16 @@ def test_second_preset_when_first_inactive(client: TestClient):
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         db.add(p2)
         db.flush()
         cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == sid).first()
         db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=p2.id, priority=2))
+        hw = db.query(Homework).filter(Homework.id == h).first()
+        hw.llm_routing_spec = {"mode": "course_groups"}
         db.commit()
-        p2id = p2.id
     finally:
         db.close()
     _submit(client, h, login_api(client, base["student_username"], base["student_password"]), "x")
@@ -526,11 +536,15 @@ def test_500_then_success_second_endpoint(client: TestClient):
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         db.add(p2)
         db.flush()
         cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == sid).first()
         db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=p2.id, priority=2))
+        hw = db.query(Homework).filter(Homework.id == h).first()
+        hw.llm_routing_spec = {"mode": "course_groups"}
         db.commit()
     finally:
         db.close()
