@@ -81,7 +81,7 @@ def _seed_student_course_and_config(client: TestClient):
         db.add(
             CourseEnrollment(subject_id=course.id, student_id=st.id, class_id=k.id, enrollment_type="required")
         )
-        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=False, quota_timezone="UTC")
+        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=False)
         db.add(cfg)
         db.commit()
         return {
@@ -103,7 +103,7 @@ def test_student_quota_reflects_default_policy_and_admin_update(client: TestClie
     ctx = _seed_student_course_and_config(client)
     ctx["admin_headers"] = admin_h
 
-    r0 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=ctx["student_headers"])
+    r0 = client.get("/api/llm-settings/student-quota/me", headers=ctx["student_headers"])
     assert r0.status_code == 200, r0.text
     b0 = r0.json()
     assert b0["daily_student_token_limit"] == 100_000
@@ -118,7 +118,7 @@ def test_student_quota_reflects_default_policy_and_admin_update(client: TestClie
     )
     assert r_put.status_code == 200, r_put.text
 
-    r1 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=ctx["student_headers"])
+    r1 = client.get("/api/llm-settings/student-quota/me", headers=ctx["student_headers"])
     assert r1.status_code == 200
     b1 = r1.json()
     assert b1["daily_student_token_limit"] == 50_000
@@ -138,7 +138,7 @@ def test_admin_single_student_override_visible_in_quota_api(client: TestClient):
     )
     assert r_put.status_code == 200, r_put.text
 
-    r = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=ctx["student_headers"])
+    r = client.get("/api/llm-settings/student-quota/me", headers=ctx["student_headers"])
     assert r.status_code == 200
     b = r.json()
     assert b["daily_student_token_limit"] == 12_345
@@ -152,7 +152,7 @@ def test_admin_single_student_override_visible_in_quota_api(client: TestClient):
     )
     assert r_clear.status_code == 200, r_clear.text
 
-    r2 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=ctx["student_headers"])
+    r2 = client.get("/api/llm-settings/student-quota/me", headers=ctx["student_headers"])
     b2 = r2.json()
     assert b2["uses_personal_override"] is False
     db = SessionLocal()
@@ -228,7 +228,6 @@ def test_teacher_course_config_response_omits_student_limit_field(client: TestCl
         headers=teacher_h,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 850,
             "max_input_tokens": 8000,

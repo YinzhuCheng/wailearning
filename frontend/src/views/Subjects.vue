@@ -369,20 +369,9 @@
             <el-input-number v-model="llmForm.estimated_image_tokens" :min="1" :step="100" style="width: 100%" />
           </el-form-item>
 
-          <el-form-item label="额度时区">
-            <el-input v-model="llmForm.quota_timezone" placeholder="例如 UTC / Asia/Shanghai（存档字段；全平台用量日以系统设置为准）" />
-          </el-form-item>
-
-          <el-alert
-            v-if="llmQuotaUsage && llmQuotaUsage.usage_date"
-            class="llm-notice"
-            type="info"
-            :closable="false"
-            :title="`LLM 用量统计日（与系统设置全局时区一致）：${llmQuotaUsage.usage_date}（${llmQuotaUsage.quota_timezone}）`"
-          />
           <div v-if="llmForm.is_enabled" class="attachment-help" style="margin-bottom: 12px">
             自动评分会将作业说明、学生文字与附件解析结果分段送入模型；大附件、PDF 多页或 zip 可能被截断或跳过。学生个人日
-            token 由管理员在系统设置中统一配置（全课共用同一池）。并发任务数由管理员在系统设置中配置。
+            token 限额由管理员在系统设置中统一配置（按用户全平台共用）。并发任务数由管理员在系统设置中配置。
           </div>
 
           <el-form-item label="系统提示词">
@@ -505,8 +494,6 @@ const llmLoading = ref(false)
 const llmSaving = ref(false)
 const llmPresets = ref([])
 const llmVisualValidationNotice = ref('端点需由管理员在系统设置中完成「文本+视觉」校验；视觉校验收需要上传测试图。只有通过视觉能力校验的端点，才能加入本课程并用于带图作业自动评分。')
-const llmQuotaUsage = ref(null)
-
 const courses = ref([])
 const classes = ref([])
 const teachers = ref([])
@@ -529,7 +516,6 @@ const llmForm = reactive({
   estimated_image_tokens: 850,
   max_input_tokens: 16000,
   max_output_tokens: 1200,
-  quota_timezone: 'Asia/Shanghai',
   system_prompt: '',
   teacher_prompt: '',
   endpoints: [],
@@ -871,7 +857,6 @@ const submitForm = async () => {
 }
 
 const resetLlmForm = () => {
-  llmQuotaUsage.value = null
   Object.assign(llmForm, {
     is_enabled: false,
     response_language: '',
@@ -879,7 +864,6 @@ const resetLlmForm = () => {
     estimated_image_tokens: 850,
     max_input_tokens: 16000,
     max_output_tokens: 1200,
-    quota_timezone: 'Asia/Shanghai',
     system_prompt: '',
     teacher_prompt: '',
     endpoints: [],
@@ -901,7 +885,6 @@ const applyLlmConfig = config => {
   llmForm.estimated_image_tokens = config.estimated_image_tokens ?? 850
   llmForm.max_input_tokens = config.max_input_tokens ?? 16000
   llmForm.max_output_tokens = config.max_output_tokens ?? 1200
-  llmForm.quota_timezone = config.quota_timezone || 'Asia/Shanghai'
   llmForm.system_prompt = config.system_prompt || ''
   llmForm.teacher_prompt = config.teacher_prompt || ''
   llmForm.endpoints = (config.endpoints || []).map(item => ({
@@ -913,7 +896,6 @@ const applyLlmConfig = config => {
     priority: g.priority,
     members: (g.members || []).map(m => ({ preset_id: m.preset_id, priority: m.priority }))
   }))
-  llmQuotaUsage.value = config.quota_usage || null
 }
 
 const openLlmConfigDialog = async course => {
@@ -983,7 +965,6 @@ const saveLlmConfig = async () => {
       estimated_image_tokens: llmForm.estimated_image_tokens,
       max_input_tokens: llmForm.max_input_tokens,
       max_output_tokens: llmForm.max_output_tokens,
-      quota_timezone: llmForm.quota_timezone?.trim() || 'Asia/Shanghai',
       system_prompt: llmForm.system_prompt?.trim() || null,
       teacher_prompt: llmForm.teacher_prompt?.trim() || null,
       ...(

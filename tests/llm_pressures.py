@@ -135,7 +135,6 @@ def test_png_attachment_sends_image_url_in_llm_request(client: TestClient):
         "max_input_tokens": 16000,
         "max_output_tokens": 1200,
         "response_language": "zh-CN",
-        "quota_timezone": "UTC",
         "estimated_image_tokens": 850,
         "endpoints": [{"preset_id": ctx["preset_id"], "priority": 1}],
     }
@@ -280,7 +279,6 @@ def _full_course_config_payload() -> dict:
         "max_input_tokens": 16000,
         "max_output_tokens": 1200,
         "response_language": "zh-CN",
-        "quota_timezone": "UTC",
         "estimated_image_tokens": 850,
     }
 
@@ -349,7 +347,7 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
         )
         db.add_all([fail_p, ok_p])
         db.flush()
-        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=True, quota_timezone="UTC", max_input_tokens=4000, max_output_tokens=500)
+        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=True, max_input_tokens=4000, max_output_tokens=500)
         db.add(cfg)
         db.flush()
         g1 = LLMGroup(config_id=cfg.id, priority=1, name="gfail")
@@ -384,7 +382,6 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
         headers=t_h,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
@@ -810,7 +807,6 @@ def test_long_submission_respects_truncate_and_succeeds(client: TestClient):
         "max_input_tokens": 4000,
         "max_output_tokens": 300,
         "response_language": "zh-CN",
-        "quota_timezone": "UTC",
         "estimated_chars_per_token": 3.0,
         "endpoints": [{"preset_id": ctx["preset_id"], "priority": 1}],
     }

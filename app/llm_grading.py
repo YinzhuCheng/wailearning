@@ -855,21 +855,11 @@ def estimate_request_tokens_from_material(
     return text_tokens + image_tokens + int(config.max_output_tokens or 0)
 
 
-def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, Any]:
-    """Aggregated usage for the LLM config's quota day (for teacher-facing UI)."""
-    usage_date, timezone_name = quota_calendar(db)
-    return {
-        "usage_date": usage_date,
-        "quota_timezone": timezone_name,
-    }
-
-
-def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, student_id: int) -> dict[str, Any]:
-    """Per-student usage for quota day (student-facing UI; excludes API keys)."""
+def get_student_quota_usage_snapshot(db: Session, *, student_id: int) -> dict[str, Any]:
+    """Per-user usage for quota day (student-facing UI; excludes API keys)."""
     usage_date, timezone_name = quota_calendar(db)
     lim_stu = resolve_effective_daily_student_tokens(db, student_id)
     snap: dict[str, Any] = {
-        "subject_id": config.subject_id,
         "usage_date": usage_date,
         "quota_timezone": timezone_name,
         "daily_student_token_limit": lim_stu,

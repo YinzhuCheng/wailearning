@@ -83,7 +83,7 @@ def test_put_flat_preserves_group_routing_when_config_has_groups(client: TestCli
         )
         db.add_all([a, b])
         db.flush()
-        cfg = CourseLLMConfig(subject_id=s.id, is_enabled=True, quota_timezone="UTC", max_input_tokens=4000, max_output_tokens=500)
+        cfg = CourseLLMConfig(subject_id=s.id, is_enabled=True, max_input_tokens=4000, max_output_tokens=500)
         db.add(cfg)
         db.flush()
         g1 = LLMGroup(config_id=cfg.id, priority=1, name="G1")
@@ -101,7 +101,6 @@ def test_put_flat_preserves_group_routing_when_config_has_groups(client: TestCli
         headers=th,
         json={
             "is_enabled": False,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
@@ -155,7 +154,7 @@ def test_put_replace_flag_drops_groups(client: TestClient):
         )
         db.add_all([a, b])
         db.flush()
-        cfg = CourseLLMConfig(subject_id=s.id, is_enabled=True, quota_timezone="UTC", max_input_tokens=4000, max_output_tokens=500)
+        cfg = CourseLLMConfig(subject_id=s.id, is_enabled=True, max_input_tokens=4000, max_output_tokens=500)
         db.add(cfg)
         db.flush()
         g1 = LLMGroup(config_id=cfg.id, priority=1, name="G1")
@@ -173,7 +172,6 @@ def test_put_replace_flag_drops_groups(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 100,
             "max_input_tokens": 4000,

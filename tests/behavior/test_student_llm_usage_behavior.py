@@ -17,24 +17,25 @@ def test_s1_student_quota_loaded_vs_not_enrolled(client: TestClient) -> None:
     ensure_admin()
     ctx = make_grading_course_with_homework()
     st = login_api(client, ctx["student_username"], ctx["student_password"])
-    r_ok = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st)
+    r_ok = client.get("/api/llm-settings/student-quota/me", headers=st)
     assert r_ok.status_code == 200, r_ok.text
     body = r_ok.json()
-    assert body["subject_id"] == ctx["subject_id"]
+    assert "subject_id" not in body
     assert body["daily_student_token_limit"] is not None
     assert body["student_used_tokens_today"] is not None
     assert body["student_remaining_tokens_today"] is not None
     assert "usage_date" in body and "quota_timezone" in body
 
-    r404 = client.get("/api/llm-settings/courses/student-quota/999999", headers=st)
-    assert r404.status_code == 404
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r403 = client.get("/api/llm-settings/student-quota/me", headers=th)
+    assert r403.status_code == 403
 
 
 def test_s2_submission_increments_usage_counters(client: TestClient) -> None:
     ensure_admin()
     ctx = make_grading_course_with_homework(daily_student_token_limit=500_000)
     st = login_api(client, ctx["student_username"], ctx["student_password"])
-    before = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    before = client.get("/api/llm-settings/student-quota/me", headers=st).json()
     used_before = int(before["student_used_tokens_today"] or 0)
 
     r = client.post(
@@ -54,7 +55,7 @@ def test_s2_submission_increments_usage_counters(client: TestClient) -> None:
     ):
         process_grading_task(tid)
 
-    after = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    after = client.get("/api/llm-settings/student-quota/me", headers=st).json()
     used_after = int(after["student_used_tokens_today"] or 0)
     assert used_after >= used_before + 15
 

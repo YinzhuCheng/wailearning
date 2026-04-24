@@ -140,7 +140,6 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
         cfg = CourseLLMConfig(
             subject_id=1,
             is_enabled=True,
-            quota_timezone="UTC",
         )
         with mock.patch("app.llm_grading._get_used_tokens_for_scope", return_value=95), mock.patch(
             "app.llm_grading.resolve_effective_daily_student_tokens", return_value=100

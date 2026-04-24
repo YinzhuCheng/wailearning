@@ -519,7 +519,6 @@ class CourseLLMConfig(Base):
     estimated_image_tokens = Column(Integer, nullable=False, default=850)
     max_input_tokens = Column(Integer, nullable=False, default=16000)
     max_output_tokens = Column(Integer, nullable=False, default=1200)
-    quota_timezone = Column(String, nullable=False, default="Asia/Shanghai")
     system_prompt = Column(Text, nullable=True)
     teacher_prompt = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)

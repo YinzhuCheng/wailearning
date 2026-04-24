@@ -31,7 +31,7 @@ def test_a2_change_default_student_cap_visible_on_student_quota(client: TestClie
         headers=ah,
         json={"default_daily_student_tokens": 88_888},
     )
-    sq = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    sq = client.get("/api/llm-settings/student-quota/me", headers=st).json()
     assert sq["daily_student_token_limit"] == 88_888
     assert sq["global_default_daily_student_tokens"] == 88_888
 
@@ -43,7 +43,7 @@ def test_a3_timezone_change_updates_student_quota_calendar(client: TestClient) -
     st = login_api(client, ctx["student_username"], ctx["student_password"])
 
     client.put("/api/llm-settings/admin/quota-policy", headers=ah, json={"quota_timezone": "UTC"})
-    u1 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    u1 = client.get("/api/llm-settings/student-quota/me", headers=st).json()
     assert u1["quota_timezone"] == "UTC"
 
     client.put(
@@ -51,7 +51,7 @@ def test_a3_timezone_change_updates_student_quota_calendar(client: TestClient) -
         headers=ah,
         json={"quota_timezone": "Asia/Shanghai"},
     )
-    u2 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    u2 = client.get("/api/llm-settings/student-quota/me", headers=st).json()
     assert u2["quota_timezone"] == "Asia/Shanghai"
 
 
@@ -83,7 +83,7 @@ def test_a5_bulk_override_then_clear(client: TestClient) -> None:
     assert r_bulk.status_code == 200, r_bulk.text
     assert r_bulk.json()["affected_students"] >= 1
 
-    sq = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    sq = client.get("/api/llm-settings/student-quota/me", headers=st).json()
     assert sq["daily_student_token_limit"] == 77_777
     assert sq["uses_personal_override"] is True
 
@@ -103,5 +103,5 @@ def test_a5_bulk_override_then_clear(client: TestClient) -> None:
     finally:
         db.close()
 
-    sq2 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    sq2 = client.get("/api/llm-settings/student-quota/me", headers=st).json()
     assert sq2["uses_personal_override"] is False

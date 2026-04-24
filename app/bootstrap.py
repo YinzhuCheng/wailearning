@@ -198,7 +198,6 @@ def ensure_schema_updates() -> None:
             estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             max_input_tokens INTEGER NOT NULL DEFAULT 16000,
             max_output_tokens INTEGER NOT NULL DEFAULT 1200,
-            quota_timezone VARCHAR NOT NULL DEFAULT 'Asia/Shanghai',
             system_prompt TEXT,
             teacher_prompt TEXT,
             created_by INTEGER REFERENCES users(id),
@@ -321,8 +320,9 @@ def ensure_schema_updates() -> None:
             connection.execute(
                 text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS daily_course_token_limit")
             )
+            connection.execute(text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS quota_timezone"))
         else:
-            for _col in ("daily_student_token_limit", "daily_course_token_limit"):
+            for _col in ("daily_student_token_limit", "daily_course_token_limit", "quota_timezone"):
                 try:
                     connection.execute(text(f"ALTER TABLE course_llm_configs DROP COLUMN {_col}"))
                 except OperationalError:

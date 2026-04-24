@@ -31,7 +31,7 @@ def test_t1_teacher_save_with_legacy_course_token_fields_ignored(client: TestCli
     assert data["is_enabled"] is True
 
 
-def test_t2_course_quota_timezone_archived_student_quota_uses_global_calendar(client: TestClient) -> None:
+def test_t2_student_quota_calendar_follows_global_policy_not_course_fields(client: TestClient) -> None:
     ensure_admin()
     ctx = make_grading_course_with_homework()
     ah = login_api(client, "pytest_admin", "pytest_admin_pass")
@@ -46,15 +46,14 @@ def test_t2_course_quota_timezone_archived_student_quota_uses_global_calendar(cl
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "endpoints": [{"preset_id": ctx["preset_id"], "priority": 1}],
         },
     )
     assert r.status_code == 200, r.text
-    assert r.json()["quota_timezone"] == "UTC"
+    assert "quota_timezone" not in r.json()
 
     st = login_api(client, ctx["student_username"], ctx["student_password"])
-    sq = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    sq = client.get("/api/llm-settings/student-quota/me", headers=st).json()
     pol = client.get("/api/llm-settings/admin/quota-policy", headers=ah).json()
     assert sq["quota_timezone"] == pol["quota_timezone"]
 
