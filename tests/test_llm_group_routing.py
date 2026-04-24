@@ -141,7 +141,6 @@ def _make_grouped_course_with_homework() -> dict:
             is_enabled=True,
             max_input_tokens=8000,
             max_output_tokens=1000,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()
@@ -309,7 +308,6 @@ def test_put_course_config_with_groups_payload(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 100,
             "max_input_tokens": 8000,
@@ -518,7 +516,6 @@ def test_get_endpoints_list_order_is_group1_then_group2(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
@@ -571,7 +568,6 @@ def test_put_rejects_empty_group(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
@@ -626,7 +622,6 @@ def test_put_rejects_duplicate_preset_in_same_course(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
@@ -717,7 +712,6 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             is_enabled=True,
             max_input_tokens=4000,
             max_output_tokens=500,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()

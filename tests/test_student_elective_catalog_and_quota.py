@@ -163,7 +163,6 @@ def test_student_quota_endpoint(client: TestClient):
         cfg = CourseLLMConfig(
             subject_id=eid,
             is_enabled=True,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.add(LLMStudentTokenOverride(student_id=stu_row.id, daily_tokens=1000))
@@ -171,10 +170,10 @@ def test_student_quota_endpoint(client: TestClient):
     finally:
         db.close()
 
-    r = client.get(f"/api/llm-settings/courses/student-quota/{eid}", headers=sh)
+    r = client.get("/api/llm-settings/student-quota/me", headers=sh)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["subject_id"] == eid
+    assert "subject_id" not in body
     assert body["daily_student_token_limit"] == 1000
     assert body["student_remaining_tokens_today"] == 1000
 
@@ -200,7 +199,7 @@ def test_student_quota_forbidden_for_teacher(client: TestClient):
     finally:
         db.close()
     th = _login(client, "t_quota", "tp")
-    r = client.get(f"/api/llm-settings/courses/student-quota/{cid}", headers=th)
+    r = client.get("/api/llm-settings/student-quota/me", headers=th)
     assert r.status_code == 403
 
 

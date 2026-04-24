@@ -7,13 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
-from app.course_access import ensure_course_access
-from app.database import get_db
 from app.course_access import ensure_course_access, get_student_profile_for_user, prepare_student_course_context
+from app.database import get_db
 from app.llm_grading import (
     build_png_data_url_from_image_bytes,
     ensure_course_llm_config,
-    get_quota_usage_snapshot,
     get_student_quota_usage_snapshot,
     validate_text_connectivity,
     validate_vision_connectivity,
@@ -118,7 +116,6 @@ def _serialize_course_config(config: CourseLLMConfig, db: Optional[Session] = No
             key=lambda row: (row.priority, row.id),
         )
 
-    quota_usage = get_quota_usage_snapshot(db, config) if db is not None else None
     return CourseLLMConfigResponse(
         id=config.id,
         subject_id=config.subject_id,
@@ -128,7 +125,6 @@ def _serialize_course_config(config: CourseLLMConfig, db: Optional[Session] = No
         estimated_image_tokens=config.estimated_image_tokens,
         max_input_tokens=config.max_input_tokens,
         max_output_tokens=config.max_output_tokens,
-        quota_timezone=config.quota_timezone,
         system_prompt=config.system_prompt,
         teacher_prompt=config.teacher_prompt,
         endpoints=[_serialize_endpoint_item(item) for item in flat],
@@ -142,7 +138,6 @@ def _serialize_course_config(config: CourseLLMConfig, db: Optional[Session] = No
             for g in group_rows
         ],
         visual_validation_notice=VISION_NOTICE,
-        quota_usage=quota_usage,
     )
 
 
@@ -294,13 +289,12 @@ async def validate_preset(
     return _serialize_preset(preset)
 
 
-@router.get("/courses/student-quota/{subject_id}", response_model=StudentLLMQuotaUsageResponse)
-def get_student_llm_quota_for_course(
-    subject_id: int,
+@router.get("/student-quota/me", response_model=StudentLLMQuotaUsageResponse)
+def get_student_llm_quota_me(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Token usage vs daily limits for the logged-in student on a course (read-only, no presets)."""
+    """Token usage vs daily limits for the logged-in student (read-only; per-user pool, not per course)."""
     if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Only students can view personal LLM quota.")
 
@@ -310,41 +304,13 @@ def get_student_llm_quota_for_course(
     if not student:
         raise HTTPException(status_code=400, detail="未找到与账号匹配的花名册。")
 
-    try:
-        ensure_course_access(subject_id, current_user, db)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-
     pol = get_or_create_global_quota_policy(db)
     db.commit()
-    usage_date, tz = quota_calendar(db)
-    lim = resolve_effective_daily_student_tokens(db, student.id)
     ov = db.query(LLMStudentTokenOverride).filter(LLMStudentTokenOverride.student_id == student.id).first()
     uses_override = ov is not None
-    from app.llm_grading import _get_used_tokens_for_scope, _sum_reserved_tokens
 
-    used_stu = _get_used_tokens_for_scope(
-        db, usage_date=usage_date, timezone_name=tz, student_id=student.id
-    ) + _sum_reserved_tokens(db, usage_date=usage_date, timezone_name=tz, student_id=student.id)
-
-    config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
-    if not config:
-        return StudentLLMQuotaUsageResponse(
-            subject_id=subject_id,
-            usage_date=usage_date,
-            quota_timezone=tz,
-            daily_student_token_limit=lim,
-            global_default_daily_student_tokens=int(pol.default_daily_student_tokens),
-            uses_personal_override=uses_override,
-            student_used_tokens_today=used_stu,
-            student_remaining_tokens_today=max(0, lim - used_stu),
-        )
-
-    snap = get_student_quota_usage_snapshot(db, config, student_id=student.id)
+    snap = get_student_quota_usage_snapshot(db, student_id=student.id)
     return StudentLLMQuotaUsageResponse(
-        subject_id=subject_id,
         usage_date=snap["usage_date"],
         quota_timezone=snap["quota_timezone"],
         daily_student_token_limit=snap.get("daily_student_token_limit"),
@@ -507,7 +473,6 @@ def update_course_llm_config(
     config.estimated_image_tokens = payload.estimated_image_tokens
     config.max_input_tokens = payload.max_input_tokens
     config.max_output_tokens = payload.max_output_tokens
-    config.quota_timezone = payload.quota_timezone.strip() or "UTC"
     config.system_prompt = payload.system_prompt
     config.teacher_prompt = payload.teacher_prompt
     config.updated_by = current_user.id

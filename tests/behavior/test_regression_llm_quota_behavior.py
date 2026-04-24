@@ -34,9 +34,8 @@ def test_r2_course_llm_config_response_shape(client: TestClient) -> None:
     body = r.json()
     assert "daily_course_token_limit" not in body
     assert "daily_student_token_limit" not in body
-    qu = body.get("quota_usage")
-    if qu is not None:
-        assert set(qu.keys()) <= {"usage_date", "quota_timezone"}
+    assert "quota_usage" not in body
+    assert "quota_timezone" not in body
 
 
 @pytest.mark.skipif(engine.dialect.name != "postgresql", reason="information_schema column check is for PostgreSQL")
@@ -48,7 +47,11 @@ def test_r3_course_llm_config_columns_no_legacy_token_limits() -> None:
                 """
                 SELECT column_name FROM information_schema.columns
                 WHERE table_name = 'course_llm_configs'
-                  AND column_name IN ('daily_course_token_limit', 'daily_student_token_limit')
+                  AND column_name IN (
+                    'daily_course_token_limit',
+                    'daily_student_token_limit',
+                    'quota_timezone'
+                  )
                 """
             )
         ).fetchall()

@@ -16,12 +16,12 @@
         当前课程：{{ userStore.selectedCourse.name }}
       </el-alert>
       <el-card
-        v-if="userStore.isStudent && userStore.selectedCourse?.id"
+        v-if="userStore.isStudent"
         shadow="never"
         class="quota-card"
       >
         <template #header>
-          <span>当前课程 · LLM 用量（个人·全课共用池）</span>
+          <span>LLM 用量（个人日限额，全平台共用）</span>
         </template>
         <div v-loading="quotaLoading" class="quota-body">
           <template v-if="quotaInfo">
@@ -419,13 +419,13 @@ const selfDrop = async row => {
 }
 
 const loadStudentQuota = async () => {
-  if (!userStore.isStudent || !userStore.selectedCourse?.id) {
+  if (!userStore.isStudent) {
     quotaInfo.value = null
     return
   }
   quotaLoading.value = true
   try {
-    quotaInfo.value = await api.llmSettings.getStudentQuota(userStore.selectedCourse.id)
+    quotaInfo.value = await api.llmSettings.getStudentQuota()
   } catch (error) {
     console.error('加载 token 用量失败', error)
     quotaInfo.value = null
@@ -743,7 +743,7 @@ onMounted(() => {
 })
 
 watch(
-  () => [userStore.isStudent, userStore.selectedCourse?.id],
+  () => userStore.isStudent,
   () => {
     if (userStore.isStudent) {
       loadStudentQuota()

@@ -1,5 +1,5 @@
 """
-行为测试：LLM token 预检与预留、日限额记账、billing_note、课程配额快照、评分材料 manifest。
+行为测试：LLM token 预检与预留、日限额记账、billing_note、评分材料 manifest。
 """
 
 from __future__ import annotations
@@ -82,7 +82,6 @@ def test_precheck_quota_student_cap_only():
         cfg = CourseLLMConfig(
             subject_id=42,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
@@ -199,7 +198,6 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
@@ -279,7 +277,7 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
 
 @mock.patch("app.routers.llm_settings.validate_vision_connectivity", return_value=(True, "vision ok"))
 @mock.patch("app.routers.llm_settings.validate_text_connectivity", return_value=(True, "text ok"))
-def test_get_course_llm_config_includes_quota_usage_shape(_, __, client: TestClient):
+def test_get_course_llm_config_omits_legacy_quota_fields(_, __, client: TestClient):
     db = SessionLocal()
     try:
         klass = Class(name="QuotaClass", grade=2026)
@@ -328,7 +326,6 @@ def test_get_course_llm_config_includes_quota_usage_shape(_, __, client: TestCli
         headers=teacher_h,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
             "estimated_chars_per_token": 4.0,
             "estimated_image_tokens": 850,
             "max_input_tokens": 8000,
@@ -339,9 +336,9 @@ def test_get_course_llm_config_includes_quota_usage_shape(_, __, client: TestCli
     assert put.status_code == 200, put.text
     g = client.get(f"/api/llm-settings/courses/{sid}", headers=teacher_h)
     assert g.status_code == 200
-    qu = g.json().get("quota_usage") or {}
-    assert qu.get("usage_date")
-    assert qu.get("quota_timezone")
+    data = g.json()
+    assert "quota_usage" not in data
+    assert "quota_timezone" not in data
 
 
 def test_estimate_request_tokens_grows_with_large_data_url_payload():
@@ -354,7 +351,6 @@ def test_estimate_request_tokens_grows_with_large_data_url_payload():
             estimated_image_tokens=850,
             max_input_tokens=16000,
             max_output_tokens=100,
-            quota_timezone="UTC",
         )
         small_url = "data:image/png;base64," + "a" * 40
         large_url = "data:image/png;base64," + "b" * 4000
@@ -402,7 +398,6 @@ def test_artifact_manifest_includes_block_metadata_after_material_build():
             is_enabled=True,
             max_input_tokens=16000,
             max_output_tokens=1200,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()
@@ -465,7 +460,6 @@ def test_scoring_messages_have_distinct_sections_for_instructor_and_submission()
             teacher_prompt="extra hint",
             max_input_tokens=16000,
             max_output_tokens=1200,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()
@@ -531,7 +525,6 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
             is_enabled=True,
             max_input_tokens=16000,
             max_output_tokens=1200,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()

@@ -340,10 +340,9 @@ class StudentElectiveSelfDropResult(BaseModel):
 
 
 class StudentLLMQuotaUsageResponse(BaseModel):
-    subject_id: int
     usage_date: str
     quota_timezone: str
-    """Effective per-student daily cap (all courses share one pool under quota_timezone)."""
+    """Effective per-user daily cap; billing day follows global quota_timezone."""
     daily_student_token_limit: Optional[int] = None
     global_default_daily_student_tokens: Optional[int] = None
     uses_personal_override: bool = False
@@ -1114,7 +1113,6 @@ class CourseLLMConfigUpdate(BaseModel):
     estimated_image_tokens: int = Field(default=850, ge=1)
     max_input_tokens: int = Field(default=16000, ge=1000)
     max_output_tokens: int = Field(default=1200, ge=1)
-    quota_timezone: str = "Asia/Shanghai"
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointSelection] = Field(default_factory=list)
@@ -1151,13 +1149,11 @@ class CourseLLMConfigResponse(BaseModel):
     estimated_image_tokens: int = 850
     max_input_tokens: int = 16000
     max_output_tokens: int = 1200
-    quota_timezone: str = "Asia/Shanghai"
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)
     groups: List[LLMGroupResponse] = Field(default_factory=list)
     visual_validation_notice: str
-    quota_usage: Optional[dict] = None
 
 
 class NotificationBase(BaseModel):
