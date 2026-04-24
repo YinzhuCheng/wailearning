@@ -7,6 +7,8 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# shellcheck source=lib_deploy.sh
+source "${REPO_ROOT}/scripts/lib_deploy.sh"
 APP_ROOT="${APP_ROOT:-/opt/dd-class}"
 SOURCE_DIR="${SOURCE_DIR:-${APP_ROOT}/source}"
 VENV_DIR="${VENV_DIR:-${APP_ROOT}/venv}"
@@ -88,3 +90,8 @@ systemctl daemon-reload
 systemctl enable ddclass-backend.service
 systemctl restart ddclass-backend.service
 systemctl --no-pager --full status ddclass-backend.service || true
+
+echo "==> Waiting for backend /health after restart"
+if ! wait_for_local_backend_health; then
+  exit 1
+fi
