@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
 from typing import Any, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
 
 import fitz
@@ -117,6 +117,17 @@ IPYNB_EXTENSIONS = {".ipynb"}
 PDF_EXTENSIONS = {".pdf"}
 RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 NON_RETRYABLE_STATUS_CODES = {401, 403}
+
+# After the first failed grading task for an attempt, enqueue at most this many extra tries.
+_MAX_AUTO_RETRY_TASKS_PER_ATTEMPT = 2
+_LLM_CALL_LOG_MAX_EVENTS = 60
+
+_AUTO_RETRY_ELIGIBLE_ERROR_CODES = frozenset(
+    {
+        "llm_call_failed",
+        "unexpected_error",
+    }
+)
 
 
 @dataclass
@@ -276,7 +287,21 @@ def refresh_submission_summary(db: Session, summary: HomeworkSubmission) -> Home
                 .first()
             )
             summary.latest_task_status = latest_task.status if latest_task else None
-            summary.latest_task_error = latest_task.error_message if latest_task else None
+            err_task = latest_task
+            if latest_task and latest_task.status in ("queued", "processing"):
+                prev_failed = (
+                    db.query(HomeworkGradingTask)
+                    .filter(
+                        HomeworkGradingTask.attempt_id == latest_attempt.id,
+                        HomeworkGradingTask.status == "failed",
+                        HomeworkGradingTask.id < latest_task.id,
+                    )
+                    .order_by(HomeworkGradingTask.id.desc())
+                    .first()
+                )
+                if prev_failed:
+                    err_task = prev_failed
+            summary.latest_task_error = err_task.error_message if err_task else None
     return summary
 
 
@@ -382,6 +407,153 @@ def queue_grading_task(
         summary.latest_task_error = None
         refresh_submission_summary(db, summary)
     return task
+
+
+def _append_llm_call_log(task: HomeworkGradingTask, event: dict[str, Any]) -> None:
+    if not isinstance(task.artifact_manifest, dict):
+        task.artifact_manifest = {}
+    log = task.artifact_manifest.get("llm_call_log")
+    if not isinstance(log, list):
+        log = []
+    event = {**event, "ts": _now_utc().isoformat()}
+    log.append(event)
+    if len(log) > _LLM_CALL_LOG_MAX_EVENTS:
+        log = log[-_LLM_CALL_LOG_MAX_EVENTS :]
+    task.artifact_manifest["llm_call_log"] = log
+
+
+def _material_needs_vision(material: dict[str, Any]) -> bool:
+    for block in material.get("student_blocks") or []:
+        if getattr(block, "block_type", None) == "image":
+            return True
+    return False
+
+
+def _preset_text_ready(preset: Optional[LLMEndpointPreset]) -> bool:
+    if not preset or not preset.is_active:
+        return False
+    if preset.validation_status != "validated":
+        return False
+    ts = getattr(preset, "text_validation_status", None)
+    if ts == "failed":
+        return False
+    # Legacy rows may only set validation_status; treat unknown as OK if overall validated.
+    return ts in (None, "passed", "skipped")
+
+
+def _preset_eligible_for_grading(preset: Optional[LLMEndpointPreset], *, need_vision: bool) -> tuple[bool, str]:
+    if not preset:
+        return False, "端点预设不存在。"
+    if not preset.is_active:
+        return False, f"端点「{preset.name}」已停用。"
+    if preset.validation_status != "validated":
+        return False, f"端点「{preset.name}」未通过整体校验（状态：{preset.validation_status}）。"
+    if not _preset_text_ready(preset):
+        msg = getattr(preset, "text_validation_message", None) or "未通过纯文本连通性测试"
+        return False, f"端点「{preset.name}」{msg}。"
+    if need_vision:
+        if not preset.supports_vision:
+            return False, f"端点「{preset.name}」未声明支持视觉，无法处理含图片/PDF 的提交。"
+        vs = getattr(preset, "vision_validation_status", None)
+        if vs == "failed":
+            vm = getattr(preset, "vision_validation_message", None) or "视觉连通性未通过"
+            return False, f"端点「{preset.name}」{vm}。"
+        if vs not in (None, "passed", "skipped"):
+            vm = getattr(preset, "vision_validation_message", None) or "视觉连通性未通过"
+            return False, f"端点「{preset.name}」{vm}。"
+    return True, ""
+
+
+def _homework_routing_warnings(db: Session, homework: Homework, config: CourseLLMConfig) -> list[str]:
+    """Return user-facing warnings when homework.llm_routing_spec may diverge from course defaults."""
+    spec = homework.llm_routing_spec
+    if not spec or not isinstance(spec, dict):
+        return []
+    mode = spec.get("mode")
+    warnings: list[str] = []
+    if mode == "latest_passing_validated":
+        preset = (
+            db.query(LLMEndpointPreset)
+            .filter(
+                LLMEndpointPreset.is_active.is_(True),
+                LLMEndpointPreset.validation_status == "validated",
+                LLMEndpointPreset.text_validation_status == "passed",
+            )
+            .order_by(LLMEndpointPreset.validated_at.desc().nullslast(), LLMEndpointPreset.id.desc())
+            .first()
+        )
+        if not preset:
+            warnings.append("作业要求使用「最新纯文本测试通过」的端点，但系统中没有符合条件的预设，已按课程设置路由。")
+            return warnings
+        bound_ids = {m.preset_id for g in (config.groups or []) for m in (g.members or [])}
+        bound_ids |= {e.preset_id for e in (config.endpoints or [])}
+        if preset.id not in bound_ids:
+            warnings.append(
+                f"作业要求优先使用「{preset.name}」，但该预设未加入本课程的 LLM 配置，调用仍可能失败。"
+            )
+    if mode == "limit_to_preset_ids":
+        raw_ids = spec.get("preset_ids")
+        if isinstance(raw_ids, list) and raw_ids:
+            id_set: set[int] = set()
+            for x in raw_ids:
+                try:
+                    id_set.add(int(x))
+                except (TypeError, ValueError):
+                    continue
+            if id_set:
+                any_hit = any(
+                    m.preset_id in id_set for g in (config.groups or []) for m in (g.members or [])
+                ) or any(e.preset_id in id_set for e in (config.endpoints or []))
+                if not any_hit:
+                    warnings.append("作业限制了端点预设，但与课程设置无交集，已回退为课程完整路由。")
+    return warnings
+
+
+def _filter_course_links_for_homework(
+    homework: Homework,
+    group_rows: list[LLMGroup],
+    flat_endpoints: list[CourseLLMConfigEndpoint],
+) -> tuple[list[Any], list[CourseLLMConfigEndpoint], list[str]]:
+    """Apply homework.llm_routing_spec (preset subset) without mutating ORM collections."""
+    from types import SimpleNamespace
+
+    spec = homework.llm_routing_spec
+    notes: list[str] = []
+    if not spec or not isinstance(spec, dict):
+        return group_rows, flat_endpoints, notes
+
+    mode = spec.get("mode")
+    if mode != "limit_to_preset_ids":
+        return group_rows, flat_endpoints, notes
+
+    raw_ids = spec.get("preset_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return group_rows, flat_endpoints, notes
+    id_set: set[int] = set()
+    for x in raw_ids:
+        try:
+            id_set.add(int(x))
+        except (TypeError, ValueError):
+            continue
+    if not id_set:
+        return group_rows, flat_endpoints, notes
+
+    ephemeral_groups: list[Any] = []
+    for g in sorted(group_rows, key=lambda x: (x.priority, x.id)):
+        members = [m for m in (g.members or []) if m.preset_id in id_set]
+        if members:
+            ephemeral_groups.append(
+                SimpleNamespace(id=g.id, priority=g.priority, name=getattr(g, "name", None), members=members)
+            )
+    new_flat = [e for e in flat_endpoints if e.preset_id in id_set]
+    if ephemeral_groups:
+        notes.append("routing_mode:limit_to_preset_ids(groups)")
+        return ephemeral_groups, [], notes
+    if new_flat:
+        notes.append("routing_mode:limit_to_preset_ids(flat)")
+        return [], new_flat, notes
+    notes.append("routing_mode:limit_to_preset_ids_miss")
+    return group_rows, flat_endpoints, notes
 
 
 def validate_text_connectivity(
@@ -1081,16 +1253,24 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
         return
 
+    routing_warnings = _homework_routing_warnings(db, homework, config)
     material = _build_student_material(homework, attempt, config)
     base_manifest = material["artifact_manifest"] or {}
     if not isinstance(base_manifest, dict):
         base_manifest = {}
     task.artifact_manifest = {**base_manifest, "llm_routing": {"version": 1, "status": "pending"}}
+    if routing_warnings:
+        task.artifact_manifest["homework_routing_warnings"] = routing_warnings
     task.input_token_estimate = material["estimated_tokens"]
     task.task_summary = material["summary"]
 
     if material["all_empty"]:
-        _mark_task_failed(db, task, "no_usable_content", "附件处理后没有可评分内容。")
+        skipped = base_manifest.get("skipped") if isinstance(base_manifest, dict) else None
+        detail = "附件处理后没有可评分内容。"
+        if isinstance(skipped, list) and skipped:
+            lines = ", ".join(f"{s.get('path', '?')}（{s.get('reason', '')}）" for s in skipped[:5])
+            detail = f"{detail} 未纳入：{lines}" + (" 等。" if len(skipped) > 5 else "")
+        _mark_task_failed(db, task, "no_usable_content", detail)
         return
 
     allowed, error_code = reserve_quota_tokens(
@@ -1137,13 +1317,23 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         db.commit()
         return
 
-    response = _grade_with_endpoint_group(
-        task=task,
-        homework=homework,
-        attempt=attempt,
-        config=config,
-        material=material,
-    )
+    try:
+        response = _grade_with_endpoint_group(
+            db=db,
+            task=task,
+            homework=homework,
+            attempt=attempt,
+            config=config,
+            material=material,
+        )
+    except NonRetryableLLMError as exc:
+        msg = str(exc) or "LLM 调用失败。"
+        _append_llm_call_log(
+            task,
+            {"phase": "routing_failed", "level": "error", "message": msg},
+        )
+        _mark_task_failed(db, task, "llm_call_failed", msg)
+        return
 
     candidate = HomeworkScoreCandidate(
         attempt_id=attempt.id,
@@ -1184,6 +1374,21 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
     db.commit()
 
 
+def _maybe_queue_auto_retry(db: Session, attempt: HomeworkAttempt, error_code: str) -> None:
+    """After a failed grading task (committed), optionally enqueue one more try for transient LLM errors."""
+    if error_code not in _AUTO_RETRY_ELIGIBLE_ERROR_CODES:
+        return
+    failed_count = (
+        db.query(func.count(HomeworkGradingTask.id))
+        .filter(HomeworkGradingTask.attempt_id == attempt.id, HomeworkGradingTask.status == "failed")
+        .scalar()
+    )
+    if int(failed_count or 0) > _MAX_AUTO_RETRY_TASKS_PER_ATTEMPT:
+        return
+    queue_grading_task(db, attempt, queue_reason=f"auto_retry_after_{error_code}")
+    db.commit()
+
+
 def _mark_task_failed(
     db: Session,
     task: HomeworkGradingTask,
@@ -1209,6 +1414,10 @@ def _mark_task_failed(
         summary.latest_task_error = error_message
         refresh_submission_summary(db, summary)
     db.commit()
+    if error_code in _AUTO_RETRY_ELIGIBLE_ERROR_CODES and task.attempt_id:
+        attempt_row = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
+        if attempt_row:
+            _maybe_queue_auto_retry(db, attempt_row, error_code)
 
 
 def _collect_grading_endpoints_for_config(
@@ -1230,13 +1439,68 @@ def _collect_grading_endpoints_for_config(
 
 def _grade_with_endpoint_group(
     *,
+    db: Session,
     task: HomeworkGradingTask,
     homework: Homework,
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
     material: dict[str, Any],
 ) -> dict[str, Any]:
+    from types import SimpleNamespace
+
+    need_vision = _material_needs_vision(material)
+    spec = homework.llm_routing_spec if isinstance(homework.llm_routing_spec, dict) else None
     group_rows, flat_endpoints = _collect_grading_endpoints_for_config(config)
+
+    if spec and spec.get("mode") == "latest_passing_validated":
+        preset = (
+            db.query(LLMEndpointPreset)
+            .filter(
+                LLMEndpointPreset.is_active.is_(True),
+                LLMEndpointPreset.validation_status == "validated",
+                LLMEndpointPreset.text_validation_status == "passed",
+            )
+            .order_by(LLMEndpointPreset.validated_at.desc().nullslast(), LLMEndpointPreset.id.desc())
+            .first()
+        )
+        if not preset:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "routing",
+                    "level": "warn",
+                    "message": "作业要求「最新纯文本测试通过」端点，但无可用预设，回退课程路由。",
+                },
+            )
+        else:
+            bound_ids = {m.preset_id for g in (config.groups or []) for m in (g.members or [])}
+            bound_ids |= {e.preset_id for e in (config.endpoints or [])}
+            if preset.id not in bound_ids:
+                _append_llm_call_log(
+                    task,
+                    {
+                        "phase": "routing",
+                        "level": "warn",
+                        "preset": preset.name,
+                        "message": "该预设未加入本课程配置，仍将尝试直接调用。",
+                    },
+                )
+            flat_endpoints = [
+                SimpleNamespace(
+                    id=-preset.id,
+                    config_id=config.id,
+                    group_id=None,
+                    preset_id=preset.id,
+                    priority=1,
+                    preset=preset,
+                )
+            ]
+            group_rows = []
+
+    group_rows, flat_endpoints, routing_notes = _filter_course_links_for_homework(homework, group_rows, flat_endpoints)
+    for note in routing_notes:
+        _append_llm_call_log(task, {"phase": "routing", "level": "info", "message": note})
+
     if group_rows:
         routing = GroupRoutingContext.from_config(group_rows, task_id=task.id)
 
@@ -1257,8 +1521,18 @@ def _grade_with_endpoint_group(
                 link = group_state.current_order[0]
                 global_index += 1
                 preset: LLMEndpointPreset = link.preset
-                if not preset or not preset.is_active or preset.validation_status != "validated" or not preset.supports_vision:
-                    last_error = f"端点 {getattr(preset, 'name', global_index)} 不可用或未通过视觉校验。"
+                ok, reason = _preset_eligible_for_grading(preset, need_vision=need_vision)
+                if not ok:
+                    last_error = reason
+                    _append_llm_call_log(
+                        task,
+                        {
+                            "phase": "skip_endpoint",
+                            "level": "warn",
+                            "preset": getattr(preset, "name", None),
+                            "message": reason,
+                        },
+                    )
                     group_state.remove_member(link)
                     _update_routing_artifact(
                         {
@@ -1279,6 +1553,7 @@ def _grade_with_endpoint_group(
                             attempt=attempt,
                             config=config,
                             material=material,
+                            task=task,
                         )
                         score_result["endpoint_id"] = preset.id
                         _update_routing_artifact({"status": "ok"})
@@ -1323,8 +1598,18 @@ def _grade_with_endpoint_group(
     last_error_flat: Optional[str] = None
     for endpoint_index, link in enumerate(flat_endpoints, start=1):
         preset: LLMEndpointPreset = link.preset
-        if not preset or not preset.is_active or preset.validation_status != "validated" or not preset.supports_vision:
-            last_error_flat = f"端点 {getattr(preset, 'name', endpoint_index)} 不可用或未通过视觉校验。"
+        ok, reason = _preset_eligible_for_grading(preset, need_vision=need_vision)
+        if not ok:
+            last_error_flat = reason
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "skip_endpoint",
+                    "level": "warn",
+                    "preset": getattr(preset, "name", None),
+                    "message": reason,
+                },
+            )
             continue
         task.current_endpoint_index = endpoint_index
         attempt_limit = max(1, int(preset.max_retries or 0) + 1)
@@ -1337,6 +1622,7 @@ def _grade_with_endpoint_group(
                     attempt=attempt,
                     config=config,
                     material=material,
+                    task=task,
                 )
                 score_result["endpoint_id"] = preset.id
                 if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
@@ -1375,6 +1661,16 @@ def _build_chat_completion_url(base_url: str) -> str:
     return urljoin(normalized, "chat/completions")
 
 
+def _redact_endpoint_host(url: str) -> str:
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}/…/chat/completions"
+    except Exception:
+        pass
+    return "（端点 URL 已省略）"
+
+
 def _request_grade_from_endpoint(
     *,
     preset: LLMEndpointPreset,
@@ -1382,6 +1678,7 @@ def _request_grade_from_endpoint(
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
     material: dict[str, Any],
+    task: Optional[HomeworkGradingTask] = None,
 ) -> dict[str, Any]:
     timeout = httpx.Timeout(
         connect=preset.connect_timeout_seconds or 10,
@@ -1396,6 +1693,17 @@ def _request_grade_from_endpoint(
         "max_tokens": config.max_output_tokens or 1200,
     }
     endpoint_url = _build_chat_completion_url(preset.base_url)
+    if task is not None:
+        _append_llm_call_log(
+            task,
+            {
+                "phase": "http_request",
+                "level": "info",
+                "preset": preset.name,
+                "model": preset.model_name,
+                "endpoint": _redact_endpoint_host(endpoint_url),
+            },
+        )
     try:
         with httpx.Client(timeout=timeout) as client:
             response = client.post(
@@ -1407,27 +1715,104 @@ def _request_grade_from_endpoint(
                 },
             )
     except httpx.TimeoutException as exc:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {"phase": "http_error", "level": "error", "preset": preset.name, "message": f"请求超时：{exc}"},
+            )
         raise RetryableLLMError(f"请求超时：{exc}") from exc
     except httpx.HTTPError as exc:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {"phase": "http_error", "level": "error", "preset": preset.name, "message": f"网络请求失败：{exc}"},
+            )
         raise RetryableLLMError(f"网络请求失败：{exc}") from exc
 
     if response.status_code in NON_RETRYABLE_STATUS_CODES:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "http_response",
+                    "level": "error",
+                    "preset": preset.name,
+                    "http_status": response.status_code,
+                    "body_excerpt": (response.text or "")[:400],
+                },
+            )
         raise NonRetryableLLMError(f"鉴权或权限失败：HTTP {response.status_code}")
     if response.status_code == 413:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {"phase": "http_response", "level": "error", "preset": preset.name, "http_status": 413},
+            )
         raise NonRetryableLLMError("请求内容过大，端点拒绝处理。")
     if response.status_code in RETRYABLE_STATUS_CODES:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "http_response",
+                    "level": "warn",
+                    "preset": preset.name,
+                    "http_status": response.status_code,
+                    "body_excerpt": (response.text or "")[:400],
+                },
+            )
         raise RetryableLLMError(f"端点暂时不可用：HTTP {response.status_code}")
     if response.status_code >= 400:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "http_response",
+                    "level": "error",
+                    "preset": preset.name,
+                    "http_status": response.status_code,
+                    "body_excerpt": (response.text or "")[:400],
+                },
+            )
         raise NonRetryableLLMError(f"端点请求失败：HTTP {response.status_code} {response.text[:300]}")
 
     try:
         data = response.json()
     except ValueError as exc:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {"phase": "parse_error", "level": "warn", "preset": preset.name, "message": "模型返回的不是合法 JSON 响应。"},
+            )
         raise RetryableLLMError("模型返回的不是合法 JSON 响应。") from exc
 
     raw_content = _extract_message_content(data)
-    score_payload = _parse_scoring_json(raw_content, homework)
+    try:
+        score_payload = _parse_scoring_json(raw_content, homework)
+    except RetryableLLMError as exc:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "parse_model_output",
+                    "level": "warn",
+                    "preset": preset.name,
+                    "message": str(exc),
+                    "raw_excerpt": (raw_content or "")[:500],
+                },
+            )
+        raise
     usage = data.get("usage") or {}
+    if task is not None:
+        _append_llm_call_log(
+            task,
+            {
+                "phase": "success",
+                "level": "info",
+                "preset": preset.name,
+                "usage": usage,
+            },
+        )
     return {
         "score": score_payload["score"],
         "comment": score_payload["comment"],

@@ -21,6 +21,7 @@ from app.main import app
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
+    Homework,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
@@ -429,6 +430,183 @@ def test_token_usage_recorded_after_success(grading_context: dict):
         assert log.total_tokens is not None
         task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
         assert task.billed_total_tokens is not None
+    finally:
+        db.close()
+
+
+def test_llm_failure_sets_error_code_and_call_log(grading_context: dict):
+    client: TestClient = grading_context["client"]
+    hid = grading_context["homework_id"]
+    student_h = grading_context["student_headers"]
+
+    r = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "log me"})
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(401, json={"error": "nope"}),
+    ):
+        process_grading_task(tid)
+
+    db = SessionLocal()
+    try:
+        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
+        assert task.status == "failed"
+        assert task.error_code == "llm_call_failed"
+        assert task.artifact_manifest
+        log = task.artifact_manifest.get("llm_call_log")
+        assert isinstance(log, list) and len(log) >= 1
+        assert any(e.get("phase") == "http_response" for e in log)
+    finally:
+        db.close()
+
+
+def test_auto_retry_after_llm_failure_queues_second_task(grading_context: dict):
+    client: TestClient = grading_context["client"]
+    hid = grading_context["homework_id"]
+    student_h = grading_context["student_headers"]
+
+    r = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "retry me"})
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(401, json={"error": "nope"}),
+    ):
+        process_grading_task(tid)
+
+    db = SessionLocal()
+    try:
+        tasks = (
+            db.query(HomeworkGradingTask)
+            .filter(HomeworkGradingTask.homework_id == hid)
+            .order_by(HomeworkGradingTask.id.asc())
+            .all()
+        )
+        assert len(tasks) == 2
+        assert tasks[0].status == "failed"
+        assert tasks[1].status == "queued"
+        assert "auto_retry" in (tasks[1].queue_reason or "")
+    finally:
+        db.close()
+
+
+def test_submissions_api_includes_task_log(grading_context: dict):
+    client: TestClient = grading_context["client"]
+    hid = grading_context["homework_id"]
+    student_h = grading_context["student_headers"]
+    teacher_h = grading_context["teacher_headers"]
+
+    r = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "api log"})
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(401, json={"error": "nope"}),
+    ):
+        process_grading_task(tid)
+
+    lst = client.get(f"/api/homeworks/{hid}/submissions", headers=teacher_h)
+    assert lst.status_code == 200, lst.text
+    rows = lst.json().get("data") or []
+    assert rows
+    row = next((x for x in rows if x.get("latest_task_log")), None)
+    assert row is not None
+    assert row.get("latest_task_error_code") == "llm_call_failed"
+    assert isinstance(row.get("latest_task_log"), list)
+
+
+def test_latest_passing_validated_routes_to_newest_preset(grading_context: dict):
+    ctx = make_grading_course_with_homework()
+    client: TestClient = grading_context["client"]
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+
+    uid = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        from datetime import datetime, timezone
+
+        p_old = LLMEndpointPreset(
+            name=f"old-pass-{uid}",
+            base_url="https://old.test/v1/",
+            api_key="k-old",
+            model_name="m-old",
+            max_retries=0,
+            is_active=True,
+            supports_vision=True,
+            validation_status="validated",
+            text_validation_status="passed",
+            validated_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        )
+        p_new = LLMEndpointPreset(
+            name=f"new-pass-{uid}",
+            base_url="https://new.test/v1/",
+            api_key="k-new",
+            model_name="m-new",
+            max_retries=0,
+            is_active=True,
+            supports_vision=True,
+            validation_status="validated",
+            text_validation_status="passed",
+            validated_at=datetime(2030, 1, 1, tzinfo=timezone.utc),
+        )
+        db.add_all([p_old, p_new])
+        db.flush()
+        hw = db.query(Homework).filter(Homework.id == ctx["homework_id"]).first()
+        hw.llm_routing_spec = {"mode": "latest_passing_validated"}
+        db.commit()
+        new_id = p_new.id
+    finally:
+        db.close()
+
+    r = client.post(f"/api/homeworks/{ctx['homework_id']}/submission", headers=student_h, json={"content": "route"})
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    def fake_post(self, url, **kwargs):
+        auth = (kwargs.get("headers") or {}).get("Authorization", "")
+        assert "k-new" in auth
+        return httpx.Response(200, json=json_llm_response(55.0, "picked new"))
+
+    with mock.patch.object(httpx.Client, "post", fake_post):
+        process_grading_task(tid)
+
+    db = SessionLocal()
+    try:
+        cand = (
+            db.query(HomeworkScoreCandidate)
+            .filter(HomeworkScoreCandidate.source == "auto")
+            .order_by(HomeworkScoreCandidate.id.desc())
+            .first()
+        )
+        assert cand is not None
+        assert cand.source_metadata.get("endpoint_id") == new_id
     finally:
         db.close()
 
