@@ -5,14 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
+from app.models import Class, User, UserRole
 from app.schemas import ChangePasswordRequest, MessageResponse, Token, UserCreate, UserResponse
 from app.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from app.config import settings
-from app.course_access import prepare_student_course_context
+from app.roster_sync import upsert_student_roster_for_user
 from app.services import LogService
-from app.models import UserRole
-
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 
@@ -56,8 +54,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         success=True
     )
 
-    if user.role == UserRole.STUDENT.value and user.class_id:
-        prepare_student_course_context(user, db)
+    if user.role == UserRole.STUDENT.value and user.class_id and user.username:
+        upsert_student_roster_for_user(db, user)
         db.commit()
 
     return {"access_token": access_token, "token_type": "bearer"}
@@ -75,6 +73,13 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if normalized_role not in {UserRole.STUDENT.value}:
         raise HTTPException(status_code=403, detail="Public registration can only create student accounts.")
 
+    if not user_data.class_id:
+        raise HTTPException(status_code=400, detail="学生注册须选择所属班级，以便同步行政班花名册（用户名即学号）。")
+
+    class_obj = db.query(Class).filter(Class.id == user_data.class_id).first()
+    if not class_obj:
+        raise HTTPException(status_code=400, detail="班级不存在")
+
     hashed_password = get_password_hash(user_data.password)
     user = User(
         username=user_data.username,
@@ -85,8 +90,11 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     )
     db.add(user)
     db.flush()
-    if user.role == UserRole.STUDENT.value and user.class_id:
-        prepare_student_course_context(user, db)
+    if user.role == UserRole.STUDENT.value and user.class_id and user.username:
+        roster_res = upsert_student_roster_for_user(db, user)
+        if roster_res.error_reason:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=roster_res.error_reason)
     db.commit()
     db.refresh(user)
     return user
