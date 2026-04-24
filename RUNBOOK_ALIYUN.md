@@ -304,7 +304,8 @@ When you update the code, **avoid a bare `git pull` on the server** if the machi
 ```bash
 cd /opt/dd-class/source
 GIT_BRANCH=main GIT_REMOTE=origin sudo bash scripts/redeploy.sh
-# or: REPO_DIR=/opt/dd-class/source BRANCH=main sudo bash scripts/pull_and_deploy.sh
+# or: REPO_DIR=/opt/dd-class/source GIT_BRANCH=main sudo bash scripts/pull_and_deploy.sh
+# (pull_and_deploy accepts BRANCH or GIT_BRANCH; if REPO_DIR is unset and /opt/dd-class/source is a git clone, that path is used by default.)
 ```
 
 If the server clone has local modifications that block checkout, run once with **`GIT_RESET_WORKTREE_BEFORE_FETCH=1`** (backs up `git diff` under `/opt/dd-class/backups` by default). See **`docs/DEPLOY_GIT_ROBUSTNESS.md`**.

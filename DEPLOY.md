@@ -11,6 +11,18 @@ If you want a data-safety-focused upgrade guide and a safer deployment example s
 
 **When is a deploy “done”?** A clean `git status` and a passing public health URL are not sufficient by themselves. Treat a release as verified only after **`deploy_all.sh`** has finished, **`scripts/post_deploy_check.sh`** has passed (local + public health, `nginx -t`, systemd), and **`git log -1`** matches the intended revision—the check script prints the repo `HEAD` to make that obvious.
 
+### Why the admin UI can look “not updated” while the API works
+
+The browser loads static files from **`/var/www/.../admin`**, rebuilt only when **`deploy_frontend.sh`** runs successfully inside **`deploy_all.sh`** (or when you use **`FRONTEND_ONLY=1`** with **`redeploy.sh`**). Typical failure modes:
+
+- **`deploy_all.sh` did not finish** (error during backend or parent portal step), so **`deploy_frontend.sh` never ran**.
+- **Wrong Git tree**: **`SKIP_GIT=1`** or SSH into the wrong directory, so **`npm run build`** repackages **old** `frontend/` sources.
+- **Wrong branch**: **`redeploy.sh`** defaults **`GIT_BRANCH=main`**; always set **`GIT_BRANCH=<your branch>`** when releasing from a feature branch.
+- **Wrong `REPO_DIR`**: **`pull_and_deploy.sh`** used to default to **`/root/dd-class`**; production is usually **`/opt/dd-class/source`**. Unset **`REPO_DIR`** now prefers **`/opt/dd-class/source`** when it is a git clone (see **`scripts/lib/deploy_repo_dir.sh`**). Override with **`REPO_DIR=...`** if your clone lives elsewhere.
+- **Browser cache**: hard refresh or try an incognito window after a verified deploy.
+
+**`redeploy.sh`** and **`pull_and_deploy.sh`** print the short **`HEAD`** before **`deploy_all`** so logs show which commit was built.
+
 ## Architecture
 
 - Nginx serves the admin SPA at `/`

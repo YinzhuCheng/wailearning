@@ -127,7 +127,21 @@ EOF
 
 ---
 
-## 7. 参考：稳健远程片段（按需改路径与分支）
+## 7. 管理端界面仍是旧版、但接口已新
+
+**常见原因**
+
+1. **`deploy_all.sh` 未跑完**：前端由 **`deploy_frontend.sh`**（`npm run build` + rsync 到 `/var/www/.../admin`）发布；若脚本在中途失败，浏览器仍加载旧静态资源。
+2. **`SKIP_GIT=1` 或拉错目录**：本地仓库不是目标 commit 时，重建前端只是「旧代码重新打包」。
+3. **`GIT_BRANCH` 未传**：`redeploy.sh` 默认 **`main`**，功能分支需显式设置。
+4. **`REPO_DIR` 与文档不一致**：生产常见为 **`/opt/dd-class/source`**；勿与另一份 clone 混淆。
+5. **浏览器缓存**：部署验证通过后可尝试强制刷新或无痕窗口。
+
+**脚本侧缓解**：`redeploy.sh` / `pull_and_deploy.sh` 在部署前打印当前 **`git rev-parse --short HEAD`**；`deploy_frontend.sh` 在构建前打印 **`SOURCE_DIR`** 对应提交。详见 **`DEPLOY.md`** 中 *Admin SPA / stale UI* 小节。
+
+---
+
+## 8. 参考：稳健远程片段（按需改路径与分支）
 
 以下仅为说明性示例；生产环境请替换 IP、分支与备份策略。
 

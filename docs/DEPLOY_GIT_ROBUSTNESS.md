@@ -43,7 +43,9 @@ git checkout -B "$BRANCH" "origin/$BRANCH"
 | `GIT_CLEAN` | `1` | `1` 时在同步末尾执行 `git clean -ffd`；`0` 跳过（慎用） |
 | `GIT_RESET_WORKTREE_BEFORE_FETCH` | `0` | `1` 时先备份 `git diff` 到 `BACKUP_DIR`，再 `reset --hard` + `clean -ffd`，再 fetch |
 | `BACKUP_DIR` | `/opt/dd-class/backups` | 上述 patch 输出目录 |
-| `REPO_DIR` | redeploy：脚本所在仓库根；pull_and_deploy：`/root/dd-class` | 服务器上的仓库路径 |
+| `REPO_DIR` | 未设置时：**若存在** `/opt/dd-class/source/.git` **则默认使用该路径**，否则为 redeploy 脚本所在仓库根目录；仍可通过环境变量显式指定 | 服务器上的仓库路径（须与 `deploy_*` 使用的 `SOURCE_DIR` 一致） |
+| `DD_DEFAULT_REPO_DIR` | `/opt/dd-class/source` | 覆盖「首选生产 clone 路径」（与 `DEPLOY.md` 目录约定一致） |
+| `BRANCH` / `GIT_BRANCH` | `pull_and_deploy` 接受 **`BRANCH`** 或 **`GIT_BRANCH`**（前者优先）；`redeploy` 使用 **`GIT_BRANCH`** | 要部署的远端分支名 |
 
 ## SSH / heredoc 注意
 

@@ -3,15 +3,16 @@
 # 用法（需 root）：
 #   sudo bash /path/to/repo/scripts/redeploy.sh
 # 可选环境变量：
-#   REPO_DIR=/root/wailearning     代码仓库路径（默认：本脚本所在仓库根目录）
+#   REPO_DIR=/opt/dd-class/source  代码仓库路径（未设置时：若存在 /opt/dd-class/source/.git 则用之，否则为脚本所在仓库根）
 #   GIT_BRANCH=main               要检出的分支
 #   GIT_REMOTE=origin             远端名称
 #   GIT_CLEAN=1                   是否在同步末尾 git clean -ffd（0=跳过，保留未跟踪文件时请慎用）
 #   GIT_RESET_WORKTREE_BEFORE_FETCH=0  设为 1 时：先备份 git diff 到 BACKUP_DIR，再 reset --hard + clean -ffd，再 fetch（解决服务器手工改文件导致 checkout 被拒）
 #   BACKUP_DIR=/opt/dd-class/backups   GIT_RESET 为 1 时写入 working-tree patch 的目录
-#   SKIP_GIT=1                    跳过 git 同步（已在目标目录准备好代码时）
-#   FRONTEND_ONLY=1               只跑 deploy_frontend.sh（例如仅修复管理端静态资源）
+#   SKIP_GIT=1                    跳过 git 同步（仅当已在 REPO_DIR 放好目标代码时使用；否则会旧代码重打前端）
+#   FRONTEND_ONLY=1               只跑 deploy_frontend.sh（仍会 npm run build 管理端；须保证 REPO_DIR 已是目标版本）
 #   APP_URL=https://你的域名       部署后 post_deploy_check 使用的公网健康检查地址
+#   DD_DEFAULT_REPO_DIR=/opt/dd-class/source  未设置 REPO_DIR 时的首选 clone 路径（与 DEPLOY.md 一致）
 set -euo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -20,7 +21,9 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd -P)}"
+# shellcheck source=scripts/lib/deploy_repo_dir.sh
+source "${SCRIPT_DIR}/lib/deploy_repo_dir.sh"
+__dd_resolve_repo_dir "${SCRIPT_DIR}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 GIT_CLEAN="${GIT_CLEAN:-1}"
@@ -32,6 +35,12 @@ APP_URL="${APP_URL:-}"
 
 echo "==> 仓库目录: ${REPO_DIR}"
 echo "==> 分支: ${GIT_BRANCH}"
+if [[ "${SKIP_GIT}" == "1" ]]; then
+  echo "==> 警告: SKIP_GIT=1 — 不会拉取远端代码。若 REPO_DIR 不是目标版本，deploy_frontend 只会用旧源码重打包，管理端界面会看似「没更新」。" >&2
+fi
+if [[ "${FRONTEND_ONLY}" == "1" ]]; then
+  echo "==> 提示: FRONTEND_ONLY=1 — 仅部署管理端静态资源，不跑后端/家长端。请确认已用正确分支更新 ${REPO_DIR}。" >&2
+fi
 
 if [[ "${SKIP_GIT}" != "1" ]]; then
   if [[ ! -d "${REPO_DIR}/.git" ]]; then
@@ -55,6 +64,11 @@ if [[ "${SKIP_GIT}" != "1" ]]; then
     "${git_final_clean_flag}"
 else
   echo "==> 已 SKIP_GIT=1，跳过 git 更新"
+fi
+
+cd "${REPO_DIR}"
+if [[ -d .git ]]; then
+  echo "==> 当前用于构建/部署的提交: $(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
 fi
 
 if [[ "${FRONTEND_ONLY}" == "1" ]]; then

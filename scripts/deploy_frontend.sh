@@ -9,6 +9,9 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 APP_ROOT="${APP_ROOT:-/opt/dd-class}"
 SOURCE_DIR="${SOURCE_DIR:-${APP_ROOT}/source}"
+if [[ -d "${SOURCE_DIR}/.git" ]]; then
+  echo "==> deploy_frontend: 源码目录 ${SOURCE_DIR} 当前提交 $(git -C "${SOURCE_DIR}" rev-parse --short HEAD) ($(git -C "${SOURCE_DIR}" rev-parse --abbrev-ref HEAD))"
+fi
 ADMIN_WEB_ROOT="${ADMIN_WEB_ROOT:-/var/www/wailearning.xyz/admin}"
 APP_USER="${APP_USER:-ddclass}"
 CERT_NAME="${CERT_NAME:-www.wailearning.xyz}"

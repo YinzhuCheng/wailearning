@@ -9,7 +9,7 @@
 仓库里确实有很多部署脚本，但职责不同：
 
 - `scripts/redeploy.sh`：默认是“更新并部署”，**不会**主动清库；适合常规升级。
-- `scripts/pull_and_deploy.sh`：也是拉取并部署，默认路径偏旧（`/root/dd-class`），通常要改环境变量。
+- `scripts/pull_and_deploy.sh`：拉取并跑 `deploy_all.sh`（需 root）。未设置 `REPO_DIR` 时，若存在 `/opt/dd-class/source/.git` 会默认使用该路径；分支可用 `BRANCH` 或 `GIT_BRANCH`。
 - `scripts/deploy_all.sh`：做完整部署，但同样不负责“删库删资产”。
 - `scripts/reset_user_password.sh`：适合“保留现有数据库，仅改密码”。
 
