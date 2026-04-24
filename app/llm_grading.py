@@ -13,7 +13,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Optional
@@ -208,6 +208,221 @@ class RetryableLLMError(Exception):
 
 class NonRetryableLLMError(Exception):
     pass
+
+
+@dataclass
+class GradingRoutingPlan:
+    """Resolved LLM routing for one grading task (course row + effective prompt/token settings)."""
+
+    effective_config: Any
+    quota_config: CourseLLMConfig
+    group_rows: list[Any]
+    flat_endpoints: list[Any]
+    routing_warnings: list[str] = field(default_factory=list)
+
+
+def _default_quota_course_config(subject_id: int) -> Any:
+    """Synthetic defaults when no course LLM row exists or course LLM is disabled."""
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        subject_id=subject_id,
+        is_enabled=False,
+        response_language=None,
+        estimated_chars_per_token=4.0,
+        estimated_image_tokens=int(settings.DEFAULT_ESTIMATED_IMAGE_TOKENS or 850),
+        max_input_tokens=16000,
+        max_output_tokens=1200,
+        quota_timezone="Asia/Shanghai",
+        system_prompt=None,
+        teacher_prompt=None,
+    )
+
+
+def _query_latest_global_multimodal_validated_preset(db: Session) -> Optional[LLMEndpointPreset]:
+    """Latest preset that passed both text and vision connectivity (admin validation)."""
+    return (
+        db.query(LLMEndpointPreset)
+        .filter(
+            LLMEndpointPreset.is_active.is_(True),
+            LLMEndpointPreset.validation_status == "validated",
+            LLMEndpointPreset.text_validation_status == "passed",
+            LLMEndpointPreset.vision_validation_status == "passed",
+        )
+        .order_by(LLMEndpointPreset.validated_at.desc().nullslast(), LLMEndpointPreset.id.desc())
+        .first()
+    )
+
+
+def _load_course_llm_bundle(db: Session, subject_id: int) -> Optional[CourseLLMConfig]:
+    return (
+        db.query(CourseLLMConfig)
+        .options(
+            joinedload(CourseLLMConfig.groups)
+            .joinedload(LLMGroup.members)
+            .joinedload(CourseLLMConfigEndpoint.preset),
+            joinedload(CourseLLMConfig.endpoints).joinedload(CourseLLMConfigEndpoint.preset),
+        )
+        .filter(CourseLLMConfig.subject_id == subject_id)
+        .first()
+    )
+
+
+def resolve_grading_routing_plan(
+    db: Session,
+    homework: Homework,
+    *,
+    subject_id: int,
+) -> tuple[Optional[GradingRoutingPlan], Optional[tuple[str, str]]]:
+    """
+    Build endpoint list and effective token/prompt config for homework grading.
+
+    Course-level is_enabled no longer blocks grading: teachers route per homework, with a
+    global multimodal-validated preset as default fallback.
+    """
+    from types import SimpleNamespace
+
+    spec = homework.llm_routing_spec if isinstance(homework.llm_routing_spec, dict) else None
+    mode = spec.get("mode") if spec else None
+
+    course_row = _load_course_llm_bundle(db, subject_id)
+    base_for_tokens: Any = course_row if course_row is not None else _default_quota_course_config(subject_id)
+    quota_config = course_row if course_row is not None else ensure_course_llm_config(db, subject_id)
+
+    warnings: list[str] = []
+    synthetic_flat: list[Any] = []
+
+    if mode == "course_groups":
+        if not course_row or not course_row.is_enabled:
+            return None, (
+                "llm_course_routing_unavailable",
+                "本作业设置为沿用课程 LLM 分组/端点顺序，但课程未启用或未配置 LLM。",
+            )
+        group_rows, flat_eps = _collect_grading_endpoints_for_config(course_row)
+        if not group_rows and not flat_eps:
+            return None, ("endpoint_missing", "当前课程未配置可用端点。")
+        return (
+            GradingRoutingPlan(
+                effective_config=course_row,
+                quota_config=quota_config,
+                group_rows=group_rows,
+                flat_endpoints=flat_eps,
+                routing_warnings=warnings,
+            ),
+            None,
+        )
+
+    if mode == "latest_passing_validated":
+        preset = _query_latest_global_multimodal_validated_preset(db)
+        if not preset:
+            return None, (
+                "no_llm_endpoint_available",
+                "未找到通过图文连通性校验的全局端点预设，请在管理端完成校验或为本作业指定允许的预设。",
+            )
+        synthetic_flat.append(
+            SimpleNamespace(
+                id=-preset.id,
+                config_id=getattr(course_row, "id", None) or -1,
+                group_id=None,
+                preset_id=preset.id,
+                priority=1,
+                preset=preset,
+            )
+        )
+        eff = base_for_tokens
+        if course_row is None or not course_row.is_enabled:
+            eff = _default_quota_course_config(subject_id)
+        return (
+            GradingRoutingPlan(
+                effective_config=eff,
+                quota_config=quota_config,
+                group_rows=[],
+                flat_endpoints=synthetic_flat,
+                routing_warnings=warnings,
+            ),
+            None,
+        )
+
+    if mode == "limit_to_preset_ids" and isinstance(spec, dict):
+        raw_ids = spec.get("preset_ids")
+        if isinstance(raw_ids, list) and raw_ids:
+            id_set: set[int] = set()
+            for x in raw_ids:
+                try:
+                    id_set.add(int(x))
+                except (TypeError, ValueError):
+                    continue
+            if id_set:
+                presets = (
+                    db.query(LLMEndpointPreset)
+                    .filter(LLMEndpointPreset.id.in_(sorted(id_set)))
+                    .order_by(LLMEndpointPreset.id.asc())
+                    .all()
+                )
+                found_ids = {p.id for p in presets}
+                missing = sorted(id_set - found_ids)
+                if missing:
+                    warnings.append(f"部分预设 ID 不存在或已删除：{missing}。")
+                for p in presets:
+                    synthetic_flat.append(
+                        SimpleNamespace(
+                            id=-p.id,
+                            config_id=getattr(course_row, "id", None) or -1,
+                            group_id=None,
+                            preset_id=p.id,
+                            priority=len(synthetic_flat) + 1,
+                            preset=p,
+                        )
+                    )
+                if not synthetic_flat:
+                    return None, (
+                        "homework_preset_unavailable",
+                        "本作业指定的端点预设均不可用，请重新选择或改用全局连通性预设。",
+                    )
+                eff = base_for_tokens
+                if course_row is None or not course_row.is_enabled:
+                    eff = _default_quota_course_config(subject_id)
+                return (
+                    GradingRoutingPlan(
+                        effective_config=eff,
+                        quota_config=quota_config,
+                        group_rows=[],
+                        flat_endpoints=synthetic_flat,
+                        routing_warnings=warnings,
+                    ),
+                    None,
+                )
+
+    # Default: same as explicit latest_passing_validated global fallback
+    preset = _query_latest_global_multimodal_validated_preset(db)
+    if not preset:
+        return None, (
+            "no_llm_endpoint_available",
+            "未找到通过图文连通性校验的全局端点预设，请在管理端完成校验或为本作业勾选允许的预设。",
+        )
+    synthetic_flat.append(
+        SimpleNamespace(
+            id=-preset.id,
+            config_id=getattr(course_row, "id", None) or -1,
+            group_id=None,
+            preset_id=preset.id,
+            priority=1,
+            preset=preset,
+        )
+    )
+    eff = base_for_tokens
+    if course_row is None or not course_row.is_enabled:
+        eff = _default_quota_course_config(subject_id)
+    return (
+        GradingRoutingPlan(
+            effective_config=eff,
+            quota_config=quota_config,
+            group_rows=[],
+            flat_endpoints=synthetic_flat,
+            routing_warnings=warnings,
+        ),
+        None,
+    )
 
 
 class _WorkerManager:
@@ -550,105 +765,10 @@ def _preset_eligible_for_grading(preset: Optional[LLMEndpointPreset], *, need_vi
         if not preset.supports_vision:
             return False, f"端点「{preset.name}」未声明支持视觉，无法处理含图片/PDF 的提交。"
         vs = getattr(preset, "vision_validation_status", None)
-        if vs == "failed":
-            vm = getattr(preset, "vision_validation_message", None) or "视觉连通性未通过"
-            return False, f"端点「{preset.name}」{vm}。"
-        if vs not in (None, "passed", "skipped"):
-            vm = getattr(preset, "vision_validation_message", None) or "视觉连通性未通过"
+        if vs != "passed":
+            vm = getattr(preset, "vision_validation_message", None) or "视觉连通性未通过或未校验"
             return False, f"端点「{preset.name}」{vm}。"
     return True, ""
-
-
-def _homework_routing_warnings(db: Session, homework: Homework, config: CourseLLMConfig) -> list[str]:
-    """Return user-facing warnings when homework.llm_routing_spec may diverge from course defaults."""
-    spec = homework.llm_routing_spec
-    if not spec or not isinstance(spec, dict):
-        return []
-    mode = spec.get("mode")
-    warnings: list[str] = []
-    if mode == "latest_passing_validated":
-        preset = (
-            db.query(LLMEndpointPreset)
-            .filter(
-                LLMEndpointPreset.is_active.is_(True),
-                LLMEndpointPreset.validation_status == "validated",
-                LLMEndpointPreset.text_validation_status == "passed",
-            )
-            .order_by(LLMEndpointPreset.validated_at.desc().nullslast(), LLMEndpointPreset.id.desc())
-            .first()
-        )
-        if not preset:
-            warnings.append("作业要求使用「最新纯文本测试通过」的端点，但系统中没有符合条件的预设，已按课程设置路由。")
-            return warnings
-        bound_ids = {m.preset_id for g in (config.groups or []) for m in (g.members or [])}
-        bound_ids |= {e.preset_id for e in (config.endpoints or [])}
-        if preset.id not in bound_ids:
-            warnings.append(
-                f"作业要求优先使用「{preset.name}」，但该预设未加入本课程的 LLM 配置，调用仍可能失败。"
-            )
-    if mode == "limit_to_preset_ids":
-        raw_ids = spec.get("preset_ids")
-        if isinstance(raw_ids, list) and raw_ids:
-            id_set: set[int] = set()
-            for x in raw_ids:
-                try:
-                    id_set.add(int(x))
-                except (TypeError, ValueError):
-                    continue
-            if id_set:
-                any_hit = any(
-                    m.preset_id in id_set for g in (config.groups or []) for m in (g.members or [])
-                ) or any(e.preset_id in id_set for e in (config.endpoints or []))
-                if not any_hit:
-                    warnings.append("作业限制了端点预设，但与课程设置无交集，已回退为课程完整路由。")
-    return warnings
-
-
-def _filter_course_links_for_homework(
-    homework: Homework,
-    group_rows: list[LLMGroup],
-    flat_endpoints: list[CourseLLMConfigEndpoint],
-) -> tuple[list[Any], list[CourseLLMConfigEndpoint], list[str]]:
-    """Apply homework.llm_routing_spec (preset subset) without mutating ORM collections."""
-    from types import SimpleNamespace
-
-    spec = homework.llm_routing_spec
-    notes: list[str] = []
-    if not spec or not isinstance(spec, dict):
-        return group_rows, flat_endpoints, notes
-
-    mode = spec.get("mode")
-    if mode != "limit_to_preset_ids":
-        return group_rows, flat_endpoints, notes
-
-    raw_ids = spec.get("preset_ids")
-    if not isinstance(raw_ids, list) or not raw_ids:
-        return group_rows, flat_endpoints, notes
-    id_set: set[int] = set()
-    for x in raw_ids:
-        try:
-            id_set.add(int(x))
-        except (TypeError, ValueError):
-            continue
-    if not id_set:
-        return group_rows, flat_endpoints, notes
-
-    ephemeral_groups: list[Any] = []
-    for g in sorted(group_rows, key=lambda x: (x.priority, x.id)):
-        members = [m for m in (g.members or []) if m.preset_id in id_set]
-        if members:
-            ephemeral_groups.append(
-                SimpleNamespace(id=g.id, priority=g.priority, name=getattr(g, "name", None), members=members)
-            )
-    new_flat = [e for e in flat_endpoints if e.preset_id in id_set]
-    if ephemeral_groups:
-        notes.append("routing_mode:limit_to_preset_ids(groups)")
-        return ephemeral_groups, [], notes
-    if new_flat:
-        notes.append("routing_mode:limit_to_preset_ids(flat)")
-        return [], new_flat, notes
-    notes.append("routing_mode:limit_to_preset_ids_miss")
-    return group_rows, flat_endpoints, notes
 
 
 def validate_text_connectivity(
@@ -1269,36 +1389,25 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         _mark_task_failed(db, task, "auto_grading_disabled", "当前作业未启用自动评分。")
         return
     if not task.subject_id:
-        _mark_task_failed(db, task, "course_missing", "当前作业未关联课程，无法使用课程级 LLM 配置。")
+        _mark_task_failed(db, task, "course_missing", "当前作业未关联课程，无法进行自动评分。")
         return
 
-    config = (
-        db.query(CourseLLMConfig)
-        .options(
-            joinedload(CourseLLMConfig.groups)
-            .joinedload(LLMGroup.members)
-            .joinedload(CourseLLMConfigEndpoint.preset),
-            joinedload(CourseLLMConfig.endpoints).joinedload(CourseLLMConfigEndpoint.preset),
-        )
-        .filter(CourseLLMConfig.subject_id == task.subject_id)
-        .first()
-    )
-    if not config or not config.is_enabled:
-        _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
+    plan, plan_err = resolve_grading_routing_plan(db, homework, subject_id=int(task.subject_id))
+    if plan_err:
+        code, msg = plan_err
+        _mark_task_failed(db, task, code, msg)
         return
 
-    if not (config.groups or []) and not (config.endpoints or []):
-        _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
-        return
+    eff_config = plan.effective_config
+    quota_config = plan.quota_config
 
-    routing_warnings = _homework_routing_warnings(db, homework, config)
-    material = _build_student_material(db, homework, attempt, config)
+    material = _build_student_material(db, homework, attempt, eff_config)
     base_manifest = material["artifact_manifest"] or {}
     if not isinstance(base_manifest, dict):
         base_manifest = {}
     task.artifact_manifest = {**base_manifest, "llm_routing": {"version": 1, "status": "pending"}}
-    if routing_warnings:
-        task.artifact_manifest["homework_routing_warnings"] = routing_warnings
+    if plan.routing_warnings:
+        task.artifact_manifest["homework_routing_warnings"] = plan.routing_warnings
         _flag_artifact_manifest_modified(task)
     task.input_token_estimate = material["estimated_tokens"]
     task.task_summary = material["summary"]
@@ -1315,7 +1424,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
     allowed, error_code = reserve_quota_tokens(
         db,
         task,
-        config,
+        quota_config,
         estimated_tokens=int(material["estimated_tokens"] or 0),
     )
     if not allowed:
@@ -1357,12 +1466,13 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
 
     try:
         response = _grade_with_endpoint_group(
-            db=db,
             task=task,
             homework=homework,
             attempt=attempt,
-            config=config,
+            config=eff_config,
             material=material,
+            group_rows=plan.group_rows,
+            flat_endpoints=plan.flat_endpoints,
         )
     except NonRetryableLLMError as exc:
         msg = str(exc) or "LLM 调用失败。"
@@ -1394,7 +1504,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
     task.error_message = None
     task.finished_at = _now_utc()
     task.task_summary = "评分成功"
-    record_usage_if_needed(db, task, config, response["usage"])
+    record_usage_if_needed(db, task, quota_config, response["usage"])
 
     summary = (
         db.query(HomeworkSubmission)
@@ -1477,67 +1587,20 @@ def _collect_grading_endpoints_for_config(
 
 def _grade_with_endpoint_group(
     *,
-    db: Session,
     task: HomeworkGradingTask,
     homework: Homework,
     attempt: HomeworkAttempt,
-    config: CourseLLMConfig,
+    config: Any,
     material: dict[str, Any],
+    group_rows: Optional[list[Any]] = None,
+    flat_endpoints: Optional[list[Any]] = None,
 ) -> dict[str, Any]:
-    from types import SimpleNamespace
-
     need_vision = _material_needs_vision(material)
-    spec = homework.llm_routing_spec if isinstance(homework.llm_routing_spec, dict) else None
-    group_rows, flat_endpoints = _collect_grading_endpoints_for_config(config)
-
-    if spec and spec.get("mode") == "latest_passing_validated":
-        preset = (
-            db.query(LLMEndpointPreset)
-            .filter(
-                LLMEndpointPreset.is_active.is_(True),
-                LLMEndpointPreset.validation_status == "validated",
-                LLMEndpointPreset.text_validation_status == "passed",
-            )
-            .order_by(LLMEndpointPreset.validated_at.desc().nullslast(), LLMEndpointPreset.id.desc())
-            .first()
-        )
-        if not preset:
-            _append_llm_call_log(
-                task,
-                {
-                    "phase": "routing",
-                    "level": "warn",
-                    "message": "作业要求「最新纯文本测试通过」端点，但无可用预设，回退课程路由。",
-                },
-            )
-        else:
-            bound_ids = {m.preset_id for g in (config.groups or []) for m in (g.members or [])}
-            bound_ids |= {e.preset_id for e in (config.endpoints or [])}
-            if preset.id not in bound_ids:
-                _append_llm_call_log(
-                    task,
-                    {
-                        "phase": "routing",
-                        "level": "warn",
-                        "preset": preset.name,
-                        "message": "该预设未加入本课程配置，仍将尝试直接调用。",
-                    },
-                )
-            flat_endpoints = [
-                SimpleNamespace(
-                    id=-preset.id,
-                    config_id=config.id,
-                    group_id=None,
-                    preset_id=preset.id,
-                    priority=1,
-                    preset=preset,
-                )
-            ]
-            group_rows = []
-
-    group_rows, flat_endpoints, routing_notes = _filter_course_links_for_homework(homework, group_rows, flat_endpoints)
-    for note in routing_notes:
-        _append_llm_call_log(task, {"phase": "routing", "level": "info", "message": note})
+    if group_rows is None and flat_endpoints is None:
+        group_rows, flat_endpoints = _collect_grading_endpoints_for_config(config)
+    else:
+        group_rows = list(group_rows or [])
+        flat_endpoints = list(flat_endpoints or [])
 
     if group_rows:
         routing = GroupRoutingContext.from_config(group_rows, task_id=task.id)
@@ -1684,6 +1747,15 @@ def _grade_with_endpoint_group(
                     time.sleep(wait_seconds)
             except NonRetryableLLMError as exc:
                 last_error_flat = str(exc)
+                _append_llm_call_log(
+                    task,
+                    {
+                        "phase": "skip_endpoint",
+                        "level": "warn",
+                        "preset": getattr(preset, "name", None),
+                        "message": last_error_flat,
+                    },
+                )
                 break
     if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
         task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {

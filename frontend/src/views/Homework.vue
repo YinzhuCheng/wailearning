@@ -197,23 +197,23 @@
           <el-switch v-model="form.auto_grading_enabled" />
           <div class="attachment-help">
             启用后，学生新提交会进入异步评分队列；展示分数始终按最高分规则计算。模型会分段读取作业说明、学生文字与附件（PDF/图片/部分文本与
-            ipynb 等）；过大内容可能被截断。日 token 限额在课程设置中配置。
+            ipynb 等）；过大内容可能被截断。端点由下方「LLM 路由」决定；未勾选具体预设时，使用管理端图文连通性均已通过的最新全局预设。日 token
+            限额仍按全局与学生策略统计。
           </div>
         </el-form-item>
         <el-form-item v-if="form.auto_grading_enabled" label="LLM 路由">
           <el-select
             v-model="form.llm_routing_mode"
             data-testid="homework-llm-routing-mode"
-            placeholder="沿用课程设置"
+            placeholder="全局图文校验通过的最新预设"
             style="width: 100%"
             @visible-change="v => v && loadLlmPresets()"
           >
-            <el-option label="沿用课程设置（课程 LLM 分组/顺序）" value="course_default" />
-            <el-option label="仅使用下方勾选的课程端点预设" value="limit_presets" />
-            <el-option label="优先使用「最新纯文本连通性测试通过」的全局预设" value="latest_passing" />
+            <el-option label="使用全局：图文连通性均已通过的最新预设" value="latest_passing" />
+            <el-option label="仅使用下方勾选的端点预设（按勾选顺序尝试）" value="limit_presets" />
           </el-select>
           <div class="attachment-help">
-            发布后仍可修改。限制预设时，请先在「课程设置」里把端点加入本课程；否则系统会回退为完整课程路由并给出提示。
+            发布后仍可修改。勾选预设时，从管理端已启用的端点中选择；若列表为空请检查权限或联系管理员配置预设。
           </div>
         </el-form-item>
         <el-form-item
@@ -226,7 +226,7 @@
             multiple
             filterable
             collapse-tags
-            placeholder="选择本作业允许使用的预设"
+            placeholder="选择本作业允许使用的预设（可多选）"
             style="width: 100%"
             @visible-change="v => v && loadLlmPresets()"
           >
@@ -369,7 +369,7 @@ const form = reactive({
   late_submission_affects_score: false,
   max_submissions_enabled: false,
   max_submissions_value: 3,
-  llm_routing_mode: 'course_default',
+  llm_routing_mode: 'latest_passing',
   llm_preset_ids: []
 })
 
@@ -460,7 +460,7 @@ const loadLlmPresets = async () => {
 const parseRoutingFromHomework = row => {
   const spec = row?.llm_routing_spec
   if (!spec || typeof spec !== 'object') {
-    form.llm_routing_mode = 'course_default'
+    form.llm_routing_mode = 'latest_passing'
     form.llm_preset_ids = []
     return
   }
@@ -474,7 +474,7 @@ const parseRoutingFromHomework = row => {
     form.llm_preset_ids = spec.preset_ids.map(x => Number(x)).filter(n => Number.isFinite(n))
     return
   }
-  form.llm_routing_mode = 'course_default'
+  form.llm_routing_mode = 'latest_passing'
   form.llm_preset_ids = []
 }
 
@@ -512,7 +512,7 @@ const resetHomeworkForm = () => {
   form.late_submission_affects_score = false
   form.max_submissions_enabled = false
   form.max_submissions_value = 3
-  form.llm_routing_mode = 'course_default'
+  form.llm_routing_mode = 'latest_passing'
   form.llm_preset_ids = []
   attachmentFile.value = null
 }

@@ -113,6 +113,8 @@ def _make_grouped_course_with_homework() -> dict:
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         p2 = LLMEndpointPreset(
             name="preset_g2",
@@ -123,6 +125,8 @@ def _make_grouped_course_with_homework() -> dict:
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         p3 = LLMEndpointPreset(
             name="preset_g3",
@@ -133,6 +137,8 @@ def _make_grouped_course_with_homework() -> dict:
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         db.add_all([p1, p2, p3])
         db.flush()
@@ -183,6 +189,8 @@ def _make_grouped_course_with_homework() -> dict:
             created_by=teacher.id,
         )
         db.add(hw)
+        db.flush()
+        hw.llm_routing_spec = {"mode": "course_groups"}
         db.commit()
         db.refresh(hw)
         return {
@@ -699,6 +707,8 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         b = LLMEndpointPreset(
             name="r-b-2",
@@ -709,6 +719,8 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         db.add_all([a, b])
         db.flush()
@@ -737,6 +749,7 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
         )
         db.add(h)
         db.flush()
+        h.llm_routing_spec = {"mode": "course_groups"}
         sub = HomeworkSubmission(
             homework_id=h.id,
             student_id=stud.id,

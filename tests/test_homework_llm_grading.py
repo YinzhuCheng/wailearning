@@ -138,7 +138,8 @@ def test_auto_grading_disabled_no_task(grading_context: dict):
         db.close()
 
 
-def test_course_llm_disabled_task_fails(grading_context: dict):
+def test_course_llm_disabled_still_grades_with_global_preset(grading_context: dict):
+    """Course LLM toggle off: homework auto-grading uses global multimodal-validated preset."""
     ctx = make_grading_course_with_homework(course_llm_enabled=False)
     client = grading_context["client"]
     student_h = login_api(client, ctx["student_username"], ctx["student_password"])
@@ -158,13 +159,24 @@ def test_course_llm_disabled_task_fails(grading_context: dict):
     finally:
         db.close()
 
-    process_grading_task(tid)
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(71.0, "global route")),
+    ):
+        process_grading_task(tid)
 
     db = SessionLocal()
     try:
         task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
-        assert task.status == "failed"
-        assert task.error_code == "llm_config_disabled"
+        assert task.status == "success"
+        cand = (
+            db.query(HomeworkScoreCandidate)
+            .filter(HomeworkScoreCandidate.attempt_id == task.attempt_id, HomeworkScoreCandidate.source == "auto")
+            .first()
+        )
+        assert cand is not None
+        assert cand.source_metadata.get("endpoint_id") == ctx["preset_id"]
     finally:
         db.close()
 
@@ -262,6 +274,8 @@ def test_second_endpoint_used_when_first_keeps_retryable(grading_context: dict):
             is_active=True,
             supports_vision=True,
             validation_status="validated",
+            text_validation_status="passed",
+            vision_validation_status="passed",
         )
         db.add(preset_b)
         db.flush()
@@ -653,6 +667,7 @@ def test_latest_passing_validated_routes_to_newest_preset(grading_context: dict)
             supports_vision=True,
             validation_status="validated",
             text_validation_status="passed",
+            vision_validation_status="passed",
             validated_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
         )
         p_new = LLMEndpointPreset(
@@ -665,6 +680,7 @@ def test_latest_passing_validated_routes_to_newest_preset(grading_context: dict)
             supports_vision=True,
             validation_status="validated",
             text_validation_status="passed",
+            vision_validation_status="passed",
             validated_at=datetime(2030, 1, 1, tzinfo=timezone.utc),
         )
         db.add_all([p_old, p_new])

@@ -787,7 +787,10 @@ class HomeworkBase(BaseModel):
     )
     llm_routing_spec: Optional[dict[str, Any]] = Field(
         default=None,
-        description="Per-homework LLM routing override: mode limit_to_preset_ids or latest_passing_validated.",
+        description=(
+            "Per-homework LLM routing: latest_passing_validated (default, global multimodal-validated); "
+            "limit_to_preset_ids with preset_ids; optional course_groups to use course endpoint groups/order."
+        ),
     )
 
     @field_validator("max_submissions")
