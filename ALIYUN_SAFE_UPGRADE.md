@@ -202,23 +202,58 @@ sudo tar -czf /opt/dd-class/backups/ddclass-source-$(date +%F-%H%M%S).tar.gz \
   /opt/dd-class/source
 ```
 
+### 5.4 停机一致备份（短时停写，严肃升级推荐）
+
+你已接受 **短时停写** 时，在单机 PostgreSQL 上这是降低「库与附件时间点漂移」最简单稳妥的做法。
+
+推荐顺序（维护窗口内执行）：
+
+1. 通知用户即将维护。
+2. `sudo install -d -m 0755 /opt/dd-class/backups/db /opt/dd-class/backups/files`（若目录已存在可跳过）。
+3. `sudo systemctl stop ddclass-backend`（停止 API 与进程内 LLM worker，避免继续写库与写附件）。
+4. `sudo -u postgres pg_dump -Fc ddclass > /opt/dd-class/backups/db/ddclass-$(date +%F-%H%M%S).dump`  
+   （若库名不是 `ddclass`，以 `DATABASE_URL` 中的库名为准。）
+5. **整包**备份配置与附件（含 `.env.production` 与 `uploads`，保证与 dump 同一时刻）：
+   ```bash
+   sudo tar -czf /opt/dd-class/backups/files/shared-$(date +%F-%H%M%S).tar.gz -C /opt/dd-class shared
+   ```
+6. （强烈建议）再打一份当前代码快照，便于与「整库回滚」配套回滚到同一时代的代码：见 **5.3**。
+7. 若本步只做备份、尚未升级：`sudo systemctl start ddclass-backend` 恢复服务。
+
+说明：`pg_dump` 可在服务运行时做，但无法与 `shared/uploads` 做到同一瞬间冻结；**先停后端再 dump + tar `shared`**，是单机上一致性备份的合理默认。
+
+### 5.5 按仓库默认部署，如何找到「原始资料」路径
+
+部署脚本默认 `APP_ROOT=/opt/dd-class`。若你们改过 `APP_ROOT` / `SOURCE_DIR` / `SHARED_DIR`，以实际为准。
+
+| 用途 | 默认路径 | 如何核实 |
+|------|----------|----------|
+| 运行代码 | `/opt/dd-class/source` | `ls -la /opt/dd-class/source` |
+| 生产配置 + uploads 根目录 | `/opt/dd-class/shared` | 查看 `EnvironmentFile` 与 `UPLOADS_DIR`：`grep -E 'EnvironmentFile|UPLOADS_DIR' /etc/systemd/system/ddclass-backend.service` |
+| 数据库连接 | `DATABASE_URL`（在 `shared/.env.production`） | `sudo grep ^DATABASE_URL= /opt/dd-class/shared/.env.production`（勿泄露到公开渠道） |
+| 管理端 / 家长端静态产物 | 常见为 `/var/www/wailearning.xyz/admin` 与 `.../parent` | 查看 nginx 站点配置中的 `root` / `alias` |
+
+备份与还原时，请始终让 **`pg_dump` / `pg_restore` 针对的库** 与 **当前 `.env.production` 中 `DATABASE_URL` 的库名、用户** 一致，避免还原到错误库。
+
 ---
 
 ## 6. 安全升级流程（推荐）
 
+### 6.1 常规升级（变更风险较小时）
+
+仍建议至少有 **5.1–5.3** 的备份，再按 `DEPLOY.md` 拉取新代码并执行 `scripts/deploy_*.sh` 或 `scripts/redeploy.sh`，最后跑 `scripts/post_deploy_check.sh`。
+
+### 6.2 严肃升级（接受短时停写；失败则「回滚代码 + 还原整库」）
+
+你方确认的回滚标准为：**回滚到旧代码，并对 PostgreSQL 做整库还原**。为避免「库已回到旧版本、附件仍是新版本」的撕裂，**强烈建议在回滚整库的同时，还原升级前打好的整包 `shared` 备份（5.4 第 5 步的 `tar`）**。
+
 推荐顺序：
 
-1. 备份数据库
-2. 备份共享目录
-3. 备份当前代码目录（可选）
-4. 拉取新代码
-5. 运行部署脚本
-6. 做 post-deploy 检查
-7. 验证：
-   - 管理端登录
-   - 家长端访问
-   - 教师课程页 LLM 配置
-   - 学生提交与评分状态
+1. 执行 **5.4**（停后端 → `pg_dump` → `tar` 整个 `shared` → 建议再打 **5.3** 代码快照），确认备份文件存在且体积合理。
+2. 保持后端停止（或再次 `stop`），按既定流程升级：拉新代码、`sudo bash scripts/deploy_all.sh`（或分步 `deploy_backend` / 前端脚本），与 `DEPLOY.md` 一致。
+3. `sudo systemctl start ddclass-backend`，执行 `sudo bash scripts/post_deploy_check.sh`（按需设置 `APP_URL` / `API_HEALTH_URL`）。
+4. 业务验收：管理端登录、家长端、课程与作业、**随机打开几条带附件的记录**。
+5. **若验收失败**：按 **§8.5** 执行「停服务 → 还原 `shared` → 整库 `pg_restore` → 还原旧代码 → 启动 → 复查」。
 
 ---
 
@@ -301,6 +336,35 @@ sudo systemctl start ddclass-backend
 ### 8.4 共享文件回滚
 
 如果附件目录损坏，再恢复 shared 备份包。
+
+### 8.5 整库回滚 + 还原整份 `shared`（与「回滚代码」配套，推荐默认）
+
+适用于：升级后 schema 或数据不兼容、验收失败，且你方已确定 **回滚代码并还原整库**。
+
+**警告**：以下步骤会 **删除当前库内全部数据** 并以备份覆盖；执行前再次确认 `.dump` 与 `shared-*.tar.gz` 路径与时间点正确。
+
+```bash
+sudo systemctl stop ddclass-backend
+
+# 1) 还原配置与附件（与备份时整包路径一致；下面仅为示例路径）
+sudo rm -rf /opt/dd-class/shared
+sudo mkdir -p /opt/dd-class
+sudo tar -xzf /opt/dd-class/backups/files/shared-YYYY-MM-DD-HHMMSS.tar.gz -C /opt/dd-class
+
+# 2) 从 .env.production 读取库名（此处仍假定为 ddclass；若不同请改 DB_NAME）
+DB_NAME=ddclass
+sudo -u postgres dropdb "${DB_NAME}"   # 若仍有连接可加上 --if-exists 或先确保后端已停
+sudo -u postgres createdb -O ddclass "${DB_NAME}"
+sudo -u postgres pg_restore --no-owner --role=ddclass -d "${DB_NAME}" /opt/dd-class/backups/db/ddclass-YYYY-MM-DD-HHMMSS.dump
+
+# 3) 回滚代码：解压 5.3 的 source 快照，或在旧 tag/commit 上重新 deploy_backend 等
+#    （务必与备份时代码版本一致或兼容该库。）
+
+sudo systemctl start ddclass-backend
+sudo bash /opt/dd-class/source/scripts/post_deploy_check.sh
+```
+
+若 `pg_restore` 报权限或 owner 相关警告，在单租户自建库场景下通常可接受；以应用能否正常读写与验收为准。若你们使用非默认数据库用户/库名，请与 `DATABASE_URL` 保持一致。
 
 ---
 
