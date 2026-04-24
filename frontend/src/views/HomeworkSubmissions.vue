@@ -71,14 +71,37 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="任务状态" min-width="160">
+            <el-table-column label="任务状态" min-width="220">
               <template #default="{ row }">
                 <div class="task-cell">
-                  <el-tag v-if="row.latest_task_status" :type="taskTagType(row.latest_task_status)" size="small">
+                  <el-tooltip
+                    v-if="row.latest_task_status === 'failed' && row.latest_task_error"
+                    :content="taskFailureTooltip(row)"
+                    placement="top"
+                  >
+                    <el-tag :type="taskTagType(row.latest_task_status)" size="small">
+                      {{ formatTaskStatus(row.latest_task_status) }}
+                    </el-tag>
+                  </el-tooltip>
+                  <el-tag
+                    v-else-if="row.latest_task_status"
+                    :type="taskTagType(row.latest_task_status)"
+                    size="small"
+                  >
                     {{ formatTaskStatus(row.latest_task_status) }}
                   </el-tag>
                   <span v-else class="muted-text">{{ row.status === 'submitted' ? '待评分' : '未提交' }}</span>
                   <span v-if="row.latest_attempt_is_late" class="late-tip">已标记迟交</span>
+                  <el-button
+                    v-if="row.latest_task_log?.length"
+                    type="primary"
+                    link
+                    size="small"
+                    data-testid="btn-open-llm-log"
+                    @click="openTaskLog(row)"
+                  >
+                    LLM 日志
+                  </el-button>
                 </div>
               </template>
             </el-table-column>
@@ -195,9 +218,28 @@
               >
                 {{ formatScore(attempt.review_score) }}
               </el-tag>
-              <el-tag v-if="attempt.task_status" :type="taskTagType(attempt.task_status)" size="small">
+              <el-tooltip
+                v-if="attempt.task_status === 'failed' && attempt.task_error"
+                :content="attemptFailureTooltip(attempt)"
+                placement="top"
+              >
+                <el-tag :type="taskTagType(attempt.task_status)" size="small">
+                  {{ formatTaskStatus(attempt.task_status) }}
+                </el-tag>
+              </el-tooltip>
+              <el-tag v-else-if="attempt.task_status" :type="taskTagType(attempt.task_status)" size="small">
                 {{ formatTaskStatus(attempt.task_status) }}
               </el-tag>
+              <el-button
+                v-if="attempt.task_log?.length"
+                type="primary"
+                link
+                size="small"
+                data-testid="btn-open-llm-log-history"
+                @click="openTaskLog(currentHistoryRow, attempt)"
+              >
+                LLM 日志
+              </el-button>
               <el-tag v-if="attempt.score_source === 'teacher'" size="small" type="success">教师评分</el-tag>
               <el-tag v-else-if="attempt.score_source === 'auto'" size="small" type="info">自动评分</el-tag>
             </div>
@@ -239,6 +281,10 @@
         </el-timeline-item>
       </el-timeline>
     </el-dialog>
+
+    <el-dialog v-model="logDialogVisible" :title="logDialogTitle" width="720px" destroy-on-close>
+      <pre class="llm-log-pre" data-testid="dialog-llm-log-body">{{ logDialogBody }}</pre>
+    </el-dialog>
   </div>
 </template>
 
@@ -264,6 +310,9 @@ const selectedRows = ref([])
 const historyVisible = ref(false)
 const currentHistoryRow = ref(null)
 const historyAttempts = ref([])
+const logDialogVisible = ref(false)
+const logDialogTitle = ref('LLM 调用日志')
+const logDialogBody = ref('')
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const downloadableSelection = computed(() =>
@@ -279,7 +328,9 @@ const buildAttemptHistoryRow = row => ({
   review_score_input: row.review_score === null || row.review_score === undefined ? '' : String(row.review_score),
   review_comment_input: row.review_comment || '',
   saving_review: false,
-  regrading: false
+  regrading: false,
+  task_log: row.task_log || [],
+  task_error_code: row.task_error_code || null
 })
 
 const buildSubmissionRow = row => ({
@@ -287,7 +338,9 @@ const buildSubmissionRow = row => ({
   review_score_input: row.review_score === null || row.review_score === undefined ? '' : String(row.review_score),
   review_comment_input: row.review_comment || '',
   saving_review: false,
-  regrading: false
+  regrading: false,
+  latest_task_log: row.latest_task_log || [],
+  latest_task_error_code: row.latest_task_error_code || null
 })
 
 const loadPage = async () => {
@@ -343,6 +396,25 @@ const taskTagType = status => ({
   success: 'success',
   failed: 'danger'
 }[status] || 'info')
+
+const taskFailureTooltip = row => {
+  const code = row.latest_task_error_code ? `错误码：${row.latest_task_error_code}\n` : ''
+  return `${code}${row.latest_task_error || ''}`.trim()
+}
+
+const attemptFailureTooltip = attempt => {
+  const code = attempt.task_error_code ? `错误码：${attempt.task_error_code}\n` : ''
+  return `${code}${attempt.task_error || ''}`.trim()
+}
+
+const openTaskLog = (row, attempt = null) => {
+  const log = attempt?.task_log || row?.latest_task_log
+  logDialogTitle.value = attempt
+    ? `LLM 日志 · ${row?.student_name || ''} · 提交 #${attempt.id}`
+    : `LLM 日志 · ${row?.student_name || ''}`
+  logDialogBody.value = JSON.stringify(log || [], null, 2)
+  logDialogVisible.value = true
+}
 
 const getTodayZipName = () => `${new Date().toLocaleDateString('sv-SE')}.zip`
 

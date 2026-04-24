@@ -100,7 +100,13 @@
               >
                 学生提交
               </el-button>
-              <el-button v-if="!userStore.isStudent" size="small" plain @click="openEditDialog(row)">
+              <el-button
+                v-if="!userStore.isStudent"
+                size="small"
+                plain
+                data-testid="homework-btn-edit"
+                @click="openEditDialog(row)"
+              >
                 编辑
               </el-button>
               <el-button
@@ -193,6 +199,44 @@
             启用后，学生新提交会进入异步评分队列；展示分数始终按最高分规则计算。模型会分段读取作业说明、学生文字与附件（PDF/图片/部分文本与
             ipynb 等）；过大内容可能被截断。日 token 限额在课程设置中配置。
           </div>
+        </el-form-item>
+        <el-form-item v-if="form.auto_grading_enabled" label="LLM 路由">
+          <el-select
+            v-model="form.llm_routing_mode"
+            data-testid="homework-llm-routing-mode"
+            placeholder="沿用课程设置"
+            style="width: 100%"
+            @visible-change="v => v && loadLlmPresets()"
+          >
+            <el-option label="沿用课程设置（课程 LLM 分组/顺序）" value="course_default" />
+            <el-option label="仅使用下方勾选的课程端点预设" value="limit_presets" />
+            <el-option label="优先使用「最新纯文本连通性测试通过」的全局预设" value="latest_passing" />
+          </el-select>
+          <div class="attachment-help">
+            发布后仍可修改。限制预设时，请先在「课程设置」里把端点加入本课程；否则系统会回退为完整课程路由并给出提示。
+          </div>
+        </el-form-item>
+        <el-form-item
+          v-if="form.auto_grading_enabled && form.llm_routing_mode === 'limit_presets'"
+          label="端点预设"
+        >
+          <el-select
+            v-model="form.llm_preset_ids"
+            data-testid="homework-llm-preset-multi"
+            multiple
+            filterable
+            collapse-tags
+            placeholder="选择本作业允许使用的预设"
+            style="width: 100%"
+            @visible-change="v => v && loadLlmPresets()"
+          >
+            <el-option
+              v-for="p in llmPresets"
+              :key="p.id"
+              :label="`${p.name} (#${p.id})`"
+              :value="p.id"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="响应语言">
           <el-input v-model="form.response_language" placeholder="例如 zh-CN / en-US，可为空" />
@@ -304,6 +348,7 @@ const batchLateForm = reactive({
 })
 const formRef = ref(null)
 const attachmentFile = ref(null)
+const llmPresets = ref([])
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
@@ -323,7 +368,9 @@ const form = reactive({
   allow_late_submission: true,
   late_submission_affects_score: false,
   max_submissions_enabled: false,
-  max_submissions_value: 3
+  max_submissions_value: 3,
+  llm_routing_mode: 'course_default',
+  llm_preset_ids: []
 })
 
 const rules = {
@@ -398,6 +445,56 @@ const applyBatchLatePolicy = async () => {
   }
 }
 
+const loadLlmPresets = async () => {
+  if (!selectedCourse.value) {
+    return
+  }
+  try {
+    const rows = await api.llmSettings.listPresets()
+    llmPresets.value = Array.isArray(rows) ? rows.filter(p => p && p.is_active !== false) : []
+  } catch {
+    llmPresets.value = []
+  }
+}
+
+const parseRoutingFromHomework = row => {
+  const spec = row?.llm_routing_spec
+  if (!spec || typeof spec !== 'object') {
+    form.llm_routing_mode = 'course_default'
+    form.llm_preset_ids = []
+    return
+  }
+  if (spec.mode === 'latest_passing_validated') {
+    form.llm_routing_mode = 'latest_passing'
+    form.llm_preset_ids = []
+    return
+  }
+  if (spec.mode === 'limit_to_preset_ids' && Array.isArray(spec.preset_ids)) {
+    form.llm_routing_mode = 'limit_presets'
+    form.llm_preset_ids = spec.preset_ids.map(x => Number(x)).filter(n => Number.isFinite(n))
+    return
+  }
+  form.llm_routing_mode = 'course_default'
+  form.llm_preset_ids = []
+}
+
+const buildLlmRoutingSpec = () => {
+  if (!form.auto_grading_enabled) {
+    return null
+  }
+  if (form.llm_routing_mode === 'latest_passing') {
+    return { mode: 'latest_passing_validated' }
+  }
+  if (form.llm_routing_mode === 'limit_presets') {
+    const ids = (form.llm_preset_ids || []).map(x => Number(x)).filter(n => Number.isFinite(n))
+    if (!ids.length) {
+      return null
+    }
+    return { mode: 'limit_to_preset_ids', preset_ids: ids }
+  }
+  return null
+}
+
 const resetHomeworkForm = () => {
   editingHomeworkId.value = null
   form.title = ''
@@ -415,11 +512,14 @@ const resetHomeworkForm = () => {
   form.late_submission_affects_score = false
   form.max_submissions_enabled = false
   form.max_submissions_value = 3
+  form.llm_routing_mode = 'course_default'
+  form.llm_preset_ids = []
   attachmentFile.value = null
 }
 
 const openCreateDialog = () => {
   resetHomeworkForm()
+  void loadLlmPresets()
   dialogVisible.value = true
 }
 
@@ -449,6 +549,8 @@ const openEditDialog = row => {
     form.max_submissions_value = 3
   }
   attachmentFile.value = null
+  parseRoutingFromHomework(row)
+  void loadLlmPresets()
   dialogVisible.value = true
 }
 
@@ -515,7 +617,8 @@ const submitForm = async () => {
       response_language: form.response_language?.trim() || null,
       allow_late_submission: form.allow_late_submission,
       late_submission_affects_score: form.late_submission_affects_score,
-      max_submissions: maxSubmissions
+      max_submissions: maxSubmissions,
+      llm_routing_spec: buildLlmRoutingSpec()
     }
     if (editingHomeworkId.value) {
       await api.homework.update(editingHomeworkId.value, payload)

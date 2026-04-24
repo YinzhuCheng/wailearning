@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -728,6 +728,10 @@ class HomeworkBase(BaseModel):
         default=None,
         description="Maximum submission attempts per student; null means unlimited.",
     )
+    llm_routing_spec: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Per-homework LLM routing override: mode limit_to_preset_ids or latest_passing_validated.",
+    )
 
     @field_validator("max_submissions")
     @classmethod
@@ -770,6 +774,7 @@ class HomeworkUpdate(BaseModel):
     allow_late_submission: Optional[bool] = None
     late_submission_affects_score: Optional[bool] = None
     max_submissions: Optional[int] = None
+    llm_routing_spec: Optional[dict[str, Any]] = None
 
     @field_validator("max_submissions")
     @classmethod
@@ -809,6 +814,7 @@ class HomeworkResponse(HomeworkBase):
     submissions_remaining: Optional[int] = None
     latest_submission_is_late: Optional[bool] = None
     grading_rule_hint: Optional[str] = None
+    llm_routing_spec: Optional[dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -886,6 +892,8 @@ class HomeworkSubmissionResponse(BaseModel):
     latest_attempt_id: Optional[int] = None
     latest_task_status: Optional[str] = None
     latest_task_error: Optional[str] = None
+    latest_task_error_code: Optional[str] = None
+    latest_task_log: Optional[list[dict[str, Any]]] = None
 
     class Config:
         from_attributes = True
@@ -909,6 +917,8 @@ class HomeworkAttemptResponse(BaseModel):
     review_comment: Optional[str] = None
     task_status: Optional[str] = None
     task_error: Optional[str] = None
+    task_error_code: Optional[str] = None
+    task_log: Optional[list[dict[str, Any]]] = None
     score_source: Optional[str] = None
 
     class Config:
@@ -949,6 +959,8 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     latest_attempt_is_late: Optional[bool] = None
     latest_task_status: Optional[str] = None
     latest_task_error: Optional[str] = None
+    latest_task_error_code: Optional[str] = None
+    latest_task_log: Optional[list[dict[str, Any]]] = None
     attempt_count: int = 0
 
 

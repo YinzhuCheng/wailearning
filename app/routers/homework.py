@@ -208,6 +208,34 @@ def _latest_task_for_attempt(db: Session, attempt_id: Optional[int]) -> Optional
     )
 
 
+def _task_for_error_and_log(
+    db: Session, attempt_id: Optional[int], latest: Optional[HomeworkGradingTask]
+) -> Optional[HomeworkGradingTask]:
+    """While a retry is queued/processing, surface the most recent failed task for diagnostics."""
+    if not attempt_id or not latest:
+        return latest
+    if latest.status not in ("queued", "processing"):
+        return latest
+    prev_failed = (
+        db.query(HomeworkGradingTask)
+        .filter(
+            HomeworkGradingTask.attempt_id == attempt_id,
+            HomeworkGradingTask.status == "failed",
+            HomeworkGradingTask.id < latest.id,
+        )
+        .order_by(HomeworkGradingTask.id.desc())
+        .first()
+    )
+    return prev_failed or latest
+
+
+def _task_call_log(task: Optional[HomeworkGradingTask]) -> Optional[list]:
+    if not task or not isinstance(task.artifact_manifest, dict):
+        return None
+    log = task.artifact_manifest.get("llm_call_log")
+    return log if isinstance(log, list) else None
+
+
 def _best_candidate_for_attempt(db: Session, attempt_id: int) -> Optional[HomeworkScoreCandidate]:
     candidates = (
         db.query(HomeworkScoreCandidate)
@@ -240,6 +268,8 @@ def _get_submission_summary(db: Session, homework_id: int, student_id: int) -> O
 
 def _serialize_submission(db: Session, submission: HomeworkSubmission) -> HomeworkSubmissionResponse:
     refresh_submission_summary(db, submission)
+    latest_task = _latest_task_for_attempt(db, submission.latest_attempt_id)
+    diag_task = _task_for_error_and_log(db, submission.latest_attempt_id, latest_task)
     return HomeworkSubmissionResponse(
         id=submission.id,
         homework_id=submission.homework_id,
@@ -258,12 +288,15 @@ def _serialize_submission(db: Session, submission: HomeworkSubmission) -> Homewo
         latest_attempt_id=submission.latest_attempt_id,
         latest_task_status=submission.latest_task_status,
         latest_task_error=submission.latest_task_error,
+        latest_task_error_code=diag_task.error_code if diag_task else None,
+        latest_task_log=_task_call_log(diag_task),
     )
 
 
 def _serialize_attempt(db: Session, attempt: HomeworkAttempt) -> HomeworkAttemptResponse:
     best_candidate = _best_candidate_for_attempt(db, attempt.id)
     task = _latest_task_for_attempt(db, attempt.id)
+    diag_task = _task_for_error_and_log(db, attempt.id, task)
     return HomeworkAttemptResponse(
         id=attempt.id,
         homework_id=attempt.homework_id,
@@ -281,7 +314,9 @@ def _serialize_attempt(db: Session, attempt: HomeworkAttempt) -> HomeworkAttempt
         review_score=best_candidate.score if best_candidate else None,
         review_comment=best_candidate.comment if best_candidate else None,
         task_status=task.status if task else None,
-        task_error=task.error_message if task else None,
+        task_error=diag_task.error_message if diag_task else None,
+        task_error_code=diag_task.error_code if diag_task else None,
+        task_log=_task_call_log(diag_task),
         score_source=best_candidate.source if best_candidate else None,
     )
 
@@ -313,6 +348,8 @@ def _serialize_submission_status(
     if submission:
         refresh_submission_summary(db, submission)
     latest_attempt = submission.latest_attempt if submission else None
+    latest_task = _latest_task_for_attempt(db, submission.latest_attempt_id) if submission else None
+    diag_task = _task_for_error_and_log(db, submission.latest_attempt_id, latest_task) if submission else None
     return HomeworkSubmissionStatusResponse(
         student_id=student.id if student else submission.student_id,
         student_name=student.name if student else None,
@@ -330,6 +367,8 @@ def _serialize_submission_status(
         latest_attempt_is_late=latest_attempt.is_late if latest_attempt else None,
         latest_task_status=submission.latest_task_status if submission else None,
         latest_task_error=submission.latest_task_error if submission else None,
+        latest_task_error_code=diag_task.error_code if diag_task else None,
+        latest_task_log=_task_call_log(diag_task),
         attempt_count=len(submission.attempts) if submission else 0,
     )
 
@@ -387,6 +426,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         submissions_remaining=remaining,
         latest_submission_is_late=latest_submission_is_late,
         grading_rule_hint=_grade_rule_hint(homework),
+        llm_routing_spec=homework.llm_routing_spec,
     )
 
 
@@ -594,6 +634,7 @@ def create_homework(
         allow_late_submission=data.allow_late_submission,
         late_submission_affects_score=data.late_submission_affects_score,
         max_submissions=data.max_submissions,
+        llm_routing_spec=data.llm_routing_spec,
         created_by=current_user.id,
     )
     db.add(homework)
@@ -654,6 +695,9 @@ def update_homework(
         homework.allow_late_submission = data.allow_late_submission
     if data.late_submission_affects_score is not None:
         homework.late_submission_affects_score = data.late_submission_affects_score
+
+    if "llm_routing_spec" in data.model_dump(exclude_unset=True):
+        homework.llm_routing_spec = data.llm_routing_spec
 
     update_payload = data.model_dump(exclude_unset=True)
     if "max_submissions" in update_payload:

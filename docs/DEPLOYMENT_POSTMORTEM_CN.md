@@ -38,7 +38,7 @@ git reset --hard "$GIT_REMOTE/$BRANCH"
 
 ---
 
-## 2. 工作区有未提交改动，`checkout` 被 Git 拦截
+## 2. 工作区有未提交改动，`checkout` 被 Git 拦截（含仅改 `scripts/*.sh`）
 
 **现象**
 
@@ -53,13 +53,24 @@ error: Your local changes to the following files would be overwritten by checkou
 **做法**
 
 - **原则**：部署机只保留可重建状态；临时改动应进仓库，或至少先导出 patch 再清理。
-- **脚本**：对需要“先清再拉”的机器，使用：
+- **脚本**：对需要“先清再拉”的机器，使用 **`GIT_RESET_WORKTREE_BEFORE_FETCH=1`**；会在 `BACKUP_DIR`（默认 `/opt/dd-class/backups`）写入 `source-working-tree-<时间戳>.patch`，再 `git reset --hard` 与 `git clean -ffd`，然后按第 1 节方式同步远端分支。
+- **自动缓解（默认）**：若未使用 `GIT_RESET` 但 `checkout -B` 仍因「本地改动会被覆盖」失败（例如只改了 `scripts/*.sh`），**`git_sync_server.sh`** 在 **`GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=1`（默认）** 时会再写入 `checkout-conflict-<时间戳>.patch`、执行 **`git stash -u`** 并重试一次。不需要时设 **`GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0`**。
 
-  ```bash
-  GIT_RESET_WORKTREE_BEFORE_FETCH=1 sudo bash scripts/redeploy.sh
-  ```
+---
 
-  会在 `BACKUP_DIR`（默认 `/opt/dd-class/backups`）写入 `source-working-tree-<时间戳>.patch`，再执行 `git reset --hard` 与 `git clean -ffd`，然后按第 1 节方式同步远端分支。
+## 2b. `sudo -u postgres pg_dump` 时出现 *could not change directory to "/root"*
+
+**现象**
+
+在 root 家目录下执行 `sudo -u postgres pg_dump ...`，日志里出现 **Permission denied** 与 **could not change directory to "/root"**。
+
+**原因**
+
+`postgres` 系统用户不能 `cd` 进 `/root`，属常见提示；**多数情况下 dump 仍成功**。
+
+**做法**
+
+在子 shell 中先 **`cd /tmp`**（或任意 postgres 可读目录）再执行 **`pg_dump`**。仓库中 **`SAFE_BACKUP_BEFORE_DEPLOY=1`** 时的备份逻辑采用 **`(cd /tmp && sudo -u postgres pg_dump ...)`**。
 
 ---
 
@@ -121,13 +132,27 @@ EOF
 
 ## 6. 原则摘要
 
-1. **部署机只保留可重建状态**：备份 DB、shared、源码区 diff 后，`git reset --hard` + `git clean -ffd`（或通过 `GIT_RESET_WORKTREE_BEFORE_FETCH=1`）。
+1. **部署机只保留可重建状态**：备份 DB、shared、源码区 diff 后，`git reset --hard` + `git clean -ffd`（或通过 `GIT_RESET_WORKTREE_BEFORE_FETCH=1`）；或在升级脚本中设 **`SAFE_BACKUP_BEFORE_DEPLOY=1`**（由 **`redeploy.sh` / `pull_and_deploy.sh`** 在 Git 同步前执行）。
 2. **Git 对齐必须用显式 refspec**：不要依赖“`git fetch origin branch` 后 `origin/branch` 一定存在”。
 3. **部署完成须经统一验收**：Git + 完整部署 + `post_deploy_check.sh` + systemd + 本机与公网健康（及文档约定的路径）。
 
 ---
 
-## 7. 参考：稳健远程片段（按需改路径与分支）
+## 7. 管理端界面仍是旧版、但接口已新
+
+**常见原因**
+
+1. **`deploy_all.sh` 未跑完**：前端由 **`deploy_frontend.sh`**（`npm run build` + rsync 到 `/var/www/.../admin`）发布；若脚本在中途失败，浏览器仍加载旧静态资源。
+2. **`SKIP_GIT=1` 或拉错目录**：本地仓库不是目标 commit 时，重建前端只是「旧代码重新打包」。
+3. **`GIT_BRANCH` 未传**：`redeploy.sh` 默认 **`main`**，功能分支需显式设置。
+4. **`REPO_DIR` 与文档不一致**：生产常见为 **`/opt/dd-class/source`**；勿与另一份 clone 混淆。
+5. **浏览器缓存**：部署验证通过后可尝试强制刷新或无痕窗口。
+
+**脚本侧缓解**：`redeploy.sh` / `pull_and_deploy.sh` 在部署前打印当前 **`git rev-parse --short HEAD`**；`deploy_frontend.sh` 在构建前打印 **`SOURCE_DIR`** 对应提交。详见 **`DEPLOY.md`** 中 *Admin SPA / stale UI* 小节。
+
+---
+
+## 8. 参考：稳健远程片段（按需改路径与分支）
 
 以下仅为说明性示例；生产环境请替换 IP、分支与备份策略。
 
