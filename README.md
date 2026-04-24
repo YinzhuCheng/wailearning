@@ -358,7 +358,8 @@ class Settings(BaseSettings):
 - `ALIYUN_SAFE_UPGRADE.md`
 - `DEPLOY.md`
 - `RUNBOOK_ALIYUN.md`
-- `docs/DEPLOY_GIT_ROBUSTNESS.md`（服务器上 Git 切分支与强制对齐远端，减少部署脚本在 checkout 阶段误失败）
+- `docs/DEPLOY_GIT_ROBUSTNESS.md`（服务器上 Git 显式 refspec、工作区清理、验收标准）
+- `docs/DEPLOYMENT_POSTMORTEM_CN.md`（一次生产部署复盘：fetch/checkout、脏工作区、heredoc、何谓“部署完成”）
 
 仓库还提供了一个可直接参考改造的安全升级脚本示例：
 

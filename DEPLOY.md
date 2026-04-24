@@ -7,7 +7,9 @@ This guide targets Alibaba Cloud ECS on Ubuntu 22.04, Debian 12, and Alibaba Clo
 If you want the operational checklist for first go-live, DNS cutover, acceptance, and rollback, also read `RUNBOOK_ALIYUN.md`.
 If you want a data-safety-focused upgrade guide and a safer deployment example script, also read `ALIYUN_SAFE_UPGRADE.md` and `scripts/example_safe_upgrade_aliyun.sh`.
 
-**Git on the server (branch checkout vs. “real” deploy failures):** when you deploy from a clone on ECS, failures often come from fragile `checkout` / `pull --ff-only` rather than from the application build. Read **`docs/DEPLOY_GIT_ROBUSTNESS.md`** for the recommended `fetch` → `checkout -B` → `reset --hard` → `clean -fd` flow; **`scripts/redeploy.sh`** and **`scripts/pull_and_deploy.sh`** follow that pattern by default.
+**Git on the server (branch checkout vs. “real” deploy failures):** when you deploy from a clone on ECS, failures often come from assuming `origin/<branch>` exists after a plain `git fetch`, from dirty working trees blocking `checkout`, or from SSH heredocs that never closed. Read **`docs/DEPLOY_GIT_ROBUSTNESS.md`** (mechanics) and **`docs/DEPLOYMENT_POSTMORTEM_CN.md`** (field lessons). **`scripts/redeploy.sh`** and **`scripts/pull_and_deploy.sh`** use an explicit refspec fetch via **`scripts/lib/git_sync_server.sh`**. Optional **`GIT_RESET_WORKTREE_BEFORE_FETCH=1`** backs up `git diff` then hard-resets before fetching (see the robustness doc).
+
+**When is a deploy “done”?** A clean `git status` and a passing public health URL are not sufficient by themselves. Treat a release as verified only after **`deploy_all.sh`** has finished, **`scripts/post_deploy_check.sh`** has passed (local + public health, `nginx -t`, systemd), and **`git log -1`** matches the intended revision—the check script prints the repo `HEAD` to make that obvious.
 
 ## Architecture
 
@@ -178,7 +180,20 @@ sudo journalctl -u postgresql -n 100 --no-pager
 
 ## 11. Update Workflow
 
-After updating the code on the server:
+Prefer the full git-align + deploy path (sets remote-tracking refs explicitly and can optionally discard local edits—see **`docs/DEPLOY_GIT_ROBUSTNESS.md`**):
+
+```bash
+cd /opt/dd-class/source
+sudo GIT_BRANCH=main GIT_REMOTE=origin bash scripts/redeploy.sh
+```
+
+If the tree on the server must be wiped before pull (uncommitted edits blocking checkout), use:
+
+```bash
+sudo GIT_RESET_WORKTREE_BEFORE_FETCH=1 GIT_BRANCH=main bash scripts/redeploy.sh
+```
+
+After updating the code on the server without `redeploy.sh`, still run checks:
 
 ```bash
 sudo bash scripts/deploy_all.sh

@@ -15,6 +15,8 @@
 
 所以这次需求（先清空再重建）建议用**可审计的一次性命令**，把删除动作写清楚，再调用已有部署脚本。
 
+常规「不重装、只升级」时的 Git/SSH 坑与验收标准见 **`docs/DEPLOYMENT_POSTMORTEM_CN.md`** 与 **`docs/DEPLOY_GIT_ROBUSTNESS.md`**（含 heredoc `EOF` 必须独占一行、`GIT_RESET_WORKTREE_BEFORE_FETCH` 等）。
+
 ## 一次性多行执行（推荐）
 
 > 除了管理员账号/密码占位符外，其他参数已按你给的信息写死：仓库 `https://github.com/YinzhuCheng/wailearning`、分支 `main`、服务器 `47.242.58.29`。
