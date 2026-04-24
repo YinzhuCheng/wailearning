@@ -28,6 +28,7 @@ import openpyxl
 import rarfile
 import xlrd
 from sqlalchemy import and_, func, text
+from sqlalchemy.orm.attributes import flag_modified
 
 
 def _unrar_tool_path() -> Optional[str]:
@@ -71,6 +72,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.attachments import get_attachment_file_path
 from app.config import settings
+from app.llm_token_quota import quota_calendar, resolve_effective_daily_student_tokens
 from app.database import SessionLocal, engine
 from app.llm_group_routing import GroupRoutingContext
 from app.models import (
@@ -471,6 +473,12 @@ def _append_llm_call_log(task: HomeworkGradingTask, event: dict[str, Any]) -> No
     if len(log) > _LLM_CALL_LOG_MAX_EVENTS:
         log = log[-_LLM_CALL_LOG_MAX_EVENTS :]
     task.artifact_manifest["llm_call_log"] = log
+    flag_modified(task, "artifact_manifest")
+
+
+def _flag_artifact_manifest_modified(task: HomeworkGradingTask) -> None:
+    """JSON columns need explicit dirty flag when mutating nested dicts in place."""
+    flag_modified(task, "artifact_manifest")
 
 
 def _material_needs_vision(material: dict[str, Any]) -> bool:
@@ -813,12 +821,11 @@ def estimate_request_tokens_from_material(
 
 def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, Any]:
     """Aggregated usage for the LLM config's quota day (for teacher-facing UI)."""
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
+    usage_date, timezone_name = quota_calendar(db)
     snap: dict[str, Any] = {
         "usage_date": usage_date,
         "quota_timezone": timezone_name,
-        "daily_student_token_limit": config.daily_student_token_limit,
+        "daily_student_token_limit": None,
         "daily_course_token_limit": config.daily_course_token_limit,
         "course_used_tokens_today": None,
         "course_remaining_tokens_today": None,
@@ -844,35 +851,33 @@ def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, 
 
 def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, student_id: int) -> dict[str, Any]:
     """Per-student usage for quota day (student-facing UI; excludes API keys)."""
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
+    usage_date, timezone_name = quota_calendar(db)
+    lim_stu = resolve_effective_daily_student_tokens(db, student_id)
     snap: dict[str, Any] = {
         "subject_id": config.subject_id,
         "usage_date": usage_date,
         "quota_timezone": timezone_name,
-        "daily_student_token_limit": config.daily_student_token_limit,
+        "daily_student_token_limit": lim_stu,
         "daily_course_token_limit": config.daily_course_token_limit,
         "student_used_tokens_today": None,
         "student_remaining_tokens_today": None,
         "course_used_tokens_today": None,
         "course_remaining_tokens_today": None,
     }
-    if config.daily_student_token_limit:
-        used_stu = _get_used_tokens_for_scope(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            student_id=student_id,
-        )
-        used_stu += _sum_reserved_tokens(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            student_id=student_id,
-        )
-        lim_stu = int(config.daily_student_token_limit)
-        snap["student_used_tokens_today"] = used_stu
-        snap["student_remaining_tokens_today"] = max(0, lim_stu - used_stu)
+    used_stu = _get_used_tokens_for_scope(
+        db,
+        usage_date=usage_date,
+        timezone_name=timezone_name,
+        student_id=student_id,
+    )
+    used_stu += _sum_reserved_tokens(
+        db,
+        usage_date=usage_date,
+        timezone_name=timezone_name,
+        student_id=student_id,
+    )
+    snap["student_used_tokens_today"] = used_stu
+    snap["student_remaining_tokens_today"] = max(0, lim_stu - used_stu)
     if config.daily_course_token_limit and config.subject_id:
         used_course = _get_used_tokens_for_scope(
             db,
@@ -903,15 +908,15 @@ def _quota_delta_violations(
     delta_tokens: int,
 ) -> list[str]:
     violations: list[str] = []
-    if config.daily_student_token_limit:
-        used_by_student = _get_used_tokens_for_scope(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            student_id=student_id,
-        )
-        if used_by_student + delta_tokens > int(config.daily_student_token_limit):
-            violations.append("student")
+    lim_stu = resolve_effective_daily_student_tokens(db, student_id)
+    used_by_student = _get_used_tokens_for_scope(
+        db,
+        usage_date=usage_date,
+        timezone_name=timezone_name,
+        student_id=student_id,
+    )
+    if used_by_student + delta_tokens > lim_stu:
+        violations.append("student")
     if config.daily_course_token_limit and subject_id:
         used_by_course = _get_used_tokens_for_scope(
             db,
@@ -983,19 +988,20 @@ def _hash_to_pg_advisory_key(label: str) -> int:
 
 
 def _pg_quota_advisory_keys(
-    config: CourseLLMConfig,
     *,
     student_id: int,
     subject_id: Optional[int],
     usage_date: str,
     timezone_name: str,
+    effective_student_daily_cap: int,
+    course_daily_cap: Optional[int],
 ) -> list[int]:
     keys: list[int] = []
-    if config.daily_student_token_limit:
+    if effective_student_daily_cap and effective_student_daily_cap > 0:
         keys.append(
             _hash_to_pg_advisory_key(f"llm_quota|student|{student_id}|{usage_date}|{timezone_name}")
         )
-    if config.daily_course_token_limit and subject_id:
+    if course_daily_cap and subject_id:
         keys.append(
             _hash_to_pg_advisory_key(f"llm_quota|subject|{subject_id}|{usage_date}|{timezone_name}")
         )
@@ -1018,23 +1024,22 @@ def _quota_precheck_in_session(
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
     """Committed usage plus in-flight reservations vs daily caps."""
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
-    if config.daily_student_token_limit:
-        used_by_student = _get_used_tokens_for_scope(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            student_id=student_id,
-        )
-        used_by_student += _sum_reserved_tokens(
-            db,
-            usage_date=usage_date,
-            timezone_name=timezone_name,
-            student_id=student_id,
-        )
-        if used_by_student + estimated_tokens > int(config.daily_student_token_limit):
-            return False, "quota_exceeded_student"
+    usage_date, timezone_name = quota_calendar(db)
+    lim_stu = resolve_effective_daily_student_tokens(db, student_id)
+    used_by_student = _get_used_tokens_for_scope(
+        db,
+        usage_date=usage_date,
+        timezone_name=timezone_name,
+        student_id=student_id,
+    )
+    used_by_student += _sum_reserved_tokens(
+        db,
+        usage_date=usage_date,
+        timezone_name=timezone_name,
+        student_id=student_id,
+    )
+    if used_by_student + estimated_tokens > lim_stu:
+        return False, "quota_exceeded_student"
     if config.daily_course_token_limit and subject_id:
         used_by_course = _get_used_tokens_for_scope(
             db,
@@ -1076,11 +1081,7 @@ def reserve_quota_tokens(
     PostgreSQL: short transaction + pg_advisory_xact_lock per scope.
     SQLite / others: process-wide lock + same-session row (tests).
     """
-    if not (config.daily_student_token_limit or (config.daily_course_token_limit and task.subject_id)):
-        return True, None
-
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
+    usage_date, timezone_name = quota_calendar(db)
 
     def _try_insert_reservation(sess: Session) -> tuple[bool, Optional[str]]:
         release_quota_reservation(sess, task.id)
@@ -1108,11 +1109,12 @@ def reserve_quota_tokens(
 
     if engine.dialect.name == "postgresql":
         keys = _pg_quota_advisory_keys(
-            config,
             student_id=task.student_id,
             subject_id=task.subject_id,
             usage_date=usage_date,
             timezone_name=timezone_name,
+            effective_student_daily_cap=resolve_effective_daily_student_tokens(db, task.student_id),
+            course_daily_cap=int(config.daily_course_token_limit) if config.daily_course_token_limit else None,
         )
         with engine.begin() as conn:
             for k in keys:
@@ -1142,8 +1144,7 @@ def record_usage_if_needed(
     if existing:
         return
     release_quota_reservation(db, task.id)
-    timezone_name = config.quota_timezone or "UTC"
-    usage_date = _get_usage_date(timezone_name)
+    usage_date, timezone_name = quota_calendar(db)
     prompt_tokens = usage.get("prompt_tokens")
     completion_tokens = usage.get("completion_tokens")
     total_tokens = usage.get("total_tokens")
@@ -1312,6 +1313,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
     task.artifact_manifest = {**base_manifest, "llm_routing": {"version": 1, "status": "pending"}}
     if routing_warnings:
         task.artifact_manifest["homework_routing_warnings"] = routing_warnings
+        _flag_artifact_manifest_modified(task)
     task.input_token_estimate = material["estimated_tokens"]
     task.task_summary = material["summary"]
 
@@ -1561,6 +1563,7 @@ def _grade_with_endpoint_group(
             base = dict(routing.routing_payload())
             base.update(merge)
             task.artifact_manifest["llm_routing"] = base
+            _flag_artifact_manifest_modified(task)
 
         _update_routing_artifact({"status": "routing"})
 
@@ -1682,6 +1685,7 @@ def _grade_with_endpoint_group(
                         "mode": "legacy_priority",
                         "status": "ok",
                     }
+                    _flag_artifact_manifest_modified(task)
                 return score_result
             except RetryableLLMError as exc:
                 last_error_flat = str(exc)
@@ -1702,6 +1706,7 @@ def _grade_with_endpoint_group(
             "mode": "legacy_priority",
             "status": "failed",
         }
+        _flag_artifact_manifest_modified(task)
     raise NonRetryableLLMError(last_error_flat or "所有端点都调用失败。")
 
 

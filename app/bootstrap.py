@@ -11,6 +11,7 @@ from app.database import Base, SessionLocal, engine
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
+    LLMGlobalQuotaPolicy,
     LLMGroup,
     Homework,
     HomeworkAttempt,
@@ -245,6 +246,22 @@ def ensure_schema_updates() -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS llm_global_quota_policies (
+            id INTEGER PRIMARY KEY,
+            default_daily_student_tokens INTEGER NOT NULL DEFAULT 100000,
+            quota_timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS llm_student_token_overrides (
+            id INTEGER PRIMARY KEY,
+            student_id INTEGER NOT NULL UNIQUE REFERENCES students(id),
+            daily_tokens INTEGER NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
         "ALTER TABLE llm_token_usage_logs ADD COLUMN IF NOT EXISTS billing_note VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
@@ -298,6 +315,22 @@ def ensure_schema_updates() -> None:
         )
 
     _backfill_default_llm_groups_for_existing_configs()
+    _ensure_llm_global_quota_policy_row()
+
+
+def _ensure_llm_global_quota_policy_row() -> None:
+    """Single global policy row (id=1) for default per-student daily cap and billing calendar timezone."""
+    db = SessionLocal()
+    try:
+        if db.query(LLMGlobalQuotaPolicy).filter(LLMGlobalQuotaPolicy.id == 1).first():
+            return
+        db.add(LLMGlobalQuotaPolicy(id=1, default_daily_student_tokens=100_000, quota_timezone="UTC"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _backfill_default_llm_groups_for_existing_configs() -> None:

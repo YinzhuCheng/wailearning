@@ -167,9 +167,6 @@ const api = {
     getWeights: subjectId => http.get(`/scores/weights/${subjectId}`),
     updateWeights: (subjectId, data) => http.put(`/scores/weights/${subjectId}`, data)
   },
-  llmSettings: {
-    getStudentQuota: subjectId => http.get(`/llm-settings/courses/student-quota/${subjectId}`)
-  },
   semesters: {
     list: () => http.get('/semesters'),
     create: data => http.post('/semesters', data),
@@ -237,7 +234,12 @@ const api = {
       return httpQuiet.post(`/llm-settings/presets/${id}/validate`, form)
     },
     getCourseConfig: subjectId => http.get(`/llm-settings/courses/${subjectId}`),
-    updateCourseConfig: (subjectId, data) => http.put(`/llm-settings/courses/${subjectId}`, data)
+    updateCourseConfig: (subjectId, data) => http.put(`/llm-settings/courses/${subjectId}`, data),
+    getStudentQuota: subjectId => http.get(`/llm-settings/courses/student-quota/${subjectId}`),
+    getGlobalQuotaPolicy: () => http.get('/llm-settings/admin/quota-policy'),
+    updateGlobalQuotaPolicy: data => http.put('/llm-settings/admin/quota-policy', data),
+    bulkQuotaOverrides: data => http.post('/llm-settings/admin/quota-overrides/bulk', data),
+    setStudentQuotaOverride: (studentId, data) => http.put(`/llm-settings/admin/students/${studentId}/quota-override`, data)
   },
   notifications: {
     list: params => http.get('/notifications', { params }),

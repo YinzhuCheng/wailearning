@@ -21,7 +21,7 @@
         class="quota-card"
       >
         <template #header>
-          <span>当前课程 · LLM 用量（个人）</span>
+          <span>当前课程 · LLM 用量（个人·全课共用池）</span>
         </template>
         <div v-loading="quotaLoading" class="quota-body">
           <template v-if="quotaInfo">
@@ -29,9 +29,12 @@
               统计日：{{ quotaInfo.usage_date }}（时区 {{ quotaInfo.quota_timezone }}）
             </p>
             <p v-if="quotaInfo.daily_student_token_limit != null" class="quota-line">
-              个人日限额：{{ quotaInfo.daily_student_token_limit }}，
+              个人日限额{{ quotaInfo.uses_personal_override ? '（管理员单独配置）' : '（系统默认）' }}：{{ quotaInfo.daily_student_token_limit }}，
               已用 {{ quotaInfo.student_used_tokens_today ?? 0 }}，
               剩余约 {{ quotaInfo.student_remaining_tokens_today ?? '—' }}
+              <span v-if="quotaInfo.global_default_daily_student_tokens != null" class="muted">
+                （当前全校默认 {{ quotaInfo.global_default_daily_student_tokens }}）
+              </span>
             </p>
             <p v-else class="quota-line muted">未设置个人日 token 限额。</p>
             <p v-if="quotaInfo.daily_course_token_limit != null" class="quota-line">

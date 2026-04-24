@@ -150,6 +150,55 @@
       </el-table>
     </el-card>
 
+    <el-card class="preview-card">
+      <template #header>
+        <span><el-icon><Setting /></el-icon> LLM 用量与额度（全平台）</span>
+      </template>
+      <el-alert
+        type="info"
+        :closable="false"
+        class="llm-notice"
+        title="学生个人日 token 为全课共用同一池；统计日与「额度时区」由下方全局策略决定。教师可在课程 LLM 配置中设置「课程日 token 上限」（按单科合计）。"
+      />
+      <el-form v-loading="llmQuotaLoading" label-width="200px" style="max-width: 640px">
+        <el-form-item label="默认每人每日 token">
+          <el-input-number v-model="llmQuotaForm.default_daily_student_tokens" :min="1" :step="10000" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="额度统计时区">
+          <el-input v-model="llmQuotaForm.quota_timezone" placeholder="例如 UTC / Asia/Shanghai" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="llmQuotaSaving" @click="saveLlmQuotaPolicy">保存全局策略</el-button>
+        </el-form-item>
+      </el-form>
+      <el-divider />
+      <p class="field-tip" style="margin-bottom: 12px">批量覆盖个人日限额（写入后优先生效；可清除恢复为默认）</p>
+      <el-form label-width="200px" style="max-width: 640px">
+        <el-form-item label="范围">
+          <el-select v-model="bulkQuotaForm.scope" style="width: 100%">
+            <el-option label="全校所有学生" value="all" />
+            <el-option label="指定班级" value="class" />
+            <el-option label="指定课程选课学生" value="subject" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="bulkQuotaForm.scope === 'class'" label="班级 ID">
+          <el-input-number v-model="bulkQuotaForm.class_id" :min="1" :step="1" style="width: 100%" />
+        </el-form-item>
+        <el-form-item v-if="bulkQuotaForm.scope === 'subject'" label="课程 ID">
+          <el-input-number v-model="bulkQuotaForm.subject_id" :min="1" :step="1" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="每人每日 token">
+          <el-input-number v-model="bulkQuotaForm.daily_tokens" :min="1" :step="1000" style="width: 100%" :disabled="bulkQuotaForm.clear_override" />
+        </el-form-item>
+        <el-form-item label="清除个人覆盖">
+          <el-switch v-model="bulkQuotaForm.clear_override" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="bulkQuotaLoading" @click="applyBulkQuotaOverrides">应用</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <el-dialog v-model="uploadDialogVisible" title="上传图片" width="500px">
       <el-form>
         <el-form-item label="图片URL">
@@ -280,6 +329,21 @@ const validateRow = ref(null)
 const validateFile = ref(null)
 const validateFileName = ref('')
 
+const llmQuotaLoading = ref(false)
+const llmQuotaSaving = ref(false)
+const llmQuotaForm = reactive({
+  default_daily_student_tokens: 100000,
+  quota_timezone: 'UTC'
+})
+const bulkQuotaLoading = ref(false)
+const bulkQuotaForm = reactive({
+  scope: 'all',
+  class_id: null,
+  subject_id: null,
+  daily_tokens: 100000,
+  clear_override: false
+})
+
 const form = ref({
   system_name: 'BIMSA-CLASS 大学生教学管理系统',
   login_background: '',
@@ -339,6 +403,60 @@ const fetchSettings = async () => {
     ElMessage.error('获取设置失败')
   } finally {
     loading.value = false
+  }
+}
+
+const fetchLlmQuotaPolicy = async () => {
+  llmQuotaLoading.value = true
+  try {
+    const row = await api.llmSettings.getGlobalQuotaPolicy()
+    llmQuotaForm.default_daily_student_tokens = row.default_daily_student_tokens ?? 100000
+    llmQuotaForm.quota_timezone = row.quota_timezone || 'UTC'
+  } catch (error) {
+    ElMessage.error(`获取 LLM 额度策略失败：${formatApiError(error)}`)
+  } finally {
+    llmQuotaLoading.value = false
+  }
+}
+
+const saveLlmQuotaPolicy = async () => {
+  llmQuotaSaving.value = true
+  try {
+    await api.llmSettings.updateGlobalQuotaPolicy({
+      default_daily_student_tokens: llmQuotaForm.default_daily_student_tokens,
+      quota_timezone: (llmQuotaForm.quota_timezone || 'UTC').trim()
+    })
+    ElMessage.success('LLM 全局额度策略已保存')
+    await fetchLlmQuotaPolicy()
+  } catch (error) {
+    ElMessage.error(`保存失败：${formatApiError(error)}`)
+  } finally {
+    llmQuotaSaving.value = false
+  }
+}
+
+const applyBulkQuotaOverrides = async () => {
+  bulkQuotaLoading.value = true
+  try {
+    const body = {
+      scope: bulkQuotaForm.scope,
+      clear_override: bulkQuotaForm.clear_override
+    }
+    if (bulkQuotaForm.scope === 'class') {
+      body.class_id = bulkQuotaForm.class_id
+    }
+    if (bulkQuotaForm.scope === 'subject') {
+      body.subject_id = bulkQuotaForm.subject_id
+    }
+    if (!bulkQuotaForm.clear_override) {
+      body.daily_tokens = bulkQuotaForm.daily_tokens
+    }
+    const res = await api.llmSettings.bulkQuotaOverrides(body)
+    ElMessage.success(`已处理，影响学生约 ${res.affected_students} 人（含无变更的 0）`)
+  } catch (error) {
+    ElMessage.error(`批量设置失败：${formatApiError(error)}`)
+  } finally {
+    bulkQuotaLoading.value = false
   }
 }
 
@@ -547,6 +665,7 @@ const runValidate = async () => {
 onMounted(() => {
   fetchSettings()
   fetchPresets()
+  fetchLlmQuotaPolicy()
 })
 </script>
 

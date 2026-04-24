@@ -343,12 +343,70 @@ class StudentLLMQuotaUsageResponse(BaseModel):
     subject_id: int
     usage_date: str
     quota_timezone: str
+    """Effective per-student daily cap (all courses share one pool under quota_timezone)."""
     daily_student_token_limit: Optional[int] = None
+    global_default_daily_student_tokens: Optional[int] = None
+    uses_personal_override: bool = False
     daily_course_token_limit: Optional[int] = None
     student_used_tokens_today: Optional[int] = None
     student_remaining_tokens_today: Optional[int] = None
     course_used_tokens_today: Optional[int] = None
     course_remaining_tokens_today: Optional[int] = None
+
+
+class LLMGlobalQuotaPolicyResponse(BaseModel):
+    id: int
+    default_daily_student_tokens: int
+    quota_timezone: str
+
+
+class LLMGlobalQuotaPolicyUpdate(BaseModel):
+    default_daily_student_tokens: Optional[int] = Field(default=None, ge=1)
+    quota_timezone: Optional[str] = None
+
+
+class LLMQuotaBulkOverrideRequest(BaseModel):
+    """Apply the same per-student daily cap to everyone in scope (or clear overrides)."""
+
+    scope: str = Field(..., description="one of: all, class, subject")
+    class_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    daily_tokens: Optional[int] = Field(default=None, ge=1)
+    clear_override: bool = False
+
+    @model_validator(mode="after")
+    def _validate_scope(self) -> "LLMQuotaBulkOverrideRequest":
+        s = (self.scope or "").strip().lower()
+        if s not in {"all", "class", "subject"}:
+            raise ValueError("scope must be all, class, or subject")
+        object.__setattr__(self, "scope", s)
+        if s == "class" and not self.class_id:
+            raise ValueError("class_id is required when scope is class")
+        if s == "subject" and not self.subject_id:
+            raise ValueError("subject_id is required when scope is subject")
+        if not self.clear_override and self.daily_tokens is None:
+            raise ValueError("daily_tokens is required unless clear_override is true")
+        if self.clear_override and self.daily_tokens is not None:
+            raise ValueError("clear_override cannot be combined with daily_tokens")
+        return self
+
+
+class LLMQuotaBulkOverrideResponse(BaseModel):
+    affected_students: int
+    default_daily_student_tokens: Optional[int] = None
+
+
+class LLMStudentQuotaOverrideUpsert(BaseModel):
+    daily_tokens: Optional[int] = Field(default=None, ge=1)
+    clear_override: bool = False
+
+    @model_validator(mode="after")
+    def _xor(self) -> "LLMStudentQuotaOverrideUpsert":
+        if self.clear_override and self.daily_tokens is not None:
+            raise ValueError("clear_override cannot be combined with daily_tokens")
+        if not self.clear_override and self.daily_tokens is None:
+            raise ValueError("Provide daily_tokens or set clear_override to true")
+        return self
 
 
 class UserBatchSetClassRequest(BaseModel):
@@ -1051,6 +1109,7 @@ class LLMGroupSelection(BaseModel):
 class CourseLLMConfigUpdate(BaseModel):
     is_enabled: bool = False
     response_language: Optional[str] = None
+    # Ignored: per-student caps are admin-managed (see /llm-settings/admin/quota-policy).
     daily_student_token_limit: Optional[int] = Field(default=None, ge=1)
     daily_course_token_limit: Optional[int] = Field(default=None, ge=1)
     estimated_chars_per_token: float = Field(default=4.0, gt=0)
@@ -1090,6 +1149,7 @@ class CourseLLMConfigResponse(BaseModel):
     subject_id: int
     is_enabled: bool = False
     response_language: Optional[str] = None
+    # Always null in API responses; personal caps are global (admin).
     daily_student_token_limit: Optional[int] = None
     daily_course_token_limit: Optional[int] = None
     estimated_chars_per_token: float = 4.0

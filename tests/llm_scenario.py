@@ -17,6 +17,7 @@ from app.models import (
     CourseLLMConfigEndpoint,
     Homework,
     LLMEndpointPreset,
+    LLMStudentTokenOverride,
     Student,
     Subject,
     User,
@@ -124,7 +125,7 @@ def make_grading_course_with_homework(
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=course_llm_enabled,
-            daily_student_token_limit=daily_student_token_limit,
+            daily_student_token_limit=None,
             daily_course_token_limit=daily_course_token_limit,
             max_input_tokens=16000,
             max_output_tokens=1200,
@@ -133,6 +134,8 @@ def make_grading_course_with_homework(
         db.add(cfg)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=preset.id, priority=1))
+        if daily_student_token_limit is not None:
+            db.merge(LLMStudentTokenOverride(student_id=stud.id, daily_tokens=int(daily_student_token_limit)))
 
         hw = Homework(
             title="pytest homework",
@@ -205,7 +208,7 @@ def make_multi_student_scenario(
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=True,
-            daily_student_token_limit=daily_student_token_limit,
+            daily_student_token_limit=None,
             max_input_tokens=16000,
             max_output_tokens=1200,
             quota_timezone="UTC",
@@ -249,6 +252,8 @@ def make_multi_student_scenario(
                     enrollment_type="required",
                 )
             )
+            if daily_student_token_limit is not None:
+                db.merge(LLMStudentTokenOverride(student_id=st.id, daily_tokens=int(daily_student_token_limit)))
             students.append(
                 {
                     "username": un,

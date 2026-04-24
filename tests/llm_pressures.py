@@ -205,7 +205,7 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(50.0, "a"))):
-        with mock.patch("app.llm_grading._get_usage_date", return_value="2000-05-20"):
+        with mock.patch("app.llm_grading.quota_calendar", return_value=("2000-05-20", "UTC")):
             process_grading_task(tid1)
     r2 = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
@@ -221,7 +221,7 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(55.0, "b"))):
-        with mock.patch("app.llm_grading._get_usage_date", return_value="2000-05-21"):
+        with mock.patch("app.llm_grading.quota_calendar", return_value=("2000-05-21", "UTC")):
             process_grading_task(tid2)
     db = SessionLocal()
     try:
@@ -243,7 +243,6 @@ def test_course_daily_token_limit_blocks_second_student(client: TestClient):
     sid = m["subject_id"]
     p = {
         "is_enabled": True,
-        "daily_student_token_limit": 1_000_000,
         "daily_course_token_limit": 4_000,
         "max_input_tokens": 16000,
         "max_output_tokens": 1200,
@@ -544,8 +543,24 @@ def test_failed_task_does_not_block_following_queued_auto_grades(client: TestCli
         assert process_next_grading_task() is True
     tdb3 = SessionLocal()
     try:
-        t_a = tdb3.query(HomeworkGradingTask).filter(HomeworkGradingTask.homework_id == a["homework_id"]).one()
-        t_b = tdb3.query(HomeworkGradingTask).filter(HomeworkGradingTask.homework_id == b["homework_id"]).one()
+        tasks_a = (
+            tdb3.query(HomeworkGradingTask)
+            .filter(HomeworkGradingTask.homework_id == a["homework_id"])
+            .order_by(HomeworkGradingTask.id.asc())
+            .all()
+        )
+        tasks_b = (
+            tdb3.query(HomeworkGradingTask)
+            .filter(HomeworkGradingTask.homework_id == b["homework_id"])
+            .order_by(HomeworkGradingTask.id.asc())
+            .all()
+        )
+        failed_a = [t for t in tasks_a if t.status == "failed"]
+        success_b = [t for t in tasks_b if t.status == "success"]
+        assert failed_a, "expected a failed grading task for homework A"
+        assert success_b, "expected a successful grading task for homework B"
+        t_a = failed_a[-1]
+        t_b = success_b[-1]
     finally:
         tdb3.close()
     assert t_a.status == "failed"

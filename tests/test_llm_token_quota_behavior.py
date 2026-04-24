@@ -36,12 +36,14 @@ from app.models import (
     HomeworkAttempt,
     HomeworkGradingTask,
     LLMEndpointPreset,
+    LLMStudentTokenOverride,
     LLMTokenUsageLog,
     Student,
     Subject,
     User,
     UserRole,
 )
+from app.llm_token_quota import quota_calendar
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
@@ -80,13 +82,15 @@ def test_precheck_quota_distinct_error_student_vs_course():
         cfg = CourseLLMConfig(
             subject_id=42,
             is_enabled=True,
-            daily_student_token_limit=1000,
+            daily_student_token_limit=None,
             daily_course_token_limit=1000,
             quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
-        with mock.patch("app.llm_grading._get_used_tokens_for_scope") as mock_used:
+        with mock.patch("app.llm_grading._get_used_tokens_for_scope") as mock_used, mock.patch(
+            "app.llm_grading.resolve_effective_daily_student_tokens", return_value=1000
+        ):
 
             def used_tokens(db_inner, **kw):
                 if kw.get("student_id") is not None:
@@ -237,13 +241,14 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=True,
-            daily_student_token_limit=1000,
+            daily_student_token_limit=None,
             quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
         db.add(cfg)
         db.flush()
+        db.add(LLMStudentTokenOverride(student_id=stud.id, daily_tokens=1000))
         preset = LLMEndpointPreset(
             name=f"pr_{uid}",
             base_url="https://x.test/v1/",
@@ -285,16 +290,14 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
         )
         db.add(old_task)
         db.flush()
-        from app.llm_grading import _get_usage_date
-
-        usage_date = _get_usage_date("UTC")
+        usage_date, tz = quota_calendar(db)
         db.add(
             LLMTokenUsageLog(
                 task_id=old_task.id,
                 subject_id=course.id,
                 student_id=stud.id,
                 usage_date=usage_date,
-                timezone="UTC",
+                timezone=tz,
                 total_tokens=950,
             )
         )
@@ -389,16 +392,14 @@ def test_usage_log_billing_note_when_post_call_exceeds_course_cap():
         )
         db.add(old_task)
         db.flush()
-        from app.llm_grading import _get_usage_date
-
-        usage_date = _get_usage_date("UTC")
+        usage_date, tz = quota_calendar(db)
         db.add(
             LLMTokenUsageLog(
                 task_id=old_task.id,
                 subject_id=course.id,
                 student_id=stud.id,
                 usage_date=usage_date,
-                timezone="UTC",
+                timezone=tz,
                 total_tokens=950,
             )
         )
