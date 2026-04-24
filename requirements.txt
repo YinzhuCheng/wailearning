@@ -11,6 +11,10 @@ bcrypt==4.0.1
 python-multipart==0.0.6
 httpx==0.26.0
 python-docx==1.2.0
+openpyxl==3.1.2
+xlrd==2.0.1
+olefile==0.47
+rarfile==4.2
 PyMuPDF==1.26.3
 Pillow==11.3.0
 pytest==8.0.0

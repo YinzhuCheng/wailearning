@@ -5,6 +5,8 @@ import hashlib
 import io
 import json
 import os
+import subprocess
+import tempfile
 import mimetypes
 import re
 import threading
@@ -12,7 +14,7 @@ import time
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
@@ -21,7 +23,49 @@ import fitz
 import httpx
 from PIL import Image, ImageFile, UnidentifiedImageError
 from docx import Document
+import olefile
+import openpyxl
+import rarfile
+import xlrd
 from sqlalchemy import and_, func, text
+
+
+def _unrar_tool_path() -> Optional[str]:
+    import shutil
+
+    return shutil.which("unrar") or shutil.which("unrar-free")
+
+
+def _rar_read_member_bytes(archive_path: str, member_name: str) -> bytes:
+    """Extract one member via unrar/unrar-free (RAR5 solid archives; 7z cannot read these)."""
+    import shutil
+
+    tool = _unrar_tool_path()
+    if not tool:
+        raise RuntimeError("未找到 unrar / unrar-free，无法解压 RAR。")
+    abs_arc = os.path.abspath(archive_path)
+    norm_member = (member_name or "").replace("\\", "/")
+    tmp_dir = tempfile.mkdtemp(prefix="rar-one-")
+    try:
+        proc = subprocess.run(
+            [tool, "x", "-o+", "-y", abs_arc, norm_member],
+            cwd=tmp_dir,
+            capture_output=True,
+            timeout=120,
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or proc.stdout or b"").decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(f"unrar 解压失败（{proc.returncode}）：{err}")
+        out_path = os.path.join(tmp_dir, norm_member)
+        if not os.path.isfile(out_path):
+            base = os.path.basename(norm_member)
+            alt = os.path.join(tmp_dir, base)
+            out_path = alt if os.path.isfile(alt) else out_path
+        if not os.path.isfile(out_path):
+            raise RuntimeError("unrar 解压后未找到目标文件。")
+        return Path(out_path).read_bytes()
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -91,7 +135,6 @@ SUPPORTED_TEXT_EXTENSIONS = {
     ".cc",
     ".cpp",
     ".csv",
-    ".doc",
     ".docx",
     ".go",
     ".h",
@@ -117,6 +160,10 @@ SUPPORTED_TEXT_EXTENSIONS = {
 }
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 ZIP_EXTENSIONS = {".zip"}
+RAR_EXTENSIONS = {".rar"}
+EXCEL_XLSX_EXTENSIONS = {".xlsx"}
+EXCEL_XLS_EXTENSIONS = {".xls"}
+LEGACY_WORD_DOC_EXTENSIONS = {".doc"}
 IPYNB_EXTENSIONS = {".ipynb"}
 PDF_EXTENSIONS = {".pdf"}
 RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
@@ -2010,8 +2057,105 @@ def _bytes_to_data_url(path: str, content: bytes) -> str:
 
 def _extract_docx_text(content: bytes) -> str:
     document = Document(io.BytesIO(content))
-    paragraphs = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
-    return "\n".join(paragraphs)
+    parts: list[str] = []
+    for paragraph in document.paragraphs:
+        t = (paragraph.text or "").strip()
+        if t:
+            parts.append(t)
+    for table in document.tables:
+        rows_out: list[str] = []
+        for row in table.rows:
+            cells = [" ".join((c.text or "").split()) for c in row.cells]
+            if any(cells):
+                rows_out.append("\t".join(cells))
+        if rows_out:
+            parts.append("[表格]\n" + "\n".join(rows_out))
+    return "\n".join(parts)
+
+
+def _extract_xlsx_text(content: bytes, path: str) -> str:
+    wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    try:
+        parts: list[str] = []
+        max_rows = 300
+        max_cols = 64
+        for sheet in wb.worksheets:
+            parts.append(f"[工作表: {sheet.title}]")
+            for row in sheet.iter_rows(min_row=1, max_row=max_rows, max_col=max_cols, values_only=True):
+                cells = ["" if v is None else str(v).strip() for v in row]
+                if any(cells):
+                    parts.append("\t".join(cells))
+        return "\n".join(parts).strip()
+    finally:
+        wb.close()
+
+
+def _extract_xls_text(content: bytes, path: str) -> str:
+    book = xlrd.open_workbook(file_contents=content, formatting_info=False, on_demand=True)
+    parts: list[str] = []
+    max_rows = 300
+    max_cols = 64
+    try:
+        for sheet in book.sheets():
+            parts.append(f"[工作表: {sheet.name}]")
+            for rx in range(min(sheet.nrows, max_rows)):
+                row_vals = []
+                for cx in range(min(sheet.ncols, max_cols)):
+                    row_vals.append(str(sheet.cell_value(rx, cx)).strip())
+                if any(row_vals):
+                    parts.append("\t".join(row_vals))
+    finally:
+        book.release_resources()
+    return "\n".join(parts).strip()
+
+
+def _extract_legacy_doc_text(content: bytes) -> str:
+    """
+    Best-effort text from legacy .doc (OLE compound file). Does not preserve layout/tables.
+    Reads the main Word binary streams only (avoids pulling unrelated OLE blobs).
+    """
+    if not olefile.isOleFile(io.BytesIO(content)):
+        return ""
+    ole = olefile.OleFileIO(io.BytesIO(content))
+    max_stream_bytes = 6 * 1024 * 1024
+    blob = b""
+    try:
+        for s in ole.listdir():
+            joined = "/".join(s).lower()
+            if not (
+                "worddocument" in joined
+                or joined.endswith("1table")
+                or joined.endswith("0table")
+                or joined == "data"
+            ):
+                continue
+            try:
+                blob += ole.openstream(s).read(max_stream_bytes)
+            except Exception:
+                continue
+        if not blob:
+            for s in ole.listdir():
+                try:
+                    blob += ole.openstream(s).read(min(max_stream_bytes, 512 * 1024))
+                    if len(blob) >= max_stream_bytes:
+                        break
+                except Exception:
+                    continue
+    finally:
+        ole.close()
+    if not blob:
+        return ""
+    text = blob.decode("utf-16le", errors="ignore")
+    lines: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if len(line) < 2:
+            continue
+        printable = sum(1 for c in line if c.isprintable() or c in "\t")
+        if printable / max(len(line), 1) < 0.55:
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
 
 
 def _extract_pdf_images(content: bytes, path: str) -> list[MaterialBlock]:
@@ -2123,6 +2267,12 @@ def _classify_and_extract(path: str, content: bytes) -> list[MaterialBlock]:
         ]
     if suffix == ".docx":
         text = _extract_docx_text(content)
+    elif suffix in EXCEL_XLSX_EXTENSIONS:
+        text = _extract_xlsx_text(content, path)
+    elif suffix in EXCEL_XLS_EXTENSIONS:
+        text = _extract_xls_text(content, path)
+    elif suffix in LEGACY_WORD_DOC_EXTENSIONS:
+        text = _extract_legacy_doc_text(content)
     elif suffix in SUPPORTED_TEXT_EXTENSIONS:
         text = _decode_bytes_as_text(content)
     else:
@@ -2179,6 +2329,8 @@ def _walk_zip_bytes(
                 child_suffix = PurePosixPath(safe_child_path).suffix.lower()
                 if child_suffix in ZIP_EXTENSIONS:
                     blocks.extend(_walk_zip_bytes(child_bytes, root_path=child_path, depth=depth + 1, state=state))
+                elif child_suffix in RAR_EXTENSIONS:
+                    blocks.extend(_walk_rar_bytes(child_bytes, root_path=child_path, depth=depth + 1, state=state))
                 else:
                     child_blocks = _classify_and_extract(child_path, child_bytes)
                     if child_blocks:
@@ -2190,6 +2342,79 @@ def _walk_zip_bytes(
     return blocks
 
 
+def _walk_rar_bytes(
+    content: bytes,
+    *,
+    root_path: str,
+    depth: int,
+    state: dict[str, Any],
+) -> list[MaterialBlock]:
+    """
+    RAR listing via rarfile; extraction via 7z stdout (RAR5 compatible, no unrar stub needed).
+    """
+    blocks: list[MaterialBlock] = []
+    if depth > MAX_ZIP_DEPTH:
+        state["skipped"].append({"path": root_path, "reason": "超过最大嵌套深度"})
+        return blocks
+    if not _unrar_tool_path():
+        state["skipped"].append({"path": root_path, "reason": "RAR 解压需要安装 unrar 或 unrar-free"})
+        return blocks
+    tmp_path: Optional[str] = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(suffix=".rar")
+        os.write(fd, content)
+        os.close(fd)
+        with rarfile.RarFile(tmp_path) as archive:
+            if archive.needs_password():
+                state["skipped"].append({"path": root_path, "reason": "RAR 已加密，不支持解压评分"})
+                return blocks
+            infos = sorted(archive.infolist(), key=lambda item: (item.filename or "").lower())
+            for info in infos:
+                if info.isdir():
+                    continue
+                if getattr(info, "needs_password", lambda: False)():
+                    state["skipped"].append({"path": root_path, "reason": "RAR 内含加密条目，不支持"})
+                    return blocks
+                member_name = info.filename or ""
+                safe_child_path = _safe_relative_path(member_name)
+                if not safe_child_path:
+                    state["skipped"].append({"path": f"{root_path}/{member_name}", "reason": "非法路径"})
+                    continue
+                state["file_count"] += 1
+                state["total_bytes"] += max(0, int(info.file_size or 0))
+                if state["file_count"] > MAX_ZIP_FILES or state["total_bytes"] > MAX_ZIP_TOTAL_BYTES:
+                    state["skipped"].append({"path": f"{root_path}/{safe_child_path}", "reason": "超出展开文件数或总大小限制"})
+                    continue
+                child_path = f"{root_path}/{safe_child_path}"
+                try:
+                    child_bytes = _rar_read_member_bytes(tmp_path, member_name)
+                except RuntimeError as exc:
+                    state["skipped"].append({"path": child_path, "reason": str(exc)[:400]})
+                    return blocks
+                child_suffix = PurePosixPath(safe_child_path).suffix.lower()
+                if child_suffix in ZIP_EXTENSIONS:
+                    blocks.extend(_walk_zip_bytes(child_bytes, root_path=child_path, depth=depth + 1, state=state))
+                elif child_suffix in RAR_EXTENSIONS:
+                    blocks.extend(_walk_rar_bytes(child_bytes, root_path=child_path, depth=depth + 1, state=state))
+                else:
+                    child_blocks = _classify_and_extract(child_path, child_bytes)
+                    if child_blocks:
+                        blocks.extend(child_blocks)
+                    else:
+                        state["skipped"].append({"path": child_path, "reason": "无法识别或提取为空"})
+    except rarfile.BadRarFile:
+        state["skipped"].append({"path": root_path, "reason": "RAR 损坏或格式不合法"})
+    except rarfile.NotRarFile:
+        state["skipped"].append({"path": root_path, "reason": "不是有效的 RAR 文件"})
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+    return blocks
+
+
 def _collect_attachment_blocks(summary_path: str, attachment_name: str) -> tuple[list[MaterialBlock], list[dict[str, str]]]:
     file_path = get_attachment_file_path(summary_path)
     if not file_path or not file_path.exists():
@@ -2197,8 +2422,12 @@ def _collect_attachment_blocks(summary_path: str, attachment_name: str) -> tuple
     content = file_path.read_bytes()
     suffix = file_path.suffix.lower()
     state = {"file_count": 0, "total_bytes": 0, "skipped": []}
-    if suffix in ZIP_EXTENSIONS or (attachment_name or "").lower().endswith(".zip"):
+    name_lower = (attachment_name or "").lower()
+    if suffix in ZIP_EXTENSIONS or name_lower.endswith(".zip"):
         blocks = _walk_zip_bytes(content, root_path=attachment_name or file_path.name, depth=1, state=state)
+        return blocks, state["skipped"]
+    if suffix in RAR_EXTENSIONS or name_lower.endswith(".rar"):
+        blocks = _walk_rar_bytes(content, root_path=attachment_name or file_path.name, depth=1, state=state)
         return blocks, state["skipped"]
     blocks = _classify_and_extract(attachment_name or file_path.name, content)
     if blocks:
