@@ -1,66 +1,133 @@
-"""
-T1–T3: Teacher course LLM config vs global admin policy.
-
-Execution deferred — see tests/behavior/conftest.py.
-"""
+"""T1–T3: Teacher course LLM API (legacy fields ignored, timezone, auto-grading interleave)."""
 
 from __future__ import annotations
 
-from typing import Any
+from unittest import mock
+
+import httpx
+from fastapi.testclient import TestClient
+
+from app.database import SessionLocal
+from app.llm_grading import process_grading_task
+from app.models import HomeworkGradingTask
+from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
-class TeacherCourseLlmDialog:
-    """Subjects.vue LLM dialog placeholder (next round: Playwright)."""
-
-    def __init__(self, course_id: int, session: Any) -> None:
-        self.course_id = course_id
-        self._session = session
-
-    def open_for_course(self, course_name: str) -> None:
-        """Login as teacher → course list → open LLM config for named course."""
-
-    def save_payload_with_legacy_extra_fields(self, payload: dict[str, Any]) -> Any:
-        """
-        PUT /api/llm-settings/courses/{id} with obsolete keys e.g. daily_course_token_limit.
-        Expect 200 and server ignore (CourseLLMConfigUpdate extra=ignore).
-        """
-        return None
-
-    def set_course_quota_timezone_archive(self, value: str) -> None:
-        """Set 额度时区 field (display-only vs global billing)."""
-
-    def toggle_auto_grading_and_endpoints(self, enabled: bool, endpoint_preset_ids: list[int]) -> None:
-        """Toggle is_enabled, bind endpoints / groups."""
+def test_t1_teacher_save_with_legacy_course_token_fields_ignored(client: TestClient) -> None:
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    body = {
+        "is_enabled": True,
+        "daily_course_token_limit": 999999,
+        "estimated_chars_per_token": 4.0,
+        "endpoints": [{"preset_id": ctx["preset_id"], "priority": 1}],
+    }
+    r = client.put(f"/api/llm-settings/courses/{ctx['subject_id']}", headers=th, json=body)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert "daily_course_token_limit" not in data
+    assert "daily_student_token_limit" not in data
+    assert data["is_enabled"] is True
 
 
-def test_t1_teacher_save_with_legacy_course_token_fields_ignored() -> None:
-    """
-    T1: Teacher UI (or API client) sends daily_course_token_limit; response 200; no course pool behavior.
-    """
-    dlg = TeacherCourseLlmDialog(course_id=1, session=None)
-    dlg.save_payload_with_legacy_extra_fields(
-        {
+def test_t2_course_quota_timezone_archived_student_quota_uses_global_calendar(client: TestClient) -> None:
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    client.put(
+        "/api/llm-settings/admin/quota-policy",
+        headers=ah,
+        json={"quota_timezone": "Asia/Shanghai"},
+    )
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.put(
+        f"/api/llm-settings/courses/{ctx['subject_id']}",
+        headers=th,
+        json={
             "is_enabled": True,
-            "daily_course_token_limit": 999999,
-            "estimated_chars_per_token": 4.0,
-            "endpoints": [{"preset_id": 1, "priority": 1}],
-        }
+            "quota_timezone": "UTC",
+            "endpoints": [{"preset_id": ctx["preset_id"], "priority": 1}],
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["quota_timezone"] == "UTC"
+
+    st = login_api(client, ctx["student_username"], ctx["student_password"])
+    sq = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
+    pol = client.get("/api/llm-settings/admin/quota-policy", headers=ah).json()
+    assert sq["quota_timezone"] == pol["quota_timezone"]
+
+
+def test_t3_toggle_auto_grading_while_submissions_in_flight(client: TestClient) -> None:
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    st = login_api(client, ctx["student_username"], ctx["student_password"])
+
+    r_sub = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=st,
+        json={"content": "in flight"},
+    )
+    assert r_sub.status_code == 200, r_sub.text
+    db = SessionLocal()
+    try:
+        tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    client.put(
+        f"/api/homeworks/{ctx['homework_id']}",
+        headers=th,
+        json={"auto_grading_enabled": False},
     )
 
+    process_grading_task(tid)
+    db = SessionLocal()
+    try:
+        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
+        assert task.status == "failed"
+        assert task.error_code == "auto_grading_disabled"
+        assert "quota_exceeded_course" not in (task.error_code or "")
+    finally:
+        db.close()
 
-def test_t2_course_archive_timezone_diverges_from_global_calendar() -> None:
-    """
-    T2: Teacher sets course quota_timezone=UTC; global policy Asia/Shanghai;
-    student student-quota uses global for usage_date/tz.
-    """
-    dlg = TeacherCourseLlmDialog(course_id=1, session=None)
-    dlg.set_course_quota_timezone_archive("UTC")
+    r2 = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=st,
+        json={"content": "after off"},
+    )
+    assert r2.status_code == 200, r2.text
+    db = SessionLocal()
+    try:
+        assert db.query(HomeworkGradingTask).filter(HomeworkGradingTask.homework_id == ctx["homework_id"]).count() == 1
+    finally:
+        db.close()
 
-
-def test_t3_toggle_auto_grading_while_submissions_in_flight() -> None:
-    """
-    T3: Interleave: submissions while teacher disables auto_grading / is_enabled / endpoints.
-    Assert stable error_code set (no quota_exceeded_course).
-    """
-    dlg = TeacherCourseLlmDialog(course_id=1, session=None)
-    dlg.toggle_auto_grading_and_endpoints(False, [])
+    client.put(
+        f"/api/homeworks/{ctx['homework_id']}",
+        headers=th,
+        json={"auto_grading_enabled": True},
+    )
+    r3 = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=st,
+        json={"content": "back on"},
+    )
+    assert r3.status_code == 200, r3.text
+    db = SessionLocal()
+    try:
+        tid2 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+    with mock.patch.object(
+        httpx.Client, "post", lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(70.0, "ok"))
+    ):
+        process_grading_task(tid2)
+    db = SessionLocal()
+    try:
+        t2 = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid2).first()
+        assert t2.status == "success"
+    finally:
+        db.close()

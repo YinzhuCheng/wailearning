@@ -735,6 +735,17 @@ def delete_homework(
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
     attachment_urls: set[str] = set()
 
+    # Break HomeworkSubmission <-> HomeworkAttempt FK cycle before bulk deletes (SQLAlchemy flush).
+    db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == homework.id).update(
+        {HomeworkSubmission.latest_attempt_id: None},
+        synchronize_session=False,
+    )
+    db.query(HomeworkAttempt).filter(HomeworkAttempt.homework_id == homework.id).update(
+        {HomeworkAttempt.submission_summary_id: None},
+        synchronize_session=False,
+    )
+    db.flush()
+
     attempts = db.query(HomeworkAttempt).filter(HomeworkAttempt.homework_id == homework.id).all()
     for attempt in attempts:
         if attempt.attachment_url:
