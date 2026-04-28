@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_password_hash
 from app.config import settings
 from app.database import get_db
-from app.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
+from app.models import Class, CourseEnrollment, Gender, Homework, Student, Subject, User, UserRole
 
 router = APIRouter(prefix="/api/e2e", tags=["e2e-dev"])
 
@@ -158,6 +158,20 @@ def reset_e2e_scenario(
             )
         )
 
+    hw = Homework(
+        title=f"E2E_UI作业_{suffix}",
+        content="用于 Playwright UI 测试的作业说明。",
+        class_id=c1.id,
+        subject_id=course_req.id,
+        max_score=100.0,
+        grade_precision="integer",
+        auto_grading_enabled=True,
+        allow_late_submission=True,
+        late_submission_affects_score=False,
+        created_by=t_own.id,
+    )
+    db.add(hw)
+
     db.commit()
 
     return {
@@ -177,6 +191,7 @@ def reset_e2e_scenario(
         "course_elective_id": course_el.id,
         "course_other_teacher_id": course_other.id,
         "course_orphan_id": course_orphan.id,
+        "homework_id": hw.id,
         "user_ids_for_batch": [u_plain.id, u_b.id],
         "teacher_user_id": t_own.id,
     }

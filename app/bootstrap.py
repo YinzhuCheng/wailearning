@@ -114,6 +114,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_attempt_id INTEGER",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_task_status VARCHAR",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_task_error TEXT",
+        "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS used_llm_assist BOOLEAN NOT NULL DEFAULT FALSE",
         """
         CREATE TABLE IF NOT EXISTS homework_attempts (
             id INTEGER PRIMARY KEY,
@@ -283,6 +284,9 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS text_validation_message TEXT",
         "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS vision_validation_status VARCHAR",
         "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS vision_validation_message TEXT",
+        "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS used_llm_assist BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS submission_mode VARCHAR NOT NULL DEFAULT 'full'",
+        "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS prior_attempt_id INTEGER",
     ]
 
     with engine.begin() as connection:
