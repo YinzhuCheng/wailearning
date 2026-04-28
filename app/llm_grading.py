@@ -850,14 +850,6 @@ def _attachment_block_meta_text(block: "MaterialBlock") -> str:
     return f"[ATTACHMENT_META path={name} origin={origin}{mime_s}{flag_s}]\n"
 
 
-def _data_url_payload_chars(data_url: Optional[str]) -> int:
-    if not data_url:
-        return 0
-    if ";base64," in data_url:
-        return max(0, len(data_url) - data_url.find(";base64,") - len(";base64,"))
-    return len(data_url)
-
-
 def estimate_request_tokens_from_material(
     config: CourseLLMConfig,
     material: dict[str, Any],
@@ -2746,16 +2738,6 @@ def _build_student_material(
         lines = [f"{s.get('path', '?')}：{s.get('reason', '')}" for s in parse_skipped_for_notes]
         notes_text_parts.append("附件解析跳过：\n- " + "\n- ".join(lines))
     notes_text = "\n\n".join([p for p in notes_text_parts if p])
-    teacher_prompt = config.teacher_prompt or ""
-    assignment_joined = "\n\n".join(assignment_texts)
-    student_intro = (
-        f"作业标题：{homework.title}\n"
-        f"满分：{normalize_score_for_homework(homework, homework.max_score)}\n"
-        f"评分精度：{'1 位小数' if homework.grade_precision == 'decimal_1' else '整数'}\n"
-        f"响应语言：{homework.response_language or config.response_language or 'zh-CN'}\n"
-        f"提交是否迟交：{'是' if attempt.is_late else '否'}\n"
-        f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
-    )
     temp_material: dict[str, Any] = {
         "assignment_texts": assignment_texts,
         "student_blocks": final_blocks,

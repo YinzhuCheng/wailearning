@@ -75,6 +75,16 @@
         </template>
 
         <div class="submission-alerts">
+          <el-steps
+            v-if="showSubmitFlowSteps"
+            class="submit-flow-steps"
+            :active="submitFlowActive"
+            align-center
+            finish-status="success"
+          >
+            <el-step title="完善本轮" description="说明、附件与申报" />
+            <el-step title="保存提交" description="写入并参与自动评分" />
+          </el-steps>
           <el-alert
             v-if="latestTaskStatus === 'failed' && historySummary?.latest_task_error"
             type="error"
@@ -128,7 +138,7 @@
               type="textarea"
               :rows="6"
               :disabled="isSubmitDisabled"
-              placeholder="可填写作业说明、答题思路或补充信息。"
+              :placeholder="contentPlaceholder"
             />
           </el-form-item>
 
@@ -294,6 +304,25 @@ const isMaxSubmissionsReached = computed(() => {
 })
 
 const isSubmitDisabled = computed(() => isSubmissionLocked.value || isMaxSubmissionsReached.value)
+
+const showSubmitFlowSteps = computed(() => Boolean(homework.value?.auto_grading_enabled))
+
+const submitFlowActive = computed(() => {
+  if (!showSubmitFlowSteps.value || isSubmitDisabled.value) {
+    return 0
+  }
+  const ready = Boolean(
+    (form.content || '').trim() || form.attachment_url || attachmentFile.value
+  )
+  return ready ? 1 : 0
+})
+
+const contentPlaceholder = computed(() => {
+  if (form.submission_mode === 'feedback_followup') {
+    return '本轮可只写针对上一轮评语要改进的点、补充推导或修订说明；上一轮正文与附件会一并送给评分模型。'
+  }
+  return '可填写作业说明、答题思路或补充信息。'
+})
 
 const form = reactive({
   content: '',
@@ -536,6 +565,21 @@ watch(
   flex-direction: column;
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.submit-flow-steps {
+  padding: 8px 12px 4px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.submit-flow-steps :deep(.el-step__title) {
+  font-size: 13px;
+}
+
+.submit-flow-steps :deep(.el-step__description) {
+  font-size: 12px;
 }
 
 .deadline-warning {

@@ -1,5 +1,10 @@
 <template>
-  <div ref="rootRef" class="feedback-rich" v-html="renderedHtml" />
+  <div
+    ref="rootRef"
+    class="feedback-rich"
+    :class="variant === 'teacher' ? 'feedback-rich--teacher' : 'feedback-rich--student'"
+    v-html="renderedHtml"
+  />
 </template>
 
 <script setup>
@@ -72,8 +77,17 @@ watch(
 .feedback-rich {
   font-size: 14px;
   line-height: 1.65;
-  color: #334155;
   word-break: break-word;
+}
+
+.feedback-rich--student {
+  color: #334155;
+}
+
+.feedback-rich--teacher {
+  color: #1e293b;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .feedback-rich :deep(h1),
