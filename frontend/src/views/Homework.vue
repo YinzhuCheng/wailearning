@@ -129,7 +129,10 @@
                 >
                   {{ formatScore(row.review_score) }}
                 </el-tag>
-                <div v-if="row.review_comment" class="review-comment">{{ row.review_comment }}</div>
+                <el-tag v-if="row.used_llm_assist" size="small" type="warning" effect="plain">大模型辅助</el-tag>
+                <div v-if="row.review_comment" class="review-comment-wrap">
+                  <FeedbackRichText :text="row.review_comment" variant="student" />
+                </div>
                 <div class="review-meta">共 {{ row.attempt_count || 0 }} 次提交，展示最高分对应评语</div>
               </div>
               <span v-else class="muted-text">未评分</span>
@@ -325,6 +328,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
@@ -785,11 +789,12 @@ watch(selectedCourse, () => {
   gap: 6px;
 }
 
-.review-comment {
-  color: #475569;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
+.review-comment-wrap {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .review-meta,

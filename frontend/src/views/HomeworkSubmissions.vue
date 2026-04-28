@@ -115,6 +115,13 @@
                 {{ row.attempt_count || 0 }}
               </template>
             </el-table-column>
+            <el-table-column label="大模型申报" width="120">
+              <template #default="{ row }">
+                <el-tag v-if="row.used_llm_assist" type="warning" size="small" effect="plain">是</el-tag>
+                <el-tag v-else-if="row.status === 'submitted'" type="info" size="small" effect="plain">否</el-tag>
+                <span v-else class="muted-text">—</span>
+              </template>
+            </el-table-column>
             <el-table-column label="提交说明" min-width="220">
               <template #default="{ row }">
                 {{ row.content || '无' }}
@@ -143,7 +150,9 @@
                   />
                   <el-input
                     v-model="row.review_comment_input"
-                    placeholder="评论"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="评语（支持 Markdown；公式可用 $...$ 或 $$...$$）"
                     class="review-comment-input"
                   />
                   <el-button
@@ -157,7 +166,10 @@
                 </div>
                 <div v-if="hasSavedReview(row)" class="review-result">
                   <span v-if="row.review_score !== null && row.review_score !== undefined">当前展示分：{{ formatScore(row.review_score) }}</span>
-                  <span v-if="row.review_comment">评语：{{ row.review_comment }}</span>
+                  <div v-if="row.review_comment" class="feedback-inline">
+                    <span class="muted-text" style="display: block; margin-bottom: 4px">评语</span>
+                    <FeedbackRichText :text="row.review_comment" variant="teacher" />
+                  </div>
                 </div>
               </template>
             </el-table-column>
@@ -211,6 +223,7 @@
             <div class="attempt-tags">
               <el-tag size="small" type="primary">提交 #{{ attempt.id }}</el-tag>
               <el-tag v-if="attempt.is_late" size="small" type="warning">迟交</el-tag>
+              <el-tag v-if="attempt.used_llm_assist" size="small" type="warning" effect="plain">申报大模型</el-tag>
               <el-tag
                 v-if="attempt.review_score !== null && attempt.review_score !== undefined"
                 :type="scoreTag(attempt.review_score)"
@@ -251,7 +264,10 @@
                   {{ attempt.attachment_name || '下载附件' }}
                 </el-button>
               </div>
-              <div v-if="attempt.review_comment" class="attempt-comment">{{ attempt.review_comment }}</div>
+              <div v-if="attempt.review_comment" class="attempt-feedback">
+                <div class="muted-text" style="font-size: 12px; margin-bottom: 4px">评语</div>
+                <FeedbackRichText :text="attempt.review_comment" variant="teacher" />
+              </div>
               <div v-if="attempt.task_error" class="attempt-error">{{ attempt.task_error }}</div>
             </div>
 
@@ -263,7 +279,9 @@
               />
               <el-input
                 v-model="attempt.review_comment_input"
-                placeholder="该次提交的评语"
+                type="textarea"
+                :rows="2"
+                placeholder="该次提交的评语（支持 Markdown / LaTeX）"
                 class="review-comment-input"
               />
               <el-button type="primary" :loading="attempt.saving_review" @click="saveReview(currentHistoryRow, attempt)">
@@ -294,6 +312,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import { useUserStore } from '@/stores/user'
 import { downloadAttachment } from '@/utils/attachments'
 
@@ -687,8 +706,16 @@ watch(
   white-space: pre-wrap;
 }
 
-.attempt-comment {
-  color: #0f172a;
+.attempt-feedback {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fafbfc;
+}
+
+.feedback-inline {
+  margin-top: 8px;
 }
 
 .attempt-error {

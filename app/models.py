@@ -384,6 +384,7 @@ class HomeworkSubmission(Base):
     content = Column(String, nullable=True)
     attachment_name = Column(String, nullable=True)
     attachment_url = Column(String, nullable=True)
+    used_llm_assist = Column(Boolean, nullable=False, default=False)
     review_score = Column(Float, nullable=True)
     review_comment = Column(String, nullable=True)
     latest_attempt_id = Column(Integer, ForeignKey("homework_attempts.id", use_alter=True), nullable=True)
@@ -417,6 +418,7 @@ class HomeworkAttempt(Base):
     attachment_url = Column(String, nullable=True)
     is_late = Column(Boolean, default=False)
     counts_toward_final_score = Column(Boolean, default=True)
+    used_llm_assist = Column(Boolean, nullable=False, default=False)
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

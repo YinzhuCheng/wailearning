@@ -279,6 +279,7 @@ def _serialize_submission(db: Session, submission: HomeworkSubmission) -> Homewo
         content=submission.content,
         attachment_name=submission.attachment_name,
         attachment_url=submission.attachment_url,
+        used_llm_assist=bool(getattr(submission, "used_llm_assist", False)),
         submitted_at=submission.submitted_at,
         updated_at=submission.updated_at,
         student_name=submission.student.name if submission.student else None,
@@ -309,6 +310,7 @@ def _serialize_attempt(db: Session, attempt: HomeworkAttempt) -> HomeworkAttempt
         attachment_url=attempt.attachment_url,
         is_late=bool(attempt.is_late),
         counts_toward_final_score=bool(attempt.counts_toward_final_score),
+        used_llm_assist=bool(getattr(attempt, "used_llm_assist", False)),
         submitted_at=attempt.submitted_at,
         updated_at=attempt.updated_at,
         review_score=best_candidate.score if best_candidate else None,
@@ -361,6 +363,7 @@ def _serialize_submission_status(
         content=submission.content if submission else None,
         attachment_name=submission.attachment_name if submission else None,
         attachment_url=submission.attachment_url if submission else None,
+        used_llm_assist=bool(submission.used_llm_assist) if submission else None,
         review_score=submission.review_score if submission else None,
         review_comment=submission.review_comment if submission else None,
         latest_attempt_id=submission.latest_attempt_id if submission else None,
@@ -381,6 +384,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         task_error = submission.latest_task_error
         attempt_count = len(submission.attempts)
         latest_submission_is_late = submission.latest_attempt.is_late if submission.latest_attempt else None
+        latest_used_llm_assist = bool(submission.used_llm_assist)
     else:
         review_score = None
         review_comment = None
@@ -388,6 +392,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         task_error = None
         attempt_count = 0
         latest_submission_is_late = None
+        latest_used_llm_assist = None
 
     cap = homework.max_submissions
     remaining: Optional[int] = None
@@ -420,6 +425,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         creator_name=homework.creator.real_name if homework.creator else None,
         review_score=review_score,
         review_comment=review_comment,
+        used_llm_assist=latest_used_llm_assist,
         task_status=task_status,
         task_error=task_error,
         attempt_count=attempt_count,
@@ -867,6 +873,7 @@ def submit_homework(
     submission.content = next_content
     submission.attachment_name = next_attachment_name
     submission.attachment_url = next_attachment_url
+    submission.used_llm_assist = bool(data.used_llm_assist)
     submission.submitted_at = submitted_at
 
     attempt = HomeworkAttempt(
@@ -880,6 +887,7 @@ def submit_homework(
         attachment_url=next_attachment_url,
         is_late=is_late,
         counts_toward_final_score=counts_toward,
+        used_llm_assist=bool(data.used_llm_assist),
         submitted_at=submitted_at,
     )
     db.add(attempt)

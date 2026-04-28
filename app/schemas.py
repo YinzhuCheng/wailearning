@@ -865,6 +865,7 @@ class HomeworkResponse(HomeworkBase):
     creator_name: Optional[str] = None
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
+    used_llm_assist: Optional[bool] = None
     task_status: Optional[str] = None
     task_error: Optional[str] = None
     attempt_count: int = 0
@@ -920,6 +921,7 @@ class HomeworkSubmissionCreate(BaseModel):
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     remove_attachment: bool = False
+    used_llm_assist: bool = False
 
     @model_validator(mode="after")
     def validate_submission_payload(self):
@@ -940,6 +942,7 @@ class HomeworkSubmissionResponse(BaseModel):
     content: Optional[str] = None
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
+    used_llm_assist: bool = False
     submitted_at: datetime
     updated_at: datetime
     student_name: Optional[str] = None
@@ -968,6 +971,7 @@ class HomeworkAttemptResponse(BaseModel):
     attachment_url: Optional[str] = None
     is_late: bool = False
     counts_toward_final_score: bool = True
+    used_llm_assist: bool = False
     submitted_at: datetime
     updated_at: Optional[datetime] = None
     review_score: Optional[float] = None
@@ -1010,6 +1014,7 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     content: Optional[str] = None
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
+    used_llm_assist: Optional[bool] = None
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
     latest_attempt_id: Optional[int] = None

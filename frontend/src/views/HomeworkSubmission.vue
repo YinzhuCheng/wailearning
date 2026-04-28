@@ -40,15 +40,22 @@
             <span v-else class="muted-text">暂无附件</span>
           </el-descriptions-item>
           <el-descriptions-item label="最高分评语" :span="2">
-            <div v-if="summaryReviewText" class="best-review">
-              <el-tag
-                v-if="historySummary?.review_score !== null && historySummary?.review_score !== undefined"
-                :type="scoreTag(historySummary.review_score)"
-                size="small"
-              >
-                {{ formatScore(historySummary.review_score) }}
-              </el-tag>
-              <span>{{ summaryReviewText }}</span>
+            <div v-if="summaryReviewText" class="feedback-panel feedback-panel--hero">
+              <div class="feedback-panel__head">
+                <el-tag
+                  v-if="historySummary?.review_score !== null && historySummary?.review_score !== undefined"
+                  :type="scoreTag(historySummary.review_score)"
+                  size="small"
+                  effect="dark"
+                  round
+                >
+                  {{ formatScore(historySummary.review_score) }}
+                </el-tag>
+                <el-tag v-if="historySummary?.used_llm_assist" type="warning" size="small" effect="plain">
+                  最近一次提交申报使用大模型辅助
+                </el-tag>
+              </div>
+              <FeedbackRichText class="feedback-panel__body" :text="summaryReviewText" variant="student" />
             </div>
             <span v-else class="muted-text">暂无评分</span>
           </el-descriptions-item>
@@ -111,6 +118,18 @@
             />
           </el-form-item>
 
+          <el-form-item label="诚信申报">
+            <el-switch
+              v-model="form.used_llm_assist"
+              :disabled="isSubmitDisabled"
+              active-text="本次作答曾使用大语言模型辅助"
+              inactive-text="未使用大语言模型辅助作答"
+            />
+            <div class="attachment-help">
+              请如实选择。若选择「曾使用」，自动评分将更关注思路与知识功底，弱化措辞与排版细节。
+            </div>
+          </el-form-item>
+
           <el-form-item label="附件">
             <el-upload
               :auto-upload="false"
@@ -171,6 +190,7 @@
               <div class="attempt-tags">
                 <el-tag size="small" type="primary">第 {{ getAttemptLabel(attempt) }} 次提交</el-tag>
                 <el-tag v-if="attempt.is_late" size="small" type="warning">迟交</el-tag>
+                <el-tag v-if="attempt.used_llm_assist" size="small" type="warning" effect="plain">申报大模型辅助</el-tag>
                 <el-tag
                   v-if="attempt.review_score !== null && attempt.review_score !== undefined"
                   :type="scoreTag(attempt.review_score)"
@@ -183,13 +203,19 @@
                 </el-tag>
               </div>
               <div class="attempt-body">
-                <div>{{ attempt.content || '无提交说明' }}</div>
+                <div class="attempt-note-label">提交说明</div>
+                <div class="attempt-plain">{{ attempt.content || '无提交说明' }}</div>
                 <div v-if="attempt.attachment_url" class="attempt-link">
                   <el-button type="primary" link @click="openAttachment(attempt.attachment_url, attempt.attachment_name)">
                     {{ attempt.attachment_name || '下载附件' }}
                   </el-button>
                 </div>
-                <div v-if="attempt.review_comment" class="attempt-comment">{{ attempt.review_comment }}</div>
+                <template v-if="attempt.review_comment">
+                  <div class="attempt-note-label">评语（支持 Markdown / LaTeX）</div>
+                  <div class="feedback-panel feedback-panel--compact">
+                    <FeedbackRichText :text="attempt.review_comment" variant="student" />
+                  </div>
+                </template>
                 <div v-if="attempt.task_error" class="attempt-error">{{ attempt.task_error }}</div>
               </div>
             </div>
@@ -206,6 +232,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
@@ -256,7 +283,8 @@ const form = reactive({
   content: '',
   attachment_name: '',
   attachment_url: '',
-  remove_attachment: false
+  remove_attachment: false,
+  used_llm_assist: false
 })
 
 const applySubmission = submission => {
@@ -265,6 +293,7 @@ const applySubmission = submission => {
   form.attachment_name = submission?.attachment_name || ''
   form.attachment_url = submission?.attachment_url || ''
   form.remove_attachment = false
+  form.used_llm_assist = Boolean(submission?.used_llm_assist)
   attachmentFile.value = null
 }
 
@@ -354,7 +383,8 @@ const submitForm = async () => {
       content: form.content?.trim() || null,
       attachment_name: attachment.attachment_name,
       attachment_url: attachment.attachment_url,
-      remove_attachment: form.remove_attachment
+      remove_attachment: form.remove_attachment,
+      used_llm_assist: Boolean(form.used_llm_assist)
     })
     ElMessage.success('作业已提交')
     await loadPage()
@@ -513,11 +543,46 @@ watch(
   flex-wrap: wrap;
 }
 
-.best-review {
+.feedback-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: linear-gradient(165deg, #f8fafc 0%, #ffffff 55%);
+  padding: 14px 16px;
+}
+
+.feedback-panel--hero {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.feedback-panel--compact {
+  padding: 10px 12px;
+  margin-top: 4px;
+}
+
+.feedback-panel__head {
   display: flex;
-  gap: 10px;
-  align-items: center;
   flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.feedback-panel__body :deep(.feedback-rich) {
+  font-size: 15px;
+}
+
+.attempt-note-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 6px;
+}
+
+.attempt-plain {
+  white-space: pre-wrap;
+  color: #475569;
 }
 
 .attempt-card {
@@ -540,9 +605,6 @@ watch(
   margin-top: 2px;
 }
 
-.attempt-comment {
-  color: #0f172a;
-}
 
 .attempt-error {
   color: #dc2626;

@@ -1976,16 +1976,42 @@ def _parse_scoring_json(raw_text: str, homework: Homework) -> dict[str, Any]:
     return {"score": score, "comment": comment}
 
 
+def _llm_assist_assignment_addendum(attempt: HomeworkAttempt) -> str:
+    if not bool(getattr(attempt, "used_llm_assist", False)):
+        return ""
+    return (
+        "### 学生申报：使用大语言模型辅助作答\n"
+        "该生在提交时**诚信申报**本次曾使用大语言模型辅助。请据此调整评分侧重：\n"
+        "- **着重**考查作答思路、概念迁移、论证链条与问题拆解能力；透过表述**反推**其真实知识功底。\n"
+        "- **弱化**对措辞润色、排版细节、枚举完整性等「表面完美度」的苛求；若核心结论或主干推理错误，仍应体现在 score 上。\n"
+        "- 若与参考答案字面高度相似但推理薄弱，应谨慎给高分。\n"
+    )
+
+
+def _comment_format_system_suffix(system_prompt: str) -> str:
+    base = (system_prompt or "").strip()
+    if "Markdown" in base or "markdown" in base or "LaTeX" in base or "latex" in base:
+        return base
+    return (
+        base
+        + "\n\n除上述格式约束外，JSON 内的 `comment` 字符串可使用 Markdown（标题、列表、加粗等）；"
+        "数学公式可使用 `$...$`（行内）或 `$$...$$`（独立行）LaTeX。"
+    )
+
+
 def _build_scoring_messages(
     homework: Homework,
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
     material: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    system_prompt = config.system_prompt or (
-        "你是一个严格遵守格式要求的课程作业评分助手。"
-        "你必须只输出 JSON 对象，且字段固定为 score 与 comment。"
-        "绝不能在 JSON 前后输出任何额外说明。"
+    system_prompt = _comment_format_system_suffix(
+        config.system_prompt
+        or (
+            "你是一个严格遵守格式要求的课程作业评分助手。"
+            "你必须只输出 JSON 对象，且字段固定为 score 与 comment。"
+            "绝不能在 JSON 前后输出任何额外说明。"
+        )
     )
     response_language = homework.response_language or config.response_language or "zh-CN"
     teacher_prompt = config.teacher_prompt or ""
@@ -1993,12 +2019,16 @@ def _build_scoring_messages(
     assignment_text = f"{SECTION_ASSIGNMENT}\n### 教师侧作业说明与材料\n{assignment_body}"
     if teacher_prompt.strip():
         assignment_text += f"\n\n### 教师补充提示（课程 LLM 配置）\n{teacher_prompt}"
+    assist_addendum = _llm_assist_assignment_addendum(attempt)
+    if assist_addendum:
+        assignment_text += "\n\n" + assist_addendum
     student_intro = (
         f"{SECTION_STUDENT_BODY}\n### 提交元数据\n"
         f"作业标题：{homework.title}\n"
         f"满分：{normalize_score_for_homework(homework, homework.max_score)}\n"
         f"评分精度：{'1 位小数' if homework.grade_precision == 'decimal_1' else '整数'}\n"
         f"响应语言：{response_language}\n"
+        f"学生是否申报使用大语言模型辅助作答：{'是' if getattr(attempt, 'used_llm_assist', False) else '否'}\n"
         f"提交是否迟交：{'是' if attempt.is_late else '否'}\n"
         f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
     )
@@ -2497,6 +2527,7 @@ def _format_iteration_context_for_prompt(db: Session, homework: Homework, attemp
         "### 迭代上下文（仅保留最近 "
         f"{ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS} 次历史提交的文字摘要；更早轮次已省略以节省 token）",
         "以下为该学生此前提交的要点，供你判断是否在反馈基础上有改进（当前要评的是最新一次提交，见后文）。",
+        "多轮评分时请关注各轮**分数与评语的走势**：若本轮相对历史有显著进步或退步，请在 `comment` 中简要对比说明原因。",
     ]
     for idx, prev in enumerate(priors_chrono, start=1):
         cand = _best_score_candidate_for_attempt(db, prev.id)
@@ -2512,7 +2543,8 @@ def _format_iteration_context_for_prompt(db: Session, homework: Homework, attemp
             body = body[:ITERATION_PRIOR_NOTE_CHAR_MAX] + "…"
         att = "有附件" if prev.attachment_url else "无附件"
         att_name = f"（{prev.attachment_name}）" if prev.attachment_name else ""
-        lines.append(f"- 历史第 {idx} 轮：{att}{att_name}。{score_part}")
+        llm_tag = "是" if getattr(prev, "used_llm_assist", False) else "否"
+        lines.append(f"- 历史第 {idx} 轮：{att}{att_name}。{score_part}申报使用大模型辅助：{llm_tag}。")
         if body:
             lines.append(f"  学生说明摘录：{body}")
         if comment:
