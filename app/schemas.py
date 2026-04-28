@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -922,12 +922,19 @@ class HomeworkSubmissionCreate(BaseModel):
     attachment_url: Optional[str] = None
     remove_attachment: bool = False
     used_llm_assist: bool = False
+    submission_mode: Literal["full", "feedback_followup"] = "full"
+    prior_attempt_id: Optional[int] = None
 
     @model_validator(mode="after")
     def validate_submission_payload(self):
         self.content = self.content.strip() if isinstance(self.content, str) else self.content
         if not self.content:
             self.content = None
+        if self.submission_mode == "feedback_followup":
+            if self.prior_attempt_id is None:
+                raise ValueError("按反馈补充提交时必须提供 prior_attempt_id（上一轮提交 id）。")
+        else:
+            self.prior_attempt_id = None
         if not self.remove_attachment and not (self.content or self.attachment_url):
             raise ValueError("Please provide submission content or an attachment.")
         return self
@@ -943,6 +950,9 @@ class HomeworkSubmissionResponse(BaseModel):
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     used_llm_assist: bool = False
+    submission_mode: Optional[str] = None
+    prior_attempt_id: Optional[int] = None
+    allow_feedback_followup: bool = False
     submitted_at: datetime
     updated_at: datetime
     student_name: Optional[str] = None
@@ -972,6 +982,8 @@ class HomeworkAttemptResponse(BaseModel):
     is_late: bool = False
     counts_toward_final_score: bool = True
     used_llm_assist: bool = False
+    submission_mode: str = "full"
+    prior_attempt_id: Optional[int] = None
     submitted_at: datetime
     updated_at: Optional[datetime] = None
     review_score: Optional[float] = None
@@ -981,6 +993,7 @@ class HomeworkAttemptResponse(BaseModel):
     task_error_code: Optional[str] = None
     task_log: Optional[list[dict[str, Any]]] = None
     score_source: Optional[str] = None
+    allow_feedback_followup: bool = False
 
     class Config:
         from_attributes = True

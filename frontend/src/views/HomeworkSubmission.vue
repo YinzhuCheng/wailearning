@@ -108,6 +108,20 @@
         </div>
 
         <el-form label-position="top" @submit.prevent>
+          <el-form-item
+            v-if="historySummary?.allow_feedback_followup && attempts.length"
+            label="提交方式"
+          >
+            <el-radio-group v-model="form.submission_mode" :disabled="isSubmitDisabled">
+              <el-radio label="full">完整提交</el-radio>
+              <el-radio label="feedback_followup">按反馈补充</el-radio>
+            </el-radio-group>
+            <div class="attachment-help">
+              选择「按反馈补充」时，系统会把<strong>上一轮</strong>的说明与附件一并交给评分模型，本轮说明只需针对评语中的不足做补充或修订，无需全文重写。
+              若不重新上传附件，将自动沿用上一轮的附件。
+            </div>
+          </el-form-item>
+
           <el-form-item label="提交说明">
             <el-input
               v-model="form.content"
@@ -190,6 +204,9 @@
                 <el-tag size="small" type="primary">第 {{ getAttemptLabel(attempt) }} 次提交</el-tag>
                 <el-tag v-if="attempt.is_late" size="small" type="warning">迟交</el-tag>
                 <el-tag v-if="attempt.used_llm_assist" size="small" type="warning" effect="plain">申报大模型辅助</el-tag>
+                <el-tag v-if="attempt.submission_mode === 'feedback_followup'" size="small" type="info" effect="plain">
+                  按反馈补充
+                </el-tag>
                 <el-tag
                   v-if="attempt.review_score !== null && attempt.review_score !== undefined"
                   :type="scoreTag(attempt.review_score)"
@@ -283,7 +300,8 @@ const form = reactive({
   attachment_name: '',
   attachment_url: '',
   remove_attachment: false,
-  used_llm_assist: false
+  used_llm_assist: false,
+  submission_mode: 'full'
 })
 
 const applySubmission = submission => {
@@ -293,6 +311,7 @@ const applySubmission = submission => {
   form.attachment_url = submission?.attachment_url || ''
   form.remove_attachment = false
   form.used_llm_assist = Boolean(submission?.used_llm_assist)
+  form.submission_mode = 'full'
   attachmentFile.value = null
 }
 
@@ -378,12 +397,16 @@ const submitForm = async () => {
   submitting.value = true
   try {
     const attachment = await uploadAttachmentIfNeeded()
+    const priorId =
+      form.submission_mode === 'feedback_followup' && attempts.value.length ? attempts.value[0].id : undefined
     await api.homework.submit(route.params.id, {
       content: form.content?.trim() || null,
       attachment_name: attachment.attachment_name,
       attachment_url: attachment.attachment_url,
       remove_attachment: form.remove_attachment,
-      used_llm_assist: Boolean(form.used_llm_assist)
+      used_llm_assist: Boolean(form.used_llm_assist),
+      submission_mode: form.submission_mode,
+      prior_attempt_id: priorId
     })
     ElMessage.success('作业已提交')
     await loadPage()

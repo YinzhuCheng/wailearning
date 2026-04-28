@@ -832,6 +832,7 @@ SECTION_STUDENT_BODY = "[SECTION:STUDENT_TEXT_RESPONSE]"
 SECTION_ATTACHMENT = "[SECTION:ATTACHMENT_CONTENT]"
 SECTION_IMAGES = "[SECTION:STUDENT_IMAGES]"
 SECTION_NOTES = "[SECTION:PIPELINE_NOTES]"
+SECTION_PRIOR_SUBMISSION = "[SECTION:PRIOR_SUBMISSION_ROLLING]"
 
 
 def _attachment_block_meta_text(block: "MaterialBlock") -> str:
@@ -2029,11 +2030,39 @@ def _build_scoring_messages(
         f"评分精度：{'1 位小数' if homework.grade_precision == 'decimal_1' else '整数'}\n"
         f"响应语言：{response_language}\n"
         f"学生是否申报使用大语言模型辅助作答：{'是' if getattr(attempt, 'used_llm_assist', False) else '否'}\n"
+        f"本次提交模式：{'按反馈补充（上一轮正文与附件见「上一轮提交」区块；本轮说明为补充/修订）' if getattr(attempt, 'submission_mode', None) == 'feedback_followup' else '完整提交'}\n"
         f"提交是否迟交：{'是' if attempt.is_late else '否'}\n"
         f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
     )
     user_parts: list[dict[str, Any]] = [{"type": "text", "text": assignment_text}]
     user_parts.append({"type": "text", "text": student_intro})
+    prior_text_blocks = [b for b in (material.get("prior_student_blocks") or []) if b.block_type == "text"]
+    prior_image_blocks = [b for b in (material.get("prior_student_blocks") or []) if b.block_type == "image"]
+    if prior_text_blocks or prior_image_blocks:
+        user_parts.append(
+            {
+                "type": "text",
+                "text": (
+                    f"{SECTION_PRIOR_SUBMISSION}\n"
+                    "（以下为学生在**上一轮**提交中的说明与附件解析内容，供对照本轮补充说明；"
+                    "评分请以本轮说明为主，同时结合上一轮与历史评语判断是否改进。）"
+                ),
+            }
+        )
+        for block in prior_text_blocks:
+            meta = _attachment_block_meta_text(block)
+            user_parts.append({"type": "text", "text": (meta + (block.text or "")).strip()})
+        if prior_image_blocks:
+            user_parts.append(
+                {"type": "text", "text": f"{SECTION_IMAGES}\n（以下为上一轮提交中的图片/PDF 页渲染）"}
+            )
+            for block in prior_image_blocks:
+                cap = (
+                    f"[IMAGE_META path={block.logical_path or block.path} "
+                    f"mime={block.mime_hint or 'image'} origin={block.origin or 'prior_attachment'}]"
+                )
+                user_parts.append({"type": "text", "text": cap})
+                user_parts.append({"type": "image_url", "image_url": {"url": block.image_data_url}})
     text_blocks = [b for b in material["student_blocks"] if b.block_type == "text"]
     image_blocks = [b for b in material["student_blocks"] if b.block_type == "image"]
     if text_blocks:
@@ -2555,26 +2584,9 @@ def _format_iteration_context_for_prompt(db: Session, homework: Homework, attemp
     return "\n".join(lines)
 
 
-def _build_student_material(
-    db: Session,
-    homework: Homework,
-    attempt: HomeworkAttempt,
-    config: CourseLLMConfig,
-) -> dict[str, Any]:
-    assignment_texts = [
-        f"作业标题：{homework.title}",
-        f"作业要求：\n{homework.content or '无'}",
-    ]
-    iteration_ctx = _format_iteration_context_for_prompt(db, homework, attempt)
-    if iteration_ctx:
-        assignment_texts.append(iteration_ctx)
-    if homework.reference_answer:
-        assignment_texts.append(f"参考答案或提示：\n{homework.reference_answer}")
-    if homework.rubric_text:
-        assignment_texts.append(f"评分要点：\n{homework.rubric_text}")
-
+def _collect_attempt_material_blocks(attempt: HomeworkAttempt) -> list[MaterialBlock]:
+    """Raw student material blocks (before global char/image budget), sorted by priority."""
     student_blocks: list[MaterialBlock] = []
-    skipped: list[dict[str, str]] = []
     if attempt.content:
         text, truncated = _truncate_text(attempt.content)
         note = "\n\n[说明] 提交说明过长，已截断。" if truncated else ""
@@ -2592,28 +2604,34 @@ def _build_student_material(
             )
         )
     if attempt.attachment_url:
-        attachment_blocks, skipped_items = _collect_attachment_blocks(
+        attachment_blocks, _skipped_items = _collect_attachment_blocks(
             attempt.attachment_url,
             attempt.attachment_name or "attachment",
         )
         student_blocks.extend(attachment_blocks)
-        skipped.extend(skipped_items)
-
     student_blocks.sort(key=lambda item: (item.priority, item.path))
-    text_budget = int((config.max_input_tokens or 16000) * (config.estimated_chars_per_token or 4.0))
-    reserved_text = "\n\n".join(assignment_texts)
-    remaining_chars = max(2000, text_budget - len(reserved_text))
-    remaining_image_budget = config.max_input_tokens or 16000
+    return student_blocks
+
+
+def _apply_blocks_char_and_image_budget(
+    blocks: list[MaterialBlock],
+    *,
+    remaining_chars: int,
+    remaining_image_budget: int,
+) -> tuple[list[MaterialBlock], list[dict[str, str]], list[str]]:
     final_blocks: list[MaterialBlock] = []
+    skipped: list[dict[str, str]] = []
     truncation_notes: list[str] = []
-    for block in student_blocks:
+    rem_chars = remaining_chars
+    rem_img = remaining_image_budget
+    for block in blocks:
         if block.block_type == "text":
             block_text = block.text or ""
-            if remaining_chars <= 0:
+            if rem_chars <= 0:
                 skipped.append({"path": block.path, "reason": "超出输入长度预算"})
                 continue
-            if len(block_text) > remaining_chars:
-                truncated_text, _ = _truncate_text(block_text, remaining_chars)
+            if len(block_text) > rem_chars:
+                truncated_text, _ = _truncate_text(block_text, rem_chars)
                 final_blocks.append(
                     MaterialBlock(
                         priority=block.priority,
@@ -2628,19 +2646,93 @@ def _build_student_material(
                     )
                 )
                 truncation_notes.append(f"{block.path} 已按预算截断")
-                remaining_chars = 0
+                rem_chars = 0
                 continue
             final_blocks.append(block)
-            remaining_chars -= len(block_text)
+            rem_chars -= len(block_text)
         else:
             estimated_tokens = block.estimated_tokens or settings.DEFAULT_ESTIMATED_IMAGE_TOKENS
-            if remaining_image_budget < estimated_tokens:
+            if rem_img < estimated_tokens:
                 skipped.append({"path": block.path, "reason": "超出图片 token 预算"})
                 continue
             final_blocks.append(block)
-            remaining_image_budget -= estimated_tokens
+            rem_img -= estimated_tokens
+    return final_blocks, skipped, truncation_notes
+
+
+def _build_student_material(
+    db: Session,
+    homework: Homework,
+    attempt: HomeworkAttempt,
+    config: CourseLLMConfig,
+) -> dict[str, Any]:
+    assignment_texts = [
+        f"作业标题：{homework.title}",
+        f"作业要求：\n{homework.content or '无'}",
+    ]
+    iteration_ctx = _format_iteration_context_for_prompt(db, homework, attempt)
+    if iteration_ctx:
+        assignment_texts.append(iteration_ctx)
+    if homework.reference_answer:
+        assignment_texts.append(f"参考答案或提示：\n{homework.reference_answer}")
+    if homework.rubric_text:
+        assignment_texts.append(f"评分要点：\n{homework.rubric_text}")
+    if getattr(attempt, "submission_mode", None) == "feedback_followup" and getattr(attempt, "prior_attempt_id", None):
+        assignment_texts.append(
+            "### 本轮为「按反馈补充」提交\n"
+            "学生在表单中**本轮说明**可能只写了针对上一轮评语的改进点；**上一轮正文与附件**已单独放在提示中的「上一轮提交」区块。\n"
+            "请综合上一轮材料、本轮补充与历史评语判断是否在不足点上有所改进，并据此给分；不要因本轮说明较短而直接给极低分。"
+        )
+    prior_attempt_id = getattr(attempt, "prior_attempt_id", None)
+    prior_blocks_raw: list[MaterialBlock] = []
+    if prior_attempt_id and getattr(attempt, "submission_mode", None) == "feedback_followup":
+        prior_row = (
+            db.query(HomeworkAttempt)
+            .filter(
+                HomeworkAttempt.id == int(prior_attempt_id),
+                HomeworkAttempt.homework_id == homework.id,
+                HomeworkAttempt.student_id == attempt.student_id,
+                HomeworkAttempt.submission_summary_id == attempt.submission_summary_id,
+            )
+            .first()
+        )
+        if prior_row:
+            prior_blocks_raw = _collect_attempt_material_blocks(prior_row)
+
+    current_blocks_raw = _collect_attempt_material_blocks(attempt)
+
+    text_budget = int((config.max_input_tokens or 16000) * (config.estimated_chars_per_token or 4.0))
+    reserved_text = "\n\n".join(assignment_texts)
+    remaining_chars = max(2000, text_budget - len(reserved_text))
+    remaining_image_budget = config.max_input_tokens or 16000
+
+    prior_final: list[MaterialBlock] = []
+    prior_skipped: list[dict[str, str]] = []
+    prior_trunc_notes: list[str] = []
+    if prior_blocks_raw:
+        prior_final, prior_skipped, prior_trunc_notes = _apply_blocks_char_and_image_budget(
+            prior_blocks_raw,
+            remaining_chars=remaining_chars,
+            remaining_image_budget=remaining_image_budget,
+        )
+        for block in prior_final:
+            if block.block_type == "text":
+                remaining_chars -= len(block.text or "")
+            else:
+                remaining_image_budget -= block.estimated_tokens or settings.DEFAULT_ESTIMATED_IMAGE_TOKENS
+
+    final_blocks, skipped, truncation_notes = _apply_blocks_char_and_image_budget(
+        current_blocks_raw,
+        remaining_chars=remaining_chars,
+        remaining_image_budget=remaining_image_budget,
+    )
 
     notes_text_parts: list[str] = []
+    if prior_trunc_notes:
+        notes_text_parts.append("上一轮截断说明：\n- " + "\n- ".join(prior_trunc_notes))
+    if prior_skipped:
+        prior_skipped_lines = [f"{item['path']}：{item['reason']}" for item in prior_skipped]
+        notes_text_parts.append("上一轮未纳入内容：\n- " + "\n- ".join(prior_skipped_lines))
     if truncation_notes:
         notes_text_parts.append("截断说明：\n- " + "\n- ".join(truncation_notes))
     if skipped:
@@ -2657,11 +2749,13 @@ def _build_student_material(
         f"提交是否迟交：{'是' if attempt.is_late else '否'}\n"
         f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
     )
-    temp_material = {
+    temp_material: dict[str, Any] = {
         "assignment_texts": assignment_texts,
         "student_blocks": final_blocks,
         "notes_text": notes_text,
     }
+    if prior_final:
+        temp_material["prior_student_blocks"] = prior_final
     estimated_tokens = estimate_request_tokens_from_material(
         config,
         temp_material,
@@ -2681,13 +2775,31 @@ def _build_student_material(
             for block in final_blocks
         ],
         "skipped": skipped,
+        "prior_included": [
+            {
+                "path": block.path,
+                "type": block.block_type,
+                "logical_path": block.logical_path,
+                "mime_hint": block.mime_hint,
+                "origin": block.origin,
+                "truncated": block.truncated,
+            }
+            for block in prior_final
+        ]
+        if prior_final
+        else [],
+        "prior_skipped": prior_skipped,
     }
+    summary_parts = [f"纳入 {len(final_blocks)} 个片段，跳过 {len(skipped)} 个文件/片段"]
+    if prior_final:
+        summary_parts.append(f"上一轮纳入 {len(prior_final)} 个片段")
     return {
         "assignment_texts": assignment_texts,
         "student_blocks": final_blocks,
+        "prior_student_blocks": prior_final,
         "notes_text": notes_text,
         "estimated_tokens": estimated_tokens,
         "artifact_manifest": artifact_manifest,
-        "summary": f"纳入 {len(final_blocks)} 个片段，跳过 {len(skipped)} 个文件/片段",
-        "all_empty": len(final_blocks) == 0,
+        "summary": "；".join(summary_parts),
+        "all_empty": len(final_blocks) == 0 and len(prior_final) == 0,
     }

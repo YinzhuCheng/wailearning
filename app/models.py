@@ -419,6 +419,8 @@ class HomeworkAttempt(Base):
     is_late = Column(Boolean, default=False)
     counts_toward_final_score = Column(Boolean, default=True)
     used_llm_assist = Column(Boolean, nullable=False, default=False)
+    submission_mode = Column(String, nullable=False, default="full")
+    prior_attempt_id = Column(Integer, ForeignKey("homework_attempts.id", use_alter=True), nullable=True)
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

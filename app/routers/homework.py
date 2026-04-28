@@ -266,10 +266,48 @@ def _get_submission_summary(db: Session, homework_id: int, student_id: int) -> O
     )
 
 
+def _attempt_allows_feedback_followup(
+    db: Session,
+    homework: Homework,
+    submission: HomeworkSubmission,
+    attempt: HomeworkAttempt,
+) -> bool:
+    """Whether the student may start a new attempt in feedback-followup mode using this attempt as prior."""
+    if homework.max_submissions is not None:
+        used = (
+            db.query(func.count(HomeworkAttempt.id))
+            .filter(HomeworkAttempt.homework_id == homework.id, HomeworkAttempt.student_id == attempt.student_id)
+            .scalar()
+            or 0
+        )
+        if int(used) >= int(homework.max_submissions):
+            return False
+    best = _best_candidate_for_attempt(db, attempt.id)
+    if best is None:
+        return False
+    if best.comment and str(best.comment).strip():
+        return True
+    if best.source == "teacher":
+        return True
+    task = _latest_task_for_attempt(db, attempt.id)
+    return bool(task and task.status == "success")
+
+
 def _serialize_submission(db: Session, submission: HomeworkSubmission) -> HomeworkSubmissionResponse:
     refresh_submission_summary(db, submission)
     latest_task = _latest_task_for_attempt(db, submission.latest_attempt_id)
     diag_task = _task_for_error_and_log(db, submission.latest_attempt_id, latest_task)
+    latest_attempt = (
+        db.query(HomeworkAttempt).filter(HomeworkAttempt.id == submission.latest_attempt_id).first()
+        if submission.latest_attempt_id
+        else None
+    )
+    hw = db.query(Homework).filter(Homework.id == submission.homework_id).first()
+    allow_ff = (
+        _attempt_allows_feedback_followup(db, hw, submission, latest_attempt)
+        if hw and latest_attempt
+        else False
+    )
     return HomeworkSubmissionResponse(
         id=submission.id,
         homework_id=submission.homework_id,
@@ -280,6 +318,9 @@ def _serialize_submission(db: Session, submission: HomeworkSubmission) -> Homewo
         attachment_name=submission.attachment_name,
         attachment_url=submission.attachment_url,
         used_llm_assist=bool(getattr(submission, "used_llm_assist", False)),
+        submission_mode=getattr(latest_attempt, "submission_mode", None) if latest_attempt else None,
+        prior_attempt_id=getattr(latest_attempt, "prior_attempt_id", None) if latest_attempt else None,
+        allow_feedback_followup=allow_ff,
         submitted_at=submission.submitted_at,
         updated_at=submission.updated_at,
         student_name=submission.student.name if submission.student else None,
@@ -298,6 +339,17 @@ def _serialize_attempt(db: Session, attempt: HomeworkAttempt) -> HomeworkAttempt
     best_candidate = _best_candidate_for_attempt(db, attempt.id)
     task = _latest_task_for_attempt(db, attempt.id)
     diag_task = _task_for_error_and_log(db, attempt.id, task)
+    hw = db.query(Homework).filter(Homework.id == attempt.homework_id).first()
+    sub = (
+        attempt.summary
+        if getattr(attempt, "summary", None)
+        else (
+            db.query(HomeworkSubmission).filter(HomeworkSubmission.id == attempt.submission_summary_id).first()
+            if attempt.submission_summary_id
+            else None
+        )
+    )
+    allow_ff = _attempt_allows_feedback_followup(db, hw, sub, attempt) if hw and sub else False
     return HomeworkAttemptResponse(
         id=attempt.id,
         homework_id=attempt.homework_id,
@@ -311,6 +363,8 @@ def _serialize_attempt(db: Session, attempt: HomeworkAttempt) -> HomeworkAttempt
         is_late=bool(attempt.is_late),
         counts_toward_final_score=bool(attempt.counts_toward_final_score),
         used_llm_assist=bool(getattr(attempt, "used_llm_assist", False)),
+        submission_mode=str(getattr(attempt, "submission_mode", None) or "full"),
+        prior_attempt_id=getattr(attempt, "prior_attempt_id", None),
         submitted_at=attempt.submitted_at,
         updated_at=attempt.updated_at,
         review_score=best_candidate.score if best_candidate else None,
@@ -320,6 +374,7 @@ def _serialize_attempt(db: Session, attempt: HomeworkAttempt) -> HomeworkAttempt
         task_error_code=diag_task.error_code if diag_task else None,
         task_log=_task_call_log(diag_task),
         score_source=best_candidate.source if best_candidate else None,
+        allow_feedback_followup=allow_ff,
     )
 
 
@@ -855,6 +910,31 @@ def submit_homework(
     next_attachment_name = submission.attachment_name or None
     next_attachment_url = submission.attachment_url or None
 
+    prior_row: Optional[HomeworkAttempt] = None
+    if data.submission_mode == "feedback_followup":
+        if not data.prior_attempt_id:
+            raise HTTPException(status_code=400, detail="按反馈补充提交需要指定 prior_attempt_id。")
+        prior_row = (
+            db.query(HomeworkAttempt)
+            .filter(
+                HomeworkAttempt.id == int(data.prior_attempt_id),
+                HomeworkAttempt.homework_id == homework.id,
+                HomeworkAttempt.student_id == student.id,
+                HomeworkAttempt.submission_summary_id == submission.id,
+            )
+            .first()
+        )
+        if not prior_row:
+            raise HTTPException(status_code=400, detail="指定的上一轮提交不存在或不属于当前作业汇总。")
+        if not _attempt_allows_feedback_followup(db, homework, submission, prior_row):
+            raise HTTPException(
+                status_code=400,
+                detail="当前尚不能使用「按反馈补充」：请等待上一轮自动评分完成，或确保已有教师/评语反馈后再试。",
+            )
+        if data.attachment_url is None and not data.remove_attachment:
+            next_attachment_name = prior_row.attachment_name
+            next_attachment_url = prior_row.attachment_url
+
     if data.remove_attachment and submission.attachment_url:
         next_attachment_name = None
         next_attachment_url = None
@@ -888,6 +968,8 @@ def submit_homework(
         is_late=is_late,
         counts_toward_final_score=counts_toward,
         used_llm_assist=bool(data.used_llm_assist),
+        submission_mode=str(data.submission_mode or "full"),
+        prior_attempt_id=int(data.prior_attempt_id) if data.prior_attempt_id is not None else None,
         submitted_at=submitted_at,
     )
     db.add(attempt)

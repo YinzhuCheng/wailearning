@@ -285,6 +285,8 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS vision_validation_status VARCHAR",
         "ALTER TABLE llm_endpoint_presets ADD COLUMN IF NOT EXISTS vision_validation_message TEXT",
         "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS used_llm_assist BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS submission_mode VARCHAR NOT NULL DEFAULT 'full'",
+        "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS prior_attempt_id INTEGER",
     ]
 
     with engine.begin() as connection:
