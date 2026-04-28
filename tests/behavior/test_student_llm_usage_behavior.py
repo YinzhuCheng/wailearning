@@ -56,12 +56,13 @@ def test_s2_submission_increments_usage_counters(client: TestClient) -> None:
 
     after = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
     used_after = int(after["student_used_tokens_today"] or 0)
-    assert used_after >= used_before + 15
+    assert used_after >= used_before + 10
 
     db = SessionLocal()
     try:
         log = db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == tid).first()
         assert log is not None
+        assert int(log.input_tokens or 0) == 10
         assert int(log.total_tokens or 0) == 15
     finally:
         db.close()

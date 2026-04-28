@@ -21,7 +21,7 @@ from app.llm_grading import (
     validate_endpoint_connectivity,
 )
 import base64
-from app.models import CourseLLMConfig, Homework
+from app.models import CourseLLMConfig, Homework, HomeworkAttempt
 
 
 @pytest.fixture(autouse=True)
@@ -85,10 +85,10 @@ def test_estimate_task_tokens():
         max_output_tokens=500,
     )
     t = estimate_task_tokens(cfg, text_length=400, image_count=1)
-    assert t > 500
+    assert 150 < t < 400
 
 
-def test_estimate_request_tokens_from_material_counts_data_url_payload():
+def test_estimate_request_tokens_from_material_uses_tiktoken_not_base64_payload():
     cfg = CourseLLMConfig(
         subject_id=1,
         estimated_chars_per_token=4.0,
@@ -100,6 +100,7 @@ def test_estimate_request_tokens_from_material_counts_data_url_payload():
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/w8AAusB9Y9nKXUAAAAASUVORK5CYII="
     )
     material = {
+        "assignment_texts": ["作业标题：t", "作业要求：\n无"],
         "student_blocks": [
             MaterialBlock(
                 priority=2,
@@ -111,14 +112,16 @@ def test_estimate_request_tokens_from_material_counts_data_url_payload():
         ],
         "notes_text": "",
     }
-    t = estimate_request_tokens_from_material(
-        cfg,
-        material,
-        assignment_text="A" * 100,
-        teacher_prompt="T",
-        student_intro="S",
+    hw = Homework(title="t", content="c", class_id=1, max_score=100, grade_precision="integer", created_by=1)
+    att = HomeworkAttempt(
+        homework_id=1,
+        student_id=1,
+        subject_id=1,
+        class_id=1,
+        content="",
     )
-    assert t > 500
+    t = estimate_request_tokens_from_material(cfg, material, homework=hw, attempt=att)
+    assert 200 < t < 2500
 
 
 def test_precheck_quota_allows_unlimited():
