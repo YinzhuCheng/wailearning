@@ -83,18 +83,21 @@
               <span v-else class="muted-text">{{ row.attempt_count ? '待教师评分' : '未提交' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="220">
+          <el-table-column label="操作" :width="userStore.isStudent ? 200 : 220">
             <template #default="{ row }">
-              <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
+              <template v-if="userStore.isStudent">
+                <el-dropdown split-button type="primary" size="small" @click="goToSubmitPage(row)">
+                  作业与提交
+                  <template #dropdown>
+                    <el-dropdown-item @click="viewHomework(row)">仅查看说明</el-dropdown-item>
+                  </template>
+                </el-dropdown>
+              </template>
+              <template v-else>
+                <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
+              </template>
               <el-button
-                v-if="userStore.isStudent"
-                size="small"
-                @click="goToSubmitPage(row)"
-              >
-                提交
-              </el-button>
-              <el-button
-                v-else
+                v-if="!userStore.isStudent"
                 size="small"
                 @click="goToSubmissionStatus(row)"
               >
@@ -318,6 +321,9 @@
           <span v-else class="muted-text">无附件</span>
         </el-descriptions-item>
       </el-descriptions>
+      <template #footer>
+        <el-button type="primary" @click="detailVisible = false">关闭</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>

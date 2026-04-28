@@ -156,7 +156,6 @@
           </el-form-item>
 
           <div class="form-actions">
-            <el-button @click="router.push('/homework')">取消</el-button>
             <el-button
               type="primary"
               :loading="submitting"
