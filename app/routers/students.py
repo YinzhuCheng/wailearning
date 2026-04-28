@@ -301,7 +301,9 @@ def create_student(
         Student.class_id == student_data.class_id,
     ).first()
     if existing:
-        # Idempotent: same class + student_no (e.g. roster already created by user-management sync or public register).
+        if (existing.name or "").strip() != (student_data.name or "").strip():
+            raise HTTPException(status_code=400, detail="该班级中学号已存在")
+        # Idempotent: same class + student_no and same display name (e.g. roster sync).
         existing.name = student_data.name
         existing.gender = student_data.gender
         existing.phone = student_data.phone
