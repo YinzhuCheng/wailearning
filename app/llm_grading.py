@@ -2584,9 +2584,10 @@ def _format_iteration_context_for_prompt(db: Session, homework: Homework, attemp
     return "\n".join(lines)
 
 
-def _collect_attempt_material_blocks(attempt: HomeworkAttempt) -> list[MaterialBlock]:
-    """Raw student material blocks (before global char/image budget), sorted by priority."""
+def _collect_attempt_material_blocks(attempt: HomeworkAttempt) -> tuple[list[MaterialBlock], list[dict[str, str]]]:
+    """Raw student material blocks plus parse-time skips (e.g. zip limits) before global budget."""
     student_blocks: list[MaterialBlock] = []
+    skipped_all: list[dict[str, str]] = []
     if attempt.content:
         text, truncated = _truncate_text(attempt.content)
         note = "\n\n[说明] 提交说明过长，已截断。" if truncated else ""
@@ -2604,13 +2605,14 @@ def _collect_attempt_material_blocks(attempt: HomeworkAttempt) -> list[MaterialB
             )
         )
     if attempt.attachment_url:
-        attachment_blocks, _skipped_items = _collect_attachment_blocks(
+        attachment_blocks, skipped_items = _collect_attachment_blocks(
             attempt.attachment_url,
             attempt.attachment_name or "attachment",
         )
         student_blocks.extend(attachment_blocks)
+        skipped_all.extend(skipped_items or [])
     student_blocks.sort(key=lambda item: (item.priority, item.path))
-    return student_blocks
+    return student_blocks, skipped_all
 
 
 def _apply_blocks_char_and_image_budget(
@@ -2685,6 +2687,7 @@ def _build_student_material(
         )
     prior_attempt_id = getattr(attempt, "prior_attempt_id", None)
     prior_blocks_raw: list[MaterialBlock] = []
+    prior_parse_skipped: list[dict[str, str]] = []
     if prior_attempt_id and getattr(attempt, "submission_mode", None) == "feedback_followup":
         prior_row = (
             db.query(HomeworkAttempt)
@@ -2697,9 +2700,9 @@ def _build_student_material(
             .first()
         )
         if prior_row:
-            prior_blocks_raw = _collect_attempt_material_blocks(prior_row)
+            prior_blocks_raw, prior_parse_skipped = _collect_attempt_material_blocks(prior_row)
 
-    current_blocks_raw = _collect_attempt_material_blocks(attempt)
+    current_blocks_raw, current_parse_skipped = _collect_attempt_material_blocks(attempt)
 
     text_budget = int((config.max_input_tokens or 16000) * (config.estimated_chars_per_token or 4.0))
     reserved_text = "\n\n".join(assignment_texts)
@@ -2738,7 +2741,11 @@ def _build_student_material(
     if skipped:
         skipped_lines = [f"{item['path']}：{item['reason']}" for item in skipped]
         notes_text_parts.append("未纳入内容：\n- " + "\n- ".join(skipped_lines))
-    notes_text = "\n\n".join(notes_text_parts)
+    parse_skipped_for_notes = [x for x in (current_parse_skipped + prior_parse_skipped) if x]
+    if parse_skipped_for_notes:
+        lines = [f"{s.get('path', '?')}：{s.get('reason', '')}" for s in parse_skipped_for_notes]
+        notes_text_parts.append("附件解析跳过：\n- " + "\n- ".join(lines))
+    notes_text = "\n\n".join([p for p in notes_text_parts if p])
     teacher_prompt = config.teacher_prompt or ""
     assignment_joined = "\n\n".join(assignment_texts)
     student_intro = (
@@ -2774,7 +2781,7 @@ def _build_student_material(
             }
             for block in final_blocks
         ],
-        "skipped": skipped,
+        "skipped": skipped + current_parse_skipped,
         "prior_included": [
             {
                 "path": block.path,
@@ -2788,7 +2795,7 @@ def _build_student_material(
         ]
         if prior_final
         else [],
-        "prior_skipped": prior_skipped,
+        "prior_skipped": prior_skipped + prior_parse_skipped,
     }
     summary_parts = [f"纳入 {len(final_blocks)} 个片段，跳过 {len(skipped)} 个文件/片段"]
     if prior_final:

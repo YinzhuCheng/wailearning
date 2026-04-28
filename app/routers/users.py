@@ -11,6 +11,7 @@ from app.auth import get_current_active_user, get_password_hash
 from app.database import get_db
 from app.models import (
     Class,
+    CourseEnrollment,
     CourseMaterial,
     Gender,
     Homework,
@@ -514,6 +515,20 @@ def update_user(
 
     if is_admin(current_user) and user.class_id != next_class_id:
         changes.append(f"班级ID: {user.class_id} -> {next_class_id}")
+        if user.role == UserRole.STUDENT.value and user.username:
+            roster = (
+                db.query(Student)
+                .filter(Student.student_no == user.username, Student.class_id == user.class_id)
+                .first()
+            )
+            if roster:
+                db.query(CourseEnrollment).filter(CourseEnrollment.student_id == roster.id).delete(
+                    synchronize_session=False
+                )
+                roster.class_id = next_class_id
+                db.flush()
+                sync_student_course_enrollments(roster, db)
+                db.flush()
         user.class_id = next_class_id
 
     if user_data.is_active is not None and is_admin(current_user):
