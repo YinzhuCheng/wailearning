@@ -31,7 +31,13 @@
           </el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
-            {{ homework.content || '暂无作业说明。' }}
+            <RichMarkdownDisplay :markdown="homework.content" variant="student" empty-text="暂无作业说明。" />
+          </el-descriptions-item>
+          <el-descriptions-item label="评分要点" :span="2">
+            <RichMarkdownDisplay :markdown="homework.rubric_text" variant="student" empty-text="未设置" />
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案" :span="2">
+            <RichMarkdownDisplay :markdown="homework.reference_answer" variant="student" empty-text="未设置" />
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
             <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
@@ -287,6 +293,7 @@ import { ElMessage } from 'element-plus'
 
 import api from '@/api'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
+import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 

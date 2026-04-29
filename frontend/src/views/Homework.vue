@@ -174,7 +174,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="editingHomeworkId ? '编辑作业' : '发布作业'"
-      width="620px"
+      width="900px"
       destroy-on-close
       @closed="onHomeworkDialogClosed"
     >
@@ -191,7 +191,13 @@
           />
         </el-form-item>
         <el-form-item label="作业内容" prop="content">
-          <el-input v-model="form.content" type="textarea" :rows="6" />
+          <MarkdownEditorPanel
+            v-model="form.content"
+            :min-rows="6"
+            :max-rows="24"
+            placeholder="支持 Markdown、LaTeX、插图（上传或 URL）"
+            hint="与独立附件并存；自动评分时说明中的远程/附件图片会尽量转为模型可读格式。"
+          />
         </el-form-item>
         <el-form-item label="满分" prop="max_score">
           <el-input-number v-model="form.max_score" :min="1" :max="1000" :precision="1" style="width: 100%" />
@@ -251,10 +257,22 @@
           <el-input v-model="form.response_language" placeholder="例如 zh-CN / en-US，可为空" />
         </el-form-item>
         <el-form-item label="评分要点">
-          <el-input v-model="form.rubric_text" type="textarea" :rows="4" placeholder="可填写评分量规、评分要点或教师说明" />
+          <MarkdownEditorPanel
+            v-model="form.rubric_text"
+            :min-rows="4"
+            :max-rows="18"
+            placeholder="评分量规、要点（Markdown / LaTeX / 图）"
+            hint="学生端始终可见，与作业说明使用相同渲染。"
+          />
         </el-form-item>
         <el-form-item label="参考答案">
-          <el-input v-model="form.reference_answer" type="textarea" :rows="4" placeholder="可选，供 LLM 评分参考" />
+          <MarkdownEditorPanel
+            v-model="form.reference_answer"
+            :min-rows="4"
+            :max-rows="18"
+            placeholder="参考答案或提示（可选；学生端始终可见）"
+            hint="供学生对照与 LLM 评分参考。"
+          />
         </el-form-item>
         <el-form-item label="迟交规则">
           <div class="late-rules">
@@ -301,7 +319,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="作业详情" width="620px" destroy-on-close>
+    <el-dialog v-model="detailVisible" title="作业详情" width="900px" destroy-on-close>
       <el-descriptions v-if="currentHomework" :column="2" border>
         <el-descriptions-item label="作业标题" :span="2">{{ currentHomework.title }}</el-descriptions-item>
         <el-descriptions-item label="课程">{{ currentHomework.subject_name || selectedCourse?.name }}</el-descriptions-item>
@@ -314,9 +332,15 @@
           </el-descriptions-item>
           <el-descriptions-item label="自动评分">{{ currentHomework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ currentHomework.grading_rule_hint }}</el-descriptions-item>
-        <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '暂无内容' }}</el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">{{ currentHomework.rubric_text || '未设置' }}</el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">{{ currentHomework.reference_answer || '未设置' }}</el-descriptions-item>
+          <el-descriptions-item label="作业内容" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.content" variant="student" empty-text="暂无内容" />
+          </el-descriptions-item>
+          <el-descriptions-item label="评分要点" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.rubric_text" variant="student" empty-text="未设置" />
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.reference_answer" variant="student" empty-text="未设置" />
+          </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentHomework.attachment_url" type="primary" link @click="openAttachment(currentHomework)">
             {{ currentHomework.attachment_name || '下载附件' }}
@@ -338,6 +362,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
+import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
+import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 

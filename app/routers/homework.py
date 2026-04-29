@@ -527,11 +527,7 @@ def _serialize_homework_for_user(
     current_user: User,
     submission: Optional[HomeworkSubmission] = None,
 ) -> HomeworkResponse:
-    response = _serialize_homework(homework, submission)
-    if current_user.role == UserRole.STUDENT:
-        response.reference_answer = None
-        response.rubric_text = None
-    return response
+    return _serialize_homework(homework, submission)
 
 
 def _resolve_target_attempt(db: Session, submission: HomeworkSubmission, attempt_id: Optional[int]) -> HomeworkAttempt:
