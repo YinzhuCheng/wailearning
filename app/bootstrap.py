@@ -158,6 +158,8 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS late_submission_affects_score BOOLEAN DEFAULT FALSE",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS max_submissions INTEGER",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS llm_routing_spec JSON",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS linked_material_id INTEGER REFERENCES course_materials(id) ON DELETE SET NULL",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS linked_chapter_id INTEGER REFERENCES course_material_chapters(id) ON DELETE SET NULL",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_score FLOAT",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_comment VARCHAR",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_attempt_id INTEGER",

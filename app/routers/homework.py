@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from starlette.responses import StreamingResponse
 
 from app.attachments import (
@@ -29,6 +29,9 @@ from app.llm_grading import normalize_score_for_homework, queue_grading_task, re
 from app.models import (
     Class,
     CourseEnrollment,
+    CourseMaterial,
+    CourseMaterialChapter,
+    CourseMaterialSection,
     Homework,
     HomeworkAttempt,
     HomeworkGradeAppeal,
@@ -462,6 +465,52 @@ def _serialize_submission_status(
     )
 
 
+def _validate_homework_material_chapter_placement(
+    db: Session,
+    *,
+    class_id: int,
+    subject_id: Optional[int],
+    linked_material_id: Optional[int],
+    linked_chapter_id: Optional[int],
+) -> None:
+    """Optional placement under course material / chapter; both null means course-level only."""
+    if linked_material_id is None and linked_chapter_id is None:
+        return
+    if subject_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Homework must be bound to a course (subject_id) when linked to material or chapter.",
+        )
+    if linked_material_id is not None:
+        mat = db.query(CourseMaterial).filter(CourseMaterial.id == linked_material_id).first()
+        if not mat:
+            raise HTTPException(status_code=404, detail="Course material not found.")
+        if mat.class_id != class_id:
+            raise HTTPException(status_code=400, detail="The selected material does not belong to this class.")
+        if mat.subject_id is None or mat.subject_id != subject_id:
+            raise HTTPException(status_code=400, detail="The selected material does not belong to this course.")
+    if linked_chapter_id is not None:
+        ch = db.query(CourseMaterialChapter).filter(CourseMaterialChapter.id == linked_chapter_id).first()
+        if not ch:
+            raise HTTPException(status_code=404, detail="Chapter not found.")
+        if ch.subject_id != subject_id:
+            raise HTTPException(status_code=400, detail="The selected chapter does not belong to this course.")
+    if linked_material_id is not None and linked_chapter_id is not None:
+        placed = (
+            db.query(CourseMaterialSection)
+            .filter(
+                CourseMaterialSection.material_id == linked_material_id,
+                CourseMaterialSection.chapter_id == linked_chapter_id,
+            )
+            .first()
+        )
+        if not placed:
+            raise HTTPException(
+                status_code=400,
+                detail="The selected material is not placed under the selected chapter.",
+            )
+
+
 def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmission] = None) -> HomeworkResponse:
     if submission:
         review_score = submission.review_score
@@ -493,6 +542,10 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         attachment_url=homework.attachment_url,
         class_id=homework.class_id,
         subject_id=homework.subject_id,
+        linked_material_id=homework.linked_material_id,
+        linked_chapter_id=homework.linked_chapter_id,
+        linked_material_title=homework.linked_material.title if homework.linked_material else None,
+        linked_chapter_title=homework.linked_chapter.title if homework.linked_chapter else None,
         due_date=homework.due_date,
         max_score=homework.max_score,
         grade_precision=homework.grade_precision,
@@ -568,12 +621,13 @@ def _delete_attachment_if_unreferenced(
 def get_homeworks(
     class_id: Optional[int] = None,
     subject_id: Optional[int] = None,
+    chapter_id: Optional[int] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    query = db.query(Homework)
+    query = db.query(Homework).options(joinedload(Homework.linked_material), joinedload(Homework.linked_chapter))
     allowed_class_ids = get_accessible_class_ids(current_user, db)
 
     if current_user.role != UserRole.ADMIN:
@@ -589,6 +643,17 @@ def get_homeworks(
     if subject_id:
         ensure_course_access(subject_id, current_user, db)
         query = query.filter(Homework.subject_id == subject_id)
+
+    if chapter_id is not None:
+        ch = db.query(CourseMaterialChapter).filter(CourseMaterialChapter.id == chapter_id).first()
+        if not ch:
+            return HomeworkListResponse(total=0, data=[])
+        if subject_id is not None and ch.subject_id != subject_id:
+            return HomeworkListResponse(total=0, data=[])
+        if subject_id is None:
+            ensure_course_access(ch.subject_id, current_user, db)
+            query = query.filter(Homework.subject_id == ch.subject_id)
+        query = query.filter(Homework.linked_chapter_id == chapter_id)
 
     total = query.count()
     homeworks = query.order_by(desc(Homework.created_at)).offset((page - 1) * page_size).limit(page_size).all()
@@ -788,6 +853,14 @@ def create_homework(
         if course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
+    _validate_homework_material_chapter_placement(
+        db,
+        class_id=data.class_id,
+        subject_id=data.subject_id,
+        linked_material_id=data.linked_material_id,
+        linked_chapter_id=data.linked_chapter_id,
+    )
+
     homework = Homework(
         title=data.title,
         content=data.content,
@@ -795,6 +868,8 @@ def create_homework(
         attachment_url=data.attachment_url,
         class_id=data.class_id,
         subject_id=data.subject_id,
+        linked_material_id=data.linked_material_id,
+        linked_chapter_id=data.linked_chapter_id,
         due_date=data.due_date,
         max_score=data.max_score,
         grade_precision=data.grade_precision,
@@ -871,6 +946,11 @@ def update_homework(
         homework.llm_routing_spec = data.llm_routing_spec
 
     update_payload = data.model_dump(exclude_unset=True)
+    if "linked_material_id" in update_payload:
+        homework.linked_material_id = update_payload["linked_material_id"]
+    if "linked_chapter_id" in update_payload:
+        homework.linked_chapter_id = update_payload["linked_chapter_id"]
+
     if "max_submissions" in update_payload:
         new_cap = update_payload["max_submissions"]
         if new_cap is not None:
@@ -888,6 +968,14 @@ def update_homework(
                     detail=f"提交次数上限不能低于已有学生的最多提交次数（当前最大 {max_per_student} 次）。",
                 )
         homework.max_submissions = new_cap
+
+    _validate_homework_material_chapter_placement(
+        db,
+        class_id=homework.class_id,
+        subject_id=homework.subject_id,
+        linked_material_id=homework.linked_material_id,
+        linked_chapter_id=homework.linked_chapter_id,
+    )
 
     db.commit()
     db.refresh(homework)

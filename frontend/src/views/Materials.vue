@@ -70,6 +70,17 @@
               @row-click="viewMaterial"
             >
               <el-table-column prop="title" label="资料标题" min-width="200" />
+              <el-table-column label="关联作业" min-width="200">
+                <template #default="{ row }">
+                  <template v-if="(row.linked_homeworks || []).length">
+                    <span v-for="(h, idx) in row.linked_homeworks" :key="h.id">
+                      <span v-if="idx > 0" class="muted-text"> · </span>
+                      <router-link :to="homeworkLinkFor(h)">{{ h.title }}</router-link>
+                    </span>
+                  </template>
+                  <span v-else class="muted-text">—</span>
+                </template>
+              </el-table-column>
               <el-table-column v-if="showPlacementColumn" label="所在章节" min-width="180">
                 <template #default="{ row }">
                   {{ placementSummary(row) }}
@@ -144,6 +155,15 @@
               </el-table-column>
             </el-table>
           </el-card>
+
+          <div v-if="selectedChapterId && chapterHomeworks.length" class="chapter-homework-block">
+            <div class="chapter-homework-title">本章作业</div>
+            <ul class="chapter-homework-list">
+              <li v-for="h in chapterHomeworks" :key="h.id">
+                <router-link :to="homeworkLinkFor(h)">{{ h.title }}</router-link>
+              </li>
+            </ul>
+          </div>
         </section>
       </div>
     </template>
@@ -288,6 +308,7 @@ const renameChapterId = ref(null)
 const renameChapterTitle = ref('')
 const placementTarget = ref(null)
 const extraChapterId = ref(null)
+const chapterHomeworks = ref([])
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
@@ -381,6 +402,7 @@ const loadChapterTree = async () => {
 const loadMaterials = async () => {
   if (!selectedCourse.value) {
     materials.value = []
+    chapterHomeworks.value = []
     return
   }
 
@@ -394,9 +416,36 @@ const loadMaterials = async () => {
       page_size: 200
     })
     materials.value = result?.data || []
+    await loadChapterHomeworks()
   } finally {
     loading.value = false
   }
+}
+
+const loadChapterHomeworks = async () => {
+  chapterHomeworks.value = []
+  if (!selectedCourse.value || !selectedChapterId.value) {
+    return
+  }
+  try {
+    const res = await api.homework.list({
+      class_id: selectedCourse.value.class_id,
+      subject_id: selectedCourse.value.id,
+      chapter_id: selectedChapterId.value,
+      page: 1,
+      page_size: 100
+    })
+    chapterHomeworks.value = res?.data || []
+  } catch {
+    chapterHomeworks.value = []
+  }
+}
+
+const homeworkLinkFor = hw => {
+  if (userStore.isStudent) {
+    return `/homework/${hw.id}/submit`
+  }
+  return { path: '/homework', query: { highlight: hw.id } }
 }
 
 const handleChapterDrop = async (draggingNode, dropNode, dropType) => {
@@ -806,6 +855,42 @@ watch(selectedChapterId, () => {
 
 .materials-toolbar {
   margin-bottom: 12px;
+}
+
+.materials-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chapter-homework-block {
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.chapter-homework-title {
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.chapter-homework-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #334155;
+  font-size: 14px;
+}
+
+.chapter-homework-list a {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.chapter-homework-list a:hover {
+  text-decoration: underline;
 }
 
 .materials-main :deep(.el-table__row) {
