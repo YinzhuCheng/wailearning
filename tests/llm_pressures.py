@@ -181,7 +181,7 @@ def test_png_attachment_sends_image_url_in_llm_request(client: TestClient):
     assert r_me.json()["latest_task_status"] == "success"
 
 
-# --- 3) Quota: usage_date moves when _get_usage_date is patched (timezone day roll) ---
+# --- 3) Quota: usage_date moves when course quota day helper is patched (timezone day roll) ---
 
 
 def test_quota_resets_across_patched_usage_dates(client: TestClient):
@@ -205,7 +205,7 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(50.0, "a"))):
-        with mock.patch("app.llm_grading.quota_calendar", return_value=("2000-05-20", "UTC")):
+        with mock.patch("app.llm_grading.quota_calendar_for_timezone", return_value=("2000-05-20", "UTC")):
             process_grading_task(tid1)
     r2 = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
@@ -221,7 +221,7 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(55.0, "b"))):
-        with mock.patch("app.llm_grading.quota_calendar", return_value=("2000-05-21", "UTC")):
+        with mock.patch("app.llm_grading.quota_calendar_for_timezone", return_value=("2000-05-21", "UTC")):
             process_grading_task(tid2)
     db = SessionLocal()
     try:

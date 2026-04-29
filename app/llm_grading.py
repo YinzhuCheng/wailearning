@@ -1121,14 +1121,6 @@ def _quota_delta_violations(
     return violations
 
 
-def _get_usage_date(timezone_name: str) -> str:
-    try:
-        tz = ZoneInfo(timezone_name or "UTC")
-    except Exception:
-        tz = ZoneInfo("UTC")
-    return datetime.now(tz).date().isoformat()
-
-
 def _get_used_tokens_for_scope(
     db: Session,
     *,

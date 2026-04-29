@@ -1,4 +1,4 @@
-"""Admin-managed LLM daily token caps: one calendar (global policy) and per-student effective limits."""
+"""Admin-managed LLM daily token caps (per-student limit) and helpers for quota calendars."""
 
 from __future__ import annotations
 
@@ -31,12 +31,6 @@ def get_or_create_global_quota_policy(db: Session) -> LLMGlobalQuotaPolicy:
 def resolve_max_parallel_grading_tasks(db: Session) -> int:
     pol = get_or_create_global_quota_policy(db)
     return max(1, int(getattr(pol, "max_parallel_grading_tasks", None) or 3))
-
-
-def quota_calendar(db: Session) -> tuple[str, str]:
-    """(usage_date_iso, timezone_name) for admin global policy display (parallel workers, defaults)."""
-    pol = get_or_create_global_quota_policy(db)
-    return quota_calendar_for_timezone((pol.quota_timezone or "UTC").strip() or "UTC")
 
 
 def quota_calendar_for_timezone(tz_raw: str) -> tuple[str, str]:
