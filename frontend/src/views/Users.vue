@@ -167,6 +167,7 @@
 
     <el-dialog
       v-model="studentImportDialogVisible"
+      data-testid="dialog-users-import-students"
       title="文件导入学生用户"
       width="920px"
       destroy-on-close

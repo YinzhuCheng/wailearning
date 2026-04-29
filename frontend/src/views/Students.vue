@@ -176,6 +176,7 @@
 
       <el-dialog
         v-model="fileImportDialogVisible"
+        data-testid="dialog-file-import-students"
         :title="isAdminView ? '文件导入名单' : '文件导入花名册'"
         width="560px"
         destroy-on-close
@@ -192,9 +193,15 @@
         </el-alert>
 
         <div class="file-import-actions">
-          <el-button @click="downloadTemplate('xlsx')">下载 Excel 模板</el-button>
-          <el-button @click="downloadTemplate('csv')">下载 CSV 模板</el-button>
-          <el-button type="primary" :loading="importing" @click="triggerImport">选择文件并导入</el-button>
+          <el-button data-testid="students-download-template-xlsx" @click="downloadTemplate('xlsx')">
+            下载 Excel 模板
+          </el-button>
+          <el-button data-testid="students-download-template-csv" @click="downloadTemplate('csv')">
+            下载 CSV 模板
+          </el-button>
+          <el-button type="primary" data-testid="students-trigger-file-import" :loading="importing" @click="triggerImport">
+            选择文件并导入
+          </el-button>
         </div>
         <p class="file-import-hint muted-hint">请选择 .xlsx、.xls 或 .csv 文件；导入过程中请勿关闭窗口。</p>
 
