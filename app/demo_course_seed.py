@@ -3,6 +3,8 @@
 - **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业。
 - **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业，**不**自动写入全班选课。
 
+若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（`ensure_schema_updates` 会写入内置默认预设），本种子会为演示必修课/选修课**幂等绑定**首个可用预设（必修课同时 `is_enabled=True` 以配合自动评分作业）；否则不写入端点，由管理员或教师在课程 LLM 配置中手动选择。
+
 演示必修课作业**不包含参考答案**（`reference_answer` 为空）。必修课资料区含三层演示章节。
 """
 
@@ -19,10 +21,13 @@ from app.models import (
     CourseEnrollment,
     CourseExamWeight,
     CourseGradeScheme,
+    CourseLLMConfig,
+    CourseLLMConfigEndpoint,
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
     Homework,
+    LLMEndpointPreset,
     Semester,
     Student,
     Subject,
@@ -82,6 +87,65 @@ _COURSE_DESCRIPTION = (
 _DEMO_CHAPTER_ROOT = "【演示】第一单元：导论与数据概览"
 _DEMO_CHAPTER_L2 = "【演示】第一节：Python 环境与常用库"
 _DEMO_CHAPTER_L3 = "【演示】1.1 课程资料与拓展阅读"
+
+
+def _first_validated_preset_for_demo_course(db: Session) -> LLMEndpointPreset | None:
+    """
+    Global preset suitable for demo course LLM binding (validated + active + usable for grading rules).
+    """
+    for pr in (
+        db.query(LLMEndpointPreset)
+        .filter(
+            LLMEndpointPreset.is_active.is_(True),
+            LLMEndpointPreset.validation_status == "validated",
+            LLMEndpointPreset.supports_vision.is_(True),
+        )
+        .order_by(LLMEndpointPreset.id.asc())
+        .all()
+    ):
+        ts = getattr(pr, "text_validation_status", None)
+        if ts == "failed":
+            continue
+        if ts not in (None, "passed", "skipped"):
+            continue
+        vs = getattr(pr, "vision_validation_status", None)
+        if vs == "failed":
+            continue
+        return pr
+    return None
+
+
+def _ensure_demo_subject_llm_binding(
+    db: Session,
+    *,
+    subject_id: int,
+    teacher_id: int,
+    enable_auto_grading: bool,
+) -> None:
+    """Idempotent: attach first suitable validated preset when the course has no LLM endpoints."""
+    cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+    if not cfg:
+        cfg = CourseLLMConfig(
+            subject_id=subject_id,
+            created_by=teacher_id,
+            updated_by=teacher_id,
+            is_enabled=bool(enable_auto_grading),
+            quota_timezone="Asia/Shanghai",
+        )
+        db.add(cfg)
+        db.flush()
+    if db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == cfg.id).first():
+        if enable_auto_grading:
+            cfg.is_enabled = True
+        return
+    preset = _first_validated_preset_for_demo_course(db)
+    if not preset:
+        return
+    db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=preset.id, priority=1))
+    if enable_auto_grading:
+        cfg.is_enabled = True
+    db.flush()
+
 
 _HOMEWORK_TITLE = "数据挖掘第一次作业：Python 环境、NumPy/Pandas 基础与 Wine 数据探索"
 
@@ -519,6 +583,13 @@ def _seed_llm_elective_course(
         course.description = _LLM_COURSE_DESCRIPTION
         print(f"Demo elective '{_LLM_COURSE_NAME}' already exists; refreshed fields.")
 
+    _ensure_demo_subject_llm_binding(
+        db,
+        subject_id=course.id,
+        teacher_id=teacher.id,
+        enable_auto_grading=False,
+    )
+
     _seed_demo_grade_weights(db, course=course)
     unc = _get_or_create_uncategorized_chapter(db, subject_id=course.id)
 
@@ -703,6 +774,13 @@ def seed_demo_course_bundle(db: Session) -> None:
         course.course_times = _COURSE_TIMES
         course.description = _COURSE_DESCRIPTION
         print(f"Demo course '{_COURSE_NAME}' already exists.")
+
+    _ensure_demo_subject_llm_binding(
+        db,
+        subject_id=course.id,
+        teacher_id=teacher.id,
+        enable_auto_grading=True,
+    )
 
     _seed_demo_grade_weights(db, course=course)
     _seed_demo_material_chapters(db, subject_id=course.id)
