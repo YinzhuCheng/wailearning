@@ -221,3 +221,20 @@ def test_elective_catalog_forbidden_for_teacher(client: TestClient):
     th = _login(client, "t_cat", "tp")
     r = client.get("/api/subjects/elective-catalog", headers=th)
     assert r.status_code == 403
+
+
+def test_student_course_catalog_lists_required_and_elective_with_hints(client: TestClient):
+    sh, kid, eid, oid, rid = _seed_student_and_elective(client)
+    r = client.get("/api/subjects/course-catalog", headers=sh)
+    assert r.status_code == 200, r.text
+    rows = r.json()
+    by_id = {row["id"]: row for row in rows}
+    assert rid in by_id and eid in by_id and oid in by_id
+    assert by_id[rid]["course_type"] == "required"
+    assert by_id[rid]["is_enrolled"] is True
+    hint_req = by_id[rid].get("enrollment_hint") or ""
+    assert "花名册" in hint_req or "教师" in hint_req
+    assert by_id[eid]["course_type"] == "elective"
+    assert by_id[eid]["can_self_enroll_elective"] is True
+    assert by_id[oid]["course_type"] == "elective"
+    assert by_id[oid]["can_self_enroll_elective"] is False

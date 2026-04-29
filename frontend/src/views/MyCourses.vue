@@ -49,31 +49,45 @@
     >
       <template #header>
         <div class="elective-header">
-          <span>全校选修课 · 自主选课</span>
+          <span>全校课程目录 · 选课说明</span>
           <el-button size="small" :loading="electiveLoading" @click="loadElectiveCatalog">刷新目录</el-button>
         </div>
       </template>
       <p class="elective-tip">
-        仅显示<strong>进行中</strong>的<strong>选修课</strong>。你只能选修<strong>本班开设</strong>的课程；其他班级的课可浏览，选课按钮不可用。
+        展示系统中<strong>进行中</strong>的全部课程，并标明<strong>必修 / 选修</strong>与<strong>选课条件</strong>。
+        <strong>选修课</strong>仅可对<strong>本班开设</strong>的课程点击选课；其他班级课程可浏览，选课按钮不可用。
+        <strong>必修课</strong>由教师按班级花名册统一加入，不可在此自主选课。
       </p>
-      <el-table :data="electiveCatalog" v-loading="electiveLoading" max-height="360" empty-text="暂无可选选修课">
-        <el-table-column prop="name" label="课程" min-width="160" />
+      <el-table :data="electiveCatalog" v-loading="electiveLoading" max-height="420" empty-text="暂无进行中的课程">
+        <el-table-column prop="name" label="课程" min-width="150" />
+        <el-table-column label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.course_type === 'elective' ? 'warning' : 'success'" size="small">
+              {{ row.course_type === 'elective' ? '选修' : '必修' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="class_name" label="开设班级" width="140" />
         <el-table-column prop="teacher_name" label="任课教师" width="120" />
+        <el-table-column label="选课条件" min-width="220">
+          <template #default="{ row }">
+            <span class="hint-cell">{{ row.enrollment_hint || '—' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button
-              v-if="!isEnrolled(row.id)"
+              v-if="row.course_type === 'elective' && !row.is_enrolled"
               type="primary"
               size="small"
-              :disabled="!canSelfEnrollElective(row)"
+              :disabled="!row.can_self_enroll_elective"
               :loading="selfEnrollingId === row.id"
               @click="selfEnroll(row)"
             >
               选课
             </el-button>
             <el-button
-              v-else
+              v-else-if="row.course_type === 'elective' && row.is_enrolled"
               type="danger"
               plain
               size="small"
@@ -83,6 +97,7 @@
             >
               退选
             </el-button>
+            <span v-else class="muted-inline">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -343,18 +358,13 @@ const loadElectiveCatalog = async () => {
   }
   electiveLoading.value = true
   try {
-    electiveCatalog.value = await api.courses.electiveCatalog()
+    electiveCatalog.value = await api.courses.courseCatalog()
   } catch (error) {
-    console.error('加载选修目录失败', error)
+    console.error('加载课程目录失败', error)
   } finally {
     electiveLoading.value = false
   }
 }
-
-const myClassId = computed(() => userStore.userInfo?.class_id ?? null)
-
-const canSelfEnrollElective = row =>
-  userStore.isStudent && row?.class_id != null && myClassId.value != null && Number(row.class_id) === Number(myClassId.value)
 
 const isEnrolled = courseId =>
   (courses.value || []).some(c => String(c.id) === String(courseId))
@@ -807,6 +817,17 @@ watch(
   font-size: 13px;
   color: #64748b;
   line-height: 1.5;
+}
+
+.hint-cell {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.muted-inline {
+  color: #94a3b8;
+  font-size: 13px;
 }
 
 .roster-tools {

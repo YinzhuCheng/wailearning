@@ -1,7 +1,9 @@
-"""Default demo course data: teacher `teacher`, students stu1–stu5, 数据挖掘 course + first homework + demo chapters.
+"""Default demo data: teacher `teacher`, class 人工智能1班, students stu1–stu5.
 
-演示作业**不包含参考答案**（`reference_answer` 为空），便于教学上由学生独立作答；评分量表与作业说明照常提供。
-演示课程资料区会幂等写入**三层章节**（根章节 → 子章节 → 孙章节），便于章节树 UI 展示。
+- **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业。
+- **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业，**不**自动写入全班选课。
+
+演示必修课作业**不包含参考答案**（`reference_answer` 为空）。必修课资料区含三层演示章节。
 """
 
 from __future__ import annotations
@@ -14,9 +16,12 @@ from app.auth import get_password_hash
 from app.course_access import sync_course_enrollments
 from app.models import (
     Class,
+    CourseEnrollment,
     CourseExamWeight,
     CourseGradeScheme,
+    CourseMaterial,
     CourseMaterialChapter,
+    CourseMaterialSection,
     Homework,
     Semester,
     Student,
@@ -28,8 +33,42 @@ from app.student_user_sync import reconcile_student_users_and_roster
 
 _DEMO_PASSWORD = "111111"
 
-_CLASS_NAME = "数据挖掘默认班"
+_CLASS_NAME = "人工智能1班"
+_LEGACY_CLASS_NAME = "数据挖掘默认班"
 _COURSE_NAME = "数据挖掘"
+
+_LLM_COURSE_NAME = "大语言模型"
+_LLM_COURSE_DESCRIPTION = (
+    "全校默认选修示例：大语言模型基础与应用入门。完成本课需由学生在「我的课程」中自主选课；"
+    "内容包含提示工程简介与一次实践作业。"
+)
+_LLM_WEEKLY = "每周四 15:00–17:00（选修，以教务通知为准）"
+_LLM_MATERIAL_TITLE = "【选修】大语言模型：课程说明与阅读材料"
+_LLM_MATERIAL_CONTENT = """## 欢迎选修「大语言模型」
+
+本课程为**选修课**，请在「我的课程」页面使用**选课**按钮加入后，方可查看作业与完整资料池。
+
+### 学习目标
+
+- 了解大语言模型的基本能力与局限；
+- 掌握提示（Prompt）书写的基本结构；
+- 完成一次简短的实践作业。
+
+### 推荐阅读
+
+1. 关注课程通知与 LLM 使用规范；
+2. 课前可预习「提示工程」基础概念。
+"""
+_LLM_HOMEWORK_TITLE = "大语言模型入门作业：提示工程小练习"
+_LLM_HOMEWORK_CONTENT = """请完成以下任务（建议 300–800 字或等价条目）：
+
+1. 用你自己的话解释：什么是「提示工程」？它为什么会影响大语言模型的输出质量？
+2. 设计一个用于「总结一段中文新闻要点」的提示模板，并说明每个部分的作用。
+3. 指出使用大语言模型辅助学习时，你认为需要注意的两条风险或边界。
+
+提交形式：纯文本或 Markdown 均可。"""
+_LLM_RUBRIC_TEXT = """总分 100。关注是否理解提示工程、模板结构是否清楚、风险意识是否到位；表达清晰即可，不必长篇。
+"""
 
 _TEACHER_DISPLAY_NAME = "李演示"
 _COURSE_WEEKLY_SCHEDULE = "每周二 14:00–16:00（教室以教务通知为准）"
@@ -392,9 +431,160 @@ def _seed_demo_material_chapters(db: Session, *, subject_id: int) -> None:
     print("Created demo course material chapter outline (3 levels).")
 
 
+def _merge_legacy_demo_class_into_target(db: Session, *, target: Class) -> None:
+    """Rename or merge old demo class name into 人工智能1班 so existing installs keep one roster."""
+    legacy = db.query(Class).filter(Class.name == _LEGACY_CLASS_NAME).first()
+    if not legacy or legacy.id == target.id:
+        return
+    db.query(Subject).filter(Subject.class_id == legacy.id).update({Subject.class_id: target.id}, synchronize_session=False)
+    db.query(Student).filter(Student.class_id == legacy.id).update({Student.class_id: target.id}, synchronize_session=False)
+    db.query(User).filter(User.class_id == legacy.id, User.role == UserRole.STUDENT.value).update(
+        {User.class_id: target.id},
+        synchronize_session=False,
+    )
+    db.query(CourseEnrollment).filter(CourseEnrollment.class_id == legacy.id).update(
+        {CourseEnrollment.class_id: target.id},
+        synchronize_session=False,
+    )
+    db.query(CourseMaterial).filter(CourseMaterial.class_id == legacy.id).update(
+        {CourseMaterial.class_id: target.id},
+        synchronize_session=False,
+    )
+    db.query(Homework).filter(Homework.class_id == legacy.id).update({Homework.class_id: target.id}, synchronize_session=False)
+    db.delete(legacy)
+    db.flush()
+    print(f"Merged legacy demo class '{_LEGACY_CLASS_NAME}' into '{_CLASS_NAME}'.")
+
+
+def _get_or_create_uncategorized_chapter(db: Session, *, subject_id: int) -> CourseMaterialChapter:
+    unc = (
+        db.query(CourseMaterialChapter)
+        .filter(
+            CourseMaterialChapter.subject_id == subject_id,
+            CourseMaterialChapter.is_uncategorized.is_(True),
+        )
+        .first()
+    )
+    if unc:
+        return unc
+    unc = CourseMaterialChapter(
+        subject_id=subject_id,
+        parent_id=None,
+        title="未分类",
+        sort_order=0,
+        is_uncategorized=True,
+    )
+    db.add(unc)
+    db.flush()
+    return unc
+
+
+def _seed_llm_elective_course(
+    db: Session,
+    *,
+    teacher: User,
+    klass: Class,
+    semester: Semester | None,
+) -> None:
+    """Elective on the same demo class; students self-enroll (no roster-wide auto enrollment)."""
+    course = (
+        db.query(Subject)
+        .filter(
+            Subject.name == _LLM_COURSE_NAME,
+            Subject.teacher_id == teacher.id,
+            Subject.class_id == klass.id,
+        )
+        .first()
+    )
+    if not course:
+        course = Subject(
+            name=_LLM_COURSE_NAME,
+            teacher_id=teacher.id,
+            class_id=klass.id,
+            semester_id=semester.id if semester else None,
+            semester=semester.name if semester else None,
+            course_type="elective",
+            status="active",
+            weekly_schedule=_LLM_WEEKLY,
+            course_times="选修课：请自主选课；课次以教务与课程群通知为准。",
+            description=_LLM_COURSE_DESCRIPTION,
+        )
+        db.add(course)
+        db.flush()
+        print(f"Created demo elective course '{_LLM_COURSE_NAME}'.")
+    else:
+        course.course_type = "elective"
+        course.status = "active"
+        course.weekly_schedule = _LLM_WEEKLY
+        course.description = _LLM_COURSE_DESCRIPTION
+        print(f"Demo elective '{_LLM_COURSE_NAME}' already exists; refreshed fields.")
+
+    _seed_demo_grade_weights(db, course=course)
+    unc = _get_or_create_uncategorized_chapter(db, subject_id=course.id)
+
+    mat = (
+        db.query(CourseMaterial)
+        .filter(CourseMaterial.subject_id == course.id, CourseMaterial.title == _LLM_MATERIAL_TITLE)
+        .first()
+    )
+    if not mat:
+        mat = CourseMaterial(
+            title=_LLM_MATERIAL_TITLE,
+            content=_LLM_MATERIAL_CONTENT,
+            class_id=klass.id,
+            subject_id=course.id,
+            created_by=teacher.id,
+        )
+        db.add(mat)
+        db.flush()
+        exists_sec = (
+            db.query(CourseMaterialSection)
+            .filter(CourseMaterialSection.material_id == mat.id, CourseMaterialSection.chapter_id == unc.id)
+            .first()
+        )
+        if not exists_sec:
+            db.add(CourseMaterialSection(material_id=mat.id, chapter_id=unc.id, sort_order=0))
+        print("Created demo LLM course material.")
+    else:
+        mat.content = _LLM_MATERIAL_CONTENT
+
+    due = datetime.now(timezone.utc) + timedelta(days=21)
+    hw = (
+        db.query(Homework)
+        .filter(Homework.subject_id == course.id, Homework.title == _LLM_HOMEWORK_TITLE)
+        .first()
+    )
+    if not hw:
+        db.add(
+            Homework(
+                title=_LLM_HOMEWORK_TITLE,
+                content=_LLM_HOMEWORK_CONTENT,
+                class_id=klass.id,
+                subject_id=course.id,
+                due_date=due,
+                max_score=100,
+                grade_precision="integer",
+                auto_grading_enabled=False,
+                rubric_text=_LLM_RUBRIC_TEXT,
+                reference_answer=None,
+                response_language="zh-CN",
+                allow_late_submission=True,
+                late_submission_affects_score=False,
+                max_submissions=3,
+                created_by=teacher.id,
+            )
+        )
+        print("Created demo LLM homework.")
+    else:
+        hw.content = _LLM_HOMEWORK_CONTENT
+        hw.rubric_text = _LLM_RUBRIC_TEXT
+        hw.due_date = hw.due_date or due
+
+
 def seed_demo_course_bundle(db: Session) -> None:
     """
-    Idempotent seed: teacher `teacher`, class, students stu1–stu5, course 数据挖掘, first homework.
+    Idempotent seed: teacher `teacher`, class 人工智能1班, students stu1–stu5,
+    必修课「数据挖掘」+ 选修课「大语言模型」。
     Password for all demo accounts: 111111.
     """
     pwd_hash = get_password_hash(_DEMO_PASSWORD)
@@ -424,6 +614,7 @@ def seed_demo_course_bundle(db: Session) -> None:
         print(f"Created demo class '{_CLASS_NAME}'.")
     else:
         print(f"Demo class '{_CLASS_NAME}' already exists.")
+    _merge_legacy_demo_class_into_target(db, target=klass)
 
     student_specs = [
         ("stu1", "学生一", "13800001001"),
@@ -558,6 +749,8 @@ def seed_demo_course_bundle(db: Session) -> None:
         hw.due_date = hw.due_date or due
         hw.max_submissions = hw.max_submissions if hw.max_submissions is not None else 3
         print("Demo homework already exists; refreshed text fields.")
+
+    _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)
 
     reconcile_student_users_and_roster(db)
     db.commit()

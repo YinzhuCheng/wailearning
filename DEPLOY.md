@@ -84,7 +84,7 @@ LLM_GRADING_TASK_STALE_SECONDS=600
 INIT_DEFAULT_DATA=true
 ```
 
-When **`INIT_DEFAULT_DATA=true`** (the application default), first startup also **idempotently** seeds a demo teaching bundle: accounts **`teacher`** and **`stu1`–`stu5`** (initial password **`111111`** shared), demo class **数据挖掘默认班**, course **数据挖掘**, and the first homework with full rubric text—see `app/demo_course_seed.py`. Set **`INIT_DEFAULT_DATA=false`** in production if you do not want these accounts.
+When **`INIT_DEFAULT_DATA=true`** (the application default), first startup also **idempotently** seeds a demo teaching bundle: accounts **`teacher`** and **`stu1`–`stu5`** (initial password **`111111`** shared), demo class **人工智能1班**, required course **数据挖掘**, elective **大语言模型** (sample material + homework), and the first required-course homework with full rubric text—see `app/demo_course_seed.py`. Set **`INIT_DEFAULT_DATA=false`** in production if you do not want these accounts.
 
 Notes:
 

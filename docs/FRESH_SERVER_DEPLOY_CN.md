@@ -72,7 +72,7 @@ INIT_ADMIN_PASSWORD=YOUR_ADMIN_PASSWORD
 INIT_DEFAULT_DATA=true
 ```
 
-当 **`INIT_DEFAULT_DATA=true`**（默认）时，首次启动还会在数据库中**幂等**写入演示账号：**`teacher`** / **`stu1`**–**`stu5`**（初始密码均为 **`111111`**）、演示班级与 **「数据挖掘」** 课程及第一次作业（含评分要点，**不含参考答案**）。生产环境若不需要，请在首次上线前改为 **`INIT_DEFAULT_DATA=false`**。
+当 **`INIT_DEFAULT_DATA=true`**（默认）时，首次启动还会在数据库中**幂等**写入演示账号：**`teacher`** / **`stu1`**–**`stu5`**（初始密码均为 **`111111`**）、演示班级 **「人工智能1班」**、**必修课「数据挖掘」**（全班自动入课）及第一次作业（含评分要点，**不含参考答案**），以及**选修课「大语言模型」**（简要资料与入门作业，需学生自主选课）。生产环境若不需要，请在首次上线前改为 **`INIT_DEFAULT_DATA=false`**。
 
 ```bash
 sudo chown root:ddclass /opt/dd-class/shared/.env.production

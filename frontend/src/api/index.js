@@ -148,7 +148,8 @@ export { http, httpQuiet, apiBaseUrl }
 
 const subjectsApi = {
   list: params => http.get('/subjects', { params }),
-  electiveCatalog: () => http.get('/subjects/elective-catalog'),
+    electiveCatalog: () => http.get('/subjects/elective-catalog'),
+    courseCatalog: () => http.get('/subjects/course-catalog'),
   studentSelfEnroll: subjectId => http.post(`/subjects/${subjectId}/student-self-enroll`),
   studentSelfDrop: subjectId => http.post(`/subjects/${subjectId}/student-self-drop`),
   get: id => http.get(`/subjects/${id}`),
