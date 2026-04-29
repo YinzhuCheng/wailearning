@@ -3,6 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, false, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.attachments import delete_attachment_file_if_unreferenced
@@ -344,7 +345,20 @@ def mark_as_read(
         read_record.is_read = True
         read_record.read_at = datetime.now(timezone.utc)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(NotificationRead).filter(
+            NotificationRead.notification_id == notification_id,
+            NotificationRead.user_id == current_user.id,
+        ).first()
+        if existing:
+            existing.is_read = True
+            existing.read_at = datetime.now(timezone.utc)
+            db.commit()
+        else:
+            raise
     return {"message": "Notification marked as read."}
 
 
@@ -376,5 +390,25 @@ def mark_all_as_read(
             record.read_at = datetime.now(timezone.utc)
             updated += 1
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        for notification in notifications:
+            record = db.query(NotificationRead).filter(
+                NotificationRead.notification_id == notification.id,
+                NotificationRead.user_id == current_user.id,
+            ).first()
+            if not record:
+                record = NotificationRead(
+                    notification_id=notification.id,
+                    user_id=current_user.id,
+                    is_read=True,
+                    read_at=datetime.now(timezone.utc),
+                )
+                db.add(record)
+                continue
+            record.is_read = True
+            record.read_at = datetime.now(timezone.utc)
+        db.commit()
     return {"message": f"Marked {updated} notifications as read."}

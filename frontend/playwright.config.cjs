@@ -1,5 +1,6 @@
 const { defineConfig, devices } = require('@playwright/test')
 const path = require('path')
+const os = require('os')
 
 const E2E_API_PORT = process.env.E2E_API_PORT || '8012'
 const E2E_UI_PORT = process.env.E2E_UI_PORT || '3012'
@@ -11,18 +12,60 @@ process.env.PLAYWRIGHT_BASE_URL =
   process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${E2E_UI_PORT}`
 
 const repoRoot = path.resolve(__dirname, '..')
-const sqliteUrl = `sqlite:////tmp/playwright_e2e_${E2E_API_PORT}.sqlite`
+const isWindows = process.platform === 'win32'
+const sqliteFile = isWindows
+  ? path.join(os.tmpdir(), `playwright_e2e_${E2E_API_PORT}.sqlite`)
+  : `/tmp/playwright_e2e_${E2E_API_PORT}.sqlite`
+const sqliteUrl = isWindows
+  ? `sqlite:///${sqliteFile.replace(/\\/g, '/')}`
+  : `sqlite:////tmp/playwright_e2e_${E2E_API_PORT}.sqlite`
 const secretKey = 'playwright-e2e-secret-key-minimum-32-chars-xx'
 
-const apiEnv = [
-  'E2E_DEV_SEED_ENABLED=true',
-  `E2E_DEV_SEED_TOKEN=${process.env.E2E_DEV_SEED_TOKEN}`,
-  'INIT_DEFAULT_DATA=false',
-  `DATABASE_URL=${sqliteUrl}`,
-  `SECRET_KEY=${secretKey}`,
-  'ENABLE_LLM_GRADING_WORKER=false',
-  'LLM_GRADING_WORKER_LEADER=false'
-].join(' ')
+const apiEnv = {
+  E2E_DEV_SEED_ENABLED: 'true',
+  E2E_DEV_SEED_TOKEN: process.env.E2E_DEV_SEED_TOKEN,
+  INIT_DEFAULT_DATA: 'false',
+  DATABASE_URL: sqliteUrl,
+  SECRET_KEY: secretKey,
+  ENABLE_LLM_GRADING_WORKER: 'false',
+  LLM_GRADING_WORKER_LEADER: 'false'
+}
+
+function quoteWindowsArg(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`
+}
+
+function buildWindowsEnvPrefix(env) {
+  return Object.entries(env)
+    .map(([key, value]) => `set "${key}=${value}"`)
+    .join(' && ')
+}
+
+function buildApiCommand() {
+  if (isWindows) {
+    const pythonExe = process.env.E2E_PYTHON || path.join(repoRoot, '.venv', 'Scripts', 'python.exe')
+    return [
+      buildWindowsEnvPrefix(apiEnv),
+      `cd /d ${quoteWindowsArg(repoRoot)}`,
+      `${quoteWindowsArg(pythonExe)} -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_API_PORT}`
+    ].join(' && ')
+  }
+  const apiEnvString = Object.entries(apiEnv)
+    .map(([key, value]) => `${key}=${JSON.stringify(String(value))}`)
+    .join(' ')
+  return `bash -lc 'cd "${repoRoot}" && exec env ${apiEnvString} python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_API_PORT}'`
+}
+
+function buildUiCommand() {
+  if (isWindows) {
+    return [
+      `set "VITE_PROXY_TARGET=${apiBase}"`,
+      `cd /d ${quoteWindowsArg(path.join(repoRoot, 'frontend'))}`,
+      'npx vite --host 127.0.0.1 --port ' + E2E_UI_PORT
+    ].join(' && ')
+  }
+  return `bash -lc 'cd "${path.join(repoRoot, 'frontend')}" && exec env VITE_PROXY_TARGET=${apiBase} npx vite --host 127.0.0.1 --port ${E2E_UI_PORT}'`
+}
 
 /**
  * @see {import('@playwright/test').PlaywrightTestConfig}
@@ -43,13 +86,13 @@ module.exports = defineConfig({
   },
   webServer: [
     {
-      command: `bash -lc 'cd "${repoRoot}" && exec env ${apiEnv} python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_API_PORT}'`,
+      command: buildApiCommand(),
       url: `${apiBase}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000
     },
     {
-      command: `bash -lc 'cd "${path.join(repoRoot, 'frontend')}" && exec env VITE_PROXY_TARGET=${apiBase} npx vite --host 127.0.0.1 --port ${E2E_UI_PORT}'`,
+      command: buildUiCommand(),
       url: `http://127.0.0.1:${E2E_UI_PORT}/`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000

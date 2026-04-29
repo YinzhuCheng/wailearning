@@ -140,6 +140,15 @@ def ensure_schema_updates() -> None:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_score_grade_appeal_pending_component
+        ON score_grade_appeals(subject_id, student_id, semester, target_component)
+        WHERE status = 'pending'
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_read_notification_user
+        ON notification_reads(notification_id, user_id)
+        """,
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_student_id INTEGER REFERENCES students(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_homework_id INTEGER REFERENCES homeworks(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_student_id INTEGER REFERENCES students(id)",

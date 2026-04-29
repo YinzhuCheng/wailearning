@@ -251,11 +251,6 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
-  if (userStore.isStudent && to.path !== '/courses' && !userStore.selectedCourse && to.path !== '/personal-settings') {
-    next('/courses')
-    return
-  }
-
   if (!userStore.isAdmin && to.path !== '/login') {
     try {
       await userStore.ensureSelectedCourse(false, {
@@ -263,6 +258,20 @@ router.beforeEach(async (to, from, next) => {
       })
     } catch (error) {
       console.error('Failed to preload teaching courses', error)
+    }
+  }
+
+  if (userStore.isStudent && to.path !== '/courses' && !userStore.selectedCourse && to.path !== '/personal-settings') {
+    try {
+      await userStore.ensureSelectedCourse(false, {
+        preserveEmptySelection: false
+      })
+    } catch (error) {
+      console.error('Failed to auto-select course for student route', error)
+    }
+    if (!userStore.selectedCourse) {
+      next('/courses')
+      return
     }
   }
 

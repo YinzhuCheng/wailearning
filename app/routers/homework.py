@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
@@ -1254,16 +1255,20 @@ def create_grade_appeal(
         reason_text=payload.reason_text,
         status="pending",
     )
-    db.add(appeal)
-    db.flush()
-    notify_teachers_grade_appeal(
-        db,
-        appeal=appeal,
-        homework=homework,
-        student_name=student.name,
-        creator_user_id=current_user.id,
-    )
-    db.commit()
+    try:
+        db.add(appeal)
+        db.flush()
+        notify_teachers_grade_appeal(
+            db,
+            appeal=appeal,
+            homework=homework,
+            student_name=student.name,
+            creator_user_id=current_user.id,
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Appeal already exists for this submission.") from exc
     db.refresh(appeal)
     return appeal
 

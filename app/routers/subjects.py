@@ -2,6 +2,7 @@ import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
@@ -412,21 +413,32 @@ def student_self_enroll_elective(
     if existing:
         return StudentElectiveSelfEnrollResult(subject_id=course.id, created=False, already_enrolled=True)
 
-    db.query(CourseEnrollmentBlock).filter(
-        CourseEnrollmentBlock.subject_id == course.id,
-        CourseEnrollmentBlock.student_id == student.id,
-    ).delete(synchronize_session=False)
-    db.add(
-        CourseEnrollment(
-            subject_id=course.id,
-            student_id=student.id,
-            class_id=course.class_id,
-            enrollment_type="elective",
-            can_remove=True,
+    try:
+        db.query(CourseEnrollmentBlock).filter(
+            CourseEnrollmentBlock.subject_id == course.id,
+            CourseEnrollmentBlock.student_id == student.id,
+        ).delete(synchronize_session=False)
+        db.add(
+            CourseEnrollment(
+                subject_id=course.id,
+                student_id=student.id,
+                class_id=course.class_id,
+                enrollment_type="elective",
+                can_remove=True,
+            )
         )
-    )
-    db.commit()
-    return StudentElectiveSelfEnrollResult(subject_id=course.id, created=True, already_enrolled=False)
+        db.commit()
+        return StudentElectiveSelfEnrollResult(subject_id=course.id, created=True, already_enrolled=False)
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            db.query(CourseEnrollment)
+            .filter(CourseEnrollment.subject_id == course.id, CourseEnrollment.student_id == student.id)
+            .first()
+        )
+        if existing:
+            return StudentElectiveSelfEnrollResult(subject_id=course.id, created=False, already_enrolled=True)
+        raise
 
 
 @router.post("/{subject_id}/student-self-drop", response_model=StudentElectiveSelfDropResult)
@@ -456,14 +468,25 @@ def student_self_drop_elective(
     if et != "elective" and not enrollment.can_remove:
         raise HTTPException(status_code=400, detail="必修课不可退选。")
 
-    db.delete(enrollment)
-    if not db.query(CourseEnrollmentBlock).filter(
-        CourseEnrollmentBlock.subject_id == subject_id,
-        CourseEnrollmentBlock.student_id == student.id,
-    ).first():
-        db.add(CourseEnrollmentBlock(subject_id=subject_id, student_id=student.id))
-    db.commit()
-    return StudentElectiveSelfDropResult(subject_id=subject_id, removed=True)
+    try:
+        db.delete(enrollment)
+        if not db.query(CourseEnrollmentBlock).filter(
+            CourseEnrollmentBlock.subject_id == subject_id,
+            CourseEnrollmentBlock.student_id == student.id,
+        ).first():
+            db.add(CourseEnrollmentBlock(subject_id=subject_id, student_id=student.id))
+        db.commit()
+        return StudentElectiveSelfDropResult(subject_id=subject_id, removed=True)
+    except IntegrityError:
+        db.rollback()
+        existing = (
+            db.query(CourseEnrollment)
+            .filter(CourseEnrollment.subject_id == subject_id, CourseEnrollment.student_id == student.id)
+            .first()
+        )
+        if not existing:
+            return StudentElectiveSelfDropResult(subject_id=subject_id, removed=False)
+        raise
 
 
 @router.get("/{subject_id}", response_model=SubjectResponse)
@@ -782,21 +805,37 @@ def enroll_roster_students_on_subject(
             skipped_wrong_class += 1
             continue
 
-        db.query(CourseEnrollmentBlock).filter(
-            CourseEnrollmentBlock.subject_id == course.id,
-            CourseEnrollmentBlock.student_id == student.id,
-        ).delete(synchronize_session=False)
-        db.add(
-            CourseEnrollment(
-                subject_id=course.id,
-                student_id=student.id,
-                class_id=course.class_id,
-                enrollment_type=enrollment_type,
-                can_remove=can_remove,
+        try:
+            with db.begin_nested():
+                db.query(CourseEnrollmentBlock).filter(
+                    CourseEnrollmentBlock.subject_id == course.id,
+                    CourseEnrollmentBlock.student_id == student.id,
+                ).delete(synchronize_session=False)
+                db.add(
+                    CourseEnrollment(
+                        subject_id=course.id,
+                        student_id=student.id,
+                        class_id=course.class_id,
+                        enrollment_type=enrollment_type,
+                        can_remove=can_remove,
+                    )
+                )
+                db.flush()
+            enrolled_ids.add(student.id)
+            created += 1
+        except IntegrityError:
+            existing = (
+                db.query(CourseEnrollment)
+                .filter(
+                    CourseEnrollment.subject_id == course.id,
+                    CourseEnrollment.student_id == student.id,
+                )
+                .first()
             )
-        )
-        enrolled_ids.add(student.id)
-        created += 1
+            if existing:
+                skipped_already += 1
+                continue
+            raise
 
     db.commit()
     return SubjectRosterEnrollResult(

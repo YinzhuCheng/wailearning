@@ -3,6 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
@@ -415,15 +416,19 @@ def create_score_grade_appeal(
         reason_text=payload.reason_text.strip(),
         status="pending",
     )
-    db.add(appeal)
-    db.flush()
-    notify_teachers_score_grade_appeal(
-        db,
-        appeal=appeal,
-        student_name=student.name or "",
-        creator_user_id=current_user.id,
-    )
-    db.commit()
+    try:
+        db.add(appeal)
+        db.flush()
+        notify_teachers_score_grade_appeal(
+            db,
+            appeal=appeal,
+            student_name=student.name or "",
+            creator_user_id=current_user.id,
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="A pending appeal for this component already exists.") from exc
     db.refresh(appeal)
     return _serialize_score_appeal(db, appeal)
 
