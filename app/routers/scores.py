@@ -6,9 +6,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
-from app.course_access import ensure_course_access, get_student_profile_for_user
+from app.course_access import ensure_course_access, get_enrolled_students, get_student_profile_for_user
 from app.database import get_db
-from app.models import CourseExamWeight, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
+from app.models import CourseExamWeight, CourseGradeScheme, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
 from app.permissions import is_student
 from app.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from app.score_composition import OTHER_DAILY_EXAM_TYPE, build_composition_for_student, get_scheme_dto, upsert_scheme
@@ -262,8 +262,6 @@ def get_course_grade_scheme(
     current_user: User = Depends(get_current_active_user),
 ):
     ensure_course_access(subject_id, current_user, db)
-    from app.models import CourseGradeScheme
-
     row = db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == subject_id).first()
     hw = float(row.homework_weight) if row else 30.0
     ex = float(row.extra_daily_weight) if row else 20.0
@@ -306,7 +304,6 @@ def list_class_score_compositions(
     if is_student(current_user):
         raise HTTPException(status_code=403, detail="仅教师可查看全班成绩构成。")
     ensure_course_access(subject_id, current_user, db)
-    from app.course_access import get_enrolled_students
 
     enrollments = get_enrolled_students(subject_id, db)
     out: list[ScoreCompositionResponse] = []
@@ -395,6 +392,20 @@ def create_score_grade_appeal(
         if payload.target_component in exam_types and sc.exam_type != payload.target_component:
             raise HTTPException(status_code=400, detail="score_id 与申诉对象不符。")
 
+    dup = (
+        db.query(ScoreGradeAppeal)
+        .filter(
+            ScoreGradeAppeal.student_id == student.id,
+            ScoreGradeAppeal.subject_id == subject_id,
+            ScoreGradeAppeal.semester == payload.semester.strip(),
+            ScoreGradeAppeal.target_component == payload.target_component.strip(),
+            ScoreGradeAppeal.status == "pending",
+        )
+        .first()
+    )
+    if dup:
+        raise HTTPException(status_code=400, detail="该申诉对象已有一条待处理申诉，请勿重复提交。")
+
     appeal = ScoreGradeAppeal(
         subject_id=subject_id,
         student_id=student.id,
@@ -453,8 +464,11 @@ def respond_score_grade_appeal(
     if not appeal:
         raise HTTPException(status_code=404, detail="申诉不存在。")
     ensure_course_access(appeal.subject_id, current_user, db)
+    next_status = (payload.status or "resolved").strip()
+    if next_status not in ("pending", "resolved", "rejected"):
+        raise HTTPException(status_code=400, detail="无效的处理状态。")
     appeal.teacher_response = payload.teacher_response.strip()
-    appeal.status = payload.status.strip() if payload.status else "resolved"
+    appeal.status = next_status
     mark_score_appeal_notifications_handled(db, appeal.id)
     db.commit()
     db.refresh(appeal)

@@ -4,24 +4,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models import Homework, HomeworkGradeAppeal, Notification, Subject, User, UserRole
-
-
-def subject_teacher_user_ids(db: Session, subject_id: int) -> list[int]:
-    course = db.query(Subject).filter(Subject.id == subject_id).first()
-    if not course:
-        return []
-    ids: list[int] = []
-    if course.teacher_id:
-        ids.append(int(course.teacher_id))
-    if course.class_id:
-        class_teachers = (
-            db.query(User.id)
-            .filter(User.role == UserRole.CLASS_TEACHER.value, User.class_id == course.class_id)
-            .all()
-        )
-        ids.extend(int(r[0]) for r in class_teachers)
-    return sorted(set(ids))
+from app.course_access import subject_teacher_user_ids
+from app.models import Homework, HomeworkGradeAppeal, Notification
 
 
 def notify_teachers_grade_appeal(

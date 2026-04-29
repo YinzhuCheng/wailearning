@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import CourseExamWeight, CourseGradeScheme, Homework, HomeworkSubmission, Score, Student, Subject
@@ -55,25 +54,6 @@ def _homework_weighted_percent(sub: HomeworkSubmission, hw: Homework) -> float:
 
 def compute_homework_average_percent(db: Session, *, student_id: int, subject_id: int) -> Optional[float]:
     """Mean of (review_score/max_score*100) over homeworks in this course with a scored submission."""
-    q = (
-        db.query(func.avg(HomeworkSubmission.review_score / func.nullif(Homework.max_score, 0) * 100.0))
-        .join(Homework, Homework.id == HomeworkSubmission.homework_id)
-        .filter(
-            Homework.subject_id == subject_id,
-            HomeworkSubmission.student_id == student_id,
-            HomeworkSubmission.review_score.isnot(None),
-            Homework.max_score.isnot(None),
-            Homework.max_score > 0,
-        )
-    )
-    val = q.scalar()
-    if val is None:
-        return None
-    return round(float(val), 2)
-
-
-def compute_homework_average_percent_python(db: Session, *, student_id: int, subject_id: int) -> Optional[float]:
-    """SQLite-safe: compute in Python."""
     rows = (
         db.query(HomeworkSubmission, Homework)
         .join(Homework, Homework.id == HomeworkSubmission.homework_id)
@@ -88,15 +68,6 @@ def compute_homework_average_percent_python(db: Session, *, student_id: int, sub
         return None
     parts = [_homework_weighted_percent(sub, hw) for sub, hw in rows]
     return round(sum(parts) / len(parts), 2)
-
-
-def exam_weights_total(db: Session, subject_id: int) -> float:
-    total = (
-        db.query(func.sum(CourseExamWeight.weight))
-        .filter(CourseExamWeight.subject_id == subject_id)
-        .scalar()
-    )
-    return float(total or 0)
 
 
 def get_exam_weight_rows(db: Session, subject_id: int) -> list:
@@ -114,7 +85,6 @@ def build_composition_for_student(
     student_id: int,
     subject_id: int,
     semester: str,
-    use_sql_avg: bool = True,
     student_name: Optional[str] = None,
 ) -> dict:
     """Assemble components and weighted total for one student / course / semester."""
@@ -124,41 +94,26 @@ def build_composition_for_student(
     exam_rows = get_exam_weight_rows(db, subject_id)
     exam_total_w = sum(float(r.weight) for r in exam_rows)
 
-    if use_sql_avg:
-        try:
-            hw_avg = compute_homework_average_percent(db, student_id=student_id, subject_id=subject_id)
-        except Exception:
-            hw_avg = compute_homework_average_percent_python(db, student_id=student_id, subject_id=subject_id)
-    else:
-        hw_avg = compute_homework_average_percent_python(db, student_id=student_id, subject_id=subject_id)
+    hw_avg = compute_homework_average_percent(db, student_id=student_id, subject_id=subject_id)
 
-    other_row = (
+    score_rows = (
         db.query(Score)
         .filter(
             Score.student_id == student_id,
             Score.subject_id == subject_id,
             Score.semester == semester,
-            Score.exam_type == OTHER_DAILY_EXAM_TYPE,
         )
-        .first()
+        .all()
     )
+    scores_by_type = {row.exam_type: row for row in score_rows}
+    other_row = scores_by_type.get(OTHER_DAILY_EXAM_TYPE)
     other_score = float(other_row.score) if other_row else None
 
     exam_scores: dict[str, float] = {}
     for wrow in exam_rows:
-        et = wrow.exam_type
-        sc = (
-            db.query(Score)
-            .filter(
-                Score.student_id == student_id,
-                Score.subject_id == subject_id,
-                Score.semester == semester,
-                Score.exam_type == et,
-            )
-            .first()
-        )
+        sc = scores_by_type.get(wrow.exam_type)
         if sc:
-            exam_scores[et] = float(sc.score)
+            exam_scores[wrow.exam_type] = float(sc.score)
 
     inner_total = float(scheme.homework_weight) + float(scheme.extra_daily_weight) + exam_total_w
     inner_ok = round(inner_total, 2) == 100.0

@@ -164,3 +164,64 @@ def test_composition_and_student_appeal(client: TestClient):
     )
     assert up.status_code == 200, up.text
     assert up.json()["status"] == "resolved"
+
+
+def test_duplicate_pending_appeal_rejected(client: TestClient):
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    sid = ctx["subject_id"]
+    sem = "2026-春季"
+
+    client.put(f"/api/scores/grade-scheme/{sid}", headers=th, json={"homework_weight": 30, "extra_daily_weight": 20})
+    client.put(
+        f"/api/scores/weights/{sid}",
+        headers=th,
+        json={"items": [{"exam_type": "期末", "weight": 50}]},
+    )
+
+    p1 = client.post(
+        f"/api/scores/appeals?subject_id={sid}",
+        headers=sh,
+        json={"semester": sem, "target_component": "total", "reason_text": "第一次"},
+    )
+    assert p1.status_code == 200, p1.text
+    p2 = client.post(
+        f"/api/scores/appeals?subject_id={sid}",
+        headers=sh,
+        json={"semester": sem, "target_component": "total", "reason_text": "第二次"},
+    )
+    assert p2.status_code == 400
+
+
+def test_appeal_response_invalid_status(client: TestClient):
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    sid = ctx["subject_id"]
+    sem = "2026-春季"
+
+    client.put(f"/api/scores/grade-scheme/{sid}", headers=th, json={"homework_weight": 30, "extra_daily_weight": 20})
+    client.put(
+        f"/api/scores/weights/{sid}",
+        headers=th,
+        json={"items": [{"exam_type": "期末", "weight": 50}]},
+    )
+
+    ap = client.post(
+        f"/api/scores/appeals?subject_id={sid}",
+        headers=sh,
+        json={"semester": sem, "target_component": "homework_avg", "reason_text": "作业分"},
+    )
+    assert ap.status_code == 200, ap.text
+    aid = ap.json()["id"]
+
+    bad = client.put(
+        f"/api/scores/appeals/{aid}",
+        headers=th,
+        json={"teacher_response": "说明", "status": "not_a_status"},
+    )
+    assert bad.status_code == 400
+

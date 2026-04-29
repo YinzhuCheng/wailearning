@@ -1032,10 +1032,8 @@ const buildFinalScoreMap = (scores, weights) => {
 
     let finalScore = null
 
-    if (weightMap.size > 0 && weightedTotal > 0) {
+    if (weightMap.size > 0) {
       finalScore = weightedTotal
-    } else if (weightMap.size > 0) {
-      finalScore = null
     } else {
       finalScore = average(allScores)
     }
