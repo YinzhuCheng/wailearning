@@ -32,6 +32,7 @@
           :data="homeworks"
           v-loading="loading"
           row-key="id"
+          highlight-current-row
           @selection-change="onHomeworkSelectionChange"
         >
           <el-table-column
@@ -41,6 +42,18 @@
             :reserve-selection="true"
           />
           <el-table-column prop="title" label="作业标题" width="190" show-overflow-tooltip />
+          <el-table-column label="资料/章节" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.linked_material_id" class="muted-text">
+                资料{{ row.linked_material_title ? `「${row.linked_material_title}」` : '' }}
+                <template v-if="row.linked_chapter_title"> · {{ row.linked_chapter_title }}</template>
+              </span>
+              <span v-else-if="row.linked_chapter_id" class="muted-text">
+                章节{{ row.linked_chapter_title ? `「${row.linked_chapter_title}」` : '' }}
+              </span>
+              <span v-else class="muted-text">—</span>
+            </template>
+          </el-table-column>
           <el-table-column v-if="!userStore.isStudent" label="提交上限" width="100">
             <template #default="{ row }">
               {{ row.max_submissions != null ? `${row.max_submissions} 次` : '不限' }}
@@ -182,6 +195,57 @@
         <el-form-item label="作业标题" prop="title">
           <el-input v-model="form.title" />
         </el-form-item>
+        <el-form-item label="关联位置">
+          <el-radio-group v-model="form.placement_mode">
+            <el-radio label="none">不关联（仅课程作业列表）</el-radio>
+            <el-radio label="chapter">关联章节</el-radio>
+            <el-radio label="material">关联资料</el-radio>
+          </el-radio-group>
+          <div class="attachment-help">
+            关联后会在「课程资料」对应章节底部显示作业链接；不关联时作业仍出现在课程作业栏。
+          </div>
+          <el-select
+            v-if="form.placement_mode === 'chapter'"
+            v-model="form.linked_chapter_id"
+            filterable
+            clearable
+            placeholder="选择章节"
+            style="width: 100%; margin-top: 8px"
+          >
+            <el-option v-for="opt in flatChapterOptions" :key="opt.id" :label="opt.label" :value="opt.id" />
+          </el-select>
+          <template v-if="form.placement_mode === 'material'">
+            <el-select
+              v-model="form.linked_material_id"
+              filterable
+              clearable
+              placeholder="选择资料"
+              style="width: 100%; margin-top: 8px"
+              @change="onPlacementMaterialChange"
+            >
+              <el-option
+                v-for="m in materialsOptions"
+                :key="m.id"
+                :label="m.title"
+                :value="m.id"
+              />
+            </el-select>
+            <el-select
+              v-model="form.linked_chapter_id"
+              filterable
+              clearable
+              placeholder="该资料所在章节（必选）"
+              style="width: 100%; margin-top: 8px"
+            >
+              <el-option
+                v-for="opt in chaptersForSelectedMaterial"
+                :key="opt.id"
+                :label="opt.label"
+                :value="opt.id"
+              />
+            </el-select>
+          </template>
+        </el-form-item>
         <el-form-item label="截止时间" prop="due_date">
           <el-date-picker
             v-model="form.due_date"
@@ -322,6 +386,16 @@
     <el-dialog v-model="detailVisible" title="作业详情" width="900px" destroy-on-close>
       <el-descriptions v-if="currentHomework" :column="2" border>
         <el-descriptions-item label="作业标题" :span="2">{{ currentHomework.title }}</el-descriptions-item>
+        <el-descriptions-item label="资料/章节" :span="2">
+          <span v-if="currentHomework.linked_material_id">
+            资料「{{ currentHomework.linked_material_title || '—' }}」
+            <template v-if="currentHomework.linked_chapter_title"> · {{ currentHomework.linked_chapter_title }}</template>
+          </span>
+          <span v-else-if="currentHomework.linked_chapter_id">
+            章节「{{ currentHomework.linked_chapter_title || '—' }}」
+          </span>
+          <span v-else class="muted-text">未关联（仅课程作业列表）</span>
+        </el-descriptions-item>
         <el-descriptions-item label="课程">{{ currentHomework.subject_name || selectedCourse?.name }}</el-descriptions-item>
         <el-descriptions-item label="截止时间">{{ formatDate(currentHomework.due_date) }}</el-descriptions-item>
         <el-descriptions-item label="发布人">{{ currentHomework.creator_name }}</el-descriptions-item>
@@ -357,7 +431,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
@@ -368,6 +442,7 @@ import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const loading = ref(false)
@@ -388,9 +463,40 @@ const batchLateForm = reactive({
 const formRef = ref(null)
 const attachmentFile = ref(null)
 const llmPresets = ref([])
+const chapterTreeNodes = ref([])
+const materialsCache = ref([])
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
+
+const flattenTree = (nodes, depth = 0, acc = []) => {
+  for (const n of nodes || []) {
+    acc.push({ ...n, depth })
+    if (n.children?.length) flattenTree(n.children, depth + 1, acc)
+  }
+  return acc
+}
+
+const flatChapterOptions = computed(() => {
+  const flat = flattenTree(chapterTreeNodes.value)
+  return flat.map(n => ({
+    id: n.id,
+    label: `${'　'.repeat(n.depth)}${n.title}`
+  }))
+})
+
+const materialsOptions = computed(() =>
+  (materialsCache.value || []).map(m => ({ id: m.id, title: m.title }))
+)
+
+const chaptersForSelectedMaterial = computed(() => {
+  const m = materialsCache.value.find(x => x.id === form.linked_material_id)
+  const ps = m?.placements || []
+  return ps.map(p => ({
+    id: p.chapter_id,
+    label: p.chapter_title || `章节 #${p.chapter_id}`
+  }))
+})
 
 const form = reactive({
   title: '',
@@ -409,7 +515,10 @@ const form = reactive({
   max_submissions_enabled: false,
   max_submissions_value: 3,
   llm_routing_mode: 'course_default',
-  llm_preset_ids: []
+  llm_preset_ids: [],
+  placement_mode: 'none',
+  linked_material_id: null,
+  linked_chapter_id: null
 })
 
 const rules = {
@@ -446,6 +555,13 @@ const loadHomeworks = async () => {
     selectedHomeworkRows.value = []
     await nextTick()
     homeworkTableRef.value?.clearSelection?.()
+    const hid = route.query.highlight
+    if (hid && homeworkTableRef.value?.setCurrentRow) {
+      const row = homeworks.value.find(h => String(h.id) === String(hid))
+      if (row) {
+        homeworkTableRef.value.setCurrentRow(row)
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -493,6 +609,57 @@ const loadLlmPresets = async () => {
     llmPresets.value = Array.isArray(rows) ? rows.filter(p => p && p.is_active !== false) : []
   } catch {
     llmPresets.value = []
+  }
+}
+
+const loadPlacementContext = async () => {
+  if (!selectedCourse.value) {
+    chapterTreeNodes.value = []
+    materialsCache.value = []
+    return
+  }
+  try {
+    const [treeRes, matRes] = await Promise.all([
+      api.materialChapters.tree({ subject_id: selectedCourse.value.id }),
+      api.materials.list({
+        class_id: selectedCourse.value.class_id,
+        subject_id: selectedCourse.value.id,
+        page: 1,
+        page_size: 500
+      })
+    ])
+    chapterTreeNodes.value = treeRes?.nodes || []
+    materialsCache.value = matRes?.data || []
+  } catch {
+    chapterTreeNodes.value = []
+    materialsCache.value = []
+  }
+}
+
+const syncPlacementFromRow = row => {
+  if (row?.linked_material_id) {
+    form.placement_mode = 'material'
+    form.linked_material_id = row.linked_material_id
+    form.linked_chapter_id = row.linked_chapter_id ?? null
+  } else if (row?.linked_chapter_id) {
+    form.placement_mode = 'chapter'
+    form.linked_material_id = null
+    form.linked_chapter_id = row.linked_chapter_id
+  } else {
+    form.placement_mode = 'none'
+    form.linked_material_id = null
+    form.linked_chapter_id = null
+  }
+}
+
+const onPlacementMaterialChange = () => {
+  const opts = chaptersForSelectedMaterial.value
+  if (!opts.length) {
+    form.linked_chapter_id = null
+    return
+  }
+  if (!opts.some(o => o.id === form.linked_chapter_id)) {
+    form.linked_chapter_id = null
   }
 }
 
@@ -554,11 +721,15 @@ const resetHomeworkForm = () => {
   form.llm_routing_mode = 'course_default'
   form.llm_preset_ids = []
   attachmentFile.value = null
+  form.placement_mode = 'none'
+  form.linked_material_id = null
+  form.linked_chapter_id = null
 }
 
 const openCreateDialog = () => {
   resetHomeworkForm()
   void loadLlmPresets()
+  void loadPlacementContext()
   dialogVisible.value = true
 }
 
@@ -589,7 +760,9 @@ const openEditDialog = row => {
   }
   attachmentFile.value = null
   parseRoutingFromHomework(row)
+  syncPlacementFromRow(row)
   void loadLlmPresets()
+  void loadPlacementContext()
   dialogVisible.value = true
 }
 
@@ -642,6 +815,22 @@ const submitForm = async () => {
   try {
     const attachment = await uploadAttachmentIfNeeded()
     const maxSubmissions = form.max_submissions_enabled ? Number(form.max_submissions_value) : null
+    let linkedMaterialId = null
+    let linkedChapterId = null
+    if (form.placement_mode === 'material') {
+      linkedMaterialId = form.linked_material_id
+      linkedChapterId = form.linked_chapter_id
+      if (!linkedMaterialId || !linkedChapterId) {
+        ElMessage.warning('关联资料时请选择资料及其所在章节')
+        return
+      }
+    } else if (form.placement_mode === 'chapter') {
+      linkedChapterId = form.linked_chapter_id
+      if (!linkedChapterId) {
+        ElMessage.warning('请选择关联章节')
+        return
+      }
+    }
     const payload = {
       title: form.title,
       content: form.content,
@@ -657,7 +846,9 @@ const submitForm = async () => {
       allow_late_submission: form.allow_late_submission,
       late_submission_affects_score: form.late_submission_affects_score,
       max_submissions: maxSubmissions,
-      llm_routing_spec: buildLlmRoutingSpec()
+      llm_routing_spec: buildLlmRoutingSpec(),
+      linked_material_id: linkedMaterialId,
+      linked_chapter_id: linkedChapterId
     }
     if (editingHomeworkId.value) {
       await api.homework.update(editingHomeworkId.value, payload)

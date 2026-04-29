@@ -400,6 +400,10 @@ class Homework(Base):
     late_submission_affects_score = Column(Boolean, default=False)
     max_submissions = Column(Integer, nullable=True)
     llm_routing_spec = Column(JSON, nullable=True)
+    linked_material_id = Column(Integer, ForeignKey("course_materials.id", ondelete="SET NULL"), nullable=True, index=True)
+    linked_chapter_id = Column(
+        Integer, ForeignKey("course_material_chapters.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -407,6 +411,8 @@ class Homework(Base):
     class_obj = relationship("Class", backref="homeworks")
     subject = relationship("Subject", back_populates="homeworks")
     creator = relationship("User", backref="homeworks")
+    linked_material = relationship("CourseMaterial", foreign_keys=[linked_material_id])
+    linked_chapter = relationship("CourseMaterialChapter", foreign_keys=[linked_chapter_id])
     submissions = relationship("HomeworkSubmission", back_populates="homework")
     attempts = relationship("HomeworkAttempt", back_populates="homework")
 

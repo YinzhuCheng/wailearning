@@ -8,10 +8,11 @@ from app.auth import get_current_active_user
 from app.attachments import delete_attachment_file_if_unreferenced
 from app.course_access import ensure_course_access_http
 from app.database import get_db
-from app.models import Class, CourseMaterial, CourseMaterialChapter, CourseMaterialSection, User, UserRole
+from app.models import Class, CourseMaterial, CourseMaterialChapter, CourseMaterialSection, Homework, User, UserRole
 from app.routers.classes import get_accessible_class_ids
 from app.schemas import (
     CourseMaterialCreate,
+    CourseMaterialLinkedHomework,
     CourseMaterialListResponse,
     CourseMaterialPlacement,
     CourseMaterialResponse,
@@ -85,6 +86,15 @@ def _serialize_material(db: Session, material: CourseMaterial) -> CourseMaterial
             )
         )
     chapter_ids = [p.chapter_id for p in placements]
+    linked_rows = (
+        db.query(Homework)
+        .filter(Homework.linked_material_id == material.id)
+        .order_by(desc(Homework.created_at))
+        .all()
+    )
+    linked_homeworks = [
+        CourseMaterialLinkedHomework(id=h.id, title=h.title, linked_chapter_id=h.linked_chapter_id) for h in linked_rows
+    ]
     return CourseMaterialResponse(
         id=material.id,
         title=material.title,
@@ -101,6 +111,7 @@ def _serialize_material(db: Session, material: CourseMaterial) -> CourseMaterial
         subject_name=material.subject.name if material.subject else None,
         creator_name=material.creator.real_name if material.creator else None,
         placements=placements,
+        linked_homeworks=linked_homeworks,
     )
 
 

@@ -868,6 +868,14 @@ class HomeworkBase(BaseModel):
         default=None,
         description="Per-homework LLM routing override: mode limit_to_preset_ids or latest_passing_validated.",
     )
+    linked_material_id: Optional[int] = Field(
+        default=None,
+        description="Optional course material this homework is tied to; with linked_chapter_id must appear in that chapter.",
+    )
+    linked_chapter_id: Optional[int] = Field(
+        default=None,
+        description="Optional chapter: homework appears at chapter bottom in materials view; can pair with linked_material_id.",
+    )
 
     @field_validator("max_submissions")
     @classmethod
@@ -911,6 +919,8 @@ class HomeworkUpdate(BaseModel):
     late_submission_affects_score: Optional[bool] = None
     max_submissions: Optional[int] = None
     llm_routing_spec: Optional[dict[str, Any]] = None
+    linked_material_id: Optional[int] = None
+    linked_chapter_id: Optional[int] = None
 
     @field_validator("max_submissions")
     @classmethod
@@ -952,6 +962,8 @@ class HomeworkResponse(HomeworkBase):
     latest_submission_is_late: Optional[bool] = None
     grading_rule_hint: Optional[str] = None
     llm_routing_spec: Optional[dict[str, Any]] = None
+    linked_material_title: Optional[str] = None
+    linked_chapter_title: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -1382,6 +1394,12 @@ class CourseMaterialPlacement(BaseModel):
     sort_order: int
 
 
+class CourseMaterialLinkedHomework(BaseModel):
+    id: int
+    title: str
+    linked_chapter_id: Optional[int] = None
+
+
 class CourseMaterialBase(BaseModel):
     title: str
     content: Optional[str] = None
@@ -1414,6 +1432,7 @@ class CourseMaterialResponse(CourseMaterialBase):
     subject_name: Optional[str] = None
     creator_name: Optional[str] = None
     placements: List[CourseMaterialPlacement] = Field(default_factory=list)
+    linked_homeworks: List[CourseMaterialLinkedHomework] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
