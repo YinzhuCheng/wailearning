@@ -1288,6 +1288,21 @@ class NotificationListResponse(BaseModel):
     data: List[NotificationResponse]
 
 
+class NotificationSyncStatus(BaseModel):
+    """Lightweight snapshot for polling: size of visible inbox and change watermark."""
+
+    total: int
+    unread_count: int
+    latest_updated_at: Optional[datetime] = None
+
+
+class CourseMaterialPlacement(BaseModel):
+    section_id: int
+    chapter_id: int
+    chapter_title: str
+    sort_order: int
+
+
 class CourseMaterialBase(BaseModel):
     title: str
     content: Optional[str] = None
@@ -1295,10 +1310,20 @@ class CourseMaterialBase(BaseModel):
     attachment_url: Optional[str] = None
     class_id: int
     subject_id: Optional[int] = None
+    chapter_ids: Optional[List[int]] = None
 
 
 class CourseMaterialCreate(CourseMaterialBase):
     pass
+
+
+class CourseMaterialUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    remove_attachment: bool = False
+    chapter_ids: Optional[List[int]] = None
 
 
 class CourseMaterialResponse(CourseMaterialBase):
@@ -1309,6 +1334,7 @@ class CourseMaterialResponse(CourseMaterialBase):
     class_name: Optional[str] = None
     subject_name: Optional[str] = None
     creator_name: Optional[str] = None
+    placements: List[CourseMaterialPlacement] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -1317,3 +1343,44 @@ class CourseMaterialResponse(CourseMaterialBase):
 class CourseMaterialListResponse(BaseModel):
     total: int
     data: List[CourseMaterialResponse]
+
+
+class CourseMaterialChapterNode(BaseModel):
+    id: int
+    subject_id: int
+    parent_id: Optional[int] = None
+    title: str
+    sort_order: int
+    is_uncategorized: bool
+    children: List["CourseMaterialChapterNode"] = Field(default_factory=list)
+
+
+class CourseMaterialChapterTreeResponse(BaseModel):
+    nodes: List[CourseMaterialChapterNode]
+
+
+class CourseMaterialChapterCreate(BaseModel):
+    title: str
+    parent_id: Optional[int] = None
+    sort_order: Optional[int] = None
+
+
+class CourseMaterialChapterUpdate(BaseModel):
+    title: Optional[str] = None
+
+
+class CourseMaterialChapterReorderRequest(BaseModel):
+    parent_id: Optional[int] = None
+    ordered_chapter_ids: List[int]
+
+
+class CourseMaterialSectionReorderRequest(BaseModel):
+    chapter_id: int
+    ordered_section_ids: List[int]
+
+
+class CourseMaterialAddPlacementRequest(BaseModel):
+    chapter_id: int
+
+
+CourseMaterialChapterNode.model_rebuild()

@@ -192,6 +192,11 @@ import {
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 import { filterCoursesByClassId, resolveClassTeacherClassId, resolveClassTeacherClassName } from '@/utils/classTeacher'
+import {
+  emitNotificationRefresh,
+  startNotificationPolling,
+  subscribeNotificationBroadcast
+} from '@/utils/notificationSync'
 
 const route = useRoute()
 const router = useRouter()
@@ -208,6 +213,41 @@ const passwordForm = reactive({
   new_password: '',
   confirm_password: ''
 })
+
+const lastNotificationSyncSignature = ref(null)
+let stopNotificationPolling = () => {}
+let unsubscribeNotificationBroadcast = () => {}
+
+const notificationSyncParams = computed(() => {
+  if (userStore.isAdmin) {
+    return null
+  }
+
+  if ((userStore.isTeacher || userStore.isStudent) && selectedCourse.value?.id) {
+    return { subject_id: selectedCourse.value.id }
+  }
+
+  return {}
+})
+
+const pollNotificationSync = async () => {
+  if (userStore.isAdmin || !userStore.isLoggedIn) {
+    return
+  }
+
+  const params = notificationSyncParams.value || {}
+
+  try {
+    const status = await api.notifications.syncStatus(params)
+    const signature = `${status.total}:${status.unread_count}:${status.latest_updated_at || ''}`
+    if (lastNotificationSyncSignature.value !== null && signature !== lastNotificationSyncSignature.value) {
+      emitNotificationRefresh()
+    }
+    lastNotificationSyncSignature.value = signature
+  } catch (error) {
+    console.error('通知同步检查失败', error)
+  }
+}
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const availableCourses = computed(() => userStore.teachingCourses || [])
@@ -374,11 +414,13 @@ const syncTeacherCourses = async force => {
 
 const handleWindowFocus = () => {
   syncTeacherCourses(true)
+  pollNotificationSync()
 }
 
 const handleVisibilityChange = () => {
   if (document.visibilityState === 'visible') {
     syncTeacherCourses(true)
+    pollNotificationSync()
   }
 }
 
@@ -412,33 +454,48 @@ const handleCommand = command => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   syncResponsiveSidebar()
   window.addEventListener('resize', syncResponsiveSidebar)
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
-  syncTeacherCourses(true)
+  await syncTeacherCourses(true)
+  await pollNotificationSync()
+  stopNotificationPolling = startNotificationPolling(pollNotificationSync)
+  unsubscribeNotificationBroadcast = subscribeNotificationBroadcast(() => {
+    emitNotificationRefresh()
+  })
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncResponsiveSidebar)
   window.removeEventListener('focus', handleWindowFocus)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  stopNotificationPolling()
+  unsubscribeNotificationBroadcast()
 })
 
 watch(
   () => userStore.userInfo?.id,
-  () => {
-    syncTeacherCourses(true)
+  async () => {
+    lastNotificationSyncSignature.value = null
+    await syncTeacherCourses(true)
+    await pollNotificationSync()
   }
 )
 
 watch(
   () => route.fullPath,
-  () => {
-    syncTeacherCourses(true)
+  async () => {
+    await syncTeacherCourses(true)
+    await pollNotificationSync()
   }
 )
+
+watch(notificationSyncParams, () => {
+  lastNotificationSyncSignature.value = null
+  pollNotificationSync()
+})
 </script>
 
 <style scoped>

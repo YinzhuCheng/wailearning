@@ -12,6 +12,9 @@ from app.demo_course_seed import seed_demo_course_bundle
 from app.database import Base, SessionLocal, engine
 from app.student_user_sync import reconcile_student_users_and_roster
 from app.models import (
+    CourseMaterial,
+    CourseMaterialChapter,
+    CourseMaterialSection,
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
     LLMGlobalQuotaPolicy,
@@ -307,6 +310,27 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS used_llm_assist BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS submission_mode VARCHAR NOT NULL DEFAULT 'full'",
         "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS prior_attempt_id INTEGER",
+        """
+        CREATE TABLE IF NOT EXISTS course_material_chapters (
+            id INTEGER PRIMARY KEY,
+            subject_id INTEGER NOT NULL REFERENCES subjects(id),
+            parent_id INTEGER REFERENCES course_material_chapters(id),
+            title VARCHAR NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_uncategorized BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS course_material_sections (
+            id INTEGER PRIMARY KEY,
+            material_id INTEGER NOT NULL REFERENCES course_materials(id) ON DELETE CASCADE,
+            chapter_id INTEGER NOT NULL REFERENCES course_material_chapters(id) ON DELETE CASCADE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            CONSTRAINT uq_course_material_section_placement UNIQUE(material_id, chapter_id)
+        )
+        """,
     ]
 
     with engine.begin() as connection:
@@ -358,6 +382,62 @@ def ensure_schema_updates() -> None:
     _backfill_default_llm_groups_for_existing_configs()
     _ensure_llm_global_quota_policy_row()
     _ensure_default_llm_endpoint_preset()
+    _backfill_course_material_chapters()
+
+
+def _backfill_course_material_chapters() -> None:
+    """Ensure uncategorized chapter per course and link existing materials."""
+    db = SessionLocal()
+    try:
+        for subj in db.query(Subject).all():
+            unc = (
+                db.query(CourseMaterialChapter)
+                .filter(
+                    CourseMaterialChapter.subject_id == subj.id,
+                    CourseMaterialChapter.is_uncategorized.is_(True),
+                )
+                .first()
+            )
+            if not unc:
+                unc = CourseMaterialChapter(
+                    subject_id=subj.id,
+                    parent_id=None,
+                    title="未分类",
+                    sort_order=0,
+                    is_uncategorized=True,
+                )
+                db.add(unc)
+                db.flush()
+
+            mats = (
+                db.query(CourseMaterial)
+                .filter(CourseMaterial.subject_id == subj.id)
+                .order_by(CourseMaterial.created_at.asc())
+                .all()
+            )
+            for idx, mat in enumerate(mats):
+                exists = (
+                    db.query(CourseMaterialSection)
+                    .filter(
+                        CourseMaterialSection.material_id == mat.id,
+                        CourseMaterialSection.chapter_id == unc.id,
+                    )
+                    .first()
+                )
+                if not exists:
+                    db.add(
+                        CourseMaterialSection(
+                            material_id=mat.id,
+                            chapter_id=unc.id,
+                            sort_order=idx,
+                        )
+                    )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _ensure_default_llm_endpoint_preset() -> None:

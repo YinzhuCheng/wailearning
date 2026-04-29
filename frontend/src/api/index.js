@@ -296,6 +296,7 @@ const api = {
     setStudentQuotaOverride: (studentId, data) => http.put(`/llm-settings/admin/students/${studentId}/quota-override`, data)
   },
   notifications: {
+    syncStatus: params => http.get('/notifications/sync-status', { params }),
     list: params => http.get('/notifications', { params }),
     get: id => http.get(`/notifications/${id}`),
     create: data => http.post('/notifications', data),
@@ -308,7 +309,21 @@ const api = {
     list: params => http.get('/materials', { params }),
     get: id => http.get(`/materials/${id}`),
     create: data => http.post('/materials', data),
+    update: (id, data) => http.put(`/materials/${id}`, data),
     delete: id => http.delete(`/materials/${id}`)
+  },
+  materialChapters: {
+    tree: params => http.get('/material-chapters/tree', { params }),
+    create: (subjectId, data) => http.post(`/material-chapters?subject_id=${subjectId}`, data),
+    update: (chapterId, data) => http.put(`/material-chapters/${chapterId}`, data),
+    delete: (chapterId, subjectId) => http.delete(`/material-chapters/${chapterId}?subject_id=${subjectId}`),
+    reorderChapters: (subjectId, data) => http.post(`/material-chapters/reorder?subject_id=${subjectId}`, data),
+    reorderSections: (subjectId, data) =>
+      http.post(`/material-chapters/sections/reorder?subject_id=${subjectId}`, data),
+    addPlacement: (materialId, subjectId, data) =>
+      http.post(`/material-chapters/materials/${materialId}/placements?subject_id=${subjectId}`, data),
+    removePlacement: (sectionId, subjectId) =>
+      http.delete(`/material-chapters/placements/${sectionId}?subject_id=${subjectId}`)
   },
   files: {
     upload: file => {
