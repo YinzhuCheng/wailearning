@@ -223,6 +223,16 @@ def delete_chapter(
         else:
             sec.chapter_id = unc.id
 
+    db.flush()
+
+    remaining = (
+        db.query(CourseMaterialSection).filter(CourseMaterialSection.chapter_id == chapter_id).count()
+    )
+    if remaining:
+        db.query(CourseMaterialSection).filter(CourseMaterialSection.chapter_id == chapter_id).delete(
+            synchronize_session=False
+        )
+
     children = db.query(CourseMaterialChapter).filter(CourseMaterialChapter.parent_id == chapter_id).all()
     for child in children:
         child.parent_id = chapter.parent_id

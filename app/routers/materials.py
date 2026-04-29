@@ -184,19 +184,20 @@ def get_materials(
         )
 
     total = query.count()
-    materials = (
-        query.order_by(
-            desc(CourseMaterial.created_at)
-            if chapter_id is None
-            else (
-                asc(CourseMaterialSection.sort_order),
-                desc(CourseMaterial.created_at),
-            )
+    if chapter_id is None:
+        materials = (
+            query.order_by(desc(CourseMaterial.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
         )
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+    else:
+        materials = (
+            query.order_by(asc(CourseMaterialSection.sort_order), desc(CourseMaterial.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
     return CourseMaterialListResponse(total=total, data=[_serialize_material(db, item) for item in materials])
 
 
