@@ -8,6 +8,7 @@ from app.attachments import ensure_upload_directories
 from app.auth import get_password_hash
 from app.config import settings
 from app.course_access import sync_course_enrollments
+from app.demo_course_seed import seed_demo_course_bundle
 from app.database import Base, SessionLocal, engine
 from app.models import (
     CourseLLMConfig,
@@ -739,6 +740,7 @@ def bootstrap() -> None:
             normalize_semester_catalog(db)
             sync_subject_semester_links(db)
             seed_default_system_settings(db)
+            seed_demo_course_bundle(db)
             sync_existing_courses(db)
             backfill_homework_grading_data(db)
         else:
