@@ -505,11 +505,22 @@ const saveReview = async (row, attempt = null) => {
 
   target.saving_review = true
   try {
-    await api.homework.reviewSubmission(route.params.id, row.submission_id, {
+    const res = await api.homework.reviewSubmission(route.params.id, row.submission_id, {
       attempt_id: attempt?.id || null,
       review_score: score,
       review_comment: target.review_comment_input?.trim() || null
     })
+    const updated = res?.data
+    if (updated && row.submission_id) {
+      row.review_score = updated.review_score
+      row.review_comment = updated.review_comment
+      row.latest_task_status = updated.latest_task_status
+      row.latest_task_error = updated.latest_task_error
+      row.latest_task_log = updated.latest_task_log || []
+      row.review_score_input =
+        updated.review_score === null || updated.review_score === undefined ? '' : String(updated.review_score)
+      row.review_comment_input = updated.review_comment || ''
+    }
     ElMessage.success('评分已保存')
     await loadPage()
     if (historyVisible.value && currentHistoryRow.value?.submission_id === row.submission_id) {

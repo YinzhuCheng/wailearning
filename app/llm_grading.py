@@ -81,6 +81,7 @@ from app.llm_token_quota import (
 )
 from app.database import SessionLocal, engine
 from app.llm_group_routing import GroupRoutingContext
+from app.homework_notifications import notify_student_homework_graded
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
@@ -1377,6 +1378,13 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
             summary.latest_task_status = task.status
             summary.latest_task_error = None
             refresh_submission_summary(db, summary)
+            notify_student_homework_graded(
+                db,
+                homework=homework,
+                submission=summary,
+                actor_user_id=int(homework.created_by or 0) or int(task.id),
+                source_label="自动评分（已有人工评分，未调用模型）",
+            )
         db.commit()
         return
 
@@ -1433,6 +1441,13 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         summary.latest_task_status = task.status
         summary.latest_task_error = None
         refresh_submission_summary(db, summary)
+        notify_student_homework_graded(
+            db,
+            homework=homework,
+            submission=summary,
+            actor_user_id=int(homework.created_by or 0) or int(task.id),
+            source_label="自动评分",
+        )
 
     db.commit()
 

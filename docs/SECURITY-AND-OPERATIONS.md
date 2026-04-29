@@ -17,6 +17,7 @@
 | 作业、提交与 LLM 评分业务 | 按 `ensure_course_access` 能访问到的课程 | 同左 | 同左 | 学生仅可操作本人相关数据（具体接口校验） |
 | 系统设置与**全局** LLM 端点预置 | 是（系统设置、LLM 预置等） | — | — | 否 |
 | 课程级 LLM 配置 | 是 | 是（`app/routers/llm_settings.py` 中 `ADMIN` / `CLASS_TEACHER` / `TEACHER` 可管） | 是 | 否（学生访问 LLM 管理接口应被拒绝） |
+| 通知中心（`app/routers/notifications.py`） | 是 | 依可访问班级/课程发布与查看 | 同左 | 仅查看自己有权限范围内的通知；**作业批改完成后**系统可能自动写入一条站内提醒（见 [HOMEWORK_AND_NOTIFICATIONS_CN.md](HOMEWORK_AND_NOTIFICATIONS_CN.md)） |
 
 **家长访问**：没有独立的「家长用户表登录角色」。家长通过**学生维度的 `parent_code`（家长码）** 访问 `app/routers/parent.py` 下接口，属只读/受限能力，不承载后台管理权限。
 

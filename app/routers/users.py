@@ -514,7 +514,23 @@ def update_user(
 
     if is_admin(current_user) and user.class_id != next_class_id:
         changes.append(f"班级ID: {user.class_id} -> {next_class_id}")
+        prev_class_id = user.class_id
         user.class_id = next_class_id
+        if (
+            user.role == UserRole.STUDENT.value
+            and user.username
+            and prev_class_id
+            and next_class_id
+            and prev_class_id != next_class_id
+        ):
+            roster = (
+                db.query(Student)
+                .filter(Student.student_no == user.username, Student.class_id == prev_class_id)
+                .first()
+            )
+            if roster:
+                roster.class_id = next_class_id
+                sync_student_course_enrollments(roster, db)
 
     if user_data.is_active is not None and is_admin(current_user):
         changes.append(f"状态: {user.is_active} -> {user_data.is_active}")
