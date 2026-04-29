@@ -1,8 +1,8 @@
 <template>
   <div
     ref="rootRef"
-    class="feedback-rich"
-    :class="variant === 'teacher' ? 'feedback-rich--teacher' : 'feedback-rich--student'"
+    class="rich-md"
+    :class="variant === 'teacher' ? 'rich-md--teacher' : 'rich-md--student'"
     v-html="renderedHtml"
   />
 </template>
@@ -16,28 +16,33 @@ import 'katex/dist/katex.min.css'
 import { createCourseMarkdownIt } from '@/utils/markdownIt'
 
 const props = defineProps({
-  text: { type: String, default: '' },
-  /** 'student' | 'teacher' — subtle theme tint */
-  variant: { type: String, default: 'student' }
+  markdown: { type: String, default: '' },
+  variant: { type: String, default: 'student' },
+  emptyText: { type: String, default: '暂无内容' }
 })
 
 const rootRef = ref(null)
-
 const md = createCourseMarkdownIt()
 
 const renderedHtml = computed(() => {
-  const raw = (props.text || '').trim()
+  const raw = (props.markdown || '').trim()
   if (!raw) {
-    return '<p class="feedback-rich__empty">暂无内容</p>'
+    return `<p class="rich-md__empty">${escapeHtml(props.emptyText)}</p>`
   }
   return md.render(raw)
 })
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 const applyMath = () => {
   const el = rootRef.value
-  if (!el) {
-    return
-  }
+  if (!el) return
   try {
     renderMathInElement(el, {
       delimiters: [
@@ -51,7 +56,7 @@ const applyMath = () => {
       strict: 'ignore'
     })
   } catch {
-    /* ignore KaTeX edge cases */
+    /* ignore */
   }
 }
 
@@ -61,7 +66,7 @@ onMounted(async () => {
 })
 
 watch(
-  () => props.text,
+  () => props.markdown,
   async () => {
     await nextTick()
     applyMath()
@@ -71,55 +76,55 @@ watch(
 </script>
 
 <style scoped>
-.feedback-rich {
+.rich-md {
   font-size: 14px;
   line-height: 1.65;
   word-break: break-word;
 }
 
-.feedback-rich--student {
+.rich-md--student {
   color: #334155;
 }
 
-.feedback-rich--teacher {
+.rich-md--teacher {
   color: #1e293b;
   font-size: 13px;
   line-height: 1.6;
 }
 
-.feedback-rich :deep(h1),
-.feedback-rich :deep(h2),
-.feedback-rich :deep(h3) {
+.rich-md :deep(h1),
+.rich-md :deep(h2),
+.rich-md :deep(h3) {
   margin: 0.75em 0 0.35em;
   font-weight: 600;
   color: #0f172a;
 }
 
-.feedback-rich :deep(h1) {
+.rich-md :deep(h1) {
   font-size: 1.15rem;
 }
-.feedback-rich :deep(h2) {
+.rich-md :deep(h2) {
   font-size: 1.08rem;
 }
-.feedback-rich :deep(h3) {
+.rich-md :deep(h3) {
   font-size: 1.02rem;
 }
 
-.feedback-rich :deep(p) {
+.rich-md :deep(p) {
   margin: 0.45em 0;
 }
 
-.feedback-rich :deep(ul),
-.feedback-rich :deep(ol) {
+.rich-md :deep(ul),
+.rich-md :deep(ol) {
   margin: 0.35em 0 0.5em 1.25em;
   padding: 0;
 }
 
-.feedback-rich :deep(li) {
+.rich-md :deep(li) {
   margin: 0.2em 0;
 }
 
-.feedback-rich :deep(blockquote) {
+.rich-md :deep(blockquote) {
   margin: 0.5em 0;
   padding: 0.35em 0.75em;
   border-left: 3px solid #cbd5e1;
@@ -127,7 +132,7 @@ watch(
   color: #475569;
 }
 
-.feedback-rich :deep(code) {
+.rich-md :deep(code) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   font-size: 0.9em;
   padding: 0.1em 0.35em;
@@ -136,7 +141,7 @@ watch(
   color: #0f172a;
 }
 
-.feedback-rich :deep(pre) {
+.rich-md :deep(pre) {
   margin: 0.5em 0;
   padding: 0.65em 0.85em;
   border-radius: 8px;
@@ -145,26 +150,34 @@ watch(
   overflow-x: auto;
 }
 
-.feedback-rich :deep(pre code) {
+.rich-md :deep(pre code) {
   background: transparent;
   color: inherit;
   padding: 0;
 }
 
-.feedback-rich :deep(a) {
+.rich-md :deep(a) {
   color: #2563eb;
   text-decoration: none;
 }
-.feedback-rich :deep(a:hover) {
+.rich-md :deep(a:hover) {
   text-decoration: underline;
 }
 
-.feedback-rich :deep(.katex-display) {
+.rich-md :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.35em 0;
+  vertical-align: middle;
+}
+
+.rich-md :deep(.katex-display) {
   margin: 0.65em 0;
   overflow-x: auto;
 }
 
-.feedback-rich__empty {
+.rich-md__empty {
   margin: 0;
   color: #94a3b8;
   font-size: 13px;

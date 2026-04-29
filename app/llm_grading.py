@@ -33,6 +33,7 @@ from sqlalchemy import and_, func, text
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.homework_notifications import notify_student_homework_graded
+from app.markdown_llm import append_markdown_with_dataurl_images_to_parts, expand_markdown_images_for_llm
 
 
 def _unrar_tool_path() -> Optional[str]:
@@ -2024,7 +2025,36 @@ def _build_scoring_messages(
     )
     response_language = homework.response_language or config.response_language or "zh-CN"
     teacher_prompt = config.teacher_prompt or ""
-    assignment_body = "\n\n".join(material["assignment_texts"])
+
+    def _expand_hw_md(field: Optional[str]) -> str:
+        return expand_markdown_images_for_llm(field or "")
+
+    content_md = _expand_hw_md(homework.content)
+    ref_md = _expand_hw_md(homework.reference_answer)
+    rubric_md = _expand_hw_md(homework.rubric_text)
+
+    assignment_texts_plain = list(material["assignment_texts"])
+    assignment_texts_plain[1] = (
+        f"作业要求：\n{content_md}"
+        if (homework.content or "").strip()
+        else f"作业要求：\n无"
+    )
+    if homework.reference_answer:
+        idx = next(
+            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("参考答案或提示")),
+            None,
+        )
+        if idx is not None:
+            assignment_texts_plain[idx] = f"参考答案或提示：\n{ref_md}"
+    if homework.rubric_text:
+        idx = next(
+            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("评分要点")),
+            None,
+        )
+        if idx is not None:
+            assignment_texts_plain[idx] = f"评分要点：\n{rubric_md}"
+
+    assignment_body = "\n\n".join(assignment_texts_plain)
     assignment_text = f"{SECTION_ASSIGNMENT}\n### 教师侧作业说明与材料\n{assignment_body}"
     if teacher_prompt.strip():
         assignment_text += f"\n\n### 教师补充提示（课程 LLM 配置）\n{teacher_prompt}"
@@ -2042,8 +2072,9 @@ def _build_scoring_messages(
         f"提交是否迟交：{'是' if attempt.is_late else '否'}\n"
         f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
     )
-    user_parts: list[dict[str, Any]] = [{"type": "text", "text": assignment_text}]
-    user_parts.append({"type": "text", "text": student_intro})
+    user_parts: list[dict[str, Any]] = []
+    append_markdown_with_dataurl_images_to_parts(user_parts, assignment_text)
+    append_markdown_with_dataurl_images_to_parts(user_parts, student_intro)
     prior_text_blocks = [b for b in (material.get("prior_student_blocks") or []) if b.block_type == "text"]
     prior_image_blocks = [b for b in (material.get("prior_student_blocks") or []) if b.block_type == "image"]
     if prior_text_blocks or prior_image_blocks:
@@ -2676,17 +2707,24 @@ def _build_student_material(
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
 ) -> dict[str, Any]:
+    def _expand_hw_md(field: Optional[str]) -> str:
+        return expand_markdown_images_for_llm(field or "")
+
+    content_md = _expand_hw_md(homework.content)
+    ref_md = _expand_hw_md(homework.reference_answer)
+    rubric_md = _expand_hw_md(homework.rubric_text)
+
     assignment_texts = [
         f"作业标题：{homework.title}",
-        f"作业要求：\n{homework.content or '无'}",
+        f"作业要求：\n{content_md if (homework.content or '').strip() else '无'}",
     ]
     iteration_ctx = _format_iteration_context_for_prompt(db, homework, attempt)
     if iteration_ctx:
         assignment_texts.append(iteration_ctx)
     if homework.reference_answer:
-        assignment_texts.append(f"参考答案或提示：\n{homework.reference_answer}")
+        assignment_texts.append(f"参考答案或提示：\n{ref_md}")
     if homework.rubric_text:
-        assignment_texts.append(f"评分要点：\n{homework.rubric_text}")
+        assignment_texts.append(f"评分要点：\n{rubric_md}")
     if getattr(attempt, "submission_mode", None) == "feedback_followup" and getattr(attempt, "prior_attempt_id", None):
         assignment_texts.append(
             "### 本轮为「按反馈补充」提交\n"

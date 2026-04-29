@@ -6,6 +6,7 @@ from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
 from fastapi import HTTPException, Request, UploadFile
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -119,7 +120,42 @@ def attachment_is_referenced(db: Session, attachment_url: Optional[str]) -> bool
         db.query(Notification).filter(Notification.attachment_url == attachment_url).first(),
         db.query(CourseMaterial).filter(CourseMaterial.attachment_url == attachment_url).first(),
     ]
-    return any(item is not None for item in references)
+    if any(item is not None for item in references):
+        return True
+
+    needle = (attachment_url or "").replace("\\", "/")
+    stored = get_attachment_stored_name(attachment_url)
+    if needle:
+        if (
+            db.query(Homework)
+            .filter(
+                or_(
+                    Homework.content.contains(needle),
+                    Homework.reference_answer.contains(needle),
+                    Homework.rubric_text.contains(needle),
+                )
+            )
+            .first()
+        ):
+            return True
+        if db.query(CourseMaterial).filter(CourseMaterial.content.contains(needle)).first():
+            return True
+    if stored and len(stored) >= 8:
+        if (
+            db.query(Homework)
+            .filter(
+                or_(
+                    Homework.content.contains(stored),
+                    Homework.reference_answer.contains(stored),
+                    Homework.rubric_text.contains(stored),
+                )
+            )
+            .first()
+        ):
+            return True
+        if db.query(CourseMaterial).filter(CourseMaterial.content.contains(stored)).first():
+            return True
+    return False
 
 
 def delete_attachment_file_if_unreferenced(db: Session, attachment_url: Optional[str]) -> None:
