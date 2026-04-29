@@ -2,14 +2,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, false, or_
 from sqlalchemy.orm import Session
 
 from app.attachments import delete_attachment_file_if_unreferenced
 from app.auth import get_current_active_user
-from app.course_access import ensure_course_access
+from app.course_access import ensure_course_access, get_student_profile_for_user, prepare_student_course_context
 from app.database import get_db
-from app.models import Class, Notification, NotificationRead, Subject, User, UserRole
+from app.models import Class, Notification, NotificationRead, User, UserRole
 from app.routers.classes import get_accessible_class_ids
 from app.schemas import NotificationCreate, NotificationListResponse, NotificationResponse, NotificationUpdate
 
@@ -32,6 +32,21 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
     if subject_id:
         course = ensure_course_access(subject_id, current_user, db)
         query = query.filter(or_(Notification.subject_id == course.id, Notification.subject_id.is_(None)))
+
+    if current_user.role == UserRole.STUDENT:
+        prepare_student_course_context(current_user, db)
+        student = get_student_profile_for_user(current_user, db)
+        if not student:
+            return query.filter(false())
+        query = query.filter(
+            Notification.target_user_id.is_(None),
+            or_(Notification.target_student_id.is_(None), Notification.target_student_id == student.id),
+        )
+
+    if current_user.role in (UserRole.TEACHER, UserRole.CLASS_TEACHER):
+        query = query.filter(
+            or_(Notification.target_user_id.is_(None), Notification.target_user_id == current_user.id)
+        )
 
     if current_user.role != UserRole.ADMIN:
         if class_ids:
@@ -56,6 +71,12 @@ def _serialize_notification(notification: Notification, current_user: User, db: 
         is_pinned=notification.is_pinned,
         class_id=notification.class_id,
         subject_id=notification.subject_id,
+        target_student_id=notification.target_student_id,
+        related_homework_id=notification.related_homework_id,
+        related_student_id=notification.related_student_id,
+        related_appeal_id=notification.related_appeal_id,
+        target_user_id=notification.target_user_id,
+        notification_kind=notification.notification_kind or "general",
         created_by=notification.created_by,
         created_at=notification.created_at,
         updated_at=notification.updated_at,
@@ -114,6 +135,20 @@ def get_notification(
     if notification.subject_id:
         ensure_course_access(notification.subject_id, current_user, db)
 
+    if current_user.role == UserRole.STUDENT:
+        prepare_student_course_context(current_user, db)
+        student = get_student_profile_for_user(current_user, db)
+        if notification.target_student_id and (
+            not student or int(notification.target_student_id) != int(student.id)
+        ):
+            raise HTTPException(status_code=403, detail="You do not have access to this notification.")
+        if notification.target_user_id is not None:
+            raise HTTPException(status_code=403, detail="You do not have access to this notification.")
+
+    if current_user.role in (UserRole.TEACHER, UserRole.CLASS_TEACHER):
+        if notification.target_user_id is not None and int(notification.target_user_id) != int(current_user.id):
+            raise HTTPException(status_code=403, detail="You do not have access to this notification.")
+
     return _serialize_notification(notification, current_user, db)
 
 
@@ -148,6 +183,12 @@ def create_notification(
         is_pinned=data.is_pinned,
         class_id=data.class_id,
         subject_id=data.subject_id,
+        target_student_id=data.target_student_id,
+        related_homework_id=data.related_homework_id,
+        related_student_id=data.related_student_id,
+        related_appeal_id=data.related_appeal_id,
+        target_user_id=data.target_user_id,
+        notification_kind=data.notification_kind or "general",
         created_by=current_user.id,
     )
     db.add(notification)

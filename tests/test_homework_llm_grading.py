@@ -29,6 +29,7 @@ from app.models import (
     HomeworkSubmission,
     LLMEndpointPreset,
     LLMTokenUsageLog,
+    Notification,
 )
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
@@ -205,7 +206,56 @@ def test_non_retryable_http_fails_without_extra_llm_calls(grading_context: dict)
         db.close()
 
 
-def test_teacher_review_overrides_auto_score(grading_context: dict):
+def test_auto_grade_creates_targeted_notification(grading_context: dict):
+    client: TestClient = grading_context["client"]
+    hid = grading_context["homework_id"]
+    student_h = grading_context["student_headers"]
+
+    r = client.post(
+        f"/api/homeworks/{hid}/submission",
+        headers=student_h,
+        json={"content": "notify me"},
+    )
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
+    finally:
+        db.close()
+
+    with mock.patch.object(
+        httpx.Client,
+        "post",
+        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(77.0, "auto ok")),
+    ):
+        process_grading_task(tid)
+
+    db = SessionLocal()
+    try:
+        note = (
+            db.query(Notification)
+            .filter(
+                Notification.related_homework_id == hid,
+                Notification.related_student_id == grading_context["student_id"],
+            )
+            .first()
+        )
+        assert note is not None
+        assert note.target_student_id == grading_context["student_id"]
+        assert "作业已批改" in note.title
+        note_id = note.id
+    finally:
+        db.close()
+
+    listed = client.get("/api/notifications", headers=student_h)
+    assert listed.status_code == 200, listed.text
+    payload = listed.json()
+    note_ids = [row["id"] for row in payload.get("data", [])]
+    assert note_id in note_ids
+
+
+def test_teacher_review_updates_grade_notification(grading_context: dict):
     client: TestClient = grading_context["client"]
     hid = grading_context["homework_id"]
     student_h = grading_context["student_headers"]
@@ -243,6 +293,16 @@ def test_teacher_review_overrides_auto_score(grading_context: dict):
         teachers = db.query(HomeworkScoreCandidate).filter(HomeworkScoreCandidate.source == "teacher").all()
         assert len(teachers) == 1
         assert teachers[0].score == 92.0
+        note = (
+            db.query(Notification)
+            .filter(
+                Notification.related_homework_id == hid,
+                Notification.related_student_id == grading_context["student_id"],
+            )
+            .first()
+        )
+        assert note is not None
+        assert "92" in (note.content or "")
     finally:
         db.close()
 

@@ -1,5 +1,8 @@
 from typing import List
 
+from sqlalchemy import false as sql_false
+from sqlalchemy.orm import Query
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -11,6 +14,13 @@ from app.schemas import ClassCreate, ClassResponse, ClassUpdate
 
 
 router = APIRouter(prefix="/api/classes", tags=["班级管理"])
+
+
+def apply_class_id_filter(query: Query, column, class_ids: List[int]) -> Query:
+    """Avoid SQL errors from IN () when the caller has no accessible classes."""
+    if not class_ids:
+        return query.filter(sql_false())
+    return query.filter(column.in_(class_ids))
 
 
 def get_accessible_class_ids(user: User, db: Session) -> List[int]:

@@ -247,6 +247,7 @@ const routeNameMap = {
   '/settings': '系统设置',
   '/materials': '课程资料',
   '/homework': '作业管理',
+  '/homework/by-student': '学生作业一览',
   '/notifications': '通知信息'
 }
 
@@ -265,6 +266,7 @@ const teacherMenu = [
   { path: '/scores', label: '成绩管理', icon: Collection },
   { path: '/attendance', label: '考勤管理', icon: Collection },
   { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/homework/by-student', label: '学生作业一览', icon: User },
   { path: '/homework', label: '作业管理', icon: Reading },
   { path: '/notifications', label: '通知中心', icon: Bell }
 ]

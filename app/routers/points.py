@@ -14,7 +14,9 @@ from app.schemas import (
 )
 from app.auth import get_current_active_user
 from app.permissions import can_manage_students, is_admin
-from app.routers.classes import get_accessible_class_ids
+from sqlalchemy import false as sql_false
+
+from app.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from datetime import datetime
 
 router = APIRouter(prefix="/api/points", tags=["积分系统"])
@@ -26,12 +28,22 @@ def get_point_stats(
     current_user: User = Depends(get_current_active_user)
 ):
     class_ids = get_accessible_class_ids(current_user, db)
-    student_ids = [s.id for s in db.query(Student).filter(Student.class_id.in_(class_ids)).all()]
+    students_q = apply_class_id_filter(db.query(Student), Student.class_id, class_ids)
+    student_ids = [s.id for s in students_q.all()]
+
+    if not student_ids:
+        return PointStatsResponse(
+            total_students=0,
+            active_students=0,
+            total_points_distributed=0,
+            total_points_exchanged=0,
+            top_students=[],
+        )
 
     total_students = len(student_ids)
     active_students = db.query(StudentPoint).filter(
         StudentPoint.student_id.in_(student_ids),
-        StudentPoint.total_points > 0
+        StudentPoint.total_points > 0,
     ).count()
 
     total_distributed = db.query(func.coalesce(func.sum(StudentPoint.total_earned), 0)).filter(
@@ -84,10 +96,9 @@ def get_point_ranking(
     query = db.query(
         StudentPoint,
         Student.name,
-        Class.name.label("class_name")
-    ).join(Student, StudentPoint.student_id == Student.id
-    ).join(Class, Student.class_id == Class.id
-    ).filter(Student.class_id.in_(accessible_class_ids))
+        Class.name.label("class_name"),
+    ).join(Student, StudentPoint.student_id == Student.id).join(Class, Student.class_id == Class.id)
+    query = apply_class_id_filter(query, Student.class_id, accessible_class_ids)
 
     if class_id:
         query = query.filter(Student.class_id == class_id)
@@ -420,9 +431,12 @@ def get_exchanges(
     current_user: User = Depends(get_current_active_user)
 ):
     accessible_class_ids = get_accessible_class_ids(current_user, db)
-    accessible_student_ids = [s.id for s in db.query(Student).filter(Student.class_id.in_(accessible_class_ids)).all()]
-    
-    query = db.query(PointExchange).filter(PointExchange.student_id.in_(accessible_student_ids))
+    students_q = apply_class_id_filter(db.query(Student), Student.class_id, accessible_class_ids)
+    accessible_student_ids = [s.id for s in students_q.all()]
+
+    query = db.query(PointExchange).filter(
+        PointExchange.student_id.in_(accessible_student_ids) if accessible_student_ids else sql_false()
+    )
     if status:
         query = query.filter(PointExchange.status == status)
     if student_id and student_id in accessible_student_ids:

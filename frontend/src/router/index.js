@@ -143,6 +143,12 @@ const routes = [
         meta: { title: '学生提交', requiresTeacher: true }
       },
       {
+        path: 'homework/by-student',
+        name: 'StudentHomeworkByCourse',
+        component: () => import('@/views/StudentHomeworkByCourse.vue'),
+        meta: { title: '学生作业一览', requiresTeacher: true }
+      },
+      {
         path: 'materials',
         name: 'Materials',
         component: () => import('@/views/Materials.vue')

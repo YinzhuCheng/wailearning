@@ -256,7 +256,14 @@ const api = {
     getMySubmission: id => http.get(`/homeworks/${id}/submission/me`),
     getMySubmissionHistory: id => http.get(`/homeworks/${id}/submission/me/history`),
     submit: (id, data) => http.post(`/homeworks/${id}/submission`, data),
-    getSubmissions: id => http.get(`/homeworks/${id}/submissions`),
+    getSubmissions: (id, params) => http.get(`/homeworks/${id}/submissions`, { params }),
+    listCourseStudents: subjectId => http.get(`/homeworks/courses/${subjectId}/students`),
+    listStudentHomeworks: (subjectId, studentId, params) =>
+      http.get(`/homeworks/courses/${subjectId}/students/${studentId}/homeworks`, { params }),
+    submitAppeal: (homeworkId, submissionId, data) =>
+      http.post(`/homeworks/${homeworkId}/submissions/${submissionId}/appeal`, data),
+    acknowledgeAppeal: (homeworkId, submissionId) =>
+      http.post(`/homeworks/${homeworkId}/submissions/${submissionId}/appeal/acknowledge`),
     getSubmissionHistory: (homeworkId, submissionId) =>
       http.get(`/homeworks/${homeworkId}/submissions/${submissionId}/history`),
     reviewSubmission: (homeworkId, submissionId, data) =>

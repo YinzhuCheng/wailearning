@@ -8,7 +8,9 @@ from app.attachments import ensure_upload_directories
 from app.auth import get_password_hash
 from app.config import settings
 from app.course_access import sync_course_enrollments
+from app.demo_course_seed import seed_demo_course_bundle
 from app.database import Base, SessionLocal, engine
+from app.student_user_sync import reconcile_student_users_and_roster
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
@@ -97,6 +99,24 @@ def ensure_schema_updates() -> None:
         """,
         "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
+        """
+        CREATE TABLE IF NOT EXISTS homework_grade_appeals (
+            id INTEGER PRIMARY KEY,
+            homework_id INTEGER NOT NULL REFERENCES homeworks(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            submission_id INTEGER NOT NULL REFERENCES homework_submissions(id),
+            reason_text TEXT NOT NULL,
+            status VARCHAR NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_student_id INTEGER REFERENCES students(id)",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_homework_id INTEGER REFERENCES homeworks(id)",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_student_id INTEGER REFERENCES students(id)",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_appeal_id INTEGER REFERENCES homework_grade_appeals(id)",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_user_id INTEGER REFERENCES users(id)",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notification_kind VARCHAR NOT NULL DEFAULT 'general'",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS max_score FLOAT NOT NULL DEFAULT 100",
@@ -721,9 +741,14 @@ def bootstrap() -> None:
             normalize_semester_catalog(db)
             sync_subject_semester_links(db)
             seed_default_system_settings(db)
+            seed_demo_course_bundle(db)
             sync_existing_courses(db)
             backfill_homework_grading_data(db)
+            reconcile_student_users_and_roster(db)
+            db.commit()
         else:
+            reconcile_student_users_and_roster(db)
+            db.commit()
             print("INIT_DEFAULT_DATA is false. Table creation completed without seed data.")
     finally:
         db.close()
