@@ -53,11 +53,7 @@
               </div>
 
               <div v-if="isAdminView" class="card-actions">
-                <el-button @click="downloadTemplate('xlsx')">Excel 模板</el-button>
-                <el-button @click="downloadTemplate('csv')">CSV 模板</el-button>
-                <el-button type="primary" :loading="importing" @click="triggerImport">
-                  文件导入名单
-                </el-button>
+                <el-button type="primary" @click="openFileImportDialog">文件导入名单</el-button>
                 <el-button type="primary" plain data-testid="students-open-paste-import" @click="openPasteImportDialog">
                   粘贴批量导入
                 </el-button>
@@ -72,11 +68,7 @@
               </div>
 
               <div v-else-if="canManageRoster" class="card-actions">
-                <el-button @click="downloadTemplate('xlsx')">Excel 模板</el-button>
-                <el-button @click="downloadTemplate('csv')">CSV 模板</el-button>
-                <el-button type="primary" :loading="importing" @click="triggerImport">
-                  文件导入花名册
-                </el-button>
+                <el-button type="primary" @click="openFileImportDialog">文件导入花名册</el-button>
                 <el-button type="primary" plain data-testid="students-open-paste-import" @click="openPasteImportDialog">
                   粘贴批量导入
                 </el-button>
@@ -92,10 +84,10 @@
             </div>
 
             <p v-if="isAdminView" class="import-tip">
-              支持 Excel / CSV 文件或「粘贴批量导入」。列为：姓名、性别、学号、所属班级（每行一条，可用 Tab 或英文逗号分隔）。导入时若发现新班级，仅管理员可自动创建班级。
+              批量导入请使用「文件导入」（内含模板下载）或「粘贴批量导入」。
             </p>
             <p v-else-if="canManageRoster" class="import-tip">
-              可文件导入或粘贴批量导入当前课程所属班级的花名册；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）。仅管理员可创建登录账号；进课请在课程管理中打开「从花名册进课」。
+              花名册可「文件导入」或「粘贴批量导入」；详细说明在「文件导入」对话框内。
             </p>
           </div>
         </template>
@@ -181,6 +173,35 @@
           </template>
         </el-table>
       </el-card>
+
+      <el-dialog
+        v-model="fileImportDialogVisible"
+        :title="isAdminView ? '文件导入名单' : '文件导入花名册'"
+        width="560px"
+        destroy-on-close
+        @closed="resetFileImportDialog"
+      >
+        <el-alert type="info" :closable="false" class="file-import-alert">
+          <template #title>格式说明</template>
+          <p v-if="isAdminView" class="alert-body">
+            支持 <strong>Excel（.xlsx / .xls）</strong> 或 <strong>CSV</strong>。表头须包含列：<strong>姓名、性别、学号、所属班级</strong>（与模板一致）。导入时若发现新班级，仅管理员可自动创建班级。
+          </p>
+          <p v-else class="alert-body">
+            支持 <strong>Excel</strong> 或 <strong>CSV</strong>；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）。仅管理员可创建登录账号；进课请在课程管理中打开「从花名册进课」。
+          </p>
+        </el-alert>
+
+        <div class="file-import-actions">
+          <el-button @click="downloadTemplate('xlsx')">下载 Excel 模板</el-button>
+          <el-button @click="downloadTemplate('csv')">下载 CSV 模板</el-button>
+          <el-button type="primary" :loading="importing" @click="triggerImport">选择文件并导入</el-button>
+        </div>
+        <p class="file-import-hint muted-hint">请选择 .xlsx、.xls 或 .csv 文件；导入过程中请勿关闭窗口。</p>
+
+        <template #footer>
+          <el-button @click="fileImportDialogVisible = false">关闭</el-button>
+        </template>
+      </el-dialog>
 
       <el-dialog
         v-model="pasteDialogVisible"
@@ -297,6 +318,7 @@ const fileInputRef = ref(null)
 const classTeacherCourses = ref([])
 
 const pasteDialogVisible = ref(false)
+const fileImportDialogVisible = ref(false)
 const pasteText = ref('')
 const pasteParseErrors = ref([])
 const pastePreviewRows = ref([])
@@ -407,6 +429,14 @@ const resetFileInput = () => {
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
   }
+}
+
+const resetFileImportDialog = () => {
+  resetFileInput()
+}
+
+const openFileImportDialog = () => {
+  fileImportDialogVisible.value = true
 }
 
 const triggerImport = () => {
@@ -842,6 +872,7 @@ const handleFileChange = async event => {
     }
 
     await loadStudents()
+    fileImportDialogVisible.value = false
   } catch (error) {
     console.error('导入学生名单失败', error)
   } finally {
@@ -984,9 +1015,16 @@ watch(
 
 .card-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .card-actions {
+    flex-wrap: wrap;
+  }
 }
 
 .header-count {
@@ -1002,6 +1040,26 @@ watch(
 
 .hidden-file-input {
   display: none;
+}
+
+.file-import-alert {
+  margin-bottom: 16px;
+}
+
+.file-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.file-import-hint {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.muted-hint {
+  color: #94a3b8;
 }
 
 .paste-alert {

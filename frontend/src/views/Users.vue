@@ -21,8 +21,10 @@
         <el-button type="warning" plain data-testid="users-open-batch-class" @click="openBatchClassDialog">
           批量调班
         </el-button>
-        <el-button type="success" plain @click="openStudentImportDialog">载入学生用户</el-button>
-        <el-button type="primary" @click="openCreateDialog">新建用户</el-button>
+        <el-button type="success" plain data-testid="users-open-student-import" @click="openStudentImportDialog">
+          文件导入学生用户
+        </el-button>
+        <el-button type="primary" data-testid="users-open-create" @click="openCreateDialog">新建用户</el-button>
       </div>
     </div>
 
@@ -165,7 +167,7 @@
 
     <el-dialog
       v-model="studentImportDialogVisible"
-      title="载入学生用户"
+      title="文件导入学生用户"
       width="920px"
       destroy-on-close
     >
@@ -773,9 +775,11 @@ onMounted(async () => {
 
 .page-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .page-title {
@@ -842,7 +846,8 @@ onMounted(async () => {
 
   .page-actions,
   .student-import-actions {
-    justify-content: stretch;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
 </style>
