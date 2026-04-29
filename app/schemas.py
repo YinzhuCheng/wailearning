@@ -199,7 +199,7 @@ class StudentBase(BaseModel):
 
 
 class StudentCreate(StudentBase):
-    pass
+    gender: Gender = Gender.MALE
 
 
 class StudentUpdate(BaseModel):
