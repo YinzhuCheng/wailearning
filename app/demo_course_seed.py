@@ -1,6 +1,7 @@
-"""Default demo course data: teacher `teacher`, students stu1–stu5, 数据挖掘 course + first homework.
+"""Default demo course data: teacher `teacher`, students stu1–stu5, 数据挖掘 course + first homework + demo chapters.
 
 演示作业**不包含参考答案**（`reference_answer` 为空），便于教学上由学生独立作答；评分量表与作业说明照常提供。
+演示课程资料区会幂等写入**三层章节**（根章节 → 子章节 → 孙章节），便于章节树 UI 展示。
 """
 
 from __future__ import annotations
@@ -11,7 +12,18 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_password_hash
 from app.course_access import sync_course_enrollments
-from app.models import Class, CourseExamWeight, CourseGradeScheme, Homework, Semester, Student, Subject, User, UserRole
+from app.models import (
+    Class,
+    CourseExamWeight,
+    CourseGradeScheme,
+    CourseMaterialChapter,
+    Homework,
+    Semester,
+    Student,
+    Subject,
+    User,
+    UserRole,
+)
 from app.student_user_sync import reconcile_student_users_and_roster
 
 _DEMO_PASSWORD = "111111"
@@ -26,6 +38,11 @@ _COURSE_DESCRIPTION = (
     "数据挖掘入门与实践（演示课程）。涵盖 Python 数据分析基础、特征与可视化、"
     "简单预处理与经典数据集探索；平时作业与课堂表现结合考核。"
 )
+
+# Demo material outline: three chapter nodes (depth 3), idempotent by root title.
+_DEMO_CHAPTER_ROOT = "【演示】第一单元：导论与数据概览"
+_DEMO_CHAPTER_L2 = "【演示】第一节：Python 环境与常用库"
+_DEMO_CHAPTER_L3 = "【演示】1.1 课程资料与拓展阅读"
 
 _HOMEWORK_TITLE = "数据挖掘第一次作业：Python 环境、NumPy/Pandas 基础与 Wine 数据探索"
 
@@ -330,6 +347,51 @@ def _seed_demo_grade_weights(db: Session, *, course: Subject) -> None:
         db.add(CourseExamWeight(subject_id=course.id, exam_type="期末考试", weight=50.0))
 
 
+def _seed_demo_material_chapters(db: Session, *, subject_id: int) -> None:
+    """Three-level outline (root → child → grandchild) for course materials UI demo."""
+    exists = (
+        db.query(CourseMaterialChapter)
+        .filter(
+            CourseMaterialChapter.subject_id == subject_id,
+            CourseMaterialChapter.title == _DEMO_CHAPTER_ROOT,
+            CourseMaterialChapter.is_uncategorized.is_(False),
+        )
+        .first()
+    )
+    if exists:
+        return
+
+    root = CourseMaterialChapter(
+        subject_id=subject_id,
+        parent_id=None,
+        title=_DEMO_CHAPTER_ROOT,
+        sort_order=10,
+        is_uncategorized=False,
+    )
+    db.add(root)
+    db.flush()
+
+    level2 = CourseMaterialChapter(
+        subject_id=subject_id,
+        parent_id=root.id,
+        title=_DEMO_CHAPTER_L2,
+        sort_order=0,
+        is_uncategorized=False,
+    )
+    db.add(level2)
+    db.flush()
+
+    level3 = CourseMaterialChapter(
+        subject_id=subject_id,
+        parent_id=level2.id,
+        title=_DEMO_CHAPTER_L3,
+        sort_order=0,
+        is_uncategorized=False,
+    )
+    db.add(level3)
+    print("Created demo course material chapter outline (3 levels).")
+
+
 def seed_demo_course_bundle(db: Session) -> None:
     """
     Idempotent seed: teacher `teacher`, class, students stu1–stu5, course 数据挖掘, first homework.
@@ -452,6 +514,7 @@ def seed_demo_course_bundle(db: Session) -> None:
         print(f"Demo course '{_COURSE_NAME}' already exists.")
 
     _seed_demo_grade_weights(db, course=course)
+    _seed_demo_material_chapters(db, subject_id=course.id)
 
     enrolled = sync_course_enrollments(course, db)
     if enrolled:

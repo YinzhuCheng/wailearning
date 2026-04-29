@@ -8,7 +8,17 @@ from app.database import Base, SessionLocal, engine
 from app.demo_course_seed import seed_demo_course_bundle
 from app.auth import get_password_hash
 from app.main import app
-from app.models import Class, CourseExamWeight, CourseGradeScheme, Homework, Student, Subject, User, UserRole
+from app.models import (
+    Class,
+    CourseExamWeight,
+    CourseGradeScheme,
+    CourseMaterialChapter,
+    Homework,
+    Student,
+    Subject,
+    User,
+    UserRole,
+)
 from fastapi.testclient import TestClient
 
 
@@ -57,6 +67,36 @@ def test_demo_seed_creates_teacher_students_course_homework():
 
         st1 = db.query(Student).filter(Student.student_no == "stu1").first()
         assert st1 and st1.phone
+
+        root = (
+            db.query(CourseMaterialChapter)
+            .filter(
+                CourseMaterialChapter.subject_id == course.id,
+                CourseMaterialChapter.title == "【演示】第一单元：导论与数据概览",
+            )
+            .first()
+        )
+        assert root is not None and root.parent_id is None
+        mid = (
+            db.query(CourseMaterialChapter)
+            .filter(
+                CourseMaterialChapter.subject_id == course.id,
+                CourseMaterialChapter.parent_id == root.id,
+                CourseMaterialChapter.title == "【演示】第一节：Python 环境与常用库",
+            )
+            .first()
+        )
+        assert mid is not None
+        leaf = (
+            db.query(CourseMaterialChapter)
+            .filter(
+                CourseMaterialChapter.subject_id == course.id,
+                CourseMaterialChapter.parent_id == mid.id,
+                CourseMaterialChapter.title == "【演示】1.1 课程资料与拓展阅读",
+            )
+            .first()
+        )
+        assert leaf is not None
 
         hw = (
             db.query(Homework)
