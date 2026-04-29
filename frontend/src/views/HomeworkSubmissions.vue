@@ -385,7 +385,7 @@ const selectableForAnyBatchAction = row =>
   Boolean(row.submission_id && (row.attachment_url || row.status === 'submitted'))
 const canReviewSubmission = row => row?.submission_id !== null && row?.submission_id !== undefined
 const hasSavedReview = row =>
-  row.review_score !== null && row.review_score !== undefined || Boolean(row.review_comment)
+  (row.review_score !== null && row.review_score !== undefined) || Boolean(row.review_comment)
 
 const formatScore = value => {
   const numericValue = Number(value)

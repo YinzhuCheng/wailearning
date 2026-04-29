@@ -268,6 +268,7 @@ const userStore = useUserStore()
 
 const loading = ref(false)
 const submitting = ref(false)
+let gradePollTimer = null
 const homework = ref(null)
 const attachmentFile = ref(null)
 const hasExistingSubmission = ref(false)
@@ -349,8 +350,32 @@ const applyHistory = history => {
   attempts.value = history?.attempts || []
 }
 
-const loadPage = async () => {
-  loading.value = true
+const stopGradePolling = () => {
+  if (gradePollTimer) {
+    window.clearInterval(gradePollTimer)
+    gradePollTimer = null
+  }
+}
+
+const maybeStartGradePolling = () => {
+  stopGradePolling()
+  if (!userStore.isStudent) {
+    return
+  }
+  const st = historySummary.value?.latest_task_status
+  if (st !== 'queued' && st !== 'processing') {
+    return
+  }
+  gradePollTimer = window.setInterval(() => {
+    loadPage({ silent: true })
+  }, 8000)
+}
+
+const loadPage = async (opts = {}) => {
+  const silent = Boolean(opts?.silent)
+  if (!silent) {
+    loading.value = true
+  }
   try {
     const [homeworkDetail, submission, history] = await Promise.all([
       api.homework.get(route.params.id),
@@ -360,8 +385,11 @@ const loadPage = async () => {
     homework.value = homeworkDetail
     applySubmission(submission)
     applyHistory(history)
+    maybeStartGradePolling()
   } finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
   }
 }
 
@@ -505,11 +533,13 @@ onBeforeUnmount(() => {
     window.clearInterval(clockTimer)
     clockTimer = null
   }
+  stopGradePolling()
 })
 
 watch(
   () => route.params.id,
   () => {
+    stopGradePolling()
     loadPage()
   }
 )

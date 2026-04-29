@@ -1187,6 +1187,9 @@ class NotificationBase(BaseModel):
     is_pinned: bool = False
     class_id: Optional[int] = None
     subject_id: Optional[int] = None
+    target_student_id: Optional[int] = None
+    related_homework_id: Optional[int] = None
+    related_student_id: Optional[int] = None
 
 
 class NotificationCreate(NotificationBase):
@@ -1203,6 +1206,9 @@ class NotificationUpdate(BaseModel):
     is_pinned: Optional[bool] = None
     class_id: Optional[int] = None
     subject_id: Optional[int] = None
+    target_student_id: Optional[int] = None
+    related_homework_id: Optional[int] = None
+    related_student_id: Optional[int] = None
 
 
 class NotificationResponse(NotificationBase):
