@@ -72,6 +72,11 @@ const routes = [
         component: () => import('@/views/Scores.vue')
       },
       {
+        path: 'student-scores',
+        name: 'StudentScores',
+        component: () => import('@/views/StudentScores.vue')
+      },
+      {
         path: 'attendance',
         name: 'Attendance',
         component: () => import('@/views/Attendance.vue')
@@ -232,7 +237,10 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
-  if (userStore.isStudent && ['/dashboard', '/students', '/scores', '/attendance', '/rankings', '/analysis', '/points'].includes(to.path)) {
+  if (
+    userStore.isStudent &&
+    ['/dashboard', '/students', '/scores', '/attendance', '/rankings', '/analysis', '/points'].includes(to.path)
+  ) {
     next('/courses')
     return
   }

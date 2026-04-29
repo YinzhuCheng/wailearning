@@ -3,9 +3,27 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Class, CourseEnrollment, CourseEnrollmentBlock, Student, Subject, User, UserRole
+
+
+def subject_teacher_user_ids(db: Session, subject_id: int) -> list[int]:
+    """Notify course teacher plus class teachers for the subject's class."""
+    course = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not course:
+        return []
+    ids: list[int] = []
+    if course.teacher_id:
+        ids.append(int(course.teacher_id))
+    if course.class_id:
+        class_teachers = (
+            db.query(User.id)
+            .filter(User.role == UserRole.CLASS_TEACHER.value, User.class_id == course.class_id)
+            .all()
+        )
+        ids.extend(int(r[0]) for r in class_teachers)
+    return sorted(set(ids))
 
 
 def prepare_student_course_context(user: User, db: Session) -> None:
@@ -253,6 +271,7 @@ def get_enrolled_students(course_id: int, db: Session) -> list[CourseEnrollment]
     return (
         db.query(CourseEnrollment)
         .filter(CourseEnrollment.subject_id == course_id)
+        .options(joinedload(CourseEnrollment.student))
         .order_by(CourseEnrollment.id.asc())
         .all()
     )

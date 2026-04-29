@@ -2,17 +2,27 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
-from app.course_access import ensure_course_access
+from app.course_access import ensure_course_access, get_enrolled_students, get_student_profile_for_user
 from app.database import get_db
-from app.models import CourseExamWeight, Score, Student, Subject, User, UserRole
+from app.models import CourseExamWeight, CourseGradeScheme, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
+from app.permissions import is_student
 from app.routers.classes import apply_class_id_filter, get_accessible_class_ids
+from app.score_composition import OTHER_DAILY_EXAM_TYPE, build_composition_for_student, get_scheme_dto, upsert_scheme
+from app.score_grade_appeals import mark_score_appeal_notifications_handled, notify_teachers_score_grade_appeal
 from app.schemas import (
     CourseExamWeightResponse,
     CourseExamWeightUpdateRequest,
+    CourseGradeSchemeResponse,
+    CourseGradeSchemeUpdate,
+    ScoreCompositionResponse,
     ScoreCreate,
+    ScoreGradeAppealCreate,
+    ScoreGradeAppealResponse,
+    ScoreGradeAppealTeacherUpdate,
     ScoreListResponse,
     ScoreResponse,
     ScoreUpdate,
@@ -50,6 +60,23 @@ def _serialize_exam_weight(item: CourseExamWeight) -> CourseExamWeightResponse:
         subject_id=item.subject_id,
         exam_type=item.exam_type,
         weight=item.weight,
+    )
+
+
+def _serialize_score_appeal(db: Session, appeal: ScoreGradeAppeal) -> ScoreGradeAppealResponse:
+    st = db.query(Student).filter(Student.id == appeal.student_id).first()
+    return ScoreGradeAppealResponse(
+        id=appeal.id,
+        subject_id=appeal.subject_id,
+        student_id=appeal.student_id,
+        student_name=st.name if st else None,
+        score_id=appeal.score_id,
+        semester=appeal.semester,
+        target_component=appeal.target_component,
+        reason_text=appeal.reason_text,
+        status=appeal.status,
+        teacher_response=appeal.teacher_response,
+        created_at=appeal.created_at,
     )
 
 
@@ -201,8 +228,18 @@ def update_course_exam_weights(
         total_weight += item.weight
         normalized_items.append((exam_type, item.weight))
 
-    if round(total_weight, 2) != 100:
-        raise HTTPException(status_code=400, detail="考试占比总和必须等于 100。")
+    if round(total_weight, 2) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="考试占比总和不能超过 100（需为「作业平时分」「其他平时分」预留比例，三者之和为 100）。",
+        )
+
+    scheme = get_scheme_dto(db, subject_id)
+    if round(float(scheme.homework_weight) + float(scheme.extra_daily_weight) + total_weight, 2) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="作业平时分 + 其他平时分 + 各次考试占比之和不能超过 100。请下调考试占比或平时分占比。",
+        )
 
     db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).delete()
     for exam_type, weight in normalized_items:
@@ -216,6 +253,226 @@ def update_course_exam_weights(
         .all()
     )
     return [_serialize_exam_weight(item) for item in items]
+
+
+@router.get("/grade-scheme/{subject_id}", response_model=CourseGradeSchemeResponse)
+def get_course_grade_scheme(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    ensure_course_access(subject_id, current_user, db)
+    row = db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == subject_id).first()
+    hw = float(row.homework_weight) if row else 30.0
+    ex = float(row.extra_daily_weight) if row else 20.0
+    return CourseGradeSchemeResponse(subject_id=subject_id, homework_weight=hw, extra_daily_weight=ex)
+
+
+@router.put("/grade-scheme/{subject_id}", response_model=CourseGradeSchemeResponse)
+def update_course_grade_scheme(
+    subject_id: int,
+    payload: CourseGradeSchemeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    _ensure_score_write_access(current_user)
+    ensure_course_access(subject_id, current_user, db)
+    hw = float(payload.homework_weight)
+    ex = float(payload.extra_daily_weight)
+    if hw < 0 or ex < 0 or hw + ex > 100:
+        raise HTTPException(status_code=400, detail="作业平时分与其他平时分占比须在 0–100 之间且两者之和不超过 100。")
+    exam_sum = (
+        db.query(func.sum(CourseExamWeight.weight)).filter(CourseExamWeight.subject_id == subject_id).scalar() or 0
+    )
+    if round(float(exam_sum) + hw + ex, 2) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="作业平时分 + 其他平时分 + 各次考试占比之和不能超过 100。请下调考试占比或平时分占比。",
+        )
+    upsert_scheme(db, subject_id, hw, ex)
+    db.commit()
+    return CourseGradeSchemeResponse(subject_id=subject_id, homework_weight=hw, extra_daily_weight=ex)
+
+
+@router.get("/composition/class", response_model=list[ScoreCompositionResponse])
+def list_class_score_compositions(
+    subject_id: int,
+    semester: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if is_student(current_user):
+        raise HTTPException(status_code=403, detail="仅教师可查看全班成绩构成。")
+    ensure_course_access(subject_id, current_user, db)
+
+    enrollments = get_enrolled_students(subject_id, db)
+    out: list[ScoreCompositionResponse] = []
+    for en in enrollments:
+        sid = en.student_id
+        stu_name = en.student.name if en.student else None
+        out.append(
+            ScoreCompositionResponse(
+                **build_composition_for_student(
+                    db, student_id=sid, subject_id=subject_id, semester=semester, student_name=stu_name
+                )
+            )
+        )
+    return out
+
+
+@router.get("/composition/me", response_model=ScoreCompositionResponse)
+def get_my_score_composition(
+    subject_id: int,
+    semester: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_student(current_user):
+        raise HTTPException(status_code=403, detail="仅学生可查看本人的成绩构成。")
+    student = get_student_profile_for_user(current_user, db)
+    if not student:
+        raise HTTPException(status_code=400, detail="未找到与账号绑定的学生档案。")
+    ensure_course_access(subject_id, current_user, db)
+    return ScoreCompositionResponse(
+        **build_composition_for_student(
+            db, student_id=student.id, subject_id=subject_id, semester=semester, student_name=student.name
+        )
+    )
+
+
+@router.get("/composition/{student_id}", response_model=ScoreCompositionResponse)
+def get_student_score_composition(
+    student_id: int,
+    subject_id: int,
+    semester: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if is_student(current_user):
+        raise HTTPException(status_code=403, detail="教师或教务可查看学生成绩构成。")
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+    class_ids = get_accessible_class_ids(current_user, db)
+    if student.class_id not in class_ids:
+        raise HTTPException(status_code=403, detail="You do not have access to this student.")
+    ensure_course_access(subject_id, current_user, db)
+    return ScoreCompositionResponse(
+        **build_composition_for_student(
+            db, student_id=student_id, subject_id=subject_id, semester=semester, student_name=student.name
+        )
+    )
+
+
+@router.post("/appeals", response_model=ScoreGradeAppealResponse)
+def create_score_grade_appeal(
+    subject_id: int,
+    payload: ScoreGradeAppealCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_student(current_user):
+        raise HTTPException(status_code=403, detail="仅学生可提交成绩申诉。")
+    student = get_student_profile_for_user(current_user, db)
+    if not student:
+        raise HTTPException(status_code=400, detail="未找到与账号绑定的学生档案。")
+    ensure_course_access(subject_id, current_user, db)
+
+    allowed = {"total", "homework_avg", OTHER_DAILY_EXAM_TYPE}
+    exam_types = {r.exam_type for r in db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).all()}
+    if payload.target_component not in allowed and payload.target_component not in exam_types:
+        raise HTTPException(status_code=400, detail="无效的申诉对象。")
+
+    if payload.score_id is not None:
+        sc = db.query(Score).filter(Score.id == payload.score_id).first()
+        if not sc or sc.student_id != student.id or sc.subject_id != subject_id or sc.semester != payload.semester:
+            raise HTTPException(status_code=400, detail="score_id 与课程或学期不符。")
+        if payload.target_component == OTHER_DAILY_EXAM_TYPE and sc.exam_type != OTHER_DAILY_EXAM_TYPE:
+            raise HTTPException(status_code=400, detail="score_id 与申诉对象不符。")
+        if payload.target_component in exam_types and sc.exam_type != payload.target_component:
+            raise HTTPException(status_code=400, detail="score_id 与申诉对象不符。")
+
+    dup = (
+        db.query(ScoreGradeAppeal)
+        .filter(
+            ScoreGradeAppeal.student_id == student.id,
+            ScoreGradeAppeal.subject_id == subject_id,
+            ScoreGradeAppeal.semester == payload.semester.strip(),
+            ScoreGradeAppeal.target_component == payload.target_component.strip(),
+            ScoreGradeAppeal.status == "pending",
+        )
+        .first()
+    )
+    if dup:
+        raise HTTPException(status_code=400, detail="该申诉对象已有一条待处理申诉，请勿重复提交。")
+
+    appeal = ScoreGradeAppeal(
+        subject_id=subject_id,
+        student_id=student.id,
+        score_id=payload.score_id,
+        semester=payload.semester.strip(),
+        target_component=payload.target_component.strip(),
+        reason_text=payload.reason_text.strip(),
+        status="pending",
+    )
+    db.add(appeal)
+    db.flush()
+    notify_teachers_score_grade_appeal(
+        db,
+        appeal=appeal,
+        student_name=student.name or "",
+        creator_user_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(appeal)
+    return _serialize_score_appeal(db, appeal)
+
+
+@router.get("/appeals", response_model=list[ScoreGradeAppealResponse])
+def list_score_grade_appeals(
+    subject_id: Optional[int] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if is_student(current_user):
+        raise HTTPException(status_code=403, detail="仅教师可查看申诉列表。")
+    q = db.query(ScoreGradeAppeal).join(Subject, Subject.id == ScoreGradeAppeal.subject_id)
+    class_ids = get_accessible_class_ids(current_user, db)
+    if not class_ids:
+        return []
+    q = q.filter(Subject.class_id.in_(class_ids))
+    if subject_id is not None:
+        ensure_course_access(subject_id, current_user, db)
+        q = q.filter(ScoreGradeAppeal.subject_id == subject_id)
+    if status:
+        q = q.filter(ScoreGradeAppeal.status == status)
+    rows = q.order_by(ScoreGradeAppeal.created_at.desc()).limit(200).all()
+    return [_serialize_score_appeal(db, a) for a in rows]
+
+
+@router.put("/appeals/{appeal_id}", response_model=ScoreGradeAppealResponse)
+def respond_score_grade_appeal(
+    appeal_id: int,
+    payload: ScoreGradeAppealTeacherUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if is_student(current_user):
+        raise HTTPException(status_code=403, detail="仅教师可处理申诉。")
+    appeal = db.query(ScoreGradeAppeal).filter(ScoreGradeAppeal.id == appeal_id).first()
+    if not appeal:
+        raise HTTPException(status_code=404, detail="申诉不存在。")
+    ensure_course_access(appeal.subject_id, current_user, db)
+    next_status = (payload.status or "resolved").strip()
+    if next_status not in ("pending", "resolved", "rejected"):
+        raise HTTPException(status_code=400, detail="无效的处理状态。")
+    appeal.teacher_response = payload.teacher_response.strip()
+    appeal.status = next_status
+    mark_score_appeal_notifications_handled(db, appeal.id)
+    db.commit()
+    db.refresh(appeal)
+    return _serialize_score_appeal(db, appeal)
 
 
 @router.put("/{score_id}", response_model=ScoreResponse)

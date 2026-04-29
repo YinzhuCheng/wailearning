@@ -504,6 +504,85 @@ class CourseExamWeightUpdateRequest(BaseModel):
     items: List[CourseExamWeightItem]
 
 
+class CourseGradeSchemeResponse(BaseModel):
+    subject_id: int
+    homework_weight: float
+    extra_daily_weight: float
+
+
+class CourseGradeSchemeUpdate(BaseModel):
+    homework_weight: float = Field(..., ge=0, le=100)
+    extra_daily_weight: float = Field(..., ge=0, le=100)
+
+
+class ScoreCompositionHomeworkItem(BaseModel):
+    homework_id: int
+    title: str
+    max_score: float
+    review_score: Optional[float] = None
+    percent_equivalent: Optional[float] = None
+
+
+class ScoreCompositionExamWeight(BaseModel):
+    exam_type: str
+    weight: float
+
+
+class ScoreCompositionScheme(BaseModel):
+    homework_weight: float
+    extra_daily_weight: float
+    other_daily_label: str
+    exam_weights: List[ScoreCompositionExamWeight]
+    inner_parts_sum: float
+    inner_parts_valid: bool
+
+
+class ScoreCompositionResponse(BaseModel):
+    student_id: Optional[int] = None
+    student_name: Optional[str] = None
+    student_no: Optional[str] = None
+    subject_id: int
+    subject_name: str
+    semester: str
+    scheme: ScoreCompositionScheme
+    homework_average_percent: Optional[float] = None
+    homework_assignments: List[ScoreCompositionHomeworkItem] = Field(default_factory=list)
+    other_daily_score: Optional[float] = None
+    other_daily_score_id: Optional[int] = None
+    exam_scores: dict[str, float] = Field(default_factory=dict)
+    weighted_total: Optional[float] = None
+    missing_for_total: List[str] = Field(default_factory=list)
+
+
+class ScoreGradeAppealCreate(BaseModel):
+    semester: str
+    target_component: str = Field(..., min_length=1, max_length=64)
+    reason_text: str = Field(..., min_length=1)
+    score_id: Optional[int] = None
+
+
+class ScoreGradeAppealTeacherUpdate(BaseModel):
+    teacher_response: str = Field(..., min_length=1)
+    status: str = Field(default="resolved")
+
+
+class ScoreGradeAppealResponse(BaseModel):
+    id: int
+    subject_id: int
+    student_id: int
+    student_name: Optional[str] = None
+    score_id: Optional[int] = None
+    semester: str
+    target_component: str
+    reason_text: str
+    status: str
+    teacher_response: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class AttendanceBase(BaseModel):
     student_id: int
     class_id: int

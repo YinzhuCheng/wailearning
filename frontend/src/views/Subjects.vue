@@ -1018,7 +1018,6 @@ const buildFinalScoreMap = (scores, weights) => {
 
   scoreMap.forEach((examMap, studentId) => {
     let weightedTotal = 0
-    let coveredWeight = 0
     const allScores = []
 
     examMap.forEach((values, examTypeKey) => {
@@ -1028,14 +1027,13 @@ const buildFinalScoreMap = (scores, weights) => {
       const weight = weightMap.get(examTypeKey)
       if (weight && examAverage !== null) {
         weightedTotal += (examAverage * weight) / 100
-        coveredWeight += weight
       }
     })
 
     let finalScore = null
 
-    if (weightMap.size > 0 && coveredWeight > 0) {
-      finalScore = weightedTotal / (coveredWeight / 100)
+    if (weightMap.size > 0) {
+      finalScore = weightedTotal
     } else {
       finalScore = average(allScores)
     }

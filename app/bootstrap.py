@@ -114,10 +114,36 @@ def ensure_schema_updates() -> None:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS course_grade_schemes (
+            id INTEGER PRIMARY KEY,
+            subject_id INTEGER NOT NULL UNIQUE REFERENCES subjects(id),
+            homework_weight FLOAT NOT NULL DEFAULT 30,
+            extra_daily_weight FLOAT NOT NULL DEFAULT 20,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS score_grade_appeals (
+            id INTEGER PRIMARY KEY,
+            subject_id INTEGER NOT NULL REFERENCES subjects(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            score_id INTEGER REFERENCES scores(id),
+            semester VARCHAR NOT NULL,
+            target_component VARCHAR NOT NULL,
+            reason_text TEXT NOT NULL,
+            status VARCHAR NOT NULL DEFAULT 'pending',
+            teacher_response TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_student_id INTEGER REFERENCES students(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_homework_id INTEGER REFERENCES homeworks(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_student_id INTEGER REFERENCES students(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_appeal_id INTEGER REFERENCES homework_grade_appeals(id)",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_score_appeal_id INTEGER REFERENCES score_grade_appeals(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS target_user_id INTEGER REFERENCES users(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notification_kind VARCHAR NOT NULL DEFAULT 'general'",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",

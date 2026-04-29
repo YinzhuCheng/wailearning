@@ -205,6 +205,43 @@ class CourseExamWeight(Base):
     subject = relationship("Subject")
 
 
+class CourseGradeScheme(Base):
+    """Per-course weights for 作业平时 vs 其他平时 (remainder after exams is homework+extra)."""
+
+    __tablename__ = "course_grade_schemes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, unique=True, index=True)
+    homework_weight = Column(Float, nullable=False, default=30.0)
+    extra_daily_weight = Column(Float, nullable=False, default=20.0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    subject = relationship("Subject", backref="grade_scheme", uselist=False)
+
+
+class ScoreGradeAppeal(Base):
+    """Student appeal against total grade or a component (homework avg, other daily, or one exam)."""
+
+    __tablename__ = "score_grade_appeals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    score_id = Column(Integer, ForeignKey("scores.id"), nullable=True, index=True)
+    semester = Column(String, nullable=False)
+    target_component = Column(String, nullable=False)
+    reason_text = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    teacher_response = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    subject = relationship("Subject")
+    student = relationship("Student")
+    score = relationship("Score")
+
+
 class Attendance(Base):
     __tablename__ = "attendances"
 
@@ -693,6 +730,7 @@ class Notification(Base):
     related_homework_id = Column(Integer, ForeignKey("homeworks.id"), nullable=True, index=True)
     related_student_id = Column(Integer, ForeignKey("students.id"), nullable=True, index=True)
     related_appeal_id = Column(Integer, ForeignKey("homework_grade_appeals.id"), nullable=True, index=True)
+    related_score_appeal_id = Column(Integer, ForeignKey("score_grade_appeals.id"), nullable=True, index=True)
     target_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     notification_kind = Column(String, nullable=False, default="general")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)

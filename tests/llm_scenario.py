@@ -152,6 +152,7 @@ def make_grading_course_with_homework(
             "student_id": stud.id,
             "teacher_id": teacher.id,
             "subject_id": course.id,
+            "class_id": klass.id,
             "student_username": stu_username,
             "student_password": "stu_pass",
             "teacher_username": teacher.username,
