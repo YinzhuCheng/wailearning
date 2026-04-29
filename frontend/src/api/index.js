@@ -242,7 +242,8 @@ const api = {
     getStudentRankings: params => http.get('/dashboard/rankings/students', { params }),
     getSubjectRankings: (subjectId, params) => http.get(`/dashboard/rankings/subjects/${subjectId}`, { params }),
     getTrends: params => http.get('/dashboard/analysis/trends', { params }),
-    getSubjectAnalysis: params => http.get('/dashboard/analysis/subjects', { params })
+    getSubjectAnalysis: params => http.get('/dashboard/analysis/subjects', { params }),
+    getHomeworkLearning: params => http.get('/dashboard/analysis/homework-learning', { params })
   },
   homework: {
     list: params => http.get('/homeworks', { params }),

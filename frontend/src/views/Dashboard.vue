@@ -77,14 +77,6 @@
               </div>
             </button>
           </div>
-
-          <button type="button" class="score-card" @click="goTo('/scores')">
-            <div class="score-card__header">
-              <h3>平均成绩</h3>
-              <span class="score-card__link">前往成绩管理</span>
-            </div>
-            <div ref="scoreChartRef" class="chart-box"></div>
-          </button>
         </div>
 
         <el-card shadow="never" class="calendar-card">
@@ -96,9 +88,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import * as echarts from 'echarts'
 import { Bell, CollectionTag, Document, Reading, User } from '@element-plus/icons-vue'
 
 import api from '@/api'
@@ -120,18 +111,14 @@ const userStore = useUserStore()
 
 const semester = ref('')
 const semesters = ref([])
-const scoreChartRef = ref(null)
 const classDashboardLoading = ref(false)
 const classTeacherCoursePool = ref([])
 const importantNotifications = ref([])
 
-let scoreChart = null
-
 let unsubscribeNotificationRefresh = () => {}
 
 const stats = reactive({
-  total_students: 0,
-  avg_score: 0
+  total_students: 0
 })
 
 const resourceCounts = reactive({
@@ -186,7 +173,6 @@ const buildQuery = () => ({
 
 const resetLegacyStats = () => {
   stats.total_students = 0
-  stats.avg_score = 0
   resourceCounts.materials = 0
   resourceCounts.homeworks = 0
   resourceCounts.notifications = 0
@@ -203,7 +189,6 @@ const loadSemesters = async () => {
 const loadLegacyStats = async () => {
   const data = await api.dashboard.getStats(buildQuery())
   stats.total_students = Number(data?.total_students || 0)
-  stats.avg_score = Number(data?.avg_score || 0)
 }
 
 const loadLegacyResourceCounts = async () => {
@@ -236,52 +221,6 @@ const loadLegacyResourceCounts = async () => {
   resourceCounts.notifications = Number(notificationsResult?.total || 0)
 }
 
-const ensureChart = async () => {
-  await nextTick()
-
-  if (scoreChartRef.value && !scoreChart) {
-    scoreChart = echarts.init(scoreChartRef.value)
-  }
-}
-
-const updateChart = () => {
-  if (!scoreChart) {
-    return
-  }
-
-  scoreChart.setOption({
-    series: [{
-      type: 'gauge',
-      startAngle: 180,
-      endAngle: 0,
-      min: 0,
-      max: 100,
-      splitNumber: 8,
-      axisLine: {
-        lineStyle: {
-          width: 8,
-          color: [
-            [0.4, '#67e8f9'],
-            [0.7, '#38bdf8'],
-            [1, '#2563eb']
-          ]
-        }
-      },
-      pointer: { itemStyle: { color: '#1d4ed8' } },
-      axisTick: { show: false },
-      splitLine: { length: 12, lineStyle: { width: 2, color: '#94a3b8' } },
-      axisLabel: { color: '#64748b' },
-      detail: {
-        valueAnimation: true,
-        formatter: '{value} 分',
-        color: '#0f172a',
-        fontSize: 26
-      },
-      data: [{ value: stats.avg_score || 0 }]
-    }]
-  })
-}
-
 const loadLegacyDashboard = async () => {
   if (isTeachingDashboard.value && !selectedCourse.value) {
     resetLegacyStats()
@@ -289,8 +228,6 @@ const loadLegacyDashboard = async () => {
   }
 
   await Promise.all([loadLegacyStats(), loadLegacyResourceCounts()])
-  await ensureChart()
-  updateChart()
 }
 
 const loadClassTeacherDashboard = async () => {
@@ -328,10 +265,6 @@ const loadClassTeacherDashboard = async () => {
   }
 }
 
-const resizeChart = () => {
-  scoreChart?.resize()
-}
-
 const goTo = path => {
   router.push(path)
 }
@@ -353,14 +286,11 @@ onMounted(async () => {
     }
 
     await loadLegacyDashboard()
-    window.addEventListener('resize', resizeChart)
   }
 })
 
 onBeforeUnmount(() => {
   unsubscribeNotificationRefresh()
-  window.removeEventListener('resize', resizeChart)
-  scoreChart?.dispose()
 })
 
 watch(
@@ -493,8 +423,7 @@ watch(selectedCourse, async () => {
   gap: 20px;
 }
 
-.metric-card,
-.score-card {
+.metric-card {
   border: 0;
   border-radius: 20px;
   background: #fff;
@@ -503,8 +432,7 @@ watch(selectedCourse, async () => {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.metric-card:hover,
-.score-card:hover {
+.metric-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 14px 34px rgba(37, 99, 235, 0.14);
 }
@@ -546,32 +474,6 @@ watch(selectedCourse, async () => {
   border-radius: 20px;
 }
 
-.score-card {
-  padding: 22px;
-  text-align: left;
-}
-
-.score-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.score-card__header h3 {
-  margin: 0;
-  color: #0f172a;
-}
-
-.score-card__link {
-  font-size: 13px;
-  color: #2563eb;
-}
-
-.chart-box {
-  height: 280px;
-}
-
 @media (max-width: 1200px) {
   .class-dashboard-layout,
   .legacy-dashboard-layout {
@@ -586,11 +488,6 @@ watch(selectedCourse, async () => {
 
   .metrics-grid {
     grid-template-columns: 1fr;
-  }
-
-  .score-card__header {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 </style>
