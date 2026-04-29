@@ -212,7 +212,16 @@ const api = {
     delete: id => http.delete(`/scores/${id}`),
     getStudentScores: (studentId, params) => http.get(`/scores/student/${studentId}`, { params }),
     getWeights: subjectId => http.get(`/scores/weights/${subjectId}`),
-    updateWeights: (subjectId, data) => http.put(`/scores/weights/${subjectId}`, data)
+    updateWeights: (subjectId, data) => http.put(`/scores/weights/${subjectId}`, data),
+    getGradeScheme: subjectId => http.get(`/scores/grade-scheme/${subjectId}`),
+    updateGradeScheme: (subjectId, data) => http.put(`/scores/grade-scheme/${subjectId}`, data),
+    getMyComposition: params => http.get('/scores/composition/me', { params }),
+    getStudentComposition: (studentId, params) =>
+      http.get(`/scores/composition/${studentId}`, { params }),
+    listClassComposition: params => http.get('/scores/composition/class', { params }),
+    createAppeal: (subjectId, data) => http.post(`/scores/appeals?subject_id=${subjectId}`, data),
+    listAppeals: params => http.get('/scores/appeals', { params }),
+    updateAppeal: (appealId, data) => http.put(`/scores/appeals/${appealId}`, data)
   },
   semesters: {
     list: () => http.get('/semesters'),

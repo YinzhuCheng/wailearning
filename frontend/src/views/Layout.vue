@@ -291,6 +291,7 @@ const routeNameMap = {
   '/classes': '班级管理',
   '/students': '学生信息',
   '/scores': '成绩管理',
+  '/student-scores': '我的成绩',
   '/attendance': '考勤管理',
   '/rankings': '班级排名',
   '/analysis': '数据分析',
@@ -359,6 +360,7 @@ const studentBaseMenu = [
 const studentMenu = [
   { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/homework', label: '课程作业', icon: Reading },
+  { path: '/student-scores', label: '我的成绩', icon: Collection },
   { path: '/notifications', label: '课程通知', icon: Bell }
 ]
 
