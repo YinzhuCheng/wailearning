@@ -148,6 +148,13 @@ export const useUserStore = defineStore('user', () => {
     return userData
   }
 
+  async function refreshUserInfo() {
+    const userData = await api.auth.getCurrentUser()
+    userInfo.value = userData
+    localStorage.setItem('user', JSON.stringify(userData))
+    return userData
+  }
+
   async function fetchSystemSettings() {
     try {
       const data = await http.get('/settings/public')
@@ -191,6 +198,7 @@ export const useUserStore = defineStore('user', () => {
     login,
     logout,
     fetchSystemSettings,
+    refreshUserInfo,
     setSelectedCourse,
     clearSelectedCourse,
     fetchTeachingCourses,

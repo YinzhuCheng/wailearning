@@ -20,30 +20,44 @@
         />
       </div>
 
-      <el-menu
-        :default-active="route.path"
-        :default-openeds="homeworkMenuOpenIndices"
-        :collapse="isCollapsed"
-        router
-        class="sidebar-menu"
-      >
-        <template v-for="item in menuItems" :key="item.type === 'submenu' ? item.index : item.path">
-          <el-sub-menu v-if="item.type === 'submenu'" :index="item.index">
-            <template #title>
+      <div class="sidebar-body">
+        <el-menu
+          :default-active="route.path"
+          :default-openeds="homeworkMenuOpenIndices"
+          :collapse="isCollapsed"
+          router
+          class="sidebar-menu sidebar-menu--scroll"
+        >
+          <template v-for="item in menuItems" :key="item.type === 'submenu' ? item.index : item.path">
+            <el-sub-menu v-if="item.type === 'submenu'" :index="item.index">
+              <template #title>
+                <el-icon><component :is="item.icon" /></el-icon>
+                <span>{{ item.label }}</span>
+              </template>
+              <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
+                <el-icon><component :is="child.icon" /></el-icon>
+                <template #title>{{ child.label }}</template>
+              </el-menu-item>
+            </el-sub-menu>
+            <el-menu-item v-else :index="item.path">
               <el-icon><component :is="item.icon" /></el-icon>
-              <span>{{ item.label }}</span>
-            </template>
-            <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
-              <el-icon><component :is="child.icon" /></el-icon>
-              <template #title>{{ child.label }}</template>
+              <template #title>{{ item.label }}</template>
             </el-menu-item>
-          </el-sub-menu>
-          <el-menu-item v-else :index="item.path">
-            <el-icon><component :is="item.icon" /></el-icon>
-            <template #title>{{ item.label }}</template>
+          </template>
+        </el-menu>
+
+        <el-menu
+          :default-active="route.path"
+          :collapse="isCollapsed"
+          router
+          class="sidebar-menu sidebar-menu--footer"
+        >
+          <el-menu-item index="/personal-settings">
+            <el-icon><Setting /></el-icon>
+            <template #title>个人设置</template>
           </el-menu-item>
-        </template>
-      </el-menu>
+        </el-menu>
+      </div>
     </el-aside>
 
     <el-container>
@@ -102,7 +116,9 @@
 
           <el-dropdown @command="handleCommand">
             <div class="user-box">
-              <el-avatar :size="34">{{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}</el-avatar>
+              <el-avatar :size="34" :src="headerAvatarSrc || undefined">
+                {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
+              </el-avatar>
               <div v-if="!isCollapsed" class="user-meta">
                 <strong>{{ userStore.userInfo?.real_name }}</strong>
                 <span>{{ roleText(userStore.userInfo?.role) }}</span>
@@ -110,7 +126,7 @@
             </div>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="change-password">修改密码</el-dropdown-item>
+                <el-dropdown-item command="personal-settings">个人设置</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -125,72 +141,13 @@
       <el-footer class="footer">
         {{ userStore.systemSettings?.copyright || '(c) 2026 BIMSA-CLASS' }}
       </el-footer>
-
-      <el-dialog
-        v-model="passwordDialogVisible"
-        title="修改密码"
-        width="420px"
-        destroy-on-close
-      >
-        <el-form label-position="top" @submit.prevent>
-          <input
-            :value="userStore.userInfo?.username || ''"
-            type="text"
-            name="username"
-            autocomplete="username"
-            readonly
-            tabindex="-1"
-            aria-hidden="true"
-            class="hidden-username"
-          />
-
-          <el-form-item label="当前密码">
-            <el-input
-              v-model="passwordForm.current_password"
-              type="password"
-              show-password
-              autocomplete="current-password"
-            />
-          </el-form-item>
-
-          <el-form-item label="新密码">
-            <el-input
-              v-model="passwordForm.new_password"
-              type="password"
-              show-password
-              autocomplete="new-password"
-            />
-          </el-form-item>
-
-          <el-form-item label="确认新密码">
-            <el-input
-              v-model="passwordForm.confirm_password"
-              type="password"
-              show-password
-              autocomplete="new-password"
-              @keyup.enter="submitChangePassword"
-            />
-          </el-form-item>
-
-          <el-text type="info">新密码需为 8 到 72 个字符，保存后立即生效。</el-text>
-        </el-form>
-        <template #footer>
-          <span>
-            <el-button @click="closeChangePasswordDialog">取消</el-button>
-            <el-button type="primary" :loading="passwordSubmitting" @click="submitChangePassword">
-              保存密码
-            </el-button>
-          </span>
-        </template>
-      </el-dialog>
     </el-container>
   </el-container>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import {
   ArrowDown,
   Bell,
@@ -207,6 +164,7 @@ import {
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { fetchAttachmentBlobUrl } from '@/utils/attachments'
 import { filterCoursesByClassId, resolveClassTeacherClassId, resolveClassTeacherClassName } from '@/utils/classTeacher'
 import {
   emitNotificationRefresh,
@@ -221,14 +179,31 @@ const userStore = useUserStore()
 const adminHomePath = '/students'
 const mobileBreakpoint = 768
 const isCollapsed = ref(false)
-const passwordDialogVisible = ref(false)
-const passwordSubmitting = ref(false)
 
-const passwordForm = reactive({
-  current_password: '',
-  new_password: '',
-  confirm_password: ''
-})
+const headerAvatarSrc = ref('')
+let headerAvatarBlobUrl = ''
+
+const revokeHeaderAvatarBlob = () => {
+  if (headerAvatarBlobUrl) {
+    URL.revokeObjectURL(headerAvatarBlobUrl)
+    headerAvatarBlobUrl = ''
+  }
+  headerAvatarSrc.value = ''
+}
+
+const loadHeaderAvatar = async () => {
+  revokeHeaderAvatarBlob()
+  const url = userStore.userInfo?.avatar_url
+  if (!url) {
+    return
+  }
+  try {
+    headerAvatarBlobUrl = await fetchAttachmentBlobUrl(url)
+    headerAvatarSrc.value = headerAvatarBlobUrl
+  } catch (error) {
+    console.error('加载头像失败', error)
+  }
+}
 
 const lastNotificationSyncSignature = ref(null)
 let stopNotificationPolling = () => {}
@@ -306,7 +281,8 @@ const routeNameMap = {
   '/homework': '作业管理',
   '/homework/students': '学生作业一览',
   '/homework/by-student': '学生作业一览',
-  '/notifications': '通知信息'
+  '/notifications': '通知信息',
+  '/personal-settings': '个人设置'
 }
 
 const currentRouteName = computed(() => route.meta?.title || routeNameMap[route.path] || '页面')
@@ -397,43 +373,6 @@ const roleText = role => ({
   student: '学生'
 }[role] || '未知角色')
 
-const resetPasswordForm = () => {
-  passwordForm.current_password = ''
-  passwordForm.new_password = ''
-  passwordForm.confirm_password = ''
-}
-
-const openChangePasswordDialog = () => {
-  resetPasswordForm()
-  passwordDialogVisible.value = true
-}
-
-const closeChangePasswordDialog = () => {
-  passwordDialogVisible.value = false
-  resetPasswordForm()
-}
-
-const submitChangePassword = async () => {
-  if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
-    ElMessage.warning('请完整填写密码信息')
-    return
-  }
-
-  if (passwordForm.new_password !== passwordForm.confirm_password) {
-    ElMessage.warning('两次输入的新密码不一致')
-    return
-  }
-
-  passwordSubmitting.value = true
-  try {
-    const result = await api.auth.changePassword({ ...passwordForm })
-    ElMessage.success(result?.message || '密码修改成功')
-    closeChangePasswordDialog()
-  } finally {
-    passwordSubmitting.value = false
-  }
-}
-
 const syncResponsiveSidebar = () => {
   if (typeof window !== 'undefined' && window.innerWidth <= mobileBreakpoint) {
     isCollapsed.value = true
@@ -485,8 +424,8 @@ const handleCourseSwitch = courseId => {
 }
 
 const handleCommand = command => {
-  if (command === 'change-password') {
-    openChangePasswordDialog()
+  if (command === 'personal-settings') {
+    router.push('/personal-settings')
     return
   }
 
@@ -501,6 +440,7 @@ onMounted(async () => {
   window.addEventListener('resize', syncResponsiveSidebar)
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  await loadHeaderAvatar()
   await syncTeacherCourses(true)
   await pollNotificationSync()
   stopNotificationPolling = startNotificationPolling(pollNotificationSync)
@@ -515,6 +455,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   stopNotificationPolling()
   unsubscribeNotificationBroadcast()
+  revokeHeaderAvatarBlob()
 })
 
 watch(
@@ -523,6 +464,14 @@ watch(
     lastNotificationSyncSignature.value = null
     await syncTeacherCourses(true)
     await pollNotificationSync()
+    await loadHeaderAvatar()
+  }
+)
+
+watch(
+  () => userStore.userInfo?.avatar_url,
+  () => {
+    loadHeaderAvatar()
   }
 )
 
@@ -547,8 +496,31 @@ watch(notificationSyncParams, () => {
 }
 
 .sidebar {
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(180deg, #0f172a 0%, #132238 100%);
   color: #fff;
+}
+
+.sidebar-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.sidebar-menu--scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-menu--footer {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logo {
@@ -731,15 +703,6 @@ watch(notificationSyncParams, () => {
   justify-content: center;
   font-size: 13px;
   color: #64748b;
-}
-
-.hidden-username {
-  position: absolute;
-  left: -9999px;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
 }
 
 @media (max-width: 768px) {

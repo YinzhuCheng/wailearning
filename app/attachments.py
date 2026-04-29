@@ -111,7 +111,10 @@ def attachment_is_referenced(db: Session, attachment_url: Optional[str]) -> bool
     if not attachment_url:
         return False
 
-    from app.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification
+    from app.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, User
+
+    if db.query(User).filter(User.avatar_url == attachment_url).first():
+        return True
 
     references = [
         db.query(Homework).filter(Homework.attachment_url == attachment_url).first(),

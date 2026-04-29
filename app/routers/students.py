@@ -50,7 +50,7 @@ CHINESE_DIGITS = {
 class BatchStudentItem(BaseModel):
     name: str
     student_no: str
-    gender: str
+    gender: Optional[str] = None
     class_id: Optional[int] = None
     class_name: Optional[str] = None
     phone: Optional[str] = None
@@ -388,7 +388,11 @@ def create_students_batch(
             continue
 
         try:
-            gender = normalize_gender(row.gender)
+            raw_gender = clean_text(row.gender)
+            if not raw_gender:
+                gender = Gender.MALE
+            else:
+                gender = normalize_gender(raw_gender)
         except ValueError as exc:
             message = f"第 {row_number} 行性别格式不正确"
             errors.append(message)

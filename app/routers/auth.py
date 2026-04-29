@@ -1,12 +1,14 @@
 from datetime import timedelta
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-from app.schemas import ChangePasswordRequest, MessageResponse, Token, UserCreate, UserResponse
+from app.attachments import delete_attachment_file_if_unreferenced, save_attachment
+from app.schemas import ChangePasswordRequest, MessageResponse, ProfileSelfUpdate, Token, UserCreate, UserResponse
 from app.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from app.config import settings
 from app.course_access import prepare_student_course_context
@@ -96,6 +98,74 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def get_me(current_user: User = Depends(get_current_active_user)):
     return current_user
 
+
+@router.patch("/me", response_model=UserResponse)
+def update_my_profile(
+    payload: ProfileSelfUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    current_user.real_name = payload.real_name
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+ALLOWED_AVATAR_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+MAX_AVATAR_BYTES = 2 * 1024 * 1024
+
+
+@router.post("/me/avatar", response_model=UserResponse)
+async def upload_my_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    filename = (file.filename or "").strip()
+    extension = Path(filename).suffix.lower()
+    if extension not in ALLOWED_AVATAR_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Avatar must be a JPEG, PNG, GIF, or WebP image.",
+        )
+
+    uploaded = await save_attachment(file, request)
+    size = int(uploaded.get("size") or 0)
+    if size > MAX_AVATAR_BYTES:
+        delete_attachment_file_if_unreferenced(db, str(uploaded.get("attachment_url")))
+        raise HTTPException(status_code=400, detail="Avatar image must be 2 MB or smaller.")
+
+    previous = current_user.avatar_url
+    current_user.avatar_url = str(uploaded["attachment_url"])
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    if previous and previous != current_user.avatar_url:
+        delete_attachment_file_if_unreferenced(db, previous)
+
+    return current_user
+
+
+@router.delete("/me/avatar", response_model=UserResponse)
+def remove_my_avatar(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    previous = current_user.avatar_url
+    if not previous:
+        return current_user
+
+    current_user.avatar_url = None
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    delete_attachment_file_if_unreferenced(db, previous)
+    return current_user
+
+
 @router.post("/change-password", response_model=MessageResponse)
 def change_password(
     payload: ChangePasswordRequest,
@@ -113,9 +183,9 @@ def change_password(
             target_id=current_user.id,
             target_name=current_user.username,
             details="Current password verification failed.",
-        ip_address=_client_ip(request),
-        user_agent=str(request.headers.get("user-agent")) if request else None,
-        result="failed"
+            ip_address=_client_ip(request),
+            user_agent=str(request.headers.get("user-agent")) if request else None,
+            result="failed",
         )
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
