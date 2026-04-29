@@ -8,7 +8,7 @@ from app.database import Base, SessionLocal, engine
 from app.demo_course_seed import seed_demo_course_bundle
 from app.auth import get_password_hash
 from app.main import app
-from app.models import Class, Homework, Student, Subject, User, UserRole
+from app.models import Class, CourseExamWeight, CourseGradeScheme, Homework, Student, Subject, User, UserRole
 from fastapi.testclient import TestClient
 
 
@@ -38,6 +38,8 @@ def test_demo_seed_creates_teacher_students_course_homework():
     db = SessionLocal()
     try:
         assert db.query(User).filter(User.username == "teacher").first()
+        t = db.query(User).filter(User.username == "teacher").first()
+        assert t and "演示" in (t.real_name or "")
         for uname in ("stu1", "stu2", "stu3", "stu4", "stu5"):
             assert db.query(User).filter(User.username == uname).first()
 
@@ -45,6 +47,17 @@ def test_demo_seed_creates_teacher_students_course_homework():
 
         course = db.query(Subject).filter(Subject.name == "数据挖掘").first()
         assert course is not None
+        assert course.weekly_schedule
+        assert course.description
+
+        assert db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == course.id).first() is not None
+        exam_w = db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == course.id).first()
+        assert exam_w is not None
+        assert exam_w.exam_type == "期末考试"
+
+        st1 = db.query(Student).filter(Student.student_no == "stu1").first()
+        assert st1 and st1.phone
+
         hw = (
             db.query(Homework)
             .filter(
@@ -58,6 +71,9 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert hw.grade_precision == "integer"
         assert hw.auto_grading_enabled is True
         assert hw.response_language == "zh-CN"
+        assert hw.reference_answer in (None, "")
+        assert hw.max_submissions == 3
+        assert hw.due_date is not None
         assert "Wine" in (hw.content or "")
         assert "宽松评分原则" in (hw.rubric_text or "")
     finally:

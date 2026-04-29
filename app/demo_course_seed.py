@@ -1,18 +1,31 @@
-"""Default demo course data: teacher `teacher`, students stu1–stu5, 数据挖掘 course + first homework."""
+"""Default demo course data: teacher `teacher`, students stu1–stu5, 数据挖掘 course + first homework.
+
+演示作业**不包含参考答案**（`reference_answer` 为空），便于教学上由学生独立作答；评分量表与作业说明照常提供。
+"""
 
 from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
 from app.auth import get_password_hash
 from app.course_access import sync_course_enrollments
-from app.models import Class, Homework, Semester, Student, Subject, User, UserRole
+from app.models import Class, CourseExamWeight, CourseGradeScheme, Homework, Semester, Student, Subject, User, UserRole
 from app.student_user_sync import reconcile_student_users_and_roster
 
 _DEMO_PASSWORD = "111111"
 
 _CLASS_NAME = "数据挖掘默认班"
 _COURSE_NAME = "数据挖掘"
+
+_TEACHER_DISPLAY_NAME = "李演示"
+_COURSE_WEEKLY_SCHEDULE = "每周二 14:00–16:00（教室以教务通知为准）"
+_COURSE_TIMES = "第1–16周；实验课与讨论课穿插安排，请关注课程群通知。"
+_COURSE_DESCRIPTION = (
+    "数据挖掘入门与实践（演示课程）。涵盖 Python 数据分析基础、特征与可视化、"
+    "简单预处理与经典数据集探索；平时作业与课堂表现结合考核。"
+)
 
 _HOMEWORK_TITLE = "数据挖掘第一次作业：Python 环境、NumPy/Pandas 基础与 Wine 数据探索"
 
@@ -302,192 +315,19 @@ _RUBRIC_TEXT = """请根据以下标准评分，总分 100 分。评分时应以
 9. 只有在几乎没有完成主要任务、内容明显与作业无关、完全无法判断完成情况，或存在明显大段抄袭时，才应给较低分。
 10. 对于认真完成主要任务的学生，建议分数集中在 85 分以上。"""
 
-_REFERENCE_ANSWER = """参考答案 / 自动评分参考
-本次作业没有唯一标准答案。评分时重点关注学生是否完成了 Python 数据分析的基本入门流程，而不是是否完全按照某一种固定格式提交，也不是是否与参考答案逐字一致。
 
-一份较好的答案通常应包括以下内容：
-
-1. 说明使用的 Python 环境
-
-学生可以使用 Anaconda、Jupyter Notebook、VS Code、Google Colab、课程服务器或其他 Python 环境。只要能够运行 Python 代码即可。
-
-示例说明：
-
-我使用 Anaconda 创建 Python 环境，并在 Jupyter Notebook 中完成本次作业。使用的主要库包括 numpy、pandas、matplotlib、seaborn 和 sklearn。
-
-或者：
-
-我使用 Google Colab 完成本次作业，因为它不需要在本地安装环境，可以直接运行 Python 代码。
-
-2. 成功运行基础代码
-
-示例：
-
-print("Hello Python")
-
-3. 成功导入常用库
-
-示例：
-
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.datasets import load_wine
-
-4. NumPy 和 Pandas 的概念理解
-
-NumPy 主要用于高效的数值计算，特别适合处理数组、矩阵和向量化计算。它是很多科学计算和机器学习库的基础。
-
-Pandas 主要用于表格数据处理，适合进行数据读取、数据清洗、缺失值处理、字段选择、条件筛选、分组统计和简单数据分析。
-
-NumPy 数组更适合处理纯数值型、结构较规则的数据；Pandas DataFrame 更适合处理带有行列标签、字段名称和混合数据类型的表格数据。
-
-5. Pandas 操作解释
-
-df.loc[0:10, ['age', 'score']] 表示选择标签为 0 到 10 的行，以及 age 和 score 两列。
-
-df[df['age'] > 20] 表示筛选出 age 大于 20 的所有行。
-
-df.groupby('gender')['score'].mean() 表示按照 gender 分组，并计算每组 score 的平均值。
-
-6. Wine 数据集加载与 DataFrame 构建
-
-参考代码：
-
-from sklearn.datasets import load_wine
-import pandas as pd
-
-wine = load_wine()
-df_wine = pd.DataFrame(wine.data, columns=wine.feature_names)
-df_wine['target'] = wine.target
-df_wine['target_name'] = df_wine['target'].map(lambda i: wine.target_names[i])
-
-df_wine.head()
-
-7. 基础统计分析
-
-示例代码：
-
-features = ['alcohol', 'malic_acid', 'color_intensity', 'hue', 'proline']
-df_wine[features].describe()
-
-也可以使用：
-
-df_wine.info()
-df_wine['target_name'].value_counts()
-df_wine.groupby('target_name')[features].mean()
-
-8. 简单可视化
-
-示例代码一：类别分布图
-
-sns.countplot(data=df_wine, x='target_name')
-plt.title('Wine Class Distribution')
-plt.show()
-
-示例代码二：散点图
-
-sns.scatterplot(
-    data=df_wine,
-    x='alcohol',
-    y='color_intensity',
-    hue='target_name'
-)
-plt.title('Alcohol vs Color Intensity')
-plt.show()
-
-示例代码三：箱线图
-
-sns.boxplot(
-    data=df_wine,
-    x='target_name',
-    y='proline'
-)
-plt.title('Proline by Wine Class')
-plt.show()
-
-学生不必使用完全相同的图表，只要图表与数据分析相关即可。
-
-9. 观察结论示例
-
-学生可以写出类似结论：
-
-第一，不同类别葡萄酒在 alcohol、color_intensity、proline 等特征上存在一定差异，这说明这些特征可能有助于分类。
-
-第二，proline 的数值范围明显大于 alcohol、hue 等特征，因此不同特征之间存在较明显的尺度差异。
-
-第三，从散点图可以看出，部分葡萄酒类别在 alcohol 和 color_intensity 组成的二维空间中有一定区分度，但也可能存在重叠。
-
-第四，不同类别样本数量大致接近，因此本数据集的类别分布相对均衡。
-
-这些结论不要求完全一致，只要能够结合统计结果或图表进行合理解释即可。
-
-10. 标准化函数
-
-参考代码：
-
-import numpy as np
-
-def standardize(x):
-    return (x - x.mean()) / x.std()
-
-x = df_wine['alcohol'].to_numpy()
-x_std = standardize(x)
-
-print(x_std.mean())
-print(x_std.std())
-
-输出结果中，标准化后的均值应接近 0，标准差应接近 1。由于浮点数计算误差，均值可能不是严格等于 0，但应该非常接近 0。
-
-如果学生使用以下方式，也可以接受：
-
-from sklearn.preprocessing import StandardScaler
-
-scaler = StandardScaler()
-x_std = scaler.fit_transform(df_wine[['alcohol']])
-
-11. 标准化作用解释
-
-标准化可以把不同量纲或不同数值范围的特征调整到相近尺度，减少某些数值范围特别大的特征对模型的过度影响。对于依赖距离计算或梯度优化的模型，标准化通常比较重要。
-
-12. 特征尺度与建模思考题
-
-可接受回答示例：
-
-如果不同特征的数值范围差异很大，模型可能会更重视数值范围大的特征。例如在 KNN 或 K-Means 中，模型需要计算样本之间的距离。如果 proline 的数值远大于 alcohol，那么距离可能主要由 proline 决定，从而削弱其他特征的作用。
-
-很多模型需要标准化或归一化，是因为它可以让不同特征处于相近尺度，使模型训练更稳定，也让距离计算或参数优化更加合理。
-
-对特征尺度敏感的模型包括 KNN、K-Means、SVM、逻辑回归和神经网络等。例如 KNN 根据样本之间的距离进行分类，如果特征尺度差异很大，距离会被大尺度特征主导。
-
-13. 拓展练习参考
-
-拓展练习为选做内容，不做不扣分。
-
-如果学生完成 Iris 数据集分析，可以参考以下代码：
-
-from sklearn.datasets import load_iris
-
-iris = load_iris()
-df_iris = pd.DataFrame(iris.data, columns=iris.feature_names)
-df_iris['target'] = iris.target
-df_iris['target_name'] = df_iris['target'].map(lambda i: iris.target_names[i])
-
-df_iris.groupby('target_name').mean()
-
-sns.boxplot(data=df_iris, x='target_name', y='petal length (cm)')
-plt.show()
-
-合理结论示例：
-
-Iris 数据集中，petal length 和 petal width 对不同类别的区分比较明显，尤其 setosa 与其他类别差异较大。
-
-如果学生选择自选 CSV 数据集，只要能够完成读取、基本查看、简单图表和简短分析，也可以给予加分。
-
-总体评分说明：
-
-本次作业是入门作业，不要求学生完成复杂建模，也不要求图表非常美观。只要学生能够完成基本环境运行、数据读取、统计分析、简单可视化、标准化理解和基本思考题，就应给予较高分数。对于认真完成主要任务的学生，建议分数集中在 85 分以上。拓展练习只作为加分项，不做不扣分。"""
+def _seed_demo_grade_weights(db: Session, *, course: Subject) -> None:
+    """Align demo course with default grade composition (30/20/50) when rows are missing."""
+    if not db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == course.id).first():
+        db.add(
+            CourseGradeScheme(
+                subject_id=course.id,
+                homework_weight=30.0,
+                extra_daily_weight=20.0,
+            )
+        )
+    if not db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == course.id).first():
+        db.add(CourseExamWeight(subject_id=course.id, exam_type="期末考试", weight=50.0))
 
 
 def seed_demo_course_bundle(db: Session) -> None:
@@ -502,7 +342,7 @@ def seed_demo_course_bundle(db: Session) -> None:
         teacher = User(
             username="teacher",
             hashed_password=pwd_hash,
-            real_name="演示教师",
+            real_name=_TEACHER_DISPLAY_NAME,
             role=UserRole.TEACHER.value,
             class_id=None,
             is_active=True,
@@ -512,6 +352,7 @@ def seed_demo_course_bundle(db: Session) -> None:
         print("Created demo teacher 'teacher'.")
     else:
         print("Demo teacher 'teacher' already exists.")
+    teacher.real_name = _TEACHER_DISPLAY_NAME
 
     klass = db.query(Class).filter(Class.name == _CLASS_NAME).first()
     if not klass:
@@ -523,13 +364,13 @@ def seed_demo_course_bundle(db: Session) -> None:
         print(f"Demo class '{_CLASS_NAME}' already exists.")
 
     student_specs = [
-        ("stu1", "学生一"),
-        ("stu2", "学生二"),
-        ("stu3", "学生三"),
-        ("stu4", "学生四"),
-        ("stu5", "学生五"),
+        ("stu1", "学生一", "13800001001"),
+        ("stu2", "学生二", "13800001002"),
+        ("stu3", "学生三", "13800001003"),
+        ("stu4", "学生四", "13800001004"),
+        ("stu5", "学生五", "13800001005"),
     ]
-    for uname, display in student_specs:
+    for uname, display, phone in student_specs:
         u = db.query(User).filter(User.username == uname).first()
         if not u:
             u = User(
@@ -553,10 +394,19 @@ def seed_demo_course_bundle(db: Session) -> None:
 
         st = db.query(Student).filter(Student.student_no == uname, Student.class_id == klass.id).first()
         if not st:
-            db.add(Student(name=display, student_no=uname, class_id=klass.id, teacher_id=teacher.id))
+            db.add(
+                Student(
+                    name=display,
+                    student_no=uname,
+                    class_id=klass.id,
+                    teacher_id=teacher.id,
+                    phone=phone,
+                )
+            )
             print(f"Created roster row for '{uname}'.")
         else:
             st.teacher_id = teacher.id
+            st.phone = phone
             if (st.name or "") != display:
                 st.name = display
 
@@ -585,7 +435,9 @@ def seed_demo_course_bundle(db: Session) -> None:
             semester=semester.name if semester else None,
             course_type="required",
             status="active",
-            description="数据挖掘课程（演示种子数据）。",
+            weekly_schedule=_COURSE_WEEKLY_SCHEDULE,
+            course_times=_COURSE_TIMES,
+            description=_COURSE_DESCRIPTION,
         )
         db.add(course)
         db.flush()
@@ -594,7 +446,12 @@ def seed_demo_course_bundle(db: Session) -> None:
         if semester and course.semester_id != semester.id:
             course.semester_id = semester.id
             course.semester = semester.name
+        course.weekly_schedule = _COURSE_WEEKLY_SCHEDULE
+        course.course_times = _COURSE_TIMES
+        course.description = _COURSE_DESCRIPTION
         print(f"Demo course '{_COURSE_NAME}' already exists.")
+
+    _seed_demo_grade_weights(db, course=course)
 
     enrolled = sync_course_enrollments(course, db)
     if enrolled:
@@ -605,6 +462,7 @@ def seed_demo_course_bundle(db: Session) -> None:
         .filter(Homework.subject_id == course.id, Homework.title == _HOMEWORK_TITLE)
         .first()
     )
+    due = datetime.now(timezone.utc) + timedelta(days=14)
     if not hw:
         db.add(
             Homework(
@@ -612,15 +470,16 @@ def seed_demo_course_bundle(db: Session) -> None:
                 content=_HOMEWORK_CONTENT,
                 class_id=klass.id,
                 subject_id=course.id,
-                due_date=None,
+                due_date=due,
                 max_score=100,
                 grade_precision="integer",
                 auto_grading_enabled=True,
                 rubric_text=_RUBRIC_TEXT,
-                reference_answer=_REFERENCE_ANSWER,
+                reference_answer=None,
                 response_language="zh-CN",
                 allow_late_submission=True,
                 late_submission_affects_score=False,
+                max_submissions=3,
                 created_by=teacher.id,
             )
         )
@@ -631,8 +490,10 @@ def seed_demo_course_bundle(db: Session) -> None:
         hw.grade_precision = "integer"
         hw.auto_grading_enabled = True
         hw.rubric_text = _RUBRIC_TEXT
-        hw.reference_answer = _REFERENCE_ANSWER
+        hw.reference_answer = None
         hw.response_language = "zh-CN"
+        hw.due_date = hw.due_date or due
+        hw.max_submissions = hw.max_submissions if hw.max_submissions is not None else 3
         print("Demo homework already exists; refreshed text fields.")
 
     reconcile_student_users_and_roster(db)
