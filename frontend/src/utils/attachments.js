@@ -65,3 +65,16 @@ export const downloadAttachment = async (attachmentUrl, attachmentName) => {
   document.body.removeChild(link)
   window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000)
 }
+
+/** Authorization header applied via http interceptor; returns a blob: URL to revoke when done. */
+export const fetchAttachmentBlobUrl = async attachmentUrl => {
+  if (!attachmentUrl) {
+    return ''
+  }
+  const blob = await http.get('/files/download', {
+    params: { attachment_url: attachmentUrl },
+    responseType: 'blob',
+    timeout: 0
+  })
+  return URL.createObjectURL(blob)
+}

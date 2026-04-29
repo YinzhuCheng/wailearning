@@ -174,6 +174,12 @@ const routes = [
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/Notifications.vue')
+      },
+      {
+        path: 'personal-settings',
+        name: 'PersonalSettings',
+        component: () => import('@/views/PersonalSettings.vue'),
+        meta: { title: '个人设置' }
       }
     ]
   }
@@ -245,6 +251,11 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
+  if (userStore.isStudent && to.path !== '/courses' && !userStore.selectedCourse && to.path !== '/personal-settings') {
+    next('/courses')
+    return
+  }
+
   if (!userStore.isAdmin && to.path !== '/login') {
     try {
       await userStore.ensureSelectedCourse(false, {
@@ -253,11 +264,6 @@ router.beforeEach(async (to, from, next) => {
     } catch (error) {
       console.error('Failed to preload teaching courses', error)
     }
-  }
-
-  if (userStore.isStudent && to.path !== '/courses' && !userStore.selectedCourse) {
-    next('/courses')
-    return
   }
 
   next()

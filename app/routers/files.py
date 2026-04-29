@@ -35,6 +35,9 @@ async def upload_attachment(
 
 
 def _has_attachment_access(current_user: User, attachment_url: str, db: Session) -> bool:
+    if current_user.avatar_url and attachment_url == current_user.avatar_url:
+        return True
+
     allowed_class_ids = set(get_accessible_class_ids(current_user, db))
 
     homework = db.query(Homework).filter(Homework.attachment_url == attachment_url).first()

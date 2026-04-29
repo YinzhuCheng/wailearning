@@ -63,9 +63,22 @@ class UserResponse(UserBase):
     is_active: bool
     created_at: datetime
     class_id: Optional[int] = None
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class ProfileSelfUpdate(BaseModel):
+    real_name: str = Field(..., min_length=1, max_length=120)
+
+    @field_validator("real_name")
+    @classmethod
+    def strip_real_name(cls, value: str) -> str:
+        stripped = (value or "").strip()
+        if not stripped:
+            raise ValueError("real_name cannot be empty.")
+        return stripped
 
 
 class StudentUserBatchCreateRequest(BaseModel):

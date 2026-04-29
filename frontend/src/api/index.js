@@ -168,6 +168,16 @@ const api = {
     login: data => http.post('/auth/login', data),
     register: data => http.post('/auth/register', data),
     getCurrentUser: () => http.get('/auth/me'),
+    updateProfile: data => http.patch('/auth/me', data),
+    uploadAvatar: file => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return http.post('/auth/me/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        ...fileTransferRequestConfig
+      })
+    },
+    deleteAvatar: () => http.delete('/auth/me/avatar'),
     changePassword: data => http.post('/auth/change-password', data)
   },
   users: {
