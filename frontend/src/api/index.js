@@ -296,6 +296,7 @@ const api = {
     setStudentQuotaOverride: (studentId, data) => http.put(`/llm-settings/admin/students/${studentId}/quota-override`, data)
   },
   notifications: {
+    syncStatus: params => http.get('/notifications/sync-status', { params }),
     list: params => http.get('/notifications', { params }),
     get: id => http.get(`/notifications/${id}`),
     create: data => http.post('/notifications', data),

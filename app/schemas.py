@@ -1288,6 +1288,14 @@ class NotificationListResponse(BaseModel):
     data: List[NotificationResponse]
 
 
+class NotificationSyncStatus(BaseModel):
+    """Lightweight snapshot for polling: size of visible inbox and change watermark."""
+
+    total: int
+    unread_count: int
+    latest_updated_at: Optional[datetime] = None
+
+
 class CourseMaterialBase(BaseModel):
     title: str
     content: Optional[str] = None
