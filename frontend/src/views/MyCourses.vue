@@ -7,14 +7,6 @@
           {{ userStore.isStudent ? '选择一门课程查看作业与通知。' : '选择一门课程进入教学工作台。' }}
         </p>
       </div>
-      <el-alert
-        v-if="userStore.selectedCourse"
-        type="success"
-        :closable="false"
-        class="current-course-alert"
-      >
-        当前课程：{{ userStore.selectedCourse.name }}
-      </el-alert>
       <el-card
         v-if="userStore.isStudent && userStore.selectedCourse?.id"
         shadow="never"
@@ -781,10 +773,6 @@ watch(
   color: #64748b;
 }
 
-.current-course-alert {
-  width: 320px;
-}
-
 .quota-card {
   width: 100%;
   max-width: 560px;
@@ -939,10 +927,6 @@ watch(
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
-  }
-
-  .current-course-alert {
-    width: 100%;
   }
 }
 </style>

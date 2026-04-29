@@ -83,18 +83,21 @@
               <span v-else class="muted-text">{{ row.attempt_count ? '待教师评分' : '未提交' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="220">
+          <el-table-column label="操作" :width="userStore.isStudent ? 200 : 220">
             <template #default="{ row }">
-              <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
+              <template v-if="userStore.isStudent">
+                <el-dropdown split-button type="primary" size="small" @click="goToSubmitPage(row)">
+                  作业与提交
+                  <template #dropdown>
+                    <el-dropdown-item @click="viewHomework(row)">仅查看说明</el-dropdown-item>
+                  </template>
+                </el-dropdown>
+              </template>
+              <template v-else>
+                <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
+              </template>
               <el-button
-                v-if="userStore.isStudent"
-                size="small"
-                @click="goToSubmitPage(row)"
-              >
-                提交
-              </el-button>
-              <el-button
-                v-else
+                v-if="!userStore.isStudent"
                 size="small"
                 @click="goToSubmissionStatus(row)"
               >
@@ -129,7 +132,10 @@
                 >
                   {{ formatScore(row.review_score) }}
                 </el-tag>
-                <div v-if="row.review_comment" class="review-comment">{{ row.review_comment }}</div>
+                <el-tag v-if="row.used_llm_assist" size="small" type="warning" effect="plain">大模型辅助</el-tag>
+                <div v-if="row.review_comment" class="review-comment-wrap">
+                  <FeedbackRichText :text="row.review_comment" variant="student" />
+                </div>
                 <div class="review-meta">共 {{ row.attempt_count || 0 }} 次提交，展示最高分对应评语</div>
               </div>
               <span v-else class="muted-text">未评分</span>
@@ -315,6 +321,9 @@
           <span v-else class="muted-text">无附件</span>
         </el-descriptions-item>
       </el-descriptions>
+      <template #footer>
+        <el-button type="primary" @click="detailVisible = false">关闭</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -325,6 +334,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
@@ -785,11 +795,12 @@ watch(selectedCourse, () => {
   gap: 6px;
 }
 
-.review-comment {
-  color: #475569;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
+.review-comment-wrap {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .review-meta,

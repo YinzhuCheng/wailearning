@@ -80,10 +80,7 @@
         </header>
         <el-skeleton :loading="loading" animated :rows="3">
           <template v-if="!homeworks.length">
-            <p class="empty-inline">暂无作业。有新作业时会显示在这里。</p>
-            <el-button type="primary" size="small" plain class="empty-cta" @click="router.push('/homework')">
-              去作业列表
-            </el-button>
+            <p class="empty-inline">暂无作业。有新作业时会显示在这里；也可点击上方「查看全部」进入作业列表。</p>
           </template>
           <ul v-else class="item-list item-list--homework">
             <li v-for="item in homeworksPreview" :key="item.id">

@@ -358,23 +358,21 @@ def test_estimate_request_tokens_grows_with_large_data_url_payload():
         )
         small_url = "data:image/png;base64," + "a" * 40
         large_url = "data:image/png;base64," + "b" * 4000
-        m_small = {"student_blocks": [MaterialBlock(1, "i", "image", image_data_url=small_url)], "notes_text": ""}
-        m_large = {"student_blocks": [MaterialBlock(1, "i", "image", image_data_url=large_url)], "notes_text": ""}
-        a = estimate_request_tokens_from_material(
-            cfg,
-            m_small,
-            assignment_text="A",
-            teacher_prompt="",
-            student_intro="",
-        )
-        b = estimate_request_tokens_from_material(
-            cfg,
-            m_large,
-            assignment_text="A",
-            teacher_prompt="",
-            student_intro="",
-        )
-        assert b >= a
+        m_small = {
+            "assignment_texts": ["作业标题：x", "作业要求：\n无"],
+            "student_blocks": [MaterialBlock(1, "i", "image", image_data_url=small_url)],
+            "notes_text": "",
+        }
+        m_large = {
+            "assignment_texts": ["作业标题：x", "作业要求：\n无"],
+            "student_blocks": [MaterialBlock(1, "i", "image", image_data_url=large_url)],
+            "notes_text": "",
+        }
+        hw = Homework(title="x", content="", class_id=1, max_score=100, grade_precision="integer", created_by=1)
+        att = HomeworkAttempt(homework_id=1, student_id=1, subject_id=1, class_id=1, content="")
+        a = estimate_request_tokens_from_material(cfg, m_small, homework=hw, attempt=att)
+        b = estimate_request_tokens_from_material(cfg, m_large, homework=hw, attempt=att)
+        assert abs(b - a) <= 4
     finally:
         db.close()
 
