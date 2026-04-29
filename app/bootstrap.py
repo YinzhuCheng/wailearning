@@ -10,6 +10,7 @@ from app.config import settings
 from app.course_access import sync_course_enrollments
 from app.demo_course_seed import seed_demo_course_bundle
 from app.database import Base, SessionLocal, engine
+from app.student_user_sync import reconcile_student_users_and_roster
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
@@ -743,7 +744,11 @@ def bootstrap() -> None:
             seed_demo_course_bundle(db)
             sync_existing_courses(db)
             backfill_homework_grading_data(db)
+            reconcile_student_users_and_roster(db)
+            db.commit()
         else:
+            reconcile_student_users_and_roster(db)
+            db.commit()
             print("INIT_DEFAULT_DATA is false. Table creation completed without seed data.")
     finally:
         db.close()

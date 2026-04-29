@@ -8,7 +8,7 @@ from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
 from app.models import Attendance, Student, Subject, User, UserRole
-from app.routers.classes import get_accessible_class_ids
+from app.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from app.schemas import AttendanceCreate, AttendanceListResponse, AttendanceResponse, AttendanceUpdate
 
 
@@ -51,7 +51,7 @@ def get_attendances(
     current_user: User = Depends(get_current_active_user),
 ):
     class_ids = get_accessible_class_ids(current_user, db)
-    query = db.query(Attendance).filter(Attendance.class_id.in_(class_ids))
+    query = apply_class_id_filter(db.query(Attendance), Attendance.class_id, class_ids)
 
     if class_id:
         if class_id not in class_ids:

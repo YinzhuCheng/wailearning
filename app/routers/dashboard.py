@@ -9,7 +9,7 @@ from app.course_access import ensure_course_access
 from app.database import get_db
 from app.models import Attendance, Class, Score, Student, Subject, User
 from app.schemas import ClassRanking, DashboardStats, ScoreResponse, StudentRanking
-from app.routers.classes import get_accessible_class_ids
+from app.routers.classes import apply_class_id_filter, get_accessible_class_ids
 
 
 router = APIRouter(prefix="/api/dashboard", tags=["仪表盘"])
@@ -39,11 +39,11 @@ def get_dashboard_stats(
     if selected_course and selected_course.class_id:
         class_ids = [selected_course.class_id]
 
-    total_students_query = db.query(Student).filter(Student.class_id.in_(class_ids))
+    total_students_query = apply_class_id_filter(db.query(Student), Student.class_id, class_ids)
     total_students = total_students_query.count()
     total_classes = len(class_ids)
 
-    score_query = db.query(Score).filter(Score.class_id.in_(class_ids))
+    score_query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
     if semester:
         score_query = score_query.filter(Score.semester == semester)
     if selected_course:
@@ -52,7 +52,7 @@ def get_dashboard_stats(
     total_scores = score_query.count()
     avg_score = round(score_query.with_entities(func.avg(Score.score)).scalar() or 0, 2)
 
-    attendance_query = db.query(Attendance).filter(Attendance.class_id.in_(class_ids))
+    attendance_query = apply_class_id_filter(db.query(Attendance), Attendance.class_id, class_ids)
     if selected_course:
         attendance_query = attendance_query.filter(Attendance.subject_id == selected_course.id)
 
@@ -112,7 +112,8 @@ def get_class_rankings(
     query = db.query(
         Score.class_id,
         func.avg(Score.score).label("avg_score"),
-    ).filter(Score.class_id.in_(class_ids))
+    )
+    query = apply_class_id_filter(query, Score.class_id, class_ids)
 
     if semester:
         query = query.filter(Score.semester == semester)
@@ -156,7 +157,8 @@ def get_student_rankings(
     query = db.query(
         Score.student_id,
         func.avg(Score.score).label("avg_score"),
-    ).filter(Score.class_id.in_(class_ids))
+    )
+    query = apply_class_id_filter(query, Score.class_id, class_ids)
 
     if class_id:
         if class_id not in class_ids:
@@ -204,7 +206,7 @@ def get_subject_rankings(
             raise HTTPException(status_code=403, detail="You do not have access to this class.")
         class_ids = [class_id]
 
-    query = db.query(Score).filter(Score.subject_id == selected_course.id, Score.class_id.in_(class_ids))
+    query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
     if semester:
         query = query.filter(Score.semester == semester)
     if exam_type:
@@ -236,7 +238,7 @@ def get_score_trends(
 ):
     selected_course = _apply_course_scope(subject_id, current_user, db)
     class_ids = get_accessible_class_ids(current_user, db)
-    query = db.query(Score).filter(Score.class_id.in_(class_ids))
+    query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
     if semester:
         query = query.filter(Score.semester == semester)
     if selected_course:
@@ -273,7 +275,8 @@ def get_subject_analysis(
         func.max(Score.score).label("max_score"),
         func.min(Score.score).label("min_score"),
         func.count(Score.id).label("count"),
-    ).filter(Score.class_id.in_(class_ids))
+    )
+    query = apply_class_id_filter(query, Score.class_id, class_ids)
 
     if semester:
         query = query.filter(Score.semester == semester)

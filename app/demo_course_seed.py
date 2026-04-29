@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_password_hash
 from app.course_access import sync_course_enrollments
 from app.models import Class, Homework, Semester, Student, Subject, User, UserRole
+from app.student_user_sync import reconcile_student_users_and_roster
 
 _DEMO_PASSWORD = "111111"
 
@@ -634,5 +635,6 @@ def seed_demo_course_bundle(db: Session) -> None:
         hw.response_language = "zh-CN"
         print("Demo homework already exists; refreshed text fields.")
 
+    reconcile_student_users_and_roster(db)
     db.commit()
     print("Demo course bundle seed completed.")

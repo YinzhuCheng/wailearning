@@ -24,8 +24,9 @@ from app.models import (
     User,
     UserRole,
 )
-from app.routers.classes import get_accessible_class_ids
+from app.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from app.schemas import StudentCreate, StudentListResponse, StudentResponse, StudentUpdate
+from app.student_user_sync import sync_student_user_from_roster_row
 
 
 router = APIRouter(prefix="/api/students", tags=["学生管理"])
@@ -267,7 +268,7 @@ def get_students(
     current_user: User = Depends(get_current_active_user),
 ):
     class_ids = get_accessible_class_ids(current_user, db)
-    query = db.query(Student).filter(Student.class_id.in_(class_ids))
+    query = apply_class_id_filter(db.query(Student), Student.class_id, class_ids)
 
     if class_id:
         if class_id not in class_ids:
@@ -313,6 +314,7 @@ def create_student(
             existing.teacher_id = current_user.id
         db.flush()
         sync_student_course_enrollments(existing, db)
+        sync_student_user_from_roster_row(db, existing)
         linked = db.query(User).filter(User.username == existing.student_no).first()
         if linked and linked.role == UserRole.STUDENT.value:
             prepare_student_course_context(linked, db)
@@ -333,6 +335,7 @@ def create_student(
     db.add(student)
     db.flush()
     sync_student_course_enrollments(student, db)
+    sync_student_user_from_roster_row(db, student)
     db.commit()
     db.refresh(student)
 
@@ -448,6 +451,7 @@ def create_students_batch(
         db.flush()
         for student in new_students:
             sync_student_course_enrollments(student, db)
+            sync_student_user_from_roster_row(db, student)
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -531,6 +535,8 @@ def update_student(
         db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student.id).delete()
         db.flush()
         sync_student_course_enrollments(student, db)
+
+    sync_student_user_from_roster_row(db, student)
 
     db.commit()
     db.refresh(student)

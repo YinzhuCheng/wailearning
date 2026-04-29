@@ -52,6 +52,8 @@ INIT_ADMIN_REAL_NAME=System Administrator
 
 生产环境若不需要这组账号，请将 **`INIT_DEFAULT_DATA=false`**，或部署后立即修改/停用这些用户。
 
+每次 bootstrap / 应用启动 / 演示种子结束时，会运行 **`reconcile_student_users_and_roster`**（见 `app/student_user_sync.py`）：学生账号与花名册按「用户名 = 学号、同班」互相同步，无需在界面手动「从用户生成花名册」或「从花名册载入用户」（管理员仍可用手动批量接口覆盖特殊情况）。
+
 ---
 
 *本文档仅汇总本仓库中管理员相关的设置方式，不修改其他代码或说明文件。*

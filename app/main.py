@@ -15,6 +15,7 @@ from app.bootstrap import (
 )
 from app.demo_course_seed import seed_demo_course_bundle
 from app.config import settings
+from app.student_user_sync import reconcile_student_users_and_roster
 from app.database import Base, SessionLocal, engine
 from app.llm_grading import start_grading_worker, worker_manager
 from app.routers import (
@@ -50,8 +51,12 @@ async def lifespan(app: FastAPI):
         normalize_semester_catalog(db)
         sync_subject_semester_links(db)
         backfill_homework_grading_data(db)
+        reconcile_student_users_and_roster(db)
+        db.commit()
         if settings.INIT_DEFAULT_DATA:
             seed_demo_course_bundle(db)
+            reconcile_student_users_and_roster(db)
+            db.commit()
     finally:
         db.close()
     if settings.ENABLE_LLM_GRADING_WORKER and settings.LLM_GRADING_WORKER_LEADER:
