@@ -12,6 +12,7 @@ from app.models import (
     Class,
     CourseExamWeight,
     CourseGradeScheme,
+    CourseMaterial,
     CourseMaterialChapter,
     Homework,
     Student,
@@ -114,8 +115,15 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert hw.reference_answer in (None, "")
         assert hw.max_submissions == 3
         assert hw.due_date is not None
-        assert "Wine" in (hw.content or "")
-        assert "宽松评分原则" in (hw.rubric_text or "")
+        llm = db.query(Subject).filter(Subject.name == "大语言模型").first()
+        assert llm is not None
+        assert llm.course_type == "elective"
+        assert db.query(CourseMaterial).filter(CourseMaterial.subject_id == llm.id).count() >= 1
+        assert (
+            db.query(Homework)
+            .filter(Homework.subject_id == llm.id, Homework.title.contains("大语言模型"))
+            .first()
+        )
     finally:
         db.close()
 
@@ -125,7 +133,7 @@ def test_demo_seed_repairs_conflicting_stu1_username():
     _reset_db()
     db = SessionLocal()
     try:
-        klass = Class(name="数据挖掘默认班", grade=2026)
+        klass = Class(name="人工智能1班", grade=2026)
         db.add(klass)
         db.flush()
         db.add(

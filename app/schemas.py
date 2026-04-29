@@ -283,6 +283,14 @@ class SubjectResponse(BaseModel):
         from_attributes = True
 
 
+class StudentCourseCatalogItem(SubjectResponse):
+    """Student-facing schoolwide course list with enrollment hints (read-only browse + elective self-enroll)."""
+
+    is_enrolled: bool = False
+    enrollment_hint: str = ""
+    can_self_enroll_elective: bool = False
+
+
 class CourseEnrollmentResponse(BaseModel):
     id: int
     subject_id: int

@@ -48,7 +48,7 @@ INIT_ADMIN_REAL_NAME=System Administrator
 
 ## 5. 演示课程种子（`teacher` / `stu1`–`stu5`）
 
-当 **`INIT_DEFAULT_DATA=true`** 时，`app/demo_course_seed.py` 中的 **`seed_demo_course_bundle`** 会在 bootstrap 与 **FastAPI 应用 lifespan** 中各执行一次（幂等）：创建演示任课教师、同一班级的五名学生用户与花名册、**「数据挖掘」** 课程及第一次作业（含评分要点；**不含参考答案**）、以及**三层资料章节**示例。账号 **`teacher`**、**`stu1`** … **`stu5`** 的初始密码均为 **`111111`**。
+当 **`INIT_DEFAULT_DATA=true`** 时，`app/demo_course_seed.py` 中的 **`seed_demo_course_bundle`** 会在 bootstrap 与 **FastAPI 应用 lifespan** 中各执行一次（幂等）：创建演示任课教师、**「人工智能1班」** 下五名学生用户与花名册、**必修课「数据挖掘」**（全班自动入课）及第一次作业（含评分要点；**不含参考答案**）、**三层资料章节**示例，以及同班**选修课「大语言模型」**（简要资料与入门作业，需学生自主选课）。账号 **`teacher`**、**`stu1`** … **`stu5`** 的初始密码均为 **`111111`**。
 
 生产环境若不需要这组账号，请将 **`INIT_DEFAULT_DATA=false`**，或部署后立即修改/停用这些用户。
 

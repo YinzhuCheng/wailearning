@@ -51,6 +51,21 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await expect(page.getByTestId('paste-import-submit')).toBeEnabled()
   })
 
+  test('teacher: file import dialog has templates and upload trigger', async ({ page }) => {
+    const s = scenario()
+    await login(page, s.teacher_own.username, s.teacher_own.password)
+
+    await page.goto('/courses')
+    await page.getByRole('button', { name: '进入课程' }).first().click()
+    await page.goto('/students')
+
+    await page.getByRole('button', { name: '文件导入花名册' }).click()
+    await expect(page.getByTestId('dialog-file-import-students')).toBeVisible()
+    await expect(page.getByTestId('students-download-template-xlsx')).toBeVisible()
+    await expect(page.getByTestId('students-download-template-csv')).toBeVisible()
+    await expect(page.getByTestId('students-trigger-file-import')).toBeVisible()
+  })
+
   test('admin: batch class dialog opens', async ({ page }) => {
     const s = scenario()
     await login(page, s.admin.username, s.admin.password)
@@ -63,6 +78,27 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await page.getByTestId('batch-class-target-select').click()
     await page.getByRole('option', { name: s.class_name_1 }).click()
     await expect(page.getByTestId('batch-class-confirm')).toBeEnabled()
+  })
+
+  test('admin: student file import dialog opens with template buttons', async ({ page }) => {
+    const s = scenario()
+    await login(page, s.admin.username, s.admin.password)
+    await page.goto('/students')
+
+    await page.getByRole('button', { name: '文件导入名单' }).click()
+    await expect(page.getByTestId('dialog-file-import-students')).toBeVisible()
+    await expect(page.getByTestId('students-download-template-xlsx')).toBeVisible()
+    await expect(page.getByTestId('students-download-template-csv')).toBeVisible()
+    await expect(page.getByTestId('students-trigger-file-import')).toBeVisible()
+  })
+
+  test('admin: users file-import-students dialog opens', async ({ page }) => {
+    const s = scenario()
+    await login(page, s.admin.username, s.admin.password)
+    await page.goto('/users')
+
+    await page.getByTestId('users-open-student-import').click()
+    await expect(page.getByTestId('dialog-users-import-students')).toBeVisible()
   })
 
   test('orphan course: roster dialog shows empty state', async ({ page }) => {

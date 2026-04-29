@@ -120,6 +120,22 @@ def get_student_elective_catalog_query(user: User, db: Session):
     )
 
 
+def get_student_course_catalog_query(user: User, db: Session):
+    """
+    All active courses for browse + enrollment hints.
+    Electives: self-enroll only when course.class_id matches student's roster class.
+    """
+    query = db.query(Subject)
+    if user.role != UserRole.STUDENT:
+        return query.filter(False)
+    prepare_student_course_context(user, db)
+    db.commit()
+    student = get_student_profile_for_user(user, db)
+    if not student or not user.class_id:
+        return query.filter(False)
+    return query.filter(Subject.status == "active")
+
+
 def get_accessible_course_ids(user: User, db: Session) -> list[int]:
     return [course.id for course in get_accessible_courses_query(user, db).all() if course.id]
 
@@ -176,6 +192,9 @@ def is_course_instructor(user: User, course: Subject) -> bool:
 def sync_course_enrollments(course: Subject, db: Session) -> int:
     if not course.class_id:
         return 0
+    if (course.course_type or "required").strip().lower() == "elective":
+        # Electives are joined by student self-enrollment (or explicit roster picks), not whole-class auto sync.
+        return 0
 
     class_students = db.query(Student).filter(Student.class_id == course.class_id).all()
     existing_student_ids = {
@@ -228,6 +247,8 @@ def sync_student_course_enrollments(
 
     created = 0
     for course in courses:
+        if (course.course_type or "required").strip().lower() == "elective":
+            continue
         if course.id in existing_course_ids:
             continue
         if course.id in blocked_subject_ids:

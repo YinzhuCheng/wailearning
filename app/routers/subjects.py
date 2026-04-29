@@ -9,6 +9,7 @@ from app.course_access import (
     ensure_course_access,
     get_accessible_courses_query,
     get_enrolled_students,
+    get_student_course_catalog_query,
     get_student_elective_catalog_query,
     get_student_profile_for_user,
     prepare_student_course_context,
@@ -22,6 +23,7 @@ from app.schemas import (
     CourseEnrollmentResponse,
     CourseEnrollmentTypeUpdate,
     CourseRosterStudentInput,
+    StudentCourseCatalogItem,
     StudentElectiveSelfDropResult,
     StudentElectiveSelfEnrollResult,
     SubjectCreate,
@@ -208,6 +210,45 @@ def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
     )
 
 
+def _serialize_student_course_catalog_item(
+    course: Subject,
+    db: Session,
+    *,
+    student: Student,
+    enrolled_subject_ids: set[int],
+) -> StudentCourseCatalogItem:
+    base = _serialize_course(course, db)
+    ct = (course.course_type or "required").strip().lower()
+    is_enrolled = course.id in enrolled_subject_ids
+    same_class = (
+        course.class_id is not None
+        and student.class_id is not None
+        and int(course.class_id) == int(student.class_id)
+    )
+    if ct == "elective":
+        if is_enrolled:
+            hint = "已选修，可退选。"
+        elif not course.class_id:
+            hint = "课程未绑定班级，暂不可选课。"
+        elif not same_class:
+            hint = "仅可选修本班开设的课程；其他班级课程可浏览，选课按钮不可用。"
+        else:
+            hint = "本班开设的选修课，可自行选课。"
+        can_self = bool(same_class and course.class_id and not is_enrolled)
+    else:
+        if is_enrolled:
+            hint = "已在花名册中（通常由教师按班级统一添加）。"
+        else:
+            hint = "必修课由教师按班级花名册统一加入，不可在此自主选课；若应修而未显示请联系任课教师或管理员。"
+        can_self = False
+    return StudentCourseCatalogItem(
+        **base.model_dump(),
+        is_enrolled=is_enrolled,
+        enrollment_hint=hint,
+        can_self_enroll_elective=can_self,
+    )
+
+
 def _serialize_enrollment(enrollment: CourseEnrollment) -> CourseEnrollmentResponse:
     enrollment_type = enrollment.enrollment_type or ("elective" if enrollment.can_remove else "required")
     return CourseEnrollmentResponse(
@@ -288,6 +329,31 @@ def get_subjects(
         .all()
     )
     return [_serialize_course(course, db) for course in courses]
+
+
+@router.get("/course-catalog", response_model=List[StudentCourseCatalogItem])
+def list_student_course_catalog(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Active courses schoolwide for students: 必修/选修 labels + enrollment conditions; electives self-enroll only same class."""
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Only students can browse the course catalog.")
+
+    prepare_student_course_context(current_user, db)
+    db.commit()
+    student = get_student_profile_for_user(current_user, db)
+    if not student:
+        raise HTTPException(status_code=400, detail="未找到与账号匹配的花名册，无法浏览选课目录。")
+
+    enrolled_ids = {
+        row[0]
+        for row in db.query(CourseEnrollment.subject_id)
+        .filter(CourseEnrollment.student_id == student.id)
+        .all()
+    }
+    courses = get_student_course_catalog_query(current_user, db).order_by(Subject.created_at.desc()).all()
+    return [_serialize_student_course_catalog_item(c, db, student=student, enrolled_subject_ids=enrolled_ids) for c in courses]
 
 
 @router.get("/elective-catalog", response_model=List[SubjectResponse])
