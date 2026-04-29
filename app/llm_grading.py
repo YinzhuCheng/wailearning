@@ -27,6 +27,7 @@ from docx import Document
 import olefile
 import openpyxl
 import rarfile
+import tiktoken
 import xlrd
 from sqlalchemy import and_, func, text
 from sqlalchemy.orm.attributes import flag_modified
@@ -777,10 +778,52 @@ def estimate_task_tokens(
     text_length: int,
     image_count: int,
 ) -> int:
-    chars_per_token = config.estimated_chars_per_token or 4.0
-    text_tokens = int(text_length / chars_per_token) + 200
+    """Rough input-only estimate for lightweight callers (chars heuristic + image cap)."""
+    chars_per_token = float(config.estimated_chars_per_token or 4.0)
+    text_tokens = int(text_length / chars_per_token) + 64
     image_tokens = int(image_count * (config.estimated_image_tokens or 850))
-    return text_tokens + image_tokens + int(config.max_output_tokens or 0)
+    return text_tokens + image_tokens
+
+
+_o200k_encoder: Optional[tiktoken.Encoding] = None
+
+
+def _get_o200k_encoder() -> tiktoken.Encoding:
+    global _o200k_encoder
+    if _o200k_encoder is None:
+        _o200k_encoder = tiktoken.encoding_for_model("gpt-4o")
+    return _o200k_encoder
+
+
+def _estimate_input_tokens_from_scoring_messages(
+    messages: list[dict[str, Any]],
+    *,
+    per_image_tokens: int,
+) -> int:
+    """
+    Input-side token estimate: tiktoken (o200k) on all text parts sent to the model,
+    plus per-image allowance for each image_url part (raw base64 URLs are not counted as text).
+    Daily quota and reservations use the same input-only definition.
+    """
+    enc = _get_o200k_encoder()
+    text_total = 0
+    image_parts = 0
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, str):
+            text_total += len(enc.encode(content))
+        elif isinstance(content, list):
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                if part.get("type") == "text":
+                    t = part.get("text") or ""
+                    if isinstance(t, str):
+                        text_total += len(enc.encode(t))
+                elif part.get("type") == "image_url":
+                    image_parts += 1
+    overhead = 8 * len(messages)
+    return text_total + image_parts * max(1, int(per_image_tokens)) + overhead
 
 
 # Stable section markers for the scoring prompt (model + debugging)
@@ -818,41 +861,19 @@ def estimate_request_tokens_from_material(
     config: CourseLLMConfig,
     material: dict[str, Any],
     *,
-    assignment_text: str,
-    teacher_prompt: str,
-    student_intro: str,
+    homework: Homework,
+    attempt: HomeworkAttempt,
 ) -> int:
     """
-    Approximate request-side tokens using text char counts (incl. base64 payload length
-    for image data URLs) plus configured image/output heuristics.
+    Input-only token estimate aligned with the scoring request: same message tree as the API call,
+    text counted with tiktoken (o200k), each image_url counted once via configured per-image tokens
+    (not double-counted with base64 length).
     """
-    chars_per_token = float(config.estimated_chars_per_token or 4.0)
-    per_image = int(config.estimated_image_tokens or 850)
-
-    section_overhead = len(SECTION_ASSIGNMENT) + len(SECTION_STUDENT_BODY)
-    section_overhead += len(SECTION_ATTACHMENT) + len(SECTION_IMAGES) + len(SECTION_NOTES)
-
-    text_chars = (
-        len(assignment_text or "")
-        + len(teacher_prompt or "")
-        + len(student_intro or "")
-        + section_overhead
+    messages = _build_scoring_messages(homework, attempt, config, material)
+    return _estimate_input_tokens_from_scoring_messages(
+        messages,
+        per_image_tokens=int(config.estimated_image_tokens or 850),
     )
-    text_chars += len(material.get("notes_text") or "")
-
-    for block in material.get("student_blocks") or []:
-        if block.block_type == "text":
-            text_chars += len(block.text or "")
-            meta = _attachment_block_meta_text(block)
-            if meta:
-                text_chars += len(meta)
-        elif block.block_type == "image":
-            text_chars += _data_url_payload_chars(block.image_data_url)
-
-    text_tokens = int(text_chars / chars_per_token) + 200
-    image_count = len([b for b in (material.get("student_blocks") or []) if b.block_type == "image"])
-    image_tokens = int(image_count * per_image)
-    return text_tokens + image_tokens + int(config.max_output_tokens or 0)
 
 
 def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, Any]:
@@ -865,7 +886,7 @@ def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, 
 
 
 def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, student_id: int) -> dict[str, Any]:
-    """Per-student usage for quota day (student-facing UI; excludes API keys)."""
+    """Per-student usage for quota day: sums logged input (prompt) tokens plus in-flight reservations."""
     usage_date, timezone_name = quota_calendar(db)
     lim_stu = resolve_effective_daily_student_tokens(db, student_id)
     snap: dict[str, Any] = {
@@ -932,6 +953,7 @@ def _get_used_tokens_for_scope(
     student_id: Optional[int] = None,
     subject_id: Optional[int] = None,
 ) -> int:
+    """Sum daily-cap usage from logs: input_tokens (prompt) when present, else total_tokens for legacy rows."""
     query = db.query(LLMTokenUsageLog).filter(
         LLMTokenUsageLog.usage_date == usage_date,
         LLMTokenUsageLog.timezone == timezone_name,
@@ -942,10 +964,12 @@ def _get_used_tokens_for_scope(
         query = query.filter(LLMTokenUsageLog.subject_id == subject_id)
     total = 0
     for item in query.all():
-        if item.total_tokens is not None:
+        if item.input_tokens is not None:
+            total += int(item.input_tokens)
+        elif item.total_tokens is not None:
             total += int(item.total_tokens)
         else:
-            total += int(item.input_tokens or 0) + int(item.output_tokens or 0)
+            total += int(item.output_tokens or 0)
     return total
 
 
@@ -1115,6 +1139,7 @@ def record_usage_if_needed(
     if total_tokens is None:
         total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
     billing_note: Optional[str] = None
+    prompt_for_quota = int(prompt_tokens or 0)
     violations = _quota_delta_violations(
         db,
         config,
@@ -1122,7 +1147,7 @@ def record_usage_if_needed(
         timezone_name=timezone_name,
         student_id=task.student_id,
         subject_id=task.subject_id,
-        delta_tokens=int(total_tokens or 0),
+        delta_tokens=prompt_for_quota,
     )
     if violations:
         billing_note = "over_daily_limit:" + ",".join(violations)
@@ -2601,15 +2626,15 @@ def _build_student_material(
         f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
     )
     temp_material = {
+        "assignment_texts": assignment_texts,
         "student_blocks": final_blocks,
         "notes_text": notes_text,
     }
     estimated_tokens = estimate_request_tokens_from_material(
         config,
         temp_material,
-        assignment_text=f"{SECTION_ASSIGNMENT}\n{assignment_joined}",
-        teacher_prompt=teacher_prompt,
-        student_intro=student_intro,
+        homework=homework,
+        attempt=attempt,
     )
     artifact_manifest = {
         "included": [

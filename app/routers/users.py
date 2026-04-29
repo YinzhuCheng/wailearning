@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.student_user_roster import sync_student_roster_from_user_accounts
+
 from app.attachments import delete_attachment_file_if_unreferenced
 from app.auth import get_current_active_user, get_password_hash
 from app.database import get_db
@@ -208,9 +210,13 @@ def batch_set_user_class(
         if user.class_id == payload.class_id:
             continue
         user.class_id = payload.class_id
-        if user.username and user.class_id:
+        if user.username and (user.role or "").strip() == UserRole.STUDENT.value:
             prepare_student_course_context(user, db)
         updated += 1
+
+    moved_student_ids = [u.id for u in users if (u.role or "").strip() == UserRole.STUDENT.value and u.class_id]
+    if moved_student_ids:
+        sync_student_roster_from_user_accounts(db, moved_student_ids)
 
     db.commit()
 
@@ -237,134 +243,9 @@ def upsert_student_roster_from_student_users(
             total=0, created=0, updated=0, skipped=0, errors=[]
         )
 
-    users = db.query(User).filter(User.id.in_(user_ids)).all()
-    user_map = {u.id: u for u in users}
-
-    created = 0
-    updated = 0
-    skipped = 0
-    errors: list[StudentRosterUpsertFromUsersError] = []
-
-    for uid in user_ids:
-        user = user_map.get(uid)
-        if not user:
-            errors.append(StudentRosterUpsertFromUsersError(user_id=uid, reason="用户不存在"))
-            continue
-        if (user.role or "").strip() != UserRole.STUDENT.value:
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id, username=user.username, reason="仅支持学生角色账号"
-                )
-            )
-            continue
-        if not user.class_id:
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id,
-                    username=user.username,
-                    reason="学生账号未分配班级，无法写入花名册",
-                )
-            )
-            continue
-
-        student_no = (user.username or "").strip()
-        if not student_no:
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id, username=user.username, reason="用户名为空，无法作为学号写入花名册"
-                )
-            )
-            continue
-
-        display_name = (user.real_name or "").strip() or student_no
-
-        existing_same_class = (
-            db.query(Student)
-            .filter(Student.student_no == student_no, Student.class_id == user.class_id)
-            .first()
-        )
-        if existing_same_class:
-            if (existing_same_class.name or "").strip() != display_name:
-                existing_same_class.name = display_name
-                updated += 1
-            else:
-                skipped += 1
-            prepare_student_course_context(user, db)
-            continue
-
-        conflict = (
-            db.query(Student)
-            .filter(Student.student_no == student_no, Student.class_id != user.class_id)
-            .first()
-        )
-        if conflict:
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id,
-                    username=user.username,
-                    reason="该学号已在其他班级的花名册中，请先处理重复或调整班级后再同步",
-                )
-            )
-            continue
-
-        class_obj = db.query(Class).filter(Class.id == user.class_id).first()
-        if not class_obj:
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id,
-                    username=user.username,
-                    reason="所属班级不存在",
-                )
-            )
-            continue
-
-        roster = Student(
-            name=display_name,
-            student_no=student_no,
-            gender=Gender.MALE,
-            class_id=user.class_id,
-        )
-        db.add(roster)
-        try:
-            with db.begin_nested():
-                db.flush()
-        except IntegrityError:
-            # Concurrent create or race after pre-check: align with existing row.
-            db.expunge(roster)
-            raced = (
-                db.query(Student)
-                .filter(Student.student_no == student_no, Student.class_id == user.class_id)
-                .first()
-            )
-            if raced:
-                if (raced.name or "").strip() != display_name:
-                    raced.name = display_name
-                    updated += 1
-                else:
-                    skipped += 1
-                prepare_student_course_context(user, db)
-                continue
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id,
-                    username=user.username,
-                    reason="花名册写入冲突，请重试或检查学号是否重复",
-                )
-            )
-            continue
-
-        created += 1
-        prepare_student_course_context(user, db)
-
+    result = sync_student_roster_from_user_accounts(db, user_ids)
     db.commit()
-
-    return StudentRosterUpsertFromUsersResponse(
-        total=len(user_ids),
-        created=created,
-        updated=updated,
-        skipped=skipped,
-        errors=errors,
-    )
+    return result
 
 
 @router.post("/student-candidates/load", response_model=StudentUserBatchCreateResponse)
@@ -550,7 +431,7 @@ def create_user(
     db.add(user)
     db.flush()
     if user.role == UserRole.STUDENT.value and user.class_id:
-        prepare_student_course_context(user, db)
+        sync_student_roster_from_user_accounts(db, [user.id])
     db.commit()
     db.refresh(user)
 
@@ -640,7 +521,7 @@ def update_user(
         user.is_active = user_data.is_active
 
     if user.role == UserRole.STUDENT.value and user.username and user.class_id:
-        prepare_student_course_context(user, db)
+        sync_student_roster_from_user_accounts(db, [user.id])
 
     db.commit()
     db.refresh(user)

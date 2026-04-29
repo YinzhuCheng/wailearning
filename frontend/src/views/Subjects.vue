@@ -127,17 +127,8 @@
           </el-table-column>
           <el-table-column prop="student_count" label="学生数" width="100" />
           <el-table-column prop="description" label="课程简介" min-width="220" show-overflow-tooltip />
-          <el-table-column label="操作" width="360" fixed="right">
+          <el-table-column label="操作" width="300" fixed="right">
             <template #default="{ row }">
-              <el-button
-                type="warning"
-                size="small"
-                :loading="syncingId === row.id"
-                :data-testid="`btn-sync-enroll-${row.id}`"
-                @click="syncEnrollments(row)"
-              >
-                同步选课
-              </el-button>
               <el-button
                 type="success"
                 size="small"
@@ -274,7 +265,7 @@
           <p class="roster-enroll-alert-body">
             仅允许将<strong>本课程所属行政班花名册</strong>中的学生加入选课；不会把外班学生写入本课。
             若某生尚未出现在下列名单中，请先在「学生信息」中维护该班花名册（或粘贴批量导入），再返回此处勾选。
-            「同步选课」会一次性把<strong>全班</strong>花名册与选课对齐；此处适合只勾选部分学生。
+            需要<strong>全班</strong>与花名册对齐时，请点下方「全班加入选课」；部分进课请勾选后点「加入选课」。
           </p>
         </el-alert>
 
@@ -491,7 +482,6 @@ import {
 const userStore = useUserStore()
 
 const loading = ref(false)
-const syncingId = ref(null)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const editingCourse = ref(null)
@@ -647,26 +637,6 @@ const loadCourses = async () => {
     courses.value = await api.courses.list()
   } finally {
     loading.value = false
-  }
-}
-
-const syncEnrollments = async course => {
-  if (!course?.id) {
-    return
-  }
-  syncingId.value = course.id
-  try {
-    const result = await api.courses.syncEnrollments(course.id)
-    ElMessage.success(
-      result?.created > 0
-        ? `已根据花名册同步选课，新增 ${result.created} 人`
-        : '选课名单已与花名册一致'
-    )
-    await loadCourses()
-  } catch (error) {
-    console.error('同步选课失败', error)
-  } finally {
-    syncingId.value = null
   }
 }
 

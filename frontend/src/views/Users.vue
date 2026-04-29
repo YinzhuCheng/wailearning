@@ -4,22 +4,10 @@
       <div>
         <h1 class="page-title">用户管理</h1>
         <p class="page-subtitle">
-          支持管理员、班主任、任课老师和学生四类用户。可勾选学生行后使用「批量调班」；管理员可将所选学生账号
-          <strong>补录到学生管理花名册</strong>（用户名即学号），或加入指定课程选课。
+          支持管理员、班主任、任课老师和学生四类用户。新建或编辑学生账号时，系统会按用户名（学号）自动对齐学生管理花名册；可勾选学生行后使用「批量调班」或将所选学生<strong>加入指定课程选课</strong>。
         </p>
       </div>
       <div class="page-actions">
-        <el-button
-          v-if="isAdmin"
-          type="primary"
-          plain
-          data-testid="users-sync-roster"
-          :disabled="!batchSelectedStudents.length"
-          :loading="rosterSyncSubmitting"
-          @click="submitSyncStudentRoster"
-        >
-          同步到学生管理
-        </el-button>
         <el-button
           v-if="isAdmin"
           type="primary"
@@ -138,7 +126,6 @@
         <template #title>说明</template>
         <p class="batch-class-alert-body">
           仅支持<strong>学生</strong>角色。将把所选账号的「所属班级」统一改到下方班级，并自动与<strong>学号相同</strong>的花名册记录对齐（含选课同步）。
-          若花名册中尚无对应学号，请先由教务在「学生管理」中补录花名册。
         </p>
       </el-alert>
 
@@ -253,7 +240,7 @@
       <el-alert type="info" :closable="false" class="batch-class-alert">
         <template #title>说明</template>
         <p class="batch-class-alert-body">
-          仅处理已勾选且角色为<strong>学生</strong>的账号。系统会按账号「所属班级」补录/对齐花名册（用户名即学号），再把所选学生加入下方课程的选课名单（须与本班花名册一致）。
+          仅处理已勾选且角色为<strong>学生</strong>的账号。花名册应与账号一致（用户名即学号）；将把所选学生加入下方课程的选课名单（须与本班花名册一致）。
         </p>
       </el-alert>
       <el-form label-width="100px" class="batch-class-form">
@@ -322,7 +309,6 @@ const classes = ref([])
 const pendingStudents = ref([])
 const selectedPendingStudents = ref([])
 const batchSelectedStudents = ref([])
-const rosterSyncSubmitting = ref(false)
 const addToCourseDialogVisible = ref(false)
 const addToCourseSubjectId = ref(null)
 const addToCourseSubmitting = ref(false)
@@ -448,35 +434,6 @@ const openBatchClassDialog = () => {
   batchClassDialogVisible.value = true
 }
 
-const submitSyncStudentRoster = async () => {
-  if (!batchSelectedStudents.value.length) {
-    return
-  }
-  rosterSyncSubmitting.value = true
-  try {
-    const result = await api.users.upsertStudentRosterFromUsers({
-      user_ids: batchSelectedStudents.value.map(u => u.id)
-    })
-    const parts = []
-    if (result?.created) parts.push(`新建花名册 ${result.created} 人`)
-    if (result?.updated) parts.push(`更新姓名 ${result.updated} 人`)
-    if (result?.skipped) parts.push(`已一致跳过 ${result.skipped} 人`)
-    const errCount = (result?.errors || []).length
-    if (errCount) {
-      parts.push(`未处理 ${errCount} 人`)
-    }
-    ElMessage[errCount ? 'warning' : 'success'](parts.length ? parts.join('；') : '已完成')
-    if (errCount) {
-      const lines = (result.errors || []).slice(0, 8).map(e => `${e.username || `#${e.user_id}`}：${e.reason}`)
-      await ElMessageBox.alert(lines.join('\n'), '部分未处理', { confirmButtonText: '知道了' })
-    }
-    clearUserTableSelection()
-    await loadUsers()
-  } finally {
-    rosterSyncSubmitting.value = false
-  }
-}
-
 const resetAddToCourseDialog = () => {
   addToCourseSubjectId.value = null
 }
@@ -507,18 +464,6 @@ const submitAddToCourse = async () => {
   }
   addToCourseSubmitting.value = true
   try {
-    const rosterRes = await api.users.upsertStudentRosterFromUsers({
-      user_ids: batchSelectedStudents.value.map(u => u.id)
-    })
-    const rosterErr = (rosterRes?.errors || []).length
-    if (rosterErr) {
-      ElMessage.warning(`花名册同步有 ${rosterErr} 个账号未处理，请查看详情后继续`)
-      const lines = (rosterRes.errors || []).slice(0, 10).map(
-        e => `${e.username || `#${e.user_id}`}：${e.reason}`
-      )
-      await ElMessageBox.alert(lines.join('\n'), '花名册同步', { confirmButtonText: '知道了' })
-    }
-
     const rosterRows = await loadAllPages(params =>
       api.students.list({
         ...params,

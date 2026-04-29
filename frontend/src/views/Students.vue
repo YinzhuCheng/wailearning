@@ -37,9 +37,9 @@
       >
         <template #title>课程花名册与选课</template>
         <p class="alert-body">
-          选课名单与<strong>行政班花名册必须一致</strong>：只能给「本课程所属班级」里已有的学生加选课；进课方式包括<strong>同步选课名单</strong>（全班对齐）或在<strong>课程管理</strong>中从花名册勾选进课。
+          选课名单与<strong>行政班花名册必须一致</strong>：只能给「本课程所属班级」里已有的学生加选课；请在<strong>课程管理</strong>中打开「从花名册进课」，使用「全班加入选课」或勾选后进课。
           学生登录用户名须与<strong>学号</strong>一致才能交作业。可在此维护花名册：支持<strong>文件导入</strong>或<strong>粘贴批量导入</strong>；导入时「所属班级」可留空，将默认填入当前课程班级。
-          若人数为 0 或新生进班后未出现，请先确认花名册中已有该生，再点<strong>同步选课名单</strong>。
+          若人数为 0 或新生进班后未出现在选课中，请先确认花名册中已有该生，再在课程管理中同步选课。
         </p>
       </el-alert>
 
@@ -80,14 +80,6 @@
                 <el-button type="primary" plain data-testid="students-open-paste-import" @click="openPasteImportDialog">
                   粘贴批量导入
                 </el-button>
-                <el-button
-                  type="success"
-                  data-testid="students-sync-enrollments"
-                  :loading="syncingEnrollments"
-                  @click="syncCourseEnrollments"
-                >
-                  同步选课名单
-                </el-button>
                 <el-button @click="goRosterNew">新增花名册学生</el-button>
                 <input
                   ref="fileInputRef"
@@ -103,7 +95,7 @@
               支持 Excel / CSV 文件或「粘贴批量导入」。列为：姓名、性别、学号、所属班级（每行一条，可用 Tab 或英文逗号分隔）。导入时若发现新班级，仅管理员可自动创建班级。
             </p>
             <p v-else-if="canManageRoster" class="import-tip">
-              可文件导入或粘贴批量导入当前课程所属班级的花名册；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）。仅管理员可创建登录账号；进课后请在课程管理中从花名册勾选或同步选课。
+              可文件导入或粘贴批量导入当前课程所属班级的花名册；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）。仅管理员可创建登录账号；进课请在课程管理中打开「从花名册进课」。
             </p>
           </div>
         </template>
@@ -300,7 +292,6 @@ const TEMPLATE_ROWS = [
 
 const loading = ref(false)
 const importing = ref(false)
-const syncingEnrollments = ref(false)
 const students = ref([])
 const fileInputRef = ref(null)
 const classTeacherCourses = ref([])
@@ -697,28 +688,6 @@ const ensureClassTeacherCourses = async () => {
   }
 
   classTeacherCourses.value = await userStore.fetchTeachingCourses(true)
-}
-
-const syncCourseEnrollments = async () => {
-  if (!selectedCourse.value?.id) {
-    return
-  }
-
-  syncingEnrollments.value = true
-  try {
-    const result = await api.courses.syncEnrollments(selectedCourse.value.id)
-    ElMessage.success(
-      result?.created > 0
-        ? `已同步选课，新增 ${result.created} 条`
-        : '选课名单已与花名册一致，无需新增'
-    )
-    await userStore.fetchTeachingCourses(true)
-    await loadStudents()
-  } catch (error) {
-    console.error('同步选课失败', error)
-  } finally {
-    syncingEnrollments.value = false
-  }
 }
 
 const goRosterNew = () => {

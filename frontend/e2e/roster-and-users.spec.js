@@ -51,15 +51,6 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await expect(page.getByTestId('paste-import-submit')).toBeEnabled()
   })
 
-  test('teacher: sync enrollments button visible on students page', async ({ page }) => {
-    const s = scenario()
-    await login(page, s.teacher_own.username, s.teacher_own.password)
-    await page.goto('/courses')
-    await page.getByRole('button', { name: '进入课程' }).first().click()
-    await page.goto('/students')
-    await expect(page.getByTestId('students-sync-enrollments')).toBeVisible()
-  })
-
   test('admin: batch class dialog opens', async ({ page }) => {
     const s = scenario()
     await login(page, s.admin.username, s.admin.password)

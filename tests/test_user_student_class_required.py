@@ -9,7 +9,7 @@ from sqlalchemy import text
 from app.auth import get_password_hash
 from app.database import Base, SessionLocal, engine
 from app.main import app
-from app.models import Class, User, UserRole
+from app.models import Class, Student, User, UserRole
 from tests.llm_scenario import login_api
 
 
@@ -91,3 +91,15 @@ def test_create_student_with_class_200(client: TestClient):
     )
     assert r.status_code == 200, r.text
     assert r.json()["class_id"] == kid
+
+    db = SessionLocal()
+    try:
+        st = (
+            db.query(Student)
+            .filter(Student.student_no == "has_class_stu", Student.class_id == kid)
+            .first()
+        )
+        assert st is not None
+        assert st.name == "H"
+    finally:
+        db.close()
