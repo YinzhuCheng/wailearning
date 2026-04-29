@@ -5,7 +5,12 @@
         <h1 class="page-title">{{ pageTitle }}</h1>
         <p class="page-subtitle">{{ pageSubtitle }}</p>
       </div>
-      <el-button v-if="showManageActions" type="primary" @click="openCreateDialog">
+      <el-button
+        v-if="showManageActions"
+        type="primary"
+        data-testid="subjects-open-create"
+        @click="openCreateDialog"
+      >
         新建课程
       </el-button>
     </div>
@@ -154,7 +159,7 @@
       >
         <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
           <el-form-item label="课程名称" prop="name">
-            <el-input v-model="form.name" />
+            <el-input v-model="form.name" data-testid="subjects-form-name" />
           </el-form-item>
           <el-form-item label="所属班级" prop="class_id">
             <el-select v-model="form.class_id" placeholder="请选择班级" style="width: 100%">
@@ -248,7 +253,9 @@
         </el-form>
         <template #footer>
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+          <el-button type="primary" data-testid="subjects-course-save" :loading="submitting" @click="submitForm">
+            保存
+          </el-button>
         </template>
       </el-dialog>
 

@@ -67,6 +67,7 @@
 - [阿里云安全升级说明](#阿里云安全升级说明)
 - [安全与运维（角色、数据落点、升级重部署）](docs/SECURITY-AND-OPERATIONS.md)
 - [升级与 LLM / 作业自动批改说明](docs/UPGRADE_AND_LLM_SYSTEM.md)
+- [测试（pytest + Playwright E2E）](docs/TESTING.md)
 - [数据库迁移](#数据库迁移)
 - [常见问题](#常见问题)
 - [使用许可](#使用许可)

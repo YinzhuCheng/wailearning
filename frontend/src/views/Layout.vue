@@ -92,7 +92,7 @@
         </div>
 
         <div class="header-right">
-          <el-dropdown v-if="showCourseSwitcher" trigger="hover" @command="handleCourseSwitch">
+          <el-dropdown v-if="showCourseSwitcher" trigger="hover" data-testid="header-course-switch" @command="handleCourseSwitch">
             <el-button text>
               切换课程
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -114,7 +114,7 @@
             </template>
           </el-dropdown>
 
-          <el-dropdown @command="handleCommand">
+          <el-dropdown data-testid="header-user-menu" @command="handleCommand">
             <div class="user-box">
               <el-avatar :size="34" :src="headerAvatarSrc || undefined">
                 {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}

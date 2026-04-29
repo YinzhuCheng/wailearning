@@ -1,5 +1,5 @@
 const { expect, test } = require('@playwright/test')
-const { loadE2eScenario } = require('./fixtures.cjs')
+const { loadE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -39,7 +39,7 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await login(page, s.teacher_own.username, s.teacher_own.password)
 
     await page.goto('/courses')
-    await page.getByRole('button', { name: '进入课程' }).first().click()
+    await enterSeededRequiredCourse(page, s.suffix)
 
     await page.goto('/students')
     await page.getByTestId('students-open-paste-import').click()
@@ -56,7 +56,7 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await login(page, s.teacher_own.username, s.teacher_own.password)
 
     await page.goto('/courses')
-    await page.getByRole('button', { name: '进入课程' }).first().click()
+    await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/students')
 
     await page.getByRole('button', { name: '文件导入花名册' }).click()

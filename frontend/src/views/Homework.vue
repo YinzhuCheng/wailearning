@@ -17,7 +17,12 @@
         <el-button v-if="!userStore.isStudent && selectedCourse" @click="router.push('/homework/students')">
           学生作业一览
         </el-button>
-        <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
+        <el-button
+          v-if="!userStore.isStudent && selectedCourse"
+          type="primary"
+          data-testid="homework-btn-create"
+          @click="openCreateDialog"
+        >
           发布作业
         </el-button>
       </div>
@@ -180,7 +185,7 @@
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="作业标题" prop="title">
-          <el-input v-model="form.title" />
+          <el-input v-model="form.title" data-testid="homework-form-title" />
         </el-form-item>
         <el-form-item label="截止时间" prop="due_date">
           <el-date-picker
@@ -315,7 +320,9 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+        <el-button type="primary" data-testid="homework-form-save" :loading="submitting" @click="submitForm">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 

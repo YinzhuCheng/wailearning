@@ -1,5 +1,5 @@
 const { expect, test } = require('@playwright/test')
-const { loadE2eScenario } = require('./fixtures.cjs')
+const { loadE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -24,12 +24,12 @@ test.describe('E2E homework LLM routing controls (requires globalSetup seed)', (
     await login(page, s.teacher_own.username, s.teacher_own.password)
 
     await page.goto('/courses')
-    await page.getByRole('button', { name: '进入课程' }).first().click()
+    await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/homework')
 
-    const editBtn = page.getByTestId('homework-btn-edit').first()
-    await expect(editBtn).toBeVisible({ timeout: 15000 })
-    await editBtn.click()
+    const editRow = page.getByRole('row', { name: new RegExp(`E2E_UI作业_${s.suffix}`) })
+    await expect(editRow).toBeVisible({ timeout: 15000 })
+    await editRow.getByTestId('homework-btn-edit').click()
 
     await expect(page.getByTestId('homework-llm-routing-mode')).toBeVisible({ timeout: 15000 })
   })

@@ -14,12 +14,20 @@
           <el-input :model-value="userStore.userInfo?.username || ''" disabled />
         </el-form-item>
         <el-form-item label="姓名">
-          <el-input v-model="profileForm.real_name" maxlength="120" show-word-limit placeholder="用于界面显示的姓名" />
+          <el-input
+            v-model="profileForm.real_name"
+            data-testid="personal-profile-real-name"
+            maxlength="120"
+            show-word-limit
+            placeholder="用于界面显示的姓名"
+          />
         </el-form-item>
         <el-form-item label="角色">
           <el-input :model-value="roleLabel" disabled />
         </el-form-item>
-        <el-button type="primary" :loading="profileSaving" @click="saveProfile">保存基本信息</el-button>
+        <el-button type="primary" data-testid="personal-profile-save" :loading="profileSaving" @click="saveProfile">
+          保存基本信息
+        </el-button>
       </el-form>
     </el-card>
 

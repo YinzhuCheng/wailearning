@@ -53,14 +53,14 @@ def reset_e2e_scenario(
     t_own = User(
         username=f"e2e_teach_own_{suffix}",
         hashed_password=hpwd,
-        real_name="E2E任课甲",
+        real_name=f"E2E任课甲_{suffix}",
         role=UserRole.TEACHER.value,
         is_active=True,
     )
     t_other = User(
         username=f"e2e_teach_other_{suffix}",
         hashed_password=hpwd,
-        real_name="E2E任课乙",
+        real_name=f"E2E任课乙_{suffix}",
         role=UserRole.TEACHER.value,
         is_active=True,
     )

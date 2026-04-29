@@ -1,5 +1,5 @@
 const { expect, test } = require('@playwright/test')
-const { loadE2eScenario } = require('./fixtures.cjs')
+const { loadE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -24,7 +24,7 @@ test.describe('UI: homework student actions (requires globalSetup seed)', () => 
     await login(page, s.student_plain.username, s.student_plain.password)
 
     await page.goto('/courses')
-    await page.getByRole('button', { name: '进入课程' }).first().click()
+    await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/homework')
 
     const row = page.locator('tbody tr').first()
