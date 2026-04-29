@@ -22,14 +22,27 @@
 
       <el-menu
         :default-active="route.path"
+        :default-openeds="homeworkMenuOpenIndices"
         :collapse="isCollapsed"
         router
         class="sidebar-menu"
       >
-        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
-          <el-icon><component :is="item.icon" /></el-icon>
-          <template #title>{{ item.label }}</template>
-        </el-menu-item>
+        <template v-for="item in menuItems" :key="item.type === 'submenu' ? item.index : item.path">
+          <el-sub-menu v-if="item.type === 'submenu'" :index="item.index">
+            <template #title>
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.label }}</span>
+            </template>
+            <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
+              <el-icon><component :is="child.icon" /></el-icon>
+              <template #title>{{ child.label }}</template>
+            </el-menu-item>
+          </el-sub-menu>
+          <el-menu-item v-else :index="item.path">
+            <el-icon><component :is="item.icon" /></el-icon>
+            <template #title>{{ item.label }}</template>
+          </el-menu-item>
+        </template>
       </el-menu>
     </el-aside>
 
@@ -38,6 +51,9 @@
         <div class="header-left">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: homePath }">首页</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="homeworkBreadcrumbParent" :to="{ path: '/homework' }">
+              作业
+            </el-breadcrumb-item>
             <el-breadcrumb-item>{{ currentRouteName }}</el-breadcrumb-item>
           </el-breadcrumb>
 
@@ -287,11 +303,27 @@ const routeNameMap = {
   '/settings': '系统设置',
   '/materials': '课程资料',
   '/homework': '作业管理',
+  '/homework/students': '学生作业一览',
   '/homework/by-student': '学生作业一览',
   '/notifications': '通知信息'
 }
 
 const currentRouteName = computed(() => route.meta?.title || routeNameMap[route.path] || '页面')
+
+const homeworkBreadcrumbParent = computed(() => {
+  const p = route.path
+  return p === '/homework/students' || /^\/homework\/\d+\//.test(p)
+})
+
+const homeworkMenuOpenIndices = computed(() => {
+  if (userStore.isStudent || userStore.isAdmin || userStore.isClassTeacher) {
+    return []
+  }
+  if (route.path.startsWith('/homework')) {
+    return ['homework-center']
+  }
+  return []
+})
 
 const classTeacherMenu = [
   { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
@@ -306,8 +338,16 @@ const teacherMenu = [
   { path: '/scores', label: '成绩管理', icon: Collection },
   { path: '/attendance', label: '考勤管理', icon: Collection },
   { path: '/materials', label: '课程资料', icon: Collection },
-  { path: '/homework/by-student', label: '学生作业一览', icon: User },
-  { path: '/homework', label: '作业管理', icon: Reading },
+  {
+    type: 'submenu',
+    index: 'homework-center',
+    label: '作业',
+    icon: Reading,
+    children: [
+      { path: '/homework', label: '作业管理', icon: Reading },
+      { path: '/homework/students', label: '学生作业一览', icon: User }
+    ]
+  },
   { path: '/notifications', label: '通知中心', icon: Bell }
 ]
 
@@ -432,7 +472,7 @@ const handleCourseSwitch = courseId => {
 
   userStore.setSelectedCourse(course)
 
-  if (route.path.startsWith('/homework/')) {
+  if (/^\/homework\/\d+\//.test(route.path)) {
     router.push('/homework')
     return
   }
@@ -572,6 +612,22 @@ watch(notificationSyncParams, () => {
 .sidebar-menu :deep(.el-menu-item.is-active) {
   background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
   color: #fff;
+}
+
+.sidebar-menu :deep(.el-sub-menu__title) {
+  margin: 6px 0;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.sidebar-menu :deep(.el-sub-menu__title:hover) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu-item) {
+  margin: 4px 0;
+  padding-left: 48px !important;
 }
 
 .header {
