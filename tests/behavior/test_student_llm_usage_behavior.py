@@ -13,6 +13,21 @@ from app.models import HomeworkGradingTask, LLMStudentTokenOverride, LLMTokenUsa
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
+def test_s0_student_quotas_summary_lists_enrolled_course(client: TestClient) -> None:
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    st = login_api(client, ctx["student_username"], ctx["student_password"])
+    r = client.get("/api/llm-settings/courses/student-quotas", headers=st)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "courses" in body
+    ids = {c["subject_id"] for c in body["courses"]}
+    assert ctx["subject_id"] in ids
+    row = next(c for c in body["courses"] if c["subject_id"] == ctx["subject_id"])
+    assert row.get("subject_name")
+    assert "usage_date" in row and "quota_timezone" in row
+
+
 def test_s1_student_quota_loaded_vs_not_enrolled(client: TestClient) -> None:
     ensure_admin()
     ctx = make_grading_course_with_homework()

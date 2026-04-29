@@ -78,7 +78,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.attachments import get_attachment_file_path
 from app.config import settings
 from app.llm_token_quota import (
-    quota_calendar,
+    quota_calendar_for_timezone,
     resolve_effective_daily_student_tokens,
     resolve_max_parallel_grading_tasks,
 )
@@ -398,12 +398,194 @@ def refresh_submission_summary(db: Session, summary: HomeworkSubmission) -> Home
     return summary
 
 
+def _course_has_any_endpoint_row(db: Session, config_id: int) -> bool:
+    return (
+        db.query(CourseLLMConfigEndpoint.id)
+        .filter(CourseLLMConfigEndpoint.config_id == config_id)
+        .first()
+        is not None
+    )
+
+
+def _pick_latest_validated_course_llm_template(
+    db: Session, *, exclude_subject_id: Optional[int] = None
+) -> Optional[CourseLLMConfig]:
+    """Another course's LLM row with at least one vision-validated active endpoint, most recently updated first."""
+    subq = (
+        db.query(CourseLLMConfigEndpoint.config_id)
+        .join(LLMEndpointPreset, LLMEndpointPreset.id == CourseLLMConfigEndpoint.preset_id)
+        .filter(
+            LLMEndpointPreset.is_active.is_(True),
+            LLMEndpointPreset.validation_status == "validated",
+            LLMEndpointPreset.supports_vision.is_(True),
+        )
+    )
+    ok_ids = [int(r[0]) for r in subq.distinct().all() if r[0] is not None]
+    if not ok_ids:
+        return None
+    q = (
+        db.query(CourseLLMConfig)
+        .options(
+            joinedload(CourseLLMConfig.groups).joinedload(LLMGroup.members),
+            joinedload(CourseLLMConfig.endpoints),
+        )
+        .filter(CourseLLMConfig.id.in_(ok_ids))
+    )
+    if exclude_subject_id is not None:
+        q = q.filter(CourseLLMConfig.subject_id != exclude_subject_id)
+    return q.order_by(CourseLLMConfig.updated_at.desc().nullslast(), CourseLLMConfig.id.desc()).first()
+
+
+def _copy_course_llm_from_template(db: Session, target: CourseLLMConfig, template: CourseLLMConfig) -> None:
+    """Replace target endpoints/groups with template's validated routing; copy tuning fields."""
+    target.is_enabled = bool(template.is_enabled)
+    target.response_language = template.response_language
+    target.estimated_chars_per_token = template.estimated_chars_per_token
+    target.estimated_image_tokens = template.estimated_image_tokens
+    target.max_input_tokens = template.max_input_tokens
+    target.max_output_tokens = template.max_output_tokens
+    target.quota_timezone = template.quota_timezone or "Asia/Shanghai"
+    target.system_prompt = template.system_prompt
+    target.teacher_prompt = template.teacher_prompt
+
+    db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == target.id).delete(
+        synchronize_session=False
+    )
+    db.query(LLMGroup).filter(LLMGroup.config_id == target.id).delete(synchronize_session=False)
+    db.flush()
+
+    template = (
+        db.query(CourseLLMConfig)
+        .options(
+            joinedload(CourseLLMConfig.groups).joinedload(LLMGroup.members).joinedload(CourseLLMConfigEndpoint.preset),
+            joinedload(CourseLLMConfig.endpoints).joinedload(CourseLLMConfigEndpoint.preset),
+        )
+        .filter(CourseLLMConfig.id == template.id)
+        .first()
+    )
+    if not template:
+        return
+
+    group_rows = sorted([g for g in (template.groups or []) if g is not None], key=lambda row: (row.priority, row.id))
+    if group_rows and any((g.members or []) for g in group_rows):
+        for gi, g_src in enumerate(group_rows):
+            g_new = LLMGroup(config_id=target.id, priority=gi + 1, name=(g_src.name or "").strip() or f"group {gi + 1}")
+            db.add(g_new)
+            db.flush()
+            for mj, m_src in enumerate(sorted(g_src.members or [], key=lambda row: (row.priority, row.id))):
+                pr = m_src.preset
+                if not pr:
+                    continue
+                ok, _ = _preset_eligible_for_grading(pr, need_vision=True)
+                if not ok:
+                    continue
+                db.add(
+                    CourseLLMConfigEndpoint(
+                        config_id=target.id,
+                        group_id=g_new.id,
+                        preset_id=m_src.preset_id,
+                        priority=mj + 1,
+                    )
+                )
+        db.flush()
+        if _course_has_any_endpoint_row(db, target.id):
+            return
+        db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == target.id).delete(
+            synchronize_session=False
+        )
+        db.query(LLMGroup).filter(LLMGroup.config_id == target.id).delete(synchronize_session=False)
+        db.flush()
+
+    for item in sorted(template.endpoints or [], key=lambda row: (row.priority, row.id)):
+        pr = item.preset
+        if not pr:
+            continue
+        ok, _ = _preset_eligible_for_grading(pr, need_vision=True)
+        if not ok:
+            continue
+        db.add(
+            CourseLLMConfigEndpoint(
+                config_id=target.id,
+                group_id=None,
+                preset_id=item.preset_id,
+                priority=item.priority,
+            )
+        )
+    db.flush()
+
+
+def sync_latest_validated_course_llm_template(db: Session, target: CourseLLMConfig) -> bool:
+    """If target has no endpoints, clone from the latest validated peer course config. Returns True if cloned."""
+    if _course_has_any_endpoint_row(db, target.id):
+        return False
+    tmpl = _pick_latest_validated_course_llm_template(db, exclude_subject_id=target.subject_id)
+    if not tmpl or tmpl.id == target.id:
+        return False
+    _copy_course_llm_from_template(db, target, tmpl)
+    return _course_has_any_endpoint_row(db, target.id)
+
+
+def purge_invalid_course_llm_endpoints(db: Session, config: CourseLLMConfig) -> int:
+    """
+    Remove course endpoint rows whose preset is missing or no longer passes course eligibility (vision).
+    Returns count of removed endpoint rows.
+    """
+    removed = 0
+    for ep in (
+        db.query(CourseLLMConfigEndpoint)
+        .filter(CourseLLMConfigEndpoint.config_id == config.id)
+        .all()
+    ):
+        pr = ep.preset
+        if not pr:
+            db.delete(ep)
+            removed += 1
+            continue
+        ok, _ = _preset_eligible_for_grading(pr, need_vision=True)
+        if not ok:
+            db.delete(ep)
+            removed += 1
+    if removed:
+        db.flush()
+        for g in db.query(LLMGroup).filter(LLMGroup.config_id == config.id).all():
+            if not db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.group_id == g.id).first():
+                db.delete(g)
+        db.flush()
+    return removed
+
+
+def purge_invalid_course_llm_endpoints_for_preset(db: Session, preset_id: int) -> None:
+    """After a preset fails validation or is deactivated, strip it from all course configs."""
+    config_ids = [
+        int(r[0])
+        for r in db.query(CourseLLMConfigEndpoint.config_id)
+        .filter(CourseLLMConfigEndpoint.preset_id == preset_id)
+        .distinct()
+        .all()
+        if r[0] is not None
+    ]
+    for cid in config_ids:
+        cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.id == cid).first()
+        if cfg:
+            purge_invalid_course_llm_endpoints(db, cfg)
+
+
 def ensure_course_llm_config(db: Session, subject_id: int, user_id: Optional[int] = None) -> CourseLLMConfig:
     config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
-    if config:
-        return config
-    config = CourseLLMConfig(subject_id=subject_id, created_by=user_id, updated_by=user_id)
-    db.add(config)
+    created = False
+    if not config:
+        config = CourseLLMConfig(subject_id=subject_id, created_by=user_id, updated_by=user_id)
+        db.add(config)
+        db.flush()
+        created = True
+    if created or not _course_has_any_endpoint_row(db, config.id):
+        sync_latest_validated_course_llm_template(db, config)
+    purge_invalid_course_llm_endpoints(db, config)
+    if not _course_has_any_endpoint_row(db, config.id):
+        sync_latest_validated_course_llm_template(db, config)
+    for g in db.query(LLMGroup).filter(LLMGroup.config_id == config.id).all():
+        if not db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.group_id == g.id).first():
+            db.delete(g)
     db.flush()
     return config
 
@@ -874,7 +1056,8 @@ def estimate_request_tokens_from_material(
 
 def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, Any]:
     """Aggregated usage for the LLM config's quota day (for teacher-facing UI)."""
-    usage_date, timezone_name = quota_calendar(db)
+    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
     return {
         "usage_date": usage_date,
         "quota_timezone": timezone_name,
@@ -882,11 +1065,13 @@ def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, 
 
 
 def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, student_id: int) -> dict[str, Any]:
-    """Per-student usage for quota day: sums logged input (prompt) tokens plus in-flight reservations."""
-    usage_date, timezone_name = quota_calendar(db)
+    """Per-student usage for this course's quota day: logged input tokens + reservations for this subject."""
+    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
     lim_stu = resolve_effective_daily_student_tokens(db, student_id)
+    sid = int(config.subject_id)
     snap: dict[str, Any] = {
-        "subject_id": config.subject_id,
+        "subject_id": sid,
         "usage_date": usage_date,
         "quota_timezone": timezone_name,
         "daily_student_token_limit": lim_stu,
@@ -898,12 +1083,14 @@ def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, st
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
+        subject_id=sid,
     )
     used_stu += _sum_reserved_tokens(
         db,
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
+        subject_id=sid,
     )
     snap["student_used_tokens_today"] = used_stu
     snap["student_remaining_tokens_today"] = max(0, lim_stu - used_stu)
@@ -927,6 +1114,7 @@ def _quota_delta_violations(
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
+        subject_id=subject_id,
     )
     if used_by_student + delta_tokens > lim_stu:
         violations.append("student")
@@ -997,14 +1185,17 @@ def _hash_to_pg_advisory_key(label: str) -> int:
 def _pg_quota_advisory_keys(
     *,
     student_id: int,
+    subject_id: int,
     usage_date: str,
     timezone_name: str,
     effective_student_daily_cap: int,
 ) -> list[int]:
     keys: list[int] = []
-    if effective_student_daily_cap and effective_student_daily_cap > 0:
+    if effective_student_daily_cap and effective_student_daily_cap > 0 and subject_id:
         keys.append(
-            _hash_to_pg_advisory_key(f"llm_quota|student|{student_id}|{usage_date}|{timezone_name}")
+            _hash_to_pg_advisory_key(
+                f"llm_quota|student|{student_id}|subject|{subject_id}|{usage_date}|{timezone_name}"
+            )
         )
     return sorted(set(keys))
 
@@ -1024,20 +1215,24 @@ def _quota_precheck_in_session(
     subject_id: Optional[int],
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
-    """Committed usage plus in-flight reservations vs daily caps."""
-    usage_date, timezone_name = quota_calendar(db)
+    """Committed usage plus in-flight reservations vs daily caps (per course under course quota_timezone)."""
+    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
     lim_stu = resolve_effective_daily_student_tokens(db, student_id)
+    sid = int(subject_id) if subject_id is not None else int(config.subject_id)
     used_by_student = _get_used_tokens_for_scope(
         db,
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
+        subject_id=sid,
     )
     used_by_student += _sum_reserved_tokens(
         db,
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
+        subject_id=sid,
     )
     if used_by_student + estimated_tokens > lim_stu:
         return False, "quota_exceeded_student"
@@ -1053,7 +1248,9 @@ def precheck_quota(
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
     """Best-effort check including in-flight reservations (see reserve_quota_tokens for DB-locked reserve)."""
-    return _quota_precheck_in_session(db, config, student_id=student_id, subject_id=subject_id, estimated_tokens=estimated_tokens)
+    return _quota_precheck_in_session(
+        db, config, student_id=student_id, subject_id=subject_id or config.subject_id, estimated_tokens=estimated_tokens
+    )
 
 
 def reserve_quota_tokens(
@@ -1067,7 +1264,8 @@ def reserve_quota_tokens(
     PostgreSQL: short transaction + pg_advisory_xact_lock per scope.
     SQLite / others: process-wide lock + same-session row (tests).
     """
-    usage_date, timezone_name = quota_calendar(db)
+    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
 
     def _try_insert_reservation(sess: Session) -> tuple[bool, Optional[str]]:
         release_quota_reservation(sess, task.id)
@@ -1096,6 +1294,7 @@ def reserve_quota_tokens(
     if engine.dialect.name == "postgresql":
         keys = _pg_quota_advisory_keys(
             student_id=task.student_id,
+            subject_id=int(task.subject_id or 0),
             usage_date=usage_date,
             timezone_name=timezone_name,
             effective_student_daily_cap=resolve_effective_daily_student_tokens(db, task.student_id),
@@ -1128,7 +1327,8 @@ def record_usage_if_needed(
     if existing:
         return
     release_quota_reservation(db, task.id)
-    usage_date, timezone_name = quota_calendar(db)
+    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
     prompt_tokens = usage.get("prompt_tokens")
     completion_tokens = usage.get("completion_tokens")
     total_tokens = usage.get("total_tokens")

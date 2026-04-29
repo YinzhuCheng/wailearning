@@ -34,9 +34,14 @@ def resolve_max_parallel_grading_tasks(db: Session) -> int:
 
 
 def quota_calendar(db: Session) -> tuple[str, str]:
-    """(usage_date_iso, timezone_name) for LLM usage logs and quota math."""
+    """(usage_date_iso, timezone_name) for admin global policy display (parallel workers, defaults)."""
     pol = get_or_create_global_quota_policy(db)
-    tz_name = (pol.quota_timezone or "UTC").strip() or "UTC"
+    return quota_calendar_for_timezone((pol.quota_timezone or "UTC").strip() or "UTC")
+
+
+def quota_calendar_for_timezone(tz_raw: str) -> tuple[str, str]:
+    """Calendar day for LLM usage logs and per-course quota math (ISO date + normalized tz name)."""
+    tz_name = (tz_raw or "UTC").strip() or "UTC"
     try:
         tz = ZoneInfo(tz_name)
     except Exception:

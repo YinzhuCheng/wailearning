@@ -310,6 +310,7 @@ const api = {
     getCourseConfig: subjectId => http.get(`/llm-settings/courses/${subjectId}`),
     updateCourseConfig: (subjectId, data) => http.put(`/llm-settings/courses/${subjectId}`, data),
     getStudentQuota: subjectId => http.get(`/llm-settings/courses/student-quota/${subjectId}`),
+    getStudentQuotasSummary: () => http.get('/llm-settings/courses/student-quotas'),
     getGlobalQuotaPolicy: () => http.get('/llm-settings/admin/quota-policy'),
     updateGlobalQuotaPolicy: data => http.put('/llm-settings/admin/quota-policy', data),
     bulkQuotaOverrides: data => http.post('/llm-settings/admin/quota-overrides/bulk', data),

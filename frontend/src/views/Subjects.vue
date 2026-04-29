@@ -361,7 +361,7 @@
           </el-form-item>
 
           <el-form-item label="额度时区">
-            <el-input v-model="llmForm.quota_timezone" placeholder="例如 UTC / Asia/Shanghai（存档字段；全平台用量日以系统设置为准）" />
+            <el-input v-model="llmForm.quota_timezone" placeholder="例如 UTC / Asia/Shanghai（本课程 LLM 用量按此时区划分自然日）" />
           </el-form-item>
 
           <el-alert
@@ -369,11 +369,11 @@
             class="llm-notice"
             type="info"
             :closable="false"
-            :title="`LLM 用量统计日（与系统设置全局时区一致）：${llmQuotaUsage.usage_date}（${llmQuotaUsage.quota_timezone}）`"
+            :title="`本课程 LLM 用量统计日：${llmQuotaUsage.usage_date}（${llmQuotaUsage.quota_timezone}）`"
           />
           <div v-if="llmForm.is_enabled" class="attachment-help" style="margin-bottom: 12px">
             自动评分会将作业说明、学生文字与附件解析结果分段送入模型；大附件、PDF 多页或 zip 可能被截断或跳过。学生个人日
-            token 由管理员在系统设置中统一配置（全课共用同一池）。并发任务数由管理员在系统设置中配置。
+            token 由管理员在系统设置中统一配置；每门课在各自「额度时区」下单独统计用量。并发任务数由管理员在系统设置中配置。若本课尚未选择端点，保存或打开配置时会尝试从其他已配置且校验通过的课程自动同步一份模板。
           </div>
 
           <el-form-item label="系统提示词">

@@ -406,6 +406,9 @@ def ensure_schema_updates() -> None:
                 except OperationalError:
                     pass
 
+    if engine.dialect.name == "postgresql":
+        _ensure_course_llm_endpoint_preset_ondelete_cascade()
+
     _backfill_default_llm_groups_for_existing_configs()
     _ensure_llm_global_quota_policy_row()
     _ensure_default_llm_endpoint_preset()
@@ -535,6 +538,23 @@ def _ensure_llm_global_quota_policy_row() -> None:
         raise
     finally:
         db.close()
+
+
+def _ensure_course_llm_endpoint_preset_ondelete_cascade() -> None:
+    """Course endpoint rows disappear when a global preset is deleted (DB-enforced)."""
+    with engine.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE course_llm_config_endpoints DROP CONSTRAINT IF EXISTS course_llm_config_endpoints_preset_id_fkey")
+        )
+        conn.execute(
+            text(
+                """
+                ALTER TABLE course_llm_config_endpoints
+                ADD CONSTRAINT course_llm_config_endpoints_preset_id_fkey
+                FOREIGN KEY (preset_id) REFERENCES llm_endpoint_presets(id) ON DELETE CASCADE
+                """
+            )
+        )
 
 
 def _backfill_default_llm_groups_for_existing_configs() -> None:

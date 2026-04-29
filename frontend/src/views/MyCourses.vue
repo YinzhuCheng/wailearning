@@ -8,29 +8,52 @@
         </p>
       </div>
       <el-card
-        v-if="userStore.isStudent && userStore.selectedCourse?.id"
+        v-if="userStore.isStudent && (activeCourses.length || completedCourses.length)"
         shadow="never"
         class="quota-card"
       >
         <template #header>
-          <span>当前课程 · LLM 用量（个人·全课共用池）</span>
+          <div class="quota-card-header-row">
+            <span>各课程 · LLM 日额度（按课程分别统计）</span>
+            <el-button size="small" :loading="quotasLoading" @click="loadStudentQuotasSummary">刷新</el-button>
+          </div>
         </template>
-        <div v-loading="quotaLoading" class="quota-body">
-          <template v-if="quotaInfo">
-            <p class="quota-line">
-              统计日：{{ quotaInfo.usage_date }}（时区 {{ quotaInfo.quota_timezone }}）
-            </p>
-            <p v-if="quotaInfo.daily_student_token_limit != null" class="quota-line">
-              个人日限额{{ quotaInfo.uses_personal_override ? '（管理员单独配置）' : '（系统默认）' }}：{{ quotaInfo.daily_student_token_limit }}，
-              已用 {{ quotaInfo.student_used_tokens_today ?? 0 }}，
-              剩余约 {{ quotaInfo.student_remaining_tokens_today ?? '—' }}
-              <span v-if="quotaInfo.global_default_daily_student_tokens != null" class="muted">
-                （当前全校默认 {{ quotaInfo.global_default_daily_student_tokens }}）
-              </span>
-            </p>
-            <p v-else class="quota-line muted">未设置个人日 token 限额。</p>
+        <div v-loading="quotasLoading" class="quota-body">
+          <p v-if="quotasSummary?.uses_personal_override" class="quota-line quota-hint">
+            当前账号使用管理员单独配置的日 token 上限；各课程条形图共用上限制，用量按课程分别累计。
+          </p>
+          <p v-else-if="quotasSummary?.global_default_daily_student_tokens != null" class="quota-line quota-hint muted">
+            全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}（各课用量独立统计）。
+          </p>
+          <template v-if="quotasSummary?.courses?.length">
+            <div
+              v-for="row in quotasSummary.courses"
+              :key="row.subject_id"
+              class="quota-course-block"
+              :class="{ 'quota-course-block--current': isCurrentCourseId(row.subject_id) }"
+            >
+              <div class="quota-course-title">
+                <span class="quota-course-name">{{ row.subject_name }}</span>
+                <span class="quota-course-nums">
+                  已用 {{ row.student_used_tokens_today ?? 0 }} / 限额 {{ row.daily_student_token_limit ?? '—' }}
+                  <span v-if="row.student_remaining_tokens_today != null" class="muted">
+                    · 剩余 {{ row.student_remaining_tokens_today }}
+                  </span>
+                </span>
+              </div>
+              <el-progress
+                :percentage="quotaBarPercent(row)"
+                :stroke-width="16"
+                :show-text="false"
+                :color="quotaBarColors"
+                class="quota-progress"
+              />
+              <p class="quota-subline muted">
+                统计日 {{ row.usage_date }}（{{ row.quota_timezone }}）
+              </p>
+            </div>
           </template>
-          <p v-else-if="!quotaLoading" class="quota-line muted">暂无用量数据。</p>
+          <p v-else-if="!quotasLoading" class="quota-line muted">暂无选课记录或暂无额度数据。</p>
         </div>
       </el-card>
       <el-button
@@ -305,8 +328,8 @@ const electiveCatalog = ref([])
 const electiveLoading = ref(false)
 const selfEnrollingId = ref(null)
 const selfDroppingId = ref(null)
-const quotaInfo = ref(null)
-const quotaLoading = ref(false)
+const quotasSummary = ref(null)
+const quotasLoading = ref(false)
 const semesters = ref([])
 const dialogVisible = ref(false)
 const formRef = ref(null)
@@ -388,7 +411,7 @@ const selfEnroll = async row => {
     }
     await Promise.all([loadCourses(), loadElectiveCatalog()])
     if (String(userStore.selectedCourse?.id) === String(row.id)) {
-      await loadStudentQuota()
+      await loadStudentQuotasSummary()
     }
   } catch (error) {
     console.error('选课失败', error)
@@ -411,7 +434,7 @@ const selfDrop = async row => {
     }
     await Promise.all([loadCourses(), loadElectiveCatalog()])
     if (String(userStore.selectedCourse?.id) === String(row.id)) {
-      await loadStudentQuota()
+      await loadStudentQuotasSummary()
     }
   } catch (error) {
     console.error('退选失败', error)
@@ -420,21 +443,39 @@ const selfDrop = async row => {
   }
 }
 
-const loadStudentQuota = async () => {
-  if (!userStore.isStudent || !userStore.selectedCourse?.id) {
-    quotaInfo.value = null
+const loadStudentQuotasSummary = async () => {
+  if (!userStore.isStudent) {
+    quotasSummary.value = null
     return
   }
-  quotaLoading.value = true
+  quotasLoading.value = true
   try {
-    quotaInfo.value = await api.llmSettings.getStudentQuota(userStore.selectedCourse.id)
+    quotasSummary.value = await api.llmSettings.getStudentQuotasSummary()
   } catch (error) {
-    console.error('加载 token 用量失败', error)
-    quotaInfo.value = null
+    console.error('加载各课 LLM 额度失败', error)
+    quotasSummary.value = null
   } finally {
-    quotaLoading.value = false
+    quotasLoading.value = false
   }
 }
+
+const isCurrentCourseId = id => String(userStore.selectedCourse?.id || '') === String(id || '')
+
+const quotaBarPercent = row => {
+  const lim = Number(row?.daily_student_token_limit)
+  const used = Number(row?.student_used_tokens_today ?? 0)
+  if (!lim || lim <= 0) {
+    return 0
+  }
+  return Math.min(100, Math.round((used / lim) * 1000) / 10)
+}
+
+const quotaBarColors = [
+  { color: '#93c5fd', percentage: 60 },
+  { color: '#3b82f6', percentage: 85 },
+  { color: '#f59e0b', percentage: 95 },
+  { color: '#ef4444', percentage: 100 }
+]
 
 const loadSemesters = async () => {
   semesters.value = await api.semesters.list()
@@ -739,21 +780,20 @@ const submitForm = async () => {
 onMounted(() => {
   const tasks = [loadCourses(), loadSemesters()]
   if (userStore.isStudent) {
-    tasks.push(loadElectiveCatalog())
+    tasks.push(loadElectiveCatalog(), loadStudentQuotasSummary())
   }
   Promise.all(tasks)
 })
 
 watch(
-  () => [userStore.isStudent, userStore.selectedCourse?.id],
+  () => [userStore.isStudent, courses.value.length],
   () => {
     if (userStore.isStudent) {
-      loadStudentQuota()
+      loadStudentQuotasSummary()
     } else {
-      quotaInfo.value = null
+      quotasSummary.value = null
     }
-  },
-  { immediate: true }
+  }
 )
 </script>
 
@@ -785,8 +825,68 @@ watch(
 
 .quota-card {
   width: 100%;
-  max-width: 560px;
+  max-width: 720px;
   margin-bottom: 16px;
+}
+
+.quota-card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.quota-hint {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.quota-course-block {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.quota-course-block--current {
+  border-color: #93c5fd;
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.12);
+}
+
+.quota-course-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.quota-course-name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.quota-course-nums {
+  font-size: 13px;
+  color: #475569;
+}
+
+.quota-progress :deep(.el-progress-bar__outer) {
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: #e2e8f0;
+}
+
+.quota-progress :deep(.el-progress-bar__inner) {
+  border-radius: 999px;
+}
+
+.quota-subline {
+  margin: 8px 0 0;
+  font-size: 12px;
 }
 
 .quota-body {

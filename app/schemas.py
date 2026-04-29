@@ -360,11 +360,29 @@ class StudentElectiveSelfDropResult(BaseModel):
     removed: bool = False
 
 
+class StudentLLMCourseQuotaRow(BaseModel):
+    subject_id: int
+    subject_name: str
+    usage_date: str
+    quota_timezone: str
+    daily_student_token_limit: Optional[int] = None
+    student_used_tokens_today: Optional[int] = None
+    student_remaining_tokens_today: Optional[int] = None
+
+
+class StudentLLMQuotasSummaryResponse(BaseModel):
+    """Per-course LLM token budget for the logged-in student (each course has its own quota day / pool)."""
+
+    courses: list[StudentLLMCourseQuotaRow] = Field(default_factory=list)
+    global_default_daily_student_tokens: Optional[int] = None
+    uses_personal_override: bool = False
+
+
 class StudentLLMQuotaUsageResponse(BaseModel):
     subject_id: int
     usage_date: str
     quota_timezone: str
-    """Effective per-student daily cap (all courses share one pool under quota_timezone)."""
+    """Effective per-student daily cap under this course's quota_timezone (usage counted per subject)."""
     daily_student_token_limit: Optional[int] = None
     global_default_daily_student_tokens: Optional[int] = None
     uses_personal_override: bool = False
