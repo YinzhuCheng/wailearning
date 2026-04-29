@@ -293,7 +293,7 @@ const routeNameMap = {
   '/scores': '成绩管理',
   '/attendance': '考勤管理',
   '/rankings': '班级排名',
-  '/analysis': '数据分析',
+  '/analysis': '学情分析',
   '/users': '用户管理',
   '/subjects': '课程信息',
   '/semesters': '学期管理',
@@ -327,6 +327,7 @@ const homeworkMenuOpenIndices = computed(() => {
 
 const classTeacherMenu = [
   { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
+  { path: '/analysis', label: '学情分析', icon: DataAnalysis },
   { path: '/students', label: '学生信息', icon: User },
   { path: '/subjects', label: '课程信息', icon: Reading },
   { path: '/notifications', label: '通知信息', icon: Bell }
@@ -337,6 +338,7 @@ const teacherMenu = [
   { path: '/students', label: '学生管理', icon: User },
   { path: '/scores', label: '成绩管理', icon: Collection },
   { path: '/attendance', label: '考勤管理', icon: Collection },
+  { path: '/analysis', label: '学情分析', icon: DataAnalysis },
   { path: '/materials', label: '课程资料', icon: Collection },
   {
     type: 'submenu',

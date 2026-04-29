@@ -556,6 +556,29 @@ class DashboardStats(BaseModel):
     class_rankings: List[ClassRanking] = []
 
 
+class HomeworkTrendPoint(BaseModel):
+    homework_id: int
+    title: str
+    due_date: Optional[datetime] = None
+    avg_score: float
+    scored_count: int
+    submission_count: int
+
+
+class HomeworkResubmitLift(BaseModel):
+    homework_id: int
+    title: str
+    student_count: int
+    avg_first_score: float
+    avg_last_score: float
+    avg_lift: float
+
+
+class HomeworkLearningAnalyticsResponse(BaseModel):
+    homework_trend: List[HomeworkTrendPoint]
+    resubmit_lift: List[HomeworkResubmitLift]
+
+
 class StudentRanking(BaseModel):
     student_id: int
     student_name: str

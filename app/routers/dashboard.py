@@ -1,14 +1,23 @@
+from collections import defaultdict
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
-from app.models import Attendance, Class, Score, Student, Subject, User
-from app.schemas import ClassRanking, DashboardStats, ScoreResponse, StudentRanking
+from app.models import Attendance, Class, Homework, HomeworkAttempt, HomeworkSubmission, Score, Student, Subject, User
+from app.schemas import (
+    ClassRanking,
+    DashboardStats,
+    HomeworkLearningAnalyticsResponse,
+    HomeworkResubmitLift,
+    HomeworkTrendPoint,
+    ScoreResponse,
+    StudentRanking,
+)
 from app.routers.classes import apply_class_id_filter, get_accessible_class_ids
 
 
@@ -298,3 +307,122 @@ def get_subject_analysis(
             }
         )
     return analysis
+
+
+@router.get("/analysis/homework-learning", response_model=HomeworkLearningAnalyticsResponse)
+def get_homework_learning_analytics(
+    semester: Optional[str] = None,
+    subject_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Per-course homework analytics: class trend and resubmission score lift."""
+    from app.routers.homework import _best_candidate_for_attempt
+
+    selected_course = _apply_course_scope(subject_id, current_user, db)
+    if not selected_course:
+        raise HTTPException(status_code=400, detail="subject_id is required for homework learning analytics.")
+
+    class_ids = get_accessible_class_ids(current_user, db)
+    if selected_course.class_id:
+        class_ids = [selected_course.class_id]
+
+    hw_base = db.query(Homework).filter(Homework.subject_id == selected_course.id)
+    if class_ids:
+        hw_base = hw_base.filter(Homework.class_id.in_(class_ids))
+    if semester:
+        hw_base = hw_base.join(Subject, Subject.id == Homework.subject_id).filter(Subject.semester == semester)
+
+    homework_rows = hw_base.order_by(Homework.due_date.asc().nullslast(), Homework.id.asc()).all()
+    if not homework_rows:
+        return HomeworkLearningAnalyticsResponse(homework_trend=[], resubmit_lift=[])
+
+    hw_ids = [h.id for h in homework_rows]
+
+    sub_stats = (
+        db.query(
+            HomeworkSubmission.homework_id,
+            func.avg(HomeworkSubmission.review_score).label("avg_s"),
+            func.count(HomeworkSubmission.id).label("n_sub"),
+            func.sum(case((HomeworkSubmission.review_score.isnot(None), 1), else_=0)).label("n_scored"),
+        )
+        .filter(HomeworkSubmission.homework_id.in_(hw_ids))
+        .group_by(HomeworkSubmission.homework_id)
+        .all()
+    )
+    stats_by_hw = {row.homework_id: row for row in sub_stats}
+
+    homework_trend: list[HomeworkTrendPoint] = []
+    for hw in homework_rows:
+        row = stats_by_hw.get(hw.id)
+        avg_score = round(float(row.avg_s), 2) if row and row.avg_s is not None else 0.0
+        submission_count = int(row.n_sub) if row else 0
+        scored_count = int(row.n_scored) if row else 0
+        homework_trend.append(
+            HomeworkTrendPoint(
+                homework_id=hw.id,
+                title=hw.title,
+                due_date=hw.due_date,
+                avg_score=avg_score,
+                scored_count=scored_count,
+                submission_count=submission_count,
+            )
+        )
+
+    attempt_rows = (
+        db.query(HomeworkAttempt)
+        .filter(
+            HomeworkAttempt.homework_id.in_(hw_ids),
+            HomeworkAttempt.submission_summary_id.isnot(None),
+        )
+        .order_by(
+            HomeworkAttempt.homework_id,
+            HomeworkAttempt.student_id,
+            HomeworkAttempt.submitted_at.asc(),
+            HomeworkAttempt.id.asc(),
+        )
+        .all()
+    )
+
+    by_hw_student: dict[int, dict[int, list[HomeworkAttempt]]] = defaultdict(lambda: defaultdict(list))
+    for att in attempt_rows:
+        by_hw_student[att.homework_id][att.student_id].append(att)
+
+    resubmit_lift: list[HomeworkResubmitLift] = []
+    hw_by_id = {h.id: h for h in homework_rows}
+
+    for hw_id, student_map in by_hw_student.items():
+        first_scores: list[float] = []
+        last_scores: list[float] = []
+        for _stu_id, attempts in student_map.items():
+            if len(attempts) < 2:
+                continue
+            first_c = _best_candidate_for_attempt(db, attempts[0].id)
+            last_c = _best_candidate_for_attempt(db, attempts[-1].id)
+            if first_c is None or last_c is None:
+                continue
+            first_scores.append(float(first_c.score))
+            last_scores.append(float(last_c.score))
+
+        if not first_scores:
+            continue
+
+        hw = hw_by_id.get(hw_id)
+        title = hw.title if hw else ""
+        n = len(first_scores)
+        avg_first = round(sum(first_scores) / n, 2)
+        avg_last = round(sum(last_scores) / n, 2)
+        resubmit_lift.append(
+            HomeworkResubmitLift(
+                homework_id=hw_id,
+                title=title,
+                student_count=n,
+                avg_first_score=avg_first,
+                avg_last_score=avg_last,
+                avg_lift=round(avg_last - avg_first, 2),
+            )
+        )
+
+    resubmit_lift.sort(key=lambda x: (-x.student_count, x.homework_id))
+
+    return HomeworkLearningAnalyticsResponse(homework_trend=homework_trend, resubmit_lift=resubmit_lift)
