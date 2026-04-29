@@ -81,7 +81,10 @@ ENABLE_LLM_GRADING_WORKER=true
 LLM_GRADING_WORKER_LEADER=true
 LLM_GRADING_WORKER_POLL_SECONDS=2
 LLM_GRADING_TASK_STALE_SECONDS=600
+INIT_DEFAULT_DATA=true
 ```
+
+When **`INIT_DEFAULT_DATA=true`** (the application default), first startup also **idempotently** seeds a demo teaching bundle: accounts **`teacher`** and **`stu1`–`stu5`** (initial password **`111111`** shared), demo class **数据挖掘默认班**, course **数据挖掘**, and the first homework with full rubric text—see `app/demo_course_seed.py`. Set **`INIT_DEFAULT_DATA=false`** in production if you do not want these accounts.
 
 Notes:
 

@@ -150,6 +150,8 @@
 - ✅ 管理员端点预设：集中维护模型端点并执行视觉能力连通性校验
 - ✅ 附件处理：支持普通附件、zip、嵌套 zip、PDF、ipynb、图片与文本统一处理
 - ✅ 权限控制：教师/班主任在可访问课程范围内管理作业，学生只能查看/提交自己的作业
+- ✅ 批改完成提醒：学生通知中心可收到针对本人的作业批改完成提示（含分数摘要）
+- ✅ 成绩申诉：学生对分数可提交申诉理由；任课教师收到定向通知并可批改调整后结案
 
 ### 13. 通知中心 ✨
 - ✅ 发布通知：设置标题、内容、优先级、是否置顶
@@ -212,30 +214,26 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/joyapple/DD-CLASS.git
-cd DD-CLASS
+git clone https://github.com/YinzhuCheng/wailearning.git
+cd wailearning
 ```
 
 ### 2. 启动后端
 
+在项目根目录执行（`requirements.txt` 位于根目录）：
+
 ```bash
-# 进入后端目录
-cd app
+python3 -m venv venv
 
-# 创建虚拟环境（推荐）
-python -m venv venv
-
-# 激活虚拟环境
 # Windows:
 venv\Scripts\activate
 # Linux/Mac:
 source venv/bin/activate
 
-# 安装依赖
 pip install -r requirements.txt
 
-# 启动后端服务
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+# 首次启动前配置数据库连接：复制根目录 .env 示例或设置 DATABASE_URL（见「配置说明」）
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 后端启动后，访问 http://localhost:8001/docs 查看API文档
@@ -255,16 +253,22 @@ npm run dev
 
 前端启动后，访问 http://localhost:5173
 
-### 4. 默认登录账户
+### 4. 默认登录账户与演示数据
 
-```
-用户名: admin
-密码: admin123
-```
+管理员账号由 **`INIT_ADMIN_*`** 环境变量在**首次**初始化数据库时创建（密码哈希写入数据库），默认值见 `app/config.py`（当前示例：**用户名 `admin`，初始密码 `ChangeMe123!`**）。详见 [`scripts/ADMIN-ACCOUNT-SETUP.md`](scripts/ADMIN-ACCOUNT-SETUP.md)。
 
-⚠️ **重要**:
-- 请在生产环境中修改默认密码和默认 `SECRET_KEY`
-- 默认关闭公开注册，若要启用请在环境变量中显式开启
+当 **`INIT_DEFAULT_DATA=true`**（默认）时，还会在首次/启动时**幂等**写入一组演示教学数据（不影响已存在用户的密码覆盖逻辑；详见 `app/demo_course_seed.py`）：
+
+| 账号 | 密码 | 说明 |
+|------|------|------|
+| `teacher` | `111111` | 演示任课教师 |
+| `stu1` … `stu5` | `111111` | 同一演示班级的学生 |
+
+演示班级 **`数据挖掘默认班`**，课程 **`数据挖掘`**，并包含第一次作业的完整正文、评分要点与参考答案。
+
+⚠️ **重要**：
+- **生产环境**务必修改管理员密码、`SECRET_KEY`、`DATABASE_URL`，并评估是否将 **`INIT_DEFAULT_DATA=false`** 关闭演示种子（演示账号密码为固定弱口令）。
+- 默认关闭公开注册；若要启用请在环境变量中显式开启 **`ALLOW_PUBLIC_REGISTRATION`**。
 
 ## 📦 安装指南
 
@@ -273,7 +277,6 @@ npm run dev
 #### 1. 安装Python依赖
 
 ```bash
-cd app
 pip install -r requirements.txt
 ```
 
@@ -342,6 +345,8 @@ class Settings(BaseSettings):
 
 生产环境请将 `APP_ENV` 设为 `production`（或 `prod`），并设置足够长的随机 `SECRET_KEY`（至少 32 字符）以及非占位符的 `DATABASE_URL`。若需在非生产环境也强制校验，可设置 `REQUIRE_STRONG_SECRETS=true`。
 
+- **`INIT_DEFAULT_DATA`**（默认 `true`）：为 `true` 时，CLI `bootstrap` 与**应用启动**会写入默认管理员、默认学期、演示课程包（`teacher` / `stu1`–`stu5` 等，见上文）；生产环境若不需要演示账号可设为 `false`。详见 `app/bootstrap.py`、`app/demo_course_seed.py`。
+
 ### 阿里云安全升级说明
 
 如果你要在阿里云 ECS 上更新代码，同时尽量保护：
@@ -407,11 +412,11 @@ proxy: {
 
 ### 首次使用
 
-1. **启动服务**: 按照快速开始指南启动前后端服务
-2. **登录系统**: 使用默认账户登录
+1. **启动服务**: 按照快速开始指南启动前后端服务（后端须在项目根目录安装依赖并启动 `app.main:app`）。
+2. **登录系统**: 使用管理员账户登录（见上文「默认登录账户与演示数据」）。
 3. **初始化数据**: 
-   - 如果数据库为空，系统会自动初始化默认学期
-   - 可以手动添加班级、学生等数据
+   - 若 `INIT_DEFAULT_DATA=true`，首次启动会初始化默认学期、管理员（若不存在），以及可选的演示课程包。
+   - 也可手动添加班级、学生等数据。
 
 ### 积分系统使用
 
@@ -534,7 +539,7 @@ proxy: {
 ## 📁 项目结构
 
 ```
-DD-CLASS/
+wailearning/
 ├── app/                          # 后端应用
 │   ├── routers/                  # API路由
 │   │   ├── auth.py              # 认证相关API

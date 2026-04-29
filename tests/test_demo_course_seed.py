@@ -6,8 +6,9 @@ from sqlalchemy import text
 
 from app.database import Base, SessionLocal, engine
 from app.demo_course_seed import seed_demo_course_bundle
+from app.auth import get_password_hash
 from app.main import app
-from app.models import Homework, Student, Subject, User
+from app.models import Class, Homework, Student, Subject, User, UserRole
 from fastapi.testclient import TestClient
 
 
@@ -61,6 +62,37 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert "宽松评分原则" in (hw.rubric_text or "")
     finally:
         db.close()
+
+
+def test_demo_seed_repairs_conflicting_stu1_username():
+    """If username stu1 existed as non-student, seed fixes role and syncs password."""
+    _reset_db()
+    db = SessionLocal()
+    try:
+        klass = Class(name="数据挖掘默认班", grade=2026)
+        db.add(klass)
+        db.flush()
+        db.add(
+            User(
+                username="stu1",
+                hashed_password=get_password_hash("wrong-pass"),
+                real_name="Conflicting",
+                role=UserRole.TEACHER.value,
+                class_id=None,
+                is_active=True,
+            )
+        )
+        db.commit()
+        seed_demo_course_bundle(db)
+        stu = db.query(User).filter(User.username == "stu1").first()
+        assert stu.role == UserRole.STUDENT.value
+        assert stu.class_id == klass.id
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    r = client.post("/api/auth/login", data={"username": "stu1", "password": "111111"})
+    assert r.status_code == 200, r.text
 
 
 def test_demo_teacher_can_login():

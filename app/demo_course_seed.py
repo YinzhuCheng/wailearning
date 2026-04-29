@@ -542,15 +542,22 @@ def seed_demo_course_bundle(db: Session) -> None:
             db.add(u)
             db.flush()
             print(f"Created demo student user '{uname}'.")
-        elif u.class_id != klass.id or not u.is_active:
-            u.class_id = klass.id
-            u.is_active = True
+        else:
+            if u.role != UserRole.STUDENT.value:
+                u.role = UserRole.STUDENT.value
+            if u.class_id != klass.id or not u.is_active:
+                u.class_id = klass.id
+                u.is_active = True
             u.hashed_password = pwd_hash
 
         st = db.query(Student).filter(Student.student_no == uname, Student.class_id == klass.id).first()
         if not st:
             db.add(Student(name=display, student_no=uname, class_id=klass.id, teacher_id=teacher.id))
             print(f"Created roster row for '{uname}'.")
+        else:
+            st.teacher_id = teacher.id
+            if (st.name or "") != display:
+                st.name = display
 
     semester = (
         db.query(Semester)

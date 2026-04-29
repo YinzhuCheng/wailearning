@@ -44,7 +44,13 @@ INIT_ADMIN_REAL_NAME=System Administrator
 
 - 默认值与变量名定义：`app/config.py`（`INIT_ADMIN_*`）
 - 创建逻辑：`app/bootstrap.py`（`seed_default_admin`）
-- 本地说明中可能出现与默认配置不一致的“演示账户”表述，请以**实际 `.env` / 环境变量**和**数据库**为准。
+- 演示课程种子：`app/demo_course_seed.py`（`seed_demo_course_bundle`）；概述亦见本文 §5 与根目录 `README.md`。
+
+## 5. 演示课程种子（`teacher` / `stu1`–`stu5`）
+
+当 **`INIT_DEFAULT_DATA=true`** 时，`app/demo_course_seed.py` 中的 **`seed_demo_course_bundle`** 会在 bootstrap 与 **FastAPI 应用 lifespan** 中各执行一次（幂等）：创建演示任课教师、同一班级的五名学生用户与花名册、**「数据挖掘」** 课程及第一次作业（含评分要点与参考答案）。账号 **`teacher`**、**`stu1`** … **`stu5`** 的初始密码均为 **`111111`**。
+
+生产环境若不需要这组账号，请将 **`INIT_DEFAULT_DATA=false`**，或部署后立即修改/停用这些用户。
 
 ---
 
