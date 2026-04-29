@@ -23,12 +23,15 @@ from app.course_access import (
     prepare_student_course_context,
 )
 from app.database import get_db
+from app.homework_appeals import mark_appeal_notifications_acknowledged, notify_teachers_grade_appeal
+from app.homework_notifications import notify_student_homework_graded
 from app.llm_grading import normalize_score_for_homework, queue_grading_task, refresh_submission_summary
 from app.models import (
     Class,
     CourseEnrollment,
     Homework,
     HomeworkAttempt,
+    HomeworkGradeAppeal,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
@@ -45,6 +48,8 @@ from app.schemas import (
     HomeworkBatchRegradeRequest,
     HomeworkBatchRegradeResponse,
     HomeworkCreate,
+    HomeworkGradeAppealCreate,
+    HomeworkGradeAppealResponse,
     HomeworkListResponse,
     HomeworkRegradeRequest,
     HomeworkResponse,
@@ -56,6 +61,8 @@ from app.schemas import (
     HomeworkSubmissionStatusListResponse,
     HomeworkSubmissionStatusResponse,
     HomeworkUpdate,
+    StudentHomeworkListResponse,
+    StudentHomeworkRowResponse,
 )
 
 
@@ -293,6 +300,26 @@ def _attempt_allows_feedback_followup(
     return bool(task and task.status == "success")
 
 
+def _preview_text(value: Optional[str], limit: int = 180) -> Optional[str]:
+    if not value or not str(value).strip():
+        return None
+    s = str(value).strip().replace("\r\n", "\n").replace("\r", "\n")
+    if len(s) <= limit:
+        return s
+    return s[:limit].rstrip() + "…"
+
+
+def _submission_appeal_status(db: Session, submission_id: Optional[int]) -> Optional[str]:
+    if not submission_id:
+        return None
+    row = (
+        db.query(HomeworkGradeAppeal)
+        .filter(HomeworkGradeAppeal.submission_id == int(submission_id))
+        .first()
+    )
+    return row.status if row else None
+
+
 def _serialize_submission(db: Session, submission: HomeworkSubmission) -> HomeworkSubmissionResponse:
     refresh_submission_summary(db, submission)
     latest_task = _latest_task_for_attempt(db, submission.latest_attempt_id)
@@ -332,6 +359,7 @@ def _serialize_submission(db: Session, submission: HomeworkSubmission) -> Homewo
         latest_task_error=submission.latest_task_error,
         latest_task_error_code=diag_task.error_code if diag_task else None,
         latest_task_log=_task_call_log(diag_task),
+        appeal_status=_submission_appeal_status(db, submission.id),
     )
 
 
@@ -416,11 +444,13 @@ def _serialize_submission_status(
         status="submitted" if submission else "pending",
         submitted_at=submission.submitted_at if submission else None,
         content=submission.content if submission else None,
+        content_preview=_preview_text(submission.content if submission else None),
         attachment_name=submission.attachment_name if submission else None,
         attachment_url=submission.attachment_url if submission else None,
         used_llm_assist=bool(submission.used_llm_assist) if submission else None,
         review_score=submission.review_score if submission else None,
         review_comment=submission.review_comment if submission else None,
+        comment_preview=_preview_text(submission.review_comment if submission else None, 120),
         latest_attempt_id=submission.latest_attempt_id if submission else None,
         latest_attempt_is_late=latest_attempt.is_late if latest_attempt else None,
         latest_task_status=submission.latest_task_status if submission else None,
@@ -428,6 +458,7 @@ def _serialize_submission_status(
         latest_task_error_code=diag_task.error_code if diag_task else None,
         latest_task_log=_task_call_log(diag_task),
         attempt_count=len(submission.attempts) if submission else 0,
+        appeal_status=_submission_appeal_status(db, submission.id if submission else None),
     )
 
 
@@ -637,6 +668,89 @@ def batch_update_late_submission_policy(
         "missing_ids": missing,
         "forbidden_ids": forbidden,
     }
+
+
+@router.get(
+    "/courses/{subject_id}/students/{student_id}/homeworks",
+    response_model=StudentHomeworkListResponse,
+)
+def list_student_homeworks_for_course(
+    subject_id: int,
+    student_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can view this list.")
+
+    ensure_course_access(subject_id, current_user, db)
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+
+    enrolled = (
+        db.query(CourseEnrollment)
+        .filter(CourseEnrollment.subject_id == subject_id, CourseEnrollment.student_id == student_id)
+        .first()
+    )
+    if not enrolled:
+        raise HTTPException(status_code=403, detail="Student is not enrolled in this course.")
+
+    homeworks = (
+        db.query(Homework)
+        .filter(Homework.subject_id == subject_id)
+        .order_by(desc(Homework.created_at))
+        .all()
+    )
+    rows: list[StudentHomeworkRowResponse] = []
+    for hw in homeworks:
+        sub = (
+            db.query(HomeworkSubmission)
+            .filter(HomeworkSubmission.homework_id == hw.id, HomeworkSubmission.student_id == student_id)
+            .first()
+        )
+        if sub:
+            refresh_submission_summary(db, sub)
+        rows.append(
+            StudentHomeworkRowResponse(
+                homework_id=hw.id,
+                title=hw.title,
+                due_date=hw.due_date,
+                submitted_at=sub.submitted_at if sub else None,
+                review_score=sub.review_score if sub else None,
+                attempt_count=len(sub.attempts) if sub else 0,
+                latest_task_status=sub.latest_task_status if sub else None,
+                submission_id=sub.id if sub else None,
+                appeal_status=_submission_appeal_status(db, sub.id if sub else None),
+            )
+        )
+
+    total = len(rows)
+    offset = (page - 1) * page_size
+    page_rows = rows[offset : offset + page_size]
+    return StudentHomeworkListResponse(total=total, page=page, page_size=page_size, data=page_rows)
+
+
+@router.get("/courses/{subject_id}/students")
+def list_enrolled_students_for_course_teacher(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can view this list.")
+    ensure_course_access(subject_id, current_user, db)
+    enrollments = get_enrolled_students(subject_id, db)
+    return [
+        {
+            "student_id": e.student_id,
+            "student_name": e.student.name if e.student else None,
+            "student_no": e.student.student_no if e.student else None,
+        }
+        for e in enrollments
+    ]
 
 
 @router.get("/{homework_id}", response_model=HomeworkResponse)
@@ -991,6 +1105,8 @@ def submit_homework(
 @router.get("/{homework_id}/submissions", response_model=HomeworkSubmissionStatusListResponse)
 def get_homework_submissions(
     homework_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -1018,7 +1134,24 @@ def get_homework_submissions(
         for student in students:
             rows.append(_serialize_submission_status(db, None, submission_map.get(student.id), student))
 
-    return HomeworkSubmissionStatusListResponse(total=len(rows), data=rows)
+    rows.sort(
+        key=lambda r: (
+            0 if r.status == "submitted" else 1,
+            -(r.submitted_at.timestamp() if r.submitted_at else 0),
+            r.student_no or "",
+            r.student_name or "",
+            r.student_id,
+        )
+    )
+    total = len(rows)
+    offset = (page - 1) * page_size
+    page_rows = rows[offset : offset + page_size]
+    return HomeworkSubmissionStatusListResponse(
+        total=total,
+        page=page,
+        page_size=page_size,
+        data=page_rows,
+    )
 
 
 @router.post("/{homework_id}/submissions/batch-regrade", response_model=HomeworkBatchRegradeResponse)
@@ -1074,6 +1207,98 @@ def batch_regrade_homework_submissions(
 
     db.commit()
     return HomeworkBatchRegradeResponse(queued=queued, skipped=skipped, results=results)
+
+
+@router.post(
+    "/{homework_id}/submissions/{submission_id}/appeal",
+    response_model=HomeworkGradeAppealResponse,
+)
+def create_grade_appeal(
+    homework_id: int,
+    submission_id: int,
+    payload: HomeworkGradeAppealCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Only students can submit appeals.")
+
+    homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    student = _resolve_student_for_user(homework, current_user, db)
+    submission = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.id == submission_id,
+            HomeworkSubmission.homework_id == homework.id,
+            HomeworkSubmission.student_id == student.id,
+        )
+        .first()
+    )
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found.")
+
+    refresh_submission_summary(db, submission)
+    if submission.review_score is None and not (submission.review_comment or "").strip():
+        if submission.latest_task_status not in ("success", "failed"):
+            raise HTTPException(
+                status_code=400,
+                detail="尚无评分结果，暂不可申诉。请等待批改完成后再试。",
+            )
+
+    existing = (
+        db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == submission.id).first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="该作业已提交过申诉，请等待教师处理。")
+
+    appeal = HomeworkGradeAppeal(
+        homework_id=homework.id,
+        student_id=student.id,
+        submission_id=submission.id,
+        reason_text=payload.reason_text,
+        status="pending",
+    )
+    db.add(appeal)
+    db.flush()
+    notify_teachers_grade_appeal(
+        db,
+        appeal=appeal,
+        homework=homework,
+        student_name=student.name,
+        creator_user_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(appeal)
+    return appeal
+
+
+@router.post("/{homework_id}/submissions/{submission_id}/appeal/acknowledge", response_model=dict)
+def acknowledge_grade_appeal(
+    homework_id: int,
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can acknowledge appeals.")
+
+    homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    appeal = (
+        db.query(HomeworkGradeAppeal)
+        .filter(
+            HomeworkGradeAppeal.submission_id == submission_id,
+            HomeworkGradeAppeal.homework_id == homework.id,
+        )
+        .first()
+    )
+    if not appeal:
+        raise HTTPException(status_code=404, detail="Appeal not found.")
+
+    if appeal.status == "pending":
+        appeal.status = "acknowledged"
+        mark_appeal_notifications_acknowledged(db, appeal.id)
+    db.commit()
+    return {"message": "已标记为已阅。", "status": appeal.status}
 
 
 @router.get("/{homework_id}/submissions/{submission_id}/history", response_model=HomeworkSubmissionHistoryResponse)
@@ -1138,7 +1363,22 @@ def review_homework_submission(
         source_metadata={"submission_id": submission.id},
     )
     db.add(candidate)
+    db.flush()
     refresh_submission_summary(db, submission)
+    notify_student_homework_graded(
+        db,
+        homework_id=homework.id,
+        student_id=submission.student_id,
+        source_label="教师评分",
+        created_by_user_id=current_user.id,
+    )
+    appeal_row = (
+        db.query(HomeworkGradeAppeal)
+        .filter(HomeworkGradeAppeal.submission_id == submission.id)
+        .first()
+    )
+    if appeal_row and appeal_row.status in ("pending", "acknowledged"):
+        appeal_row.status = "resolved"
     db.commit()
     db.refresh(submission)
     return _serialize_submission(db, submission)

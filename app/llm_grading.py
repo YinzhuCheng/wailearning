@@ -32,6 +32,8 @@ import xlrd
 from sqlalchemy import and_, func, text
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.homework_notifications import notify_student_homework_graded
+
 
 def _unrar_tool_path() -> Optional[str]:
     import shutil
@@ -1370,6 +1372,13 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
             summary.latest_task_status = task.status
             summary.latest_task_error = None
             refresh_submission_summary(db, summary)
+            notify_student_homework_graded(
+                db,
+                homework_id=homework.id,
+                student_id=attempt.student_id,
+                source_label="自动评分（沿用教师评分）",
+                created_by_user_id=int(homework.created_by),
+            )
         db.commit()
         return
 
@@ -1426,6 +1435,13 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         summary.latest_task_status = task.status
         summary.latest_task_error = None
         refresh_submission_summary(db, summary)
+        notify_student_homework_graded(
+            db,
+            homework_id=homework.id,
+            student_id=attempt.student_id,
+            source_label="自动评分",
+            created_by_user_id=int(homework.created_by),
+        )
 
     db.commit()
 

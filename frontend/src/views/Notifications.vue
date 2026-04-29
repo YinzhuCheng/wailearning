@@ -69,6 +69,20 @@
               {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
+          <el-table-column v-if="showAppealActionColumn" label="申诉" width="110">
+            <template #default="{ row }">
+              <el-button
+                v-if="row.notification_kind === 'grade_appeal' && row.related_homework_id && row.related_student_id"
+                type="primary"
+                link
+                size="small"
+                @click.stop="goGradeAppeal(row)"
+              >
+                处理
+              </el-button>
+              <span v-else class="muted-text">—</span>
+            </template>
+          </el-table-column>
           <el-table-column v-if="showManageColumn" label="操作" width="180">
             <template #default="{ row }">
               <el-button
@@ -155,6 +169,9 @@
         <el-descriptions-item label="发布人">{{ currentNotification.creator_name }}</el-descriptions-item>
         <el-descriptions-item label="发布时间" :span="2">{{ formatDate(currentNotification.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="通知内容" :span="2">{{ currentNotification.content || '暂无内容' }}</el-descriptions-item>
+        <el-descriptions-item v-if="canOpenAppealFromDetail" label="申诉处理" :span="2">
+          <el-button type="primary" @click="goGradeAppeal(currentNotification)">打开对应作业评分页</el-button>
+        </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentNotification.attachment_url" type="primary" link @click="openAttachment(currentNotification)">
             {{ currentNotification.attachment_name || '下载附件' }}
@@ -168,6 +185,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
@@ -183,6 +201,7 @@ import {
 import { loadAllPages } from '@/utils/pagedFetch'
 
 const userStore = useUserStore()
+const router = useRouter()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -227,7 +246,25 @@ const showEmpty = computed(() => {
 
 const emptyText = computed(() => (isClassTeacherView.value ? '当前班主任账号没有绑定班级。' : '请先选择一门课程。'))
 const showCreateButton = computed(() => !userStore.isStudent && !isClassTeacherView.value && Boolean(selectedCourse.value))
-const showManageColumn = computed(() => !userStore.isStudent && !isClassTeacherView.value)
+const showAppealActionColumn = computed(
+  () => !userStore.isStudent && !isClassTeacherView.value && Boolean(selectedCourse.value)
+)
+
+const canOpenAppealFromDetail = computed(
+  () =>
+    currentNotification.value?.notification_kind === 'grade_appeal' &&
+    currentNotification.value?.related_homework_id &&
+    currentNotification.value?.related_student_id &&
+    !userStore.isStudent
+)
+
+const goGradeAppeal = row => {
+  if (!row?.related_homework_id || !row?.related_student_id) return
+  router.push({
+    path: `/homework/${row.related_homework_id}/submissions`,
+    query: { student_id: String(row.related_student_id) }
+  })
+}
 
 const form = reactive({
   title: '',

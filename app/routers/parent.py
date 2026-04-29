@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Deque, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_active_user
@@ -163,8 +163,11 @@ def get_class_notifications_by_parent_code(
     student = _get_parent_bound_student_or_404(parent_code, db)
 
     query = db.query(Notification).filter(
-        (Notification.class_id == None) |
-        (Notification.class_id == student.class_id)
+        or_(
+            Notification.class_id.is_(None),
+            Notification.class_id == student.class_id,
+        ),
+        or_(Notification.target_student_id.is_(None), Notification.target_student_id == student.id),
     )
 
     total = query.count()

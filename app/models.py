@@ -454,6 +454,29 @@ class HomeworkScoreCandidate(Base):
     creator = relationship("User")
 
 
+class HomeworkGradeAppeal(Base):
+    """Student appeal against displayed homework grade (reason text; teacher resolves by regrading)."""
+
+    __tablename__ = "homework_grade_appeals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    homework_id = Column(Integer, ForeignKey("homeworks.id"), nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    submission_id = Column(Integer, ForeignKey("homework_submissions.id"), nullable=False, index=True)
+    reason_text = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="pending")  # pending | acknowledged | resolved
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("submission_id", name="uq_homework_grade_appeal_submission"),
+    )
+
+    homework = relationship("Homework", backref="grade_appeals")
+    student = relationship("Student", backref="homework_grade_appeals")
+    submission = relationship("HomeworkSubmission", backref="grade_appeals")
+
+
 class HomeworkGradingTask(Base):
     __tablename__ = "homework_grading_tasks"
 
@@ -665,11 +688,17 @@ class Notification(Base):
     is_pinned = Column(Boolean, default=False)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    target_student_id = Column(Integer, ForeignKey("students.id"), nullable=True, index=True)
+    related_homework_id = Column(Integer, ForeignKey("homeworks.id"), nullable=True, index=True)
+    related_student_id = Column(Integer, ForeignKey("students.id"), nullable=True, index=True)
+    related_appeal_id = Column(Integer, ForeignKey("homework_grade_appeals.id"), nullable=True, index=True)
+    target_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    notification_kind = Column(String, nullable=False, default="general")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    creator = relationship("User", backref="notifications")
+    creator = relationship("User", foreign_keys=[created_by], backref="notifications")
     class_obj = relationship("Class", backref="notifications")
     subject = relationship("Subject", back_populates="notifications")
 

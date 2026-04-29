@@ -964,6 +964,7 @@ class HomeworkSubmissionResponse(BaseModel):
     latest_task_error: Optional[str] = None
     latest_task_error_code: Optional[str] = None
     latest_task_log: Optional[list[dict[str, Any]]] = None
+    appeal_status: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -1025,11 +1026,13 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     status: str
     submitted_at: Optional[datetime] = None
     content: Optional[str] = None
+    content_preview: Optional[str] = None
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     used_llm_assist: Optional[bool] = None
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
+    comment_preview: Optional[str] = None
     latest_attempt_id: Optional[int] = None
     latest_attempt_is_late: Optional[bool] = None
     latest_task_status: Optional[str] = None
@@ -1037,11 +1040,59 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     latest_task_error_code: Optional[str] = None
     latest_task_log: Optional[list[dict[str, Any]]] = None
     attempt_count: int = 0
+    appeal_status: Optional[str] = None
 
 
 class HomeworkSubmissionStatusListResponse(BaseModel):
     total: int
+    page: int = 1
+    page_size: int = 20
     data: List[HomeworkSubmissionStatusResponse]
+
+
+class HomeworkGradeAppealCreate(BaseModel):
+    reason_text: str = Field(..., min_length=10, max_length=8000)
+
+    @field_validator("reason_text")
+    @classmethod
+    def strip_reason(cls, value: str) -> str:
+        t = (value or "").strip()
+        if len(t) < 10:
+            raise ValueError("申诉理由至少 10 个字符。")
+        return t
+
+
+class HomeworkGradeAppealResponse(BaseModel):
+    id: int
+    homework_id: int
+    student_id: int
+    submission_id: int
+    reason_text: str
+    status: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class StudentHomeworkRowResponse(BaseModel):
+    homework_id: int
+    title: str
+    due_date: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+    review_score: Optional[float] = None
+    attempt_count: int = 0
+    latest_task_status: Optional[str] = None
+    submission_id: Optional[int] = None
+    appeal_status: Optional[str] = None
+
+
+class StudentHomeworkListResponse(BaseModel):
+    total: int
+    page: int = 1
+    page_size: int = 20
+    data: List[StudentHomeworkRowResponse]
 
 
 class HomeworkSubmissionDownloadRequest(BaseModel):
@@ -1187,6 +1238,12 @@ class NotificationBase(BaseModel):
     is_pinned: bool = False
     class_id: Optional[int] = None
     subject_id: Optional[int] = None
+    target_student_id: Optional[int] = None
+    related_homework_id: Optional[int] = None
+    related_student_id: Optional[int] = None
+    related_appeal_id: Optional[int] = None
+    target_user_id: Optional[int] = None
+    notification_kind: str = "general"
 
 
 class NotificationCreate(NotificationBase):
@@ -1203,6 +1260,12 @@ class NotificationUpdate(BaseModel):
     is_pinned: Optional[bool] = None
     class_id: Optional[int] = None
     subject_id: Optional[int] = None
+    target_student_id: Optional[int] = None
+    related_homework_id: Optional[int] = None
+    related_student_id: Optional[int] = None
+    related_appeal_id: Optional[int] = None
+    target_user_id: Optional[int] = None
+    notification_kind: Optional[str] = None
 
 
 class NotificationResponse(NotificationBase):
