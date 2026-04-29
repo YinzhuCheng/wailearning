@@ -14,6 +14,9 @@
         >
           批量迟交策略
         </el-button>
+        <el-button v-if="!userStore.isStudent && selectedCourse" @click="router.push('/homework/by-student')">
+          学生作业一览
+        </el-button>
         <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
           发布作业
         </el-button>

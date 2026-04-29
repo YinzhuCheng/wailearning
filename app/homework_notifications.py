@@ -63,6 +63,9 @@ def upsert_homework_grade_notification(
         existing.class_id = homework.class_id
         existing.subject_id = homework.subject_id
         existing.target_student_id = student.id
+        existing.notification_kind = "grade_complete"
+        existing.target_user_id = None
+        existing.related_appeal_id = None
         existing.created_by = created_by_user_id
         return existing
 
@@ -76,6 +79,7 @@ def upsert_homework_grade_notification(
         target_student_id=student.id,
         related_homework_id=homework.id,
         related_student_id=student.id,
+        notification_kind="grade_complete",
         created_by=created_by_user_id,
     )
     db.add(notification)

@@ -59,6 +59,12 @@
             </div>
             <span v-else class="muted-text">暂无评分</span>
           </el-descriptions-item>
+          <el-descriptions-item v-if="appealStatusLabel" label="申诉" :span="2">
+            <el-tag v-if="historySummary?.appeal_status === 'pending'" type="warning" size="small">申诉待处理</el-tag>
+            <el-tag v-else-if="historySummary?.appeal_status === 'acknowledged'" type="info" size="small">教师已阅</el-tag>
+            <el-tag v-else-if="historySummary?.appeal_status === 'resolved'" type="success" size="small">已处理</el-tag>
+            <span v-else class="muted-text">—</span>
+          </el-descriptions-item>
         </el-descriptions>
       </el-card>
 
@@ -115,6 +121,13 @@
             :closable="false"
             title="已达到该作业允许的最大提交次数，无法再提交。"
           />
+        </div>
+
+        <div v-if="userStore.isStudent && canShowAppealCta" class="appeal-bar">
+          <el-button type="warning" plain :disabled="appealSubmitting" @click="appealDialogVisible = true">
+            向教师申诉
+          </el-button>
+          <span class="attachment-help">如对分数或评语有异议，请说明自动评分或评语中不合理之处（至少 10 字）。每名每项作业仅可申诉一次。</span>
         </div>
 
         <el-form label-position="top" @submit.prevent>
@@ -249,6 +262,21 @@
         </el-timeline>
       </el-card>
     </template>
+
+    <el-dialog v-model="appealDialogVisible" title="向教师申诉" width="560px" destroy-on-close @closed="appealReason = ''">
+      <el-input
+        v-model="appealReason"
+        type="textarea"
+        :rows="8"
+        maxlength="8000"
+        show-word-limit
+        placeholder="请说明您认为评分或评语不合理之处（例如：自动评分忽略了哪些要点、哪条评语与您的作答不符等），至少 10 字。"
+      />
+      <template #footer>
+        <el-button @click="appealDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="appealSubmitting" @click="submitAppeal">提交申诉</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -269,6 +297,9 @@ const userStore = useUserStore()
 const loading = ref(false)
 const submitting = ref(false)
 let gradePollTimer = null
+const appealDialogVisible = ref(false)
+const appealReason = ref('')
+const appealSubmitting = ref(false)
 const homework = ref(null)
 const attachmentFile = ref(null)
 const hasExistingSubmission = ref(false)
@@ -281,6 +312,24 @@ const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
 const latestTaskStatus = computed(() => historySummary.value?.latest_task_status || '')
 const summaryReviewText = computed(() => historySummary.value?.review_comment || '')
+const appealStatusLabel = computed(() => Boolean(historySummary.value?.appeal_status))
+
+const hasGradeResult = computed(() => {
+  const h = historySummary.value
+  if (!h) return false
+  if (h.review_score !== null && h.review_score !== undefined) return true
+  if (h.review_comment && String(h.review_comment).trim()) return true
+  return h.latest_task_status === 'success' || h.latest_task_status === 'failed'
+})
+
+const canShowAppealCta = computed(
+  () =>
+    userStore.isStudent &&
+    hasExistingSubmission.value &&
+    historySummary.value?.id &&
+    !historySummary.value?.appeal_status &&
+    hasGradeResult.value
+)
 const isPastDue = computed(() => {
   if (!homework.value?.due_date) {
     return false
@@ -445,6 +494,29 @@ const uploadAttachmentIfNeeded = async () => {
   }
 }
 
+const submitAppeal = async () => {
+  const text = (appealReason.value || '').trim()
+  if (text.length < 10) {
+    ElMessage.warning('申诉理由至少 10 个字')
+    return
+  }
+  const sid = historySummary.value?.id
+  if (!sid) {
+    ElMessage.error('找不到提交记录')
+    return
+  }
+  appealSubmitting.value = true
+  try {
+    await api.homework.submitAppeal(route.params.id, sid, { reason_text: text })
+    ElMessage.success('申诉已提交，教师将收到通知')
+    appealDialogVisible.value = false
+    appealReason.value = ''
+    await loadPage()
+  } finally {
+    appealSubmitting.value = false
+  }
+}
+
 const submitForm = async () => {
   if (isSubmissionLocked.value) {
     ElMessage.warning('已超过截止时间且当前作业不允许补交。')
@@ -595,6 +667,18 @@ watch(
   flex-direction: column;
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.appeal-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
 }
 
 .submit-flow-steps {

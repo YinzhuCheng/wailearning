@@ -39,7 +39,13 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
         if not student:
             return query.filter(false())
         query = query.filter(
-            or_(Notification.target_student_id.is_(None), Notification.target_student_id == student.id)
+            Notification.target_user_id.is_(None),
+            or_(Notification.target_student_id.is_(None), Notification.target_student_id == student.id),
+        )
+
+    if current_user.role in (UserRole.TEACHER, UserRole.CLASS_TEACHER):
+        query = query.filter(
+            or_(Notification.target_user_id.is_(None), Notification.target_user_id == current_user.id)
         )
 
     if current_user.role != UserRole.ADMIN:
@@ -68,6 +74,9 @@ def _serialize_notification(notification: Notification, current_user: User, db: 
         target_student_id=notification.target_student_id,
         related_homework_id=notification.related_homework_id,
         related_student_id=notification.related_student_id,
+        related_appeal_id=notification.related_appeal_id,
+        target_user_id=notification.target_user_id,
+        notification_kind=notification.notification_kind or "general",
         created_by=notification.created_by,
         created_at=notification.created_at,
         updated_at=notification.updated_at,
@@ -133,6 +142,12 @@ def get_notification(
             not student or int(notification.target_student_id) != int(student.id)
         ):
             raise HTTPException(status_code=403, detail="You do not have access to this notification.")
+        if notification.target_user_id is not None:
+            raise HTTPException(status_code=403, detail="You do not have access to this notification.")
+
+    if current_user.role in (UserRole.TEACHER, UserRole.CLASS_TEACHER):
+        if notification.target_user_id is not None and int(notification.target_user_id) != int(current_user.id):
+            raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
     return _serialize_notification(notification, current_user, db)
 
@@ -171,6 +186,9 @@ def create_notification(
         target_student_id=data.target_student_id,
         related_homework_id=data.related_homework_id,
         related_student_id=data.related_student_id,
+        related_appeal_id=data.related_appeal_id,
+        target_user_id=data.target_user_id,
+        notification_kind=data.notification_kind or "general",
         created_by=current_user.id,
     )
     db.add(notification)
