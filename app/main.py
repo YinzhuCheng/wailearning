@@ -28,6 +28,7 @@ from app.routers import (
     homework,
     logs,
     materials,
+    material_chapters,
     notifications,
     parent,
     points,
@@ -102,6 +103,7 @@ app.include_router(system_settings.router)
 app.include_router(llm_settings.router)
 app.include_router(files.router)
 app.include_router(homework.router)
+app.include_router(material_chapters.router)
 app.include_router(materials.router)
 app.include_router(notifications.router)
 app.include_router(parent.router)

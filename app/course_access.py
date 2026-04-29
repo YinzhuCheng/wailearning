@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import Class, CourseEnrollment, CourseEnrollmentBlock, Student, Subject, User, UserRole
@@ -135,6 +136,23 @@ def ensure_course_access(course_id: int, user: User, db: Session) -> Subject:
     if course.id not in accessible_course_ids:
         raise PermissionError("You do not have access to this course.")
     return course
+
+
+def ensure_course_access_http(course_id: int, user: User, db: Session) -> Subject:
+    """Same as ensure_course_access but raises HTTP 403 for FastAPI routes."""
+    try:
+        return ensure_course_access(course_id, user, db)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="You do not have access to this course.") from None
+
+
+def is_course_instructor(user: User, course: Subject) -> bool:
+    """Whether the user may manage course structure (e.g. material chapters). Admin always; else assigned teacher."""
+    if user.role == UserRole.ADMIN:
+        return True
+    if user.role not in (UserRole.TEACHER, UserRole.CLASS_TEACHER):
+        return False
+    return course.teacher_id is not None and int(course.teacher_id) == int(user.id)
 
 
 def sync_course_enrollments(course: Subject, db: Session) -> int:

@@ -124,6 +124,7 @@ class Subject(Base):
     attendances = relationship("Attendance", back_populates="subject")
     notifications = relationship("Notification", back_populates="subject")
     materials = relationship("CourseMaterial", back_populates="subject")
+    material_chapters = relationship("CourseMaterialChapter", back_populates="subject")
     enrollments = relationship("CourseEnrollment", back_populates="course")
     llm_config = relationship("CourseLLMConfig", back_populates="subject", uselist=False)
 
@@ -720,6 +721,45 @@ class CourseMaterial(Base):
     class_obj = relationship("Class", backref="materials")
     subject = relationship("Subject", back_populates="materials")
     creator = relationship("User", backref="materials")
+    section_links = relationship(
+        "CourseMaterialSection",
+        back_populates="material",
+        cascade="all, delete-orphan",
+    )
+
+
+class CourseMaterialChapter(Base):
+    """Hierarchical chapters per course (subject). Special row is_uncategorized holds default bucket."""
+
+    __tablename__ = "course_material_chapters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
+    parent_id = Column(Integer, ForeignKey("course_material_chapters.id"), nullable=True, index=True)
+    title = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_uncategorized = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    subject = relationship("Subject", back_populates="material_chapters")
+    parent = relationship("CourseMaterialChapter", remote_side=[id], backref="children")
+
+
+class CourseMaterialSection(Base):
+    """Placement of a material under a chapter (same material may appear in multiple chapters)."""
+
+    __tablename__ = "course_material_sections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    material_id = Column(Integer, ForeignKey("course_materials.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("course_material_chapters.id", ondelete="CASCADE"), nullable=False, index=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (UniqueConstraint("material_id", "chapter_id", name="uq_course_material_section_placement"),)
+
+    material = relationship("CourseMaterial", back_populates="section_links")
+    chapter = relationship("CourseMaterialChapter", backref="section_links")
 
 
 class NotificationRead(Base):
