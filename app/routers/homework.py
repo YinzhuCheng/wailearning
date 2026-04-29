@@ -23,6 +23,7 @@ from app.course_access import (
     prepare_student_course_context,
 )
 from app.database import get_db
+from app.homework_notifications import notify_student_homework_graded
 from app.llm_grading import normalize_score_for_homework, queue_grading_task, refresh_submission_summary
 from app.models import (
     Class,
@@ -1048,7 +1049,15 @@ def review_homework_submission(
         source_metadata={"submission_id": submission.id},
     )
     db.add(candidate)
+    db.flush()
     refresh_submission_summary(db, submission)
+    notify_student_homework_graded(
+        db,
+        homework=homework,
+        submission=submission,
+        actor_user_id=current_user.id,
+        source_label="教师批改",
+    )
     db.commit()
     db.refresh(submission)
     return _serialize_submission(db, submission)

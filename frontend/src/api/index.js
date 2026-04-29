@@ -259,8 +259,11 @@ const api = {
     getSubmissions: id => http.get(`/homeworks/${id}/submissions`),
     getSubmissionHistory: (homeworkId, submissionId) =>
       http.get(`/homeworks/${homeworkId}/submissions/${submissionId}/history`),
-    reviewSubmission: (homeworkId, submissionId, data) =>
-      http.put(`/homeworks/${homeworkId}/submissions/${submissionId}/review`, data),
+    reviewSubmission: (homeworkId, submissionId, data, config = {}) =>
+      http.put(`/homeworks/${homeworkId}/submissions/${submissionId}/review`, data, {
+        returnFullResponse: true,
+        ...config
+      }),
     regradeSubmission: (homeworkId, submissionId, data = {}) =>
       http.post(`/homeworks/${homeworkId}/submissions/${submissionId}/regrade`, data),
     downloadSubmissions: (id, data) =>

@@ -17,7 +17,11 @@ from app.llm_grading import VISION_TEST_IMAGE_DATA_URL
 from app.models import (
     Class,
     CourseEnrollment,
+    CourseLLMConfig,
+    CourseLLMConfigEndpoint,
     LLMEndpointPreset,
+    LLMGroup,
+    LLMTokenUsageLog,
     Student,
     Subject,
     User,
@@ -38,6 +42,16 @@ def _reset_db():
     from app.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
+    db = SessionLocal()
+    try:
+        db.query(LLMTokenUsageLog).delete(synchronize_session=False)
+        db.query(CourseLLMConfigEndpoint).delete(synchronize_session=False)
+        db.query(LLMGroup).delete(synchronize_session=False)
+        db.query(CourseLLMConfig).delete(synchronize_session=False)
+        db.query(LLMEndpointPreset).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
     yield
     SessionLocal().close()
 
