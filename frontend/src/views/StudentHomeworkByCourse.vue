@@ -122,11 +122,23 @@ const formatDate = value => {
   return new Date(value).toLocaleString('zh-CN')
 }
 
+const ensureDefaultStudent = () => {
+  if (!students.value.length) {
+    studentId.value = null
+    return
+  }
+  const currentOk = students.value.some(s => s.student_id === studentId.value)
+  if (!currentOk) {
+    studentId.value = students.value[0].student_id
+  }
+}
+
 const loadStudents = async () => {
   if (!selectedCourse.value?.id) return
   studentsLoading.value = true
   try {
     students.value = await api.homework.listCourseStudents(selectedCourse.value.id)
+    ensureDefaultStudent()
   } finally {
     studentsLoading.value = false
   }

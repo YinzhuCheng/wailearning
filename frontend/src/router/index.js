@@ -127,26 +127,38 @@ const routes = [
       },
       {
         path: 'homework',
-        name: 'Homework',
-        component: () => import('@/views/Homework.vue')
-      },
-      {
-        path: 'homework/:id/submit',
-        name: 'HomeworkSubmit',
-        component: () => import('@/views/HomeworkSubmission.vue'),
-        meta: { title: '提交作业' }
-      },
-      {
-        path: 'homework/:id/submissions',
-        name: 'HomeworkSubmissions',
-        component: () => import('@/views/HomeworkSubmissions.vue'),
-        meta: { title: '学生提交', requiresTeacher: true }
-      },
-      {
-        path: 'homework/by-student',
-        name: 'StudentHomeworkByCourse',
-        component: () => import('@/views/StudentHomeworkByCourse.vue'),
-        meta: { title: '学生作业一览', requiresTeacher: true }
+        component: () => import('@/views/HomeworkCenterLayout.vue'),
+        redirect: { name: 'Homework' },
+        children: [
+          {
+            path: '',
+            name: 'Homework',
+            component: () => import('@/views/Homework.vue'),
+            meta: { title: '作业管理' }
+          },
+          {
+            path: 'students',
+            name: 'StudentHomeworkByCourse',
+            component: () => import('@/views/StudentHomeworkByCourse.vue'),
+            meta: { title: '学生作业一览', requiresTeacher: true }
+          },
+          {
+            path: 'by-student',
+            redirect: '/homework/students'
+          },
+          {
+            path: ':id/submit',
+            name: 'HomeworkSubmit',
+            component: () => import('@/views/HomeworkSubmission.vue'),
+            meta: { title: '提交作业' }
+          },
+          {
+            path: ':id/submissions',
+            name: 'HomeworkSubmissions',
+            component: () => import('@/views/HomeworkSubmissions.vue'),
+            meta: { title: '学生提交', requiresTeacher: true }
+          }
+        ]
       },
       {
         path: 'materials',
@@ -168,7 +180,19 @@ const router = createRouter({
 })
 
 const adminHomePath = '/students'
-const adminHiddenPaths = ['/courses', '/dashboard', '/scores', '/attendance', '/rankings', '/analysis', '/points', '/materials', '/homework', '/notifications']
+const adminHiddenPaths = [
+  '/courses',
+  '/dashboard',
+  '/scores',
+  '/attendance',
+  '/rankings',
+  '/analysis',
+  '/points',
+  '/materials',
+  '/homework',
+  '/homework/students',
+  '/notifications'
+]
 
 router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
