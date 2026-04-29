@@ -165,12 +165,13 @@
 
 <script setup>
 import { Bell, Calendar, Clock, Document, EditPen, User } from '@element-plus/icons-vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 import { buildCourseTimeCards } from '@/utils/courseTimes'
+import { onNotificationRefresh } from '@/utils/notificationSync'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -264,8 +265,17 @@ const loadWorkspace = async () => {
   }
 }
 
+let unsubscribeNotificationRefresh = () => {}
+
 onMounted(() => {
   loadWorkspace()
+  unsubscribeNotificationRefresh = onNotificationRefresh(() => {
+    loadWorkspace()
+  })
+})
+
+onBeforeUnmount(() => {
+  unsubscribeNotificationRefresh()
 })
 
 watch(selectedCourse, () => {

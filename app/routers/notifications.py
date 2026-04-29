@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, false, or_
+from sqlalchemy import desc, false, func, or_
 from sqlalchemy.orm import Session
 
 from app.attachments import delete_attachment_file_if_unreferenced
@@ -11,7 +11,13 @@ from app.course_access import ensure_course_access, get_student_profile_for_user
 from app.database import get_db
 from app.models import Class, Notification, NotificationRead, User, UserRole
 from app.routers.classes import get_accessible_class_ids
-from app.schemas import NotificationCreate, NotificationListResponse, NotificationResponse, NotificationUpdate
+from app.schemas import (
+    NotificationCreate,
+    NotificationListResponse,
+    NotificationResponse,
+    NotificationSyncStatus,
+    NotificationUpdate,
+)
 
 
 router = APIRouter(prefix="/api/notifications", tags=["通知管理"])
@@ -116,6 +122,38 @@ def get_notifications(
         unread_count=unread_count,
         data=[_serialize_notification(notification, current_user, db) for notification in notifications],
     )
+
+
+def _sync_status_for_user(current_user: User, db: Session, subject_id: Optional[int] = None) -> NotificationSyncStatus:
+    query = _visible_notifications_query(current_user, db, subject_id)
+    total = query.count()
+    latest_updated_at = query.with_entities(func.max(Notification.updated_at)).scalar()
+
+    visible_notifications = _visible_notifications_query(current_user, db, subject_id).all()
+    unread_count = 0
+    for notification in visible_notifications:
+        read_record = db.query(NotificationRead).filter(
+            NotificationRead.notification_id == notification.id,
+            NotificationRead.user_id == current_user.id,
+        ).first()
+        if not read_record or not read_record.is_read:
+            unread_count += 1
+
+    return NotificationSyncStatus(
+        total=total,
+        unread_count=unread_count,
+        latest_updated_at=latest_updated_at,
+    )
+
+
+@router.get("/sync-status", response_model=NotificationSyncStatus)
+def get_notifications_sync_status(
+    subject_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Poll-friendly snapshot; same visibility rules as the list endpoint."""
+    return _sync_status_for_user(current_user, db, subject_id)
 
 
 @router.get("/{notification_id}", response_model=NotificationResponse)

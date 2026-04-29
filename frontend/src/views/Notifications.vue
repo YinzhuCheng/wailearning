@@ -184,7 +184,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -199,6 +199,7 @@ import {
   resolveClassTeacherClassName
 } from '@/utils/classTeacher'
 import { loadAllPages } from '@/utils/pagedFetch'
+import { broadcastNotificationChange, onNotificationRefresh } from '@/utils/notificationSync'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -248,6 +249,12 @@ const emptyText = computed(() => (isClassTeacherView.value ? '当前班主任账
 const showCreateButton = computed(() => !userStore.isStudent && !isClassTeacherView.value && Boolean(selectedCourse.value))
 const showAppealActionColumn = computed(
   () => !userStore.isStudent && !isClassTeacherView.value && Boolean(selectedCourse.value)
+)
+
+const showManageColumn = computed(
+  () =>
+    !userStore.isStudent &&
+    (isClassTeacherView.value ? Boolean(currentClassId.value) : Boolean(selectedCourse.value))
 )
 
 const canOpenAppealFromDetail = computed(
@@ -430,6 +437,7 @@ const submitForm = async () => {
 
     dialogVisible.value = false
     await loadNotifications()
+    broadcastNotificationChange()
   } finally {
     submitting.value = false
   }
@@ -463,6 +471,7 @@ const deleteNotification = async row => {
     await api.notifications.delete(row.id)
     ElMessage.success('通知已删除')
     await loadNotifications()
+    broadcastNotificationChange()
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除通知失败', error)
@@ -484,6 +493,7 @@ const markAllRead = async () => {
   }
 
   await loadNotifications()
+  broadcastNotificationChange()
 }
 
 const priorityText = priority => ({
@@ -503,8 +513,17 @@ const formatDate = value => {
   return new Date(value).toLocaleString('zh-CN')
 }
 
+let unsubscribeNotificationRefresh = () => {}
+
 onMounted(() => {
   loadNotifications()
+  unsubscribeNotificationRefresh = onNotificationRefresh(() => {
+    loadNotifications()
+  })
+})
+
+onBeforeUnmount(() => {
+  unsubscribeNotificationRefresh()
 })
 
 watch(

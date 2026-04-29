@@ -113,6 +113,7 @@ import {
   resolveClassTeacherClassName
 } from '@/utils/classTeacher'
 import { loadAllPages } from '@/utils/pagedFetch'
+import { onNotificationRefresh } from '@/utils/notificationSync'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -125,6 +126,8 @@ const classTeacherCoursePool = ref([])
 const importantNotifications = ref([])
 
 let scoreChart = null
+
+let unsubscribeNotificationRefresh = () => {}
 
 const stats = reactive({
   total_students: 0,
@@ -334,6 +337,14 @@ const goTo = path => {
 }
 
 onMounted(async () => {
+  unsubscribeNotificationRefresh = onNotificationRefresh(async () => {
+    if (isClassTeacherDashboard.value) {
+      await loadClassTeacherDashboard()
+    } else {
+      await loadLegacyDashboard()
+    }
+  })
+
   if (isClassTeacherDashboard.value) {
     await loadClassTeacherDashboard()
   } else {
@@ -347,6 +358,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  unsubscribeNotificationRefresh()
   window.removeEventListener('resize', resizeChart)
   scoreChart?.dispose()
 })
