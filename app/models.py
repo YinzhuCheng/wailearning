@@ -634,7 +634,7 @@ class CourseLLMConfigEndpoint(Base):
     id = Column(Integer, primary_key=True, index=True)
     config_id = Column(Integer, ForeignKey("course_llm_configs.id", ondelete="CASCADE"), nullable=False)
     group_id = Column(Integer, ForeignKey("llm_groups.id", ondelete="CASCADE"), nullable=True)
-    preset_id = Column(Integer, ForeignKey("llm_endpoint_presets.id"), nullable=False)
+    preset_id = Column(Integer, ForeignKey("llm_endpoint_presets.id", ondelete="CASCADE"), nullable=False)
     priority = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -703,7 +703,7 @@ class LLMGlobalQuotaPolicy(Base):
 
 
 class LLMStudentTokenOverride(Base):
-    """Optional per-student daily LLM token cap (all courses share one usage pool under policy calendar)."""
+    """Optional per-student daily LLM token cap (per-course usage pool under each course's quota_timezone)."""
 
     __tablename__ = "llm_student_token_overrides"
 

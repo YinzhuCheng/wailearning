@@ -158,7 +158,7 @@
         type="info"
         :closable="false"
         class="llm-notice"
-        title="学生个人日 token 为全课共用同一池；统计日与「额度时区」由下方全局策略决定。并发数为同时处理的自动评分任务数上限。"
+        title="学生个人日 token 上限由下方默认值或批量覆盖决定；每门课在教师设置的「额度时区」下单独统计用量。下方「额度统计时区」仅用于全局展示与并发策略等，不再统一切分各课用量日。并发数为同时处理的自动评分任务数上限。"
       />
       <el-form v-loading="llmQuotaLoading" label-width="200px" style="max-width: 640px">
         <el-form-item label="默认每人每日 token">

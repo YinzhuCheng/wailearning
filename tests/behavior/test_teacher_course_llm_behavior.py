@@ -31,7 +31,7 @@ def test_t1_teacher_save_with_legacy_course_token_fields_ignored(client: TestCli
     assert data["is_enabled"] is True
 
 
-def test_t2_course_quota_timezone_archived_student_quota_uses_global_calendar(client: TestClient) -> None:
+def test_t2_course_quota_timezone_used_for_student_quota_calendar(client: TestClient) -> None:
     ensure_admin()
     ctx = make_grading_course_with_homework()
     ah = login_api(client, "pytest_admin", "pytest_admin_pass")
@@ -55,8 +55,7 @@ def test_t2_course_quota_timezone_archived_student_quota_uses_global_calendar(cl
 
     st = login_api(client, ctx["student_username"], ctx["student_password"])
     sq = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
-    pol = client.get("/api/llm-settings/admin/quota-policy", headers=ah).json()
-    assert sq["quota_timezone"] == pol["quota_timezone"]
+    assert sq["quota_timezone"] == "UTC"
 
 
 def test_t3_toggle_auto_grading_while_submissions_in_flight(client: TestClient) -> None:

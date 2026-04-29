@@ -12,6 +12,8 @@ from app.models import (
     Class,
     CourseExamWeight,
     CourseGradeScheme,
+    CourseLLMConfig,
+    CourseLLMConfigEndpoint,
     CourseMaterial,
     CourseMaterialChapter,
     Homework,
@@ -124,6 +126,13 @@ def test_demo_seed_creates_teacher_students_course_homework():
             .filter(Homework.subject_id == llm.id, Homework.title.contains("大语言模型"))
             .first()
         )
+        req_cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == course.id).first()
+        assert req_cfg is not None and req_cfg.is_enabled is True
+        assert db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == req_cfg.id).count() >= 1
+        el_cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == llm.id).first()
+        assert el_cfg is not None
+        assert el_cfg.is_enabled is False
+        assert db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == el_cfg.id).count() >= 1
     finally:
         db.close()
 

@@ -43,7 +43,7 @@ from app.models import (
     User,
     UserRole,
 )
-from app.llm_token_quota import quota_calendar
+from app.llm_token_quota import quota_calendar_for_timezone
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
@@ -247,7 +247,7 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
         )
         db.add(old_task)
         db.flush()
-        usage_date, tz = quota_calendar(db)
+        usage_date, tz = quota_calendar_for_timezone(cfg.quota_timezone or "UTC")
         db.add(
             LLMTokenUsageLog(
                 task_id=old_task.id,
