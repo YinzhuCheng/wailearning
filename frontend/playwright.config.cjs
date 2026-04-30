@@ -20,6 +20,9 @@ const sqliteUrl = isWindows
   ? `sqlite:///${sqliteFile.replace(/\\/g, '/')}`
   : `sqlite:////tmp/playwright_e2e_${E2E_API_PORT}.sqlite`
 const secretKey = 'playwright-e2e-secret-key-minimum-32-chars-xx'
+const useRealWorker = !['0', 'false', 'no', 'off'].includes(
+  String(process.env.E2E_USE_REAL_WORKER || 'true').trim().toLowerCase()
+)
 
 const apiEnv = {
   E2E_DEV_SEED_ENABLED: 'true',
@@ -27,8 +30,9 @@ const apiEnv = {
   INIT_DEFAULT_DATA: 'false',
   DATABASE_URL: sqliteUrl,
   SECRET_KEY: secretKey,
-  ENABLE_LLM_GRADING_WORKER: 'false',
-  LLM_GRADING_WORKER_LEADER: 'false'
+  ENABLE_LLM_GRADING_WORKER: useRealWorker ? 'true' : 'false',
+  LLM_GRADING_WORKER_LEADER: useRealWorker ? 'true' : 'false',
+  LLM_GRADING_WORKER_POLL_SECONDS: '1'
 }
 
 function quoteWindowsArg(value) {

@@ -1,5 +1,5 @@
 const { expect, test } = require('@playwright/test')
-const { loadE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -12,8 +12,8 @@ async function login(page, username, password) {
 }
 
 test.describe('E2E homework LLM routing controls (requires globalSetup seed)', () => {
-  test.beforeEach(({}, testInfo) => {
-    const s = scenario()
+  test.beforeEach(async ({}, testInfo) => {
+    const s = await resetE2eScenario()
     if (!s) {
       testInfo.skip(true, 'Missing e2e/.cache/scenario.json — set E2E_DEV_SEED_TOKEN and run globalSetup')
     }

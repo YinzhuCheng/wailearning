@@ -11,13 +11,25 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_password_hash
 from app.config import settings
 from app.database import get_db
-from app.llm_grading import process_next_grading_task
-from app.models import Class, CourseEnrollment, Gender, Homework, LLMEndpointPreset, Student, Subject, User, UserRole
+from app.llm_grading import process_next_grading_task, start_grading_worker, worker_manager
+from app.models import (
+    Class,
+    CourseEnrollment,
+    Gender,
+    Homework,
+    HomeworkGradingTask,
+    LLMEndpointPreset,
+    Student,
+    Subject,
+    User,
+    UserRole,
+)
 
 router = APIRouter(prefix="/api/e2e", tags=["e2e-dev"])
 
@@ -34,6 +46,7 @@ def _record_mock_llm_request(profile: str, record: dict[str, Any]) -> None:
     with _mock_llm_lock:
         slot = _mock_llm_profiles.setdefault(profile, {"steps": [], "cursor": 0, "repeat_last": True, "requests": []})
         requests = slot.setdefault("requests", [])
+        record["request_index"] = len(requests) + 1
         requests.append(record)
         if len(requests) > 200:
             del requests[:-200]
@@ -310,6 +323,53 @@ def mock_llm_state(
         }
 
 
+@router.get("/dev/grading-state")
+def grading_state_for_e2e(
+    x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    _require_seed_token(x_e2e_seed_token)
+    rows = (
+        db.query(HomeworkGradingTask.status, func.count(HomeworkGradingTask.id))
+        .group_by(HomeworkGradingTask.status)
+        .all()
+    )
+    counts = {str(status or "unknown"): int(count or 0) for status, count in rows}
+    return {
+        "worker": {
+            "enabled": bool(settings.ENABLE_LLM_GRADING_WORKER),
+            "leader_only": bool(settings.LLM_GRADING_WORKER_LEADER),
+            "running": worker_manager.is_running(),
+            "poll_seconds": int(settings.LLM_GRADING_WORKER_POLL_SECONDS or 0),
+        },
+        "tasks": {
+            "queued": counts.get("queued", 0),
+            "processing": counts.get("processing", 0),
+            "success": counts.get("success", 0),
+            "failed": counts.get("failed", 0),
+            "total": sum(counts.values()),
+        },
+    }
+
+
+@router.post("/dev/worker")
+def control_worker_for_e2e(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+) -> dict[str, Any]:
+    _require_seed_token(x_e2e_seed_token)
+    action = str(payload.get("action") or "status").strip().lower()
+    if action == "start":
+        if not settings.ENABLE_LLM_GRADING_WORKER:
+            return {"ok": False, "action": action, "running": False, "detail": "worker disabled by settings"}
+        start_grading_worker()
+    elif action == "stop":
+        worker_manager.stop()
+    elif action != "status":
+        raise HTTPException(status_code=400, detail="action must be one of: start, stop, status")
+    return {"ok": True, "action": action, "running": worker_manager.is_running()}
+
+
 @router.post("/dev/process-grading")
 def process_grading_tasks_for_e2e(
     payload: dict[str, Any] = Body(default_factory=dict),
@@ -368,6 +428,7 @@ async def mock_llm_chat_completions(
     validation = _is_validation_request(payload if isinstance(payload, dict) else {})
     step = _next_mock_llm_step(profile)
     kind = str(step.get("kind") or "ok").strip().lower()
+    sleep_seconds = float(step.get("sleep_seconds") or 0.0)
     _record_mock_llm_request(
         profile,
         {
@@ -375,12 +436,15 @@ async def mock_llm_chat_completions(
             "validation": validation,
             "model": payload.get("model"),
             "max_tokens": payload.get("max_tokens"),
+            "sleep_seconds": sleep_seconds,
             "ts": time.time(),
         },
     )
 
-    if kind == "timeout":
-        time.sleep(float(step.get("sleep_seconds") or 1.5))
+    if sleep_seconds > 0:
+        time.sleep(sleep_seconds)
+
+    if kind in {"timeout", "sleep_then_ok"}:
         body = _mock_llm_success_body(profile, step, validation=validation)
         return JSONResponse(body)
     if kind == "http_error":
@@ -389,11 +453,13 @@ async def mock_llm_chat_completions(
         if isinstance(body, (dict, list)):
             return JSONResponse(body, status_code=status_code)
         return PlainTextResponse(str(body or f"{profile}:{status_code}"), status_code=status_code)
-    if kind == "invalid_json":
+    if kind in {"invalid_json", "malformed_json"}:
         text_body = step.get("body")
         if text_body is None:
             text_body = '{"choices":[{"message":{"content":"not-json-comment"}}],"usage":{"prompt_tokens":10}}'
         return PlainTextResponse(str(text_body), media_type="application/json")
+    if kind in {"empty_body", "empty_response_body"}:
+        return PlainTextResponse("", media_type="application/json")
     if kind == "bad_grading_payload":
         body = {
             "choices": [{"message": {"content": str(step.get("content") or "plain text, not score json")}}],

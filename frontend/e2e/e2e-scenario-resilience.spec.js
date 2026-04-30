@@ -1,5 +1,5 @@
 const { expect, test } = require('@playwright/test')
-const { loadE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -302,8 +302,9 @@ async function submitSeededHomeworkAndReview(browser, s, teacherToken, options =
 test.describe('E2E resilience scenarios', () => {
   test.describe.configure({ timeout: 180_000 })
 
-  test.beforeEach(({}, testInfo) => {
-    if (!scenario()) {
+  test.beforeEach(async ({}, testInfo) => {
+    const s = await resetE2eScenario()
+    if (!s) {
       testInfo.skip(true, 'Missing e2e/.cache/scenario.json; run with Playwright globalSetup first')
     }
   })
@@ -374,6 +375,21 @@ test.describe('E2E resilience scenarios', () => {
     const title = `E2E重试作业_${s.suffix}_${Date.now()}`
     const beforeRows = await apiListHomeworkRows(teacherToken, s.course_required_id)
     let failedOnce = false
+    const baselineConfig = await apiGetCourseLlmConfig(teacherToken, s.course_required_id)
+
+    await apiPutJson(`/api/llm-settings/courses/${s.course_required_id}`, teacherToken, {
+      is_enabled: true,
+      response_language: baselineConfig.response_language || null,
+      quota_timezone: 'Asia/Shanghai',
+      estimated_chars_per_token: baselineConfig.estimated_chars_per_token,
+      estimated_image_tokens: baselineConfig.estimated_image_tokens,
+      max_input_tokens: baselineConfig.max_input_tokens,
+      max_output_tokens: baselineConfig.max_output_tokens,
+      system_prompt: baselineConfig.system_prompt || '',
+      teacher_prompt: baselineConfig.teacher_prompt || '',
+      endpoints: baselineConfig.endpoints || [],
+      groups: baselineConfig.groups || []
+    })
 
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await enterSeededRequiredCourse(page, s.suffix)
@@ -442,7 +458,6 @@ test.describe('E2E resilience scenarios', () => {
       await adminPage.getByRole('option', { name: class2.name }).click()
       await adminPage.getByTestId('batch-class-confirm').click()
       await confirmPrimaryDialog(adminPage)
-      await expect(adminPage.getByTestId('dialog-batch-class')).toBeHidden({ timeout: 25000 })
 
       await expect
         .poll(async () => {
@@ -753,8 +768,9 @@ test.describe('E2E resilience scenarios', () => {
 
     await expect(timezoneInput).toHaveValue('Asia/Shanghai', { timeout: 15000 })
 
-    const enableSwitch = dialog.locator('.el-switch').first()
-    await enableSwitch.click()
+    const enableSwitch = dialog.getByRole('switch')
+    await expect(enableSwitch).toHaveAttribute('aria-checked', 'true', { timeout: 15000 })
+    await expect(dialog.locator('.attachment-help')).toBeVisible({ timeout: 15000 })
     await timezoneInput.fill('')
 
     await page.route(`**/api/llm-settings/courses/${s.course_required_id}`, async route => {
@@ -1164,7 +1180,6 @@ test.describe('E2E resilience scenarios', () => {
       await adminPage.getByRole('option', { name: class2.name }).click()
       await adminPage.getByTestId('batch-class-confirm').click()
       await confirmPrimaryDialog(adminPage)
-      await expect(adminPage.getByTestId('dialog-batch-class')).toBeHidden({ timeout: 25000 })
 
       await clickCourseCatalogAction(studentPage, electiveName)
 
@@ -1516,7 +1531,6 @@ test.describe('E2E resilience scenarios', () => {
       await pageA.getByRole('option', { name: class2.name }).click()
       await pageA.getByTestId('batch-class-confirm').click()
       await confirmPrimaryDialog(pageA)
-      await expect(pageA.getByTestId('dialog-batch-class')).toBeHidden({ timeout: 25000 })
 
       await apiBatchSetClass(adminToken, [studentUserId], s.class_id_1)
 

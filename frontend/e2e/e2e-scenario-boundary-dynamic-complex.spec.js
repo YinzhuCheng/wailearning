@@ -2,10 +2,10 @@
  * Scenario-style Playwright tests: boundary (cold start / CRUD), dynamic (mutations visible end-to-end),
  * complex (multi-step, multi-role, optional API audit).
  *
- * Relies on globalSetup → e2e/.cache/scenario.json (same as other e2e specs).
+ * Relies on globalSetup -> e2e/.cache/scenario.json (same as other e2e specs).
  */
 const { expect, test } = require('@playwright/test')
-const { loadE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -97,9 +97,10 @@ async function apiHomeworkTitlesForSubject(token, subjectId) {
 test.describe('E2E scenarios: boundary / dynamic / complex', () => {
   test.describe.configure({ timeout: 120_000 })
 
-  test.beforeEach(({}, testInfo) => {
-    if (!scenario()) {
-      testInfo.skip(true, 'Missing e2e/.cache/scenario.json — run with Playwright globalSetup (E2E_DEV_SEED_TOKEN)')
+  test.beforeEach(async ({}, testInfo) => {
+    const s = await resetE2eScenario()
+    if (!s) {
+      testInfo.skip(true, 'Missing e2e/.cache/scenario.json - run with Playwright globalSetup (E2E_DEV_SEED_TOKEN)')
     }
   })
 
@@ -195,7 +196,7 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
     await expect(page.getByTestId('personal-profile-real-name')).toHaveValue(newName, { timeout: 15000 })
   })
 
-  test('complex: teacher publishes → student sees → teacher renames → student sees new title (API check)', async ({
+  test('complex: teacher publishes -> student sees -> teacher renames -> student sees new title (API check)', async ({
     page
   }) => {
     const s = scenario()
@@ -235,7 +236,7 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
     await expect(page.getByRole('row', { name: t1 })).toHaveCount(0)
   })
 
-  test('complex: admin and teacher contexts — admin creates course; teacher sees new course card', async ({
+  test('complex: admin and teacher contexts - admin creates course; teacher sees new course card', async ({
     browser
   }) => {
     const s = scenario()

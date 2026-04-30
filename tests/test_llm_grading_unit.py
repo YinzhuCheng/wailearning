@@ -15,13 +15,14 @@ from app.llm_grading import (
     _build_chat_completion_url,
     _parse_scoring_json,
     build_png_data_url_from_image_bytes,
+    ensure_course_llm_config,
     estimate_request_tokens_from_material,
     estimate_task_tokens,
     precheck_quota,
     validate_endpoint_connectivity,
 )
 import base64
-from app.models import CourseLLMConfig, Homework, HomeworkAttempt
+from app.models import CourseLLMConfig, Homework, HomeworkAttempt, Subject
 
 
 @pytest.fixture(autouse=True)
@@ -151,6 +152,24 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=10)
         assert ok is False
         assert code == "quota_exceeded_student"
+    finally:
+        db.close()
+
+
+def test_ensure_course_llm_config_reuses_pending_session_row():
+    db = SessionLocal()
+    try:
+        subject = Subject(name="pending-course")
+        db.add(subject)
+        db.flush()
+        pending = CourseLLMConfig(subject_id=subject.id)
+        db.add(pending)
+
+        config = ensure_course_llm_config(db, subject.id)
+
+        assert config is pending
+        db.flush()
+        assert db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject.id).count() == 1
     finally:
         db.close()
 

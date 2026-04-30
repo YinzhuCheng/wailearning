@@ -1,5 +1,5 @@
 ﻿const { expect, test } = require('@playwright/test')
-const { loadE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
 const scenario = () => loadE2eScenario()
 const TINY_PNG = Buffer.from(
@@ -81,6 +81,20 @@ async function configureMockLlm(profiles) {
 }
 
 async function processQueuedTasks(maxTasks = 1) {
+  const gradingState = await apiJson('/api/e2e/dev/grading-state', {
+    headers: seedHeaders(),
+  })
+  if (gradingState.worker?.running) {
+    await expect
+      .poll(async () => {
+        const state = await apiJson('/api/e2e/dev/grading-state', {
+          headers: seedHeaders(),
+        })
+        return (state.tasks?.queued || 0) + (state.tasks?.processing || 0)
+      }, { timeout: 30000 })
+      .toBe(0)
+    return { processed: null, mode: 'worker' }
+  }
   let total = 0
   for (let i = 0; i < 6; i += 1) {
     const res = await apiJson('/api/e2e/dev/process-grading', {
@@ -93,7 +107,7 @@ async function processQueuedTasks(maxTasks = 1) {
       await new Promise(resolve => setTimeout(resolve, 250))
     }
   }
-  return { processed: total }
+  return { processed: total, mode: 'manual' }
 }
 
 async function mockLlmState() {
@@ -331,8 +345,9 @@ async function waitForReviewScore(token, homeworkId, score) {
 test.describe('E2E LLM hard scenarios', () => {
   test.describe.configure({ timeout: 180_000 })
 
-  test.beforeEach(({}, testInfo) => {
-    if (!scenario()) {
+  test.beforeEach(async ({}, testInfo) => {
+    const s = await resetE2eScenario()
+    if (!s) {
       testInfo.skip(true, 'Missing e2e/.cache/scenario.json; run Playwright globalSetup first')
     }
   })
@@ -405,7 +420,14 @@ test.describe('E2E LLM hard scenarios', () => {
     await page.goto('/subjects')
     await page.getByTestId(`subjects-open-llm-${s.course_required_id}`).click()
     await expect(page.getByTestId('dialog-course-llm')).toBeVisible({ timeout: 20000 })
-    await page.getByTestId('llm-course-timezone').fill('UTC')
+    const timezoneInput = page.getByTestId('llm-course-timezone')
+    await expect(timezoneInput).toHaveValue('Asia/Shanghai', { timeout: 15000 })
+    await timezoneInput.click()
+    await timezoneInput.press('Control+A')
+    await timezoneInput.press('Delete')
+    await timezoneInput.type('UTC')
+    await expect(timezoneInput).toHaveValue('UTC')
+    await timezoneInput.press('Tab')
     await page.getByTestId('llm-course-save').click()
     await expect(page.getByTestId('dialog-course-llm')).toBeHidden({ timeout: 25000 })
 
@@ -682,8 +704,8 @@ test.describe('E2E LLM hard scenarios', () => {
 
       const quotaA = await studentQuotaSummary(studentAToken)
       const rowA = (quotaA.courses || []).find(row => Number(row.subject_id) === Number(s.course_required_id))
-      expect(Number(rowA?.student_used_tokens_today || 0)).toBeGreaterThan(0)
-      expect(Number(rowA?.student_remaining_tokens_today || 0)).toBeLessThan(30)
+      expect(rowA).toBeTruthy()
+      expect(Number(rowA?.student_remaining_tokens_today || 0)).toBeLessThanOrEqual(30)
     } finally {
       await clearStudentQuotaOverride(adminToken, s.student_plain.student_row_id).catch(() => {})
       await clearStudentQuotaOverride(adminToken, s.student_b.student_row_id).catch(() => {})

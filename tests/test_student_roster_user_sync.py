@@ -5,9 +5,10 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from app.auth import get_password_hash
+from app.course_access import prepare_student_course_context
 from app.database import Base, SessionLocal, engine
 from app.main import app
-from app.models import Class, Student, User, UserRole
+from app.models import Class, CourseEnrollment, Student, Subject, User, UserRole
 from app.student_user_sync import reconcile_student_users_and_roster
 from fastapi.testclient import TestClient
 
@@ -76,5 +77,39 @@ def test_reconcile_creates_user_from_roster_only():
         assert u is not None
         assert u.role == UserRole.STUDENT.value
         assert u.class_id == c.id
+    finally:
+        db.close()
+
+
+def test_prepare_student_course_context_reuses_pending_enrollment_rows():
+    _reset_db()
+    db = SessionLocal()
+    try:
+        klass = Class(name="sync-class", grade=2026)
+        db.add(klass)
+        db.flush()
+        user = User(
+            username="sync_stu",
+            hashed_password=get_password_hash("pass"),
+            real_name="Sync Stu",
+            role=UserRole.STUDENT.value,
+            class_id=klass.id,
+        )
+        db.add(user)
+        db.flush()
+        student = Student(name="Sync Stu", student_no="sync_stu", class_id=klass.id)
+        db.add(student)
+        db.flush()
+        db.add(Subject(name="required-a", class_id=klass.id, course_type="required"))
+        db.add(Subject(name="required-b", class_id=klass.id, course_type="required"))
+        db.flush()
+
+        prepare_student_course_context(user, db)
+        prepare_student_course_context(user, db)
+        db.flush()
+
+        rows = db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student.id).all()
+        assert len(rows) == 2
+        assert len({row.subject_id for row in rows}) == 2
     finally:
         db.close()

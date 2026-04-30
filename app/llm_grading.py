@@ -234,11 +234,19 @@ class _WorkerManager:
 
     def stop(self) -> None:
         self._stop_event.set()
+        thread = self._thread
         with self._lock:
             if self._executor:
                 self._executor.shutdown(wait=False)
                 self._executor = None
                 self._executor_workers = 0
+            self._thread = None
+        if thread and thread.is_alive():
+            thread.join(timeout=1.0)
+
+    def is_running(self) -> bool:
+        thread = self._thread
+        return bool(thread and thread.is_alive() and not self._stop_event.is_set())
 
     def _ensure_executor(self, workers: int) -> ThreadPoolExecutor:
         w = max(1, int(workers))
@@ -570,14 +578,31 @@ def purge_invalid_course_llm_endpoints_for_preset(db: Session, preset_id: int) -
             purge_invalid_course_llm_endpoints(db, cfg)
 
 
+def _find_session_course_llm_config(db: Session, subject_id: int) -> Optional[CourseLLMConfig]:
+    for obj in tuple(db.identity_map.values()) + tuple(db.new):
+        if isinstance(obj, CourseLLMConfig) and getattr(obj, "subject_id", None) == subject_id:
+            return obj
+    return None
+
+
 def ensure_course_llm_config(db: Session, subject_id: int, user_id: Optional[int] = None) -> CourseLLMConfig:
-    config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+    config = _find_session_course_llm_config(db, subject_id)
+    if not config:
+        config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
     created = False
     if not config:
-        config = CourseLLMConfig(subject_id=subject_id, created_by=user_id, updated_by=user_id)
-        db.add(config)
-        db.flush()
-        created = True
+        try:
+            with db.begin_nested():
+                config = CourseLLMConfig(subject_id=subject_id, created_by=user_id, updated_by=user_id)
+                db.add(config)
+                db.flush()
+                created = True
+        except IntegrityError:
+            config = _find_session_course_llm_config(db, subject_id)
+            if not config:
+                config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+        if not config:
+            raise RuntimeError(f"Failed to initialize course LLM config for subject {subject_id}.")
     if created or not _course_has_any_endpoint_row(db, config.id):
         sync_latest_validated_course_llm_template(db, config)
     purge_invalid_course_llm_endpoints(db, config)

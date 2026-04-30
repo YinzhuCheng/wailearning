@@ -598,9 +598,11 @@ def backfill_homework_grading_data(db) -> None:
     created_candidates = 0
     updated_configs = 0
     updated_submission_links = 0
+    ensured_subject_ids: set[int] = set()
 
     for homework in db.query(Homework).all():
-        if homework.subject_id:
+        if homework.subject_id and homework.subject_id not in ensured_subject_ids:
+            ensured_subject_ids.add(int(homework.subject_id))
             config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == homework.subject_id).first()
             if not config:
                 db.add(CourseLLMConfig(subject_id=homework.subject_id))

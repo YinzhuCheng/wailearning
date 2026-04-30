@@ -26,6 +26,14 @@ def subject_teacher_user_ids(db: Session, subject_id: int) -> list[int]:
     return sorted(set(ids))
 
 
+def _pending_course_enrollment_subject_ids(db: Session, student_id: int) -> set[int]:
+    subject_ids: set[int] = set()
+    for obj in tuple(db.identity_map.values()) + tuple(db.new):
+        if isinstance(obj, CourseEnrollment) and getattr(obj, "student_id", None) == student_id and obj.subject_id:
+            subject_ids.add(int(obj.subject_id))
+    return subject_ids
+
+
 def prepare_student_course_context(user: User, db: Session) -> None:
     """
     For student accounts: align roster class with account class when unambiguous,
@@ -235,6 +243,7 @@ def sync_student_course_enrollments(
         enrollment.subject_id
         for enrollment in db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student.id).all()
     }
+    existing_course_ids.update(_pending_course_enrollment_subject_ids(db, student.id))
 
     blocked_subject_ids: set[int] = set()
     if respect_enrollment_blocks:
