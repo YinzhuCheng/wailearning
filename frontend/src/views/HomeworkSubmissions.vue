@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="submissions-page" v-loading="loading">
     <div class="page-header">
       <div>
@@ -20,6 +20,7 @@
         <el-button
           v-if="homework?.auto_grading_enabled"
           type="warning"
+          data-testid="homework-submissions-batch-regrade"
           :disabled="!regradableSelection.length"
           :loading="batchRegrading"
           @click="batchRegradeSelected"
@@ -123,7 +124,7 @@
                     type="primary"
                     link
                     size="small"
-                    data-testid="btn-open-llm-log"
+                    :data-testid="`homework-submission-log-${row.student_no || row.student_id}`"
                     @click="openTaskLog(row)"
                   >
                     LLM 日志
@@ -176,10 +177,11 @@
             </el-table-column>
             <el-table-column label="操作" width="200" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" type="primary" link @click="openDetail(row)">详情</el-button>
+                <el-button size="small" type="primary" link :data-testid="`homework-submission-detail-${row.student_no || row.student_id}`" @click="openDetail(row)">详情</el-button>
                 <el-button
                   size="small"
                   :disabled="!row.submission_id"
+                  :data-testid="`homework-submission-history-${row.student_no || row.student_id}`"
                   @click="openHistory(row)"
                 >
                   历史
@@ -187,6 +189,7 @@
                 <el-button
                   v-if="homework.auto_grading_enabled"
                   size="small"
+                  :data-testid="`homework-submission-regrade-${row.student_no || row.student_id}`"
                   type="primary"
                   :disabled="!row.submission_id"
                   :loading="row.regrading"
@@ -963,3 +966,4 @@ watch(
   }
 }
 </style>
+

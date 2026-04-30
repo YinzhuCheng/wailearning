@@ -130,7 +130,7 @@
         </div>
 
         <div v-if="userStore.isStudent && canShowAppealCta" class="appeal-bar">
-          <el-button type="warning" plain :disabled="appealSubmitting" @click="appealDialogVisible = true">
+          <el-button type="warning" plain data-testid="homework-submit-open-appeal" :disabled="appealSubmitting" @click="appealDialogVisible = true">
             向教师申诉
           </el-button>
           <span class="attachment-help">如对分数或评语有异议，请说明自动评分或评语中不合理之处（至少 10 字）。每名每项作业仅可申诉一次。</span>
@@ -141,7 +141,7 @@
             v-if="historySummary?.allow_feedback_followup && attempts.length"
             label="提交方式"
           >
-            <el-radio-group v-model="form.submission_mode" :disabled="isSubmitDisabled">
+            <el-radio-group v-model="form.submission_mode" data-testid="homework-submit-mode" :disabled="isSubmitDisabled">
               <el-radio label="full">完整提交</el-radio>
               <el-radio label="feedback_followup">按反馈补充</el-radio>
             </el-radio-group>
@@ -154,6 +154,7 @@
           <el-form-item label="提交说明">
             <el-input
               v-model="form.content"
+              data-testid="homework-submit-content"
               type="textarea"
               :rows="6"
               :disabled="isSubmitDisabled"
@@ -164,6 +165,7 @@
           <el-form-item label="诚信申报">
             <el-switch
               v-model="form.used_llm_assist"
+              data-testid="homework-submit-used-llm-assist"
               :disabled="isSubmitDisabled"
               active-text="本次作答曾使用大语言模型辅助"
               inactive-text="未使用大语言模型辅助作答"
@@ -181,7 +183,7 @@
               :disabled="isSubmitDisabled"
               :on-change="handleAttachmentChange"
             >
-              <el-button :disabled="isSubmitDisabled">选择附件</el-button>
+              <el-button data-testid="homework-submit-attachment-trigger" :disabled="isSubmitDisabled">选择附件</el-button>
             </el-upload>
             <div class="attachment-help">{{ attachmentHintText }}</div>
             <div v-if="attachmentDisplayName" class="attachment-preview">
@@ -201,6 +203,7 @@
           <div class="form-actions">
             <el-button
               type="primary"
+              data-testid="homework-submit-save"
               :loading="submitting"
               :disabled="isSubmitDisabled"
               @click="submitForm"
@@ -269,9 +272,10 @@
       </el-card>
     </template>
 
-    <el-dialog v-model="appealDialogVisible" title="向教师申诉" width="560px" destroy-on-close @closed="appealReason = ''">
+    <el-dialog v-model="appealDialogVisible" data-testid="homework-submit-appeal-dialog" title="向教师申诉" width="560px" destroy-on-close @closed="appealReason = ''">
       <el-input
         v-model="appealReason"
+        data-testid="homework-submit-appeal-reason"
         type="textarea"
         :rows="8"
         maxlength="8000"
@@ -280,7 +284,7 @@
       />
       <template #footer>
         <el-button @click="appealDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="appealSubmitting" @click="submitAppeal">提交申诉</el-button>
+        <el-button type="primary" data-testid="homework-submit-appeal-confirm" :loading="appealSubmitting" @click="submitAppeal">提交申诉</el-button>
       </template>
     </el-dialog>
   </div>

@@ -973,10 +973,22 @@ def estimate_task_tokens(
 _o200k_encoder: Optional[tiktoken.Encoding] = None
 
 
+class _ApproxTokenEncoder:
+    """Offline-safe fallback for quota estimation when tiktoken assets are unavailable."""
+
+    def encode(self, text: str) -> list[int]:
+        raw = (text or "").encode("utf-8", errors="ignore")
+        approx = max(1, (len(raw) + 3) // 4)
+        return [0] * approx
+
+
 def _get_o200k_encoder() -> tiktoken.Encoding:
     global _o200k_encoder
     if _o200k_encoder is None:
-        _o200k_encoder = tiktoken.encoding_for_model("gpt-4o")
+        try:
+            _o200k_encoder = tiktoken.encoding_for_model("gpt-4o")
+        except Exception:
+            _o200k_encoder = _ApproxTokenEncoder()
     return _o200k_encoder
 
 

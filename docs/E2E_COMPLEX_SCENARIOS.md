@@ -183,3 +183,50 @@
 - 能验证“没有重复、没有半完成、没有冲突残留”
 
 如果一个场景只验证单个接口返回值或单个按钮可点击，它更适合写成 `pytest` 或普通回归测试，而不是复杂 E2E。
+## 2026-04 LLM Hard Scenario Addendum
+
+The repository now contains `frontend/e2e/e2e-llm-hard-scenarios.spec.js`, a 12-case suite focused on UI-entered LLM grading failures, routing, concurrency, recovery, and security.
+
+### New scenario classes now covered
+
+- Admin creates and validates presets, then teachers consume them from course configuration UI.
+- Teacher saves course defaults without wiping API-configured LLM groups.
+- Two students submit concurrently with group failover from a broken endpoint to a healthy endpoint.
+- Homework routing switches to the latest validated passing preset after a newer preset is validated.
+- Homework-level preset restriction overrides broader course routing.
+- Teacher batch regrade recovers malformed grading payload failures without duplicate final records.
+- Per-student quota overrides split concurrent calls into one failure and one success.
+- Teacher detail view renders malicious student HTML as text and does not execute it.
+- Student re-login and stale page reload recover the final grading state after backend repair.
+- Feedback-followup still converges under stale `selected_course`.
+- Single-student 429 retry succeeds without duplicate final grading rows.
+- Teacher submission log shows routing failure details before a repaired regrade succeeds.
+
+### Additional design rules extracted from the run
+
+1. Routing tests must separate product semantics from mock-server bookkeeping.
+   - If a mock reconfiguration resets request history, assert on score/state before the reset and on the new route after the reset.
+
+2. Quota tests must verify outcome-level truth.
+   - The important contract is split outcome, quota enforcement, and remaining budget reduction.
+   - Exact remaining-token equality is only valid when the reservation formula is stable and intentionally exposed.
+
+3. Helper APIs used by E2E must preserve production semantics.
+   - Forced preset validation must write `validated_at`.
+   - A helper that only flips status flags can make routing tests nondeterministic.
+
+4. UI-first does not mean UI-only.
+   - Start with browser interactions.
+   - End with either a visible browser state or a backend state poll that proves authoritative convergence.
+
+5. Complex selectors must be local, not global.
+   - Scope actions to rows, dialogs, or specific widgets.
+   - Avoid plain text matches for duplicated scores, statuses, or repeated Chinese labels.
+
+### Review checklist for future hard LLM scenarios
+
+- Enter through a real page, not a backend-only seed path.
+- Include at least one async boundary: queue, retry, re-login, refresh, or regrade.
+- Include one final-state assertion that is not satisfied by a transient intermediate state.
+- Prefer route-specific `data-testid` values over translated display strings.
+- If the scenario uses a helper endpoint, confirm that the helper preserves timestamps, ordering, and failure modes required by the product contract.

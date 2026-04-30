@@ -1,19 +1,90 @@
-"""Ephemeral test data for Playwright / local E2E. Disabled unless E2E_DEV_SEED_ENABLED and token match."""
+"""Ephemeral test data and mock integrations for Playwright / local E2E."""
 
 from __future__ import annotations
 
+import json
+import threading
+import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.auth import get_password_hash
 from app.config import settings
 from app.database import get_db
-from app.models import Class, CourseEnrollment, Gender, Homework, Student, Subject, User, UserRole
+from app.llm_grading import process_next_grading_task
+from app.models import Class, CourseEnrollment, Gender, Homework, LLMEndpointPreset, Student, Subject, User, UserRole
 
 router = APIRouter(prefix="/api/e2e", tags=["e2e-dev"])
+
+_mock_llm_lock = threading.Lock()
+_mock_llm_profiles: dict[str, dict[str, Any]] = {}
+
+
+def _reset_mock_llm_state() -> None:
+    with _mock_llm_lock:
+        _mock_llm_profiles.clear()
+
+
+def _record_mock_llm_request(profile: str, record: dict[str, Any]) -> None:
+    with _mock_llm_lock:
+        slot = _mock_llm_profiles.setdefault(profile, {"steps": [], "cursor": 0, "repeat_last": True, "requests": []})
+        requests = slot.setdefault("requests", [])
+        requests.append(record)
+        if len(requests) > 200:
+            del requests[:-200]
+
+
+def _next_mock_llm_step(profile: str) -> dict[str, Any]:
+    with _mock_llm_lock:
+        slot = _mock_llm_profiles.setdefault(profile, {"steps": [], "cursor": 0, "repeat_last": True, "requests": []})
+        steps = list(slot.get("steps") or [])
+        cursor = int(slot.get("cursor") or 0)
+        repeat_last = bool(slot.get("repeat_last", True))
+        if not steps:
+            step = {"kind": "ok", "score": 80.0, "comment": f"{profile}:ok"}
+        elif cursor < len(steps):
+            step = dict(steps[cursor] or {})
+            slot["cursor"] = cursor + 1
+        elif repeat_last:
+            step = dict(steps[-1] or {})
+        else:
+            step = {"kind": "ok", "score": 80.0, "comment": f"{profile}:default"}
+        return step
+
+
+def _is_validation_request(payload: dict[str, Any]) -> bool:
+    messages = payload.get("messages") or []
+    if not messages:
+        return False
+    first = messages[0]
+    content = first.get("content")
+    if isinstance(content, str):
+        return "single word: OK" in content or "reply with OK" in content
+    if isinstance(content, list):
+        joined = " ".join(str(part.get("text") or "") for part in content if isinstance(part, dict))
+        return "reply with OK" in joined
+    return False
+
+
+def _mock_llm_success_body(profile: str, step: dict[str, Any], *, validation: bool) -> dict[str, Any]:
+    if validation:
+        content = str(step.get("text") or "OK")
+    else:
+        payload = {
+            "score": float(step.get("score", 80.0)),
+            "comment": str(step.get("comment") or f"{profile}:ok"),
+        }
+        content = json.dumps(payload, ensure_ascii=False)
+    usage = step.get("usage") or {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+    return {
+        "choices": [{"message": {"content": content}}],
+        "usage": usage,
+    }
 
 
 def _require_seed_token(x_e2e_seed_token: str | None) -> None:
@@ -33,6 +104,7 @@ def reset_e2e_scenario(
     Create isolated users/classes/courses for UI tests. Safe to call repeatedly (new suffix each time).
     """
     _require_seed_token(x_e2e_seed_token)
+    _reset_mock_llm_state()
 
     suffix = uuid.uuid4().hex[:10]
     pwd = "E2eTest1!"
@@ -195,3 +267,148 @@ def reset_e2e_scenario(
         "user_ids_for_batch": [u_plain.id, u_b.id],
         "teacher_user_id": t_own.id,
     }
+
+
+@router.post("/dev/mock-llm/configure")
+def configure_mock_llm(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+) -> dict[str, Any]:
+    _require_seed_token(x_e2e_seed_token)
+    profiles = payload.get("profiles")
+    if not isinstance(profiles, dict):
+        raise HTTPException(status_code=400, detail="profiles must be an object.")
+    with _mock_llm_lock:
+        _mock_llm_profiles.clear()
+        for profile, cfg in profiles.items():
+            row = cfg if isinstance(cfg, dict) else {}
+            _mock_llm_profiles[str(profile)] = {
+                "steps": list(row.get("steps") or []),
+                "cursor": 0,
+                "repeat_last": bool(row.get("repeat_last", True)),
+                "requests": [],
+            }
+    return {"profiles": sorted(_mock_llm_profiles.keys())}
+
+
+@router.get("/dev/mock-llm/state")
+def mock_llm_state(
+    x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+) -> dict[str, Any]:
+    _require_seed_token(x_e2e_seed_token)
+    with _mock_llm_lock:
+        return {
+            "profiles": {
+                name: {
+                    "cursor": int(cfg.get("cursor") or 0),
+                    "repeat_last": bool(cfg.get("repeat_last", True)),
+                    "steps": list(cfg.get("steps") or []),
+                    "requests": list(cfg.get("requests") or []),
+                }
+                for name, cfg in _mock_llm_profiles.items()
+            }
+        }
+
+
+@router.post("/dev/process-grading")
+def process_grading_tasks_for_e2e(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+) -> dict[str, Any]:
+    _require_seed_token(x_e2e_seed_token)
+    max_tasks = int(payload.get("max_tasks") or 1)
+    max_tasks = max(0, min(max_tasks, 50))
+    processed = 0
+    for _ in range(max_tasks):
+        if not process_next_grading_task():
+            break
+        processed += 1
+    return {"processed": processed}
+
+
+@router.post("/dev/mark-preset-validated")
+def mark_preset_validated_for_e2e(
+    payload: dict[str, Any] = Body(default_factory=dict),
+    x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    _require_seed_token(x_e2e_seed_token)
+    preset_id = payload.get("preset_id")
+    try:
+        preset_id = int(preset_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="preset_id must be an integer.") from exc
+    preset = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.id == preset_id).first()
+    if not preset:
+        raise HTTPException(status_code=404, detail="Endpoint preset not found.")
+    preset.validation_status = "validated"
+    preset.validation_message = str(payload.get("validation_message") or "e2e dev forced validated")
+    preset.text_validation_status = "passed"
+    preset.text_validation_message = "e2e dev forced validated"
+    preset.vision_validation_status = "passed"
+    preset.vision_validation_message = "e2e dev forced validated"
+    preset.supports_vision = True
+    preset.validated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"id": preset.id, "validation_status": preset.validation_status, "supports_vision": preset.supports_vision}
+
+
+@router.post("/dev/mock-llm/{profile}/v1/chat/completions")
+async def mock_llm_chat_completions(
+    profile: str,
+    request: Request,
+):
+    if not settings.E2E_DEV_SEED_ENABLED:
+        raise HTTPException(status_code=404, detail="E2E dev seed is disabled.")
+    try:
+        payload = await request.json()
+    except Exception as exc:  # pragma: no cover - malformed request path
+        raise HTTPException(status_code=400, detail=f"invalid json body: {exc}") from exc
+
+    validation = _is_validation_request(payload if isinstance(payload, dict) else {})
+    step = _next_mock_llm_step(profile)
+    kind = str(step.get("kind") or "ok").strip().lower()
+    _record_mock_llm_request(
+        profile,
+        {
+            "kind": kind,
+            "validation": validation,
+            "model": payload.get("model"),
+            "max_tokens": payload.get("max_tokens"),
+            "ts": time.time(),
+        },
+    )
+
+    if kind == "timeout":
+        time.sleep(float(step.get("sleep_seconds") or 1.5))
+        body = _mock_llm_success_body(profile, step, validation=validation)
+        return JSONResponse(body)
+    if kind == "http_error":
+        status_code = int(step.get("status_code") or 500)
+        body = step.get("body")
+        if isinstance(body, (dict, list)):
+            return JSONResponse(body, status_code=status_code)
+        return PlainTextResponse(str(body or f"{profile}:{status_code}"), status_code=status_code)
+    if kind == "invalid_json":
+        text_body = step.get("body")
+        if text_body is None:
+            text_body = '{"choices":[{"message":{"content":"not-json-comment"}}],"usage":{"prompt_tokens":10}}'
+        return PlainTextResponse(str(text_body), media_type="application/json")
+    if kind == "bad_grading_payload":
+        body = {
+            "choices": [{"message": {"content": str(step.get("content") or "plain text, not score json")}}],
+            "usage": step.get("usage") or {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        }
+        return JSONResponse(body)
+    if kind == "empty_message":
+        body = {
+            "choices": [{"message": {"content": ""}}],
+            "usage": step.get("usage") or {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        }
+        return JSONResponse(body)
+    if kind == "rate_limit":
+        body = step.get("body") or {"error": "rate limited"}
+        return JSONResponse(body, status_code=int(step.get("status_code") or 429))
+
+    body = _mock_llm_success_body(profile, step, validation=validation)
+    return JSONResponse(body)

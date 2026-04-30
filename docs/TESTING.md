@@ -246,3 +246,45 @@ npm run test:e2e
 - 新增学生页面时，默认补“fresh login 无课程上下文”和“stale selected_course 缓存”两条用例。
 - 新增异步任务时，默认补“首次失败后恢复”和“轮询中断后恢复”用例。
 - 对真正需要幂等的写路径，优先同时加数据库唯一约束和接口层冲突处理，不只写前端防抖。
+## 2026-04 LLM Hard E2E Notes
+
+This round added and verified `frontend/e2e/e2e-llm-hard-scenarios.spec.js` with 12 UI-first LLM scenarios.
+
+### What we learned while fixing the suite
+
+1. `latest_passing_validated` is only deterministic if forced validation also writes `validated_at`.
+   - E2E helper routes that mark a preset as validated must set both status fields and validation time.
+   - Otherwise routing may pass by accident in one run and pick the wrong preset in another.
+
+2. Mock LLM reconfiguration currently clears per-profile request history.
+   - `POST /api/e2e/dev/mock-llm/configure` resets `_mock_llm_profiles`.
+   - Tests must not assert cumulative request counts across multiple configure calls unless they snapshot state before reconfiguration.
+
+3. Quota assertions should check invariants, not fake precision.
+   - In concurrent quota tests, assert that one student fails, one succeeds, and failed-path usage leaves the remaining quota reduced.
+   - Do not require `student_remaining_tokens_today == 0` unless the exact reservation math is part of the product contract.
+
+4. UI assertions need stable anchors.
+   - Prefer `data-testid`, row-scoped actions, or authoritative backend polling.
+   - Avoid broad text assertions such as a naked score string when the page can render the same number in multiple places.
+
+5. For Windows local runs, use the repo-pinned Python, local Playwright browser cache, and direct Playwright CLI invocation when shell wrappers are flaky.
+
+### Windows command that worked in this repo
+
+From `frontend/`:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='C:\Users\bloom\AppData\Local\ms-playwright'
+$env:E2E_API_URL='http://127.0.0.1:8012'
+$env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:3012'
+$env:E2E_DEV_SEED_TOKEN='test-playwright-seed'
+& 'C:\Program Files\nodejs\node.exe' '.\node_modules\@playwright\test\cli.js' test --grep 'E2E LLM hard scenarios'
+```
+
+### Documentation-level rules for future LLM E2E
+
+- Every scenario must start from UI and end in either visible UI state or authoritative backend state.
+- Multi-LLM routing tests must distinguish between routing correctness and mock-history bookkeeping.
+- Re-login and refresh recovery tests should always verify the final authoritative state after async grading completes.
+- When adding E2E helper APIs, keep their semantics aligned with production code paths, especially timestamps and status transitions.

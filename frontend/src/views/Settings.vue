@@ -93,7 +93,7 @@
       <template #header>
         <div class="card-header card-header--space">
           <span><el-icon><Connection /></el-icon> LLM 端点预设</span>
-          <el-button type="primary" @click="openPresetDialog()">新增端点</el-button>
+          <el-button type="primary" data-testid="settings-llm-preset-create" @click="openPresetDialog()">新增端点</el-button>
         </div>
       </template>
 
@@ -143,8 +143,8 @@
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" @click="openPresetDialog(row)">编辑</el-button>
-            <el-button size="small" :loading="row.validating" @click="openValidateDialog(row)">校验</el-button>
+            <el-button size="small" type="primary" :data-testid="`settings-llm-preset-edit-${row.id}`" @click="openPresetDialog(row)">编辑</el-button>
+            <el-button size="small" :data-testid="`settings-llm-preset-validate-${row.id}`" :loading="row.validating" @click="openValidateDialog(row)">校验</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -162,16 +162,16 @@
       />
       <el-form v-loading="llmQuotaLoading" label-width="200px" style="max-width: 640px">
         <el-form-item label="默认每人每日 token">
-          <el-input-number v-model="llmQuotaForm.default_daily_student_tokens" :min="1" :step="10000" style="width: 100%" />
+          <el-input-number v-model="llmQuotaForm.default_daily_student_tokens" data-testid="settings-llm-quota-default" :min="1" :step="10000" style="width: 100%" />
         </el-form-item>
         <el-form-item label="并发评分任务数">
-          <el-input-number v-model="llmQuotaForm.max_parallel_grading_tasks" :min="1" :max="64" :step="1" style="width: 100%" />
+          <el-input-number v-model="llmQuotaForm.max_parallel_grading_tasks" data-testid="settings-llm-quota-max-parallel" :min="1" :max="64" :step="1" style="width: 100%" />
         </el-form-item>
         <el-form-item label="额度统计时区">
-          <el-input v-model="llmQuotaForm.quota_timezone" placeholder="例如 Asia/Shanghai" />
+          <el-input v-model="llmQuotaForm.quota_timezone" data-testid="settings-llm-quota-timezone" placeholder="例如 Asia/Shanghai" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="llmQuotaSaving" @click="saveLlmQuotaPolicy">保存全局策略</el-button>
+          <el-button type="primary" data-testid="settings-llm-quota-save" :loading="llmQuotaSaving" @click="saveLlmQuotaPolicy">保存全局策略</el-button>
         </el-form-item>
       </el-form>
       <el-divider />
@@ -227,7 +227,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="validateDialogVisible" title="端点连通性校验" width="480px" destroy-on-close>
+    <el-dialog v-model="validateDialogVisible" data-testid="settings-llm-validate-dialog" title="端点连通性校验" width="480px" destroy-on-close>
       <p class="validate-hint">
         请先选一张本地图片（JPEG/PNG/WebP 等，建议小于 5MB）用于多模态测试。校验顺序：纯文本 → 带图请求。
       </p>
@@ -238,50 +238,50 @@
         :on-change="onValidateFileChange"
         :on-exceed="() => ElMessage.warning('只需选择一张图片')"
       >
-        <el-button type="primary">选择测试图</el-button>
+        <el-button type="primary" data-testid="settings-llm-validate-file-trigger">选择测试图</el-button>
         <template #tip>
           <div v-if="validateFileName" class="validate-file-name">已选：{{ validateFileName }}</div>
         </template>
       </el-upload>
       <template #footer>
         <el-button @click="validateDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="validateDialogLoading" @click="runValidate">开始校验</el-button>
+        <el-button type="primary" data-testid="settings-llm-validate-start" :loading="validateDialogLoading" @click="runValidate">开始校验</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="presetDialogVisible" :title="editingPresetId ? '编辑 LLM 端点' : '新增 LLM 端点'" width="620px" destroy-on-close>
+    <el-dialog v-model="presetDialogVisible" data-testid="settings-llm-preset-dialog" :title="editingPresetId ? '编辑 LLM 端点' : '新增 LLM 端点'" width="620px" destroy-on-close>
       <el-form :model="presetForm" label-width="130px">
         <el-form-item label="预设名称">
-          <el-input v-model="presetForm.name" placeholder="例如 OpenAI Vision 主端点" />
+          <el-input v-model="presetForm.name" data-testid="settings-llm-preset-name" placeholder="例如 OpenAI Vision 主端点" />
         </el-form-item>
         <el-form-item label="Base URL">
-          <el-input v-model="presetForm.base_url" placeholder="例如 https://api.example.com/v1/" />
+          <el-input v-model="presetForm.base_url" data-testid="settings-llm-preset-base-url" placeholder="例如 https://api.example.com/v1/" />
         </el-form-item>
         <el-form-item label="API Key">
-          <el-input v-model="presetForm.api_key" type="password" show-password placeholder="仅服务端保存，不会下发浏览器" />
+          <el-input v-model="presetForm.api_key" data-testid="settings-llm-preset-api-key" type="password" show-password placeholder="仅服务端保存，不会下发浏览器" />
         </el-form-item>
         <el-form-item label="模型名">
-          <el-input v-model="presetForm.model_name" placeholder="例如 gpt-4.1-mini" />
+          <el-input v-model="presetForm.model_name" data-testid="settings-llm-preset-model" placeholder="例如 gpt-4.1-mini" />
         </el-form-item>
         <el-form-item label="连接超时（秒）">
-          <el-input-number v-model="presetForm.connect_timeout_seconds" :min="1" :max="300" style="width: 100%" />
+          <el-input-number v-model="presetForm.connect_timeout_seconds" data-testid="settings-llm-preset-connect-timeout" :min="1" :max="300" style="width: 100%" />
         </el-form-item>
         <el-form-item label="读取超时（秒）">
-          <el-input-number v-model="presetForm.read_timeout_seconds" :min="1" :max="600" style="width: 100%" />
+          <el-input-number v-model="presetForm.read_timeout_seconds" data-testid="settings-llm-preset-read-timeout" :min="1" :max="600" style="width: 100%" />
         </el-form-item>
         <el-form-item label="重试次数">
-          <el-input-number v-model="presetForm.max_retries" :min="0" :max="10" style="width: 100%" />
+          <el-input-number v-model="presetForm.max_retries" data-testid="settings-llm-preset-max-retries" :min="0" :max="10" style="width: 100%" />
         </el-form-item>
         <el-form-item label="初始退避（秒）">
-          <el-input-number v-model="presetForm.initial_backoff_seconds" :min="1" :max="120" style="width: 100%" />
+          <el-input-number v-model="presetForm.initial_backoff_seconds" data-testid="settings-llm-preset-initial-backoff" :min="1" :max="120" style="width: 100%" />
         </el-form-item>
         <el-form-item label="是否启用">
-          <el-switch v-model="presetForm.is_active" />
+          <el-switch v-model="presetForm.is_active" data-testid="settings-llm-preset-active" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="presetDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="presetSaving" @click="savePreset">保存</el-button>
+        <el-button type="primary" data-testid="settings-llm-preset-save" :loading="presetSaving" @click="savePreset">保存</el-button>
       </template>
     </el-dialog>
   </div>

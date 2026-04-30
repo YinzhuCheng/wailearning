@@ -144,7 +144,7 @@
                 从花名册进课
               </el-button>
               <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
-              <el-button type="success" size="small" @click="openLlmConfigDialog(row)">LLM 配置</el-button>
+              <el-button type="success" size="small" :data-testid="`subjects-open-llm-${row.id}`" @click="openLlmConfigDialog(row)">LLM 配置</el-button>
               <el-button type="danger" size="small" @click="deleteCourse(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -331,6 +331,7 @@
 
       <el-dialog
         v-model="llmDialogVisible"
+        data-testid="dialog-course-llm"
         :title="llmDialogCourse ? `${llmDialogCourse.name} · LLM 配置` : 'LLM 配置'"
         width="960px"
         destroy-on-close
@@ -344,7 +345,7 @@
           />
 
           <el-form-item label="启用自动评分">
-            <el-switch v-model="llmForm.is_enabled" />
+            <el-switch v-model="llmForm.is_enabled" data-testid="llm-course-enable" />
           </el-form-item>
 
           <el-form-item label="响应语言">
@@ -368,7 +369,7 @@
           </el-form-item>
 
           <el-form-item label="额度时区">
-            <el-input v-model="llmForm.quota_timezone" placeholder="例如 UTC / Asia/Shanghai（本课程 LLM 用量按此时区划分自然日）" />
+            <el-input v-model="llmForm.quota_timezone" data-testid="llm-course-timezone" placeholder="例如 UTC / Asia/Shanghai（本课程 LLM 用量按此时区划分自然日）" />
           </el-form-item>
 
           <el-alert
@@ -428,8 +429,10 @@
                 v-for="preset in llmPresets"
                 :key="preset.id"
                 class="llm-endpoint-row"
+                :data-testid="`llm-course-preset-row-${preset.id}`"
               >
                 <el-checkbox
+                  :data-testid="`llm-course-preset-toggle-${preset.id}`"
                   :model-value="isPresetSelected(preset.id)"
                   :disabled="preset.validation_status !== 'validated' || !preset.supports_vision"
                   @change="checked => togglePresetSelection(preset, checked)"
@@ -447,6 +450,7 @@
 
                 <el-input-number
                   v-if="isPresetSelected(preset.id)"
+                  :data-testid="`llm-course-preset-priority-${preset.id}`"
                   :model-value="getPresetPriority(preset.id)"
                   :min="1"
                   @update:model-value="value => updatePresetPriority(preset.id, value)"
@@ -458,7 +462,7 @@
 
         <template #footer>
           <el-button @click="llmDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="llmSaving" @click="saveLlmConfig">保存配置</el-button>
+          <el-button type="primary" data-testid="llm-course-save" :loading="llmSaving" @click="saveLlmConfig">保存配置</el-button>
         </template>
       </el-dialog>
     </template>
