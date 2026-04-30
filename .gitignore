@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv/
 venv/
 env/
 ENV/
@@ -57,6 +58,8 @@ parent-portal/dist/
 parent-portal/.vite/
 
 # Temp Files
+.pytest_tmp/
+test-results/
 *.pyc
 create_*.py
 add_*.py
