@@ -7,10 +7,12 @@ This directory is the authoritative documentation home for the repository. The r
 - [System Overview](architecture/SYSTEM_OVERVIEW.md)
 - [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
+- [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 - [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
 - [Parent Portal](product/PARENT_PORTAL.md)
 - [Git Workflow](development/GIT_WORKFLOW.md)
 - [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
+- [Test-Inferred Risks And Follow-Ups](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 ## Documentation Principles
 
@@ -24,11 +26,13 @@ This directory is the authoritative documentation home for the repository. The r
 
 1. [System Overview](architecture/SYSTEM_OVERVIEW.md)
 2. [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
+3. [Test-Inferred Risks And Follow-Ups](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 ### Local development
 
 1. [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
 2. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
+3. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 
 ### Production deployment
 

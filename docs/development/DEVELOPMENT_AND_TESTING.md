@@ -72,6 +72,7 @@ Key files:
 
 - `apps/web/admin/playwright.config.cjs`
 - `tests/e2e/web-admin/`
+- `docs/development/TEST_EXECUTION_PITFALLS.md`
 
 ## E2E Seed and Environment
 
@@ -141,6 +142,7 @@ Recent behavior coverage includes scenarios such as:
 - Prefer stable identifiers and API-level validation over UI copy.
 - Run the narrow failing test first, then the relevant suite, then the broader suite.
 - Separate product bugs from environment mistakes such as working-directory or temp-path issues.
+- If running on Windows + PowerShell, review `TEST_EXECUTION_PITFALLS.md` before assuming Playwright or pytest failures are product regressions.
 
 ## After Documentation Updates
 

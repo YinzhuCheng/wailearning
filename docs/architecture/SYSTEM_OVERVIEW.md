@@ -66,13 +66,13 @@ LLM support is tightly integrated with homework and course configuration.
 - Attachments are normalized into model-friendly payloads where possible.
 - Teachers can recover from failures through regrade flows without losing attempt history.
 
-The implementation details are documented in [LLM_HOMEWORK_GUIDE.md](LLM_HOMEWORK_GUIDE.md).
+The implementation details are documented in [../product/LLM_HOMEWORK_GUIDE.md](../product/LLM_HOMEWORK_GUIDE.md).
 
 ## Architecture
 
 ### Backend
 
-- FastAPI application in `app/`
+- FastAPI application in `apps/backend/app/`
 - SQLAlchemy models and bootstrap migrations
 - PostgreSQL as the primary database
 - In-process grading worker controlled by configuration
@@ -126,4 +126,4 @@ On application startup, the backend:
 - optionally seeds demo data,
 - optionally starts the LLM grading worker leader.
 
-See [ADMIN_BOOTSTRAP.md](ADMIN_BOOTSTRAP.md) and [DEPLOYMENT_AND_OPERATIONS.md](DEPLOYMENT_AND_OPERATIONS.md).
+See [../operations/ADMIN_BOOTSTRAP.md](../operations/ADMIN_BOOTSTRAP.md) and [../operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md).
