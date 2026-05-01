@@ -11,6 +11,7 @@ Minimum rule:
 - before changing repository structure or file placement, read [docs/architecture/REPOSITORY_STRUCTURE.md](docs/architecture/REPOSITORY_STRUCTURE.md)
 - before changing backend or product behavior, read [docs/architecture/SYSTEM_OVERVIEW.md](docs/architecture/SYSTEM_OVERVIEW.md) and any feature-specific product document such as [docs/product/LLM_HOMEWORK_GUIDE.md](docs/product/LLM_HOMEWORK_GUIDE.md)
 - before running tests or diagnosing failures, read [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) and [docs/development/TEST_EXECUTION_PITFALLS.md](docs/development/TEST_EXECUTION_PITFALLS.md)
+- when assessing structural risk or full-suite follow-ups inferred from tests, see [docs/architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](docs/architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 - before deployment or service changes, read [docs/operations/DEPLOYMENT_AND_OPERATIONS.md](docs/operations/DEPLOYMENT_AND_OPERATIONS.md) and [docs/operations/ADMIN_BOOTSTRAP.md](docs/operations/ADMIN_BOOTSTRAP.md)
 - before touching parent-facing flows, read [docs/product/PARENT_PORTAL.md](docs/product/PARENT_PORTAL.md)
 

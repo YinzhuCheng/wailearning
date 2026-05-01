@@ -4,6 +4,8 @@
 
 This document records pitfalls encountered while executing the repository test suites on Windows + PowerShell during the repository-structure refactor completed on May 1, 2026. The focus here is the tester environment, test runner behavior, and execution workflow friction, not product-code bugs.
 
+Later passes (same overall repository layout) added Linux / CI / cloud-agent notes and Playwright selector pitfalls discovered while fixing false failures. Those additions are additive: they do not replace the Windows-focused guidance above.
+
 This file is meant to save future test operators from rediscovering the same issues.
 
 ## Read This Before Running Tests
@@ -17,6 +19,7 @@ If you are about to run tests, especially as an LLM coding agent on Windows + Po
 5. For Playwright, prefer isolated ports and explicit external-server startup when a run matters.
 6. If pytest fails before test bodies execute, inspect temp-path behavior before blaming product code.
 7. Do not copy Chinese text from PowerShell output back into tracked files.
+8. On Linux or in CI, if Playwright starts the API via `webServer`, confirm the command uses the repository `.venv` interpreter (or `E2E_PYTHON`), not a bare `python3` without project dependencies (see Pitfall 11).
 
 If you skip this checklist, you may spend time debugging the shell, temp directories, old background processes, or port collisions instead of the repository itself.
 
@@ -33,6 +36,10 @@ If you skip this checklist, you may spend time debugging the shell, temp directo
   - `apps/web/parent/`
   - `ops/`
   - `tests/e2e/web-admin/`
+
+### Additional session (Linux / cloud agent, May 2026)
+
+This session used Linux bash, the repository `.venv` for pytest, system-packaged Node/npm where needed, and Playwright driven from `apps/web/admin` (`npm run test:e2e`). Pitfalls 11–16 below come from that pass. They complement, rather than contradict, the Windows-focused items.
 
 ## Pitfall 1: PowerShell output can display mojibake
 
@@ -252,6 +259,102 @@ Normal local staging may fail even though file changes are correct on disk.
 
 If `git add` or related index-writing commands fail with index-lock permission errors in this environment, treat that as an execution-permission problem rather than a repository-integrity problem.
 
+## Pitfall 11: Playwright `webServer` on Linux uses `python3` without project packages
+
+### Symptom
+
+Playwright fails immediately when starting the API, with stderr similar to:
+
+- `No module named uvicorn`
+
+### Why it happens
+
+The Playwright config may spawn the backend with the system `python3`. That interpreter often does not have `requirements.txt` installed, while the repository expects a local virtual environment.
+
+### What worked
+
+- Point the API command at `.venv/bin/python` when that path exists, or set `E2E_PYTHON` to an interpreter that has backend dependencies installed.
+
+### Relationship to other guidance
+
+This is the same operational idea as checklist item 1 ("use the repository `.venv`"), but it applies specifically to **who** starts uvicorn when tests use managed `webServer`.
+
+## Pitfall 12: Element Plus default locale vs Chinese button labels in tests
+
+### Symptom
+
+A test waits for `getByRole('button', { name: '确定' })` or `关闭`, but Playwright reports strict-mode violations or timeouts. The dialog may show **OK** / **Cancel**, or the header close button may expose a different accessible name (for example **关闭此对话框**).
+
+### Why it matters
+
+Without registering a Chinese locale for Element Plus, `ElMessageBox.confirm` and similar components follow English defaults even when surrounding UI copy is Chinese.
+
+### Safe handling strategy
+
+- Register Element Plus `zh-cn` (or match tests to the actual accessible names rendered in your locale), or use narrow selectors (for example `name: '关闭', exact: true` vs the header close button).
+
+## Pitfall 13: Playwright strict mode and duplicate text matches
+
+### Symptom
+
+`expect(locator).toBeVisible()` fails with **strict mode violation**: one locator resolved to **two or more** elements (for example the same homework title in the page subtitle and in a table cell).
+
+### Recommendation
+
+Prefer `.first()` only when intentionally accepting ambiguity, or better:
+
+- role-based locators (`getByRole('cell', { name: ... })`),
+- scoped locators (table body vs header),
+- or `data-testid` hooks.
+
+## Pitfall 14: `textarea:first()` on the homework submit page is often the wrong control
+
+### Symptom
+
+Submission-related E2E polls the API forever: attempt count stays `0`, or POST `/api/homeworks/{id}/submission` never fires as expected.
+
+### Why it happens
+
+The homework submit view renders **CourseDiscussionPanel** (with its own textarea) **above** the homework submission form. `page.locator('textarea').first()` fills the discussion draft, not `homework-submit-content`.
+
+### Recommendation
+
+Target the homework body field explicitly, for example `getByTestId('homework-submit-content')`, for any flow that must submit homework rather than post a discussion reply.
+
+## Pitfall 15: client `page_size` larger than the API allows
+
+### Symptom
+
+The materials UI shows an empty table even though seeded data exists, or E2E cannot find a known material title.
+
+### Why it happens
+
+List endpoints validate `page_size` with an upper bound (for example `le=100`). A client request with `page_size=200` may return **422**; the UI may not surface the validation error clearly.
+
+### Recommendation
+
+Keep client requests aligned with FastAPI/Pydantic limits. When debugging empty lists, inspect network responses for 422 before assuming seed or routing bugs.
+
+## Pitfall 16: duplicate `course_enrollments` rows during startup reconciliation (often seen with SQLite)
+
+### Symptom
+
+Backend crashes during application lifespan or pytest/E2E startup with:
+
+- `sqlite3.IntegrityError: UNIQUE constraint failed: course_enrollments.subject_id, course_enrollments.student_id`
+
+### Interpretation
+
+Multiple reconciliation paths can attempt to insert the same enrollment for the same student and course. SQLite may surface the race more readily during startup batches.
+
+### What worked in practice
+
+Defensive idempotency at insert time (for example nested transactions / savepoints and treating duplicate key as "already enrolled") so startup reconciliation does not abort the whole process.
+
+### Recommendation
+
+When this appears, treat it first as **reconciliation idempotency**, not as corrupted business data, until proven otherwise.
+
 ## Proven Command Patterns
 
 ### Backend full suite
@@ -277,17 +380,19 @@ $env:PLAYWRIGHT_BROWSERS_PATH='C:\Users\<user>\AppData\Local\ms-playwright'
 ## Recommended Execution Order for Future Full Validation
 
 1. Confirm no stale backend/frontend processes are occupying the intended ports.
-2. Use the repository `.venv` explicitly for backend commands.
+2. Use the repository `.venv` explicitly for backend commands **and** for any Playwright-managed API process when using `webServer` (see Pitfall 11).
 3. Run backend `pytest` first, because it is cheaper and exposes import/path regressions quickly.
 4. For Playwright on Windows, prefer isolated ports and explicit external-server startup.
 5. Require UI root `200` before starting browser tests.
 6. If Playwright fails with `EPERM`, retry outside the restricted sandbox before concluding the suite is broken.
 7. If a single concurrency scenario fails after a long mostly-green run, rerun that one case in isolation before treating it as a deterministic regression.
+8. On Linux/CI, if the browser suite fails to boot the API, verify `uvicorn` runs under the project venv before assuming application regressions.
 
 ## What This Document Does Not Claim
 
 - It does not claim the product code is bug-free.
 - It does not claim all Windows environments need the exact same workarounds.
 - It does not claim the sandbox restrictions seen here will match CI or a developer's normal terminal.
+- It does not claim Linux agents exhibit only the Linux-specific pitfalls above; many Windows pitfalls (ports, readiness, flake in long suites) still apply cross-platform.
 
-It only records what actually happened during this May 1, 2026 validation session so the next operator can start from firmer ground.
+It records what actually happened during validation sessions (starting with the May 1, 2026 Windows-focused pass, extended by later Linux/CI observations) so the next operator can start from firmer ground.

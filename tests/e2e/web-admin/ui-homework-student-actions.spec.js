@@ -40,7 +40,7 @@ test.describe('UI: homework student actions (requires globalSetup seed)', () => 
     await splitHost.locator('.el-dropdown__caret-button').click()
     await page.getByRole('menuitem', { name: '仅查看说明' }).click()
     await expect(page.locator('.el-dialog').filter({ hasText: '作业详情' })).toBeVisible({ timeout: 10000 })
-    await page.getByRole('button', { name: '关闭' }).click()
+    await page.getByRole('button', { name: '关闭', exact: true }).click()
   })
 
   test('student: my courses page has no duplicate current-course banner', async ({ page }) => {

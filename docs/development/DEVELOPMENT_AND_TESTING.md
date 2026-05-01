@@ -11,6 +11,7 @@ Read in this order first:
 3. [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md) if you are evaluating test cleanup or consolidation
 4. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
 5. the feature-specific document for the workflow you are about to touch
+6. when triaging full-suite outcomes or structural risk from tests, optionally read [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 Why this is mandatory:
 
@@ -18,6 +19,7 @@ Why this is mandatory:
 - Windows + PowerShell execution has known traps that can produce false test failures
 - Playwright failures in this repository are often environment or process-management issues before they are product regressions
 - local artifact directories can look like source or canonical output if you do not read the structure notes first
+- cross-platform and cloud-automation runs can hit additional traps (Element Plus locale, Playwright selector ambiguity, API `page_size` limits, stale ports); see [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) Pitfalls 11–16 and [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) for follow-up risk notes
 
 ## Local Development Setup
 
@@ -218,6 +220,10 @@ python -m pytest tests/behavior -q
 ```
 
 and then any targeted Playwright spec that covers the affected workflow.
+
+### Cross-platform and CI smoke expectations
+
+If you only run `pytest` on the default SQLite configuration, note that `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` is skipped unless the dialect is PostgreSQL. Full PostgreSQL-only assertions require `TEST_DATABASE_URL` (or equivalent) pointing at a live Postgres instance with migrated schema. This does not replace the default workflow for most changes; it matters when validating schema-level regressions.
 
 ## Test Cleanup Policy
 
