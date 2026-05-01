@@ -139,3 +139,15 @@ The authoritative project documentation now lives under [`docs/`](docs/README.md
 - Treat deployment as complete only after the backend, frontends, health checks, and logs all confirm the intended revision is live.
 
 Deployment guidance is consolidated in [docs/operations/DEPLOYMENT_AND_OPERATIONS.md](docs/operations/DEPLOYMENT_AND_OPERATIONS.md).
+
+## License and Attribution
+
+This project is open source under the Apache License 2.0. Copyright 2024 DD-CLASS. You may use, modify, and distribute this repository in compliance with the terms in [LICENSE](LICENSE). The software is provided on an "AS IS" basis, without warranties or conditions of any kind.
+
+Original author and initial contributor: `joyapple`
+
+Subsequent contributors: `HaihuaXie`, `YinzhuCheng`
+
+This repository depends on third-party open source components, including FastAPI, Vue.js, Element Plus, SQLAlchemy, PostgreSQL, and ECharts, each under its own license.
+
+For bug reports, feature requests, or contribution discussions, use [GitHub Issues](https://github.com/joyapple/DD-CLASS/issues).
