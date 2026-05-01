@@ -19,3 +19,4 @@ PyMuPDF==1.26.3
 Pillow==11.3.0
 pytest==8.0.0
 tiktoken==0.8.0
+tzdata==2025.2

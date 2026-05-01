@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv/
 venv/
 env/
 ENV/
@@ -47,16 +48,25 @@ logs/
 Thumbs.db
 
 # Frontend
-frontend/dist/
-frontend/.vite/
-frontend/e2e/.cache/
-frontend/test-results/
+apps/web/admin/dist/
+apps/web/admin/.vite/
+apps/web/admin/test-results/
+frontend/
 
 # Parent Portal
-parent-portal/dist/
-parent-portal/.vite/
+apps/web/parent/dist/
+apps/web/parent/.vite/
+
+# E2E
+tests/e2e/web-admin/.cache/
+.e2e-run/
 
 # Temp Files
+.pytest_tmp/
+.pytest_tmpbasetemp/
+.pytest-db/
+.pytest_cache/
+test-results/
 *.pyc
 create_*.py
 add_*.py
