@@ -24,7 +24,7 @@ PARENT_BUILD_DIR="${PARENT_BUILD_DIR:-/var/www/wailearning.xyz/parent}"
 RELEASE_TAG="${RELEASE_TAG:-$(date +%F-%H%M%S)}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
@@ -62,16 +62,16 @@ rsync -a --delete \
   --exclude ".git" \
   --exclude "__pycache__" \
   --exclude ".pytest_cache" \
-  --exclude "frontend/node_modules" \
-  --exclude "frontend/dist" \
-  --exclude "parent-portal/node_modules" \
-  --exclude "parent-portal/dist" \
+  --exclude "apps/web/admin/node_modules" \
+  --exclude "apps/web/admin/dist" \
+  --exclude "apps/web/parent/node_modules" \
+  --exclude "apps/web/parent/dist" \
   --exclude "uploads" \
   "${REPO_ROOT}/" "${TMP_DIR}/source/"
 
 echo "==> 6. Validate Python source"
 "${PYTHON_BIN}" -m py_compile \
-  "${TMP_DIR}/source/app/config.py" \
+  "${TMP_DIR}/source/apps/backend/app/config.py" \
   "${TMP_DIR}/source/app/main.py" \
   "${TMP_DIR}/source/app/bootstrap.py"
 
@@ -94,14 +94,14 @@ echo "==> 11. Build frontend assets"
   npm run build
 )
 (
-  cd "${SOURCE_DIR}/parent-portal"
+  cd "${SOURCE_DIR}/apps/web/parent"
   npm install
   npm run build
 )
 
 echo "==> 12. Publish frontend assets"
-rsync -a --delete "${SOURCE_DIR}/frontend/dist/" "${FRONTEND_BUILD_DIR}/"
-rsync -a --delete "${SOURCE_DIR}/parent-portal/dist/" "${PARENT_BUILD_DIR}/"
+rsync -a --delete "${SOURCE_DIR}/apps/web/admin/dist/" "${FRONTEND_BUILD_DIR}/"
+rsync -a --delete "${SOURCE_DIR}/apps/web/parent/dist/" "${PARENT_BUILD_DIR}/"
 
 echo "==> 13. Start backend"
 systemctl start "${APP_SERVICE}"

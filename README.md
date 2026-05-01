@@ -24,7 +24,7 @@ The LLM subsystem is one of the core product features, not an add-on.
 - The grading worker is database-backed, can reclaim stale tasks, and records token usage per student and per course.
 - Failure handling includes quota enforcement, endpoint failover, retry logic, manual regrade, and observable task states.
 
-See [docs/LLM_HOMEWORK_GUIDE.md](docs/LLM_HOMEWORK_GUIDE.md) for the current implementation details.
+See [docs/product/LLM_HOMEWORK_GUIDE.md](docs/product/LLM_HOMEWORK_GUIDE.md) for the current implementation details.
 
 ## Tech Stack
 
@@ -37,12 +37,12 @@ See [docs/LLM_HOMEWORK_GUIDE.md](docs/LLM_HOMEWORK_GUIDE.md) for the current imp
 ## Repository Layout
 
 ```text
-app/             FastAPI backend, models, routers, grading worker, bootstrap logic
-frontend/        Admin SPA and Playwright E2E tests
-parent-portal/   Parent-facing SPA
-scripts/         Deployment, bootstrap, password reset, and git helper scripts
-docs/            Project documentation hub
-tests/           Backend and behavior test suites
+apps/backend/app/   FastAPI backend package
+apps/web/admin/     Admin SPA and Playwright config
+apps/web/parent/    Parent-facing SPA
+docs/               Documentation hub organized by topic
+ops/                CI, nginx, systemd, and deployment scripts
+tests/              Backend, behavior, and browser E2E suites
 ```
 
 ## Quick Start
@@ -64,7 +64,7 @@ Backend docs:
 ### Admin Frontend
 
 ```bash
-cd frontend
+cd apps/web/admin
 npm install
 npm run dev
 ```
@@ -74,14 +74,14 @@ Default local frontend URL: `http://127.0.0.1:5173` or the Vite port shown in th
 ### Parent Portal
 
 ```bash
-cd parent-portal
+cd apps/web/parent
 npm install
 npm run dev
 ```
 
 ## Core Environment Variables
 
-Key backend settings are defined in [`app/config.py`](app/config.py).
+Key backend settings are defined in [`apps/backend/app/config.py`](apps/backend/app/config.py).
 
 - `DATABASE_URL`
 - `SECRET_KEY`
@@ -96,7 +96,7 @@ Key backend settings are defined in [`app/config.py`](app/config.py).
 - `E2E_DEV_SEED_ENABLED`
 - `E2E_DEV_SEED_TOKEN`
 
-Admin bootstrap and demo seed behavior are documented in [docs/ADMIN_BOOTSTRAP.md](docs/ADMIN_BOOTSTRAP.md).
+Admin bootstrap and demo seed behavior are documented in [docs/operations/ADMIN_BOOTSTRAP.md](docs/operations/ADMIN_BOOTSTRAP.md).
 
 ## Testing
 
@@ -110,26 +110,26 @@ python -m pytest tests/behavior -q
 Frontend E2E:
 
 ```bash
-cd frontend
+cd apps/web/admin
 npm install
 npx playwright install chromium
 npm run test:e2e
 ```
 
-See [docs/DEVELOPMENT_AND_TESTING.md](docs/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, and current regression strategy.
+See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, and current regression strategy.
 
 ## Documentation
 
 The authoritative project documentation now lives under [`docs/`](docs/README.md).
 
 - [Documentation Hub](docs/README.md)
-- [System Overview](docs/SYSTEM_OVERVIEW.md)
-- [LLM and Homework Guide](docs/LLM_HOMEWORK_GUIDE.md)
-- [Development and Testing](docs/DEVELOPMENT_AND_TESTING.md)
-- [Deployment and Operations](docs/DEPLOYMENT_AND_OPERATIONS.md)
-- [Parent Portal](docs/PARENT_PORTAL.md)
-- [Git Workflow](docs/GIT_WORKFLOW.md)
-- [Admin Bootstrap and Demo Seed](docs/ADMIN_BOOTSTRAP.md)
+- [System Overview](docs/architecture/SYSTEM_OVERVIEW.md)
+- [LLM and Homework Guide](docs/product/LLM_HOMEWORK_GUIDE.md)
+- [Development and Testing](docs/development/DEVELOPMENT_AND_TESTING.md)
+- [Deployment and Operations](docs/operations/DEPLOYMENT_AND_OPERATIONS.md)
+- [Parent Portal](docs/product/PARENT_PORTAL.md)
+- [Git Workflow](docs/development/GIT_WORKFLOW.md)
+- [Admin Bootstrap and Demo Seed](docs/operations/ADMIN_BOOTSTRAP.md)
 
 ## Production Notes
 
@@ -138,4 +138,4 @@ The authoritative project documentation now lives under [`docs/`](docs/README.md
 - Keep only one grading-worker leader in multi-instance deployments.
 - Treat deployment as complete only after the backend, frontends, health checks, and logs all confirm the intended revision is live.
 
-Deployment guidance is consolidated in [docs/DEPLOYMENT_AND_OPERATIONS.md](docs/DEPLOYMENT_AND_OPERATIONS.md).
+Deployment guidance is consolidated in [docs/operations/DEPLOYMENT_AND_OPERATIONS.md](docs/operations/DEPLOYMENT_AND_OPERATIONS.md).

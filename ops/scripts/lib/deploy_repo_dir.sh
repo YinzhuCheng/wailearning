@@ -11,11 +11,11 @@ fi
 # Override preferred clone path (default matches docs/DEPLOYMENT_AND_OPERATIONS.md).
 : "${DD_DEFAULT_REPO_DIR:=/opt/dd-class/source}"
 
-# Args: SCRIPT_DIR (directory containing scripts/, i.e. .../repo/scripts)
+# Args: SCRIPT_DIR (directory containing ops/scripts/, i.e. .../repo/ops/scripts)
 __dd_resolve_repo_dir() {
   local script_dir="$1"
   local fallback_parent
-  fallback_parent="$(cd "${script_dir}/.." && pwd -P)"
+  fallback_parent="$(cd "${script_dir}/../.." && pwd -P)"
   local preferred="${DD_DEFAULT_REPO_DIR}"
 
   if [[ -n "${REPO_DIR:-}" ]]; then

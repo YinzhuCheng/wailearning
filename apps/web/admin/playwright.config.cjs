@@ -1,6 +1,7 @@
 const { defineConfig, devices } = require('@playwright/test')
 const path = require('path')
 const os = require('os')
+const Module = require('module')
 
 const E2E_API_PORT = process.env.E2E_API_PORT || '8012'
 const E2E_UI_PORT = process.env.E2E_UI_PORT || '3012'
@@ -11,7 +12,13 @@ process.env.E2E_DEV_SEED_TOKEN = process.env.E2E_DEV_SEED_TOKEN || 'test-playwri
 process.env.PLAYWRIGHT_BASE_URL =
   process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${E2E_UI_PORT}`
 
-const repoRoot = path.resolve(__dirname, '..')
+const repoRoot = path.resolve(__dirname, '..', '..', '..')
+const adminRoot = __dirname
+const adminNodeModules = path.join(adminRoot, 'node_modules')
+const viteBin = path.join(adminNodeModules, 'vite', 'bin', 'vite.js')
+
+process.env.NODE_PATH = [adminNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
+Module._initPaths()
 const isWindows = process.platform === 'win32'
 const sqliteFile = isWindows
   ? path.join(os.tmpdir(), `playwright_e2e_${E2E_API_PORT}.sqlite`)
@@ -22,6 +29,9 @@ const sqliteUrl = isWindows
 const secretKey = 'playwright-e2e-secret-key-minimum-32-chars-xx'
 const useRealWorker = !['0', 'false', 'no', 'off'].includes(
   String(process.env.E2E_USE_REAL_WORKER || 'true').trim().toLowerCase()
+)
+const useExternalServers = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.PLAYWRIGHT_USE_EXTERNAL_SERVERS || 'false').trim().toLowerCase()
 )
 
 const apiEnv = {
@@ -64,20 +74,20 @@ function buildUiCommand() {
   if (isWindows) {
     return [
       `set "VITE_PROXY_TARGET=${apiBase}"`,
-      `cd /d ${quoteWindowsArg(path.join(repoRoot, 'frontend'))}`,
-      'npx vite --host 127.0.0.1 --port ' + E2E_UI_PORT
+      `cd /d ${quoteWindowsArg(adminRoot)}`,
+      `node ${quoteWindowsArg(viteBin)} --host 127.0.0.1 --port ${E2E_UI_PORT}`
     ].join(' && ')
   }
-  return `bash -lc 'cd "${path.join(repoRoot, 'frontend')}" && exec env VITE_PROXY_TARGET=${apiBase} npx vite --host 127.0.0.1 --port ${E2E_UI_PORT}'`
+  return `bash -lc 'cd "${adminRoot}" && exec env VITE_PROXY_TARGET=${apiBase} node "${viteBin}" --host 127.0.0.1 --port ${E2E_UI_PORT}'`
 }
 
 /**
  * @see {import('@playwright/test').PlaywrightTestConfig}
  */
 module.exports = defineConfig({
-  testDir: './e2e',
+  testDir: '../../../tests/e2e/web-admin',
   timeout: 60_000,
-  globalSetup: './e2e/global-setup.cjs',
+  globalSetup: '../../../tests/e2e/web-admin/global-setup.cjs',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -88,19 +98,21 @@ module.exports = defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure'
   },
-  webServer: [
-    {
-      command: buildApiCommand(),
-      url: `${apiBase}/api/health`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000
-    },
-    {
-      command: buildUiCommand(),
-      url: `http://127.0.0.1:${E2E_UI_PORT}/`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000
-    }
-  ],
+  webServer: useExternalServers
+    ? undefined
+    : [
+        {
+          command: buildApiCommand(),
+          url: `${apiBase}/api/health`,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000
+        },
+        {
+          command: buildUiCommand(),
+          url: `http://127.0.0.1:${E2E_UI_PORT}/`,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000
+        }
+      ],
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
 })

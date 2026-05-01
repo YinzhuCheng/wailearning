@@ -14,7 +14,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ### Admin frontend
 
 ```bash
-cd frontend
+cd apps/web/admin
 npm install
 npm run dev
 ```
@@ -22,14 +22,14 @@ npm run dev
 ### Parent portal
 
 ```bash
-cd parent-portal
+cd apps/web/parent
 npm install
 npm run dev
 ```
 
 ## Key Development Settings
 
-Defined in [`app/config.py`](../app/config.py):
+Defined in [`../../apps/backend/app/config.py`](../../apps/backend/app/config.py):
 
 - `APP_ENV`
 - `DEBUG`
@@ -63,15 +63,15 @@ Important directories:
 Use browser tests for login flows, stale-tab behavior, deep links, and UI-to-backend convergence.
 
 ```bash
-cd frontend
+cd apps/web/admin
 npx playwright install chromium
 npm run test:e2e
 ```
 
 Key files:
 
-- `frontend/playwright.config.cjs`
-- `frontend/e2e/`
+- `apps/web/admin/playwright.config.cjs`
+- `tests/e2e/web-admin/`
 
 ## E2E Seed and Environment
 

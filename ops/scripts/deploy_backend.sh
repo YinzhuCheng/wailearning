@@ -6,7 +6,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 APP_ROOT="${APP_ROOT:-/opt/dd-class}"
 SOURCE_DIR="${SOURCE_DIR:-${APP_ROOT}/source}"
 VENV_DIR="${VENV_DIR:-${APP_ROOT}/venv}"
@@ -18,7 +18,7 @@ PYTHON_BIN="${PYTHON_BIN:-}"
 SHARED_UPLOADS_DIR="${SHARED_DIR}/uploads"
 
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
-  echo "System user '${APP_USER}' does not exist. Run scripts/setup_server.sh first."
+  echo "System user '${APP_USER}' does not exist. Run ops/scripts/setup_server.sh first."
   exit 1
 fi
 
@@ -36,10 +36,10 @@ if [[ "${REPO_ROOT}" != "${SOURCE_DIR}" ]]; then
     --exclude ".git" \
     --exclude "__pycache__" \
     --exclude ".pytest_cache" \
-    --exclude "frontend/node_modules" \
-    --exclude "frontend/dist" \
-    --exclude "parent-portal/node_modules" \
-    --exclude "parent-portal/dist" \
+    --exclude "apps/web/admin/node_modules" \
+    --exclude "apps/web/admin/dist" \
+    --exclude "apps/web/parent/node_modules" \
+    --exclude "apps/web/parent/dist" \
     --exclude "uploads" \
     "${REPO_ROOT}/" "${SOURCE_DIR}/"
 fi
@@ -80,7 +80,7 @@ echo "Using Python interpreter: ${PYTHON_BIN}"
 "${VENV_DIR}/bin/pip" install --upgrade pip wheel
 "${VENV_DIR}/bin/pip" install -r "${SOURCE_DIR}/requirements.txt"
 
-install -m 0644 "${SOURCE_DIR}/systemd/ddclass-backend.service" "${SERVICE_FILE}"
+install -m 0644 "${SOURCE_DIR}/ops/systemd/ddclass-backend.service" "${SERVICE_FILE}"
 
 chown -R "${APP_USER}:${APP_USER}" "${APP_ROOT}"
 

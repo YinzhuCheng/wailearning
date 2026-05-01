@@ -2,7 +2,7 @@
 
 ## Overview
 
-The parent portal is a separate Vue 3 application under `parent-portal/`. In production it is served from `/parent/` and gives parent-code users read-only access to student information relevant to guardians.
+The parent portal is a separate Vue 3 application under `apps/web/parent/`. In production it is served from `/parent/` and gives parent-code users read-only access to student information relevant to guardians.
 
 ## What Parents Can Do
 
@@ -15,7 +15,7 @@ The parent portal is a separate Vue 3 application under `parent-portal/`. In pro
 ## Local Development
 
 ```bash
-cd parent-portal
+cd apps/web/parent
 npm install
 npm run dev
 ```

@@ -4,13 +4,13 @@ This directory is the authoritative documentation home for the repository. The r
 
 ## Read This First
 
-- [System Overview](SYSTEM_OVERVIEW.md)
-- [LLM and Homework Guide](LLM_HOMEWORK_GUIDE.md)
-- [Development and Testing](DEVELOPMENT_AND_TESTING.md)
-- [Deployment and Operations](DEPLOYMENT_AND_OPERATIONS.md)
-- [Parent Portal](PARENT_PORTAL.md)
-- [Git Workflow](GIT_WORKFLOW.md)
-- [Admin Bootstrap and Demo Seed](ADMIN_BOOTSTRAP.md)
+- [System Overview](architecture/SYSTEM_OVERVIEW.md)
+- [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
+- [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
+- [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
+- [Parent Portal](product/PARENT_PORTAL.md)
+- [Git Workflow](development/GIT_WORKFLOW.md)
+- [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
 
 ## Documentation Principles
 
@@ -22,20 +22,20 @@ This directory is the authoritative documentation home for the repository. The r
 
 ### Product or engineering overview
 
-1. [System Overview](SYSTEM_OVERVIEW.md)
-2. [LLM and Homework Guide](LLM_HOMEWORK_GUIDE.md)
+1. [System Overview](architecture/SYSTEM_OVERVIEW.md)
+2. [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
 
 ### Local development
 
-1. [Development and Testing](DEVELOPMENT_AND_TESTING.md)
-2. [Admin Bootstrap and Demo Seed](ADMIN_BOOTSTRAP.md)
+1. [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
+2. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
 
 ### Production deployment
 
-1. [Deployment and Operations](DEPLOYMENT_AND_OPERATIONS.md)
-2. [LLM and Homework Guide](LLM_HOMEWORK_GUIDE.md)
+1. [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
+2. [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
 
 ### Parent-facing experience
 
-1. [Parent Portal](PARENT_PORTAL.md)
-2. [System Overview](SYSTEM_OVERVIEW.md)
+1. [Parent Portal](product/PARENT_PORTAL.md)
+2. [System Overview](architecture/SYSTEM_OVERVIEW.md)

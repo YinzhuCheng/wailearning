@@ -26,7 +26,7 @@ Typical filesystem layout:
 Use the repository scripts rather than hand-building the environment:
 
 ```bash
-sudo bash scripts/setup_server.sh
+sudo bash ops/scripts/setup_server.sh
 ```
 
 Then prepare the production env file:
@@ -68,7 +68,7 @@ Production rules:
 Use the bundled SQL script:
 
 ```bash
-cp scripts/init_db.sql /tmp/init_db.sql
+cp ops/scripts/init_db.sql /tmp/init_db.sql
 chmod 644 /tmp/init_db.sql
 sudo -u postgres psql \
   -v db_name='ddclass' \
@@ -81,19 +81,19 @@ sudo -u postgres psql \
 
 Primary scripts:
 
-- `scripts/deploy_all.sh`
-- `scripts/deploy_backend.sh`
-- `scripts/deploy_frontend.sh`
-- `scripts/deploy_parent_portal.sh`
-- `scripts/post_deploy_check.sh`
-- `scripts/redeploy.sh`
-- `scripts/pull_and_deploy.sh`
+- `ops/scripts/deploy_all.sh`
+- `ops/scripts/deploy_backend.sh`
+- `ops/scripts/deploy_frontend.sh`
+- `ops/scripts/deploy_parent_portal.sh`
+- `ops/scripts/post_deploy_check.sh`
+- `ops/scripts/redeploy.sh`
+- `ops/scripts/pull_and_deploy.sh`
 
 Recommended full deploy:
 
 ```bash
-sudo bash scripts/deploy_all.sh
-sudo bash scripts/post_deploy_check.sh
+sudo bash ops/scripts/deploy_all.sh
+sudo bash ops/scripts/post_deploy_check.sh
 ```
 
 ## Git-Based Server Updates
@@ -102,7 +102,7 @@ Preferred update path:
 
 ```bash
 cd /opt/dd-class/source
-sudo GIT_BRANCH=main GIT_REMOTE=origin bash scripts/redeploy.sh
+sudo GIT_BRANCH=main GIT_REMOTE=origin bash ops/scripts/redeploy.sh
 ```
 
 Useful variants:

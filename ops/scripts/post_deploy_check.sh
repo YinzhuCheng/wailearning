@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd -P)}"
+REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/../.." && pwd -P)}"
 
 APP_URL="${APP_URL:-https://wailearning.xyz}"
 API_HEALTH_URL="${API_HEALTH_URL:-${APP_URL}/health}"

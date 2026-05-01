@@ -9,7 +9,7 @@ VENV_DIR="${VENV_DIR:-/opt/dd-class/venv}"
 ENV_FILE="${ENV_FILE:-/opt/dd-class/shared/.env.production}"
 
 if [[ -z "${USERNAME}" || -z "${NEW_PASSWORD}" ]]; then
-  echo "Usage: bash scripts/reset_user_password.sh <username> <new_password>"
+  echo "Usage: bash ops/scripts/reset_user_password.sh <username> <new_password>"
   exit 1
 fi
 

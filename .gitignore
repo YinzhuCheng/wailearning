@@ -48,14 +48,16 @@ logs/
 Thumbs.db
 
 # Frontend
-frontend/dist/
-frontend/.vite/
-frontend/e2e/.cache/
-frontend/test-results/
+apps/web/admin/dist/
+apps/web/admin/.vite/
+apps/web/admin/test-results/
 
 # Parent Portal
-parent-portal/dist/
-parent-portal/.vite/
+apps/web/parent/dist/
+apps/web/parent/.vite/
+
+# E2E
+tests/e2e/web-admin/.cache/
 
 # Temp Files
 .pytest_tmp/

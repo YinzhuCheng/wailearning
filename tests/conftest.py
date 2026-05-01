@@ -7,6 +7,27 @@ from pathlib import Path
 
 import pytest
 
+if os.name == "nt":
+    import _pytest.pathlib as pytest_pathlib
+
+    _orig_cleanup_dead_symlinks = pytest_pathlib.cleanup_dead_symlinks
+    _orig_rm_rf = pytest_pathlib.rm_rf
+
+    def _safe_cleanup_dead_symlinks(root: Path) -> None:
+        try:
+            _orig_cleanup_dead_symlinks(root)
+        except PermissionError:
+            return
+
+    def _safe_rm_rf(path: Path) -> None:
+        try:
+            _orig_rm_rf(path)
+        except PermissionError:
+            return
+
+    pytest_pathlib.cleanup_dead_symlinks = _safe_cleanup_dead_symlinks
+    pytest_pathlib.rm_rf = _safe_rm_rf
+
 
 def _env_flag(name: str, default: bool) -> str:
     raw = os.environ.get(name)

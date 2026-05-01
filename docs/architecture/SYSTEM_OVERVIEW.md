@@ -80,14 +80,14 @@ The implementation details are documented in [LLM_HOMEWORK_GUIDE.md](LLM_HOMEWOR
 
 ### Admin frontend
 
-- Vue 3 SPA in `frontend/`
+- Vue 3 SPA in `apps/web/admin/`
 - Element Plus component layer
 - Pinia state management
-- Playwright E2E coverage in `frontend/e2e/`
+- Playwright E2E coverage in `tests/e2e/web-admin/` with config in `apps/web/admin/playwright.config.cjs`
 
 ### Parent portal
 
-- Separate Vue 3 SPA in `parent-portal/`
+- Separate Vue 3 SPA in `apps/web/parent/`
 - Served from `/parent/` in production
 
 ## Backend Route Groups

@@ -33,7 +33,7 @@ git push -u origin feature/<short-name>
 
 ```bash
 cd /opt/dd-class/source
-sudo GIT_BRANCH=<branch> GIT_REMOTE=origin bash scripts/redeploy.sh
+sudo GIT_BRANCH=<branch> GIT_REMOTE=origin bash ops/scripts/redeploy.sh
 ```
 
 This is safer than manually mixing `fetch`, `checkout`, and deploy commands on a live server.

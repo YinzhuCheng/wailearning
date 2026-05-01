@@ -2,7 +2,7 @@
 # Full stack: backend venv + admin SPA (npm run build) + parent portal + nginx reload.
 # If the admin UI looks outdated, common causes are: (1) this script was not run to completion,
 # (2) deploy ran from the wrong REPO_DIR / branch (SKIP_GIT=1 on stale tree), or (3) browser cache.
-# Prefer scripts/redeploy.sh from the server clone so Git + deploy_all stay aligned.
+# Prefer ops/scripts/redeploy.sh from the server clone so Git + deploy_all stay aligned.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"

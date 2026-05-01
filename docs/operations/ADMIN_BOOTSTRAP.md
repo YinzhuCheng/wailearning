@@ -52,8 +52,8 @@ INIT_ADMIN_REAL_NAME=System Administrator
 
 Useful repository scripts:
 
-- `scripts/reset_user_password.sh`
-- `scripts/set-password.sh`
+- `ops/scripts/reset_user_password.sh`
+- `ops/scripts/set-password.sh`
 
 Use these instead of keeping plaintext credentials in repository-side note files.
 

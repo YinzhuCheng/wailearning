@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOADS_DIR = Path(settings.UPLOADS_DIR).expanduser() if settings.UPLOADS_DIR else BASE_DIR / "uploads"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+UPLOADS_DIR = Path(settings.UPLOADS_DIR).expanduser() if settings.UPLOADS_DIR else REPO_ROOT / "uploads"
 ATTACHMENTS_DIR = UPLOADS_DIR / "attachments"
 MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024
 BLOCKED_ATTACHMENT_EXTENSIONS = {
@@ -44,9 +45,9 @@ def get_attachment_directories() -> list[Path]:
     seen: set[str] = set()
     upload_roots = [
         UPLOADS_DIR,
-        BASE_DIR / "uploads",
-        BASE_DIR.parent / "shared" / "uploads",
-        BASE_DIR.parent / "uploads",
+        REPO_ROOT / "uploads",
+        REPO_ROOT / "shared" / "uploads",
+        BACKEND_ROOT / "uploads",
     ]
 
     for uploads_dir in upload_roots:
