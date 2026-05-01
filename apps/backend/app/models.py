@@ -48,6 +48,7 @@ class User(Base):
     role = Column(String, nullable=False, default=UserRole.TEACHER.value)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
     avatar_url = Column(String, nullable=True)
+    discussion_page_size = Column(Integer, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -799,6 +800,25 @@ class CourseMaterialSection(Base):
 
     material = relationship("CourseMaterial", back_populates="section_links")
     chapter = relationship("CourseMaterialChapter", backref="section_links")
+
+
+class CourseDiscussionEntry(Base):
+    """Linear discussion messages for homework or course materials (scoped by subject + class)."""
+
+    __tablename__ = "course_discussion_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    target_type = Column(String, nullable=False, index=True)  # homework | material
+    target_id = Column(Integer, nullable=False, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False, index=True)
+    author_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    subject = relationship("Subject")
+    class_obj = relationship("Class")
+    author = relationship("User", foreign_keys=[author_user_id])
 
 
 class NotificationRead(Base):

@@ -367,6 +367,21 @@ def ensure_schema_updates() -> None:
             CONSTRAINT uq_course_material_section_placement UNIQUE(material_id, chapter_id)
         )
         """,
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS discussion_page_size INTEGER",
+        """
+        CREATE TABLE IF NOT EXISTS course_discussion_entries (
+            id INTEGER PRIMARY KEY,
+            target_type VARCHAR NOT NULL,
+            target_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL REFERENCES subjects(id),
+            class_id INTEGER NOT NULL REFERENCES classes(id),
+            author_user_id INTEGER NOT NULL REFERENCES users(id),
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_course_discussion_target ON course_discussion_entries(target_type, target_id, subject_id, class_id)",
+        "CREATE INDEX IF NOT EXISTS ix_course_discussion_created ON course_discussion_entries(created_at)",
     ]
 
     with engine.begin() as connection:

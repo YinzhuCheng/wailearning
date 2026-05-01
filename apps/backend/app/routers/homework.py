@@ -520,6 +520,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         latest_submission_is_late=latest_submission_is_late,
         grading_rule_hint=_grade_rule_hint(homework),
         llm_routing_spec=homework.llm_routing_spec,
+        discussion_requires_context=homework.subject_id is None,
     )
 
 

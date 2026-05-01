@@ -214,6 +214,14 @@
           <span v-else class="muted-text">无附件</span>
         </el-descriptions-item>
       </el-descriptions>
+      <CourseDiscussionPanel
+        v-if="currentMaterial"
+        target-type="material"
+        :target-id="currentMaterial.id"
+        :subject-id="currentMaterial.subject_id"
+        :class-id="currentMaterial.class_id"
+        :discussion-requires-context="currentMaterial.discussion_requires_context"
+      />
     </el-dialog>
 
     <!-- 重命名章节 -->
@@ -256,6 +264,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
 import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'

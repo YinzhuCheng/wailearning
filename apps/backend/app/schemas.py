@@ -64,21 +64,68 @@ class UserResponse(UserBase):
     created_at: datetime
     class_id: Optional[int] = None
     avatar_url: Optional[str] = None
+    discussion_page_size: Optional[int] = None
 
     class Config:
         from_attributes = True
 
 
 class ProfileSelfUpdate(BaseModel):
-    real_name: str = Field(..., min_length=1, max_length=120)
+    real_name: Optional[str] = Field(None, max_length=120)
+    discussion_page_size: Optional[int] = Field(
+        default=None,
+        ge=5,
+        le=50,
+        description="Replies per page in homework/material discussions; omit to leave unchanged; null clears to default 10.",
+    )
 
     @field_validator("real_name")
     @classmethod
-    def strip_real_name(cls, value: str) -> str:
+    def strip_real_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
         stripped = (value or "").strip()
         if not stripped:
             raise ValueError("real_name cannot be empty.")
         return stripped
+
+    @model_validator(mode="after")
+    def require_at_least_one_field(self):
+        if self.real_name is None and self.discussion_page_size is None:
+            raise ValueError("Provide real_name and/or discussion_page_size.")
+        return self
+
+
+class CourseDiscussionEntryResponse(BaseModel):
+    id: int
+    target_type: str
+    target_id: int
+    subject_id: int
+    class_id: int
+    author_user_id: int
+    author_real_name: str
+    author_username: str
+    author_role: str
+    body: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CourseDiscussionListResponse(BaseModel):
+    page: int
+    page_size: int
+    total: int
+    data: List[CourseDiscussionEntryResponse]
+
+
+class CourseDiscussionCreate(BaseModel):
+    target_type: Literal["homework", "material"]
+    target_id: int = Field(..., ge=1)
+    subject_id: int = Field(..., ge=1)
+    class_id: int = Field(..., ge=1)
+    body: str = Field(..., min_length=1, max_length=8000)
 
 
 class StudentUserBatchCreateRequest(BaseModel):
@@ -991,6 +1038,7 @@ class HomeworkResponse(HomeworkBase):
     latest_submission_is_late: Optional[bool] = None
     grading_rule_hint: Optional[str] = None
     llm_routing_spec: Optional[dict[str, Any]] = None
+    discussion_requires_context: bool = False
 
     class Config:
         from_attributes = True
@@ -1453,6 +1501,7 @@ class CourseMaterialResponse(CourseMaterialBase):
     subject_name: Optional[str] = None
     creator_name: Optional[str] = None
     placements: List[CourseMaterialPlacement] = Field(default_factory=list)
+    discussion_requires_context: bool = False
 
     class Config:
         from_attributes = True

@@ -25,6 +25,17 @@
         <el-form-item label="角色">
           <el-input :model-value="roleLabel" disabled />
         </el-form-item>
+        <el-form-item label="讨论区分页（每页回复条数）">
+          <el-input-number
+            v-model="profileForm.discussion_page_size"
+            :min="5"
+            :max="50"
+            :step="1"
+            controls-position="right"
+            data-testid="personal-discussion-page-size"
+          />
+          <p class="hint">默认 10；仅影响作业与资料讨论区的分页，可在 5～50 之间调整。</p>
+        </el-form-item>
         <el-button type="primary" data-testid="personal-profile-save" :loading="profileSaving" @click="saveProfile">
           保存基本信息
         </el-button>
@@ -126,7 +137,8 @@ import { useUserStore } from '@/stores/user'
 const userStore = useUserStore()
 
 const profileForm = reactive({
-  real_name: ''
+  real_name: '',
+  discussion_page_size: 10
 })
 
 const profileSaving = ref(false)
@@ -177,6 +189,9 @@ const roleLabel = computed(
 
 const syncProfileForm = () => {
   profileForm.real_name = userStore.userInfo?.real_name || ''
+  const d = userStore.userInfo?.discussion_page_size
+  profileForm.discussion_page_size =
+    d != null && Number.isFinite(Number(d)) && Number(d) >= 5 && Number(d) <= 50 ? Number(d) : 10
 }
 
 watch(
@@ -204,7 +219,10 @@ const saveProfile = async () => {
 
   profileSaving.value = true
   try {
-    await api.auth.updateProfile({ real_name: name })
+    await api.auth.updateProfile({
+      real_name: name,
+      discussion_page_size: profileForm.discussion_page_size
+    })
     await userStore.refreshUserInfo()
     ElMessage.success('已保存')
   } finally {

@@ -61,6 +61,14 @@
         </el-descriptions>
       </el-card>
 
+      <CourseDiscussionPanel
+        target-type="homework"
+        :target-id="homework.id"
+        :subject-id="homework.subject_id"
+        :class-id="homework.class_id"
+        :discussion-requires-context="homework.discussion_requires_context"
+      />
+
       <el-card shadow="never">
         <template #header>
           <div class="card-header">
@@ -413,6 +421,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'

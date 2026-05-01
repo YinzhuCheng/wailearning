@@ -105,7 +105,11 @@ def update_my_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    current_user.real_name = payload.real_name
+    data = payload.model_dump(exclude_unset=True)
+    if "real_name" in data:
+        current_user.real_name = data["real_name"]
+    if "discussion_page_size" in data:
+        current_user.discussion_page_size = data["discussion_page_size"]
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
