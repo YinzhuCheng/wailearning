@@ -4,6 +4,7 @@ This directory is the authoritative documentation home for the repository. The r
 
 ## Read This First
 
+- [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
 - [System Overview](architecture/SYSTEM_OVERVIEW.md)
 - [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
@@ -25,14 +26,16 @@ This directory is the authoritative documentation home for the repository. The r
 ### Product or engineering overview
 
 1. [System Overview](architecture/SYSTEM_OVERVIEW.md)
-2. [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
-3. [Test-Inferred Risks And Follow-Ups](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
+2. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
+3. [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
+4. [Test-Inferred Risks And Follow-Ups](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 ### Local development
 
 1. [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
-2. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
-3. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+2. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
+3. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
+4. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 
 ### Production deployment
 

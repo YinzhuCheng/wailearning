@@ -73,6 +73,7 @@ The implementation details are documented in [../product/LLM_HOMEWORK_GUIDE.md](
 ### Backend
 
 - FastAPI application in `apps/backend/app/`
+- Root compatibility import package in `app/` so existing `app.*` imports and entrypoints continue to resolve
 - SQLAlchemy models and bootstrap migrations
 - PostgreSQL as the primary database
 - In-process grading worker controlled by configuration
@@ -89,6 +90,14 @@ The implementation details are documented in [../product/LLM_HOMEWORK_GUIDE.md](
 
 - Separate Vue 3 SPA in `apps/web/parent/`
 - Served from `/parent/` in production
+
+### Operational helpers
+
+- Linux deployment assets live in `ops/scripts/`, `ops/systemd/`, and `ops/nginx/`
+- Windows convenience launchers live in `ops/scripts/windows/`
+- Repository-level pytest bootstrap lives in the root `conftest.py`
+
+The detailed repository boundary rules are documented in [REPOSITORY_STRUCTURE.md](REPOSITORY_STRUCTURE.md).
 
 ## Backend Route Groups
 

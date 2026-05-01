@@ -45,6 +45,15 @@ ops/                CI, nginx, systemd, and deployment scripts
 tests/              Backend, behavior, and browser E2E suites
 ```
 
+Repository-boundary rules:
+
+- The repository root should contain only repository-level entry files and configuration such as `README.md`, `LICENSE`, `requirements.txt`, `pytest.ini`, and the root `conftest.py`.
+- Windows convenience launchers live under `ops/scripts/windows/` instead of being scattered across the root or app folders.
+- The root `app/` package is an intentional compatibility shim. The real backend code lives in `apps/backend/app/`, but the shim remains because the current backend still imports `app.*` internally and several deployment/test entrypoints still depend on that module path.
+- Local runtime artifacts such as `frontend/`, `.pytest_tmp/`, `.e2e-run/`, `test-results/`, and `uploads/` are not part of the source layout even if they appear on a developer machine.
+
+See [docs/architecture/REPOSITORY_STRUCTURE.md](docs/architecture/REPOSITORY_STRUCTURE.md) for the detailed structure contract and migration rationale.
+
 ## Quick Start
 
 ### Backend
@@ -54,6 +63,12 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Windows convenience launcher:
+
+```bat
+ops\scripts\windows\start-backend.bat
 ```
 
 Backend docs:
@@ -69,6 +84,12 @@ npm install
 npm run dev
 ```
 
+Windows convenience launcher:
+
+```bat
+ops\scripts\windows\start-admin-frontend.bat
+```
+
 Default local frontend URL: `http://127.0.0.1:5173` or the Vite port shown in the terminal.
 
 ### Parent Portal
@@ -77,6 +98,12 @@ Default local frontend URL: `http://127.0.0.1:5173` or the Vite port shown in th
 cd apps/web/parent
 npm install
 npm run dev
+```
+
+Windows convenience launcher:
+
+```bat
+ops\scripts\windows\start-parent-frontend.bat
 ```
 
 ## Core Environment Variables
@@ -123,6 +150,7 @@ See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_A
 The authoritative project documentation now lives under [`docs/`](docs/README.md).
 
 - [Documentation Hub](docs/README.md)
+- [Repository Structure](docs/architecture/REPOSITORY_STRUCTURE.md)
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md)
 - [LLM and Homework Guide](docs/product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](docs/development/DEVELOPMENT_AND_TESTING.md)

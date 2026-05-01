@@ -2,6 +2,13 @@
 
 ## Local Development Setup
 
+Before running commands, understand the repository boundary rules in [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md). In particular:
+
+- the real backend source lives in `apps/backend/app/`,
+- the root `app/` package is a compatibility shim that still powers current imports and startup commands,
+- the root `conftest.py` is intentionally repository-scoped,
+- Windows launcher scripts live in `../../ops/scripts/windows/`.
+
 ### Backend
 
 ```bash
@@ -9,6 +16,12 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Optional Windows convenience launcher:
+
+```bat
+ops\scripts\windows\start-backend.bat
 ```
 
 ### Admin frontend
@@ -19,12 +32,24 @@ npm install
 npm run dev
 ```
 
+Optional Windows convenience launcher:
+
+```bat
+ops\scripts\windows\start-admin-frontend.bat
+```
+
 ### Parent portal
 
 ```bash
 cd apps/web/parent
 npm install
 npm run dev
+```
+
+Optional Windows convenience launcher:
+
+```bat
+ops\scripts\windows\start-parent-frontend.bat
 ```
 
 ## Key Development Settings
@@ -97,6 +122,7 @@ This repository is actively used on Windows, so path and encoding discipline mat
 - Prefer the repository virtual environment instead of a global Python.
 - Keep documentation and scripted edits ASCII-first when possible.
 - Avoid shell-side bulk rewriting of Chinese strings.
+- Do not treat local directories such as `frontend/`, `test-results/`, `.e2e-run/`, or `.pytest_tmp/` as source layout. They are local artifacts.
 - For Playwright, explicitly set `PLAYWRIGHT_BROWSERS_PATH` when using a local browser cache.
 
 Example command pattern for targeted Playwright runs:

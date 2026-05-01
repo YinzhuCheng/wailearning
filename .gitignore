@@ -51,6 +51,7 @@ Thumbs.db
 apps/web/admin/dist/
 apps/web/admin/.vite/
 apps/web/admin/test-results/
+frontend/
 
 # Parent Portal
 apps/web/parent/dist/
@@ -58,9 +59,13 @@ apps/web/parent/.vite/
 
 # E2E
 tests/e2e/web-admin/.cache/
+.e2e-run/
 
 # Temp Files
 .pytest_tmp/
+.pytest_tmpbasetemp/
+.pytest-db/
+.pytest_cache/
 test-results/
 *.pyc
 create_*.py
