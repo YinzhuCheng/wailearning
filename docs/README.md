@@ -11,6 +11,7 @@ This directory is the authoritative documentation home for the repository. The r
 - [Test Suite Map](development/TEST_SUITE_MAP.md)
 - [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
 - [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+- [E2E backlog scenarios (placeholder Playwright specs)](development/E2E_BACKLOG_SCENARIOS.md)
 - [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
 - [Parent Portal](product/PARENT_PORTAL.md)
 - [Git Workflow](development/GIT_WORKFLOW.md)

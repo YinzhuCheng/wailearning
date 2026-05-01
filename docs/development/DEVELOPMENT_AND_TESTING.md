@@ -132,6 +132,10 @@ Before running Playwright on Windows, read the pitfalls document first. Known fa
 - sandbox `EPERM` during subprocess startup,
 - readiness checks that accept the wrong HTTP response.
 
+### Playwright backlog scenarios (optional)
+
+Two specs under `tests/e2e/web-admin/` hold **placeholder titles** for advanced E2E coverage (`future-advanced-coverage*.spec.js`). By default they do not inflate routine run counts: see **`E2E_ENABLE_BACKLOG_SPECS`** and [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md) for how to enable them while implementing scenarios.
+
 ## E2E Seed and Environment
 
 The repository includes an E2E-only reset API used by browser tests.
