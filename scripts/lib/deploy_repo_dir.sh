@@ -8,7 +8,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   exit 1
 fi
 
-# Override preferred clone path (default matches DEPLOY.md).
+# Override preferred clone path (default matches docs/DEPLOYMENT_AND_OPERATIONS.md).
 : "${DD_DEFAULT_REPO_DIR:=/opt/dd-class/source}"
 
 # Args: SCRIPT_DIR (directory containing scripts/, i.e. .../repo/scripts)

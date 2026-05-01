@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Server-side Git sync helpers (sourced by redeploy.sh / pull_and_deploy.sh).
-# See docs/DEPLOY_GIT_ROBUSTNESS.md — explicit refspec fetch so refs/remotes/<remote>/<branch> exists.
+# See docs/DEPLOYMENT_AND_OPERATIONS.md — explicit refspec fetch so refs/remotes/<remote>/<branch> exists.
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   echo "This file is meant to be sourced from other scripts, not executed directly." >&2

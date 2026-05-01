@@ -1,819 +1,141 @@
-# 班级管理系统 (BIMSA-CLASS)
+# BIMSA-CLASS
 
-一个现代化的教学管理系统，使用 FastAPI 后端和 Vue 3 前端构建，支持学生管理、课程管理、成绩、考勤、积分、作业、家长端口，以及课程级 LLM 辅助评分。
+BIMSA-CLASS is a school and classroom management platform built with FastAPI, Vue 3, PostgreSQL, and a separate parent portal. It combines day-to-day academic administration with course-level LLM-assisted homework grading, async grading queues, quota controls, and attachment-aware submission processing.
 
-![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
-![Vue.js](https://img.shields.io/badge/Vue.js-3.4+-42b883.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791.svg)
-![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)
-[![Stars](https://img.shields.io/github/stars/joyapple/DD-CLASS?style=social)](https://github.com/joyapple/DD-CLASS/stargazers)
-[![Forks](https://img.shields.io/github/forks/joyapple/DD-CLASS?style=social)](https://github.com/joyapple/DD-CLASS/network/members)
+## Highlights
 
----
+- Multi-role access for admins, class teachers, subject teachers, students, and parent-code users.
+- Class, student, user, and roster management with reconciliation between user accounts and student roster rows.
+- Required and elective course flows, including self-enrollment, roster enrollment, batch class moves, and enrollment repair.
+- Homework lifecycle with multiple attempts, late-submission rules, score candidates, teacher review, regrade, and student appeals.
+- Course material chapters, notifications, attendance, semester management, scores, score-composition appeals, and a points system.
+- Parent portal served as a separate SPA under `/parent/`.
+- API-first backend with local `pytest` and browser-level Playwright E2E coverage.
 
-## ⭐ 支持这个项目
+## LLM-Assisted Homework Grading
 
-**如果这个项目对您有帮助，请给我们一个 Star！** 🌟
+The LLM subsystem is one of the core product features, not an add-on.
 
-您的支持是我们继续开发和维护这个项目的最大动力！
+- Admins manage reusable endpoint presets under `/api/llm-settings`.
+- Presets track validation state, vision capability, retry settings, and timeouts.
+- Teachers configure LLM behavior per course, including enablement, prompts, endpoint order, timezone-aware quota boundaries, and token estimation limits.
+- Homework can opt into async auto-grading while still allowing teacher override and regrade.
+- Submissions support text and attachment flows, including images, PDFs, notebooks, archives, and extracted text payloads.
+- The grading worker is database-backed, can reclaim stale tasks, and records token usage per student and per course.
+- Failure handling includes quota enforcement, endpoint failover, retry logic, manual regrade, and observable task states.
 
-[![Star](https://img.shields.io/github/stars/joyapple/DD-CLASS?style=for-the-badge)](https://github.com/joyapple/DD-CLASS/stargazers)
-[![Fork](https://img.shields.io/github/forks/joyapple/DD-CLASS?style=for-the-badge)](https://github.com/joyapple/DD-CLASS/network/members)
+See [docs/LLM_HOMEWORK_GUIDE.md](docs/LLM_HOMEWORK_GUIDE.md) for the current implementation details.
 
----
+## Tech Stack
 
-## 🎉 系统预览
+- Backend: FastAPI, SQLAlchemy, PostgreSQL, Pydantic v2
+- Frontend: Vue 3, Vite, Element Plus, Pinia, ECharts
+- Parent portal: separate Vue 3 + Vite application
+- Testing: `pytest`, Playwright
+- Deployment: Nginx, `gunicorn`, `uvicorn`, `systemd`
 
-### Dashboard 数据仪表盘
-![Dashboard 数据仪表盘](https://picui.ogmua.cn/s1/2026/03/24/69c2a7b335034.webp)
+## Repository Layout
 
-### 学生管理
-![学生管理](https://picui.ogmua.cn/s1/2026/03/24/69c2a7b3b291e.webp)
-
-### 成绩管理
-![成绩管理](https://picui.ogmua.cn/s1/2026/03/24/69c2a7b3cc451.webp)
-
-### 考勤管理
-![考勤管理](https://picui.ogmua.cn/s1/2026/03/24/69c2a7b42417f.webp)
-
-### 班级排名
-![班级排名](https://picui.ogmua.cn/s1/2026/03/24/69c2a7bf4c3d6.webp)
-
-### 数据分析
-![数据分析](https://picui.ogmua.cn/s1/2026/03/24/69c2a7bf814cf.webp)
-
-### 用户管理
-![用户管理](https://picui.ogmua.cn/s1/2026/03/24/69c2a7bf98a28.webp)
-
-### 积分系统
-![积分系统](https://picui.ogmua.cn/s1/2026/03/25/points_system.webp)
-
-### 积分龙虎榜（投屏展示）
-![积分龙虎榜](https://picui.ogmua.cn/s1/2026/03/25/points_display.webp)
-
----
-
-## 📋 目录
-
-- [功能介绍](#功能介绍)
-- [技术栈](#技术栈)
-- [快速开始](#快速开始)
-- [安装指南](#安装指南)
-- [配置说明](#配置说明)
-- [使用指南](#使用指南)
-- [项目结构](#项目结构)
-- [API文档](#api文档)
-- [阿里云安全升级说明](#阿里云安全升级说明)
-- [安全与运维（角色、数据落点、升级重部署）](docs/SECURITY-AND-OPERATIONS.md)
-- [升级与 LLM / 作业自动批改说明](docs/UPGRADE_AND_LLM_SYSTEM.md)
-- [测试（pytest + Playwright E2E）](docs/TESTING.md)
-- [数据库迁移](#数据库迁移)
-- [常见问题](#常见问题)
-- [使用许可](#使用许可)
-
-## 🎯 功能介绍
-
-### 1. 用户认证与权限管理
-- ✅ 用户登录（JWT Token认证）
-- ✅ 角色权限管理（管理员 / 班主任 / 任课教师 / 学生）
-- ✅ 班级访问权限控制
-- ✅ 操作日志记录
-- ✅ 默认关闭公开注册，可通过配置显式开启学生自注册
-
-### 2. 班级管理
-- ✅ 创建、编辑、删除班级
-- ✅ 班级信息维护（名称、年级）
-- ✅ 班级学生数量统计
-
-### 3. 学生管理
-- ✅ 学生档案管理（基本信息、联系方式）
-- ✅ 学号管理（支持班级内唯一）
-- ✅ 批量导入学生（支持Excel/CSV格式）
-- ✅ 按班级筛选和搜索
-
-### 4. 成绩管理
-- ✅ 成绩录入与修改
-- ✅ 多种考试类型支持（期中、期末、测验等）
-- ✅ 按学期、班级、学生筛选成绩
-- ✅ 批量导入成绩（支持Excel格式）
-- ✅ 成绩统计与分析
-
-### 5. 考勤管理
-- ✅ 日常考勤记录（出勤、缺勤、迟到、请假）
-- ✅ 日历视图展示考勤状态
-- ✅ 批量设置全班考勤
-- ✅ Excel批量导入考勤数据
-- ✅ 考勤统计与出勤率计算
-
-### 6. 学期管理
-- ✅ 学期创建与管理
-- ✅ 数据按学期筛选
-- ✅ 预设默认学期（2024-1至2025-2）
-
-### 7. 科目管理
-- ✅ 科目创建与管理
-- ✅ 科目与教师关联
-
-### 8. 数据可视化
-- ✅ Dashboard统计概览
-- ✅ 班级平均成绩排名
-- ✅ 学生成绩趋势分析
-- ✅ 考勤率统计
-
-### 9. 操作日志
-- ✅ 记录用户的关键操作（登录、创建、修改、删除）
-- ✅ 按操作类型、操作对象、日期范围筛选
-- ✅ 操作日志统计
-
-### 10. 积分系统 ✨
-- ✅ **积分规则配置**：支持考勤、成绩、行为、作业、竞赛等多个类别
-- ✅ **积分排行榜**：实时展示班级学生积分排名
-- ✅ **积分商城**：
-  - 虚拟商品（徽章、称号、特权等）
-  - 实物商品（文具、书籍、电影票等）
-- ✅ **积分兑换**：学生使用积分兑换商品
-- ✅ **积分龙虎榜**：炫酷的投屏展示界面，支持全屏模式
-- ✅ **权限控制**：所有教师都能给学生发放积分
-
-### 11. 用户管理
-- ✅ 三种角色：管理员、班主任、任课教师
-- ✅ 用户创建、编辑、删除
-- ✅ 班主任绑定班级
-
-### 12. 作业管理与 LLM 辅助评分 ✨
-- ✅ 布置作业：选择班级、科目、设置截止日期、满分、分数精度
-- ✅ 作业规则：支持允许补交、迟交标记、迟交是否影响最终评分
-- ✅ 多次提交：每次提交生成独立历史记录，对外展示最高分
-- ✅ 教师评分：可对最新提交或任意历史提交手动评分
-- ✅ 异步自动评分：新提交可进入评分任务队列，展示排队/处理中/成功/失败
-- ✅ 课程级 LLM 配置：教师在课程维度配置自动评分开关、配额、提示词与端点顺序
-- ✅ 管理员端点预设：集中维护模型端点并执行视觉能力连通性校验
-- ✅ 附件处理：支持普通附件、zip、嵌套 zip、PDF、ipynb、图片与文本统一处理
-- ✅ 权限控制：教师/班主任在可访问课程范围内管理作业，学生只能查看/提交自己的作业
-- ✅ 批改完成提醒：学生通知中心可收到针对本人的作业批改完成提示（含分数摘要）
-- ✅ 成绩申诉：学生对分数可提交申诉理由；任课教师收到定向通知并可批改调整后结案
-
-### 13. 通知中心 ✨
-- ✅ 发布通知：设置标题、内容、优先级、是否置顶
-- ✅ 通知范围：支持全校通知和班级通知
-- ✅ 权限控制：管理员可发全校/班级通知，班主任/教师只能发本班通知
-- ✅ 未读标记：自动记录已读/未读状态，支持一键全部已读
-
-### 14. 家长端口 ✨
-- ✅ 家长码绑定：通过8位家长码快速绑定学生
-- ✅ 家长码生成：班主任可在学生管理中生成/重置家长码
-- ✅ 成绩查询：查看学生各科目成绩
-- ✅ 班级通知：查看班级和学校通知
-- ✅ 班级作业：查看班级作业和截止日期
-- ✅ 数据统计：查看平均成绩、出勤率等统计
-- ✅ 手机端适配：专为手机端优化的界面
-- ✅ 家长码接口统一校验过期时间，不再在学生信息接口重复回显家长码
-
-### 15. 系统设置与模型管理 ✨
-- ✅ Bing每日一图：自动获取Bing每日背景图
-- ✅ 自定义登录背景：可上传自定义登录页面背景
-- ✅ 系统Logo：可自定义系统Logo
-- ✅ 系统名称：可自定义系统名称
-- ✅ LLM 端点预设：管理员可维护 base URL、模型名、超时、重试与启用状态
-- ✅ 视觉能力校验：端点通过视觉校验后才能被课程配置引用
-
-## 🛠 技术栈
-
-### 后端
-- **框架**: FastAPI 0.104+
-- **数据库**: PostgreSQL 14+
-- **ORM**: SQLAlchemy
-- **认证**: JWT (PyJWT)
-- **验证**: Pydantic
-- **文档/Office 处理**: python-docx
-- **PDF处理**: PyMuPDF
-- **图片处理**: Pillow
-
-### 前端
-- **框架**: Vue.js 3.4+
-- **构建工具**: Vite 5.0+
-- **UI组件库**: Element Plus
-- **状态管理**: Pinia
-- **路由**: Vue Router 4.0+
-- **图表**: ECharts 5.0+
-- **Excel处理**: xlsx
-
-### 开发工具
-- **代码格式化**: Prettier
-- **版本控制**: Git
-
-## 🚀 快速开始
-
-### 前置要求
-
-- Python 3.9 或更高版本
-- Node.js 18 或更高版本
-- PostgreSQL 14 或更高版本
-- npm 或 yarn 包管理器
-
-### 1. 克隆项目
-
-```bash
-git clone https://github.com/YinzhuCheng/wailearning.git
-cd wailearning
+```text
+app/             FastAPI backend, models, routers, grading worker, bootstrap logic
+frontend/        Admin SPA and Playwright E2E tests
+parent-portal/   Parent-facing SPA
+scripts/         Deployment, bootstrap, password reset, and git helper scripts
+docs/            Project documentation hub
+tests/           Backend and behavior test suites
 ```
 
-### 2. 启动后端
+## Quick Start
 
-在项目根目录执行（`requirements.txt` 位于根目录）：
+### Backend
 
 ```bash
-python3 -m venv venv
-
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
-
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
-
-# 首次启动前配置数据库连接：复制根目录 .env 示例或设置 DATABASE_URL（见「配置说明」）
-python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-后端启动后，访问 http://localhost:8001/docs 查看API文档
+Backend docs:
 
-### 3. 启动前端
+- Swagger UI: `http://127.0.0.1:8001/docs`
+- ReDoc: `http://127.0.0.1:8001/redoc`
+
+### Admin Frontend
 
 ```bash
-# 新开一个终端，进入前端目录
 cd frontend
-
-# 安装依赖
 npm install
-
-# 启动开发服务器
 npm run dev
 ```
 
-前端启动后，访问 http://localhost:5173
+Default local frontend URL: `http://127.0.0.1:5173` or the Vite port shown in the terminal.
 
-### 4. 默认登录账户与演示数据
-
-管理员账号由 **`INIT_ADMIN_*`** 环境变量在**首次**初始化数据库时创建（密码哈希写入数据库），默认值见 `app/config.py`（当前示例：**用户名 `admin`，初始密码 `ChangeMe123!`**）。详见 [`scripts/ADMIN-ACCOUNT-SETUP.md`](scripts/ADMIN-ACCOUNT-SETUP.md)。
-
-当 **`INIT_DEFAULT_DATA=true`**（默认）时，还会在首次/启动时**幂等**写入一组演示教学数据（不影响已存在用户的密码覆盖逻辑；详见 `app/demo_course_seed.py`）：
-
-| 账号 | 密码 | 说明 |
-|------|------|------|
-| `teacher` | `111111` | 演示任课教师 |
-| `stu1` … `stu5` | `111111` | 同一演示班级的学生 |
-
-演示班级 **`人工智能1班`**，**必修课** **`数据挖掘`**（含课表说明、课程简介与成绩构成演示权重）及第一次作业正文与评分要点；**演示作业不预填参考答案**（`reference_answer` 为空）。课程资料区会预置**三层演示章节**（章节树示例）。另预置同班**选修课** **`大语言模型`**（简要资料与入门作业，需学生自主选课）。若库中已有可用的全局 LLM 端点预设（首次迁移会写入内置默认预设），演示种子会为上述演示课程**自动绑定**首个可用预设（必修课并启用 LLM 配置以配合自动评分）。
-
-⚠️ **重要**：
-- **生产环境**务必修改管理员密码、`SECRET_KEY`、`DATABASE_URL`，并评估是否将 **`INIT_DEFAULT_DATA=false`** 关闭演示种子（演示账号密码为固定弱口令）。
-- 默认关闭公开注册；若要启用请在环境变量中显式开启 **`ALLOW_PUBLIC_REGISTRATION`**。
-
-## 📦 安装指南
-
-### 后端安装
-
-#### 1. 安装Python依赖
+### Parent Portal
 
 ```bash
-pip install -r requirements.txt
+cd parent-portal
+npm install
+npm run dev
 ```
 
-#### 2. 配置数据库
+## Core Environment Variables
 
-确保PostgreSQL服务已启动，并创建数据库：
+Key backend settings are defined in [`app/config.py`](app/config.py).
 
-```sql
-CREATE DATABASE ddclass;
-CREATE USER ddclass_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE ddclass TO ddclass_user;
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `APP_ENV`
+- `INIT_ADMIN_USERNAME`
+- `INIT_ADMIN_PASSWORD`
+- `INIT_DEFAULT_DATA`
+- `ALLOW_PUBLIC_REGISTRATION`
+- `ENABLE_LLM_GRADING_WORKER`
+- `LLM_GRADING_WORKER_LEADER`
+- `LLM_GRADING_TASK_STALE_SECONDS`
+- `E2E_DEV_SEED_ENABLED`
+- `E2E_DEV_SEED_TOKEN`
+
+Admin bootstrap and demo seed behavior are documented in [docs/ADMIN_BOOTSTRAP.md](docs/ADMIN_BOOTSTRAP.md).
+
+## Testing
+
+Backend:
+
+```bash
+python -m pytest
+python -m pytest tests/behavior -q
 ```
 
-#### 3. 修改配置文件
-
-编辑 `app/config.py` 或创建 `.env` 文件：
-
-```env
-DATABASE_URL=postgresql://ddclass_user:your_password@localhost:5432/ddclass
-SECRET_KEY=your-super-secret-key-change-in-production
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
-ALLOW_PUBLIC_REGISTRATION=false
-ENABLE_LLM_GRADING_WORKER=true
-LLM_GRADING_WORKER_LEADER=false
-LLM_GRADING_TASK_STALE_SECONDS=600
-```
-
-### 前端安装
+Frontend E2E:
 
 ```bash
 cd frontend
 npm install
+npx playwright install chromium
+npm run test:e2e
 ```
 
-如果安装缓慢，可以使用淘宝镜像：
+See [docs/DEVELOPMENT_AND_TESTING.md](docs/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, and current regression strategy.
 
-```bash
-npm install --registry=https://registry.npmmirror.com
-```
+## Documentation
 
-## ⚙️ 配置说明
+The authoritative project documentation now lives under [`docs/`](docs/README.md).
 
-### 后端配置
+- [Documentation Hub](docs/README.md)
+- [System Overview](docs/SYSTEM_OVERVIEW.md)
+- [LLM and Homework Guide](docs/LLM_HOMEWORK_GUIDE.md)
+- [Development and Testing](docs/DEVELOPMENT_AND_TESTING.md)
+- [Deployment and Operations](docs/DEPLOYMENT_AND_OPERATIONS.md)
+- [Parent Portal](docs/PARENT_PORTAL.md)
+- [Git Workflow](docs/GIT_WORKFLOW.md)
+- [Admin Bootstrap and Demo Seed](docs/ADMIN_BOOTSTRAP.md)
 
-#### 数据库配置 (app/config.py)
+## Production Notes
 
-```python
-class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://user:password@host:5432/dbname"
-    SECRET_KEY: str = "your-secret-key"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24小时
-    ALLOW_PUBLIC_REGISTRATION: bool = False
-    ENABLE_LLM_GRADING_WORKER: bool = True
-    LLM_GRADING_WORKER_LEADER: bool = False
-    LLM_GRADING_TASK_STALE_SECONDS: int = 600
-```
+- Set `APP_ENV=production` and use a strong `SECRET_KEY`.
+- Disable public registration unless you explicitly need student self-registration.
+- Keep only one grading-worker leader in multi-instance deployments.
+- Treat deployment as complete only after the backend, frontends, health checks, and logs all confirm the intended revision is live.
 
-#### 环境变量
-
-支持以下环境变量（优先级从高到低）：
-
-1. `.env` 文件
-2. 系统环境变量
-3. 默认值
-
-生产环境请将 `APP_ENV` 设为 `production`（或 `prod`），并设置足够长的随机 `SECRET_KEY`（至少 32 字符）以及非占位符的 `DATABASE_URL`。若需在非生产环境也强制校验，可设置 `REQUIRE_STRONG_SECRETS=true`。
-
-- **`INIT_DEFAULT_DATA`**（默认 `true`）：为 `true` 时，CLI `bootstrap` 与**应用启动**会写入默认管理员、默认学期、演示课程包（`teacher` / `stu1`–`stu5` 等，见上文）；生产环境若不需要演示账号可设为 `false`。详见 `app/bootstrap.py`、`app/demo_course_seed.py`。
-
-### 阿里云安全升级说明
-
-如果你要在阿里云 ECS 上更新代码，同时尽量保护：
-
-- 原始作业
-- 课程资料
-- 历史评分
-- 教师 / 学生 / 课程 / 家长码等数据库数据
-- uploads 中的历史附件
-
-请优先阅读：
-
-- `docs/SECURITY-AND-OPERATIONS.md`（角色与权限、数据存储、通用升级重部署示例）
-- `ALIYUN_SAFE_UPGRADE.md`
-- `DEPLOY.md`
-- `RUNBOOK_ALIYUN.md`
-- `docs/DEPLOY_GIT_ROBUSTNESS.md`（服务器上 Git 显式 refspec、工作区清理、验收标准）
-- `docs/DEPLOYMENT_POSTMORTEM_CN.md`（一次生产部署复盘：fetch/checkout、脏工作区、heredoc、何谓“部署完成”）
-
-仓库还提供了一个可直接参考改造的安全升级脚本示例：
-
-```bash
-scripts/example_safe_upgrade_aliyun.sh
-```
-
-它体现了当前系统在升级时最关键的保护原则：
-
-- 先备份数据库
-- 再备份共享 uploads
-- 再同步代码
-- 再安装依赖和重启服务
-- 升级失败时可按备份快速回滚
-
-建议重点关注以下配置：
-
-- `SECRET_KEY`: 生产环境必须替换
-- `ALLOW_PUBLIC_REGISTRATION`: 默认关闭，开启后也仅允许学生注册
-- `ENABLE_LLM_GRADING_WORKER`: 是否启用评分 worker
-- `LLM_GRADING_WORKER_LEADER`: 多实例部署时仅一个实例应设为 `true`
-- `LLM_GRADING_TASK_STALE_SECONDS`: 处理中任务回收阈值
-- `UPLOADS_DIR`: 附件存储目录
-
-### 前端配置
-
-#### API代理配置 (vite.config.js)
-
-如果后端不在本地运行，修改代理目标：
-
-```javascript
-proxy: {
-  '/api': {
-    target: 'http://your-backend-server:8001',
-    changeOrigin: true
-  }
-}
-```
-
-#### 开发环境端口
-
-默认前端运行在 5173 端口，后端运行在 8001 端口。
-
-## 📖 使用指南
-
-### 首次使用
-
-1. **启动服务**: 按照快速开始指南启动前后端服务（后端须在项目根目录安装依赖并启动 `app.main:app`）。
-2. **登录系统**: 使用管理员账户登录（见上文「默认登录账户与演示数据」）。
-3. **初始化数据**: 
-   - 若 `INIT_DEFAULT_DATA=true`，首次启动会初始化默认学期、管理员（若不存在），以及可选的演示课程包。
-   - 也可手动添加班级、学生等数据。
-
-### 积分系统使用
-
-#### 教师发放积分
-1. 进入"积分系统"页面
-2. 点击"积分规则"标签
-3. 选择要发放的规则，点击"发放积分"
-4. 选择学生，确认发放
-
-#### 学生兑换商品
-1. 进入"积分系统"页面
-2. 点击"积分商城"标签
-3. 选择心仪的商品
-4. 点击"立即兑换"确认
-
-#### 投屏展示
-1. 进入"积分展示"页面
-2. 点击"全屏展示"按钮
-3. 可用于教室大屏展示
-
-### 日常使用流程
-
-#### 1. 学生管理
-- 创建班级
-- 添加学生（或批量导入）
-- 管理学生信息
-
-#### 2. 成绩管理
-- 选择班级和学期
-- 录入学生成绩
-- 查看成绩统计
-
-#### 3. 考勤管理
-- 使用日历视图快速查看考勤状态
-- 批量设置全班考勤
-- 导入历史考勤数据
-
-#### 4. 数据分析
-- 查看Dashboard统计
-- 分析成绩趋势
-- 监控考勤率
-
-#### 5. 作业与自动评分
-- 在课程管理中由管理员维护 LLM 端点预设，并执行视觉能力校验
-- 任课教师在课程信息页打开“LLM 配置”，从已通过校验的全局端点预设中选择顺序（不可自造端点）；每门课可设置 **额度时区**，用于划分该课 LLM 用量的**自然日**。
-- 学生「我的课程」可查看各课 LLM 日额度条形图（`GET /api/llm-settings/courses/student-quotas`）；管理员全局策略中的「额度统计时区」主要用于展示与并发等，**不再**统一切分各课用量日。
-- 若新课尚未选端点，打开 LLM 配置时会尝试从其他已校验课程**自动同步**一份模板。
-- 教师发布作业时可设置：
-  - 满分
-  - 分数精度（整数 / 1 位小数）
-  - 是否启用自动评分
-  - 评分要点 / 参考答案 / 响应语言
-  - 是否允许补交
-  - 迟交是否影响最终评分
-- 学生每次提交都会保留历史 attempt，系统对外展示最高分
-- 自动评分任务异步执行，状态包括：排队中 / 处理中 / 成功 / 失败
-
-### 批量导入说明
-
-#### Excel模板格式
-
-**学生导入** (`students_import.xlsx`):
-```csv
-姓名,学号,性别,电话,家长电话,地址,班级ID
-张三,001,男,13800138000,13900139000,北京市,1
-```
-
-**成绩导入** (`scores_import.xlsx`):
-```csv
-学号,班级ID,科目ID,分数,考试类型,考试日期,学期
-001,1,1,95,期中,2024-03-20,2024-1
-```
-
-**考勤导入** (`attendance_import.xlsx`):
-```csv
-学号,日期,状态,备注
-001,2024-03-20,出勤,
-002,2024-03-20,缺勤,病假
-```
-
-#### 导入步骤
-
-1. 下载对应模板
-2. 填写数据（注意编码，建议使用UTF-8）
-3. 上传文件
-4. 系统自动验证并导入
-5. 查看导入结果
-
-## 🧭 最新系统结构
-
-### 核心角色
-- **管理员**：维护系统设置、用户、课程目录、LLM 端点预设
-- **班主任**：管理本班学生、家长码、通知、课程查看
-- **任课教师**：管理课程、作业、评分、课程级 LLM 配置
-- **学生**：查看课程内容、提交作业、查看评分与历史
-
-### 作业与评分核心实体
-- `Homework`: 作业主体与规则配置
-- `HomeworkSubmission`: 每个学生每个作业的汇总行
-- `HomeworkAttempt`: 每次提交的历史记录
-- `HomeworkScoreCandidate`: 自动或教师产生的候选分
-- `HomeworkGradingTask`: 异步自动评分任务
-- `CourseLLMConfig`: 课程级 LLM 配置
-- `LLMEndpointPreset`: 管理员维护的端点预设
-- `LLMTokenUsageLog`: 成功调用后的 token 记账日志
-
-### 权限与附件安全
-- 附件不再通过公开静态目录直接暴露
-- 所有附件下载统一走鉴权接口
-- 下载时会检查当前用户是否对所属作业/通知/资料具有访问权限
-- 日志与学期写操作收敛为管理员可用
-
-### 自动评分任务模型
-- Worker 为数据库驱动的轮询型异步处理器
-- 支持：
-  - stale `processing` 任务回收
-  - 重复排队抑制
-  - 多端点顺序故障转移
-  - 单端点内有限次退避重试
-- 多实例部署时建议仅一个实例设置 `LLM_GRADING_WORKER_LEADER=true`
-
-## 📁 项目结构
-
-```
-wailearning/
-├── app/                          # 后端应用
-│   ├── routers/                  # API路由
-│   │   ├── auth.py              # 认证相关API
-│   │   ├── classes.py           # 班级管理API
-│   │   ├── students.py          # 学生管理API
-│   │   ├── scores.py             # 成绩管理API
-│   │   ├── attendance.py         # 考勤管理API
-│   │   ├── semesters.py         # 学期管理API
-│   │   ├── subjects.py          # 科目管理API
-│   │   ├── dashboard.py         # 仪表盘API
-│   │   ├── users.py             # 用户管理API
-│   │   ├── logs.py              # 操作日志API
-│   │   ├── points.py            # 积分系统API
-│   │   ├── homework.py           # 作业管理API
-│   │   ├── llm_settings.py      # LLM端点预设与课程级配置API
-│   │   ├── notifications.py     # 通知中心API
-│   │   ├── parent.py             # 家长端口API
-│   │   └── settings.py          # 系统设置API
-│   ├── models.py                # 数据库模型
-│   ├── schemas.py               # Pydantic模型
-│   ├── services.py              # 业务服务层
-│   ├── llm_grading.py           # 附件处理、自动评分与任务worker
-│   ├── auth.py                  # 认证逻辑
-│   ├── config.py                # 配置文件
-│   ├── database.py              # 数据库连接
-│   └── main.py                  # 应用入口
-├── frontend/                     # 前端应用（管理端）
-│   ├── src/
-│   │   ├── api/                # API客户端
-│   │   ├── router/             # 路由配置
-│   │   ├── stores/             # Pinia状态管理
-│   │   ├── views/              # 页面组件
-│   │   ├── App.vue             # 根组件
-│   │   └── main.js             # 入口文件
-│   ├── package.json             # 前端依赖
-│   └── vite.config.js          # Vite配置
-├── parent-portal/               # 家长端口（手机端）
-│   ├── src/
-│   │   ├── api/                # API客户端
-│   │   ├── router/             # 路由配置
-│   │   ├── views/              # 页面组件
-│   │   ├── App.vue             # 根组件
-│   │   └── main.js             # 入口文件
-│   ├── package.json             # 前端依赖
-│   └── vite.config.js          # Vite配置
-├── .gitignore                   # Git忽略文件
-├── requirements.txt             # Python依赖
-└── README.md                   # 项目说明文档
-```
-
-## 📚 API文档
-
-启动后端服务后，访问以下地址查看完整API文档：
-
-- **Swagger UI**: http://localhost:8001/docs
-- **ReDoc**: http://localhost:8001/redoc
-
-### 主要API端点
-
-| 模块 | 方法 | 端点 | 描述 |
-|------|------|------|------|
-| 认证 | POST | /api/auth/login | 用户登录 |
-| 认证 | POST | /api/auth/register | 公共注册（默认关闭，仅允许学生） |
-| 班级 | GET | /api/classes | 获取班级列表 |
-| 班级 | POST | /api/classes | 创建班级 |
-| 学生 | GET | /api/students | 获取学生列表 |
-| 学生 | POST | /api/students/batch | 批量导入学生 |
-| 成绩 | GET | /api/scores | 获取成绩列表 |
-| 成绩 | POST | /api/scores/batch | 批量导入成绩 |
-| 考勤 | GET | /api/attendance | 获取考勤列表 |
-| 考勤 | POST | /api/attendance/batch | 批量导入考勤 |
-| 考勤 | POST | /api/attendance/class-batch | 班级批量考勤 |
-| 学期 | GET | /api/semesters | 获取学期列表 |
-| 学期 | POST | /api/semesters | 创建学期 |
-| 作业 | GET | /api/homeworks | 获取作业列表 |
-| 作业 | POST | /api/homeworks/{id}/submission | 学生提交作业 |
-| 作业 | GET | /api/homeworks/{id}/submission/me/history | 获取我的提交历史 |
-| 作业 | GET | /api/homeworks/{id}/submissions | 教师查看提交状态 |
-| 作业 | PUT | /api/homeworks/{id}/submissions/{submission_id}/review | 教师评分 |
-| 作业 | POST | /api/homeworks/{id}/submissions/{submission_id}/regrade | 教师触发重评 |
-| LLM | GET | /api/llm-settings/presets | 获取端点预设 |
-| LLM | POST | /api/llm-settings/presets/{id}/validate | 校验端点视觉能力 |
-| LLM | GET | /api/llm-settings/courses/{subject_id} | 获取课程级 LLM 配置 |
-| LLM | PUT | /api/llm-settings/courses/{subject_id} | 更新课程级 LLM 配置 |
-| 统计 | GET | /api/dashboard/stats | 获取统计数据 |
-| 日志 | GET | /api/logs | 获取操作日志（管理员） |
-| 积分 | GET | /api/points/stats | 获取积分统计 |
-| 积分 | GET | /api/points/ranking | 获取积分排行 |
-| 积分 | POST | /api/points/students/{id}/add | 发放积分 |
-
-## 🗄 数据库迁移
-
-### 首次初始化
-
-如果数据库为空，运行初始化脚本：
-
-```bash
-cd app
-python init_db.py
-```
-
-### 当前迁移方式
-
-当前仓库使用 **SQLAlchemy `create_all` + 启动时 schema update/backfill** 的增量方式，而不是 Alembic。
-
-启动时会自动执行：
-- 表结构补齐
-- 学期目录规范化
-- 课程学期链接同步
-- 作业评分历史与课程级 LLM 配置回填
-
-> 建议后续升级为正式 migration 体系，但当前实现仍可用于持续迭代。
-
-## ❓ 常见问题
-
-### 1. 数据库连接失败
-
-**问题**: `could not connect to server`
-
-**解决**: 
-- 确认PostgreSQL服务已启动
-- 检查DATABASE_URL配置
-- 验证用户名密码正确
-
-### 2. 前端代理请求失败
-
-**问题**: `502 Bad Gateway` 或 `404 Not Found`
-
-**解决**:
-- 确认后端服务正在运行
-- 检查vite.config.js中的代理配置
-- 确保端口号正确
-
-### 3. 导入文件乱码
-
-**问题**: 导入Excel后显示乱码
-
-**解决**:
-- 使用UTF-8编码保存文件
-- 或使用xlsx格式（自动处理编码）
-- Excel保存时选择"CSV UTF-8"格式
-
-### 4. 端口被占用
-
-**问题**: `Port is already in use`
-
-**解决**:
-
-```bash
-# Windows: 查找占用端口的进程
-netstat -ano | findstr :8001
-
-# 结束进程
-taskkill /PID <进程ID> /F
-
-# 或使用其他端口启动
-python -m uvicorn app.main:app --port 8002
-```
-
-### 5. 依赖安装失败
-
-**问题**: `pip install` 报错
-
-**解决**:
-
-```bash
-# 升级pip
-python -m pip install --upgrade pip
-
-# 使用国内镜像
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-```
-
-### 6. 积分发放失败
-
-**问题**: 提示"无权操作该学生"
-
-**解决**:
-- 确认当前用户是管理员、班主任或任课教师
-- 确认学生所在的班级在当前教师的权限范围内
-
-## 📄 使用许可
-
-### 开源许可
-
-本项目基于 **Apache License 2.0** 开源许可。
-
-### 许可条款
-
-Apache License 2.0
-
-Copyright 2024 DD-CLASS
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-### 第三方组件许可
-
-本项目使用的开源组件：
-
-- **FastAPI**: MIT License
-- **Vue.js**: MIT License
-- **Element Plus**: MIT License
-- **SQLAlchemy**: MIT License
-- **PostgreSQL**: PostgreSQL License
-- **ECharts**: Apache-2.0 License
-
-### 注意事项
-
-1. 本项目完全开源免费，欢迎学习和使用
-2. 允许自由使用、修改和分发
-3. 商业使用请注明原作者和出处
-4. 作者不对使用本项目造成的任何损失负责
-
-## 🤝 贡献指南
-
-欢迎提交Issue和Pull Request！
-
-### 提交Issue
-
-- 描述清楚问题或建议
-- 提供复现步骤（如适用）
-- 说明环境信息（操作系统、Python版本等）
-
-### 提交代码
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 创建 Pull Request
-
-## 📞 联系方式
-
-- **GitHub Issues**: https://github.com/joyapple/DD-CLASS/issues
-- **作者**: joyapple
-
----
-
-## 💖 感谢支持
-
-**如果您觉得这个项目对您有帮助，请：**
-
-1. **给项目点个 Star** ⭐ - 您的支持是我们最大的动力
-2. **Fork** 🍴 - 欢迎基于此项目开发自己的版本
-3. **提出建议** 💡 - 任何功能建议或问题都欢迎反馈
-4. **分享给更多人** 📢 - 让更多人知道这个项目
-
-**再次感谢您的支持！**
-
----
-
-## 🙏 致谢
-
-感谢以下开源项目的贡献：
-
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [Vue.js](https://vuejs.org/)
-- [Element Plus](https://element-plus.org/)
-- [SQLAlchemy](https://www.sqlalchemy.org/)
-- [ECharts](https://echarts.apache.org/)
-
----
-
-**Made with ❤️ by [joyapple](https://github.com/joyapple)**
+Deployment guidance is consolidated in [docs/DEPLOYMENT_AND_OPERATIONS.md](docs/DEPLOYMENT_AND_OPERATIONS.md).

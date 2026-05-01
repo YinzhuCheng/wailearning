@@ -12,7 +12,7 @@
 #   SKIP_GIT=1                    跳过 git 同步（仅当已在 REPO_DIR 放好目标代码时使用；否则会旧代码重打前端）
 #   FRONTEND_ONLY=1               只跑 deploy_frontend.sh（仍会 npm run build 管理端；须保证 REPO_DIR 已是目标版本）
 #   APP_URL=https://你的域名       部署后 post_deploy_check 使用的公网健康检查地址
-#   DD_DEFAULT_REPO_DIR=/opt/dd-class/source  未设置 REPO_DIR 时的首选 clone 路径（与 DEPLOY.md 一致）
+#   DD_DEFAULT_REPO_DIR=/opt/dd-class/source  未设置 REPO_DIR 时的首选 clone 路径（与 docs/DEPLOYMENT_AND_OPERATIONS.md 一致）
 #   GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=1  checkout 因本地改动被拒时自动 patch + stash -u 并重试（0=关闭）
 #   SAFE_BACKUP_BEFORE_DEPLOY=0  设为 1 时在 Git 同步前备份 PostgreSQL 与 shared（pg_dump 在 /tmp 下执行，减轻 postgres 无法 cd /root 的告警）
 #   DB_NAME=ddclass  SHARED_DIR=/opt/dd-class/shared  与备份路径相关

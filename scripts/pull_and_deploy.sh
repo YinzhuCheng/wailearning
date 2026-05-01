@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 与 scripts/redeploy.sh 共用 Git 同步逻辑（见 docs/DEPLOY_GIT_ROBUSTNESS.md）。
+# 与 scripts/redeploy.sh 共用 Git 同步逻辑（见 docs/DEPLOYMENT_AND_OPERATIONS.md）。
 # 需 root（与 deploy_all.sh 内各脚本一致）。分支可用 BRANCH 或 GIT_BRANCH。
 # GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT、SAFE_BACKUP_BEFORE_DEPLOY 与 redeploy.sh 相同。
 set -euo pipefail
