@@ -113,10 +113,20 @@ def test_elective_catalog_lists_active_electives_schoolwide(client: TestClient):
     assert rid not in ids
 
 
-def test_student_cannot_self_enroll_elective_other_class(client: TestClient):
+@pytest.mark.parametrize(
+    ("target_subject_key", "case_label"),
+    [
+        ("oid", "elective_other_class"),
+        ("rid", "required_course"),
+    ],
+)
+def test_student_cannot_self_enroll_forbidden_course_types(
+    client: TestClient, target_subject_key: str, case_label: str
+):
     sh, kid, eid, oid, rid = _seed_student_and_elective(client)
-    r = client.post(f"/api/subjects/{oid}/student-self-enroll", headers=sh)
-    assert r.status_code == 400
+    subject_ids = {"eid": eid, "oid": oid, "rid": rid}
+    r = client.post(f"/api/subjects/{subject_ids[target_subject_key]}/student-self-enroll", headers=sh)
+    assert r.status_code == 400, case_label
 
 
 def test_student_self_enroll_then_list_my_courses(client: TestClient):
@@ -132,12 +142,6 @@ def test_student_self_enroll_then_list_my_courses(client: TestClient):
     assert mine.status_code == 200
     mine_ids = {c["id"] for c in mine.json()}
     assert eid in mine_ids
-
-
-def test_student_cannot_self_enroll_required(client: TestClient):
-    sh, kid, eid, oid, rid = _seed_student_and_elective(client)
-    r = client.post(f"/api/subjects/{rid}/student-self-enroll", headers=sh)
-    assert r.status_code == 400
 
 
 def test_student_self_drop_elective(client: TestClient):

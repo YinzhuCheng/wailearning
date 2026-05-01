@@ -54,18 +54,20 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def test_e2e_seed_disabled_returns_404(client: TestClient):
-    settings.E2E_DEV_SEED_ENABLED = False
-    settings.E2E_DEV_SEED_TOKEN = ""
-    r = client.post("/api/e2e/dev/reset-scenario", headers={"X-E2E-Seed-Token": "any"})
-    assert r.status_code == 404
-
-
-def test_e2e_seed_wrong_token_returns_403(client: TestClient):
-    settings.E2E_DEV_SEED_ENABLED = True
-    settings.E2E_DEV_SEED_TOKEN = "secret-xyz"
-    r = client.post("/api/e2e/dev/reset-scenario", headers={"X-E2E-Seed-Token": "wrong"})
-    assert r.status_code == 403
+@pytest.mark.parametrize(
+    ("enabled", "configured_token", "request_token", "expected_status"),
+    [
+        (False, "", "any", 404),
+        (True, "secret-xyz", "wrong", 403),
+    ],
+)
+def test_e2e_seed_rejects_disabled_or_wrong_token(
+    client: TestClient, enabled: bool, configured_token: str, request_token: str, expected_status: int
+):
+    settings.E2E_DEV_SEED_ENABLED = enabled
+    settings.E2E_DEV_SEED_TOKEN = configured_token
+    r = client.post("/api/e2e/dev/reset-scenario", headers={"X-E2E-Seed-Token": request_token})
+    assert r.status_code == expected_status
 
 
 def test_e2e_seed_ok_when_enabled(client: TestClient):

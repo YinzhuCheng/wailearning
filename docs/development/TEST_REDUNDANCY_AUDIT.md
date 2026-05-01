@@ -74,8 +74,8 @@ Protected test files matched by policy: **18**
 
 | Category | Before | After safe deletes |
 | --- | ---: | ---: |
-| `backend-courses` | 34 | 34 |
-| `backend-e2e_dev` | 13 | 13 |
+| `backend-courses` | 33 | 33 |
+| `backend-e2e_dev` | 12 | 12 |
 | `backend-files` | 1 | 1 |
 | `backend-homework` | 28 | 28 |
 | `backend-llm` | 82 | 82 |
@@ -94,16 +94,7 @@ No exact duplicate non-protected test files were found.
 
 ## Parameterization Candidates
 
-### Cluster 1
-
-- `tests/backend/courses/test_student_elective_catalog_and_quota.py::test_student_cannot_self_enroll_elective_other_class`
-- `tests/backend/courses/test_student_elective_catalog_and_quota.py::test_student_cannot_self_enroll_required`
-
-### Cluster 2
-
-- `tests/backend/e2e_dev/test_e2e_dev_seed.py::test_e2e_seed_disabled_returns_404`
-- `tests/backend/e2e_dev/test_e2e_dev_seed.py::test_e2e_seed_wrong_token_returns_403`
-
+No same-file exact duplicate test bodies were found.
 
 ## Merge-Only Candidates
 
