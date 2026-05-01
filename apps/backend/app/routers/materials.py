@@ -101,6 +101,7 @@ def _serialize_material(db: Session, material: CourseMaterial) -> CourseMaterial
         subject_name=material.subject.name if material.subject else None,
         creator_name=material.creator.real_name if material.creator else None,
         placements=placements,
+        discussion_requires_context=material.subject_id is None,
     )
 
 

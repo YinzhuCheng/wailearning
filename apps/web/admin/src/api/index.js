@@ -297,6 +297,11 @@ const api = {
         ...fileTransferRequestConfig
       })
   },
+  discussions: {
+    list: params => http.get('/discussions', { params }),
+    create: data => http.post('/discussions', data),
+    delete: id => http.delete(`/discussions/${id}`)
+  },
   llmSettings: {
     listPresets: () => http.get('/llm-settings/presets'),
     createPreset: data => http.post('/llm-settings/presets', data),

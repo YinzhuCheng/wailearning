@@ -21,6 +21,9 @@ from app.llm_grading import process_next_grading_task, start_grading_worker, wor
 from app.models import (
     Class,
     CourseEnrollment,
+    CourseMaterial,
+    CourseMaterialChapter,
+    CourseMaterialSection,
     Gender,
     Homework,
     HomeworkGradingTask,
@@ -256,8 +259,46 @@ def reset_e2e_scenario(
         created_by=t_own.id,
     )
     db.add(hw)
+    db.flush()
+
+    unc = (
+        db.query(CourseMaterialChapter)
+        .filter(
+            CourseMaterialChapter.subject_id == course_req.id,
+            CourseMaterialChapter.is_uncategorized.is_(True),
+        )
+        .first()
+    )
+    if not unc:
+        unc = CourseMaterialChapter(
+            subject_id=course_req.id,
+            parent_id=None,
+            title="未分类",
+            sort_order=0,
+            is_uncategorized=True,
+        )
+        db.add(unc)
+        db.flush()
+
+    mat_disc = CourseMaterial(
+        title=f"E2E讨论资料_{suffix}",
+        content="用于讨论区 E2E 的资料正文。",
+        class_id=c1.id,
+        subject_id=course_req.id,
+        created_by=t_own.id,
+    )
+    db.add(mat_disc)
+    db.flush()
+    db.add(
+        CourseMaterialSection(
+            material_id=mat_disc.id,
+            chapter_id=unc.id,
+            sort_order=0,
+        )
+    )
 
     db.commit()
+    db.refresh(mat_disc)
 
     return {
         "suffix": suffix,
@@ -277,6 +318,7 @@ def reset_e2e_scenario(
         "course_other_teacher_id": course_other.id,
         "course_orphan_id": course_orphan.id,
         "homework_id": hw.id,
+        "material_discussion_id": mat_disc.id,
         "user_ids_for_batch": [u_plain.id, u_b.id],
         "teacher_user_id": t_own.id,
     }

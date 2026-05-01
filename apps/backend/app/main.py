@@ -23,6 +23,7 @@ from app.routers import (
     auth,
     classes,
     dashboard,
+    discussions,
     e2e_dev,
     files,
     homework,
@@ -103,6 +104,7 @@ app.include_router(system_settings.router)
 app.include_router(llm_settings.router)
 app.include_router(files.router)
 app.include_router(homework.router)
+app.include_router(discussions.router)
 app.include_router(material_chapters.router)
 app.include_router(materials.router)
 app.include_router(notifications.router)
