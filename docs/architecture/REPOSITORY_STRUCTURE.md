@@ -189,13 +189,14 @@ Its structure parallels the admin frontend, but it remains a separate app becaus
 
 Tests live under `tests/` and are split by style and purpose:
 
-- top-level `tests/test_*.py` for focused backend regression modules,
+- `tests/backend/` for focused backend regression modules grouped by domain,
 - `tests/behavior/` for higher-level multi-actor or workflow behavior,
 - `tests/e2e/web-admin/` for browser E2E coverage,
 - `tests/fixtures/` for test assets,
+- `tests/scenarios/` for reusable scenario builders and stress helpers,
 - a repository-level `tests/conftest.py` for test environment defaults.
 
-This is not yet a perfect domain-oriented hierarchy, but it is already clearer than mixing browser tests into frontend application directories.
+Thin compatibility re-export modules remain at the `tests/` root for shared helpers such as `tests.llm_scenario`, but the actual helper implementations now live under `tests/scenarios/`.
 
 ## Local Runtime Artifacts That May Appear But Are Not Source Layout
 

@@ -173,6 +173,7 @@ The authoritative project documentation now lives under [`docs/`](docs/README.md
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md)
 - [LLM and Homework Guide](docs/product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](docs/development/DEVELOPMENT_AND_TESTING.md)
+- [Test Suite Map](docs/development/TEST_SUITE_MAP.md)
 - [Deployment and Operations](docs/operations/DEPLOYMENT_AND_OPERATIONS.md)
 - [Parent Portal](docs/product/PARENT_PORTAL.md)
 - [Git Workflow](docs/development/GIT_WORKFLOW.md)

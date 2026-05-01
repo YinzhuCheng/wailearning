@@ -8,6 +8,7 @@ This directory is the authoritative documentation home for the repository. The r
 - [System Overview](architecture/SYSTEM_OVERVIEW.md)
 - [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
+- [Test Suite Map](development/TEST_SUITE_MAP.md)
 - [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 - [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
 - [Parent Portal](product/PARENT_PORTAL.md)
@@ -91,9 +92,10 @@ Why:
 ### Local development
 
 1. [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
-2. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
-3. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
-4. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+2. [Test Suite Map](development/TEST_SUITE_MAP.md)
+3. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
+4. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
+5. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 
 ### Production deployment
 

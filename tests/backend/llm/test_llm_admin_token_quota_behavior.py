@@ -23,7 +23,7 @@ from app.models import (
     UserRole,
 )
 from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
-from tests.test_llm_token_quota_behavior import _tiny_png_bytes
+from tests.backend.llm.test_llm_token_quota_behavior import _tiny_png_bytes
 
 
 @pytest.fixture(autouse=True)

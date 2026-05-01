@@ -54,7 +54,7 @@ def test_extract_xlsx_sheet_rows():
 def test_extract_xls_fixture():
     from pathlib import Path
 
-    p = Path(__file__).resolve().parent / "fixtures" / "tiny.xls"
+    p = Path(__file__).resolve().parents[2] / "fixtures" / "tiny.xls"
     assert p.is_file(), "fixtures/tiny.xls required (generated via xlwt)"
     blocks = _classify_and_extract("legacy.xls", p.read_bytes())
     text = _blocks_to_text(blocks)

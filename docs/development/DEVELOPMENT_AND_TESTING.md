@@ -7,8 +7,9 @@ Do not start with ad hoc commands if you are new to this repository or returning
 Read in this order first:
 
 1. [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md)
-2. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
-3. the feature-specific document for the workflow you are about to touch
+2. [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md)
+3. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
+4. the feature-specific document for the workflow you are about to touch
 
 Why this is mandatory:
 
@@ -97,10 +98,13 @@ python -m pytest tests/behavior -q
 
 Important directories:
 
-- `tests/`
+- `tests/backend/`
 - `tests/behavior/`
+- `tests/scenarios/`
 
 Before concluding that a backend test failure is a product regression, review the temp-path, Windows, and environment notes in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+
+For a domain-by-domain map of the backend suites, read [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md).
 
 ### Frontend Playwright E2E
 
