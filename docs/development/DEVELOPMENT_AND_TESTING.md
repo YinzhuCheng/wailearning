@@ -8,8 +8,9 @@ Read in this order first:
 
 1. [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md)
 2. [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md)
-3. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
-4. the feature-specific document for the workflow you are about to touch
+3. [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md) if you are evaluating test cleanup or consolidation
+4. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
+5. the feature-specific document for the workflow you are about to touch
 
 Why this is mandatory:
 
@@ -121,6 +122,7 @@ Key files:
 - `apps/web/admin/playwright.config.cjs`
 - `tests/e2e/web-admin/`
 - `docs/development/TEST_EXECUTION_PITFALLS.md`
+- `tests/TEST_PROTECTION_RULES.json`
 
 Before running Playwright on Windows, read the pitfalls document first. Known false-failure causes include:
 
@@ -210,3 +212,20 @@ python -m pytest tests/behavior -q
 ```
 
 and then any targeted Playwright spec that covers the affected workflow.
+
+## Test Cleanup Policy
+
+If you are considering deleting or consolidating tests, do not start from ad hoc judgment.
+
+Read and use:
+
+- [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md)
+- `tools/testing/audit_test_redundancy.py`
+- `tests/TEST_PROTECTION_RULES.json`
+
+Policy:
+
+- high-difficulty and high-value tests are protected first,
+- exact duplicates may be considered for removal only when they are outside the protection policy,
+- same-file duplicates should usually be parameterized rather than deleted,
+- overlap candidates should be reviewed manually before any deletion is proposed.
