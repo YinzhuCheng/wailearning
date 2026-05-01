@@ -1,5 +1,22 @@
 # Development and Testing
 
+## Required Reading Before Running Commands
+
+Do not start with ad hoc commands if you are new to this repository or returning after a break.
+
+Read in this order first:
+
+1. [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md)
+2. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
+3. the feature-specific document for the workflow you are about to touch
+
+Why this is mandatory:
+
+- the repository includes compatibility layers that are easy to misinterpret if you only inspect paths
+- Windows + PowerShell execution has known traps that can produce false test failures
+- Playwright failures in this repository are often environment or process-management issues before they are product regressions
+- local artifact directories can look like source or canonical output if you do not read the structure notes first
+
 ## Local Development Setup
 
 Before running commands, understand the repository boundary rules in [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md). In particular:
@@ -83,6 +100,8 @@ Important directories:
 - `tests/`
 - `tests/behavior/`
 
+Before concluding that a backend test failure is a product regression, review the temp-path, Windows, and environment notes in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+
 ### Frontend Playwright E2E
 
 Use browser tests for login flows, stale-tab behavior, deep links, and UI-to-backend convergence.
@@ -98,6 +117,14 @@ Key files:
 - `apps/web/admin/playwright.config.cjs`
 - `tests/e2e/web-admin/`
 - `docs/development/TEST_EXECUTION_PITFALLS.md`
+
+Before running Playwright on Windows, read the pitfalls document first. Known false-failure causes include:
+
+- `npm.ps1` execution-policy blocking,
+- stale API or UI ports,
+- hidden old processes serving the wrong app,
+- sandbox `EPERM` during subprocess startup,
+- readiness checks that accept the wrong HTTP response.
 
 ## E2E Seed and Environment
 

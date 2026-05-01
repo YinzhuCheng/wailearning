@@ -6,6 +6,20 @@ This document records pitfalls encountered while executing the repository test s
 
 This file is meant to save future test operators from rediscovering the same issues.
 
+## Read This Before Running Tests
+
+If you are about to run tests, especially as an LLM coding agent on Windows + PowerShell, check these first:
+
+1. Use the repository `.venv`, not a global Python.
+2. Treat `npm.ps1` as suspect; prefer `npm.cmd` or `npx.cmd` when PowerShell policy is restrictive.
+3. Assume stale backend or frontend processes may still own your intended ports.
+4. Do not trust "a port responds" as proof that the correct app is serving.
+5. For Playwright, prefer isolated ports and explicit external-server startup when a run matters.
+6. If pytest fails before test bodies execute, inspect temp-path behavior before blaming product code.
+7. Do not copy Chinese text from PowerShell output back into tracked files.
+
+If you skip this checklist, you may spend time debugging the shell, temp directories, old background processes, or port collisions instead of the repository itself.
+
 ## Scope of the Recorded Session
 
 - Host shell: Windows PowerShell

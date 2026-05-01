@@ -2,6 +2,23 @@
 
 BIMSA-CLASS is a school and classroom management platform built with FastAPI, Vue 3, PostgreSQL, and a separate parent portal. It combines day-to-day academic administration with course-level LLM-assisted homework grading, async grading queues, quota controls, and attachment-aware submission processing.
 
+## Read Before Work
+
+This repository expects contributors, including LLM coding agents, to read the relevant documentation before making changes. Do not treat the file tree alone as the source of truth.
+
+Minimum rule:
+
+- before changing repository structure or file placement, read [docs/architecture/REPOSITORY_STRUCTURE.md](docs/architecture/REPOSITORY_STRUCTURE.md)
+- before changing backend or product behavior, read [docs/architecture/SYSTEM_OVERVIEW.md](docs/architecture/SYSTEM_OVERVIEW.md) and any feature-specific product document such as [docs/product/LLM_HOMEWORK_GUIDE.md](docs/product/LLM_HOMEWORK_GUIDE.md)
+- before running tests or diagnosing failures, read [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) and [docs/development/TEST_EXECUTION_PITFALLS.md](docs/development/TEST_EXECUTION_PITFALLS.md)
+- before deployment or service changes, read [docs/operations/DEPLOYMENT_AND_OPERATIONS.md](docs/operations/DEPLOYMENT_AND_OPERATIONS.md) and [docs/operations/ADMIN_BOOTSTRAP.md](docs/operations/ADMIN_BOOTSTRAP.md)
+- before touching parent-facing flows, read [docs/product/PARENT_PORTAL.md](docs/product/PARENT_PORTAL.md)
+
+Practical expectation:
+
+- if you skip the relevant docs, you are likely to misread compatibility layers, confuse local artifacts for source layout, or waste time on known Windows/PowerShell test traps
+- if you discover a new behavior constraint, environment pitfall, or operational rule while working, update the corresponding document in the same change set
+
 ## Highlights
 
 - Multi-role access for admins, class teachers, subject teachers, students, and parent-code users.
@@ -143,7 +160,9 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, and current regression strategy.
+Read [docs/development/TEST_EXECUTION_PITFALLS.md](docs/development/TEST_EXECUTION_PITFALLS.md) before assuming test failures are product regressions, especially on Windows + PowerShell or when running Playwright.
+
+See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, reading order, and current regression strategy.
 
 ## Documentation
 
