@@ -1,4 +1,5 @@
 const { defineConfig, devices } = require('@playwright/test')
+const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const Module = require('module')
@@ -64,10 +65,13 @@ function buildApiCommand() {
       `${quoteWindowsArg(pythonExe)} -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_API_PORT}`
     ].join(' && ')
   }
+  const defaultVenvPython = path.join(repoRoot, '.venv', 'bin', 'python')
+  const pythonExe =
+    process.env.E2E_PYTHON || (fs.existsSync(defaultVenvPython) ? defaultVenvPython : 'python3')
   const apiEnvString = Object.entries(apiEnv)
     .map(([key, value]) => `${key}=${JSON.stringify(String(value))}`)
     .join(' ')
-  return `bash -lc 'cd "${repoRoot}" && exec env ${apiEnvString} python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_API_PORT}'`
+  return `bash -lc 'cd "${repoRoot}" && exec env ${apiEnvString} "${pythonExe}" -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_API_PORT}'`
 }
 
 function buildUiCommand() {

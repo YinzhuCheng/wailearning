@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Class, CourseEnrollment, CourseEnrollmentBlock, Student, Subject, User, UserRole
@@ -262,15 +263,22 @@ def sync_student_course_enrollments(
             continue
         if course.id in blocked_subject_ids:
             continue
-        db.add(
-            CourseEnrollment(
-                subject_id=course.id,
-                student_id=student.id,
-                class_id=student.class_id,
-                enrollment_type=course.course_type or "required",
-                can_remove=(course.course_type or "required") == "elective",
-            )
-        )
+        try:
+            with db.begin_nested():
+                db.add(
+                    CourseEnrollment(
+                        subject_id=course.id,
+                        student_id=student.id,
+                        class_id=student.class_id,
+                        enrollment_type=course.course_type or "required",
+                        can_remove=(course.course_type or "required") == "elective",
+                    )
+                )
+                db.flush()
+        except IntegrityError:
+            existing_course_ids.add(course.id)
+            continue
+        existing_course_ids.add(course.id)
         created += 1
 
     return created

@@ -65,7 +65,7 @@ test.describe('Future advanced E2E coverage expansion', () => {
       await enterSeededRequiredCourse(studentA, s.suffix)
       await studentA.goto(`/homework/${s.homework_id}/submit`)
       const body = `E2E backlog1_${s.suffix}_${Date.now()}`
-      await studentA.locator('textarea').first().fill(body)
+      await studentA.getByTestId('homework-submit-content').fill(body)
       await studentA.getByRole('button', { name: /保存提交/ }).click()
       await expect
         .poll(async () => {
@@ -309,7 +309,7 @@ test.describe('Future advanced E2E coverage expansion', () => {
       await tPage.getByRole('spinbutton').first().fill('1')
 
       await sPage.goto(`/homework/${hw.id}/submit`)
-      await sPage.locator('textarea').first().fill(`cap_${s.suffix}`)
+      await sPage.getByTestId('homework-submit-content').fill(`cap_${s.suffix}`)
       await Promise.all([
         sPage.waitForResponse(resp => resp.url().includes(`/api/homeworks/${hw.id}/submission`) && resp.request().method() === 'POST'),
         sPage.getByRole('button', { name: /保存提交/ }).click()
@@ -468,7 +468,7 @@ test.describe('Future advanced E2E coverage expansion', () => {
       }
       await route.continue()
     })
-    await page.locator('textarea').first().fill(`attach_${s.suffix}`)
+    await page.getByTestId('homework-submit-content').fill(`attach_${s.suffix}`)
     await page.getByRole('button', { name: /保存提交/ }).click()
     await page.getByRole('button', { name: /保存提交/ }).click()
 

@@ -272,7 +272,7 @@ async function chooseFeedbackFollowup(page) {
 async function submitHomeworkUi(page, homeworkId, content, options = {}) {
   await page.goto(`/homework/${homeworkId}/submit`)
   await expect(page.getByTestId('homework-submit-save')).toBeVisible({ timeout: 20000 })
-  await page.locator('textarea').first().fill(content)
+  await page.getByTestId('homework-submit-content').fill(content)
   if (options.usedLlmAssist) {
     await page.getByTestId('homework-submit-used-llm-assist').click()
   }
@@ -810,7 +810,7 @@ test.describe('E2E LLM hard scenarios', () => {
     await configureMockLlm({ followup: { steps: [{ kind: 'ok', score: 89, comment: 'improved' }], repeat_last: true } })
     await page.goto(`/homework/${hw.id}/submit`)
     await chooseFeedbackFollowup(page)
-    await page.locator('textarea').first().fill(`followup second ${Date.now()}`)
+    await page.getByTestId('homework-submit-content').fill(`followup second ${Date.now()}`)
     await page.getByTestId('homework-submit-save').click()
     await processQueuedTasks(2)
     await waitForReviewScore(studentToken, hw.id, 89)

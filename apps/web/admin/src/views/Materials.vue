@@ -400,7 +400,7 @@ const loadMaterials = async () => {
       subject_id: selectedCourse.value.id,
       chapter_id: selectedChapterId.value || undefined,
       page: 1,
-      page_size: 200
+      page_size: 100
     })
     materials.value = result?.data || []
   } finally {

@@ -108,7 +108,9 @@ test.describe('E2E course discussions (homework + materials, advanced)', () => {
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submit`, { waitUntil: 'load', timeout: 60000 })
     await expect(page.getByRole('heading', { name: '提交作业' })).toBeVisible({ timeout: 20000 })
-    await expect(page.getByText(new RegExp(`E2E_UI作业_${escapeRegex(s.suffix)}`))).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText(new RegExp(`E2E_UI作业_${escapeRegex(s.suffix)}`)).first()).toBeVisible({
+      timeout: 15000
+    })
     await expect(page.getByText('讨论区')).toBeVisible({ timeout: 15000 })
     await expect(page.getByText(/Playwright UI 测试/)).toBeVisible({ timeout: 10000 })
   })
@@ -218,10 +220,10 @@ test.describe('E2E course discussions (homework + materials, advanced)', () => {
     await login(page, s.teacher_own.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submissions`, { waitUntil: 'load', timeout: 60000 })
     const titlePat = new RegExp(`E2E_UI作业_${escapeRegex(s.suffix)}`)
-    await expect(page.getByText(titlePat)).toBeVisible({ timeout: 20000 })
+    await expect(page.getByText(titlePat).first()).toBeVisible({ timeout: 20000 })
     await expect(page.getByText('讨论区')).toBeVisible({ timeout: 15000 })
     await page.locator('.discussion-card .el-pagination .btn-next').click()
-    await expect(page.getByText(titlePat)).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText(titlePat).first()).toBeVisible({ timeout: 10000 })
     await expect(page.locator('.discussion-row__body').filter({ hasText: `bulk-${stamp}-` })).toHaveCount(1, {
       timeout: 15000
     })
@@ -264,7 +266,7 @@ test.describe('E2E course discussions (homework + materials, advanced)', () => {
     await page.goto('/courses')
     await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/materials', { waitUntil: 'load', timeout: 60000 })
-    const row = page.locator('tbody tr').filter({ hasText: `E2E讨论资料_${s.suffix}` })
+    const row = page.locator('.el-table__body tbody tr').filter({ hasText: `E2E讨论资料_${s.suffix}` }).first()
     await expect(row).toBeVisible({ timeout: 20000 })
     await row.click()
     await expect(page.locator('.el-dialog').filter({ hasText: '资料详情' })).toBeVisible({ timeout: 15000 })

@@ -663,9 +663,9 @@ test.describe('E2E resilience scenarios', () => {
       await route.continue()
     })
 
-    await page.locator('textarea').first().fill(content)
+    await page.getByTestId('homework-submit-content').fill(content)
     await page.getByRole('button', { name: /保存提交/ }).click()
-    await expect(page.locator('textarea').first()).toHaveValue(content, { timeout: 15000 })
+    await expect(page.getByTestId('homework-submit-content')).toHaveValue(content, { timeout: 15000 })
     await page.getByRole('button', { name: /保存提交/ }).click()
 
     await expect
@@ -695,7 +695,7 @@ test.describe('E2E resilience scenarios', () => {
       await login(setupPage, s.student_plain.username, s.student_plain.password)
       await enterSeededRequiredCourse(setupPage, s.suffix)
       await setupPage.goto(`/homework/${s.homework_id}/submit`)
-      await setupPage.locator('textarea').first().fill(submitContent)
+      await setupPage.getByTestId('homework-submit-content').fill(submitContent)
       await setupPage.getByRole('button', { name: /保存提交/ }).click()
     } finally {
       await setupPageCtx.close().catch(() => {})
@@ -814,7 +814,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto(`/homework/${s.homework_id}/submit`)
 
     await expect(page).toHaveURL(new RegExp(`/homework/${s.homework_id}/submit$`))
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 20000 })
+    await expect(page.getByTestId('homework-submit-content')).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
   })
 
@@ -851,7 +851,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto(`/homework/${s.homework_id}/submit`)
 
     await expect(page).toHaveURL(new RegExp(`/homework/${s.homework_id}/submit$`))
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 20000 })
+    await expect(page.getByTestId('homework-submit-content')).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
   })
 
