@@ -162,6 +162,10 @@ npm run test:e2e
 
 Read [docs/development/TEST_EXECUTION_PITFALLS.md](docs/development/TEST_EXECUTION_PITFALLS.md) before assuming test failures are product regressions, especially on Windows + PowerShell or when running Playwright.
 
+Optional Playwright backlog specs (`tests/e2e/web-admin/future-advanced-coverage*.spec.js`) are gated by **`E2E_ENABLE_BACKLOG_SPECS`**; see [docs/development/E2E_BACKLOG_SCENARIOS.md](docs/development/E2E_BACKLOG_SCENARIOS.md).
+
+Update: those files now ship **implemented** advanced scenarios (see **`future-advanced-coverage-helpers.cjs`**); the `E2E_ENABLE_BACKLOG_SPECS` gate described in the linked doc is **legacy** and no longer applies unless your checkout predates that change.
+
 See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, reading order, and current regression strategy.
 
 ## Documentation

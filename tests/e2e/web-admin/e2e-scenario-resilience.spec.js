@@ -1532,6 +1532,15 @@ test.describe('E2E resilience scenarios', () => {
       await pageA.getByTestId('batch-class-confirm').click()
       await confirmPrimaryDialog(pageA)
 
+      // Wait until the UI-driven batch move lands server-side; otherwise a fast API reset can race
+      // and the later UI completion may overwrite back to class_id_2.
+      await expect
+        .poll(async () => {
+          const me = await apiGetJson('/api/auth/me', studentToken)
+          return Number(me.class_id || 0)
+        }, { timeout: 45000 })
+        .toBe(Number(s.class_id_2))
+
       await apiBatchSetClass(adminToken, [studentUserId], s.class_id_1)
 
       await expect
@@ -1542,7 +1551,7 @@ test.describe('E2E resilience scenarios', () => {
             classId: Number(me.class_id || 0),
             requiredVisible: catalog.some(row => Number(row.id) === Number(s.course_required_id))
           }
-        }, { timeout: 30000 })
+        }, { timeout: 45000 })
         .toEqual({
           classId: Number(s.class_id_1),
           requiredVisible: true

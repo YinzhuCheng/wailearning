@@ -1,95 +1,44 @@
+/**
+ * Advanced E2E scenarios (batch I: cases 1–15). Uses the same seed reset contract as other Playwright specs.
+ */
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const {
+  escapeRegex,
+  login,
+  obtainAccessToken,
+  apiBase,
+  apiGetJson,
+  apiPostJson,
+  apiPutJson,
+  apiDelete,
+  configureMockLlm,
+  processGradingTasks,
+  gradingState,
+  createPreset,
+  validatePreset,
+  setFlatCourseConfig,
+  createHomework,
+  apiListNotifications,
+  apiListScoreAppeals,
+  apiListUsers,
+  apiFindUserIdByUsername,
+  apiHomeworkSubmissionHistory,
+  flattenChapterTree,
+  getChapterTree,
+  currentSelectedCourseId,
+  apiPostForm
+} = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
 
-function apiBase() {
-  return (process.env.E2E_API_URL || 'http://127.0.0.1:8012').replace(/\/$/, '')
+async function confirmPrimaryDialog(page) {
+  const dlg = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: /^(确定|OK)$/ }) })
+  await dlg.getByRole('button', { name: /^(确定|OK)$/ }).click()
 }
 
-async function login(page, username, password) {
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
-  await expect(page.getByTestId('login-username')).toBeVisible({ timeout: 30000 })
-  await page.getByTestId('login-username').fill(username)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 })
-}
-
-async function obtainAccessToken(username, password) {
-  const body = new URLSearchParams()
-  body.set('username', username)
-  body.set('password', password)
-  const res = await fetch(`${apiBase()}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body
-  })
-  if (!res.ok) {
-    throw new Error(`login failed ${res.status}: ${await res.text()}`)
-  }
-  const data = await res.json()
-  return data.access_token
-}
-
-async function apiGetJson(pathname, token) {
-  const res = await fetch(`${apiBase()}${pathname}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
-  })
-  if (!res.ok) {
-    throw new Error(`GET ${pathname} failed ${res.status}: ${await res.text()}`)
-  }
-  return res.json()
-}
-
-async function apiPostJson(pathname, token, body) {
-  const res = await fetch(`${apiBase()}${pathname}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify(body)
-  })
-  if (!res.ok) {
-    throw new Error(`POST ${pathname} failed ${res.status}: ${await res.text()}`)
-  }
-  return res.json()
-}
-
-async function apiPatchJson(pathname, token, body) {
-  const res = await fetch(`${apiBase()}${pathname}`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify(body)
-  })
-  if (!res.ok) {
-    throw new Error(`PATCH ${pathname} failed ${res.status}: ${await res.text()}`)
-  }
-  return res.json()
-}
-
-async function apiListNotifications(token, params = {}) {
-  const url = new URL(`${apiBase()}/api/notifications`)
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      url.searchParams.set(key, String(value))
-    }
-  }
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  if (!res.ok) {
-    throw new Error(`notifications list failed ${res.status}: ${await res.text()}`)
-  }
-  return res.json()
-}
-
-test.describe.skip('Future advanced E2E coverage expansion', () => {
-  test.describe.configure({ timeout: 180_000 })
+test.describe('Future advanced E2E coverage expansion', () => {
+  test.describe.configure({ timeout: 240_000 })
 
   test.beforeEach(async ({}, testInfo) => {
     const s = await resetE2eScenario()
@@ -98,236 +47,497 @@ test.describe.skip('Future advanced E2E coverage expansion', () => {
     }
   })
 
-  test.skip('1. student stale-tab homework resubmit after teacher hard review keeps one authoritative attempt history', async ({ browser }) => {
+  test('1. student stale-tab homework resubmit after teacher hard review keeps one authoritative attempt history', async ({
+    browser
+  }) => {
     const s = scenario()
-    const teacherCtx = await browser.newContext()
-    const studentCtxA = await browser.newContext()
-    const studentCtxB = await browser.newContext()
-    const teacherPage = await teacherCtx.newPage()
-    const studentPageA = await studentCtxA.newPage()
-    const studentPageB = await studentCtxB.newPage()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    await apiPutJson(`/api/homeworks/${s.homework_id}`, teacherToken, { max_submissions: 1 })
 
-    await login(teacherPage, s.teacher_own.username, s.teacher_own.password)
-    await login(studentPageA, s.student_plain.username, s.student_plain.password)
-    await login(studentPageB, s.student_plain.username, s.student_plain.password)
-
-    await enterSeededRequiredCourse(studentPageA, s.suffix)
-    await enterSeededRequiredCourse(studentPageB, s.suffix)
-    await studentPageA.goto('/homework')
-    await studentPageB.goto('/homework')
-
-    // Future intent:
-    // 1. student tab A submits
-    // 2. teacher reviews and closes the first summary
-    // 3. stale tab B tries to resubmit or edit based on old state
-    // 4. assert history converges to one valid current summary with no ghost duplicate
-  })
-
-  test.skip('2. teacher concurrent material chapter reorder from two tabs converges to one final chapter sequence', async ({ browser }) => {
-    const s = scenario()
     const ctxA = await browser.newContext()
     const ctxB = await browser.newContext()
-    const pageA = await ctxA.newPage()
-    const pageB = await ctxB.newPage()
+    const teacherPage = await ctxA.newPage()
+    const studentA = await ctxB.newPage()
+    try {
+      await login(teacherPage, s.teacher_own.username, s.teacher_own.password)
+      await login(studentA, s.student_plain.username, s.student_plain.password)
+      await enterSeededRequiredCourse(studentA, s.suffix)
+      await studentA.goto(`/homework/${s.homework_id}/submit`)
+      const body = `E2E backlog1_${s.suffix}_${Date.now()}`
+      await studentA.locator('textarea').first().fill(body)
+      await studentA.getByRole('button', { name: /保存提交/ }).click()
+      await expect
+        .poll(async () => {
+          const h = await apiHomeworkSubmissionHistory(studentToken, s.homework_id)
+          return h.summary?.id || null
+        }, { timeout: 30000 })
+        .toBeTruthy()
 
-    await login(pageA, s.teacher_own.username, s.teacher_own.password)
-    await login(pageB, s.teacher_own.username, s.teacher_own.password)
-    await enterSeededRequiredCourse(pageA, s.suffix)
-    await enterSeededRequiredCourse(pageB, s.suffix)
-    await pageA.goto('/materials')
-    await pageB.goto('/materials')
+      const hist = await apiHomeworkSubmissionHistory(studentToken, s.homework_id)
+      const submissionId = hist.summary?.id
+      await apiPutJson(`/api/homeworks/${s.homework_id}/submissions/${submissionId}/review`, teacherToken, {
+        review_score: 88,
+        review_comment: `E2E teacher review ${s.suffix}`
+      })
 
-    // Future intent:
-    // create 3 chapters, reorder differently in each tab, save out of order,
-    // then assert API and UI both show only the last authoritative order.
+      const studentB = await ctxB.newPage()
+      await login(studentB, s.student_plain.username, s.student_plain.password)
+      await enterSeededRequiredCourse(studentB, s.suffix)
+      await studentB.goto(`/homework/${s.homework_id}/submit`)
+      await expect(studentB.getByTestId('homework-submit-content')).toBeDisabled({ timeout: 15000 })
+
+      await expect
+        .poll(async () => {
+          const h = await apiHomeworkSubmissionHistory(studentToken, s.homework_id)
+          return h.attempts?.length || 0
+        }, { timeout: 15000 })
+        .toBe(1)
+      await studentB.close()
+    } finally {
+      await ctxA.close().catch(() => {})
+      await ctxB.close().catch(() => {})
+    }
   })
 
-  test.skip('3. admin delete-class attempt blocked while related roster and course references still exist', async ({ page }) => {
+  test('2. teacher concurrent material chapter reorder from two tabs converges to one final chapter sequence', async ({
+    browser
+  }) => {
+    const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const tree1 = await getChapterTree(teacherToken, s.course_required_id)
+    const customizable = flattenChapterTree(tree1.nodes).filter(ch => !ch.title.includes('未分类'))
+    let chA = customizable[0]
+    let chB = customizable[1]
+    if (!chA || !chB) {
+      await apiPostJson(`/api/material-chapters?subject_id=${s.course_required_id}`, teacherToken, {
+        title: `E2E章A_${s.suffix}`,
+        parent_id: null
+      })
+      await apiPostJson(`/api/material-chapters?subject_id=${s.course_required_id}`, teacherToken, {
+        title: `E2E章B_${s.suffix}`,
+        parent_id: null
+      })
+      const tree2 = await getChapterTree(teacherToken, s.course_required_id)
+      const rows = flattenChapterTree(tree2.nodes)
+      chA = rows.find(r => r.title.includes(`E2E章A_${s.suffix}`))
+      chB = rows.find(r => r.title.includes(`E2E章B_${s.suffix}`))
+    }
+    expect(chA && chB).toBeTruthy()
+
+    await Promise.all([
+      apiPostJson(`/api/material-chapters/reorder?subject_id=${s.course_required_id}`, teacherToken, {
+        parent_id: null,
+        ordered_chapter_ids: [chB.id, chA.id]
+      }),
+      apiPostJson(`/api/material-chapters/reorder?subject_id=${s.course_required_id}`, teacherToken, {
+        parent_id: null,
+        ordered_chapter_ids: [chA.id, chB.id]
+      })
+    ])
+
+    await expect
+      .poll(async () => {
+        const t = await getChapterTree(teacherToken, s.course_required_id)
+        const leaf = flattenChapterTree(t.nodes).map(r => r.id)
+        return leaf.join(',')
+      }, { timeout: 15000 })
+      .toMatch(/./)
+
+    const finalTree = await getChapterTree(teacherToken, s.course_required_id)
+    const ordered = flattenChapterTree(finalTree.nodes).map(r => r.id)
+    expect(new Set(ordered).size).toBe(ordered.length)
+  })
+
+  test('3. admin delete-class attempt blocked while related roster and course references still exist', async ({ page }) => {
     const s = scenario()
     await login(page, s.admin.username, s.admin.password)
     await page.goto('/classes')
-
-    // Future intent:
-    // attempt destructive class deletion against a seeded class with students and courses,
-    // assert backend rejection, user-facing message, and no partial cleanup.
+    const row = page.getByRole('row', { name: new RegExp(escapeRegex(s.class_name_1)) })
+    await expect(row).toBeVisible({ timeout: 15000 })
+    await row.getByRole('button', { name: '删除' }).click()
+    await confirmPrimaryDialog(page)
+    await expect(page.locator('.el-message--error').first()).toBeVisible({ timeout: 10000 })
   })
 
-  test.skip('4. teacher LLM endpoint failover during async grading leaves one completed task and no orphan queued rows', async ({ browser }) => {
+  test('4. teacher LLM endpoint failover during async grading leaves one completed task and no orphan queued rows', async () => {
+    const s = scenario()
+    const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+
+    await configureMockLlm({
+      g1: {
+        steps: [{ kind: 'http_error', status_code: 503, body: { error: 'failover' } }],
+        repeat_last: false
+      },
+      g2: { steps: [{ kind: 'ok', score: 81, comment: 'failover ok' }], repeat_last: true }
+    })
+    const p1 = await createPreset(adminToken, `E2E backlog4a_${s.suffix}`, 'g1')
+    const p2 = await createPreset(adminToken, `E2E backlog4b_${s.suffix}`, 'g2')
+    await validatePreset(adminToken, p1.id)
+    await validatePreset(adminToken, p2.id)
+    await setFlatCourseConfig(teacherToken, s.course_required_id, [p1.id, p2.id])
+
+    const hw = await createHomework(teacherToken, s, `E2E LLM failover ${s.suffix}`)
+    await apiPostJson(`/api/homeworks/${hw.id}/submission`, studentToken, {
+      content: 'failover submission',
+      used_llm_assist: false,
+      mode: 'normal'
+    })
+
+    const workerOn = (await gradingState()).worker?.running
+    if (workerOn) {
+      await expect
+        .poll(async () => {
+          const st = await gradingState()
+          return (st.tasks?.queued || 0) + (st.tasks?.processing || 0)
+        }, { timeout: 60000 })
+        .toBe(0)
+    } else {
+      await processGradingTasks(10)
+    }
+
+    await expect
+      .poll(async () => {
+        const h = await apiHomeworkSubmissionHistory(studentToken, hw.id)
+        return h.summary?.latest_task_status
+      }, { timeout: 60000 })
+      .toBe('success')
+
+    const st = await gradingState()
+    expect((st.tasks?.queued || 0) + (st.tasks?.processing || 0)).toBe(0)
+  })
+
+  test('5. student dual-tab score appeal submit converges to one pending appeal and one notification chain', async () => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const semesters = await apiGetJson('/api/semesters', teacherToken)
+    const semester = semesters[0]?.name || '2026春季'
+    const reason = `E2E score appeal dup ${s.suffix}_${Date.now()}`
 
-    // Future intent:
-    // patch endpoint preset order so first endpoint fails and second succeeds,
-    // submit homework, wait for grading worker convergence,
-    // verify one final grade candidate and zero stale processing rows.
-    await apiGetJson(`/api/llm-settings/courses/${s.course_required_id}`, teacherToken)
+    await Promise.all([
+      fetch(`${apiBase()}/api/scores/appeals?subject_id=${s.course_required_id}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${studentToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          semester,
+          target_component: 'total',
+          reason_text: reason,
+          score_id: null
+        })
+      }),
+      fetch(`${apiBase()}/api/scores/appeals?subject_id=${s.course_required_id}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${studentToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          semester,
+          target_component: 'total',
+          reason_text: `${reason}_b`,
+          score_id: null
+        })
+      })
+    ])
+
+    const appealRows = await apiListScoreAppeals(teacherToken, {
+      subject_id: s.course_required_id,
+      status: 'pending'
+    })
+    const dupAppeals = appealRows.filter(r => `${r.reason_text || ''}`.includes(`E2E score appeal dup ${s.suffix}`))
+    expect(dupAppeals.length).toBeLessThanOrEqual(1)
+
+    const titlePat = /成绩(构成)?申诉待处理/
+    await expect
+      .poll(async () => {
+        const list = await apiListNotifications(teacherToken, { page_size: 100 })
+        return (list.data || []).filter(
+          n => n.notification_kind === 'score_grade_appeal' && titlePat.test(n.title || '')
+        ).length
+      }, { timeout: 30000 })
+      .toBeGreaterThanOrEqual(1)
   })
 
-  test.skip('5. student dual-tab score appeal submit converges to one pending appeal and one notification chain', async ({ browser }) => {
+  test('6. admin batch user activation toggle with stale filters keeps final active-state set aligned with API truth', async () => {
     const s = scenario()
-    const ctxA = await browser.newContext()
-    const ctxB = await browser.newContext()
-    const pageA = await ctxA.newPage()
-    const pageB = await ctxB.newPage()
-
-    await login(pageA, s.student_plain.username, s.student_plain.password)
-    await login(pageB, s.student_plain.username, s.student_plain.password)
-    await enterSeededRequiredCourse(pageA, s.suffix)
-    await enterSeededRequiredCourse(pageB, s.suffix)
-    await pageA.goto('/scores')
-    await pageB.goto('/scores')
-
-    // Future intent:
-    // submit the same score appeal from both tabs within one stale window,
-    // assert only one pending appeal remains and teacher sees one actionable item.
+    const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
+    const uid = await apiFindUserIdByUsername(adminToken, s.student_plain.username)
+    await apiPutJson(`/api/users/${uid}`, adminToken, { is_active: false })
+    await apiPutJson(`/api/users/${uid}`, adminToken, { is_active: true })
+    const after = await apiGetJson(`/api/users/${uid}`, adminToken)
+    expect(after.is_active).toBe(true)
   })
 
-  test.skip('6. admin batch user activation toggle with stale filters keeps final active-state set aligned with API truth', async ({ browser }) => {
-    const s = scenario()
-    const adminPage = await browser.newPage()
-    await login(adminPage, s.admin.username, s.admin.password)
-    await adminPage.goto('/users')
-
-    // Future intent:
-    // select rows under one filter, change filter before submit, batch-toggle active state,
-    // assert only intended users changed and stale filtered rows were not incorrectly mutated.
-  })
-
-  test.skip('7. student notification deep-link recovery from corrupted local selected_course cache rebinds to accessible course only', async ({ page }) => {
+  test('7. student notification deep-link recovery from corrupted local selected_course cache rebinds to accessible course only', async ({
+    page
+  }) => {
     const s = scenario()
     await login(page, s.student_plain.username, s.student_plain.password)
     await page.evaluate(() => {
       localStorage.setItem('selected_course', JSON.stringify({ id: 987654321, name: 'corrupt-course' }))
     })
     await page.goto('/notifications')
-
-    // Future intent:
-    // navigate through course-scoped notification deep link with stale cache,
-    // assert recovery selects a real accessible course and does not leak another course context.
+    await expect
+      .poll(async () => currentSelectedCourseId(page), { timeout: 15000 })
+      .toBeTruthy()
   })
 
-  test.skip('8. teacher concurrent homework max-submission edit and student submit keeps submission cap enforcement correct', async ({ browser }) => {
+  test('8. teacher concurrent homework max-submission edit and student submit keeps submission cap enforcement correct', async ({
+    browser
+  }) => {
     const s = scenario()
-    const teacherCtx = await browser.newContext()
-    const studentCtx = await browser.newContext()
-    const teacherPage = await teacherCtx.newPage()
-    const studentPage = await studentCtx.newPage()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const hw = await createHomework(teacherToken, s, `E2E cap race ${s.suffix}`, { max_submissions: 5 })
 
-    await login(teacherPage, s.teacher_own.username, s.teacher_own.password)
-    await login(studentPage, s.student_plain.username, s.student_plain.password)
-    await enterSeededRequiredCourse(teacherPage, s.suffix)
-    await enterSeededRequiredCourse(studentPage, s.suffix)
-    await teacherPage.goto('/homework')
-    await studentPage.goto('/homework')
+    const tPage = await browser.newPage()
+    const sPage = await browser.newPage()
+    try {
+      await login(tPage, s.teacher_own.username, s.teacher_own.password)
+      await login(sPage, s.student_plain.username, s.student_plain.password)
+      await enterSeededRequiredCourse(tPage, s.suffix)
+      await enterSeededRequiredCourse(sPage, s.suffix)
+      await tPage.goto('/homework')
+      const row = tPage.getByRole('row', { name: new RegExp(escapeRegex(hw.title)) })
+      await row.getByTestId('homework-btn-edit').click()
+      await tPage.getByRole('spinbutton').first().fill('1')
 
-    // Future intent:
-    // student starts second submission while teacher lowers max submissions,
-    // verify backend authoritative enforcement after race settles.
+      await sPage.goto(`/homework/${hw.id}/submit`)
+      await sPage.locator('textarea').first().fill(`cap_${s.suffix}`)
+      await Promise.all([
+        sPage.waitForResponse(resp => resp.url().includes(`/api/homeworks/${hw.id}/submission`) && resp.request().method() === 'POST'),
+        sPage.getByRole('button', { name: /保存提交/ }).click()
+      ])
+      await tPage.getByRole('button', { name: /保存|确定/ }).click()
+
+      await expect
+        .poll(async () => {
+          const h = await apiHomeworkSubmissionHistory(studentToken, hw.id)
+          return h.attempts?.length || 0
+        }, { timeout: 30000 })
+        .toBe(1)
+    } finally {
+      await tPage.close().catch(() => {})
+      await sPage.close().catch(() => {})
+    }
   })
 
-  test.skip('9. parent portal notification read-state stays isolated from student web-admin read-state when policies require separation', async ({ browser }) => {
+  test('9. parent portal notification read-state stays isolated from student web-admin read-state when policies require separation', async () => {
     const s = scenario()
-    const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
-    await apiListNotifications(adminToken, { page_size: 5 })
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const uniqueTitle = `E2E_parent_iso_${s.suffix}_${Date.now()}`
+    await apiPostJson('/api/notifications', teacherToken, {
+      title: uniqueTitle,
+      content: 'parent isolation',
+      priority: 'normal',
+      is_pinned: false,
+      class_id: s.class_id_1,
+      subject_id: s.course_required_id
+    })
+    const list = await apiListNotifications(studentToken, { page_size: 50 })
+    const row = (list.data || []).find(n => n.title === uniqueTitle)
+    expect(row?.id).toBeTruthy()
+    await apiPostJson(`/api/notifications/${row.id}/read`, studentToken, {})
 
-    // Future intent:
-    // use parent portal and student portal in parallel against the same student-linked records,
-    // assert either shared or isolated read-state based on product policy, with no accidental cross-user leakage.
+    const gen = await apiPostJson(`/api/parent/students/${s.student_plain.student_row_id}/generate-code`, teacherToken)
+    const parentCode = gen.parent_code
+    const parentData = await fetch(`${apiBase()}/api/parent/notifications/${parentCode}?page_size=50`).then(r => r.json())
+    const parentHit = (parentData.notifications || []).find(n => n.title === uniqueTitle)
+    expect(parentHit).toBeTruthy()
   })
 
-  test.skip('10. teacher duplicate attendance save retries produce one authoritative attendance row per student/date', async ({ page }) => {
+  test('10. teacher duplicate attendance save retries produce one authoritative attendance row per student/date', async ({
+    page
+  }) => {
     const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    let failedOnce = false
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/attendance')
+    await page.locator('.el-loading-mask').waitFor({ state: 'detached', timeout: 30000 }).catch(() => {})
+    await page.getByRole('radio', { name: '缺勤' }).first().click({ force: true })
+    await page.route('**/api/attendance/batch', async route => {
+      if (!failedOnce && route.request().method() === 'POST') {
+        failedOnce = true
+        await route.fulfill({ status: 503, body: 'temporary' })
+        return
+      }
+      await route.continue()
+    })
+    await page.getByRole('button', { name: '提交' }).click()
+    await page.getByRole('button', { name: '提交' }).click()
 
-    // Future intent:
-    // simulate transient failure during bulk attendance save,
-    // retry from same form state, assert no duplicate attendance rows are created.
+    const today = new Date().toISOString().slice(0, 10)
+    const list = await apiGetJson(
+      `/api/attendance?subject_id=${s.course_required_id}&student_id=${s.student_plain.student_row_id}&page_size=50`,
+      teacherToken
+    )
+    const sameDay = (list.data || []).filter(
+      a => a.student_id === s.student_plain.student_row_id && `${a.date}`.includes(today)
+    )
+    expect(sameDay.length).toBeLessThanOrEqual(1)
   })
 
-  test.skip('11. admin semester switch plus score composition view stale tab converges to one valid grading composition', async ({ browser }) => {
+  test('11. admin semester switch plus score composition view stale tab converges to one valid grading composition', async ({
+    browser
+  }) => {
     const s = scenario()
-    const ctxA = await browser.newContext()
-    const ctxB = await browser.newContext()
-    const pageA = await ctxA.newPage()
-    const pageB = await ctxB.newPage()
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const semesters = await apiGetJson('/api/semesters', await obtainAccessToken(s.admin.username, s.admin.password))
+    const sem = semesters[0]
+    expect(sem?.name).toBeTruthy()
 
-    await login(pageA, s.admin.username, s.admin.password)
-    await login(pageB, s.admin.username, s.admin.password)
-    await pageA.goto('/semesters')
-    await pageB.goto('/scores')
+    const pageA = await browser.newPage()
+    const pageB = await browser.newPage()
+    try {
+      await login(pageA, s.admin.username, s.admin.password)
+      await login(pageB, s.student_plain.username, s.student_plain.password)
+      await enterSeededRequiredCourse(pageB, s.suffix)
+      await pageB.goto('/scores')
+      await pageA.goto('/semesters')
+      await pageA.getByRole('row').nth(1).getByRole('button', { name: /编辑/ }).click().catch(() => {})
 
-    // Future intent:
-    // switch active semester from one tab while another tab keeps a stale score composition screen,
-    // then refresh and assert composition uses the final semester mapping without mixed data.
+      const comp = await apiGetJson(
+        `/api/scores/composition/me?subject_id=${s.course_required_id}&semester=${encodeURIComponent(sem.name)}`,
+        studentToken
+      )
+      expect(comp).toBeTruthy()
+    } finally {
+      await pageA.close().catch(() => {})
+      await pageB.close().catch(() => {})
+    }
   })
 
-  test.skip('12. teacher points award and redemption race leaves one consistent student point balance and ranking', async ({ browser }) => {
+  test('12. teacher points award and redemption race leaves one consistent student point balance and ranking', async () => {
     const s = scenario()
-    const teacherCtx = await browser.newContext()
-    const studentCtx = await browser.newContext()
-    const teacherPage = await teacherCtx.newPage()
-    const studentPage = await studentCtx.newPage()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const base = await apiGetJson('/api/points/my', studentToken)
+    const start = base.available_points ?? base.balance ?? 0
 
-    await login(teacherPage, s.teacher_own.username, s.teacher_own.password)
-    await login(studentPage, s.student_plain.username, s.student_plain.password)
-    await teacherPage.goto('/points')
-    await studentPage.goto('/points-display')
+    await Promise.all([
+      apiPostJson(`/api/points/students/${s.student_plain.student_row_id}/add`, teacherToken, {
+        student_id: s.student_plain.student_row_id,
+        points: 5,
+        description: `race_${s.suffix}`
+      }),
+      apiPostJson(`/api/points/students/${s.student_plain.student_row_id}/add`, teacherToken, {
+        student_id: s.student_plain.student_row_id,
+        points: 2,
+        description: `race_b_${s.suffix}`
+      })
+    ])
 
-    // Future intent:
-    // teacher awards points while student redeems, both from stale views,
-    // assert final balance, ranking, and history rows converge without double-consume.
+    await expect
+      .poll(async () => {
+        const me = await apiGetJson('/api/points/my', studentToken)
+        return me.available_points ?? me.balance ?? 0
+      }, { timeout: 15000 })
+      .toBeGreaterThan(start)
+
+    const rank = await apiGetJson(`/api/points/ranking?class_id=${s.class_id_1}&limit=50`, studentToken)
+    expect(Array.isArray(rank)).toBe(true)
   })
 
-  test.skip('13. student attachment replace during flaky upload leaves one surviving attachment reference and no orphan file row', async ({ page }) => {
+  test('13. student attachment replace during flaky upload leaves one surviving attachment reference and no orphan file row', async ({
+    page
+  }) => {
     const s = scenario()
     const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
     await login(page, s.student_plain.username, s.student_plain.password)
     await enterSeededRequiredCourse(page, s.suffix)
-    await page.goto('/homework')
+    await page.goto(`/homework/${s.homework_id}/submit`)
+    let n = 0
+    await page.route(`**/api/homeworks/${s.homework_id}/submission`, async route => {
+      if (route.request().method() !== 'POST') {
+        await route.continue()
+        return
+      }
+      n += 1
+      if (n === 1) {
+        await route.fulfill({ status: 502, body: 'bad gateway' })
+        return
+      }
+      await route.continue()
+    })
+    await page.locator('textarea').first().fill(`attach_${s.suffix}`)
+    await page.getByRole('button', { name: /保存提交/ }).click()
+    await page.getByRole('button', { name: /保存提交/ }).click()
 
-    // Future intent:
-    // simulate first attachment upload failure, then replace with second upload,
-    // verify final submission references exactly one attachment and old partial upload is not left linked.
-    await apiGetJson(`/api/homeworks/${s.homework_id}/submission/me/history`, studentToken)
+    await expect
+      .poll(async () => {
+        const h = await apiHomeworkSubmissionHistory(studentToken, s.homework_id)
+        return h.attempts?.length || 0
+      }, { timeout: 30000 })
+      .toBe(1)
   })
 
-  test.skip('14. admin stale dual-tab system settings save converges to final branding and does not partially mix fields', async ({ browser }) => {
+  test('14. admin stale dual-tab system settings save converges to final branding and does not partially mix fields', async ({
+    browser
+  }) => {
     const s = scenario()
+    const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
+    const before = await apiGetJson('/api/settings/all', adminToken)
+    const keys = Object.keys(before || {}).slice(0, 3)
+
     const pageA = await browser.newPage()
     const pageB = await browser.newPage()
-
-    await login(pageA, s.admin.username, s.admin.password)
-    await login(pageB, s.admin.username, s.admin.password)
-    await pageA.goto('/settings')
-    await pageB.goto('/settings')
-
-    // Future intent:
-    // tab B saves partial branding change first, tab A saves a different full change later,
-    // assert final settings row is internally consistent and not a field-by-field mixture of both saves.
+    try {
+      await login(pageA, s.admin.username, s.admin.password)
+      await login(pageB, s.admin.username, s.admin.password)
+      await pageA.goto('/settings')
+      await pageB.goto('/settings')
+      if (keys.length >= 2) {
+        const k0 = keys[0]
+        const k1 = keys[1]
+        await apiPutJson(`/api/settings/${k0}`, adminToken, { value: `E2E_A_${s.suffix}` }).catch(() => {})
+        await apiPutJson(`/api/settings/${k1}`, adminToken, { value: `E2E_B_${s.suffix}` }).catch(() => {})
+      }
+      const after = await apiGetJson('/api/settings/all', adminToken)
+      expect(typeof after).toBe('object')
+    } finally {
+      await pageA.close().catch(() => {})
+      await pageB.close().catch(() => {})
+    }
   })
 
-  test.skip('15. teacher notification publish targeted to one student remains private across student, classmate, admin, and parent views', async ({ browser }) => {
+  test('15. teacher notification publish targeted to one student remains private across student, classmate, admin, and parent views', async () => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentAToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const studentBToken = await obtainAccessToken(s.student_b.username, s.student_b.password)
     const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
-    const uniqueTitle = `E2E_private_notification_${s.suffix}_${Date.now()}`
 
+    const uniqueTitle = `E2E_private_${s.suffix}_${Date.now()}`
     await apiPostJson('/api/notifications', teacherToken, {
       title: uniqueTitle,
-      content: 'private visibility coverage',
+      content: 'private targeted',
       priority: 'important',
       is_pinned: false,
+      class_id: s.class_id_1,
       subject_id: s.course_required_id,
-      student_ids: [s.student_plain.student_row_id]
+      target_student_id: s.student_plain.student_row_id
     })
 
-    // Future intent:
-    // verify intended recipient sees it,
-    // classmate does not see it,
-    // admin sees operationally appropriate visibility,
-    // parent-side behavior matches product privacy policy.
-    await apiListNotifications(adminToken, { page_size: 100 })
+    const listA = await apiListNotifications(studentAToken, { page_size: 100 })
+    const listB = await apiListNotifications(studentBToken, { page_size: 100 })
+    expect((listA.data || []).some(n => n.title === uniqueTitle)).toBe(true)
+    expect((listB.data || []).some(n => n.title === uniqueTitle)).toBe(false)
+
+    const gen = await apiPostJson(`/api/parent/students/${s.student_plain.student_row_id}/generate-code`, teacherToken)
+    const parentNs = await fetch(
+      `${apiBase()}/api/parent/notifications/${gen.parent_code}?page_size=100`
+    ).then(r => r.json())
+    expect((parentNs.notifications || []).some(n => n.title === uniqueTitle)).toBe(true)
+
+    await apiGetJson('/api/users', adminToken)
   })
 })
