@@ -136,6 +136,8 @@ Before running Playwright on Windows, read the pitfalls document first. Known fa
 
 Two specs under `tests/e2e/web-admin/` hold **placeholder titles** for advanced E2E coverage (`future-advanced-coverage*.spec.js`). By default they do not inflate routine run counts: see **`E2E_ENABLE_BACKLOG_SPECS`** and [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md) for how to enable them while implementing scenarios.
 
+Follow-up: when present in your tree, **`future-advanced-coverage.spec.js`** / **`future-advanced-coverage-2.spec.js`** should contain **real tests** and **`future-advanced-coverage-helpers.cjs`** shared helpers; treat them like other Playwright specs unless your branch still documents the older skipped-placeholder workflow.
+
 ## E2E Seed and Environment
 
 The repository includes an E2E-only reset API used by browser tests.

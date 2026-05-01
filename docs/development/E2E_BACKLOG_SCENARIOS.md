@@ -1,4 +1,16 @@
-# E2E backlog scenarios (placeholder Playwright specs)
+# E2E advanced coverage specs (`future-advanced-coverage*.spec.js`)
+
+## Current status
+
+As implemented in this repository, **`tests/e2e/web-admin/future-advanced-coverage.spec.js`** (cases 1–15) and **`tests/e2e/web-admin/future-advanced-coverage-2.spec.js`** (cases 16–30) contain **real Playwright `test(...)` implementations** that run under the default admin E2E configuration (same `globalSetup`, `E2E_DEV_SEED_TOKEN`, and Playwright `webServer` contract as other specs under `tests/e2e/web-admin/`).
+
+Shared fetch/login/API helpers used by these files live in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`**.
+
+Older documentation below described a **skipped placeholder backlog** gated by **`E2E_ENABLE_BACKLOG_SPECS`** and **`backlog-e2e.cjs`**; that mechanism was **removed** once the scenarios were implemented end-to-end. The historical sections remain for traceability.
+
+---
+
+# E2E backlog scenarios (historical note: placeholder Playwright specs)
 
 ## Purpose
 
@@ -47,7 +59,15 @@ You should still satisfy the usual E2E prerequisites (`globalSetup`, `E2E_DEV_SE
 
 Placeholder skips **do not mean** the product necessarily lacks the feature. They mean **automated E2E coverage for that narrative is not yet checked in**. Overlap with existing suites (`e2e-scenario-resilience.spec.js`, LLM hard scenarios, etc.) is possible; when implementing, deduplicate or consolidate rather than copying.
 
-## Index of backlog titles (short labels)
+## Verification
+
+From `apps/web/admin`, with default Playwright `webServer` and `E2E_DEV_SEED_TOKEN` (see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)):
+
+```bash
+npx playwright test future-advanced-coverage.spec.js future-advanced-coverage-2.spec.js
+```
+
+In the environment used for the implementation of this document, the above command completed with **30 passed** (chromium, 1 worker).
 
 **Part I (`future-advanced-coverage.spec.js`):**
 

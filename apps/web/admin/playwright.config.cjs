@@ -12,8 +12,6 @@ process.env.E2E_DEV_SEED_TOKEN = process.env.E2E_DEV_SEED_TOKEN || 'test-playwri
 process.env.PLAYWRIGHT_BASE_URL =
   process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${E2E_UI_PORT}`
 
-// Optional backlog specs (`future-advanced-coverage*.spec.js`) read `E2E_ENABLE_BACKLOG_SPECS` when loading tests (see docs/development/E2E_BACKLOG_SCENARIOS.md).
-
 const repoRoot = path.resolve(__dirname, '..', '..', '..')
 const adminRoot = __dirname
 const adminNodeModules = path.join(adminRoot, 'node_modules')

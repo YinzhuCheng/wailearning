@@ -100,12 +100,14 @@ This directory also contains a future-coverage expansion file pair:
 
 Those files are intentionally checked in as a bank of higher-difficulty E2E scenarios. They are **not** treated as validated regression coverage until individually implemented.
 
+Revision note: once **`future-advanced-coverage*.spec.js`** contains **`test(...)` bodies** (with **`future-advanced-coverage-helpers.cjs`** support), they participate in normal **`npm run test:e2e`** runs alongside other specs in **`tests/e2e/web-admin/`**; the **`E2E_ENABLE_BACKLOG_SPECS`** gate described below is legacy for branches that still carried skipped placeholders.
+
 Those files are intentionally checked in as a bank of higher-difficulty E2E scenarios and are currently marked `skip` so the cases exist in the repository without being treated as already-validated regression coverage. Default Playwright runs still skip the backlog describes unless **`E2E_ENABLE_BACKLOG_SPECS`** is truthy; see [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md) for the updated mechanism.
 
 Operational summary:
 
 - **`E2E_ENABLE_BACKLOG_SPECS`** — When unset/falsy, the backlog suite describes are registered as skipped so default Playwright runs match only implemented specs (~60 tests instead of ~90 placeholder rows). When truthy, the backlog describes run and each scenario reports skipped with a documented placeholder reason until replaced by real `test(...)` implementations.
-- Helpers: `tests/e2e/web-admin/backlog-e2e.cjs`.
+- Helpers: **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`** (when scenarios are implemented); legacy helper **`tests/e2e/web-admin/backlog-e2e.cjs`** applied only to older skipped-placeholder revisions.
 - Full scenario index and workflow: [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md).
 
 ### `tests/scenarios/`
