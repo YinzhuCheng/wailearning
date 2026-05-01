@@ -243,3 +243,7 @@ Prefer this escalation order:
 4. broader Playwright coverage if needed
 
 If Playwright fails first, read [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) before assuming the product is broken.
+
+### Linux / CI agents
+
+The same escalation order applies. Additional traps that showed up outside the original Windows-focused validation—managed Playwright `webServer` using a system Python without `uvicorn`, Element Plus message-box locale vs Chinese labels, strict-mode duplicate text matches, homework submit vs discussion `textarea` ordering, materials list `page_size` vs API `le=` limits—are recorded as Pitfalls 11–16 in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md). Suspected product or structural weaknesses inferred during full-suite repair are accumulated in [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md), including a short **next regression pass** checklist.

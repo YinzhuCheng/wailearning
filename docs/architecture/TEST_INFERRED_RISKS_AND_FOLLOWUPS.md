@@ -4,6 +4,8 @@
 
 This document records repository weaknesses, suspected bugs, and structural risks inferred during the May 1, 2026 repository-refactor validation pass.
 
+A later full-suite repair pass (May 2026, Linux/CI-style execution with Playwright + pytest) added a few more items: same schema as below—`Observed`, `Strong inference`, or `Structural risk`—and the same disclaimer: not a confirmed defect list.
+
 This is not a list of confirmed product defects. It is a focused backlog of areas that felt risky under real test pressure and therefore deserve deliberate follow-up.
 
 Where possible, each item is labeled as one of:
@@ -318,6 +320,93 @@ The next layout change will create similar drift unless path assumptions are cen
 - prefer shared variables or clearer conventions in scripts
 - consider lightweight doc/script path checks in CI
 
+## P2: Element Plus default locale can disagree with Chinese UI copy and tests
+
+### Type
+
+`Observed`
+
+### Evidence
+
+On a stock `app.use(ElementPlus)` setup without an explicit `locale`, `ElMessageBox` confirm/cancel may render English **OK** / **Cancel** while the rest of the app uses Chinese copy. E2E tests that target `确定` or disambiguate `关闭` can then fail for locale reasons, not product logic.
+
+### Why this matters
+
+- false failures in message-box flows (delete, confirm, etc.)
+- dual close affordances in dialogs (header "close this dialog" vs footer primary button) already complicate `getByRole` matching
+
+### Follow-up
+
+- register a single application-wide Element Plus locale consistent with the product language, or
+- make E2E match `aria` names from the active locale, or
+- add `data-testid` on critical dialog actions if copy-based matching remains brittle
+
+## P2: `course_enrollments` duplicate inserts can surface under startup reconciliation (especially SQLite)
+
+### Type
+
+`Observed` (during a May 2026 full-suite pass, fixed defensively in code) / `Strong inference` for long-term data model
+
+### Evidence
+
+Application lifespan runs `reconcile_student_users_and_roster`, which can invoke `prepare_student_course_context` / enrollment sync from multiple directions close together. In SQLite-heavy runs this produced `UNIQUE constraint failed: course_enrollments.subject_id, course_enrollments.student_id` during startup.
+
+### Interpretation
+
+Insertion paths were not all mutually aware of in-flight rows in the same session; relying on application-level "already enrolled" checks alone is brittle under parallel reconciliation.
+
+### Why this matters
+
+- startup failure blocks every endpoint including health checks and Playwright boot
+- Postgres might mask different races than SQLite
+
+### Follow-up
+
+- consider DB-level idempotency (`INSERT OR IGNORE` semantics / upserts) where appropriate for enrollments
+- audit all callers of enrollment sync for redundant work in one transaction
+- keep SQLite in CI or smoke paths if it remains a supported dev/test database
+
+## P2: client request `page_size` can drift above FastAPI validation limits
+
+### Type
+
+`Strong inference`
+
+### Evidence
+
+The materials list UI requested `page_size` larger than the route allows (`Query(..., le=100)` pattern). The failure mode was an empty UI table rather than an obvious inline validation message—easy to misread as "seed broken".
+
+### Follow-up
+
+- share numeric bounds between OpenAPI schema and frontend constants where feasible
+- surface list API errors in UI dev flows when responses are 422
+
+## P3: homework submit page places discussion textarea above submission textarea
+
+### Type
+
+`Structural risk`
+
+### Evidence
+
+Automations using `textarea:first()` targeted the discussion draft control instead of the homework submission body (`homework-submit-content`), producing confusing outcomes (no submission recorded).
+
+### Follow-up
+
+- treat `data-testid="homework-submit-content"` (and related submit affordances) as the stable contract for E2E
+- consider a short note in teacher/student UI docs that two text areas exist on the same view
+
+## Next full regression pass — extra focus (May 2026 addendum)
+
+When re-running the full stack after changes to enrollment, materials, or internationalization:
+
+1. **Startup / SQLite**: cold start or fresh E2E DB file after many `reset-scenario` cycles; watch for duplicate enrollment during `reconcile_student_users_and_roster`.
+2. **Playwright + `webServer` on Linux/CI**: confirm the backend process uses the same Python environment as `pytest` (see [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md) Pitfall 11).
+3. **Message-box flows**: any change to Element Plus upgrade or locale config—re-smoke delete/confirm paths in admin.
+4. **Homework + discussion**: any change to `HomeworkSubmission` layout—re-run a small E2E that both posts a discussion line and submits homework text.
+5. **Materials list**: any change to list API limits or `Materials.vue` list parameters—verify a non-empty table with >0 materials for a seeded course.
+6. **PostgreSQL-only pytest**: if schema columns are in scope, run with `TEST_DATABASE_URL` (or project Postgres) so `test_r3` in `test_regression_llm_quota_behavior` is not skipped by accident.
+
 ## P3: CI definitions were previously stale enough to reference invalid startup behavior
 
 ### Type
@@ -344,6 +433,9 @@ CI drift had already accumulated before this change.
 3. Break down the LLM subsystem and heavy route modules into smaller, more testable pieces.
 4. Decide the long-term fate of the root `app` compatibility layer.
 5. Simplify the Playwright boot contract for Windows and document the canonical execution path.
+6. Harden course enrollment creation so reconciliation cannot double-insert the same row (see P2 `course_enrollments` item above); re-validate on SQLite and Postgres.
+7. Lock Element Plus locale (or E2E strategy) to avoid English message-box affordances in a Chinese UI.
+8. After any API pagination limit change, grep the admin SPA for `page_size` and align client requests with server `le=` constraints.
 
 ## What This Document Is Not
 
