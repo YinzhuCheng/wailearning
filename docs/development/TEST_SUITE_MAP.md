@@ -96,8 +96,9 @@ They also have the highest dependence on the local execution environment.
 This directory also contains a future-coverage expansion file:
 
 - `tests/e2e/web-admin/future-advanced-coverage.spec.js`
+- `tests/e2e/web-admin/future-advanced-coverage-2.spec.js`
 
-That file is intentionally checked in as a bank of higher-difficulty E2E scenarios and is currently marked `skip` so the cases exist in the repository without being treated as already-validated regression coverage.
+Those files are intentionally checked in as a bank of higher-difficulty E2E scenarios and are currently marked `skip` so the cases exist in the repository without being treated as already-validated regression coverage.
 
 ### `tests/scenarios/`
 
