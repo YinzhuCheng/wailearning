@@ -219,16 +219,17 @@ def add_points(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if not can_manage_students(current_user):
+    if not can_manage_students(current_user) and not is_admin(current_user):
         raise HTTPException(status_code=403, detail="只有教师可以添加积分")
 
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
 
-    accessible_class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id not in accessible_class_ids:
-        raise HTTPException(status_code=403, detail="无权操作该学生")
+    if not is_admin(current_user):
+        accessible_class_ids = get_accessible_class_ids(current_user, db)
+        if student.class_id not in accessible_class_ids:
+            raise HTTPException(status_code=403, detail="无权操作该学生")
 
     sp = _ensure_student_point_row(db, student_id)
     pts = int(data.points)

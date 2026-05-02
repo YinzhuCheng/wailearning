@@ -215,19 +215,35 @@ def sync_course_enrollments(course: Subject, db: Session) -> int:
     for student in class_students:
         if student.id in existing_student_ids:
             continue
-        db.query(CourseEnrollmentBlock).filter(
-            CourseEnrollmentBlock.subject_id == course.id,
-            CourseEnrollmentBlock.student_id == student.id,
-        ).delete(synchronize_session=False)
-        db.add(
-            CourseEnrollment(
-                subject_id=course.id,
-                student_id=student.id,
-                class_id=course.class_id,
-                enrollment_type=course.course_type or "required",
-                can_remove=(course.course_type or "required") == "elective",
+        try:
+            with db.begin_nested():
+                db.query(CourseEnrollmentBlock).filter(
+                    CourseEnrollmentBlock.subject_id == course.id,
+                    CourseEnrollmentBlock.student_id == student.id,
+                ).delete(synchronize_session=False)
+                db.add(
+                    CourseEnrollment(
+                        subject_id=course.id,
+                        student_id=student.id,
+                        class_id=course.class_id,
+                        enrollment_type=course.course_type or "required",
+                        can_remove=(course.course_type or "required") == "elective",
+                    )
+                )
+                db.flush()
+        except IntegrityError:
+            enrollment_row = (
+                db.query(CourseEnrollment)
+                .filter(
+                    CourseEnrollment.subject_id == course.id,
+                    CourseEnrollment.student_id == student.id,
+                )
+                .first()
             )
-        )
+            if enrollment_row:
+                existing_student_ids.add(student.id)
+            continue
+        existing_student_ids.add(student.id)
         created += 1
 
     return created

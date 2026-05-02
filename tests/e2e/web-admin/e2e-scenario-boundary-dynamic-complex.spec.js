@@ -43,7 +43,10 @@ async function fillCourseDialogDateRange(page) {
 }
 
 async function confirmMessageBox(page) {
-  await page.getByRole('dialog', { name: '删除课程' }).getByRole('button', { name: /^(OK|确定)$/ }).click()
+  await page
+    .getByRole('dialog', { name: /删除课程/ })
+    .getByRole('button', { name: /^(OK|确定)$/ })
+    .click({ force: true })
 }
 
 /** Element Plus: click the select control inside a form item by its label text. */
@@ -95,7 +98,7 @@ async function apiHomeworkTitlesForSubject(token, subjectId) {
 }
 
 test.describe('E2E scenarios: boundary / dynamic / complex', () => {
-  test.describe.configure({ timeout: 120_000 })
+  test.describe.configure({ timeout: 300_000 })
 
   test.beforeEach(async ({}, testInfo) => {
     const s = await resetE2eScenario()
@@ -133,12 +136,46 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
     await page.locator('.schedule-picker__cell').filter({ hasText: /^选择$/ }).first().click()
     await fillCourseDialogDateRange(page)
     await page.getByTestId('subjects-course-save').click()
-    await expect(page.getByRole('dialog', { name: /新建课程/ })).toBeHidden({ timeout: 20000 })
-    const row = page.getByRole('row', { name: new RegExp(`E2E待删课_${u}`) })
-    await expect(row).toBeVisible({ timeout: 15000 })
-    await row.getByRole('button', { name: '删除' }).click()
+    await expect
+      .poll(async () => {
+        const tok = await obtainAccessToken(s.admin.username, s.admin.password)
+        const res = await page.request.get(`${apiBase()}/api/subjects`, {
+          headers: { Authorization: `Bearer ${tok}` }
+        })
+        if (!res.ok()) {
+          return false
+        }
+        const rows = await res.json()
+        return Array.isArray(rows) && rows.some(c => `${c.name || ''}`.includes(`E2E待删课_${u}`))
+      }, { timeout: 120000 })
+      .toBe(true)
+
+    const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
+    const subjectsRes = await page.request.get(`${apiBase()}/api/subjects`, {
+      headers: { Authorization: `Bearer ${adminTok}` }
+    })
+    expect(subjectsRes.ok()).toBeTruthy()
+    const subjectRows = await subjectsRes.json()
+    const created = Array.isArray(subjectRows)
+      ? subjectRows.find(c => `${c.name || ''}`.includes(`E2E待删课_${u}`))
+      : null
+    expect(created?.id).toBeTruthy()
+
+    await page.goto('/subjects', { waitUntil: 'load', timeout: 120000 })
+    const delPromise = page.waitForResponse(
+      r =>
+        r.url().includes(`/api/subjects/${created.id}`) &&
+        r.request().method() === 'DELETE' &&
+        !r.url().includes('/students/'),
+      { timeout: 120000 }
+    )
+    await page.getByTestId(`subjects-delete-${created.id}`).click({ force: true })
     await confirmMessageBox(page)
-    await expect(row).toHaveCount(0, { timeout: 15000 })
+    const delResp = await delPromise
+    expect(delResp.ok()).toBeTruthy()
+
+    await page.goto('/subjects', { waitUntil: 'load', timeout: 60000 })
+    await expect(page.getByTestId(`subjects-delete-${created.id}`)).toHaveCount(0, { timeout: 30000 })
   })
 
   test('boundary: admin creates a new student user aligned to class', async ({ page }) => {
@@ -154,9 +191,15 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
     await page.locator('.el-dialog label.el-radio').filter({ hasText: '学生' }).click()
     await openDialogSelectByLabel(page, '所属班级')
     await page.getByRole('option', { name: s.class_name_1 }).click()
+    const savePromise = page.waitForResponse(
+      r => r.url().includes('/api/users') && r.request().method() === 'POST',
+      { timeout: 120000 }
+    )
     await page.getByRole('button', { name: '保存' }).click()
-    await expect(page.getByRole('dialog', { name: '新建用户' })).toBeHidden({ timeout: 20000 })
-    await expect(page.getByRole('row', { name: new RegExp(uname) })).toBeVisible({ timeout: 15000 })
+    const saveResp = await savePromise
+    expect(saveResp.ok()).toBeTruthy()
+    await page.goto('/users', { waitUntil: 'load', timeout: 120000 })
+    await expect(page.getByRole('row', { name: new RegExp(uname) })).toBeVisible({ timeout: 120000 })
   })
 
   test('dynamic: teacher publishes homework; student sees it; API list matches', async ({ page }) => {

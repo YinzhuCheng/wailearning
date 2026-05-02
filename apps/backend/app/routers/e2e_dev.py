@@ -152,7 +152,15 @@ def reset_e2e_scenario(
         role=UserRole.TEACHER.value,
         is_active=True,
     )
-    db.add_all([admin, t_own, t_other])
+    ct = User(
+        username=f"e2e_class_teacher_{suffix}",
+        hashed_password=hpwd,
+        real_name=f"E2E班主任_{suffix}",
+        role=UserRole.CLASS_TEACHER.value,
+        class_id=c1.id,
+        is_active=True,
+    )
+    db.add_all([admin, t_own, t_other, ct])
     db.flush()
 
     st_plain = Student(
@@ -203,6 +211,10 @@ def reset_e2e_scenario(
     db.add_all([u_plain, u_drop, u_b])
     db.flush()
 
+    st_plain.parent_code = f"P{suffix[:6].upper()}"
+    st_plain.parent_code_expires = None
+
+    db.flush()
     course_req = Subject(
         name=f"E2E必修课_{suffix}",
         teacher_id=t_own.id,
@@ -321,6 +333,8 @@ def reset_e2e_scenario(
         "material_discussion_id": mat_disc.id,
         "user_ids_for_batch": [u_plain.id, u_b.id],
         "teacher_user_id": t_own.id,
+        "class_teacher": {"username": ct.username, "password": pwd},
+        "parent_code": st_plain.parent_code,
     }
 
 

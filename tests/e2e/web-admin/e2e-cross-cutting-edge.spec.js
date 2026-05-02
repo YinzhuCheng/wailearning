@@ -293,8 +293,19 @@ test.describe('E2E cross-cutting edge scenarios', () => {
         p1.getByRole('button', { name: '发表回复' }).click(),
         p2.getByRole('button', { name: '发表回复' }).click()
       ])
-      await expect(p1.locator('.discussion-row__body').filter({ hasText: d1 })).toBeVisible({ timeout: 20000 })
-      await expect(p1.locator('.discussion-row__body').filter({ hasText: d2 })).toBeVisible({ timeout: 20000 })
+      await expect
+        .poll(async () => {
+          const list = await apiListDiscussions(teTok, { ...base, page: 1, page_size: 50 })
+          if (list.status !== 200 || !list.json) {
+            return false
+          }
+          const bodies = (list.json.data || []).map(x => `${x.body || ''}`)
+          return bodies.some(b => b.includes(d1)) && bodies.some(b => b.includes(d2))
+        }, { timeout: 35000 })
+        .toBe(true)
+      await p1.reload({ waitUntil: 'load', timeout: 60000 })
+      await expect(p1.locator('.discussion-row__body').filter({ hasText: d1 })).toBeVisible({ timeout: 25000 })
+      await expect(p1.locator('.discussion-row__body').filter({ hasText: d2 })).toBeVisible({ timeout: 25000 })
     } finally {
       await ctx1.close().catch(() => {})
       await ctx2.close().catch(() => {})

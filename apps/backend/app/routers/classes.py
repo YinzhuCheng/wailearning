@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_active_user
 from app.course_access import get_accessible_class_ids_from_courses
 from app.database import get_db
-from app.models import Class, Student, User, UserRole
+from app.models import Class, Student, Subject, User, UserRole
 from app.schemas import ClassCreate, ClassResponse, ClassUpdate
 
 
@@ -149,6 +149,13 @@ def delete_class(
     students = db.query(Student).filter(Student.class_id == class_id).count()
     if students > 0:
         raise HTTPException(status_code=400, detail="This class still contains students and cannot be deleted.")
+
+    courses = db.query(Subject).filter(Subject.class_id == class_id).count()
+    if courses > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="This class still has courses assigned and cannot be deleted.",
+        )
 
     db.delete(class_obj)
     db.commit()

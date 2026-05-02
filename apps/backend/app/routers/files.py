@@ -122,6 +122,14 @@ def _attachment_urls_with_exact_stored_basename(db: Session, stored_basename: st
         for (u,) in q.all():
             if u and get_attachment_stored_name(str(u)) == stored_basename:
                 urls.append(str(u))
+    user_rows = (
+        db.query(User.avatar_url)
+        .filter(User.avatar_url.isnot(None), or_(*[User.avatar_url.endswith(s) for s in suffixes]))
+        .all()
+    )
+    for (u,) in user_rows:
+        if u and get_attachment_stored_name(str(u)) == stored_basename:
+            urls.append(str(u))
     return urls
 
 

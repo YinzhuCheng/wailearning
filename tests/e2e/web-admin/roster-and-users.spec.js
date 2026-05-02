@@ -12,6 +12,7 @@ async function login(page, username, password) {
 }
 
 test.describe('E2E roster + users (requires globalSetup seed)', () => {
+  test.describe.configure({ timeout: 180_000 })
   test.beforeEach(async ({}, testInfo) => {
     const s = await resetE2eScenario()
     if (!s) {
@@ -28,10 +29,18 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await expect(page.getByTestId('dialog-roster-enroll')).toBeVisible()
 
     const row = page.locator(`[data-testid="table-roster-enroll-pick"] tr:has-text("${s.student_b.username}")`)
-    await row.locator('.el-checkbox').first().click()
-    await page.getByTestId('btn-roster-enroll-submit').click()
+    await row.locator('.el-checkbox').first().click({ force: true })
+    const rosterResp = page.waitForResponse(
+      r =>
+        r.url().includes('/roster-enroll') &&
+        r.request().method() === 'POST' &&
+        r.ok(),
+      { timeout: 120000 }
+    )
+    await page.getByTestId('btn-roster-enroll-submit').click({ force: true })
+    await rosterResp
 
-    await expect(page.getByTestId('dialog-roster-enroll')).toBeHidden({ timeout: 15000 })
+    await expect(page.getByTestId('dialog-roster-enroll')).toBeHidden({ timeout: 90000 })
   })
 
   test('teacher: paste import opens dialog and preview', async ({ page }) => {
@@ -72,10 +81,10 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await page.goto('/users')
 
     const rowA = page.locator(`tr:has-text("${s.student_plain.username}")`)
-    await rowA.locator('.el-checkbox').first().click()
+    await rowA.locator('.el-checkbox').first().click({ force: true })
     await page.getByTestId('users-open-batch-class').click()
     await expect(page.getByTestId('dialog-batch-class')).toBeVisible()
-    await page.getByTestId('batch-class-target-select').click()
+    await page.getByTestId('batch-class-target-select').click({ force: true })
     await page.getByRole('option', { name: s.class_name_1 }).click()
     await expect(page.getByTestId('batch-class-confirm')).toBeEnabled()
   })

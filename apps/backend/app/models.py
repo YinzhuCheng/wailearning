@@ -49,6 +49,7 @@ class User(Base):
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
     avatar_url = Column(String, nullable=True)
     discussion_page_size = Column(Integer, nullable=True)
+    token_version = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

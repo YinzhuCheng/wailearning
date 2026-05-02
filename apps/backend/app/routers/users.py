@@ -19,6 +19,7 @@ from app.models import (
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
+    LLMQuotaReservation,
     LLMTokenUsageLog,
     Notification,
     NotificationRead,
@@ -86,6 +87,9 @@ def delete_user_homeworks(user_id: int, db: Session) -> None:
                 .all()
             ]
             if task_ids:
+                db.query(LLMQuotaReservation).filter(LLMQuotaReservation.task_id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
                 db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id.in_(task_ids)).delete(
                     synchronize_session=False
                 )

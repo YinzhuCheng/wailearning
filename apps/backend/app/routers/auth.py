@@ -47,7 +47,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={
+            "sub": user.username,
+            "tv": int(getattr(user, "token_version", 0) or 0),
+        },
+        expires_delta=access_token_expires,
     )
 
     LogService.log_login(
@@ -194,6 +198,7 @@ def change_password(
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
     current_user.hashed_password = get_password_hash(payload.new_password)
+    current_user.token_version = int(getattr(current_user, "token_version", 0) or 0) + 1
     db.add(current_user)
     db.commit()
 

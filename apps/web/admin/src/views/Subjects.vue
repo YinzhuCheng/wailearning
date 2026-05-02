@@ -145,7 +145,7 @@
               </el-button>
               <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
               <el-button type="success" size="small" :data-testid="`subjects-open-llm-${row.id}`" @click="openLlmConfigDialog(row)">LLM 配置</el-button>
-              <el-button type="danger" size="small" @click="deleteCourse(row)">删除</el-button>
+              <el-button type="danger" size="small" :data-testid="`subjects-delete-${row.id}`" @click="deleteCourse(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -990,6 +990,7 @@ const deleteCourse = async course => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除课程失败', error)
+      ElMessage.error(error?.response?.data?.detail || error?.message || '删除课程失败')
     }
   }
 }
