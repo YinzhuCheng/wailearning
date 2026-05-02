@@ -1016,7 +1016,16 @@ def submit_homework(
             class_id=homework.class_id,
         )
         db.add(submission)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            homework = _get_homework_or_404(homework_id, db)
+            homework = _ensure_homework_access(homework, current_user, db)
+            student = _resolve_student_for_user(homework, current_user, db)
+            submission = _get_submission_summary(db, homework.id, student.id)
+            if submission is None:
+                raise HTTPException(status_code=409, detail="Concurrent submission conflict; please retry.")
 
     next_content = data.content
     next_attachment_name = submission.attachment_name or None
