@@ -13,11 +13,14 @@ from app.models import (
     Attendance,
     Class,
     CourseEnrollment,
+    DiscussionLLMJob,
     Gender,
     HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
+    LLMDiscussionQuotaReservation,
+    LLMDiscussionTokenUsageLog,
     LLMQuotaReservation,
     LLMTokenUsageLog,
     Score,
@@ -567,6 +570,22 @@ def delete_student(
         db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student_id).delete()
         submissions = db.query(HomeworkSubmission).filter(HomeworkSubmission.student_id == student_id).all()
         attempts = db.query(HomeworkAttempt).filter(HomeworkAttempt.student_id == student_id).all()
+        job_ids_discussion = [
+            jid
+            for (jid,) in db.query(DiscussionLLMJob.id)
+            .filter(DiscussionLLMJob.requester_student_id == student_id)
+            .all()
+        ]
+        if job_ids_discussion:
+            db.query(LLMDiscussionQuotaReservation).filter(
+                LLMDiscussionQuotaReservation.job_id.in_(job_ids_discussion)
+            ).delete(synchronize_session=False)
+            db.query(LLMDiscussionTokenUsageLog).filter(LLMDiscussionTokenUsageLog.job_id.in_(job_ids_discussion)).delete(
+                synchronize_session=False
+            )
+            db.query(DiscussionLLMJob).filter(DiscussionLLMJob.id.in_(job_ids_discussion)).delete(
+                synchronize_session=False
+            )
         for attempt in attempts:
             db.query(HomeworkScoreCandidate).filter(HomeworkScoreCandidate.attempt_id == attempt.id).delete()
             task_ids = [

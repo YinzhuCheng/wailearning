@@ -80,6 +80,7 @@
         :subject-id="homework.subject_id"
         :class-id="homework.class_id"
         :discussion-requires-context="homework.discussion_requires_context"
+        :is-student="userStore.isStudent"
       />
 
       <el-card shadow="never" class="info-card">

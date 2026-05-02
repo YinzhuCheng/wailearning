@@ -31,6 +31,7 @@ from app.models import (
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    DiscussionLLMJob,
     Homework,
     HomeworkGradeAppeal,
     Notification,
@@ -777,6 +778,8 @@ def delete_subject(
 
     for hw in db.query(Homework).filter(Homework.subject_id == subject_id).all():
         _purge_homework_row(db, hw)
+
+    db.query(DiscussionLLMJob).filter(DiscussionLLMJob.subject_id == subject_id).delete(synchronize_session=False)
 
     db.query(CourseDiscussionEntry).filter(CourseDiscussionEntry.subject_id == subject_id).delete(
         synchronize_session=False
