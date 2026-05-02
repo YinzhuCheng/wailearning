@@ -426,6 +426,32 @@ CI drift had already accumulated before this change.
 - verify the rewritten CI definitions on the actual target CI platform
 - ensure CI runs reflect the same entrypoints developers actually use
 
+## May 2026: follow-up from tier-4 stress E2E implementation (test pressure)
+
+This section adds **incremental** risk notes from implementing and stabilizing `tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`. It does not replace earlier items; it classifies what turned out to be **test-side** vs **product-side** under pressure.
+
+### Dominant failure mode during triage
+
+- **Most red runs** were **test or harness mistakes**: wrong REST paths, assumed JSON fields not in response models, invalid edge values vs Pydantic `ge=` / min-length validators, fragile UI selectors, or URL construction bugs in helpers.
+- **Fewer but higher-impact** failures were **real product gaps**: for example JWTs remaining valid after password change until explicit invalidation was added, and attachment download-by-name not considering **user avatar** URLs in DB lookup (fixed). Those are worth tracking as product work when encountered.
+
+### Residual product concerns (still worth monitoring)
+
+- **Session / token model**: any future auth feature (refresh tokens, device revoke) must stay consistent with **`token_version`** (or equivalent) so “change password” and “logout everywhere” semantics remain testable and secure.
+- **Endpoints that 500 on bad input**: if a malformed JSON body produces **500** instead of **422**, treat as **hardening** backlog — tests should not rely on that behavior.
+- **SQLite concurrency**: idempotent inserts help; **lost updates** on counters or read-modify-write paths remain a structural risk under parallel requests (see Pitfall 24 in [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md)).
+- **Notification read-state under concurrency**: dual-tab mark-all-read remains the flagship **P1** flake/risk (see above); tier-4 did not retire that concern.
+- **LLM subsystem**: large routers, worker coupling, and quota paths — **P1/P2** items elsewhere in this file still apply; stress E2E increases confidence but does not prove correctness under all production timings.
+
+### Source of “potential bugs” vs “test bugs” (rule of thumb)
+
+| Source | Typical signal |
+| --- | --- |
+| **Test / contract mismatch** | Immediate `404`/`422` with a clear FastAPI detail; wrong path in test; field name absent in schema. |
+| **Product defect** | Same steps manually or via minimal `curl` reproduce wrong business state; security expectation (invalidated session) violated; 500 on valid input; data integrity after single-threaded API sequence. |
+
+When triaging, fix **contract mismatches in tests first**; if minimal reproduction still fails, escalate to product.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.

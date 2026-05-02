@@ -464,6 +464,95 @@ Concurrent “read balance → add → write” increments lose totals even with
 
 Prefer **single-statement SQL increments** (`UPDATE ... SET total_points = total_points + :delta`) for hot counters instead of ORM read-modify-write in parallel threads.
 
+## Pitfall 25: helper `fetch` / `fetchRaw` double-prefixes the API base URL
+
+### Symptom
+
+`TypeError: Failed to parse URL` or URLs like `http://127.0.0.1:8012http://127.0.0.1:8012/api/...`.
+
+### Why it happens
+
+A helper already prefixes `apiBase()`, but the test passes a **full absolute URL** as the path argument.
+
+### How to avoid (test side)
+
+- Pass **path-only** strings to shared helpers (`/api/...`), **or**
+- Teach the helper to treat `http://` / `https://` prefixes as already-absolute and skip concatenation.
+
+## Pitfall 26: `fetchRaw`-style helpers and JSON bodies — avoid double encoding
+
+### Symptom
+
+Backend `500` / `AttributeError` (for example attendance batch) because the route receives a **string** where it expects a parsed object.
+
+### Why it happens
+
+The test passes `JSON.stringify(body)` while the helper also sets `Content-Type: application/json` and may stringify again, or the server assumes `dict` and calls `.get` on a string.
+
+### How to avoid (test side)
+
+- Pass a **plain object** as the body and let one layer perform `JSON.stringify`.
+- If you must send raw bytes, match what the backend route declares (form vs JSON).
+
+## Pitfall 27: asserting fields that the API response model does not expose
+
+### Symptom
+
+`expect.poll` never succeeds: the test checks `homework_title` (or similar) on a payload that only includes **`HomeworkSubmissionHistoryResponse`** fields (`summary`, `attempts`), not the parent homework row.
+
+### How to avoid (test side)
+
+- Before writing polls, confirm field names against **`apps/backend/app/schemas.py`** or a sample `GET` in Swagger/OpenAPI.
+- For “title updated” convergence, prefer **`GET /api/homeworks/{id}`** (or the list endpoint) for the homework record, not the submission history response.
+
+## Pitfall 28: Pydantic validation limits are easy to violate in scripted payloads
+
+### Symptom
+
+`422` on appeals, LLM course settings, or other endpoints when the test uses too-short strings or token counts below `ge=...`.
+
+### Examples encountered
+
+- Appeal `reason_text` minimum length (validators strip and enforce a floor).
+- `max_input_tokens` / `max_output_tokens` on course LLM config have **minimums** (for example 1000) — values chosen only to “stress” the worker may be **invalid for the schema**.
+
+### How to avoid (test side)
+
+- Read the schema / router for **`Field(ge=...)`** and custom validators before choosing edge values.
+- Separate “invalid on purpose” cases (expect 422) from “happy path” cases.
+
+## Pitfall 29: UI title vs API title — heading selectors may not match the DOM
+
+### Symptom
+
+API polls green, but `getByRole('heading', { name })` times out on the homework submit page.
+
+### How to avoid (test side)
+
+- After authoritative API state is correct, **`reload`** the page and assert **`body` text** or a broader title locator (`h1`, `h2`, `.page-title`) with `filter({ hasText })`, not only `heading` role, unless you verified the component’s a11y tree.
+
+## Pitfall 30: password-change + token invalidation tests must capture the old token first
+
+### Symptom
+
+The test obtains a **new** token after the UI already changed the password, then expects `401` — receives `200` because the new token is valid.
+
+### How to avoid (test side)
+
+- Call `obtainAccessToken(...)` **before** any UI action that changes credentials.
+- After UI submit, **poll** `GET /api/auth/me` with the **old** token until `401` (or a short wait for commit), because UI “success” can race the DB update.
+
+## Pitfall 31: attachment download tests must respect how the server authorizes URLs
+
+### Symptom
+
+`404` or `403` when `GET`ting a file right after `POST /api/files/upload`: the bytes exist on disk but **no row** references the URL yet (name-based download resolves candidates via DB paths like homework, materials, notifications, **and** user avatar).
+
+### How to avoid (test side)
+
+- For “download works” coverage, either **link** the file the way production does (homework submission, material, **or** `POST /api/auth/me/avatar`), **or** assert the documented behavior for orphan uploads.
+- When building a path for `fetch`, handle **relative** `attachment_url` values (`/api/files/...`) — do not assume `new URL(fileUrl)` without a base when the server returns a path-only URL.
+
 ## Proven Command Patterns
 
 ### Backend full suite

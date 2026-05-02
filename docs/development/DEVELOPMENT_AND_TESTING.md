@@ -215,6 +215,26 @@ Recent behavior coverage includes scenarios such as:
 
 When extending Playwright or threaded pytest coverage, the friction usually clusters around **contract mismatches** (HTTP method/parameter shape), **router redirects by role**, **SQLite races**, and **Playwright locator ambiguity**. Pitfalls **17–24** were appended to [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)— read those before debugging failures that look like “flaky UI” but are actually environment or selector discipline issues.
 
+Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded as pitfalls **25–31** in the same document (double `apiBase`, JSON encoding, schema `ge=` limits, homework title DOM vs API, password-change token capture, attachment ACL).
+
+### Recommendations for new test samples (E2E and API)
+
+- **Confirm the contract first**: path, verb, query vs body, and Pydantic bounds — align with `apps/backend/app/routers/*.py` and `schemas.py`, and mirror the admin client in `apps/web/admin/src/api` when in doubt.
+- **Assert server state before UI**: use `page.request`, shared `apiGetJson`, or `expect.poll` on an API predicate, then reload or widen locators for the UI (see pitfalls 29–30 in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
+- **Prefer stable hooks**: `data-testid`, course context helpers (`enterSeededRequiredCourse`), and explicit `waitForResponse` registration before clicks — especially for Element Plus dialogs and batch actions.
+- **Concurrency**: prefer API-only parallel storms when the UI disables controls; avoid `Promise.all` on clicks that may be no-ops when disabled (see Pitfall 22).
+- **Conditional scenarios**: if a test needs two movable material chapters, a parent code, or a class-teacher seed, use `test.skip` with a clear reason when the seed layout does not support it — document the assumption in the spec comment.
+- **Regression placement**: put **API contract and idempotency** checks in `pytest` where possible; reserve Playwright for routing, visibility, and multi-tab behavior that HTTP tests cannot see.
+
+### Sample hygiene: overlap, redundancy, and refinement targets
+
+This is judgment for maintainers, not an automatic delete list:
+
+- **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the optional **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
+- Older E2E that still rely on **`toBeHidden`** on Element Plus dialogs alone are **more fragile** than patterns that confirm success via **network response + navigation + table row** (see resilience and boundary specs). Prefer aligning those tests with the “authoritative state first” rule rather than deleting them outright.
+- **`TEST_REDUNDANCY_AUDIT.md`** remains the formal gate for safe deletes; the audit’s **protected** list intentionally keeps high-difficulty files — do not “clean up” stress specs without reading that policy.
+- Optional backlog specs gated by **`E2E_ENABLE_BACKLOG_SPECS`** ([E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md)): if placeholders remain in a branch, do not treat them as failing debt — treat them as a **queue** with explicit enablement.
+
 ## After Documentation Updates
 
 For documentation-only work, full test runs are not always necessary. For changes that also touch behavior, prefer:
