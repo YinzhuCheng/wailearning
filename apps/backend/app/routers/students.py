@@ -18,6 +18,7 @@ from app.models import (
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
+    LLMQuotaReservation,
     LLMTokenUsageLog,
     Score,
     Student,
@@ -573,6 +574,9 @@ def delete_student(
                 for item in db.query(HomeworkGradingTask.id).filter(HomeworkGradingTask.attempt_id == attempt.id).all()
             ]
             if task_ids:
+                db.query(LLMQuotaReservation).filter(LLMQuotaReservation.task_id.in_(task_ids)).delete(
+                    synchronize_session=False
+                )
                 db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id.in_(task_ids)).delete(
                     synchronize_session=False
                 )

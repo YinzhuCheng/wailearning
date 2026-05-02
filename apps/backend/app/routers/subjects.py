@@ -2,6 +2,7 @@ import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -18,7 +19,31 @@ from app.course_access import (
     sync_course_enrollments,
 )
 from app.database import get_db
-from app.models import Class, CourseEnrollment, CourseEnrollmentBlock, Semester, Student, Subject, User, UserRole
+from app.models import (
+    Attendance,
+    Class,
+    CourseDiscussionEntry,
+    CourseEnrollment,
+    CourseEnrollmentBlock,
+    CourseExamWeight,
+    CourseGradeScheme,
+    CourseLLMConfig,
+    CourseMaterial,
+    CourseMaterialChapter,
+    CourseMaterialSection,
+    Homework,
+    HomeworkGradeAppeal,
+    Notification,
+    NotificationRead,
+    Score,
+    ScoreGradeAppeal,
+    Semester,
+    Student,
+    Subject,
+    User,
+    UserRole,
+)
+from app.routers.homework import _purge_homework_row
 from app.schemas import (
     CourseTimeItem,
     CourseEnrollmentResponse,
@@ -181,8 +206,9 @@ def _resolve_semester(
     raise HTTPException(status_code=400, detail="Semester not found.")
 
 
-def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
-    student_count = db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).count()
+def _serialize_course(course: Subject, db: Session, *, student_count: Optional[int] = None) -> SubjectResponse:
+    if student_count is None:
+        student_count = db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).count()
     semester_label = (
         course.semester_obj.name
         if course.semester_obj
@@ -329,7 +355,17 @@ def get_subjects(
         .order_by(Subject.status.asc(), Subject.created_at.desc())
         .all()
     )
-    return [_serialize_course(course, db) for course in courses]
+    counts: dict[int, int] = {}
+    if courses:
+        ids = [c.id for c in courses]
+        rows = (
+            db.query(CourseEnrollment.subject_id, func.count(CourseEnrollment.id))
+            .filter(CourseEnrollment.subject_id.in_(ids))
+            .group_by(CourseEnrollment.subject_id)
+            .all()
+        )
+        counts = {int(sid): int(cnt or 0) for sid, cnt in rows}
+    return [_serialize_course(course, db, student_count=counts.get(course.id, 0)) for course in courses]
 
 
 @router.get("/course-catalog", response_model=List[StudentCourseCatalogItem])
@@ -371,7 +407,17 @@ def list_elective_catalog_for_student(
         .order_by(Subject.created_at.desc())
         .all()
     )
-    return [_serialize_course(course, db) for course in courses]
+    counts: dict[int, int] = {}
+    if courses:
+        ids = [c.id for c in courses]
+        rows = (
+            db.query(CourseEnrollment.subject_id, func.count(CourseEnrollment.id))
+            .filter(CourseEnrollment.subject_id.in_(ids))
+            .group_by(CourseEnrollment.subject_id)
+            .all()
+        )
+        counts = {int(sid): int(cnt or 0) for sid, cnt in rows}
+    return [_serialize_course(course, db, student_count=counts.get(course.id, 0)) for course in courses]
 
 
 @router.post("/{subject_id}/student-self-enroll", response_model=StudentElectiveSelfEnrollResult)
@@ -701,7 +747,74 @@ def delete_subject(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
 
-    db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == subject_id).delete()
+    hw_ids = [row[0] for row in db.query(Homework.id).filter(Homework.subject_id == subject_id).all()]
+    hw_appeal_ids = []
+    if hw_ids:
+        hw_appeal_ids = [
+            row[0]
+            for row in db.query(HomeworkGradeAppeal.id).filter(HomeworkGradeAppeal.homework_id.in_(hw_ids)).all()
+        ]
+    appeal_ids = [
+        row[0]
+        for row in db.query(ScoreGradeAppeal.id).filter(ScoreGradeAppeal.subject_id == subject_id).all()
+    ]
+
+    notif_filters = [Notification.subject_id == subject_id]
+    if hw_ids:
+        notif_filters.append(Notification.related_homework_id.in_(hw_ids))
+    if hw_appeal_ids:
+        notif_filters.append(Notification.related_appeal_id.in_(hw_appeal_ids))
+    if appeal_ids:
+        notif_filters.append(Notification.related_score_appeal_id.in_(appeal_ids))
+    notif_filter = or_(*notif_filters) if len(notif_filters) > 1 else notif_filters[0]
+
+    notif_ids = [row[0] for row in db.query(Notification.id).filter(notif_filter).all()]
+    if notif_ids:
+        db.query(NotificationRead).filter(NotificationRead.notification_id.in_(notif_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(Notification).filter(Notification.id.in_(notif_ids)).delete(synchronize_session=False)
+
+    for hw in db.query(Homework).filter(Homework.subject_id == subject_id).all():
+        _purge_homework_row(db, hw)
+
+    db.query(CourseDiscussionEntry).filter(CourseDiscussionEntry.subject_id == subject_id).delete(
+        synchronize_session=False
+    )
+
+    for mat in db.query(CourseMaterial).filter(CourseMaterial.subject_id == subject_id).all():
+        db.delete(mat)
+
+    chapter_id_rows = (
+        db.query(CourseMaterialChapter.id).filter(CourseMaterialChapter.subject_id == subject_id).all()
+    )
+    chapter_ids = [row[0] for row in chapter_id_rows]
+    if chapter_ids:
+        db.query(CourseMaterialChapter).filter(CourseMaterialChapter.subject_id == subject_id).update(
+            {CourseMaterialChapter.parent_id: None},
+            synchronize_session=False,
+        )
+        db.query(CourseMaterialSection).filter(CourseMaterialSection.chapter_id.in_(chapter_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(CourseMaterialChapter).filter(CourseMaterialChapter.subject_id == subject_id).delete(
+            synchronize_session=False
+        )
+
+    db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).delete(synchronize_session=False)
+    db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == subject_id).delete(synchronize_session=False)
+    db.query(ScoreGradeAppeal).filter(ScoreGradeAppeal.subject_id == subject_id).delete(synchronize_session=False)
+    db.query(Score).filter(Score.subject_id == subject_id).delete(synchronize_session=False)
+    db.query(Attendance).filter(Attendance.subject_id == subject_id).delete(synchronize_session=False)
+
+    llm_cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+    if llm_cfg:
+        db.delete(llm_cfg)
+
+    db.query(CourseEnrollmentBlock).filter(CourseEnrollmentBlock.subject_id == subject_id).delete(
+        synchronize_session=False
+    )
+    db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == subject_id).delete(synchronize_session=False)
     db.delete(course)
     db.commit()
     return {"message": "Course deleted successfully."}

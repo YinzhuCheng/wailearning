@@ -146,20 +146,25 @@ httpQuiet.interceptors.response.use(
 
 export { http, httpQuiet, apiBaseUrl }
 
+/** Course list/sync can exceed default timeout on large SQLite E2E databases. */
+const subjectsHeavyTimeout = 60000
+const rosterHeavyTimeout = 60000
+
 const subjectsApi = {
-  list: params => http.get('/subjects', { params }),
-    electiveCatalog: () => http.get('/subjects/elective-catalog'),
-    courseCatalog: () => http.get('/subjects/course-catalog'),
+  list: params => http.get('/subjects', { params, timeout: subjectsHeavyTimeout }),
+    electiveCatalog: () => http.get('/subjects/elective-catalog', { timeout: subjectsHeavyTimeout }),
+    courseCatalog: () => http.get('/subjects/course-catalog', { timeout: subjectsHeavyTimeout }),
   studentSelfEnroll: subjectId => http.post(`/subjects/${subjectId}/student-self-enroll`),
   studentSelfDrop: subjectId => http.post(`/subjects/${subjectId}/student-self-drop`),
   get: id => http.get(`/subjects/${id}`),
-  create: data => http.post('/subjects', data),
-  update: (id, data) => http.put(`/subjects/${id}`, data),
-  delete: id => http.delete(`/subjects/${id}`),
-  getStudents: id => http.get(`/subjects/${id}/students`),
-  syncEnrollments: id => http.post(`/subjects/${id}/sync-enrollments`),
-  rosterEnroll: (subjectId, data) => http.post(`/subjects/${subjectId}/roster-enroll`, data),
-  removeStudent: (subjectId, studentId) => http.delete(`/subjects/${subjectId}/students/${studentId}`),
+  create: data => http.post('/subjects', data, { timeout: subjectsHeavyTimeout }),
+  update: (id, data) => http.put(`/subjects/${id}`, data, { timeout: subjectsHeavyTimeout }),
+  delete: id => http.delete(`/subjects/${id}`, { timeout: subjectsHeavyTimeout }),
+  getStudents: id => http.get(`/subjects/${id}/students`, { timeout: subjectsHeavyTimeout }),
+  syncEnrollments: id => http.post(`/subjects/${id}/sync-enrollments`, {}, { timeout: subjectsHeavyTimeout }),
+  rosterEnroll: (subjectId, data) => http.post(`/subjects/${subjectId}/roster-enroll`, data, { timeout: subjectsHeavyTimeout }),
+  removeStudent: (subjectId, studentId) =>
+    http.delete(`/subjects/${subjectId}/students/${studentId}`, { timeout: subjectsHeavyTimeout }),
   updateEnrollmentType: (subjectId, studentId, data) => http.put(`/subjects/${subjectId}/students/${studentId}/enrollment-type`, data)
 }
 
@@ -181,13 +186,13 @@ const api = {
     changePassword: data => http.post('/auth/change-password', data)
   },
   users: {
-    list: params => http.get('/users', { params }),
+    list: params => http.get('/users', { params, timeout: rosterHeavyTimeout }),
     listStudentCandidates: () => http.get('/users/student-candidates'),
     loadStudentCandidates: data => http.post('/users/student-candidates/load', data),
     batchSetClass: data => http.post('/users/batch-set-class', data),
     upsertStudentRosterFromUsers: data => http.post('/users/student-roster/from-users', data),
     get: id => http.get(`/users/${id}`),
-    create: data => http.post('/users', data),
+    create: data => http.post('/users', data, { timeout: rosterHeavyTimeout }),
     update: (id, data) => http.put(`/users/${id}`, data),
     delete: id => http.delete(`/users/${id}`)
   },
@@ -199,7 +204,7 @@ const api = {
     delete: id => http.delete(`/classes/${id}`)
   },
   students: {
-    list: params => http.get('/students', { params }),
+    list: params => http.get('/students', { params, timeout: rosterHeavyTimeout }),
     get: id => http.get(`/students/${id}`),
     create: data => http.post('/students', data),
     update: (id, data) => http.put(`/students/${id}`, data),

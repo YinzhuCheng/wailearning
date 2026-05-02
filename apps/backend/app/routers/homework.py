@@ -36,6 +36,7 @@ from app.models import (
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
+    LLMQuotaReservation,
     LLMTokenUsageLog,
     Student,
     User,
@@ -549,6 +550,60 @@ def _resolve_target_attempt(db: Session, submission: HomeworkSubmission, attempt
     return attempt
 
 
+def _purge_homework_row(db: Session, homework: Homework) -> None:
+    """Remove a homework row and all dependent rows (attempts, tasks, appeals). Internal/admin use."""
+    db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.homework_id == homework.id).delete(
+        synchronize_session=False
+    )
+
+    attachment_urls: set[str] = set()
+
+    db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == homework.id).update(
+        {HomeworkSubmission.latest_attempt_id: None},
+        synchronize_session=False,
+    )
+    db.query(HomeworkAttempt).filter(HomeworkAttempt.homework_id == homework.id).update(
+        {HomeworkAttempt.submission_summary_id: None},
+        synchronize_session=False,
+    )
+    db.flush()
+
+    attempts = db.query(HomeworkAttempt).filter(HomeworkAttempt.homework_id == homework.id).all()
+    for attempt in attempts:
+        if attempt.attachment_url:
+            attachment_urls.add(attempt.attachment_url)
+        db.query(HomeworkScoreCandidate).filter(HomeworkScoreCandidate.attempt_id == attempt.id).delete()
+        task_ids = [
+            item[0]
+            for item in db.query(HomeworkGradingTask.id)
+            .filter(HomeworkGradingTask.attempt_id == attempt.id)
+            .all()
+        ]
+        if task_ids:
+            db.query(LLMQuotaReservation).filter(LLMQuotaReservation.task_id.in_(task_ids)).delete(
+                synchronize_session=False
+            )
+            db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id.in_(task_ids)).delete(synchronize_session=False)
+        db.query(HomeworkGradingTask).filter(HomeworkGradingTask.attempt_id == attempt.id).delete()
+        db.delete(attempt)
+
+    for submission in list(homework.submissions):
+        if submission.attachment_url:
+            attachment_urls.add(submission.attachment_url)
+        db.delete(submission)
+
+    if homework.attachment_url:
+        _delete_attachment_if_unreferenced(
+            db,
+            homework.attachment_url,
+            exclude_homework_id=homework.id,
+        )
+    for attachment_url in attachment_urls:
+        _delete_attachment_if_unreferenced(db, attachment_url)
+
+    db.delete(homework)
+
+
 def _delete_attachment_if_unreferenced(
     db: Session,
     attachment_url: Optional[str],
@@ -906,52 +961,7 @@ def delete_homework(
         raise HTTPException(status_code=403, detail="Only teachers can delete homework.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
-    attachment_urls: set[str] = set()
-
-    # Break HomeworkSubmission <-> HomeworkAttempt FK cycle before bulk deletes (SQLAlchemy flush).
-    db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == homework.id).update(
-        {HomeworkSubmission.latest_attempt_id: None},
-        synchronize_session=False,
-    )
-    db.query(HomeworkAttempt).filter(HomeworkAttempt.homework_id == homework.id).update(
-        {HomeworkAttempt.submission_summary_id: None},
-        synchronize_session=False,
-    )
-    db.flush()
-
-    attempts = db.query(HomeworkAttempt).filter(HomeworkAttempt.homework_id == homework.id).all()
-    for attempt in attempts:
-        if attempt.attachment_url:
-            attachment_urls.add(attempt.attachment_url)
-        db.query(HomeworkScoreCandidate).filter(HomeworkScoreCandidate.attempt_id == attempt.id).delete()
-        task_ids = [
-            item[0]
-            for item in db.query(HomeworkGradingTask.id)
-            .filter(HomeworkGradingTask.attempt_id == attempt.id)
-            .all()
-        ]
-        if task_ids:
-            db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id.in_(task_ids)).delete(
-                synchronize_session=False
-            )
-        db.query(HomeworkGradingTask).filter(HomeworkGradingTask.attempt_id == attempt.id).delete()
-        db.delete(attempt)
-
-    for submission in list(homework.submissions):
-        if submission.attachment_url:
-            attachment_urls.add(submission.attachment_url)
-        db.delete(submission)
-
-    if homework.attachment_url:
-        _delete_attachment_if_unreferenced(
-            db,
-            homework.attachment_url,
-            exclude_homework_id=homework.id,
-        )
-    for attachment_url in attachment_urls:
-        _delete_attachment_if_unreferenced(db, attachment_url)
-
-    db.delete(homework)
+    _purge_homework_row(db, homework)
     db.commit()
     return {"message": "Homework deleted successfully."}
 

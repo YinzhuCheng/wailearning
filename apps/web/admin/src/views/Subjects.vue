@@ -990,6 +990,7 @@ const deleteCourse = async course => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除课程失败', error)
+      ElMessage.error(error?.response?.data?.detail || error?.message || '删除课程失败')
     }
   }
 }
