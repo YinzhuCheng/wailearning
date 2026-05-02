@@ -55,6 +55,20 @@ LLM_GRADING_WORKER_POLL_SECONDS=2
 LLM_GRADING_TASK_STALE_SECONDS=600
 ```
 
+Optional: tune per-preset outbound LLM concurrency in each worker process (defaults in `apps/backend/app/config.py`): `LLM_PRESET_MAX_CONCURRENT_REQUESTS`, `LLM_PRESET_COOLDOWN_AFTER_429_SECONDS`, `LLM_PRESET_SLOT_BLOCK_SECONDS`, `LLM_PRESET_SLOT_WAIT_SECONDS`. See [LLM and Homework Guide](../product/LLM_HOMEWORK_GUIDE.md) for behavior.
+DEBUG=false
+DATABASE_URL=postgresql://ddclass:<password>@127.0.0.1:5432/ddclass
+SECRET_KEY=<strong-random-value>
+ALLOW_PUBLIC_REGISTRATION=false
+INIT_ADMIN_USERNAME=admin
+INIT_ADMIN_PASSWORD=<strong-admin-password>
+INIT_DEFAULT_DATA=false
+ENABLE_LLM_GRADING_WORKER=true
+LLM_GRADING_WORKER_LEADER=true
+LLM_GRADING_WORKER_POLL_SECONDS=2
+LLM_GRADING_TASK_STALE_SECONDS=600
+```
+
 Production rules:
 
 - never keep placeholder database credentials,

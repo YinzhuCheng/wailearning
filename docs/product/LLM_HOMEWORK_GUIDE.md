@@ -111,6 +111,8 @@ The grading worker is database-backed and configuration-driven.
 
 In single-process local development, one process can both serve the API and drain the queue. In multi-instance production, only one intended leader should normally run task draining.
 
+Per-process outbound concurrency for LLM calls is configurable via environment variables (see `apps/backend/app/config.py`): each **preset id** can share at most `LLM_PRESET_MAX_CONCURRENT_REQUESTS` simultaneous HTTP grading requests **within one backend worker process** (default `2`; set to `0` to disable the gate). When a preset is at capacity, grading rotates to the next member in the **same group** (or the next flat endpoint) instead of queuing every task on one hot line; optional cooldown after HTTP `429` is controlled by `LLM_PRESET_COOLDOWN_AFTER_429_SECONDS`. These gates do **not** coordinate across separate server processes; combine with provider-side limits or multi-instance awareness if needed.
+
 ## Quotas and Timezones
 
 Quota behavior is easy to describe incorrectly, so the practical rules matter:

@@ -138,6 +138,8 @@ Key backend settings are defined in [`apps/backend/app/config.py`](apps/backend/
 - `ENABLE_LLM_GRADING_WORKER`
 - `LLM_GRADING_WORKER_LEADER`
 - `LLM_GRADING_TASK_STALE_SECONDS`
+- `LLM_PRESET_MAX_CONCURRENT_REQUESTS` (optional; per-preset outbound concurrency within each worker process, default `2` in code — see `config.py`)
+- `LLM_PRESET_COOLDOWN_AFTER_429_SECONDS`, `LLM_PRESET_SLOT_BLOCK_SECONDS`, `LLM_PRESET_SLOT_WAIT_SECONDS` (optional tuning for the same feature)
 - `E2E_DEV_SEED_ENABLED`
 - `E2E_DEV_SEED_TOKEN`
 

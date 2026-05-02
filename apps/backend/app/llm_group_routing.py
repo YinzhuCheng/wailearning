@@ -60,6 +60,11 @@ class _GroupState:
     def remove_member(self, link: CourseLLMConfigEndpoint) -> None:
         self.current_order = [x for x in self.current_order if x.id != link.id]
 
+    def rotate_head_to_end(self) -> None:
+        """Move first member to end (same fixed membership; used when preset slot busy)."""
+        if len(self.current_order) > 1:
+            self.current_order = self.current_order[1:] + self.current_order[:1]
+
     @staticmethod
     def _should_move_to_end(exc: Exception) -> bool:
         # Avoid importing app.llm_grading (circular); match by class name.
