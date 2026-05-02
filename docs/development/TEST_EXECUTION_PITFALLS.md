@@ -634,6 +634,34 @@ Section headers and other controls can match a loose `/密码/` regex; the real 
 - Use **`waitUntil: 'domcontentloaded'`** (not only `load`) for login hops, **retry** `goto` on the errors above, and treat **`goto` + `localStorage.clear`** as best-effort if the page navigates mid-call.
 - Before starting a new Playwright process, ensure **no stray `node`/`vite`/`chrome`** holds `E2E_UI_PORT` / `E2E_API_PORT` when `reuseExistingServer` is false — otherwise `webServer` fails to bind and the suite misleads you into “app” failures.
 
+## Pitfall 38: Admin delete-course UI assertion races the subjects table refresh
+
+### Symptom
+
+`DELETE /api/subjects/{id}` returns **200**, but `getByTestId('subjects-delete-{id}')` still exists for tens of seconds — `toHaveCount(0)` times out.
+
+### Why it happens
+
+The list row is driven by client state; **`loadCourses()`** (or equivalent) may lag behind the successful API delete, especially under Vite dev + SQLite E2E load.
+
+### How to avoid (test side)
+
+- After a successful delete response, **`expect.poll` on `GET /api/subjects`** until the id disappears, then **`page.goto('/subjects')`** (or wait for an explicit table reload) before asserting row-level UI.
+
+## Pitfall 39: `page_size` upper bounds differ by route — do not assume `le=100` everywhere
+
+### Symptom
+
+A test expects **`422`** for `page_size=200` on **`/api/students`**, but receives **200** — because that list allows **`le=1000`**.
+
+### Why it matters
+
+Copy-pasting “`page_size=200` means 422” from homework/materials/notifications tests will create **false failures** on routes with different `Query(..., le=...)`.
+
+### How to avoid (test side)
+
+- Read the **`Query(..., le=)`** on the FastAPI handler (or grep `page_size` in `apps/backend/app/routers/`) before picking an out-of-range value. Prefer **`page_size = max_allowed + 1`** per route family.
+
 ## Proven Command Patterns
 
 ### Backend full suite

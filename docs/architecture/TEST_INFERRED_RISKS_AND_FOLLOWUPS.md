@@ -478,6 +478,14 @@ This section records **residual risk and suspected sources** after a long full-s
 - If **`curl` / minimal pytest** reproduces wrong state → **product** issue (file with repro DB dialect).
 - If only **Playwright + Vite** shows the failure and **`domcontentloaded` + retry** stabilizes it → start as **harness**; still worth CI hardening so noise does not mask regressions.
 
+### May 2026 (second pass): pagination contract drift across routers
+
+**Concern:** Admin and teacher UIs call many list endpoints with `page_size`. FastAPI validates **`le=` per route**; some lists allow **1000** (e.g. students) while others cap at **100** (logs, points exchanges/records, parent portals, homework submission grids). **Source:** independent `Query` defaults in `apps/backend/app/routers/*.py`.
+
+**Risk:** A future UI change that sends a **single global `page_size`** (or copies a constant from one screen) could yield **422** on some pages while others silently cap or error — hard to spot without route-level contract tests.
+
+**Mitigation (engineering):** when changing pagination defaults, grep **`page_size`** across routers and the admin `src/api` client together; keep at least one **per-family** API test (see `e2e-pitfall-guard-rails-batch2.spec.js`) or pytest parametrics so drift is caught early.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.

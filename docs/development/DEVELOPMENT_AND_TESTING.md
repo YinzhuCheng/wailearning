@@ -215,7 +215,7 @@ Recent behavior coverage includes scenarios such as:
 
 When extending Playwright or threaded pytest coverage, the friction usually clusters around **contract mismatches** (HTTP method/parameter shape), **router redirects by role**, **SQLite races**, and **Playwright locator ambiguity**. Pitfalls **17–24** were appended to [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)— read those before debugging failures that look like “flaky UI” but are actually environment or selector discipline issues.
 
-Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded as pitfalls **25–31** in the same document (double `apiBase`, JSON encoding, schema `ge=` limits, homework title DOM vs API, password-change token capture, attachment ACL). A subsequent **full `pytest` + full admin Playwright** pass on a Linux agent added pitfalls **32–37** (MessageBox a11y, duplicate course title rows, disabled `force` clicks, `waitForResponse` race, password button label, Vite `goto` races).
+Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded as pitfalls **25–31** in the same document (double `apiBase`, JSON encoding, schema `ge=` limits, homework title DOM vs API, password-change token capture, attachment ACL). A subsequent **full `pytest` + full admin Playwright** pass on a Linux agent added pitfalls **32–37** (MessageBox a11y, duplicate course title rows, disabled `force` clicks, `waitForResponse` race, password button label, Vite `goto` races). A **pitfall-guard** follow-up added **38–39** (delete-list UI vs API truth, per-route `page_size` limits).
 
 ### Recommendations for new test samples (E2E and API)
 
@@ -254,6 +254,13 @@ These notes **add** to the bullets above; they do not replace the redundancy aud
 - **Tier-4 password test** using **`/密码/`** on the personal-settings page was **too broad**; prefer explicit labels or testids.
 - **Overlap** between **`e2e-tier4-stress-backlog.spec.js`**, **`e2e-scenario-resilience.spec.js`**, and **`future-advanced-coverage*.spec.js`** remains: before adding a new case, grep for the same **invariant** (enroll idempotency, token invalidation, mark-all-read). Parameterize or extend an existing spec when the setup cost is high.
 - **Redundancy**: still governed by [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md); the audit’s merge-only candidates (courses/roster/LLM token files) are **review prompts**, not an automatic delete list.
+
+### May 2026 (second pass): pitfall-guard batch specs and `page_size` discipline
+
+- A second small Playwright file **`tests/e2e/web-admin/e2e-pitfall-guard-rails-batch2.spec.js`** was added to widen **`page_size` 422** coverage across **logs**, **points**, **parent scores/homework**, **homework submissions**, and **students** (where `le` differs — see Pitfall **39** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)). Run it alone with:
+  - `npx playwright test e2e-pitfall-guard-rails-batch2.spec.js`
+- When adding more list-endpoint tests, **parameterize `(path, max_page_size)`** from code or a tiny shared table in the spec — avoid magic `200` unless you confirmed `le` for that router.
+- **`e2e-pitfall-guard-rails.spec.js`** (15 cases) and **batch2** (10 cases) overlap conceptually with **`e2e-cross-cutting-tier3.spec.js`** HTTP-edge tests; new edges should **extend** batch2 or tier3, not fork a third file, unless the invariant is genuinely new.
 
 ## After Documentation Updates
 
