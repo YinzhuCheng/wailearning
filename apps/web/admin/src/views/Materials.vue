@@ -221,6 +221,7 @@
         :subject-id="currentMaterial.subject_id"
         :class-id="currentMaterial.class_id"
         :discussion-requires-context="currentMaterial.discussion_requires_context"
+        :is-student="userStore.isStudent"
       />
     </el-dialog>
 

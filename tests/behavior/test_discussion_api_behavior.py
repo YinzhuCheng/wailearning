@@ -113,6 +113,21 @@ def test_behavior_discussion_wrong_class_for_subject_post_400(client: TestClient
     assert r.status_code == 400
 
 
+def test_behavior_discussion_teacher_invoke_llm_forbidden_403(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    te = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    base = {
+        "target_type": "homework",
+        "target_id": ctx["homework_id"],
+        "subject_id": ctx["subject_id"],
+        "class_id": ctx["class_id"],
+        "body": "@LLM\nhello",
+        "invoke_llm": True,
+    }
+    r = client.post("/api/discussions", headers=te, json=base)
+    assert r.status_code == 403
+
+
 def test_behavior_discussion_student_cannot_delete_teacher_message_403(client: TestClient):
     ctx = make_grading_course_with_homework()
     te = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])

@@ -586,7 +586,7 @@ class CourseLLMConfig(Base):
     estimated_chars_per_token = Column(Float, nullable=False, default=4.0)
     estimated_image_tokens = Column(Integer, nullable=False, default=850)
     max_input_tokens = Column(Integer, nullable=False, default=16000)
-    max_output_tokens = Column(Integer, nullable=False, default=1200)
+    max_output_tokens = Column(Integer, nullable=False, default=1000)
     quota_timezone = Column(String, nullable=False, default="Asia/Shanghai")
     system_prompt = Column(Text, nullable=True)
     teacher_prompt = Column(Text, nullable=True)
@@ -815,11 +815,71 @@ class CourseDiscussionEntry(Base):
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=False, index=True)
     author_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     body = Column(Text, nullable=False)
+    message_kind = Column(String, nullable=False, default="human")  # human | llm_assistant
+    llm_invocation = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     subject = relationship("Subject")
     class_obj = relationship("Class")
     author = relationship("User", foreign_keys=[author_user_id])
+
+
+class DiscussionLLMJob(Base):
+    """One synchronous LLM call triggered from course discussion (quota + usage like grading)."""
+
+    __tablename__ = "discussion_llm_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False, index=True)
+    target_type = Column(String, nullable=False)
+    target_id = Column(Integer, nullable=False)
+    requester_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    requester_student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
+    user_entry_id = Column(Integer, ForeignKey("course_discussion_entries.id", ondelete="CASCADE"), nullable=False)
+    assistant_entry_id = Column(Integer, ForeignKey("course_discussion_entries.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=False, default="pending")  # pending | success | failed
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    user_entry = relationship("CourseDiscussionEntry", foreign_keys=[user_entry_id])
+    assistant_entry = relationship("CourseDiscussionEntry", foreign_keys=[assistant_entry_id])
+
+
+class LLMDiscussionQuotaReservation(Base):
+    """In-flight token reservation for discussion LLM calls (same daily caps as grading)."""
+
+    __tablename__ = "llm_discussion_quota_reservations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("discussion_llm_jobs.id", ondelete="CASCADE"), nullable=False, unique=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    usage_date = Column(String, nullable=False)
+    timezone = Column(String, nullable=False, default="UTC")
+    reserved_tokens = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    job = relationship("DiscussionLLMJob")
+
+
+class LLMDiscussionTokenUsageLog(Base):
+    """Billed token usage for a discussion LLM job."""
+
+    __tablename__ = "llm_discussion_token_usage_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("discussion_llm_jobs.id", ondelete="CASCADE"), nullable=False, unique=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    usage_date = Column(String, nullable=False)
+    timezone = Column(String, nullable=False, default="UTC")
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    billing_note = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class NotificationRead(Base):

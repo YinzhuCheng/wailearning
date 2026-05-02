@@ -305,7 +305,9 @@ const api = {
   discussions: {
     list: params => http.get('/discussions', { params }),
     create: data => http.post('/discussions', data),
-    delete: id => http.delete(`/discussions/${id}`)
+    delete: id => http.delete(`/discussions/${id}`),
+    /** @param {AbortSignal} [signal] */
+    listSignal: (params, signal) => http.get('/discussions', { params, signal })
   },
   llmSettings: {
     listPresets: () => http.get('/llm-settings/presets'),

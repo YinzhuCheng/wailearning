@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import threading
 from typing import Literal, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access_http, is_course_instructor
 from app.database import get_db
-from app.models import CourseDiscussionEntry, CourseMaterial, Homework, Subject, User, UserRole
+from app.models import CourseDiscussionEntry, CourseMaterial, DiscussionLLMJob, Homework, Subject, User, UserRole
 from app.routers.classes import get_accessible_class_ids
 from app.schemas import (
     CourseDiscussionCreate,
@@ -27,6 +29,19 @@ MAX_PAGE_SIZE = 50
 MAX_BODY_LEN = 8000
 
 TargetType = Literal["homework", "material"]
+
+_LLM_FIRST_LINE = re.compile(r"^\s*@LLM\s*\n?", re.IGNORECASE)
+
+
+def _strip_llm_ui_prefix(body: str) -> str:
+    """Remove leading @LLM line inserted by the client UI (not sent to the model as a literal tag)."""
+    return _LLM_FIRST_LINE.sub("", body or "", count=1).strip()
+
+
+def _run_discussion_llm_job(job_id: int) -> None:
+    from app.llm_discussion import run_discussion_llm_reply_for_job
+
+    run_discussion_llm_reply_for_job(job_id)
 
 
 def _resolve_page_size(user: User, page_size: Optional[int]) -> int:
@@ -121,6 +136,8 @@ def _serialize_entry(row: CourseDiscussionEntry, author: User) -> CourseDiscussi
         author_username=author.username,
         author_role=author.role,
         body=row.body,
+        message_kind=getattr(row, "message_kind", None) or "human",
+        llm_invocation=bool(getattr(row, "llm_invocation", False)),
         created_at=row.created_at,
     )
 
@@ -201,17 +218,52 @@ def create_discussion(
             db=db,
         )
 
+    invoke_llm = bool(payload.invoke_llm)
+    if invoke_llm and current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="仅学生账号可发起智能助教回复。")
+
+    body_for_display = body
+    llm_invocation = False
+    if invoke_llm:
+        inner = _strip_llm_ui_prefix(body)
+        if not inner:
+            raise HTTPException(status_code=400, detail="智能助教模式下请填写具体问题或说明（@LLM 之后的内容不能为空）。")
+        llm_invocation = True
+
     entry = CourseDiscussionEntry(
         target_type=payload.target_type,
         target_id=payload.target_id,
         subject_id=payload.subject_id,
         class_id=payload.class_id,
         author_user_id=current_user.id,
-        body=body,
+        body=body_for_display,
+        message_kind="human",
+        llm_invocation=llm_invocation,
     )
     db.add(entry)
+    db.flush()
+
+    job_id: Optional[int] = None
+    if invoke_llm:
+        job = DiscussionLLMJob(
+            subject_id=payload.subject_id,
+            class_id=payload.class_id,
+            target_type=payload.target_type,
+            target_id=payload.target_id,
+            requester_user_id=current_user.id,
+            user_entry_id=entry.id,
+            status="pending",
+        )
+        db.add(job)
+        db.flush()
+        job_id = job.id
+
     db.commit()
     db.refresh(entry)
+
+    if job_id is not None:
+        threading.Thread(target=_run_discussion_llm_job, args=(job_id,), daemon=True).start()
+
     return _serialize_entry(entry, current_user)
 
 

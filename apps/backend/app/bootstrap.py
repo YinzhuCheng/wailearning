@@ -1,3 +1,4 @@
+import os
 import re
 from datetime import datetime, timezone
 
@@ -261,7 +262,7 @@ def ensure_schema_updates() -> None:
             estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0,
             estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             max_input_tokens INTEGER NOT NULL DEFAULT 16000,
-            max_output_tokens INTEGER NOT NULL DEFAULT 1200,
+            max_output_tokens INTEGER NOT NULL DEFAULT 1000,
             quota_timezone VARCHAR NOT NULL DEFAULT 'Asia/Shanghai',
             system_prompt TEXT,
             teacher_prompt TEXT,
@@ -383,6 +384,53 @@ def ensure_schema_updates() -> None:
         """,
         "CREATE INDEX IF NOT EXISTS ix_course_discussion_target ON course_discussion_entries(target_type, target_id, subject_id, class_id)",
         "CREATE INDEX IF NOT EXISTS ix_course_discussion_created ON course_discussion_entries(created_at)",
+        "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS message_kind VARCHAR NOT NULL DEFAULT 'human'",
+        "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS llm_invocation BOOLEAN NOT NULL DEFAULT FALSE",
+        """
+        CREATE TABLE IF NOT EXISTS discussion_llm_jobs (
+            id INTEGER PRIMARY KEY,
+            subject_id INTEGER NOT NULL REFERENCES subjects(id),
+            class_id INTEGER NOT NULL REFERENCES classes(id),
+            target_type VARCHAR NOT NULL,
+            target_id INTEGER NOT NULL,
+            requester_user_id INTEGER NOT NULL REFERENCES users(id),
+            requester_student_id INTEGER REFERENCES students(id),
+            user_entry_id INTEGER NOT NULL REFERENCES course_discussion_entries(id) ON DELETE CASCADE,
+            assistant_entry_id INTEGER REFERENCES course_discussion_entries(id) ON DELETE SET NULL,
+            status VARCHAR NOT NULL DEFAULT 'pending',
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            finished_at TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_discussion_llm_jobs_subject ON discussion_llm_jobs(subject_id)",
+        """
+        CREATE TABLE IF NOT EXISTS llm_discussion_quota_reservations (
+            id INTEGER PRIMARY KEY,
+            job_id INTEGER NOT NULL UNIQUE REFERENCES discussion_llm_jobs(id) ON DELETE CASCADE,
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            subject_id INTEGER REFERENCES subjects(id),
+            usage_date VARCHAR NOT NULL,
+            timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            reserved_tokens INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS llm_discussion_token_usage_logs (
+            id INTEGER PRIMARY KEY,
+            job_id INTEGER NOT NULL UNIQUE REFERENCES discussion_llm_jobs(id) ON DELETE CASCADE,
+            subject_id INTEGER REFERENCES subjects(id),
+            student_id INTEGER NOT NULL REFERENCES students(id),
+            usage_date VARCHAR NOT NULL,
+            timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            input_tokens INTEGER,
+            output_tokens INTEGER,
+            total_tokens INTEGER,
+            billing_note VARCHAR,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
     ]
 
     with engine.begin() as connection:
@@ -437,6 +485,7 @@ def ensure_schema_updates() -> None:
     _backfill_default_llm_groups_for_existing_configs()
     _ensure_llm_global_quota_policy_row()
     _ensure_default_llm_endpoint_preset()
+    _ensure_llm_assistant_system_user()
     _backfill_course_material_chapters()
 
 
@@ -555,6 +604,30 @@ def _ensure_llm_global_quota_policy_row() -> None:
                 default_daily_student_tokens=100_000,
                 quota_timezone="Asia/Shanghai",
                 max_parallel_grading_tasks=3,
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def _ensure_llm_assistant_system_user() -> None:
+    """Reserved user for discussion LLM assistant messages (not a login account)."""
+    db = SessionLocal()
+    try:
+        un = "__system_llm_assistant__"
+        if db.query(User).filter(User.username == un).first():
+            return
+        db.add(
+            User(
+                username=un,
+                hashed_password=get_password_hash(os.urandom(16).hex()),
+                real_name="智能助教",
+                role=UserRole.TEACHER.value,
+                is_active=False,
             )
         )
         db.commit()
