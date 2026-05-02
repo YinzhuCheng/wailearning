@@ -117,6 +117,7 @@ class Subject(Base):
     course_end_at = Column(DateTime(timezone=True), nullable=True)
     course_times = Column(Text, nullable=True)
     description = Column(String, nullable=True)
+    cover_image_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     teacher = relationship("User", back_populates="courses")

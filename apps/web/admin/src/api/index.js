@@ -158,8 +158,16 @@ const subjectsApi = {
   studentSelfDrop: subjectId => http.post(`/subjects/${subjectId}/student-self-drop`),
   get: id => http.get(`/subjects/${id}`),
   create: data => http.post('/subjects', data, { timeout: subjectsHeavyTimeout }),
-  update: (id, data) => http.put(`/subjects/${id}`, data, { timeout: subjectsHeavyTimeout }),
-  delete: id => http.delete(`/subjects/${id}`, { timeout: subjectsHeavyTimeout }),
+    update: (id, data) => http.put(`/subjects/${id}`, data, { timeout: subjectsHeavyTimeout }),
+    delete: id => http.delete(`/subjects/${id}`, { timeout: subjectsHeavyTimeout }),
+    uploadCoverImage: (subjectId, file) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return http.post(`/subjects/${subjectId}/cover-image`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        ...fileTransferRequestConfig
+      })
+    },
   getStudents: id => http.get(`/subjects/${id}/students`, { timeout: subjectsHeavyTimeout }),
   syncEnrollments: id => http.post(`/subjects/${id}/sync-enrollments`, {}, { timeout: subjectsHeavyTimeout }),
   rosterEnroll: (subjectId, data) => http.post(`/subjects/${subjectId}/roster-enroll`, data, { timeout: subjectsHeavyTimeout }),

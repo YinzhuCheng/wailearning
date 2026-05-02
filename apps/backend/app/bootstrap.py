@@ -82,6 +82,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_end_at TIMESTAMP",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_times TEXT",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description VARCHAR",
+        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS cover_image_url VARCHAR",
         "ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR NOT NULL DEFAULT 'required'",
         """
         CREATE TABLE IF NOT EXISTS course_enrollment_blocks (
