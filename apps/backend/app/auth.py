@@ -39,10 +39,17 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
+        token_ver = payload.get("tv")
     except JWTError:
         raise credentials_exception
     user = db.query(User).filter(User.username == username).first()
     if user is None:
+        raise credentials_exception
+    expected_ver = int(getattr(user, "token_version", 0) or 0)
+    if token_ver is None:
+        if expected_ver != 0:
+            raise credentials_exception
+    elif int(token_ver) != expected_ver:
         raise credentials_exception
     return user
 
