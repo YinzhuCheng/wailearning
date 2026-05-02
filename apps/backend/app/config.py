@@ -50,6 +50,15 @@ class Settings(BaseSettings):
     LLM_GRADING_TASK_STALE_SECONDS: int = 600
     DEFAULT_ESTIMATED_IMAGE_TOKENS: int = 850
 
+    # Per-preset outbound concurrency within each grading worker process (0 = unlimited).
+    LLM_PRESET_MAX_CONCURRENT_REQUESTS: int = 2
+    # After HTTP 429 on a preset, skip it for this many seconds when routing (same process).
+    LLM_PRESET_COOLDOWN_AFTER_429_SECONDS: float = 8.0
+    # Max seconds to wait for a slot on the same preset before rotating to another member.
+    LLM_PRESET_SLOT_BLOCK_SECONDS: float = 12.0
+    # Poll interval while waiting for a slot or cooldown expiry.
+    LLM_PRESET_SLOT_WAIT_SECONDS: float = 0.08
+
     # Optional: seed / override API key for the default LLM preset name (see bootstrap).
     DEFAULT_LLM_API_KEY: str = ""
 

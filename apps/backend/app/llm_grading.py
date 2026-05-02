@@ -83,6 +83,12 @@ from app.llm_token_quota import (
     resolve_max_parallel_grading_tasks,
 )
 from app.database import SessionLocal, engine
+from app.llm_endpoint_slots import (
+    blocking_acquire_preset_slot,
+    note_preset_rate_limited,
+    release_preset_slot,
+    try_acquire_preset_slot,
+)
 from app.llm_group_routing import GroupRoutingContext
 from app.models import (
     CourseLLMConfig,
@@ -1967,8 +1973,7 @@ def _grade_with_endpoint_group(
             group_state.apply_round_robin_start(task.id)
             while group_state.current_order:
                 link = group_state.current_order[0]
-                global_index += 1
-                preset: LLMEndpointPreset = link.preset
+                preset = link.preset
                 ok, reason = _preset_eligible_for_grading(preset, need_vision=need_vision)
                 if not ok:
                     last_error = reason
@@ -1989,62 +1994,83 @@ def _grade_with_endpoint_group(
                         }
                     )
                     continue
+                slot_ok = try_acquire_preset_slot(preset.id) or blocking_acquire_preset_slot(
+                    preset.id,
+                    timeout_seconds=float(settings.LLM_PRESET_SLOT_BLOCK_SECONDS or 0),
+                )
+                if not slot_ok:
+                    _append_llm_call_log(
+                        task,
+                        {
+                            "phase": "routing",
+                            "level": "info",
+                            "preset": getattr(preset, "name", None),
+                            "message": "预设并发槽已满，轮换组内下一端点。",
+                        },
+                    )
+                    group_state.rotate_head_to_end()
+                    _update_routing_artifact({"status": "preset_slot_busy_rotate"})
+                    continue
+                global_index += 1
                 task.current_endpoint_index = global_index
                 attempt_limit = max(1, int(preset.max_retries or 0) + 1)
-                member_done = False
-                for request_attempt in range(1, attempt_limit + 1):
-                    task.current_attempt = request_attempt
-                    try:
-                        score_result = _request_grade_from_endpoint(
-                            preset=preset,
-                            homework=homework,
-                            attempt=attempt,
-                            config=config,
-                            material=material,
-                            task=task,
-                        )
-                        score_result["endpoint_id"] = preset.id
-                        _update_routing_artifact({"status": "ok"})
-                        return score_result
-                    except RetryableLLMError as exc:
-                        last_error = str(exc)
-                        n_before = len(group_state.current_order)
-                        routing.note_failure(group_state, link, exc)
-                        if request_attempt >= attempt_limit:
-                            if n_before == 1:
-                                group_state.remove_member(link)
+                try:
+                    for request_attempt in range(1, attempt_limit + 1):
+                        task.current_attempt = request_attempt
+                        try:
+                            score_result = _request_grade_from_endpoint(
+                                preset=preset,
+                                homework=homework,
+                                attempt=attempt,
+                                config=config,
+                                material=material,
+                                task=task,
+                            )
+                            score_result["endpoint_id"] = preset.id
+                            _update_routing_artifact({"status": "ok"})
+                            return score_result
+                        except RetryableLLMError as exc:
+                            last_error = str(exc)
+                            if "HTTP 429" in last_error or "429" in last_error:
+                                note_preset_rate_limited(preset.id)
+                            n_before = len(group_state.current_order)
+                            routing.note_failure(group_state, link, exc)
+                            if request_attempt >= attempt_limit:
+                                if n_before == 1:
+                                    group_state.remove_member(link)
+                                _update_routing_artifact(
+                                    {
+                                        "status": "adaptive_shift",
+                                        "last_error": last_error,
+                                    }
+                                )
+                                break
                             _update_routing_artifact(
                                 {
-                                    "status": "adaptive_shift",
+                                    "status": "retry_backoff",
                                     "last_error": last_error,
                                 }
                             )
-                            member_done = True
+                            wait_seconds = min(
+                                int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
+                                120,
+                            )
+                            if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
+                                time.sleep(wait_seconds)
+                        except NonRetryableLLMError as exc:
+                            last_error = str(exc)
+                            routing.note_failure(group_state, link, exc)
+                            _update_routing_artifact({"status": "endpoint_error", "last_error": last_error})
+                            group_state.remove_member(link)
                             break
-                        _update_routing_artifact(
-                            {
-                                "status": "retry_backoff",
-                                "last_error": last_error,
-                            }
-                        )
-                        wait_seconds = min(
-                            int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
-                            120,
-                        )
-                        if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
-                            time.sleep(wait_seconds)
-                    except NonRetryableLLMError as exc:
-                        last_error = str(exc)
-                        routing.note_failure(group_state, link, exc)
-                        _update_routing_artifact({"status": "endpoint_error", "last_error": last_error})
-                        group_state.remove_member(link)
-                        member_done = True
-                        break
+                finally:
+                    release_preset_slot(preset.id)
         _update_routing_artifact({"status": "failed", "message": last_error or ""})
         raise NonRetryableLLMError(last_error or "所有组内端点都调用失败。")
 
     last_error_flat: Optional[str] = None
-    for endpoint_index, link in enumerate(flat_endpoints, start=1):
+    endpoint_index = 0
+    for link in flat_endpoints:
         preset: LLMEndpointPreset = link.preset
         ok, reason = _preset_eligible_for_grading(preset, need_vision=need_vision)
         if not ok:
@@ -2059,41 +2085,62 @@ def _grade_with_endpoint_group(
                 },
             )
             continue
+        slot_ok = try_acquire_preset_slot(preset.id) or blocking_acquire_preset_slot(
+            preset.id,
+            timeout_seconds=float(settings.LLM_PRESET_SLOT_BLOCK_SECONDS or 0),
+        )
+        if not slot_ok:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "routing",
+                    "level": "info",
+                    "preset": getattr(preset, "name", None),
+                    "message": "预设并发槽已满，尝试下一端点。",
+                },
+            )
+            continue
+        endpoint_index += 1
         task.current_endpoint_index = endpoint_index
         attempt_limit = max(1, int(preset.max_retries or 0) + 1)
-        for request_attempt in range(1, attempt_limit + 1):
-            task.current_attempt = request_attempt
-            try:
-                score_result = _request_grade_from_endpoint(
-                    preset=preset,
-                    homework=homework,
-                    attempt=attempt,
-                    config=config,
-                    material=material,
-                    task=task,
-                )
-                score_result["endpoint_id"] = preset.id
-                if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
-                    task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
-                        "version": 1,
-                        "mode": "legacy_priority",
-                        "status": "ok",
-                    }
-                    _flag_artifact_manifest_modified(task)
-                return score_result
-            except RetryableLLMError as exc:
-                last_error_flat = str(exc)
-                if request_attempt >= attempt_limit:
+        try:
+            for request_attempt in range(1, attempt_limit + 1):
+                task.current_attempt = request_attempt
+                try:
+                    score_result = _request_grade_from_endpoint(
+                        preset=preset,
+                        homework=homework,
+                        attempt=attempt,
+                        config=config,
+                        material=material,
+                        task=task,
+                    )
+                    score_result["endpoint_id"] = preset.id
+                    if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
+                        task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
+                            "version": 1,
+                            "mode": "legacy_priority",
+                            "status": "ok",
+                        }
+                        _flag_artifact_manifest_modified(task)
+                    return score_result
+                except RetryableLLMError as exc:
+                    last_error_flat = str(exc)
+                    if "HTTP 429" in last_error_flat or "429" in last_error_flat:
+                        note_preset_rate_limited(preset.id)
+                    if request_attempt >= attempt_limit:
+                        break
+                    wait_seconds = min(
+                        int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
+                        120,
+                    )
+                    if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
+                        time.sleep(wait_seconds)
+                except NonRetryableLLMError as exc:
+                    last_error_flat = str(exc)
                     break
-                wait_seconds = min(
-                    int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
-                    120,
-                )
-                if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
-                    time.sleep(wait_seconds)
-            except NonRetryableLLMError as exc:
-                last_error_flat = str(exc)
-                break
+        finally:
+            release_preset_slot(preset.id)
     if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
         task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
             "version": 1,
