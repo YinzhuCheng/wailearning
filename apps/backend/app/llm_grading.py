@@ -1538,6 +1538,9 @@ def record_discussion_usage_if_needed(
             billing_note=billing_note,
         )
     )
+
+
+def claim_grading_tasks_batch(max_tasks: int) -> list[int]:
     """
     Atomically move up to max_tasks rows from queued -> processing (oldest first).
     Returns list of task ids claimed in this transaction (empty if none).

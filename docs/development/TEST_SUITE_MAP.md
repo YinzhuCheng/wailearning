@@ -91,6 +91,8 @@ These tests are the closest to a user-visible workflow because they exercise:
 - browser automation,
 - UI-to-API convergence.
 
+Additional targeted suite: **`e2e-discussion-cover-llm-tier3.spec.js`** — discussion LLM (`invoke_llm`), long reply preview (3 logical lines + expand), and course cover (API + UI). Run only that file with `npx playwright test e2e-discussion-cover-llm-tier3.spec.js` from `apps/web/admin` when iterating on those features.
+
 They also have the highest dependence on the local execution environment.
 
 This directory also contains a future-coverage expansion file pair:

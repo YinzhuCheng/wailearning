@@ -267,7 +267,7 @@
                   class="cover-file-input"
                   @change="onCoverFileChange"
                 />
-                <el-button size="small" @click="triggerCoverPick">选择图片</el-button>
+                <el-button size="small" data-testid="subjects-course-cover-pick" @click="triggerCoverPick">选择图片</el-button>
                 <el-button
                   v-if="showCoverRemove"
                   size="small"
@@ -281,6 +281,7 @@
               </div>
             </div>
           </el-form-item>
+        </el-form>
         <template #footer>
           <el-button @click="dialogVisible = false">取消</el-button>
           <el-button type="primary" data-testid="subjects-course-save" :loading="submitting" @click="submitForm">

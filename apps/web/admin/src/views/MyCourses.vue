@@ -89,6 +89,7 @@
               :src="row.cover_image_url"
               fit="cover"
               class="catalog-cover-thumb"
+              data-testid="course-catalog-cover-thumb"
               :preview-src-list="[row.cover_image_url]"
               preview-teleported
             />
@@ -154,7 +155,7 @@
               class="course-card"
               :class="{ 'course-card-selected': userStore.selectedCourse?.id === course.id }"
             >
-              <div v-if="course.cover_image_url" class="course-card-cover">
+              <div v-if="course.cover_image_url" class="course-card-cover" data-testid="course-card-cover">
                 <el-image :src="course.cover_image_url" fit="cover" class="course-card-cover-img" />
               </div>
               <div class="course-card-header">

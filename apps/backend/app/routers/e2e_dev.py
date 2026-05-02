@@ -386,6 +386,7 @@ def reset_e2e_scenario(
         "course_orphan_id": course_orphan.id,
         "homework_id": hw.id,
         "material_discussion_id": mat_disc.id,
+        "discussion_llm_profile": disc_profile,
         "user_ids_for_batch": [u_plain.id, u_b.id],
         "teacher_user_id": t_own.id,
         "class_teacher": {"username": ct.username, "password": pwd},

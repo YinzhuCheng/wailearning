@@ -17,7 +17,7 @@
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
-      <div v-if="selectedCourse?.cover_image_url" class="course-cover-banner">
+      <div v-if="selectedCourse?.cover_image_url" class="course-cover-banner" data-testid="materials-course-cover-banner">
         <el-image :src="selectedCourse.cover_image_url" fit="cover" class="course-cover-banner__img" />
       </div>
       <div class="materials-layout">

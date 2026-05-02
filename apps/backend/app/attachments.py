@@ -143,6 +143,9 @@ async def save_course_cover_image(file: UploadFile, request: Request) -> dict[st
         "content_type": file.content_type,
         "size": size,
     }
+
+
+def delete_attachment_file(attachment_url: Optional[str]) -> None:
     target_path = get_attachment_file_path(attachment_url)
     if not target_path:
         return

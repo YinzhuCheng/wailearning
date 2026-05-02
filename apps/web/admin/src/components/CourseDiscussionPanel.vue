@@ -64,7 +64,13 @@
         />
 
         <div v-if="isStudent" class="discussion-llm-bar">
-          <el-button size="small" :type="llmMode ? 'primary' : 'default'" plain @click="toggleLlmMode">
+          <el-button
+            size="small"
+            :type="llmMode ? 'primary' : 'default'"
+            plain
+            data-testid="discussion-llm-toggle"
+            @click="toggleLlmMode"
+          >
             请 LLM 回复
           </el-button>
           <el-text v-if="llmMode" type="info" size="small">
@@ -80,7 +86,13 @@
           :placeholder="inputPlaceholder"
           class="discussion-input"
         />
-        <el-button type="primary" :loading="posting" :disabled="!draft.trim()" @click="submit">
+        <el-button
+          type="primary"
+          :loading="posting"
+          :disabled="!draft.trim()"
+          data-testid="discussion-submit"
+          @click="submit"
+        >
           {{ llmMode ? '发送（调用智能助教）' : '发表回复' }}
         </el-button>
       </div>
@@ -351,12 +363,12 @@ const pollUntilAssistant = async (afterUserEntryId, maxSeconds = 90) => {
   }, 1500)
 }
 
-const FORBIDDEN_AT = /@(?!LLM\b)/i
+const FORBIDDEN_AT = /@(?!LLM\b)[\w.-]+/gi
 
 watch(draft, val => {
   if (typeof val !== 'string') return
   if (FORBIDDEN_AT.test(val)) {
-    draft.value = val.replace(FORBIDDEN_AT, '@')
+    draft.value = val.replace(FORBIDDEN_AT, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n')
     ElMessage.warning('讨论区不支持 @ 其他用户或助教，已自动移除。')
   }
 })

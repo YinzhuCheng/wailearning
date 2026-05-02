@@ -19,6 +19,7 @@ from app.course_access import (
     sync_course_enrollments,
 )
 from app.attachments import delete_attachment_file_if_unreferenced
+from app.database import get_db
 from app.models import (
     Attendance,
     Class,
