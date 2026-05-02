@@ -160,12 +160,12 @@
             </el-table-column>
             <el-table-column label="提交说明（缩略）" min-width="200">
               <template #default="{ row }">
-                <span>{{ row.content_preview || '—' }}</span>
+                <span :data-testid="`submission-content-preview-${row.student_no || row.student_id}`">{{ row.content_preview || '—' }}</span>
               </template>
             </el-table-column>
             <el-table-column label="评语（缩略）" min-width="160">
               <template #default="{ row }">
-                <span>{{ row.comment_preview || '—' }}</span>
+                <span :data-testid="`submission-comment-preview-${row.student_no || row.student_id}`">{{ row.comment_preview || '—' }}</span>
               </template>
             </el-table-column>
             <el-table-column label="申诉" width="100">
