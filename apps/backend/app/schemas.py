@@ -107,6 +107,8 @@ class CourseDiscussionEntryResponse(BaseModel):
     author_username: str
     author_role: str
     body: str
+    message_kind: str = "human"
+    llm_invocation: bool = False
     created_at: datetime
 
     class Config:
@@ -126,6 +128,7 @@ class CourseDiscussionCreate(BaseModel):
     subject_id: int = Field(..., ge=1)
     class_id: int = Field(..., ge=1)
     body: str = Field(..., min_length=1, max_length=8000)
+    invoke_llm: bool = False
 
 
 class StudentUserBatchCreateRequest(BaseModel):
@@ -318,6 +321,8 @@ class SubjectUpdate(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    remove_cover_image: bool = False
 
 
 class SubjectResponse(BaseModel):
@@ -334,6 +339,7 @@ class SubjectResponse(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: List[CourseTimeItem] = Field(default_factory=list)
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
     teacher_name: Optional[str] = None
     class_name: Optional[str] = None
     student_count: int = 0
@@ -1348,7 +1354,7 @@ class CourseLLMConfigUpdate(BaseModel):
     estimated_chars_per_token: float = Field(default=4.0, gt=0)
     estimated_image_tokens: int = Field(default=850, ge=1)
     max_input_tokens: int = Field(default=16000, ge=1000)
-    max_output_tokens: int = Field(default=1200, ge=1)
+    max_output_tokens: int = Field(default=1000, ge=1)
     quota_timezone: str = "Asia/Shanghai"
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
@@ -1385,7 +1391,7 @@ class CourseLLMConfigResponse(BaseModel):
     estimated_chars_per_token: float = 4.0
     estimated_image_tokens: int = 850
     max_input_tokens: int = 16000
-    max_output_tokens: int = 1200
+    max_output_tokens: int = 1000
     quota_timezone: str = "Asia/Shanghai"
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None

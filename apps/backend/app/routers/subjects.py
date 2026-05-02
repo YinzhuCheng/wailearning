@@ -1,7 +1,7 @@
 import json
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from app.course_access import (
     remove_course_enrollment,
     sync_course_enrollments,
 )
+from app.attachments import delete_attachment_file_if_unreferenced
 from app.database import get_db
 from app.models import (
     Attendance,
@@ -31,6 +32,7 @@ from app.models import (
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    DiscussionLLMJob,
     Homework,
     HomeworkGradeAppeal,
     Notification,
@@ -45,6 +47,7 @@ from app.models import (
 )
 from app.routers.homework import _purge_homework_row
 from app.schemas import (
+    AttachmentUploadResponse,
     CourseTimeItem,
     CourseEnrollmentResponse,
     CourseEnrollmentTypeUpdate,
@@ -230,6 +233,7 @@ def _serialize_course(course: Subject, db: Session, *, student_count: Optional[i
         course_end_at=primary_course_time.course_end_at if primary_course_time else course.course_end_at,
         course_times=course_times,
         description=course.description,
+        cover_image_url=course.cover_image_url,
         teacher_name=course.teacher.real_name if course.teacher else None,
         class_name=course.class_obj.name if course.class_obj else None,
         student_count=student_count,
@@ -688,6 +692,18 @@ def update_subject(
         if value is not None:
             setattr(course, field, value)
 
+    if subject_data.remove_cover_image:
+        prev = course.cover_image_url
+        course.cover_image_url = None
+        if prev:
+            delete_attachment_file_if_unreferenced(db, prev)
+    elif subject_data.cover_image_url is not None:
+        new_url = (subject_data.cover_image_url or "").strip() or None
+        prev = course.cover_image_url
+        if prev and prev != new_url:
+            delete_attachment_file_if_unreferenced(db, prev)
+        course.cover_image_url = new_url
+
     if (
         subject_data.course_times is not None
         or subject_data.weekly_schedule is not None
@@ -727,6 +743,43 @@ def update_subject(
     return _serialize_course(course, db)
 
 
+@router.post("/{subject_id}/cover-image", response_model=AttachmentUploadResponse)
+async def upload_subject_cover_image(
+    subject_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role == UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Students cannot upload course covers.")
+
+    if current_user.role == UserRole.ADMIN:
+        pass
+    else:
+        try:
+            ensure_course_access(subject_id, current_user, db)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Course not found.")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="You do not have access to this course.")
+
+    course = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+
+    from app.attachments import save_course_cover_image
+
+    uploaded = await save_course_cover_image(file, request)
+    prev = course.cover_image_url
+    course.cover_image_url = str(uploaded["attachment_url"])
+    if prev and prev != course.cover_image_url:
+        delete_attachment_file_if_unreferenced(db, prev)
+    db.commit()
+    db.refresh(course)
+    return AttachmentUploadResponse(**uploaded)
+
+
 @router.delete("/{subject_id}")
 def delete_subject(
     subject_id: int,
@@ -746,6 +799,8 @@ def delete_subject(
     course = db.query(Subject).filter(Subject.id == subject_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
+
+    cover_url = course.cover_image_url
 
     hw_ids = [row[0] for row in db.query(Homework.id).filter(Homework.subject_id == subject_id).all()]
     hw_appeal_ids = []
@@ -777,6 +832,8 @@ def delete_subject(
 
     for hw in db.query(Homework).filter(Homework.subject_id == subject_id).all():
         _purge_homework_row(db, hw)
+
+    db.query(DiscussionLLMJob).filter(DiscussionLLMJob.subject_id == subject_id).delete(synchronize_session=False)
 
     db.query(CourseDiscussionEntry).filter(CourseDiscussionEntry.subject_id == subject_id).delete(
         synchronize_session=False
@@ -817,6 +874,8 @@ def delete_subject(
     db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == subject_id).delete(synchronize_session=False)
     db.delete(course)
     db.commit()
+    if cover_url:
+        delete_attachment_file_if_unreferenced(db, cover_url)
     return {"message": "Course deleted successfully."}
 
 

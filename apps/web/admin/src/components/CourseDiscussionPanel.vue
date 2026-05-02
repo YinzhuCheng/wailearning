@@ -22,11 +22,31 @@
         <div v-if="!entries.length && !loading" class="muted-text">暂无讨论，发表第一条回复吧。</div>
         <div v-for="row in entries" :key="row.id" class="discussion-row">
           <div class="discussion-row__meta">
-            <span class="discussion-row__name">{{ row.author_real_name }}</span>
-            <el-tag size="small" effect="plain">{{ roleLabel(row.author_role) }}</el-tag>
+            <span class="discussion-row__name">{{ displayAuthorName(row) }}</span>
+            <el-tag v-if="row.message_kind === 'llm_assistant'" type="success" size="small" effect="plain">
+              智能助教
+            </el-tag>
+            <el-tag v-else size="small" effect="plain">{{ roleLabel(row.author_role) }}</el-tag>
+            <el-tag v-if="row.llm_invocation" type="warning" size="small" effect="plain">调用智能助教</el-tag>
             <span class="discussion-row__time">{{ formatTime(row.created_at) }}</span>
           </div>
-          <div class="discussion-row__body">{{ row.body }}</div>
+          <div
+            class="discussion-row__body"
+            :class="{
+              'discussion-row__body--clickable': isTruncated(row.body) && !isExpanded(row.id)
+            }"
+            @click="onBodyClick(row)"
+          >
+            <span class="discussion-row__text">{{ displayBody(row) }}</span>
+            <button
+              v-if="isTruncated(row.body) && isExpanded(row.id)"
+              type="button"
+              class="discussion-row__collapse-btn"
+              @click.stop="collapseRow(row.id)"
+            >
+              收起
+            </button>
+          </div>
           <div v-if="canDelete(row)" class="discussion-row__actions">
             <el-button type="danger" link size="small" @click="removeEntry(row)">删除</el-button>
           </div>
@@ -43,17 +63,37 @@
           @current-change="loadList"
         />
 
+        <div v-if="isStudent" class="discussion-llm-bar">
+          <el-button
+            size="small"
+            :type="llmMode ? 'primary' : 'default'"
+            plain
+            data-testid="discussion-llm-toggle"
+            @click="toggleLlmMode"
+          >
+            请 LLM 回复
+          </el-button>
+          <el-text v-if="llmMode" type="info" size="small">
+            将附带「@LLM」并消耗你的课程 LLM 额度；输出长度由教师在课程 LLM 设置中的 max_output_tokens 控制。
+          </el-text>
+        </div>
         <el-input
           v-model="draft"
           type="textarea"
           :rows="3"
           maxlength="8000"
           show-word-limit
-          placeholder="输入讨论内容（需登录，不支持匿名）"
+          :placeholder="inputPlaceholder"
           class="discussion-input"
         />
-        <el-button type="primary" :loading="posting" :disabled="!draft.trim()" @click="submit">
-          发表回复
+        <el-button
+          type="primary"
+          :loading="posting"
+          :disabled="!draft.trim()"
+          data-testid="discussion-submit"
+          @click="submit"
+        >
+          {{ llmMode ? '发送（调用智能助教）' : '发表回复' }}
         </el-button>
       </div>
     </template>
@@ -61,11 +101,17 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+
+/** Each segment renders as one logical line: a text line (may be empty) or one image. */
+const PREVIEW_LINE_LIMIT = 3
+
+/** Markdown ![alt](url) or HTML <img ...> each counts as one line. */
+const INLINE_IMAGE_RE = /!\[[^\]]*\]\([^)]+\)|<img\b[^>]*>/gi
 
 const props = defineProps({
   targetType: {
@@ -78,7 +124,9 @@ const props = defineProps({
   subjectId: { type: Number, default: null },
   classId: { type: Number, default: null },
   /** Backend hint: homework/material not linked to a subject. */
-  discussionRequiresContext: { type: Boolean, default: false }
+  discussionRequiresContext: { type: Boolean, default: false },
+  /** Student UI: show "请 LLM 回复" and allow invoke_llm. Teachers post plain comments only. */
+  isStudent: { type: Boolean, default: false }
 })
 
 const userStore = useUserStore()
@@ -115,9 +163,27 @@ const page = ref(1)
 const total = ref(0)
 const entries = ref([])
 const draft = ref('')
+const llmMode = ref(false)
+/** entry id -> expanded full body */
+const expandedEntryIds = ref(new Set())
+
+let pollTimer = null
+let pollAbort = null
+
+const inputPlaceholder = computed(() => {
+  if (llmMode.value) {
+    return '首行已自动包含 @LLM（勿删），下一行起输入要向智能助教说明的问题…'
+  }
+  return '输入讨论内容（需登录，不支持匿名）'
+})
 
 const roleLabel = role =>
   ({ admin: '管理员', class_teacher: '班主任', teacher: '教师', student: '学生' }[role] || role || '—')
+
+const displayAuthorName = row => {
+  if (row.message_kind === 'llm_assistant') return '智能助教'
+  return row.author_real_name
+}
 
 const formatTime = v => {
   if (!v) return ''
@@ -136,6 +202,105 @@ const canDelete = row => {
   return userStore.canManageTeaching
 }
 
+const stopPolling = () => {
+  if (pollTimer != null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  if (pollAbort) {
+    try {
+      pollAbort.abort()
+    } catch {
+      /* ignore */
+    }
+    pollAbort = null
+  }
+}
+
+/**
+ * Split body into line-sized segments: each `\\n`-split text line is one segment;
+ * each markdown image and each HTML <img> tag is one segment (in order).
+ */
+function lineSegmentsFromBody(body) {
+  const raw = body == null ? '' : String(body)
+  const segments = []
+  let last = 0
+  let m
+  const re = new RegExp(INLINE_IMAGE_RE.source, 'gi')
+  while ((m = re.exec(raw)) !== null) {
+    if (m.index > last) {
+      const chunk = raw.slice(last, m.index)
+      for (const line of chunk.split('\n')) {
+        segments.push({ kind: 'text', value: line })
+      }
+    }
+    segments.push({ kind: 'image', value: m[0] })
+    last = m.index + m[0].length
+  }
+  if (last < raw.length) {
+    for (const line of raw.slice(last).split('\n')) {
+      segments.push({ kind: 'text', value: line })
+    }
+  }
+  if (!segments.length) {
+    segments.push({ kind: 'text', value: '' })
+  }
+  return segments
+}
+
+/** Rebuild original string from segments (inverse of lineSegmentsFromBody). */
+function joinSegments(parts) {
+  let s = ''
+  for (let i = 0; i < parts.length; i += 1) {
+    const seg = parts[i]
+    if (seg.kind === 'text' && i > 0 && parts[i - 1].kind === 'text') {
+      s += '\n'
+    }
+    s += seg.value
+  }
+  return s
+}
+
+function isTruncated(body) {
+  return lineSegmentsFromBody(body).length > PREVIEW_LINE_LIMIT
+}
+
+function isExpanded(id) {
+  return expandedEntryIds.value.has(id)
+}
+
+function previewText(body) {
+  const segs = lineSegmentsFromBody(body)
+  if (segs.length <= PREVIEW_LINE_LIMIT) {
+    return joinSegments(segs)
+  }
+  const head = segs.slice(0, PREVIEW_LINE_LIMIT)
+  return `${joinSegments(head)}...`
+}
+
+function displayBody(row) {
+  const body = row?.body ?? ''
+  if (isExpanded(row.id)) {
+    return body
+  }
+  return previewText(body)
+}
+
+function onBodyClick(row) {
+  if (!isTruncated(row.body) || isExpanded(row.id)) {
+    return
+  }
+  const next = new Set(expandedEntryIds.value)
+  next.add(row.id)
+  expandedEntryIds.value = next
+}
+
+function collapseRow(id) {
+  const next = new Set(expandedEntryIds.value)
+  next.delete(id)
+  expandedEntryIds.value = next
+}
+
 const loadList = async () => {
   if (!canUseDiscussion.value) return
   loading.value = true
@@ -150,6 +315,7 @@ const loadList = async () => {
     })
     total.value = res?.total ?? 0
     entries.value = res?.data ?? []
+    expandedEntryIds.value = new Set()
   } catch (e) {
     console.error(e)
     ElMessage.error(e?.response?.data?.detail || '加载讨论失败')
@@ -158,23 +324,100 @@ const loadList = async () => {
   }
 }
 
+const pollUntilAssistant = async (afterUserEntryId, maxSeconds = 90) => {
+  stopPolling()
+  const ac = new AbortController()
+  pollAbort = ac
+  const deadline = Date.now() + maxSeconds * 1000
+  pollTimer = setInterval(async () => {
+    if (Date.now() > deadline) {
+      stopPolling()
+      ElMessage.warning('智能助教响应超时，请稍后刷新页面查看。')
+      return
+    }
+    try {
+      const res = await api.discussions.listSignal(
+        {
+          target_type: props.targetType,
+          target_id: props.targetId,
+          subject_id: resolvedSubjectId.value,
+          class_id: resolvedClassId.value,
+          page: 1,
+          page_size: Math.min(50, Math.max(effectivePageSize.value, 20))
+        },
+        ac.signal
+      )
+      const list = res?.data ?? []
+      const hasAssistantAfter = list.some(r => r.message_kind === 'llm_assistant' && r.id > afterUserEntryId)
+      if (hasAssistantAfter) {
+        stopPolling()
+        const lastPage = Math.max(1, Math.ceil((res?.total ?? total.value) / effectivePageSize.value))
+        page.value = lastPage
+        await loadList()
+        ElMessage.success('智能助教已回复')
+      }
+    } catch (e) {
+      if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return
+      console.error(e)
+    }
+  }, 1500)
+}
+
+const FORBIDDEN_AT = /@(?!LLM\b)[\w.-]+/gi
+
+watch(draft, val => {
+  if (typeof val !== 'string') return
+  if (FORBIDDEN_AT.test(val)) {
+    draft.value = val.replace(FORBIDDEN_AT, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n')
+    ElMessage.warning('讨论区不支持 @ 其他用户或助教，已自动移除。')
+  }
+})
+
+const ensureLlmPrefix = () => {
+  const t = draft.value || ''
+  if (!/^\s*@LLM\b/i.test(t)) {
+    draft.value = t.trim() ? `@LLM\n${t}` : '@LLM\n'
+  }
+}
+
+const toggleLlmMode = () => {
+  llmMode.value = !llmMode.value
+  if (llmMode.value) ensureLlmPrefix()
+  else {
+    draft.value = (draft.value || '').replace(/^\s*@LLM\s*\n?/i, '').trimStart()
+  }
+}
+
 const submit = async () => {
   const text = draft.value.trim()
   if (!text || !canUseDiscussion.value) return
+  if (llmMode.value && props.isStudent) {
+    const inner = text.replace(/^\s*@LLM\s*\n?/i, '').trim()
+    if (!inner) {
+      ElMessage.warning('请填写要向智能助教说明的内容（@LLM 之后不能为空）。')
+      return
+    }
+  }
   posting.value = true
   try {
-    await api.discussions.create({
+    const invokeLlm = Boolean(llmMode.value && props.isStudent)
+    const res = await api.discussions.create({
       target_type: props.targetType,
       target_id: props.targetId,
       subject_id: resolvedSubjectId.value,
       class_id: resolvedClassId.value,
-      body: text
+      body: text,
+      invoke_llm: invokeLlm
     })
     draft.value = ''
+    llmMode.value = false
     const lastPage = Math.max(1, Math.ceil((total.value + 1) / effectivePageSize.value))
     page.value = lastPage
     await loadList()
-    ElMessage.success('已发表')
+    ElMessage.success(invokeLlm ? '已提交，正在请求智能助教…' : '已发表')
+    if (invokeLlm && res?.id != null) {
+      pollUntilAssistant(Number(res.id))
+    }
   } catch (e) {
     ElMessage.error(e?.response?.data?.detail || '发表失败')
   } finally {
@@ -200,6 +443,7 @@ const removeEntry = async row => {
 watch(
   () => [props.targetId, props.targetType, props.subjectId, props.classId, props.discussionRequiresContext],
   () => {
+    stopPolling()
     page.value = 1
     loadList()
   }
@@ -208,6 +452,7 @@ watch(
 watch(
   () => userStore.userInfo?.discussion_page_size,
   () => {
+    stopPolling()
     page.value = 1
     loadList()
   }
@@ -216,10 +461,15 @@ watch(
 watch(
   () => [resolvedSubjectId.value, resolvedClassId.value],
   () => {
+    stopPolling()
     page.value = 1
     loadList()
   }
 )
+
+onBeforeUnmount(() => {
+  stopPolling()
+})
 
 loadList()
 </script>
@@ -278,6 +528,35 @@ loadList()
   color: #334155;
 }
 
+.discussion-row__body--clickable {
+  cursor: pointer;
+}
+
+.discussion-row__body--clickable:hover .discussion-row__text {
+  color: #2563eb;
+}
+
+.discussion-row__text {
+  display: inline;
+  vertical-align: baseline;
+}
+
+.discussion-row__collapse-btn {
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--el-color-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  vertical-align: baseline;
+}
+
+.discussion-row__collapse-btn:hover {
+  color: var(--el-color-primary-light-3);
+}
+
 .discussion-row__actions {
   margin-top: 6px;
 }
@@ -285,6 +564,14 @@ loadList()
 .discussion-pager {
   margin: 12px 0;
   justify-content: flex-end;
+}
+
+.discussion-llm-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .discussion-input {

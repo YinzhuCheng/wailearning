@@ -250,6 +250,37 @@
           <el-form-item label="课程简介" prop="description">
             <el-input v-model="form.description" type="textarea" :rows="4" />
           </el-form-item>
+          <el-form-item label="课程封面">
+            <div class="cover-field">
+              <el-image
+                v-if="coverPreviewSrc"
+                :src="coverPreviewSrc"
+                fit="cover"
+                class="cover-preview"
+              />
+              <div v-else class="cover-preview cover-preview--empty">无封面</div>
+              <div class="cover-actions">
+                <input
+                  ref="coverFileInputRef"
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,image/svg+xml,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
+                  class="cover-file-input"
+                  @change="onCoverFileChange"
+                />
+                <el-button size="small" data-testid="subjects-course-cover-pick" @click="triggerCoverPick">选择图片</el-button>
+                <el-button
+                  v-if="showCoverRemove"
+                  size="small"
+                  type="danger"
+                  plain
+                  @click="clearCover"
+                >
+                  移除封面
+                </el-button>
+                <p class="cover-hint">JPG / PNG / GIF / WebP / BMP / SVG，单张不超过 10MB。留空则选课与资料区保持原样布局。</p>
+              </div>
+            </div>
+          </el-form-item>
         </el-form>
         <template #footer>
           <el-button @click="dialogVisible = false">取消</el-button>
@@ -497,6 +528,7 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const editingCourse = ref(null)
 const formRef = ref(null)
+const coverFileInputRef = ref(null)
 const courseDetailVisible = ref(false)
 const courseDetailLoading = ref(false)
 const detailCourse = ref(null)
@@ -590,6 +622,28 @@ const form = reactive({
   description: ''
 })
 
+const coverOriginalUrl = ref('')
+const pendingCoverFile = ref(null)
+const localCoverPreviewUrl = ref('')
+
+const revokeLocalCoverPreview = () => {
+  if (localCoverPreviewUrl.value) {
+    try {
+      URL.revokeObjectURL(localCoverPreviewUrl.value)
+    } catch {
+      /* ignore */
+    }
+    localCoverPreviewUrl.value = ''
+  }
+}
+
+const coverPreviewSrc = computed(() => {
+  if (localCoverPreviewUrl.value) return localCoverPreviewUrl.value
+  return coverOriginalUrl.value || ''
+})
+
+const showCoverRemove = computed(() => Boolean(coverOriginalUrl.value || pendingCoverFile.value))
+
 const validateCourseTimes = (_rule, value, callback) => {
   if (!Array.isArray(value) || !value.length) {
     callback(new Error('请至少添加一组课程时间'))
@@ -625,6 +679,12 @@ const rules = {
 }
 
 const resetForm = () => {
+  revokeLocalCoverPreview()
+  pendingCoverFile.value = null
+  coverOriginalUrl.value = ''
+  if (coverFileInputRef.value) {
+    coverFileInputRef.value.value = ''
+  }
   Object.assign(form, {
     name: '',
     class_id: null,
@@ -800,6 +860,12 @@ const openCreateDialog = () => {
 
 const openEditDialog = course => {
   editingCourse.value = course
+  revokeLocalCoverPreview()
+  pendingCoverFile.value = null
+  coverOriginalUrl.value = course.cover_image_url || ''
+  if (coverFileInputRef.value) {
+    coverFileInputRef.value.value = ''
+  }
   const normalizedCourseTimes = normalizeEditableCourseTimes(course)
 
   Object.assign(form, {
@@ -813,6 +879,70 @@ const openEditDialog = course => {
     description: course.description || ''
   })
   dialogVisible.value = true
+}
+
+const triggerCoverPick = () => {
+  coverFileInputRef.value?.click()
+}
+
+const onCoverFileChange = async e => {
+  const input = e.target
+  const file = input?.files?.[0]
+  if (!file) return
+  const maxBytes = 10 * 1024 * 1024
+  if (file.size > maxBytes) {
+    ElMessage.error('封面图片须不超过 10MB')
+    input.value = ''
+    return
+  }
+  if (editingCourse.value?.id) {
+    try {
+      const res = await api.courses.uploadCoverImage(editingCourse.value.id, file)
+      coverOriginalUrl.value = res?.attachment_url || ''
+      revokeLocalCoverPreview()
+      pendingCoverFile.value = null
+      ElMessage.success('封面已更新')
+      await loadCourses()
+      const updated = (courses.value || []).find(c => String(c.id) === String(editingCourse.value.id))
+      if (updated) {
+        editingCourse.value = updated
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      input.value = ''
+    }
+    return
+  }
+  revokeLocalCoverPreview()
+  pendingCoverFile.value = file
+  localCoverPreviewUrl.value = URL.createObjectURL(file)
+  input.value = ''
+}
+
+const clearCover = async () => {
+  if (pendingCoverFile.value) {
+    revokeLocalCoverPreview()
+    pendingCoverFile.value = null
+    if (coverFileInputRef.value) {
+      coverFileInputRef.value.value = ''
+    }
+    return
+  }
+  if (editingCourse.value?.id && coverOriginalUrl.value) {
+    try {
+      await api.courses.update(editingCourse.value.id, { remove_cover_image: true })
+      coverOriginalUrl.value = ''
+      ElMessage.success('已移除课程封面')
+      await loadCourses()
+      const updated = (courses.value || []).find(c => String(c.id) === String(editingCourse.value.id))
+      if (updated) {
+        editingCourse.value = updated
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
 }
 
 const getCourseTimeLines = course =>
@@ -840,9 +970,20 @@ const submitForm = async () => {
       await api.courses.update(editingCourse.value.id, payload)
       ElMessage.success('课程已更新')
     } else {
-      await api.courses.create(payload)
+      const created = await api.courses.create(payload)
       ElMessage.success('课程已创建')
+      if (pendingCoverFile.value && created?.id) {
+        try {
+          await api.courses.uploadCoverImage(created.id, pendingCoverFile.value)
+        } catch (err) {
+          console.error(err)
+          ElMessage.warning('课程已创建，但封面上传失败，可在编辑中重试。')
+        }
+      }
     }
+
+    revokeLocalCoverPreview()
+    pendingCoverFile.value = null
 
     dialogVisible.value = false
     await loadCourses()
@@ -1332,5 +1473,46 @@ watch(
   margin-bottom: 12px;
   color: #475569;
   font-size: 14px;
+}
+
+.cover-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.cover-preview {
+  width: 160px;
+  height: 100px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #f8fafc;
+}
+
+.cover-preview--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.cover-actions {
+  flex: 1;
+  min-width: 200px;
+}
+
+.cover-file-input {
+  display: none;
+}
+
+.cover-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
 }
 </style>

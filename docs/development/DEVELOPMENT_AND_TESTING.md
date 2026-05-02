@@ -203,6 +203,8 @@ Recent behavior coverage includes scenarios such as:
 - quota exhaustion followed by recovery,
 - disable-then-reenable LLM grading flows.
 
+Browser note: `tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js` (15 cases) exercises **discussion LLM assistant**, **long-body preview/collapse**, and **course cover** flows against the seeded scenario; `POST /api/e2e/dev/reset-scenario` now seeds a per-run **`discussion_llm_profile`** plus an enabled course LLM row wired to the mock chat endpoint so discussion jobs can complete without manual admin setup.
+
 ## Practical Testing Rules
 
 - Assert authoritative business state before asserting visual transitions.

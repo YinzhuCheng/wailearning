@@ -16,6 +16,16 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 UPLOADS_DIR = Path(settings.UPLOADS_DIR).expanduser() if settings.UPLOADS_DIR else REPO_ROOT / "uploads"
 ATTACHMENTS_DIR = UPLOADS_DIR / "attachments"
 MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024
+COURSE_COVER_MAX_BYTES = 10 * 1024 * 1024
+COURSE_COVER_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+COURSE_COVER_IMAGE_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/svg+xml",
+}
 BLOCKED_ATTACHMENT_EXTENSIONS = {
     ".apk",
     ".app",
@@ -100,6 +110,41 @@ async def save_attachment(file: UploadFile, request: Request) -> dict[str, objec
     }
 
 
+async def save_course_cover_image(file: UploadFile, request: Request) -> dict[str, object]:
+    """Course cover: common raster/SVG formats, max 10 MiB."""
+    ensure_upload_directories()
+    filename = (file.filename or "").strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="Please select an image file to upload.")
+    extension = Path(filename).suffix.lower()
+    if extension not in COURSE_COVER_IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported image format. Use JPG, PNG, GIF, WebP, BMP, or SVG.",
+        )
+    ct = (file.content_type or "").strip().lower()
+    if ct and ct not in COURSE_COVER_IMAGE_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="File must be a common image type (e.g. image/jpeg, image/png).")
+
+    content = await file.read()
+    size = len(content)
+    if size == 0:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    if size > COURSE_COVER_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Course cover image must be 10 MB or smaller.")
+
+    stored_name = f"{uuid4().hex}{extension}"
+    target_path = ATTACHMENTS_DIR / stored_name
+    target_path.write_bytes(content)
+
+    return {
+        "attachment_name": file.filename,
+        "attachment_url": str(request.url_for("download_attachment_by_name", stored_name=stored_name)),
+        "content_type": file.content_type,
+        "size": size,
+    }
+
+
 def delete_attachment_file(attachment_url: Optional[str]) -> None:
     target_path = get_attachment_file_path(attachment_url)
     if not target_path:
@@ -112,9 +157,12 @@ def attachment_is_referenced(db: Session, attachment_url: Optional[str]) -> bool
     if not attachment_url:
         return False
 
-    from app.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, User
+    from app.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, Subject, User
 
     if db.query(User).filter(User.avatar_url == attachment_url).first():
+        return True
+
+    if db.query(Subject).filter(Subject.cover_image_url == attachment_url).first():
         return True
 
     references = [

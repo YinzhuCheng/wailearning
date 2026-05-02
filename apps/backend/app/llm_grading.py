@@ -87,11 +87,14 @@ from app.llm_group_routing import GroupRoutingContext
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
+    DiscussionLLMJob,
     Homework,
     HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
+    LLMDiscussionQuotaReservation,
+    LLMDiscussionTokenUsageLog,
     LLMEndpointPreset,
     LLMGroup,
     LLMQuotaReservation,
@@ -1183,6 +1186,21 @@ def _get_used_tokens_for_scope(
             total += int(item.total_tokens)
         else:
             total += int(item.output_tokens or 0)
+    dq = db.query(LLMDiscussionTokenUsageLog).filter(
+        LLMDiscussionTokenUsageLog.usage_date == usage_date,
+        LLMDiscussionTokenUsageLog.timezone == timezone_name,
+    )
+    if student_id is not None:
+        dq = dq.filter(LLMDiscussionTokenUsageLog.student_id == student_id)
+    if subject_id is not None:
+        dq = dq.filter(LLMDiscussionTokenUsageLog.subject_id == subject_id)
+    for item in dq.all():
+        if item.input_tokens is not None:
+            total += int(item.input_tokens)
+        elif item.total_tokens is not None:
+            total += int(item.total_tokens)
+        else:
+            total += int(item.output_tokens or 0)
     return total
 
 
@@ -1203,7 +1221,17 @@ def _sum_reserved_tokens(
     if subject_id is not None:
         q = q.filter(LLMQuotaReservation.subject_id == subject_id)
     val = q.scalar()
-    return int(val or 0)
+    total = int(val or 0)
+    q2 = db.query(func.coalesce(func.sum(LLMDiscussionQuotaReservation.reserved_tokens), 0)).filter(
+        LLMDiscussionQuotaReservation.usage_date == usage_date,
+        LLMDiscussionQuotaReservation.timezone == timezone_name,
+    )
+    if student_id is not None:
+        q2 = q2.filter(LLMDiscussionQuotaReservation.student_id == student_id)
+    if subject_id is not None:
+        q2 = q2.filter(LLMDiscussionQuotaReservation.subject_id == subject_id)
+    total += int(q2.scalar() or 0)
+    return total
 
 
 def _hash_to_pg_advisory_key(label: str) -> int:
@@ -1393,6 +1421,123 @@ def record_usage_if_needed(
     task.billed_input_tokens = prompt_tokens
     task.billed_output_tokens = completion_tokens
     task.billed_total_tokens = total_tokens
+
+
+def release_discussion_quota_reservation(db: Session, job_id: int) -> None:
+    db.query(LLMDiscussionQuotaReservation).filter(LLMDiscussionQuotaReservation.job_id == job_id).delete(
+        synchronize_session=False
+    )
+
+
+def reserve_discussion_quota_tokens(
+    db: Session,
+    job: DiscussionLLMJob,
+    config: CourseLLMConfig,
+    *,
+    student_id: int,
+    subject_id: int,
+    estimated_tokens: int,
+) -> tuple[bool, Optional[str]]:
+    """Same locking + caps as grading reservations, keyed by discussion job id."""
+    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+
+    def _try_insert(sess: Session) -> tuple[bool, Optional[str]]:
+        release_discussion_quota_reservation(sess, job.id)
+        ok, err = _quota_precheck_in_session(
+            sess,
+            config,
+            student_id=student_id,
+            subject_id=subject_id,
+            estimated_tokens=estimated_tokens,
+        )
+        if not ok:
+            return ok, err
+        sess.add(
+            LLMDiscussionQuotaReservation(
+                job_id=job.id,
+                student_id=student_id,
+                subject_id=subject_id,
+                usage_date=usage_date,
+                timezone=timezone_name,
+                reserved_tokens=int(estimated_tokens),
+            )
+        )
+        sess.flush()
+        return True, None
+
+    if engine.dialect.name == "postgresql":
+        keys = _pg_quota_advisory_keys(
+            student_id=student_id,
+            subject_id=int(subject_id or 0),
+            usage_date=usage_date,
+            timezone_name=timezone_name,
+            effective_student_daily_cap=resolve_effective_daily_student_tokens(db, student_id),
+        )
+        with engine.begin() as conn:
+            for k in keys:
+                conn.execute(text("SELECT pg_advisory_xact_lock(CAST(:k AS BIGINT))"), {"k": k})
+            inner = Session(bind=conn, autoflush=False, autocommit=False)
+            try:
+                ok, err = _try_insert(inner)
+                if not ok:
+                    return ok, err
+            except IntegrityError:
+                return True, None
+            finally:
+                inner.close()
+        return True, None
+
+    with _quota_serialization_lock:
+        return _try_insert(db)
+
+
+def record_discussion_usage_if_needed(
+    db: Session,
+    job: DiscussionLLMJob,
+    config: CourseLLMConfig,
+    student_id: int,
+    subject_id: int,
+    usage: dict[str, Any],
+) -> None:
+    existing = db.query(LLMDiscussionTokenUsageLog).filter(LLMDiscussionTokenUsageLog.job_id == job.id).first()
+    if existing:
+        return
+    release_discussion_quota_reservation(db, job.id)
+    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    total_tokens = usage.get("total_tokens")
+    if total_tokens is None:
+        total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+    billing_note: Optional[str] = None
+    prompt_for_quota = int(prompt_tokens or 0)
+    violations = _quota_delta_violations(
+        db,
+        config,
+        usage_date=usage_date,
+        timezone_name=timezone_name,
+        student_id=student_id,
+        subject_id=subject_id,
+        delta_tokens=prompt_for_quota,
+    )
+    if violations:
+        billing_note = "over_daily_limit:" + ",".join(violations)
+
+    db.add(
+        LLMDiscussionTokenUsageLog(
+            job_id=job.id,
+            subject_id=subject_id,
+            student_id=student_id,
+            usage_date=usage_date,
+            timezone=timezone_name,
+            input_tokens=prompt_tokens,
+            output_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            billing_note=billing_note,
+        )
+    )
 
 
 def claim_grading_tasks_batch(max_tasks: int) -> list[int]:

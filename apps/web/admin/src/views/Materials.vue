@@ -17,6 +17,9 @@
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
+      <div v-if="selectedCourse?.cover_image_url" class="course-cover-banner" data-testid="materials-course-cover-banner">
+        <el-image :src="selectedCourse.cover_image_url" fit="cover" class="course-cover-banner__img" />
+      </div>
       <div class="materials-layout">
         <aside class="chapter-sidebar" :class="{ 'chapter-sidebar--narrow': userStore.isStudent }">
           <div class="chapter-sidebar__head">
@@ -221,6 +224,7 @@
         :subject-id="currentMaterial.subject_id"
         :class-id="currentMaterial.class_id"
         :discussion-requires-context="currentMaterial.discussion_requires_context"
+        :is-student="userStore.isStudent"
       />
     </el-dialog>
 
@@ -756,6 +760,21 @@ watch(selectedChapterId, () => {
 .header-actions {
   display: flex;
   gap: 12px;
+}
+
+.course-cover-banner {
+  margin-bottom: 20px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  max-height: 200px;
+  background: #f1f5f9;
+}
+
+.course-cover-banner__img {
+  width: 100%;
+  height: 160px;
+  display: block;
 }
 
 .materials-layout {
