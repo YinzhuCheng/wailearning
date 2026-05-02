@@ -318,6 +318,8 @@ class SubjectUpdate(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    remove_cover_image: bool = False
 
 
 class SubjectResponse(BaseModel):
@@ -334,6 +336,7 @@ class SubjectResponse(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: List[CourseTimeItem] = Field(default_factory=list)
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
     teacher_name: Optional[str] = None
     class_name: Optional[str] = None
     student_count: int = 0

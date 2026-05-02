@@ -16,7 +16,7 @@ from app.attachments import (
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
-from app.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, User, UserRole
+from app.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, Subject, User, UserRole
 from app.routers.classes import get_accessible_class_ids
 from app.schemas import AttachmentUploadResponse
 
@@ -101,6 +101,14 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
             return True
         return False
 
+    subject_cover = db.query(Subject).filter(Subject.cover_image_url == attachment_url).first()
+    if subject_cover:
+        try:
+            ensure_course_access(subject_cover.id, current_user, db)
+        except (ValueError, PermissionError):
+            return False
+        return True
+
     return False
 
 
@@ -128,6 +136,14 @@ def _attachment_urls_with_exact_stored_basename(db: Session, stored_basename: st
         .all()
     )
     for (u,) in user_rows:
+        if u and get_attachment_stored_name(str(u)) == stored_basename:
+            urls.append(str(u))
+    sub_rows = (
+        db.query(Subject.cover_image_url)
+        .filter(Subject.cover_image_url.isnot(None), or_(*[Subject.cover_image_url.endswith(s) for s in suffixes]))
+        .all()
+    )
+    for (u,) in sub_rows:
         if u and get_attachment_stored_name(str(u)) == stored_basename:
             urls.append(str(u))
     return urls
