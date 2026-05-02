@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, update
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from app.database import get_db
 from app.models import User, Student, Class, PointRule, StudentPoint, PointRecord, PointItem, PointExchange, UserRole
@@ -20,6 +21,33 @@ from app.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from datetime import datetime
 
 router = APIRouter(prefix="/api/points", tags=["积分系统"])
+
+
+def _ensure_student_point_row(db: Session, student_id: int) -> StudentPoint:
+    """Create the per-student point row if missing; tolerate concurrent first inserts (SQLite)."""
+    sp = db.query(StudentPoint).filter(StudentPoint.student_id == student_id).first()
+    if sp:
+        return sp
+    sp = StudentPoint(
+        student_id=student_id,
+        total_points=0,
+        available_points=0,
+        total_earned=0,
+        total_spent=0,
+    )
+    db.add(sp)
+    try:
+        db.commit()
+        db.refresh(sp)
+    except IntegrityError:
+        db.rollback()
+        sp = db.query(StudentPoint).filter(StudentPoint.student_id == student_id).first()
+        if not sp:
+            raise HTTPException(
+                status_code=500,
+                detail="无法初始化学生积分账户，请重试。",
+            ) from None
+    return sp
 
 
 @router.get("/stats", response_model=PointStatsResponse)
@@ -142,12 +170,7 @@ def get_my_points(
             detail="未找到与当前登录账号学号一致的学生档案，请联系管理员。",
         )
 
-    sp = db.query(StudentPoint).filter(StudentPoint.student_id == student.id).first()
-    if not sp:
-        sp = StudentPoint(student_id=student.id, total_points=0, available_points=0)
-        db.add(sp)
-        db.commit()
-        db.refresh(sp)
+    sp = _ensure_student_point_row(db, student.id)
 
     return StudentPointResponse(
         id=sp.id,
@@ -157,14 +180,15 @@ def get_my_points(
         total_earned=sp.total_earned,
         total_spent=sp.total_spent,
         student_name=student.name,
-        class_name=student.class_obj.name if student.class_obj else None
+        class_name=student.class_obj.name if student.class_obj else None,
     )
+
 
 @router.get("/students/{student_id}", response_model=StudentPointResponse)
 def get_student_points(
     student_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
@@ -174,12 +198,7 @@ def get_student_points(
     if student.class_id not in accessible_class_ids:
         raise HTTPException(status_code=403, detail="无权查看该学生积分")
 
-    sp = db.query(StudentPoint).filter(StudentPoint.student_id == student_id).first()
-    if not sp:
-        sp = StudentPoint(student_id=student_id, total_points=0, available_points=0)
-        db.add(sp)
-        db.commit()
-        db.refresh(sp)
+    sp = _ensure_student_point_row(db, student_id)
 
     return StudentPointResponse(
         id=sp.id,
@@ -189,15 +208,16 @@ def get_student_points(
         total_earned=sp.total_earned,
         total_spent=sp.total_spent,
         student_name=student.name,
-        class_name=student.class_obj.name if student.class_obj else None
+        class_name=student.class_obj.name if student.class_obj else None,
     )
+
 
 @router.post("/students/{student_id}/add")
 def add_points(
     student_id: int,
     data: PointAddRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     if not can_manage_students(current_user):
         raise HTTPException(status_code=403, detail="只有教师可以添加积分")
@@ -210,31 +230,37 @@ def add_points(
     if student.class_id not in accessible_class_ids:
         raise HTTPException(status_code=403, detail="无权操作该学生")
 
+    sp = _ensure_student_point_row(db, student_id)
+    pts = int(data.points)
+    db.execute(
+        update(StudentPoint)
+        .where(StudentPoint.student_id == student_id)
+        .values(
+            total_points=StudentPoint.total_points + pts,
+            available_points=StudentPoint.available_points + pts,
+            total_earned=StudentPoint.total_earned + pts,
+        )
+    )
+    db.flush()
     sp = db.query(StudentPoint).filter(StudentPoint.student_id == student_id).first()
     if not sp:
-        sp = StudentPoint(student_id=student_id, total_points=0, available_points=0)
-        db.add(sp)
-        db.commit()
-        db.refresh(sp)
-
-    sp.total_points += data.points
-    sp.available_points += data.points
-    sp.total_earned += data.points
+        raise HTTPException(status_code=500, detail="积分账户异常")
 
     record = PointRecord(
         student_id=student_id,
-        points=data.points,
+        points=pts,
         balance_after=sp.total_points,
         source_type=data.source_type,
         source_id=data.source_id,
         description=data.description,
         operator_id=current_user.id,
-        rule_id=data.rule_id
+        rule_id=data.rule_id,
     )
     db.add(record)
     db.commit()
 
     return {"message": "积分添加成功", "current_points": sp.total_points}
+
 
 @router.get("/rules", response_model=List[PointRuleResponse])
 def get_rules(
@@ -379,12 +405,7 @@ def exchange_item(
     if item.stock != -1 and item.stock < data.quantity:
         raise HTTPException(status_code=400, detail="库存不足")
 
-    sp = db.query(StudentPoint).filter(StudentPoint.student_id == student_id).first()
-    if not sp:
-        sp = StudentPoint(student_id=student_id, total_points=0, available_points=0, total_earned=0, total_spent=0)
-        db.add(sp)
-        db.commit()
-        db.refresh(sp)
+    sp = _ensure_student_point_row(db, student_id)
 
     total_cost = item.points_cost * data.quantity
     if sp.available_points < total_cost:
