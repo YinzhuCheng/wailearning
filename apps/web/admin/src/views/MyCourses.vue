@@ -82,6 +82,19 @@
         <strong>必修课</strong>由教师按班级花名册统一加入，不可在此自主选课。
       </p>
       <el-table :data="electiveCatalog" v-loading="electiveLoading" max-height="420" empty-text="暂无进行中的课程">
+        <el-table-column label="封面" width="88">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.cover_image_url"
+              :src="row.cover_image_url"
+              fit="cover"
+              class="catalog-cover-thumb"
+              :preview-src-list="[row.cover_image_url]"
+              preview-teleported
+            />
+            <span v-else class="muted-inline">—</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="课程" min-width="150" />
         <el-table-column label="类型" width="100">
           <template #default="{ row }">
@@ -141,6 +154,9 @@
               class="course-card"
               :class="{ 'course-card-selected': userStore.selectedCourse?.id === course.id }"
             >
+              <div v-if="course.cover_image_url" class="course-card-cover">
+                <el-image :src="course.cover_image_url" fit="cover" class="course-card-cover-img" />
+              </div>
               <div class="course-card-header">
                 <h3>{{ course.name }}</h3>
                 <div class="course-tags">
@@ -186,6 +202,9 @@
               class="course-card course-card-muted"
               :class="{ 'course-card-selected': userStore.selectedCourse?.id === course.id }"
             >
+              <div v-if="course.cover_image_url" class="course-card-cover course-card-cover--muted">
+                <el-image :src="course.cover_image_url" fit="cover" class="course-card-cover-img" />
+              </div>
               <div class="course-card-header">
                 <h3>{{ course.name }}</h3>
                 <div class="course-tags">
@@ -979,6 +998,32 @@ watch(
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+}
+
+.catalog-cover-thumb {
+  width: 64px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.course-card-cover {
+  margin: -20px -20px 14px;
+  height: 120px;
+  border-radius: 18px 18px 0 0;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.course-card-cover--muted {
+  opacity: 0.92;
+}
+
+.course-card-cover-img {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .course-card {
