@@ -475,7 +475,7 @@ test.describe('E2E tier-4 stress backlog', () => {
       await pwdInputs.nth(0).fill(s.password_teacher_student)
       await pwdInputs.nth(1).fill(newPass)
       await pwdInputs.nth(2).fill(newPass)
-      await page.getByRole('button', { name: /密码/ }).click()
+      await page.getByRole('button', { name: '更新密码' }).click()
       await expect(page.getByText(/成功|更新/).first()).toBeVisible({ timeout: 30000 }).catch(() => {})
       await expect
         .poll(async () => (await fetchRaw('GET', '/api/auth/me', { token: beforeTok })).status, {

@@ -240,19 +240,37 @@ function courseCatalogRow(page, courseName) {
   return page.locator('tr').filter({ hasText: courseName }).first()
 }
 
+/** Catalog table only (not the course-card grid below, which can repeat the same title). */
+function electiveCatalogRow(page, courseName) {
+  return page
+    .locator('.elective-catalog-card')
+    .locator('.el-table__body tbody tr')
+    .filter({ hasText: courseName })
+    .first()
+}
+
+async function clickElectiveCatalogEnroll(page, courseName) {
+  const row = electiveCatalogRow(page, courseName)
+  await expect(row).toBeVisible({ timeout: 90000 })
+  const btn = row.getByRole('button', { name: '选课' })
+  await expect(btn).toBeEnabled({ timeout: 60000 })
+  await btn.click()
+}
+
+async function clickElectiveCatalogDrop(page, courseName) {
+  const row = electiveCatalogRow(page, courseName)
+  await expect(row).toBeVisible({ timeout: 90000 })
+  const btn = row.getByRole('button', { name: '退选' })
+  // Button stays disabled until local `courses` includes this elective (MyCourses.vue isElectiveEnrollment).
+  await expect(btn).toBeEnabled({ timeout: 60000 })
+  await btn.click()
+}
+
 async function openHomeworkEditDialog(page, title) {
   const row = homeworkRow(page, title)
   await expect(row).toBeVisible({ timeout: 20000 })
   await row.getByTestId('homework-btn-edit').click()
   await expect(page.getByRole('dialog', { name: /发布作业|编辑作业/ })).toBeVisible({ timeout: 15000 })
-}
-
-async function clickCourseCatalogAction(page, courseName) {
-  const row = courseCatalogRow(page, courseName)
-  await expect(row).toBeVisible({ timeout: 90000 })
-  const button = row.getByRole('button').first()
-  await expect(button).toBeVisible({ timeout: 30000 })
-  await button.click({ force: true })
 }
 
 async function openRosterDialog(page, courseId) {
@@ -448,9 +466,10 @@ test.describe('E2E resilience scenarios', () => {
       await expect(courseCard(studentPage, requiredCourseName)).toBeVisible({ timeout: 20000 })
 
       await login(adminPage, s.admin.username, s.admin.password)
-      await adminPage.goto('/users')
-      const studentRow = adminPage.locator(`tr:has-text("${s.student_plain.username}")`)
-      await expect(studentRow).toBeVisible({ timeout: 15000 })
+      await adminPage.goto('/users', { waitUntil: 'domcontentloaded', timeout: 60000 })
+      await expect(adminPage.getByTestId('users-open-create')).toBeVisible({ timeout: 60000 })
+      const studentRow = adminPage.locator(`tr:has-text("${s.student_plain.username}")`).first()
+      await expect(studentRow).toBeVisible({ timeout: 60000 })
       await studentRow.locator('.el-checkbox').first().click()
       await adminPage.getByTestId('users-open-batch-class').click()
       await expect(adminPage.getByTestId('dialog-batch-class')).toBeVisible({ timeout: 15000 })
@@ -549,19 +568,22 @@ test.describe('E2E resilience scenarios', () => {
       await pageA.goto('/courses')
       await pageB.goto('/courses')
 
-      await clickCourseCatalogAction(pageA, electiveName)
-      await clickCourseCatalogAction(pageB, electiveName)
+      await clickElectiveCatalogEnroll(pageA, electiveName)
+      await clickElectiveCatalogEnroll(pageB, electiveName)
 
       await expect
-        .poll(async () => {
-          const catalog = await apiStudentCourseCatalog(studentToken)
-          const elective = catalog.find(row => Number(row.id) === Number(s.course_elective_id))
-          const students = await apiListCourseStudents(adminToken, s.course_elective_id)
-          return {
-            enrolledInCatalog: Boolean(elective?.is_enrolled),
-            enrollmentRows: students.filter(row => Number(row.student_id) === Number(s.student_plain.student_row_id)).length
-          }
-        }, { timeout: 30000 })
+        .poll(
+          async () => {
+            const catalog = await apiStudentCourseCatalog(studentToken)
+            const elective = catalog.find(row => Number(row.id) === Number(s.course_elective_id))
+            const students = await apiListCourseStudents(adminToken, s.course_elective_id)
+            return {
+              enrolledInCatalog: Boolean(elective?.is_enrolled),
+              enrollmentRows: students.filter(row => Number(row.student_id) === Number(s.student_plain.student_row_id)).length
+            }
+          },
+          { timeout: 30000, intervals: [250, 500, 1000] }
+        )
         .toEqual({
           enrolledInCatalog: true,
           enrollmentRows: 1
@@ -591,19 +613,22 @@ test.describe('E2E resilience scenarios', () => {
       await pageA.goto('/courses')
       await pageB.goto('/courses')
 
-      await clickCourseCatalogAction(pageA, electiveName)
-      await clickCourseCatalogAction(pageB, electiveName)
+      await clickElectiveCatalogDrop(pageA, electiveName)
+      await clickElectiveCatalogDrop(pageB, electiveName)
 
       await expect
-        .poll(async () => {
-          const catalog = await apiStudentCourseCatalog(studentToken)
-          const elective = catalog.find(row => Number(row.id) === Number(s.course_elective_id))
-          const students = await apiListCourseStudents(adminToken, s.course_elective_id)
-          return {
-            enrolledInCatalog: Boolean(elective?.is_enrolled),
-            enrollmentRows: students.filter(row => Number(row.student_id) === Number(s.student_plain.student_row_id)).length
-          }
-        }, { timeout: 30000 })
+        .poll(
+          async () => {
+            const catalog = await apiStudentCourseCatalog(studentToken)
+            const elective = catalog.find(row => Number(row.id) === Number(s.course_elective_id))
+            const students = await apiListCourseStudents(adminToken, s.course_elective_id)
+            return {
+              enrolledInCatalog: Boolean(elective?.is_enrolled),
+              enrollmentRows: students.filter(row => Number(row.student_id) === Number(s.student_plain.student_row_id)).length
+            }
+          },
+          { timeout: 30000, intervals: [250, 500, 1000] }
+        )
         .toEqual({
           enrolledInCatalog: false,
           enrollmentRows: 0
@@ -1135,8 +1160,8 @@ test.describe('E2E resilience scenarios', () => {
       await pageA.goto('/courses')
       await pageB.goto('/courses')
 
-      await clickCourseCatalogAction(pageA, electiveName)
-      await clickCourseCatalogAction(pageB, electiveName)
+      await clickElectiveCatalogDrop(pageA, electiveName)
+      await clickElectiveCatalogDrop(pageB, electiveName)
 
       await expect
         .poll(async () => {
@@ -1194,7 +1219,7 @@ test.describe('E2E resilience scenarios', () => {
       await adminPage.getByTestId('batch-class-confirm').click()
       await confirmPrimaryDialog(adminPage)
 
-      await clickCourseCatalogAction(studentPage, electiveName)
+      await clickElectiveCatalogEnroll(studentPage, electiveName)
 
       await expect
         .poll(async () => {

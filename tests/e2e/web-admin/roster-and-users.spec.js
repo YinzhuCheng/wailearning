@@ -29,16 +29,19 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await expect(page.getByTestId('dialog-roster-enroll')).toBeVisible()
 
     const row = page.locator(`[data-testid="table-roster-enroll-pick"] tr:has-text("${s.student_b.username}")`)
+    await expect(row).toBeVisible({ timeout: 30000 })
     await row.locator('.el-checkbox').first().click({ force: true })
-    const rosterResp = page.waitForResponse(
-      r =>
-        r.url().includes('/roster-enroll') &&
-        r.request().method() === 'POST' &&
-        r.ok(),
-      { timeout: 120000 }
-    )
-    await page.getByTestId('btn-roster-enroll-submit').click({ force: true })
-    await rosterResp
+    // Pair listener with submit so a fast 200 cannot be missed (avoids flaky waitForResponse timeout).
+    const [rosterResp] = await Promise.all([
+      page.waitForResponse(
+        r =>
+          r.url().includes('/roster-enroll') &&
+          r.request().method() === 'POST' &&
+          r.ok(),
+        { timeout: 120000 }
+      ),
+      page.getByTestId('btn-roster-enroll-submit').click({ force: true })
+    ])
 
     await expect(page.getByTestId('dialog-roster-enroll')).toBeHidden({ timeout: 90000 })
   })
