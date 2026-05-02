@@ -12,17 +12,47 @@ function escapeRegex(text) {
   return `${text || ''}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-async function login(page, username, password) {
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
-  await page.evaluate(() => {
+function isDestroyedContextError(err) {
+  const msg = `${err && err.message ? err.message : err}`
+  return (
+    msg.includes('Execution context was destroyed') ||
+    msg.includes('Target page, context or browser has been closed') ||
+    msg.includes('interrupted by another navigation') ||
+    msg.includes('net::ERR_ABORTED')
+  )
+}
+
+async function gotoLogin(page) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
-      localStorage.clear()
-      sessionStorage.clear()
-    } catch {
-      /* ignore */
+      await page.goto('/login', { waitUntil: 'domcontentloaded', timeout: 60000 })
+      return
+    } catch (e) {
+      if (!isDestroyedContextError(e) || attempt === 7) {
+        throw e
+      }
+      await new Promise(r => setTimeout(r, 200 + attempt * 100))
     }
-  })
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
+  }
+}
+
+async function login(page, username, password) {
+  await gotoLogin(page)
+  try {
+    await page.evaluate(() => {
+      try {
+        localStorage.clear()
+        sessionStorage.clear()
+      } catch {
+        /* ignore */
+      }
+    })
+  } catch (e) {
+    if (!isDestroyedContextError(e)) {
+      throw e
+    }
+  }
+  await gotoLogin(page)
   await expect(page.getByTestId('login-username')).toBeVisible({ timeout: 30000 })
   await page.getByTestId('login-username').fill(username)
   await page.getByTestId('login-password').fill(password)

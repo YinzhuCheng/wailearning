@@ -553,6 +553,115 @@ The test obtains a **new** token after the UI already changed the password, then
 - For “download works” coverage, either **link** the file the way production does (homework submission, material, **or** `POST /api/auth/me/avatar`), **or** assert the documented behavior for orphan uploads.
 - When building a path for `fetch`, handle **relative** `attachment_url` values (`/api/files/...`) — do not assume `new URL(fileUrl)` without a base when the server returns a path-only URL.
 
+## Pitfall 32: Element Plus `ElMessageBox.confirm` title is not always the dialog’s accessible name
+
+### Symptom
+
+Playwright waits forever on `getByRole('dialog', { name: /删除课程/ })` or the confirm button inside it, while the UI visibly shows the delete confirmation.
+
+### Why it matters
+
+MessageBox markup and locale wiring do not guarantee that the **title string** is exposed as the dialog’s **accessible name** in every Element Plus version or configuration.
+
+### How to avoid (test side)
+
+- Prefer targeting the overlay that contains the primary action, for example `page.getByRole('dialog').filter({ has: page.getByRole('button', { name: /^(确定|OK)$/ }) })`, then click **确定/OK** inside that dialog (same pattern as advanced coverage specs).
+
+## Pitfall 33: Student “我的课程” page shows the same course title twice (catalog table vs course cards)
+
+### Symptom
+
+`page.locator('tr').filter({ hasText: courseName })` or `row.getByRole('button').first()` clicks **刷新目录** or hits the wrong row; API polls never reach the expected enroll/drop state.
+
+### Why it happens
+
+`MyCourses.vue` renders the **elective catalog** in a table and also lists **active courses** as cards below. The same `name` can appear in both regions; the first `tr` match or the first button in a row may not be **选课/退选**.
+
+### How to avoid (test side)
+
+- Scope locators to the catalog card only, e.g. `.elective-catalog-card` + `.el-table__body tbody tr`, then click **`getByRole('button', { name: '选课' })`** or **`'退选'`** explicitly — never `row.getByRole('button').first()`.
+
+## Pitfall 34: `click({ force: true })` on a disabled Element Plus button is a silent no-op
+
+### Symptom
+
+Dual-tab elective enroll/drop tests time out on `expect.poll` even though the test “clicked” 退选/选课.
+
+### Why it happens
+
+In `MyCourses.vue`, **退选** stays `:disabled` until local `courses` includes the elective (`isElectiveEnrollment`). Catalog `is_enrolled` can be true while the button is still disabled for a short window. **`force: true` does not enable a disabled control.**
+
+### How to avoid (test side)
+
+- **`await expect(button).toBeEnabled({ timeout: … })`** before `click()` (without `force`), or assert API-side state first and reload the page if you intentionally need a cold DOM.
+
+## Pitfall 35: `waitForResponse` registered after `click()` misses a fast 200
+
+### Symptom
+
+`TimeoutError` waiting for `POST …/roster-enroll` even though the UI closed the dialog and enrollment succeeded.
+
+### Why it happens
+
+The response can complete before Playwright attaches the listener.
+
+### How to avoid (test side)
+
+- Start **`page.waitForResponse(...)`** and **`click()`** in the same **`Promise.all([...])`**, or use **`expect.poll`** on API state instead of relying on a single network event.
+
+## Pitfall 36: Over-broad `getByRole('button', { name: /密码/ })` matches the wrong control
+
+### Symptom
+
+Password-change / token-invalidation specs never call `POST /api/auth/change-password` or behave randomly.
+
+### Why it happens
+
+Section headers and other controls can match a loose `/密码/` regex; the real submit control on `PersonalSettings.vue` is **`更新密码`**.
+
+### How to avoid (test side)
+
+- Prefer **exact** button labels from the Vue template (`更新密码`) or `data-testid` if one is added later.
+
+## Pitfall 37: Vite `webServer` + repeated `goto('/login')` — navigation interrupted or `net::ERR_ABORTED`
+
+### Symptom
+
+`page.goto('/login')` throws **interrupted by another navigation** or **`net::ERR_ABORTED`**, or `page.evaluate` fails with **Execution context was destroyed**, often after a long E2E run or when the dev server reloads.
+
+### How to avoid (test side)
+
+- Use **`waitUntil: 'domcontentloaded'`** (not only `load`) for login hops, **retry** `goto` on the errors above, and treat **`goto` + `localStorage.clear`** as best-effort if the page navigates mid-call.
+- Before starting a new Playwright process, ensure **no stray `node`/`vite`/`chrome`** holds `E2E_UI_PORT` / `E2E_API_PORT` when `reuseExistingServer` is false — otherwise `webServer` fails to bind and the suite misleads you into “app” failures.
+
+## Pitfall 38: Admin delete-course UI assertion races the subjects table refresh
+
+### Symptom
+
+`DELETE /api/subjects/{id}` returns **200**, but `getByTestId('subjects-delete-{id}')` still exists for tens of seconds — `toHaveCount(0)` times out.
+
+### Why it happens
+
+The list row is driven by client state; **`loadCourses()`** (or equivalent) may lag behind the successful API delete, especially under Vite dev + SQLite E2E load.
+
+### How to avoid (test side)
+
+- After a successful delete response, **`expect.poll` on `GET /api/subjects`** until the id disappears, then **`page.goto('/subjects')`** (or wait for an explicit table reload) before asserting row-level UI.
+
+## Pitfall 39: `page_size` upper bounds differ by route — do not assume `le=100` everywhere
+
+### Symptom
+
+A test expects **`422`** for `page_size=200` on **`/api/students`**, but receives **200** — because that list allows **`le=1000`**.
+
+### Why it matters
+
+Copy-pasting “`page_size=200` means 422” from homework/materials/notifications tests will create **false failures** on routes with different `Query(..., le=...)`.
+
+### How to avoid (test side)
+
+- Read the **`Query(..., le=)`** on the FastAPI handler (or grep `page_size` in `apps/backend/app/routers/`) before picking an out-of-range value. Prefer **`page_size = max_allowed + 1`** per route family.
+
 ## Proven Command Patterns
 
 ### Backend full suite

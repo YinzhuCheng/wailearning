@@ -43,10 +43,10 @@ async function fillCourseDialogDateRange(page) {
 }
 
 async function confirmMessageBox(page) {
-  await page
-    .getByRole('dialog', { name: /删除课程/ })
-    .getByRole('button', { name: /^(OK|确定)$/ })
-    .click({ force: true })
+  // Element Plus MessageBox: title "删除课程" may not map to the dialog accessible name in all locales;
+  // target the overlay dialog that exposes the confirm button (see TEST_EXECUTION_PITFALLS.md).
+  const dlg = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: /^(确定|OK)$/ }) })
+  await dlg.getByRole('button', { name: /^(确定|OK)$/ }).click({ force: true })
 }
 
 /** Element Plus: click the select control inside a form item by its label text. */

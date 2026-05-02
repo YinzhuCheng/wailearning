@@ -452,6 +452,40 @@ This section adds **incremental** risk notes from implementing and stabilizing `
 
 When triaging, fix **contract mismatches in tests first**; if minimal reproduction still fails, escalate to product.
 
+## May 2026: concerns surfaced during a full admin E2E + pytest pass (agent)
+
+This section records **residual risk and suspected sources** after a long full-suite run. It is **incremental** with earlier P1/P2 items (e.g. dual-tab mark-all-read, startup coupling): those remain authoritative until closed.
+
+### Harness / environment (not product defects, but they hide real bugs)
+
+- **Vite dev server under Playwright `webServer`**: hot reload and chained navigations can cause **`ERR_ABORTED`**, **interrupted navigation**, or **destroyed execution context** during `login()` helpers. **Source**: dev-mode SPA + aggressive `goto`/`evaluate` sequencing. **Mitigation**: see Pitfall **37** in [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md); prefer stable preview builds in CI if flaking persists.
+- **Port reuse**: stale **`node` / `chrome`** on `E2E_API_PORT` / `E2E_UI_PORT` after aborted runs prevents `webServer` startup. **Source**: process cleanup, not application logic.
+- **SQLite + long E2E**: many `reset-scenario` cycles and concurrent tabs stress the same file DB as pytest defaults; **duplicate enrollment** and timing sensitivity are already called out elsewhere (P2 / Pitfall 16). Re-validate critical enrollment fixes on Postgres when possible.
+
+### Product-adjacent UX / state that can look like bugs under automation
+
+- **Elective 退选 disabled until `courses` loads**: the UI intentionally disables **退选** until the client believes the row is an elective enrollment. **Source**: `MyCourses.vue` coupling catalog flags to **`courses`** store. Slow networks can widen the window; tests must **`toBeEnabled`** before click. Whether to relax UX (e.g. spinner instead of disabled) is a **product** decision, not a test requirement.
+- **MessageBox accessibility**: if product teams need strict `getByRole('dialog', { name })` in tests, consider **explicit `aria-labelledby`** or documented testids on confirm dialogs — today, tests work around Element Plus markup (Pitfall 32).
+
+### Ongoing product-risk themes (unchanged priority, reinforced by the pass)
+
+- **Notification read-state under concurrency** (existing **P1**): still the highest-value area to classify as product race vs test flake.
+- **Backend import/startup coupling** (existing **P1/P2**): heavy lifespan work magnifies any flake in long E2E runs.
+- **Enrollment reconciliation on SQLite** (existing **P2**): keep watching for `IntegrityError` on `course_enrollments` under parallel or rapid reset scenarios.
+
+### How to use this subsection when filing issues
+
+- If **`curl` / minimal pytest** reproduces wrong state → **product** issue (file with repro DB dialect).
+- If only **Playwright + Vite** shows the failure and **`domcontentloaded` + retry** stabilizes it → start as **harness**; still worth CI hardening so noise does not mask regressions.
+
+### May 2026 (second pass): pagination contract drift across routers
+
+**Concern:** Admin and teacher UIs call many list endpoints with `page_size`. FastAPI validates **`le=` per route**; some lists allow **1000** (e.g. students) while others cap at **100** (logs, points exchanges/records, parent portals, homework submission grids). **Source:** independent `Query` defaults in `apps/backend/app/routers/*.py`.
+
+**Risk:** A future UI change that sends a **single global `page_size`** (or copies a constant from one screen) could yield **422** on some pages while others silently cap or error — hard to spot without route-level contract tests.
+
+**Mitigation (engineering):** when changing pagination defaults, grep **`page_size`** across routers and the admin `src/api` client together; keep at least one **per-family** API test (see `e2e-pitfall-guard-rails-batch2.spec.js`) or pytest parametrics so drift is caught early.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.

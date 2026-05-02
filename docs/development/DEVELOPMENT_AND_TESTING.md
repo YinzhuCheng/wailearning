@@ -215,7 +215,7 @@ Recent behavior coverage includes scenarios such as:
 
 When extending Playwright or threaded pytest coverage, the friction usually clusters around **contract mismatches** (HTTP method/parameter shape), **router redirects by role**, **SQLite races**, and **Playwright locator ambiguity**. Pitfalls **17–24** were appended to [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)— read those before debugging failures that look like “flaky UI” but are actually environment or selector discipline issues.
 
-Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded as pitfalls **25–31** in the same document (double `apiBase`, JSON encoding, schema `ge=` limits, homework title DOM vs API, password-change token capture, attachment ACL).
+Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded as pitfalls **25–31** in the same document (double `apiBase`, JSON encoding, schema `ge=` limits, homework title DOM vs API, password-change token capture, attachment ACL). A subsequent **full `pytest` + full admin Playwright** pass on a Linux agent added pitfalls **32–37** (MessageBox a11y, duplicate course title rows, disabled `force` clicks, `waitForResponse` race, password button label, Vite `goto` races). A **pitfall-guard** follow-up added **38–39** (delete-list UI vs API truth, per-route `page_size` limits).
 
 ### Recommendations for new test samples (E2E and API)
 
@@ -234,6 +234,33 @@ This is judgment for maintainers, not an automatic delete list:
 - Older E2E that still rely on **`toBeHidden`** on Element Plus dialogs alone are **more fragile** than patterns that confirm success via **network response + navigation + table row** (see resilience and boundary specs). Prefer aligning those tests with the “authoritative state first” rule rather than deleting them outright.
 - **`TEST_REDUNDANCY_AUDIT.md`** remains the formal gate for safe deletes; the audit’s **protected** list intentionally keeps high-difficulty files — do not “clean up” stress specs without reading that policy.
 - Optional backlog specs gated by **`E2E_ENABLE_BACKLOG_SPECS`** ([E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md)): if placeholders remain in a branch, do not treat them as failing debt — treat them as a **queue** with explicit enablement.
+
+### May 2026: lessons from a full `pytest` + full admin Playwright run (Linux agent)
+
+These notes **add** to the bullets above; they do not replace the redundancy audit or protection rules.
+
+**Further recommendations when authoring new samples**
+
+- **MessageBox and locale**: treat delete/confirm flows as “overlay + OK button” problems first; see Pitfall **32** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+- **Student course pages**: any test that drives **选课/退选** must scope to the **catalog table** and wait for **enabled** action buttons; see Pitfalls **33–34**.
+- **Network pairing**: for idempotent POSTs that return quickly, pair **`waitForResponse` with `click`** atomically; see Pitfall **35**.
+- **Personal settings**: match the **exact** primary action label (`更新密码`) for password flows; see Pitfall **36**.
+- **Login helpers shared across specs**: harden `goto('/login')` against Vite navigation races; see Pitfall **37**. Any new shared helper should follow the same pattern.
+- **Admin `/users` table**: `el-table`’s inner layout can make raw `.el-table__body` **visibility** checks misleading; prefer waiting for a **known toolbar** `data-testid` (e.g. `users-open-create`) plus a **row/cell** locator scoped to the user table, or poll the API if the scenario allows.
+
+**Samples that were misleading or easy to mis-maintain (refine in place, not necessarily delete)**
+
+- **`e2e-scenario-resilience.spec.js` elective dual-context cases** historically used **unscoped** `tr:has-text(courseName)` and **`button.first()`** — wrong target and silent **`force`** on disabled **退选**. The fix is **scoping + enabled waits**; other files that copy the old pattern should be aligned when touched.
+- **Tier-4 password test** using **`/密码/`** on the personal-settings page was **too broad**; prefer explicit labels or testids.
+- **Overlap** between **`e2e-tier4-stress-backlog.spec.js`**, **`e2e-scenario-resilience.spec.js`**, and **`future-advanced-coverage*.spec.js`** remains: before adding a new case, grep for the same **invariant** (enroll idempotency, token invalidation, mark-all-read). Parameterize or extend an existing spec when the setup cost is high.
+- **Redundancy**: still governed by [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md); the audit’s merge-only candidates (courses/roster/LLM token files) are **review prompts**, not an automatic delete list.
+
+### May 2026 (second pass): pitfall-guard batch specs and `page_size` discipline
+
+- A second small Playwright file **`tests/e2e/web-admin/e2e-pitfall-guard-rails-batch2.spec.js`** was added to widen **`page_size` 422** coverage across **logs**, **points**, **parent scores/homework**, **homework submissions**, and **students** (where `le` differs — see Pitfall **39** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)). Run it alone with:
+  - `npx playwright test e2e-pitfall-guard-rails-batch2.spec.js`
+- When adding more list-endpoint tests, **parameterize `(path, max_page_size)`** from code or a tiny shared table in the spec — avoid magic `200` unless you confirmed `le` for that router.
+- **`e2e-pitfall-guard-rails.spec.js`** (15 cases) and **batch2** (10 cases) overlap conceptually with **`e2e-cross-cutting-tier3.spec.js`** HTTP-edge tests; new edges should **extend** batch2 or tier3, not fork a third file, unless the invariant is genuinely new.
 
 ## After Documentation Updates
 
