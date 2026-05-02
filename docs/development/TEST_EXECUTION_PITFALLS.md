@@ -355,6 +355,115 @@ Defensive idempotency at insert time (for example nested transactions / savepoin
 
 When this appears, treat it first as **reconciliation idempotency**, not as corrupted business data, until proven otherwise.
 
+## Remaining unease after advanced E2E and behavior passes (May 2026)
+
+These are not documented as solved product defects; they are **risk surfaces** that stayed uncomfortable while authoring higher-difficulty tests:
+
+- **Notification mark-all-read vs UI**: server semantics can be correct while the UI remains temporarily ambiguous under concurrency; treating API responses as authoritative remains mandatory.
+- **SQLite concurrency**: even after idempotent inserts, **lost updates** remain possible for counters updated via ORM read-modify-write; concurrent increment paths may need SQL-level atomic updates.
+- **Router-driven redirects**: admin accounts skip student-facing navigation assumptions; tests must mirror **actual role routing**, not an idealized “open any path” model.
+- **`expect.poll` footguns**: returning `undefined`/`null` can prevent predicate satisfaction until timeout; ensure the predicate returns a definite boolean or use assertions inside the callback carefully.
+
+## Pitfall 17: admin SPA router redirects hide student routes until course context exists
+
+### Symptom
+
+Playwright navigates to `/points-display`, `/homework`, `/notifications`, etc., but lands elsewhere or never reaches the expected shell controls until timeouts.
+
+### Why it happens
+
+The admin SPA `router.beforeEach` redirects **admin users** away from many paths students use, and **students** may be forced through `/courses` until `selectedCourse` / enrollment context is resolved.
+
+### Recommendation
+
+For student flows that depend on a seeded course, call the same **`enterSeededRequiredCourse`** helper used by other specs **before** asserting pages that assume teaching/student course context.
+
+## Pitfall 18: Playwright strict mode with multiple tables (`getByRole('table')`)
+
+### Symptom
+
+`expect(page.getByRole('table')).toBeVisible()` fails with strict-mode violations or resolves the wrong table (layout chrome vs-data tables).
+
+### Recommendation
+
+Scope locators: `page.locator('.ranking-card').getByRole('table').first()` (or another stable ancestor), rather than the page-global role query.
+
+## Pitfall 19: student course-catalog enrollment flags (`is_enrolled`, not legacy JSON guesses)
+
+### Symptom
+
+Assertions like `row.enrolled` always fail even though the UI shows enrollment; API responses look “wrong”.
+
+### Why it happens
+
+The student catalog schema exposes **`is_enrolled`** (see `StudentCourseCatalogItem`). Older informal field names are misleading.
+
+### Recommendation
+
+Assert **`is_enrolled`** / documented schema fields, not ad hoc property names copied from other payloads.
+
+## Pitfall 20: user updates use `PUT`, not `PATCH`
+
+### Symptom
+
+E2E sends `PATCH /api/users/{id}` expecting `{ is_active: false }`; nothing changes and downstream bearer validation assertions fail.
+
+### Recommendation
+
+Match the backend route family (`PUT /api/users/{id}` for updates in this repository) when scripting admin changes.
+
+## Pitfall 21: `POST /api/notifications/mark-all-read` takes `subject_id` as a query parameter
+
+### Symptom
+
+Posting JSON `{ subject_id: ... }` to `mark-all-read` silently behaves like “no filter” or fails validation expectations.
+
+### Recommendation
+
+Mirror the SPA client: **`POST /api/notifications/mark-all-read?subject_id=<id>`** (FastAPI `Optional[int]` query params).
+
+## Pitfall 22: clicking disabled “mark all read” can stall `Promise.all`
+
+### Symptom
+
+An E2E runs until the **suite timeout** with no obvious failure until you notice Playwright waiting forever on a click.
+
+### Why it happens
+
+The notifications UI disables “全部标为已读” when `unreadCount === 0`. Putting `click()` inside `Promise.all` alongside API racing calls may block indefinitely.
+
+### Recommendation
+
+Prefer API-only storms for concurrency scenarios, or guard clicks with enabled checks; do not parallelize unconditional UI clicks with uncertain disabled state.
+
+## Pitfall 23: homework submission success copy varies (`作业已提交` vs “已保存”)
+
+### Symptom
+
+Assertions waiting only for `/已保存/` miss Element Plus success toasts.
+
+### Recommendation
+
+Allow multiple known success patterns consistent with `HomeworkSubmission.vue` (`作业已提交`, etc.).
+
+## Pitfall 24: SQLite `UNIQUE` on first-create paths vs lost updates on counters
+
+### Symptom A — inserts
+
+Concurrent first-time inserts into uniqueness-constrained rows (examples encountered while extending coverage: `homework_submissions`, `student_points`) surface **`IntegrityError`** under parallel requests.
+
+### What helps
+
+Treat duplicate-key as “already exists”, rollback, reload the row, and continue; homework submission creation paths adopted this pattern during stress testing.
+
+### Symptom B — updates
+
+Concurrent “read balance → add → write” increments lose totals even without duplicate inserts.
+
+### What helps
+
+Prefer **single-statement SQL increments** (`UPDATE ... SET total_points = total_points + :delta`) for hot counters instead of ORM read-modify-write in parallel threads.
+
 ## Proven Command Patterns
 
 ### Backend full suite
