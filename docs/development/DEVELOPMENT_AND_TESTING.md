@@ -211,6 +211,10 @@ Recent behavior coverage includes scenarios such as:
 - Separate product bugs from environment mistakes such as working-directory or temp-path issues.
 - If running on Windows + PowerShell, review `TEST_EXECUTION_PITFALLS.md` before assuming Playwright or pytest failures are product regressions.
 
+### Incremental lessons from higher-difficulty browser/API suites (May 2026)
+
+When extending Playwright or threaded pytest coverage, the friction usually clusters around **contract mismatches** (HTTP method/parameter shape), **router redirects by role**, **SQLite races**, and **Playwright locator ambiguity**. Pitfalls **17–24** were appended to [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)— read those before debugging failures that look like “flaky UI” but are actually environment or selector discipline issues.
+
 ## After Documentation Updates
 
 For documentation-only work, full test runs are not always necessary. For changes that also touch behavior, prefer:
