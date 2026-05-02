@@ -30,7 +30,23 @@
             <el-tag v-if="row.llm_invocation" type="warning" size="small" effect="plain">调用智能助教</el-tag>
             <span class="discussion-row__time">{{ formatTime(row.created_at) }}</span>
           </div>
-          <div class="discussion-row__body">{{ row.body }}</div>
+          <div
+            class="discussion-row__body"
+            :class="{
+              'discussion-row__body--clickable': isTruncated(row.body) && !isExpanded(row.id)
+            }"
+            @click="onBodyClick(row)"
+          >
+            <span class="discussion-row__text">{{ displayBody(row) }}</span>
+            <button
+              v-if="isTruncated(row.body) && isExpanded(row.id)"
+              type="button"
+              class="discussion-row__collapse-btn"
+              @click.stop="collapseRow(row.id)"
+            >
+              收起
+            </button>
+          </div>
           <div v-if="canDelete(row)" class="discussion-row__actions">
             <el-button type="danger" link size="small" @click="removeEntry(row)">删除</el-button>
           </div>
@@ -78,6 +94,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+
+/** Each segment renders as one logical line: a text line (may be empty) or one image. */
+const PREVIEW_LINE_LIMIT = 3
+
+/** Markdown ![alt](url) or HTML <img ...> each counts as one line. */
+const INLINE_IMAGE_RE = /!\[[^\]]*\]\([^)]+\)|<img\b[^>]*>/gi
 
 const props = defineProps({
   targetType: {
@@ -130,6 +152,8 @@ const total = ref(0)
 const entries = ref([])
 const draft = ref('')
 const llmMode = ref(false)
+/** entry id -> expanded full body */
+const expandedEntryIds = ref(new Set())
 
 let pollTimer = null
 let pollAbort = null
@@ -181,6 +205,90 @@ const stopPolling = () => {
   }
 }
 
+/**
+ * Split body into line-sized segments: each `\\n`-split text line is one segment;
+ * each markdown image and each HTML <img> tag is one segment (in order).
+ */
+function lineSegmentsFromBody(body) {
+  const raw = body == null ? '' : String(body)
+  const segments = []
+  let last = 0
+  let m
+  const re = new RegExp(INLINE_IMAGE_RE.source, 'gi')
+  while ((m = re.exec(raw)) !== null) {
+    if (m.index > last) {
+      const chunk = raw.slice(last, m.index)
+      for (const line of chunk.split('\n')) {
+        segments.push({ kind: 'text', value: line })
+      }
+    }
+    segments.push({ kind: 'image', value: m[0] })
+    last = m.index + m[0].length
+  }
+  if (last < raw.length) {
+    for (const line of raw.slice(last).split('\n')) {
+      segments.push({ kind: 'text', value: line })
+    }
+  }
+  if (!segments.length) {
+    segments.push({ kind: 'text', value: '' })
+  }
+  return segments
+}
+
+/** Rebuild original string from segments (inverse of lineSegmentsFromBody). */
+function joinSegments(parts) {
+  let s = ''
+  for (let i = 0; i < parts.length; i += 1) {
+    const seg = parts[i]
+    if (seg.kind === 'text' && i > 0 && parts[i - 1].kind === 'text') {
+      s += '\n'
+    }
+    s += seg.value
+  }
+  return s
+}
+
+function isTruncated(body) {
+  return lineSegmentsFromBody(body).length > PREVIEW_LINE_LIMIT
+}
+
+function isExpanded(id) {
+  return expandedEntryIds.value.has(id)
+}
+
+function previewText(body) {
+  const segs = lineSegmentsFromBody(body)
+  if (segs.length <= PREVIEW_LINE_LIMIT) {
+    return joinSegments(segs)
+  }
+  const head = segs.slice(0, PREVIEW_LINE_LIMIT)
+  return `${joinSegments(head)}...`
+}
+
+function displayBody(row) {
+  const body = row?.body ?? ''
+  if (isExpanded(row.id)) {
+    return body
+  }
+  return previewText(body)
+}
+
+function onBodyClick(row) {
+  if (!isTruncated(row.body) || isExpanded(row.id)) {
+    return
+  }
+  const next = new Set(expandedEntryIds.value)
+  next.add(row.id)
+  expandedEntryIds.value = next
+}
+
+function collapseRow(id) {
+  const next = new Set(expandedEntryIds.value)
+  next.delete(id)
+  expandedEntryIds.value = next
+}
+
 const loadList = async () => {
   if (!canUseDiscussion.value) return
   loading.value = true
@@ -195,6 +303,7 @@ const loadList = async () => {
     })
     total.value = res?.total ?? 0
     entries.value = res?.data ?? []
+    expandedEntryIds.value = new Set()
   } catch (e) {
     console.error(e)
     ElMessage.error(e?.response?.data?.detail || '加载讨论失败')
@@ -405,6 +514,35 @@ loadList()
   font-size: 14px;
   line-height: 1.55;
   color: #334155;
+}
+
+.discussion-row__body--clickable {
+  cursor: pointer;
+}
+
+.discussion-row__body--clickable:hover .discussion-row__text {
+  color: #2563eb;
+}
+
+.discussion-row__text {
+  display: inline;
+  vertical-align: baseline;
+}
+
+.discussion-row__collapse-btn {
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--el-color-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  vertical-align: baseline;
+}
+
+.discussion-row__collapse-btn:hover {
+  color: var(--el-color-primary-light-3);
 }
 
 .discussion-row__actions {

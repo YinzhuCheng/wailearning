@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 import uuid
@@ -21,6 +22,8 @@ from app.llm_grading import process_next_grading_task, start_grading_worker, wor
 from app.models import (
     Class,
     CourseEnrollment,
+    CourseLLMConfig,
+    CourseLLMConfigEndpoint,
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
@@ -90,6 +93,8 @@ def _is_validation_request(payload: dict[str, Any]) -> bool:
 def _mock_llm_success_body(profile: str, step: dict[str, Any], *, validation: bool) -> dict[str, Any]:
     if validation:
         content = str(step.get("text") or "OK")
+    elif step.get("text") is not None:
+        content = str(step.get("text"))
     else:
         payload = {
             "score": float(step.get("score", 80.0)),
@@ -308,6 +313,56 @@ def reset_e2e_scenario(
             sort_order=0,
         )
     )
+
+    # Course LLM for discussion assistant + grading E2E: mock chat completions (plain text for discussion prompts).
+    api_self_port = (os.environ.get("E2E_API_PORT") or "8012").strip()
+    api_self_base = f"http://127.0.0.1:{api_self_port}"
+    disc_profile = f"discuss_{suffix}"
+    llm_preset = LLMEndpointPreset(
+        name=f"e2e_discussion_{suffix}",
+        base_url=f"{api_self_base}/api/e2e/dev/mock-llm/{disc_profile}/v1/",
+        api_key="e2e-discussion-mock-key",
+        model_name="e2e-discussion-mock",
+        max_retries=0,
+        initial_backoff_seconds=1,
+        is_active=True,
+        supports_vision=True,
+        validation_status="validated",
+        text_validation_status="passed",
+        vision_validation_status="passed",
+    )
+    db.add(llm_preset)
+    db.flush()
+    llm_cfg = CourseLLMConfig(
+        subject_id=course_req.id,
+        is_enabled=True,
+        max_input_tokens=16000,
+        max_output_tokens=800,
+        quota_timezone="UTC",
+    )
+    db.add(llm_cfg)
+    db.flush()
+    db.add(
+        CourseLLMConfigEndpoint(
+            config_id=llm_cfg.id,
+            preset_id=llm_preset.id,
+            priority=1,
+            group_id=None,
+        )
+    )
+    with _mock_llm_lock:
+        _mock_llm_profiles[disc_profile] = {
+            "steps": [
+                {
+                    "kind": "ok",
+                    "text": "【E2E助教】收到，请继续努力学习。",
+                    "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+                }
+            ],
+            "cursor": 0,
+            "repeat_last": True,
+            "requests": [],
+        }
 
     db.commit()
     db.refresh(mat_disc)
