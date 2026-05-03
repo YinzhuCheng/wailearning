@@ -491,6 +491,16 @@ This section records **residual risk and suspected sources** after a long full-s
 
 **Mitigation (engineering):** when changing pagination defaults, grep **`page_size`** across routers and the admin `src/api` client together; keep at least one **per-family** API test (see `e2e-pitfall-guard-rails-batch2.spec.js`) or pytest parametrics so drift is caught early.
 
+### May 2026 (LLM global quota unification + full pytest): residual concerns for triage
+
+**Type:** mix of `Structural risk` and `Strong inference` (same disclaimer as the P1/P2 list above — not a confirmed defect list).
+
+- **Token accounting semantics vs intuition:** usage logs still carry `subject_id`, but **daily enforcement** is on the **student’s total** for the global calendar day. Tests that only checked “per course used == X” without checking **global remaining** can miss regressions where attribution and enforcement diverge. **Source:** split between analytics fields and guard logic.
+- **Bootstrap / migration ordering:** dropping legacy columns from `course_llm_configs` while ORM and old rows coexist requires `ensure_schema_updates` and dialect-specific `ALTER` to stay aligned. **Source:** SQLite vs PostgreSQL migration affordances differ (`IF EXISTS`, transactional DDL).
+- **Third-party and deprecation noise in long runs:** full-suite stderr is dominated by **Pydantic v2 class Config**, **passlib `crypt`**, **jose `utcnow`**, and **openpyxl** deprecation warnings — easy to skim past a **real** `SAWarning` (for example delete row count mismatches). **Source:** dependency versions + SQLAlchemy strictness.
+- **E2E assumptions about removed course-level fields:** any Playwright or helper that still **PUTs** `quota_timezone` / `estimated_*` on course LLM config may rely on Pydantic **`extra="ignore"`** and give a false sense that those settings persist. **Source:** API silently ignoring unknown keys vs UI expecting them.
+- **Dual representation of “student_used” in APIs:** per-course rows may show **subject-attributed** usage while a summary field shows **total**; tests or clients that conflate the two can mis-display “remaining”. **Source:** intentional API shape for UX; needs clear field naming in clients.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.

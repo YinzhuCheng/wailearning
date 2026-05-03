@@ -110,6 +110,16 @@ No same-file exact duplicate test bodies were found.
 - Treat merge-only candidates as review prompts, not deletion commands.
 - Prefer parameterization, shared helper extraction, or narrower assertion factoring before removing coverage.
 
+## Maintainer notes (incremental, May 2026): naming vs behavior after product redesigns
+
+Some files or test titles still carry **historical names** (`per_course_llm_quota_*`, “legacy” routing wording) while the **assertions** were updated to match new behavior (for example global student quota pool + per-subject attribution). That is intentional short-term: renaming files would churn imports and protection lists.
+
+**When touching those tests:** consider renaming the *file* or `describe` block only if you are already editing them for another reason, and update [TEST_PROTECTION_RULES.json](../../tests/TEST_PROTECTION_RULES.json) / this audit if paths change.
+
+**Overlap worth conscious consolidation (not automatic deletion):** backend LLM quota tests listed as merge-only candidates (`test_llm_admin_token_quota_behavior.py` vs `test_llm_token_quota_behavior.py`) — keep both until a human decides whether admin-policy-only cases should move into a single parametrized module; concurrency and stress files should stay separate.
+
+**E2E vs API drift:** Playwright titles and comments should avoid promising **per-course quota policy** if the product moved settings to **global admin policy**; prefer describing what the UI actually does (endpoint selection, save failure recovery, etc.) so future readers do not design new tests against a retired model.
+
 ## Recommended Next Review Targets
 
 - `backend-courses` and `backend-roster`: many related enrollment and roster rules with similar helper usage

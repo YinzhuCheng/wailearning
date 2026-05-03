@@ -356,6 +356,8 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 - **SQLite vs PostgreSQL semantics:** Transaction boundaries, uniqueness timing, and **`SERIAL`** vs SQLite autoincrement can diverge; Postgres-only paths deserve **periodic** CI or manual smoke with `TEST_DATABASE_URL`.
 - **Large orchestration modules (`llm_grading`, heavy routers):** Fixes in one branch of grading or roster flows can **couple** unexpectedly — prefer **narrow pytest** for extracted helpers when refactoring.
 
+Additional pitfalls from the same pass are recorded as **Pitfall 41–42** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (mock patch paths after refactors; avoiding `tail` on full pytest output).
+
 **New focused suites (additive):**
 
 - `tests/postgres/test_postgres_dialect_guards.py` — twenty guards that **skip on SQLite** unless `TEST_DATABASE_URL` is PostgreSQL (see `tests/postgres/conftest.py`).
