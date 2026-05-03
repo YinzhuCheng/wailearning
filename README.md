@@ -108,7 +108,7 @@ Windows convenience launcher:
 ops\scripts\windows\start-admin-frontend.bat
 ```
 
-Default local frontend URL: `http://127.0.0.1:5173` or the Vite port shown in the terminal.
+Default local frontend URL: `http://127.0.0.1:3000` unless `VITE_DEV_PORT` overrides it.
 
 ### Parent Portal
 
@@ -124,6 +124,8 @@ Windows convenience launcher:
 ops\scripts\windows\start-parent-frontend.bat
 ```
 
+Default local parent-portal URL: `http://127.0.0.1:5174` unless `VITE_DEV_PORT` overrides it.
+
 ## Core Environment Variables
 
 Key backend settings are defined in [`apps/backend/wailearning_backend/core/config.py`](apps/backend/wailearning_backend/core/config.py).
@@ -133,11 +135,17 @@ Key backend settings are defined in [`apps/backend/wailearning_backend/core/conf
 - `APP_ENV`
 - `INIT_ADMIN_USERNAME`
 - `INIT_ADMIN_PASSWORD`
+- `INIT_ADMIN_REAL_NAME`
 - `INIT_DEFAULT_DATA`
 - `ALLOW_PUBLIC_REGISTRATION`
+- `BACKEND_CORS_ORIGINS`
+- `TRUSTED_HOSTS`
 - `ENABLE_LLM_GRADING_WORKER`
 - `LLM_GRADING_WORKER_LEADER`
+- `LLM_GRADING_WORKER_POLL_SECONDS`
 - `LLM_GRADING_TASK_STALE_SECONDS`
+- `DEFAULT_LLM_API_KEY`
+- `REQUIRE_STRONG_SECRETS`
 - `E2E_DEV_SEED_ENABLED`
 - `E2E_DEV_SEED_TOKEN`
 
@@ -163,9 +171,7 @@ npm run test:e2e
 
 Read [docs/development/TEST_EXECUTION_PITFALLS.md](docs/development/TEST_EXECUTION_PITFALLS.md) before assuming test failures are product regressions, especially on Windows + PowerShell or when running Playwright.
 
-Optional Playwright backlog specs (`tests/e2e/web-admin/future-advanced-coverage*.spec.js`) are gated by **`E2E_ENABLE_BACKLOG_SPECS`**; see [docs/development/E2E_BACKLOG_SCENARIOS.md](docs/development/E2E_BACKLOG_SCENARIOS.md).
-
-Update: those files now ship **implemented** advanced scenarios (see **`future-advanced-coverage-helpers.cjs`**); the `E2E_ENABLE_BACKLOG_SPECS` gate described in the linked doc is **legacy** and no longer applies unless your checkout predates that change.
+The historical “backlog” Playwright pair, `tests/e2e/web-admin/future-advanced-coverage*.spec.js`, is now implemented as normal runnable coverage in this branch. The old `E2E_ENABLE_BACKLOG_SPECS` gate survives only as a historical note for older branches; see [docs/development/E2E_BACKLOG_SCENARIOS.md](docs/development/E2E_BACKLOG_SCENARIOS.md).
 
 See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, reading order, and current regression strategy.
 

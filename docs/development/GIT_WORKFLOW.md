@@ -60,4 +60,4 @@ Resolve conflicts locally before deployment.
 
 ## Related Docs
 
-- [Deployment and Operations](DEPLOYMENT_AND_OPERATIONS.md)
+- [Deployment and Operations](../operations/DEPLOYMENT_AND_OPERATIONS.md)

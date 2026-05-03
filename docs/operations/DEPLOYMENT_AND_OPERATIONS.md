@@ -17,6 +17,7 @@ Typical filesystem layout:
 - `/opt/dd-class/source`
 - `/opt/dd-class/venv`
 - `/opt/dd-class/shared/.env.production`
+- `/opt/dd-class/shared/uploads`
 - `/opt/dd-class/backups`
 - `/var/www/wailearning.xyz/admin`
 - `/var/www/wailearning.xyz/parent`
@@ -48,11 +49,15 @@ SECRET_KEY=<strong-random-value>
 ALLOW_PUBLIC_REGISTRATION=false
 INIT_ADMIN_USERNAME=admin
 INIT_ADMIN_PASSWORD=<strong-admin-password>
+INIT_ADMIN_REAL_NAME=System Administrator
 INIT_DEFAULT_DATA=false
+BACKEND_CORS_ORIGINS=https://wailearning.xyz,https://www.wailearning.xyz
+TRUSTED_HOSTS=wailearning.xyz,www.wailearning.xyz,127.0.0.1,localhost
 ENABLE_LLM_GRADING_WORKER=true
 LLM_GRADING_WORKER_LEADER=true
 LLM_GRADING_WORKER_POLL_SECONDS=2
 LLM_GRADING_TASK_STALE_SECONDS=600
+REQUIRE_STRONG_SECRETS=true
 ```
 
 Production rules:
@@ -61,6 +66,8 @@ Production rules:
 - never keep the default weak secret,
 - normally keep `ALLOW_PUBLIC_REGISTRATION=false`,
 - use `INIT_DEFAULT_DATA=false` unless you intentionally want demo accounts and demo courses,
+- set `TRUSTED_HOSTS` and `BACKEND_CORS_ORIGINS` deliberately instead of relying on development defaults,
+- consider `REQUIRE_STRONG_SECRETS=true` even outside strict production startup paths so weak secrets fail early,
 - only one production backend leader should usually run the grading worker.
 
 ## Database Initialization
@@ -89,6 +96,14 @@ Primary scripts:
 - `ops/scripts/redeploy.sh`
 - `ops/scripts/pull_and_deploy.sh`
 
+Implementation notes that matter operationally:
+
+- `deploy_backend.sh` creates `${APP_ROOT}/shared/uploads` and migrates legacy `uploads/` content there when present
+- backend deployment installs `ops/systemd/ddclass-backend.service` and restarts `ddclass-backend.service`
+- frontend deployment builds from `apps/web/admin` and syncs `dist/` into `${ADMIN_WEB_ROOT}`
+- parent deployment builds from `apps/web/parent` and syncs `dist/` into `${PARENT_WEB_ROOT}`
+- both frontend deploy scripts also refresh the nginx site file from `ops/nginx/wailearning.xyz*.conf`
+
 Recommended full deploy:
 
 ```bash
@@ -110,6 +125,8 @@ Useful variants:
 - `GIT_RESET_WORKTREE_BEFORE_FETCH=1` when local server edits are blocking checkout.
 - `SAFE_BACKUP_BEFORE_DEPLOY=1` when you want a pre-upgrade database and shared-data backup.
 - `GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0` when you want fail-fast behavior instead of auto-stash.
+- `FRONTEND_ONLY=1` when you intentionally want only the admin SPA rebuilt and deployed.
+- `APP_URL=https://...` when you want the post-deploy public check to hit a specific public hostname.
 
 ## Safe Upgrade Principles
 
@@ -183,6 +200,6 @@ sudo journalctl -u postgresql -n 100 --no-pager
 
 ## Related Docs
 
-- [LLM and Homework Guide](LLM_HOMEWORK_GUIDE.md)
+- [LLM and Homework Guide](../product/LLM_HOMEWORK_GUIDE.md)
 - [Admin Bootstrap and Demo Seed](ADMIN_BOOTSTRAP.md)
-- [Git Workflow](GIT_WORKFLOW.md)
+- [Git Workflow](../development/GIT_WORKFLOW.md)
