@@ -31,7 +31,7 @@
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
-      <el-card shadow="never">
+      <el-card shadow="never" class="homework-list-card">
         <el-table
           ref="homeworkTableRef"
           :data="homeworks"
@@ -39,6 +39,24 @@
           row-key="id"
           @selection-change="onHomeworkSelectionChange"
         >
+          <template #empty>
+            <div class="homework-empty-state">
+              <div class="homework-empty-state__title">
+                {{ userStore.isStudent ? '暂无课程作业' : '当前课程还没有作业' }}
+              </div>
+              <p>
+                {{ userStore.isStudent ? '老师发布作业后会显示在这里。' : '发布第一份作业后，学生提交、评分任务和批量策略会在这里汇总。' }}
+              </p>
+              <el-button
+                v-if="!userStore.isStudent"
+                type="primary"
+                data-testid="homework-empty-create"
+                @click="openCreateDialog"
+              >
+                发布作业
+              </el-button>
+            </div>
+          </template>
           <el-table-column
             v-if="!userStore.isStudent"
             type="selection"
@@ -853,6 +871,42 @@ watch(selectedCourse, () => {
   gap: 6px;
 }
 
+.homework-list-card {
+  overflow: hidden;
+}
+
+.homework-list-card :deep(.el-card__body) {
+  overflow-x: auto;
+}
+
+.homework-list-card :deep(.el-table) {
+  min-width: 1060px;
+}
+
+.homework-empty-state {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 16px;
+  color: #64748b;
+  text-align: center;
+}
+
+.homework-empty-state__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.homework-empty-state p {
+  max-width: 420px;
+  margin: 0;
+  line-height: 1.6;
+}
+
 .late-rules {
   display: flex;
   flex-direction: column;
@@ -862,6 +916,14 @@ watch(selectedCourse, () => {
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
+  }
+
+  .homework-page {
+    overflow-x: hidden;
+  }
+
+  .homework-list-card :deep(.el-card__body) {
+    padding: 12px;
   }
 }
 </style>

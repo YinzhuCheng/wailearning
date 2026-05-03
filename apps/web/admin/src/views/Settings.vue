@@ -675,23 +675,47 @@ onMounted(() => {
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.settings-container :deep(.el-card) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.settings-container :deep(.el-card__body) {
+  min-width: 0;
+}
+
+.settings-container :deep(.el-form) {
+  min-width: 0;
 }
 
 .card-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-size: 18px;
   font-weight: 700;
 }
 
 .card-header--space {
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card-header span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .logo-upload,
 .background-upload {
   width: 100%;
+  min-width: 0;
 }
 
 .logo-preview,
@@ -705,7 +729,7 @@ onMounted(() => {
 }
 
 .background-preview img {
-  max-width: 400px;
+  max-width: min(400px, 100%);
   max-height: 200px;
   border-radius: 8px;
 }
@@ -724,12 +748,14 @@ onMounted(() => {
 
 .preview-card {
   margin-top: 20px;
+  min-width: 0;
 }
 
 .login-preview {
   background: #f5f7fa;
   padding: 20px;
   border-radius: 8px;
+  overflow: hidden;
 }
 
 .preview-background {
@@ -747,7 +773,8 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.95);
   padding: 40px;
   border-radius: 12px;
-  width: 350px;
+  width: min(350px, 100%);
+  min-width: 0;
   text-align: center;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
@@ -764,12 +791,14 @@ onMounted(() => {
 .preview-title {
   margin: 10px 0;
   color: #333;
+  overflow-wrap: anywhere;
 }
 
 .preview-intro {
   color: #666;
   font-size: 14px;
   margin-bottom: 20px;
+  overflow-wrap: anywhere;
 }
 
 .preview-footer {
@@ -784,10 +813,62 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.preview-card :deep(.el-table) {
+  min-width: 980px;
+}
+
+.preview-card :deep(.el-table__body-wrapper),
+.preview-card :deep(.el-table__header-wrapper) {
+  min-width: 0;
+}
+
+.preview-card :deep(.el-card__body) {
+  overflow-x: auto;
+}
+
 @media (max-width: 768px) {
+  .settings-container {
+    padding: 16px 14px;
+  }
+
+  .settings-container :deep(.el-card__body) {
+    padding: 16px;
+  }
+
+  .settings-container :deep(.el-form-item) {
+    display: block;
+  }
+
+  .settings-container :deep(.el-form-item__label) {
+    display: block;
+    width: 100% !important;
+    margin-bottom: 8px;
+    text-align: left;
+  }
+
+  .settings-container :deep(.el-form-item__content) {
+    display: block;
+    margin-left: 0 !important;
+    min-width: 0;
+  }
+
   .card-header--space {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .login-preview {
+    padding: 12px;
+  }
+
+  .preview-background {
+    min-height: 360px;
+    height: auto;
+    padding: 18px;
+  }
+
+  .preview-login-box {
+    padding: 24px 18px;
   }
 }
 </style>

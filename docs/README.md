@@ -13,6 +13,7 @@ This directory is the authoritative documentation home for the repository. The r
 - [Test Suite Map](development/TEST_SUITE_MAP.md)
 - [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
 - [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+- [UI/UX Audit And Responsive Repair Notes](development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md)
 - [E2E advanced coverage specs and historical backlog note](development/E2E_BACKLOG_SCENARIOS.md)
 - [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
 - [Parent Portal](product/PARENT_PORTAL.md)
@@ -104,9 +105,10 @@ Why:
 2. [Encoding And Mojibake Safety](development/ENCODING_AND_MOJIBAKE_SAFETY.md)
 3. [Test Suite Map](development/TEST_SUITE_MAP.md)
 4. [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
-5. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
-6. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
-7. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+5. [UI/UX Audit And Responsive Repair Notes](development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md) when continuing admin SPA visual or responsive work
+6. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
+7. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
+8. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 
 ### Production deployment
 

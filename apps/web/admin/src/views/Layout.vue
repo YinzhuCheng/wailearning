@@ -1,6 +1,10 @@
 <template>
-  <el-container class="layout-container">
-    <el-aside :width="isCollapsed ? '72px' : '240px'" class="sidebar">
+  <el-container
+    class="layout-container"
+    :class="{ 'layout-container--mobile-sidebar-open': isMobile && !isCollapsed }"
+  >
+    <div v-if="isMobile && !isCollapsed" class="mobile-sidebar-backdrop" @click="isCollapsed = true" />
+    <el-aside :width="sidebarWidth" class="sidebar">
       <div class="logo">
         <div class="logo-main">
           <div class="logo-icon">
@@ -63,6 +67,14 @@
     <el-container>
       <el-header class="header">
         <div class="header-left">
+          <el-button
+            v-if="isMobile"
+            class="mobile-menu-btn"
+            :icon="isCollapsed ? Expand : Fold"
+            circle
+            size="small"
+            @click="isCollapsed = !isCollapsed"
+          />
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: homePath }">首页</el-breadcrumb-item>
             <el-breadcrumb-item v-if="homeworkBreadcrumbParent" :to="{ path: '/homework' }">
@@ -179,6 +191,7 @@ const userStore = useUserStore()
 const adminHomePath = '/students'
 const mobileBreakpoint = 768
 const isCollapsed = ref(false)
+const isMobile = ref(false)
 
 const headerAvatarSrc = ref('')
 let headerAvatarBlobUrl = ''
@@ -257,6 +270,12 @@ const homePath = computed(() => {
 const showClassContext = computed(() => userStore.isClassTeacher && Boolean(currentClassId.value))
 const showCourseContext = computed(() => !userStore.isAdmin && !userStore.isClassTeacher && Boolean(selectedCourse.value))
 const showCourseSwitcher = computed(() => !userStore.isAdmin && !userStore.isClassTeacher && availableCourses.value.length > 0)
+const sidebarWidth = computed(() => {
+  if (isMobile.value) {
+    return isCollapsed.value ? '0px' : '240px'
+  }
+  return isCollapsed.value ? '72px' : '240px'
+})
 const classContextText = computed(() => `班级课程 ${classTeacherCourses.value.length} 门`)
 
 const routeNameMap = {
@@ -375,7 +394,12 @@ const roleText = role => ({
 }[role] || '未知角色')
 
 const syncResponsiveSidebar = () => {
-  if (typeof window !== 'undefined' && window.innerWidth <= mobileBreakpoint) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  isMobile.value = window.innerWidth <= mobileBreakpoint
+  if (isMobile.value) {
     isCollapsed.value = true
   }
 }
@@ -496,11 +520,23 @@ watch(notificationSyncParams, () => {
   background: #f4f7fb;
 }
 
+.layout-container > .el-container {
+  min-width: 0;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #0f172a 0%, #132238 100%);
   color: #fff;
+  transition: width 0.2s ease, transform 0.2s ease;
+}
+
+.mobile-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  background: rgba(15, 23, 42, 0.36);
 }
 
 .sidebar-body {
@@ -618,12 +654,14 @@ watch(notificationSyncParams, () => {
   display: flex;
   align-items: center;
   gap: 18px;
+  min-width: 0;
 }
 
 .context-chip {
   display: flex;
   align-items: center;
   gap: 10px;
+  max-width: 100%;
   border-radius: 999px;
   background: #eff6ff;
   padding: 8px 14px;
@@ -641,8 +679,16 @@ watch(notificationSyncParams, () => {
 
 .context-chip__meta {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 2px;
+}
+
+.context-chip__meta strong,
+.context-chip__meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .context-chip__meta span {
@@ -654,6 +700,7 @@ watch(notificationSyncParams, () => {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .course-option {
@@ -695,6 +742,7 @@ watch(notificationSyncParams, () => {
 }
 
 .main-content {
+  min-width: 0;
   padding: 0;
 }
 
@@ -707,6 +755,30 @@ watch(notificationSyncParams, () => {
 }
 
 @media (max-width: 768px) {
+  .layout-container {
+    position: relative;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 999;
+    overflow: hidden;
+    box-shadow: 18px 0 40px rgba(15, 23, 42, 0.2);
+  }
+
+  .sidebar[style*="0px"] {
+    transform: translateX(-100%);
+  }
+
+  .layout-container--mobile-sidebar-open {
+    overflow: hidden;
+  }
+
+  .logo {
+    padding: 14px 12px;
+  }
+
   .header {
     height: auto;
     flex-direction: column;
@@ -716,8 +788,35 @@ watch(notificationSyncParams, () => {
   }
 
   .header-left {
-    flex-direction: column;
+    width: 100%;
+    flex-wrap: wrap;
     align-items: flex-start;
+    gap: 10px;
+  }
+
+  .mobile-menu-btn {
+    flex: 0 0 auto;
+  }
+
+  .header-left :deep(.el-breadcrumb) {
+    min-width: 0;
+    max-width: calc(100% - 44px);
+  }
+
+  .context-chip {
+    width: 100%;
+    border-radius: 18px;
+    align-items: flex-start;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .user-meta {
+    display: none;
   }
 }
 </style>
