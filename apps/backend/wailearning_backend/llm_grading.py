@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -8,26 +9,50 @@ from typing import Any, Optional
 
 import httpx
 import tiktoken
+from sqlalchemy import func
 from sqlalchemy.orm.attributes import flag_modified
 
 from apps.backend.wailearning_backend.homework_notifications import notify_student_homework_graded
 from apps.backend.wailearning_backend.markdown_llm import append_markdown_with_dataurl_images_to_parts, expand_markdown_images_for_llm
 from apps.backend.wailearning_backend.domains.llm.attachments import (
+    ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS,
+    ITERATION_PRIOR_COMMENT_CHAR_MAX,
+    ITERATION_PRIOR_NOTE_CHAR_MAX,
+    MAX_ZIP_DEPTH,
+    MAX_ZIP_FILES,
+    MAX_ZIP_TOTAL_BYTES,
     MaterialBlock,
     VISION_TEST_IMAGE_DATA_URL,
+    _classify_and_extract,
     _collect_attachment_blocks,
     _truncate_text,
+    _walk_rar_bytes,
+    _walk_zip_bytes,
+    build_png_data_url_from_image_bytes,
 )
 
 
 from apps.backend.wailearning_backend.domains.llm.protocol import (
+    NON_RETRYABLE_STATUS_CODES,
+    RETRYABLE_STATUS_CODES,
     build_chat_completion_url as _build_chat_completion_url,
     extract_message_content as _extract_message_content,
+    parse_scoring_json as _parse_scoring_json,
+    redact_endpoint_host as _redact_endpoint_host,
 )
 from apps.backend.wailearning_backend.domains.llm.quota import (
+    get_quota_usage_snapshot,
+    get_student_quota_usage_snapshot,
+    get_used_tokens_for_scope as _get_used_tokens_for_scope,
+    precheck_quota,
     record_usage_if_needed,
     release_quota_reservation,
     reserve_quota_tokens,
+)
+from apps.backend.wailearning_backend.llm_token_quota import (
+    quota_calendar_for_timezone,
+    resolve_effective_daily_student_tokens,
+    resolve_max_parallel_grading_tasks,
 )
 
 
@@ -1282,6 +1307,160 @@ def _collect_grading_endpoints_for_config(
         key=lambda row: (row.priority, row.id),
     )
     return [], flat
+
+
+def _request_grade_from_endpoint(
+    *,
+    preset: LLMEndpointPreset,
+    homework: Homework,
+    attempt: HomeworkAttempt,
+    config: CourseLLMConfig,
+    material: dict[str, Any],
+    task: Optional[HomeworkGradingTask] = None,
+) -> dict[str, Any]:
+    timeout = httpx.Timeout(
+        connect=preset.connect_timeout_seconds or 10,
+        read=preset.read_timeout_seconds or 120,
+        write=preset.read_timeout_seconds or 120,
+        pool=preset.connect_timeout_seconds or 10,
+    )
+    payload = {
+        "model": preset.model_name,
+        "messages": _build_scoring_messages(homework, attempt, config, material),
+        "temperature": 0.2,
+        "max_tokens": config.max_output_tokens or 1200,
+    }
+    endpoint_url = _build_chat_completion_url(preset.base_url)
+    if task is not None:
+        _append_llm_call_log(
+            task,
+            {
+                "phase": "http_request",
+                "level": "info",
+                "preset": preset.name,
+                "model": preset.model_name,
+                "endpoint": _redact_endpoint_host(endpoint_url),
+            },
+        )
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(
+                endpoint_url,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {preset.api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+    except httpx.TimeoutException as exc:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {"phase": "http_error", "level": "error", "preset": preset.name, "message": f"请求超时：{exc}"},
+            )
+        raise RetryableLLMError(f"请求超时：{exc}") from exc
+    except httpx.HTTPError as exc:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {"phase": "http_error", "level": "error", "preset": preset.name, "message": f"网络请求失败：{exc}"},
+            )
+        raise RetryableLLMError(f"网络请求失败：{exc}") from exc
+
+    if response.status_code in NON_RETRYABLE_STATUS_CODES:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "http_response",
+                    "level": "error",
+                    "preset": preset.name,
+                    "http_status": response.status_code,
+                    "body_excerpt": (response.text or "")[:400],
+                },
+            )
+        raise NonRetryableLLMError(f"鉴权或权限失败：HTTP {response.status_code}")
+    if response.status_code == 413:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {"phase": "http_response", "level": "error", "preset": preset.name, "http_status": 413},
+            )
+        raise NonRetryableLLMError("请求内容过大，端点拒绝处理。")
+    if response.status_code in RETRYABLE_STATUS_CODES:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "http_response",
+                    "level": "warn",
+                    "preset": preset.name,
+                    "http_status": response.status_code,
+                    "body_excerpt": (response.text or "")[:400],
+                },
+            )
+        raise RetryableLLMError(f"端点暂时不可用：HTTP {response.status_code}")
+    if response.status_code >= 400:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "http_response",
+                    "level": "error",
+                    "preset": preset.name,
+                    "http_status": response.status_code,
+                    "body_excerpt": (response.text or "")[:400],
+                },
+            )
+        raise NonRetryableLLMError(f"端点请求失败：HTTP {response.status_code} {response.text[:300]}")
+
+    try:
+        data = response.json()
+    except ValueError as exc:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {"phase": "parse_error", "level": "warn", "preset": preset.name, "message": "模型返回的不是合法 JSON 响应。"},
+            )
+        raise RetryableLLMError("模型返回的不是合法 JSON 响应。") from exc
+
+    raw_content = _extract_message_content(data)
+    try:
+        score_payload = _parse_scoring_json(raw_content, homework)
+    except RetryableLLMError as exc:
+        if task is not None:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "parse_model_output",
+                    "level": "warn",
+                    "preset": preset.name,
+                    "message": str(exc),
+                    "raw_excerpt": (raw_content or "")[:500],
+                },
+            )
+        raise
+    usage = data.get("usage") or {}
+    if task is not None:
+        _append_llm_call_log(
+            task,
+            {
+                "phase": "success",
+                "level": "info",
+                "preset": preset.name,
+                "usage": usage,
+            },
+        )
+    return {
+        "score": score_payload["score"],
+        "comment": score_payload["comment"],
+        "usage": {
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+        },
+        "raw_response": raw_content,
+    }
 
 
 def _grade_with_endpoint_group(

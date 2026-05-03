@@ -1,8 +1,9 @@
 import os
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from apps.backend.wailearning_backend.attachments import ensure_upload_directories
 from apps.backend.wailearning_backend.core.auth import get_password_hash
@@ -620,7 +621,11 @@ def _ensure_llm_assistant_system_user() -> None:
                 is_active=False,
             )
         )
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Parallel startup or repeated bootstrap can race the unique username insert.
+            db.rollback()
     except Exception:
         db.rollback()
         raise

@@ -5,6 +5,7 @@ import io
 import json
 import mimetypes
 import os
+import re
 import subprocess
 import tempfile
 import zipfile
