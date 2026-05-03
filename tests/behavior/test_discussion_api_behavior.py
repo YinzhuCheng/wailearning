@@ -12,10 +12,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.auth import get_password_hash
-from app.database import Base, SessionLocal, engine
-from app.main import app
-from app.models import Class, CourseMaterial, Homework, Subject, User, UserRole
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import Class, CourseMaterial, Homework, Subject, User, UserRole
 from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 from tests.material_flow import get_uncategorized_id, headers_for, make_subject_with_roster, ui_create_material
 
@@ -30,7 +30,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield

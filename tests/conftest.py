@@ -57,8 +57,8 @@ _DEFAULT_WORKER_LEADER = os.environ["LLM_GRADING_WORKER_LEADER"] == "true"
 
 @pytest.fixture(autouse=True)
 def _reset_worker_and_e2e_settings():
-    from app.config import settings
-    from app.llm_grading import worker_manager
+    from apps.backend.wailearning_backend.core.config import settings
+    from apps.backend.wailearning_backend.llm_grading import worker_manager
 
     worker_manager.stop()
     settings.ENABLE_LLM_GRADING_WORKER = _DEFAULT_ENABLE_WORKER

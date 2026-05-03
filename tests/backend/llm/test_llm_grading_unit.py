@@ -8,8 +8,8 @@ import httpx
 import pytest
 from sqlalchemy import text
 
-from app.database import Base, SessionLocal, engine
-from app.llm_grading import (
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.llm_grading import (
     VISION_TEST_IMAGE_DATA_URL,
     MaterialBlock,
     _build_chat_completion_url,
@@ -22,7 +22,7 @@ from app.llm_grading import (
     validate_endpoint_connectivity,
 )
 import base64
-from app.models import CourseLLMConfig, Homework, HomeworkAttempt, Subject
+from apps.backend.wailearning_backend.db.models import CourseLLMConfig, Homework, HomeworkAttempt, Subject
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +35,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -69,7 +69,7 @@ def test_parse_scoring_json_markdown_fence():
 
 
 def test_parse_scoring_json_out_of_range():
-    from app.llm_grading import RetryableLLMError
+    from apps.backend.wailearning_backend.llm_grading import RetryableLLMError
 
     hw = Homework(max_score=10, grade_precision="integer")
     with pytest.raises(RetryableLLMError) as exc:
@@ -129,7 +129,7 @@ def test_precheck_quota_allows_unlimited():
     db = SessionLocal()
     try:
         cfg = CourseLLMConfig(subject_id=1, is_enabled=True)
-        with mock.patch("app.llm_grading.resolve_effective_daily_student_tokens", return_value=2_000_000_000):
+        with mock.patch("apps.backend.wailearning_backend.llm_grading.resolve_effective_daily_student_tokens", return_value=2_000_000_000):
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=999_999_999)
         assert ok is True
         assert code is None
@@ -146,8 +146,8 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
             is_enabled=True,
             quota_timezone="UTC",
         )
-        with mock.patch("app.llm_grading._get_used_tokens_for_scope", return_value=95), mock.patch(
-            "app.llm_grading.resolve_effective_daily_student_tokens", return_value=100
+        with mock.patch("apps.backend.wailearning_backend.llm_grading._get_used_tokens_for_scope", return_value=95), mock.patch(
+            "apps.backend.wailearning_backend.llm_grading.resolve_effective_daily_student_tokens", return_value=100
         ):
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=10)
         assert ok is False

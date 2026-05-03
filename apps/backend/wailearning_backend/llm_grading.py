@@ -1,0 +1,1949 @@
+from __future__ import annotations
+
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, wait
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
+
+import httpx
+import tiktoken
+from sqlalchemy.orm.attributes import flag_modified
+
+from apps.backend.wailearning_backend.homework_notifications import notify_student_homework_graded
+from apps.backend.wailearning_backend.markdown_llm import append_markdown_with_dataurl_images_to_parts, expand_markdown_images_for_llm
+from apps.backend.wailearning_backend.domains.llm.attachments import (
+    MaterialBlock,
+    VISION_TEST_IMAGE_DATA_URL,
+    _collect_attachment_blocks,
+    _truncate_text,
+)
+
+
+from apps.backend.wailearning_backend.domains.llm.protocol import (
+    build_chat_completion_url as _build_chat_completion_url,
+    extract_message_content as _extract_message_content,
+)
+from apps.backend.wailearning_backend.domains.llm.quota import (
+    record_usage_if_needed,
+    release_quota_reservation,
+    reserve_quota_tokens,
+)
+
+
+from sqlalchemy.orm import Session, joinedload
+
+from apps.backend.wailearning_backend.core.config import settings
+from apps.backend.wailearning_backend.db.database import SessionLocal
+from apps.backend.wailearning_backend.llm_group_routing import GroupRoutingContext
+from apps.backend.wailearning_backend.db.models import (
+    CourseLLMConfig,
+    CourseLLMConfigEndpoint,
+    Homework,
+    HomeworkAttempt,
+    HomeworkGradingTask,
+    HomeworkScoreCandidate,
+    HomeworkSubmission,
+    LLMEndpointPreset,
+    LLMGroup,
+)
+
+# After the first failed grading task for an attempt, enqueue at most this many extra tries.
+_MAX_AUTO_RETRY_TASKS_PER_ATTEMPT = 2
+_LLM_CALL_LOG_MAX_EVENTS = 60
+
+_AUTO_RETRY_ELIGIBLE_ERROR_CODES = frozenset(
+    {
+        "llm_call_failed",
+        "unexpected_error",
+    }
+)
+
+
+from apps.backend.wailearning_backend.domains.llm.errors import NonRetryableLLMError, RetryableLLMError
+
+
+class _WorkerManager:
+    def __init__(self) -> None:
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._lock = threading.Lock()
+        self._executor: Optional[ThreadPoolExecutor] = None
+        self._executor_workers: int = 0
+
+    def start(self) -> None:
+        if not settings.ENABLE_LLM_GRADING_WORKER:
+            return
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                return
+            self._stop_event.clear()
+            self._thread = threading.Thread(target=self._run, name="llm-grading-worker", daemon=True)
+            self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        thread = self._thread
+        with self._lock:
+            if self._executor:
+                self._executor.shutdown(wait=False)
+                self._executor = None
+                self._executor_workers = 0
+            self._thread = None
+        if thread and thread.is_alive():
+            thread.join(timeout=1.0)
+
+    def is_running(self) -> bool:
+        thread = self._thread
+        return bool(thread and thread.is_alive() and not self._stop_event.is_set())
+
+    def _ensure_executor(self, workers: int) -> ThreadPoolExecutor:
+        w = max(1, int(workers))
+        if self._executor is not None and self._executor_workers == w:
+            return self._executor
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+        self._executor = ThreadPoolExecutor(max_workers=w, thread_name_prefix="llm-grade")
+        self._executor_workers = w
+        return self._executor
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                db = SessionLocal()
+                try:
+                    cap = resolve_max_parallel_grading_tasks(db)
+                finally:
+                    db.close()
+                claimed = claim_grading_tasks_batch(cap)
+                if not claimed:
+                    self._stop_event.wait(settings.LLM_GRADING_WORKER_POLL_SECONDS)
+                    continue
+                ex = self._ensure_executor(cap)
+                futs = [ex.submit(process_grading_task, tid) for tid in claimed]
+                wait(futs)
+                for fut in futs:
+                    try:
+                        fut.result()
+                    except Exception as exc:  # pragma: no cover
+                        print(f"LLM grading task error: {exc}")
+            except Exception as exc:  # pragma: no cover - defensive background logging
+                print(f"LLM grading worker loop error: {exc}")
+                self._stop_event.wait(settings.LLM_GRADING_WORKER_POLL_SECONDS)
+
+
+worker_manager = _WorkerManager()
+
+# Serialize grading for a single task id in-process (duplicate worker wakeups / tests).
+_task_grading_locks: dict[int, threading.Lock] = {}
+_task_grading_locks_mutex = threading.Lock()
+
+
+def _grading_lock_for_task(task_id: int) -> threading.Lock:
+    with _task_grading_locks_mutex:
+        if task_id not in _task_grading_locks:
+            _task_grading_locks[task_id] = threading.Lock()
+        return _task_grading_locks[task_id]
+
+
+def start_grading_worker() -> None:
+    worker_manager.start()
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def normalize_score_for_homework(homework: Homework, score: float | int) -> float:
+    value = max(0.0, min(float(score), float(homework.max_score or 100)))
+    if (homework.grade_precision or "integer") == "decimal_1":
+        return round(value, 1)
+    return float(round(value))
+
+
+def _teacher_candidate_sort_key(candidate: HomeworkScoreCandidate) -> tuple[float, datetime]:
+    """Higher score first, then newer; used only among teacher rows."""
+    ts = candidate.updated_at or candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    return (float(candidate.score or 0), ts)
+
+
+def _auto_candidate_sort_key(candidate: HomeworkScoreCandidate) -> tuple[float, datetime]:
+    """Among auto rows: higher score, then newer."""
+    ts = candidate.updated_at or candidate.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    return (float(candidate.score or 0), ts)
+
+
+def get_best_score_candidate(
+    db: Session,
+    homework_id: int,
+    student_id: int,
+    *,
+    latest_attempt_id: Optional[int] = None,
+) -> Optional[HomeworkScoreCandidate]:
+    """
+    Best visible score for the submission summary: only the **latest attempt**'s
+    candidates apply (if latest_attempt_id is set). On that attempt, any **teacher**
+    score takes precedence over automatic scores so LLM output cannot override a
+    teacher's grade in the UI.
+    """
+    query = (
+        db.query(HomeworkScoreCandidate)
+        .filter(
+            HomeworkScoreCandidate.homework_id == homework_id,
+            HomeworkScoreCandidate.student_id == student_id,
+        )
+    )
+    if latest_attempt_id is not None:
+        query = query.filter(HomeworkScoreCandidate.attempt_id == latest_attempt_id)
+    candidates = query.all()
+    valid_candidates = [
+        c
+        for c in candidates
+        if c.score is not None and getattr(c.attempt, "counts_toward_final_score", True)
+    ]
+    if not valid_candidates:
+        return None
+    teacher_rows = [c for c in valid_candidates if c.source == "teacher"]
+    if teacher_rows:
+        return max(teacher_rows, key=_teacher_candidate_sort_key)
+    auto_rows = [c for c in valid_candidates if c.source == "auto"]
+    if auto_rows:
+        return max(auto_rows, key=_auto_candidate_sort_key)
+    return max(valid_candidates, key=_auto_candidate_sort_key)
+
+
+def refresh_submission_summary(db: Session, summary: HomeworkSubmission) -> HomeworkSubmission:
+    best_candidate = get_best_score_candidate(
+        db, summary.homework_id, summary.student_id, latest_attempt_id=summary.latest_attempt_id
+    )
+    summary.review_score = best_candidate.score if best_candidate else None
+    summary.review_comment = (best_candidate.comment or None) if best_candidate else None
+
+    if summary.latest_attempt_id:
+        latest_attempt = (
+            db.query(HomeworkAttempt)
+            .filter(HomeworkAttempt.id == summary.latest_attempt_id)
+            .first()
+        )
+        if latest_attempt:
+            summary.content = latest_attempt.content
+            summary.attachment_name = latest_attempt.attachment_name
+            summary.attachment_url = latest_attempt.attachment_url
+            summary.submitted_at = latest_attempt.submitted_at
+            latest_task = (
+                db.query(HomeworkGradingTask)
+                .filter(HomeworkGradingTask.attempt_id == latest_attempt.id)
+                .order_by(HomeworkGradingTask.created_at.desc(), HomeworkGradingTask.id.desc())
+                .first()
+            )
+            summary.latest_task_status = latest_task.status if latest_task else None
+            err_task = latest_task
+            if latest_task and latest_task.status in ("queued", "processing"):
+                prev_failed = (
+                    db.query(HomeworkGradingTask)
+                    .filter(
+                        HomeworkGradingTask.attempt_id == latest_attempt.id,
+                        HomeworkGradingTask.status == "failed",
+                        HomeworkGradingTask.id < latest_task.id,
+                    )
+                    .order_by(HomeworkGradingTask.id.desc())
+                    .first()
+                )
+                if prev_failed:
+                    err_task = prev_failed
+            summary.latest_task_error = err_task.error_message if err_task else None
+    return summary
+
+
+def _course_has_any_endpoint_row(db: Session, config_id: int) -> bool:
+    return (
+        db.query(CourseLLMConfigEndpoint.id)
+        .filter(CourseLLMConfigEndpoint.config_id == config_id)
+        .first()
+        is not None
+    )
+
+
+def _pick_latest_validated_course_llm_template(
+    db: Session, *, exclude_subject_id: Optional[int] = None
+) -> Optional[CourseLLMConfig]:
+    """Another course's LLM row with at least one vision-validated active endpoint, most recently updated first."""
+    subq = (
+        db.query(CourseLLMConfigEndpoint.config_id)
+        .join(LLMEndpointPreset, LLMEndpointPreset.id == CourseLLMConfigEndpoint.preset_id)
+        .filter(
+            LLMEndpointPreset.is_active.is_(True),
+            LLMEndpointPreset.validation_status == "validated",
+            LLMEndpointPreset.supports_vision.is_(True),
+        )
+    )
+    ok_ids = [int(r[0]) for r in subq.distinct().all() if r[0] is not None]
+    if not ok_ids:
+        return None
+    q = (
+        db.query(CourseLLMConfig)
+        .options(
+            joinedload(CourseLLMConfig.groups).joinedload(LLMGroup.members),
+            joinedload(CourseLLMConfig.endpoints),
+        )
+        .filter(CourseLLMConfig.id.in_(ok_ids))
+    )
+    if exclude_subject_id is not None:
+        q = q.filter(CourseLLMConfig.subject_id != exclude_subject_id)
+    return q.order_by(CourseLLMConfig.updated_at.desc().nullslast(), CourseLLMConfig.id.desc()).first()
+
+
+def _copy_course_llm_from_template(db: Session, target: CourseLLMConfig, template: CourseLLMConfig) -> None:
+    """Replace target endpoints/groups with template's validated routing; copy tuning fields."""
+    target.is_enabled = bool(template.is_enabled)
+    target.response_language = template.response_language
+    target.estimated_chars_per_token = template.estimated_chars_per_token
+    target.estimated_image_tokens = template.estimated_image_tokens
+    target.max_input_tokens = template.max_input_tokens
+    target.max_output_tokens = template.max_output_tokens
+    target.quota_timezone = template.quota_timezone or "Asia/Shanghai"
+    target.system_prompt = template.system_prompt
+    target.teacher_prompt = template.teacher_prompt
+
+    db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == target.id).delete(
+        synchronize_session=False
+    )
+    db.query(LLMGroup).filter(LLMGroup.config_id == target.id).delete(synchronize_session=False)
+    db.flush()
+
+    template = (
+        db.query(CourseLLMConfig)
+        .options(
+            joinedload(CourseLLMConfig.groups).joinedload(LLMGroup.members).joinedload(CourseLLMConfigEndpoint.preset),
+            joinedload(CourseLLMConfig.endpoints).joinedload(CourseLLMConfigEndpoint.preset),
+        )
+        .filter(CourseLLMConfig.id == template.id)
+        .first()
+    )
+    if not template:
+        return
+
+    group_rows = sorted([g for g in (template.groups or []) if g is not None], key=lambda row: (row.priority, row.id))
+    if group_rows and any((g.members or []) for g in group_rows):
+        for gi, g_src in enumerate(group_rows):
+            g_new = LLMGroup(config_id=target.id, priority=gi + 1, name=(g_src.name or "").strip() or f"group {gi + 1}")
+            db.add(g_new)
+            db.flush()
+            for mj, m_src in enumerate(sorted(g_src.members or [], key=lambda row: (row.priority, row.id))):
+                pr = m_src.preset
+                if not pr:
+                    continue
+                ok, _ = _preset_eligible_for_grading(pr, need_vision=True)
+                if not ok:
+                    continue
+                db.add(
+                    CourseLLMConfigEndpoint(
+                        config_id=target.id,
+                        group_id=g_new.id,
+                        preset_id=m_src.preset_id,
+                        priority=mj + 1,
+                    )
+                )
+        db.flush()
+        if _course_has_any_endpoint_row(db, target.id):
+            return
+        db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == target.id).delete(
+            synchronize_session=False
+        )
+        db.query(LLMGroup).filter(LLMGroup.config_id == target.id).delete(synchronize_session=False)
+        db.flush()
+
+    for item in sorted(template.endpoints or [], key=lambda row: (row.priority, row.id)):
+        pr = item.preset
+        if not pr:
+            continue
+        ok, _ = _preset_eligible_for_grading(pr, need_vision=True)
+        if not ok:
+            continue
+        db.add(
+            CourseLLMConfigEndpoint(
+                config_id=target.id,
+                group_id=None,
+                preset_id=item.preset_id,
+                priority=item.priority,
+            )
+        )
+    db.flush()
+
+
+def sync_latest_validated_course_llm_template(db: Session, target: CourseLLMConfig) -> bool:
+    """If target has no endpoints, clone from the latest validated peer course config. Returns True if cloned."""
+    if _course_has_any_endpoint_row(db, target.id):
+        return False
+    tmpl = _pick_latest_validated_course_llm_template(db, exclude_subject_id=target.subject_id)
+    if not tmpl or tmpl.id == target.id:
+        return False
+    _copy_course_llm_from_template(db, target, tmpl)
+    return _course_has_any_endpoint_row(db, target.id)
+
+
+def purge_invalid_course_llm_endpoints(db: Session, config: CourseLLMConfig) -> int:
+    """
+    Remove course endpoint rows whose preset is missing or no longer passes course eligibility (vision).
+    Returns count of removed endpoint rows.
+    """
+    removed = 0
+    for ep in (
+        db.query(CourseLLMConfigEndpoint)
+        .filter(CourseLLMConfigEndpoint.config_id == config.id)
+        .all()
+    ):
+        pr = ep.preset
+        if not pr:
+            db.delete(ep)
+            removed += 1
+            continue
+        ok, _ = _preset_eligible_for_grading(pr, need_vision=True)
+        if not ok:
+            db.delete(ep)
+            removed += 1
+    if removed:
+        db.flush()
+        for g in db.query(LLMGroup).filter(LLMGroup.config_id == config.id).all():
+            if not db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.group_id == g.id).first():
+                db.delete(g)
+        db.flush()
+    return removed
+
+
+def purge_invalid_course_llm_endpoints_for_preset(db: Session, preset_id: int) -> None:
+    """After a preset fails validation or is deactivated, strip it from all course configs."""
+    config_ids = [
+        int(r[0])
+        for r in db.query(CourseLLMConfigEndpoint.config_id)
+        .filter(CourseLLMConfigEndpoint.preset_id == preset_id)
+        .distinct()
+        .all()
+        if r[0] is not None
+    ]
+    for cid in config_ids:
+        cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.id == cid).first()
+        if cfg:
+            purge_invalid_course_llm_endpoints(db, cfg)
+
+
+def _find_session_course_llm_config(db: Session, subject_id: int) -> Optional[CourseLLMConfig]:
+    for obj in tuple(db.identity_map.values()) + tuple(db.new):
+        if isinstance(obj, CourseLLMConfig) and getattr(obj, "subject_id", None) == subject_id:
+            return obj
+    return None
+
+
+def ensure_course_llm_config(db: Session, subject_id: int, user_id: Optional[int] = None) -> CourseLLMConfig:
+    config = _find_session_course_llm_config(db, subject_id)
+    if not config:
+        config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+    created = False
+    if not config:
+        try:
+            with db.begin_nested():
+                config = CourseLLMConfig(subject_id=subject_id, created_by=user_id, updated_by=user_id)
+                db.add(config)
+                db.flush()
+                created = True
+        except IntegrityError:
+            config = _find_session_course_llm_config(db, subject_id)
+            if not config:
+                config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+        if not config:
+            raise RuntimeError(f"Failed to initialize course LLM config for subject {subject_id}.")
+    if created or not _course_has_any_endpoint_row(db, config.id):
+        sync_latest_validated_course_llm_template(db, config)
+    purge_invalid_course_llm_endpoints(db, config)
+    if not _course_has_any_endpoint_row(db, config.id):
+        sync_latest_validated_course_llm_template(db, config)
+    for g in db.query(LLMGroup).filter(LLMGroup.config_id == config.id).all():
+        if not db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.group_id == g.id).first():
+            db.delete(g)
+    db.flush()
+    return config
+
+
+def build_task_summary(task: HomeworkGradingTask) -> str:
+    status_map = {
+        "queued": "排队中",
+        "processing": "处理中",
+        "success": "成功",
+        "failed": "失败",
+    }
+    status_label = status_map.get(task.status, task.status)
+    if task.error_message:
+        return f"{status_label}: {task.error_message}"
+    return status_label
+
+
+def _reclaim_stale_processing_tasks(db: Session) -> int:
+    stale_before = _now_utc() - timedelta(seconds=max(60, int(settings.LLM_GRADING_TASK_STALE_SECONDS or 600)))
+    stale_tasks = (
+        db.query(HomeworkGradingTask)
+        .filter(
+            HomeworkGradingTask.status == "processing",
+            HomeworkGradingTask.updated_at.isnot(None),
+            HomeworkGradingTask.updated_at < stale_before,
+        )
+        .all()
+    )
+    reclaimed = 0
+    for task in stale_tasks:
+        task.status = "queued"
+        task.error_code = None
+        task.error_message = None
+        task.queue_reason = "reclaimed_stale_processing"
+        task.task_summary = "已回收超时任务，等待重试"
+        task.started_at = None
+        task.finished_at = None
+        task.updated_at = _now_utc()
+        reclaimed += 1
+    if reclaimed:
+        db.commit()
+    return reclaimed
+
+
+def queue_grading_task(
+    db: Session,
+    attempt: HomeworkAttempt,
+    queue_reason: str = "new_submission",
+) -> HomeworkGradingTask:
+    existing_task = (
+        db.query(HomeworkGradingTask)
+        .filter(
+            HomeworkGradingTask.attempt_id == attempt.id,
+            HomeworkGradingTask.status.in_(("queued", "processing")),
+        )
+        .order_by(HomeworkGradingTask.created_at.desc(), HomeworkGradingTask.id.desc())
+        .first()
+    )
+    if existing_task:
+        summary = (
+            db.query(HomeworkSubmission)
+            .filter(
+                HomeworkSubmission.homework_id == attempt.homework_id,
+                HomeworkSubmission.student_id == attempt.student_id,
+            )
+            .first()
+        )
+        if summary:
+            summary.latest_task_status = existing_task.status
+            summary.latest_task_error = existing_task.error_message
+            refresh_submission_summary(db, summary)
+        return existing_task
+
+    task = HomeworkGradingTask(
+        attempt_id=attempt.id,
+        homework_id=attempt.homework_id,
+        student_id=attempt.student_id,
+        subject_id=attempt.subject_id,
+        status="queued",
+        queue_reason=queue_reason,
+    )
+    db.add(task)
+    db.flush()
+    summary = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.homework_id == attempt.homework_id,
+            HomeworkSubmission.student_id == attempt.student_id,
+        )
+        .first()
+    )
+    if summary:
+        summary.latest_task_status = task.status
+        summary.latest_task_error = None
+        refresh_submission_summary(db, summary)
+    return task
+
+
+def _append_llm_call_log(task: HomeworkGradingTask, event: dict[str, Any]) -> None:
+    if not isinstance(task.artifact_manifest, dict):
+        task.artifact_manifest = {}
+    log = task.artifact_manifest.get("llm_call_log")
+    if not isinstance(log, list):
+        log = []
+    event = {**event, "ts": _now_utc().isoformat()}
+    log.append(event)
+    if len(log) > _LLM_CALL_LOG_MAX_EVENTS:
+        log = log[-_LLM_CALL_LOG_MAX_EVENTS :]
+    task.artifact_manifest["llm_call_log"] = log
+    flag_modified(task, "artifact_manifest")
+
+
+def _flag_artifact_manifest_modified(task: HomeworkGradingTask) -> None:
+    """JSON columns need explicit dirty flag when mutating nested dicts in place."""
+    flag_modified(task, "artifact_manifest")
+
+
+def _material_needs_vision(material: dict[str, Any]) -> bool:
+    for block in material.get("student_blocks") or []:
+        if getattr(block, "block_type", None) == "image":
+            return True
+    return False
+
+
+def _preset_text_ready(preset: Optional[LLMEndpointPreset]) -> bool:
+    if not preset or not preset.is_active:
+        return False
+    if preset.validation_status != "validated":
+        return False
+    ts = getattr(preset, "text_validation_status", None)
+    if ts == "failed":
+        return False
+    # Legacy rows may only set validation_status; treat unknown as OK if overall validated.
+    return ts in (None, "passed", "skipped")
+
+
+def _preset_eligible_for_grading(preset: Optional[LLMEndpointPreset], *, need_vision: bool) -> tuple[bool, str]:
+    if not preset:
+        return False, "端点预设不存在。"
+    if not preset.is_active:
+        return False, f"端点「{preset.name}」已停用。"
+    if preset.validation_status != "validated":
+        return False, f"端点「{preset.name}」未通过整体校验（状态：{preset.validation_status}）。"
+    if not _preset_text_ready(preset):
+        msg = getattr(preset, "text_validation_message", None) or "未通过纯文本连通性测试"
+        return False, f"端点「{preset.name}」{msg}。"
+    if need_vision:
+        if not preset.supports_vision:
+            return False, f"端点「{preset.name}」未声明支持视觉，无法处理含图片/PDF 的提交。"
+        vs = getattr(preset, "vision_validation_status", None)
+        if vs == "failed":
+            vm = getattr(preset, "vision_validation_message", None) or "视觉连通性未通过"
+            return False, f"端点「{preset.name}」{vm}。"
+        if vs not in (None, "passed", "skipped"):
+            vm = getattr(preset, "vision_validation_message", None) or "视觉连通性未通过"
+            return False, f"端点「{preset.name}」{vm}。"
+    return True, ""
+
+
+def _homework_routing_warnings(db: Session, homework: Homework, config: CourseLLMConfig) -> list[str]:
+    """Return user-facing warnings when homework.llm_routing_spec may diverge from course defaults."""
+    spec = homework.llm_routing_spec
+    if not spec or not isinstance(spec, dict):
+        return []
+    mode = spec.get("mode")
+    warnings: list[str] = []
+    if mode == "latest_passing_validated":
+        preset = (
+            db.query(LLMEndpointPreset)
+            .filter(
+                LLMEndpointPreset.is_active.is_(True),
+                LLMEndpointPreset.validation_status == "validated",
+                LLMEndpointPreset.text_validation_status == "passed",
+            )
+            .order_by(LLMEndpointPreset.validated_at.desc().nullslast(), LLMEndpointPreset.id.desc())
+            .first()
+        )
+        if not preset:
+            warnings.append("作业要求使用「最新纯文本测试通过」的端点，但系统中没有符合条件的预设，已按课程设置路由。")
+            return warnings
+        bound_ids = {m.preset_id for g in (config.groups or []) for m in (g.members or [])}
+        bound_ids |= {e.preset_id for e in (config.endpoints or [])}
+        if preset.id not in bound_ids:
+            warnings.append(
+                f"作业要求优先使用「{preset.name}」，但该预设未加入本课程的 LLM 配置，调用仍可能失败。"
+            )
+    if mode == "limit_to_preset_ids":
+        raw_ids = spec.get("preset_ids")
+        if isinstance(raw_ids, list) and raw_ids:
+            id_set: set[int] = set()
+            for x in raw_ids:
+                try:
+                    id_set.add(int(x))
+                except (TypeError, ValueError):
+                    continue
+            if id_set:
+                any_hit = any(
+                    m.preset_id in id_set for g in (config.groups or []) for m in (g.members or [])
+                ) or any(e.preset_id in id_set for e in (config.endpoints or []))
+                if not any_hit:
+                    warnings.append("作业限制了端点预设，但与课程设置无交集，已回退为课程完整路由。")
+    return warnings
+
+
+def _filter_course_links_for_homework(
+    homework: Homework,
+    group_rows: list[LLMGroup],
+    flat_endpoints: list[CourseLLMConfigEndpoint],
+) -> tuple[list[Any], list[CourseLLMConfigEndpoint], list[str]]:
+    """Apply homework.llm_routing_spec (preset subset) without mutating ORM collections."""
+    from types import SimpleNamespace
+
+    spec = homework.llm_routing_spec
+    notes: list[str] = []
+    if not spec or not isinstance(spec, dict):
+        return group_rows, flat_endpoints, notes
+
+    mode = spec.get("mode")
+    if mode != "limit_to_preset_ids":
+        return group_rows, flat_endpoints, notes
+
+    raw_ids = spec.get("preset_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return group_rows, flat_endpoints, notes
+    id_set: set[int] = set()
+    for x in raw_ids:
+        try:
+            id_set.add(int(x))
+        except (TypeError, ValueError):
+            continue
+    if not id_set:
+        return group_rows, flat_endpoints, notes
+
+    ephemeral_groups: list[Any] = []
+    for g in sorted(group_rows, key=lambda x: (x.priority, x.id)):
+        members = [m for m in (g.members or []) if m.preset_id in id_set]
+        if members:
+            ephemeral_groups.append(
+                SimpleNamespace(id=g.id, priority=g.priority, name=getattr(g, "name", None), members=members)
+            )
+    new_flat = [e for e in flat_endpoints if e.preset_id in id_set]
+    if ephemeral_groups:
+        notes.append("routing_mode:limit_to_preset_ids(groups)")
+        return ephemeral_groups, [], notes
+    if new_flat:
+        notes.append("routing_mode:limit_to_preset_ids(flat)")
+        return [], new_flat, notes
+    notes.append("routing_mode:limit_to_preset_ids_miss")
+    return group_rows, flat_endpoints, notes
+
+
+def validate_text_connectivity(
+    base_url: str,
+    api_key: str,
+    model_name: str,
+    connect_timeout_seconds: int,
+    read_timeout_seconds: int,
+) -> tuple[bool, str]:
+    """OpenAI-style chat: text-only smoke test before multimodal check."""
+    timeout = httpx.Timeout(connect=connect_timeout_seconds, read=read_timeout_seconds, write=read_timeout_seconds, pool=connect_timeout_seconds)
+    messages = [
+        {
+            "role": "user",
+            "content": "Please reply with the single word: OK",
+        }
+    ]
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0,
+        "max_tokens": 8,
+    }
+    endpoint_url = _build_chat_completion_url(base_url)
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(
+                endpoint_url,
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+    except httpx.HTTPError as exc:
+        return False, f"纯文本连通性校验失败：{exc}"
+
+    if response.status_code >= 400:
+        return False, f"纯文本连通性校验失败：HTTP {response.status_code} {response.text[:300]}"
+
+    try:
+        data = response.json()
+    except ValueError:
+        return False, "纯文本连通性校验失败：返回内容不是 JSON。"
+
+    content = _extract_message_content(data)
+    if not content.strip():
+        return False, "纯文本连通性校验失败：模型未返回可读文本。"
+
+    return True, "纯文本请求校验通过。"
+
+
+def validate_vision_connectivity(
+    base_url: str,
+    api_key: str,
+    model_name: str,
+    connect_timeout_seconds: int,
+    read_timeout_seconds: int,
+    image_data_url: Optional[str] = None,
+) -> tuple[bool, str]:
+    if image_data_url and not (image_data_url.startswith("data:image/") and "base64," in image_data_url):
+        return False, "视觉能力校验失败：图片数据格式无效（需为 data:image/...;base64,...）。"
+    data_url = image_data_url or VISION_TEST_IMAGE_DATA_URL
+    timeout = httpx.Timeout(connect=connect_timeout_seconds, read=read_timeout_seconds, write=read_timeout_seconds, pool=connect_timeout_seconds)
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Please reply with OK."},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        }
+    ]
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0,
+        "max_tokens": 5,
+    }
+
+    endpoint_url = _build_chat_completion_url(base_url)
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(
+                endpoint_url,
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+    except httpx.HTTPError as exc:
+        return False, f"视觉能力校验失败：{exc}"
+
+    if response.status_code >= 400:
+        return False, f"视觉能力校验失败：HTTP {response.status_code} {response.text[:300]}"
+
+    try:
+        data = response.json()
+    except ValueError:
+        return False, "视觉能力校验失败：返回内容不是 JSON。"
+
+    content = _extract_message_content(data)
+    if not content.strip():
+        return False, "视觉能力校验失败：模型未返回可读文本。"
+
+    return True, "多模态（图像）输入校验通过。"
+
+
+def validate_endpoint_connectivity(
+    base_url: str,
+    api_key: str,
+    model_name: str,
+    connect_timeout_seconds: int,
+    read_timeout_seconds: int,
+) -> tuple[bool, str]:
+    ok, msg = validate_text_connectivity(
+        base_url, api_key, model_name, connect_timeout_seconds, read_timeout_seconds
+    )
+    if not ok:
+        return False, msg
+    ok2, msg2 = validate_vision_connectivity(
+        base_url, api_key, model_name, connect_timeout_seconds, read_timeout_seconds
+    )
+    if not ok2:
+        return False, msg2
+    return True, "端点连通性校验通过：已验证纯文本与多模态（图像）输入。"
+
+
+def estimate_task_tokens(
+    config: CourseLLMConfig,
+    text_length: int,
+    image_count: int,
+) -> int:
+    """Rough input-only estimate for lightweight callers (chars heuristic + image cap)."""
+    chars_per_token = float(config.estimated_chars_per_token or 4.0)
+    text_tokens = int(text_length / chars_per_token) + 64
+    image_tokens = int(image_count * (config.estimated_image_tokens or 850))
+    return text_tokens + image_tokens
+
+
+_o200k_encoder: Optional[tiktoken.Encoding] = None
+
+
+class _ApproxTokenEncoder:
+    """Offline-safe fallback for quota estimation when tiktoken assets are unavailable."""
+
+    def encode(self, text: str) -> list[int]:
+        raw = (text or "").encode("utf-8", errors="ignore")
+        approx = max(1, (len(raw) + 3) // 4)
+        return [0] * approx
+
+
+def _get_o200k_encoder() -> tiktoken.Encoding:
+    global _o200k_encoder
+    if _o200k_encoder is None:
+        try:
+            _o200k_encoder = tiktoken.encoding_for_model("gpt-4o")
+        except Exception:
+            _o200k_encoder = _ApproxTokenEncoder()
+    return _o200k_encoder
+
+
+def _estimate_input_tokens_from_scoring_messages(
+    messages: list[dict[str, Any]],
+    *,
+    per_image_tokens: int,
+) -> int:
+    """
+    Input-side token estimate: tiktoken (o200k) on all text parts sent to the model,
+    plus per-image allowance for each image_url part (raw base64 URLs are not counted as text).
+    Daily quota and reservations use the same input-only definition.
+    """
+    enc = _get_o200k_encoder()
+    text_total = 0
+    image_parts = 0
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, str):
+            text_total += len(enc.encode(content))
+        elif isinstance(content, list):
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                if part.get("type") == "text":
+                    t = part.get("text") or ""
+                    if isinstance(t, str):
+                        text_total += len(enc.encode(t))
+                elif part.get("type") == "image_url":
+                    image_parts += 1
+    overhead = 8 * len(messages)
+    return text_total + image_parts * max(1, int(per_image_tokens)) + overhead
+
+
+# Stable section markers for the scoring prompt (model + debugging)
+SECTION_ASSIGNMENT = "[SECTION:INSTRUCTOR_ASSIGNMENT]"
+SECTION_STUDENT_BODY = "[SECTION:STUDENT_TEXT_RESPONSE]"
+SECTION_ATTACHMENT = "[SECTION:ATTACHMENT_CONTENT]"
+SECTION_IMAGES = "[SECTION:STUDENT_IMAGES]"
+SECTION_NOTES = "[SECTION:PIPELINE_NOTES]"
+SECTION_PRIOR_SUBMISSION = "[SECTION:PRIOR_SUBMISSION_ROLLING]"
+
+
+def _attachment_block_meta_text(block: "MaterialBlock") -> str:
+    """Short human-readable line for prompts (no raw base64)."""
+    if block.block_type != "text" or not (block.origin or "").startswith("attachment"):
+        return ""
+    name = (block.logical_path or block.path or "attachment").strip()
+    mime = (block.mime_hint or "").strip()
+    origin = (block.origin or "").strip()
+    flags: list[str] = []
+    if block.truncated:
+        flags.append("truncated")
+    flag_s = f" flags={','.join(flags)}" if flags else ""
+    mime_s = f" mime={mime}" if mime else ""
+    return f"[ATTACHMENT_META path={name} origin={origin}{mime_s}{flag_s}]\n"
+
+
+def estimate_request_tokens_from_material(
+    config: CourseLLMConfig,
+    material: dict[str, Any],
+    *,
+    homework: Homework,
+    attempt: HomeworkAttempt,
+) -> int:
+    """
+    Input-only token estimate aligned with the scoring request: same message tree as the API call,
+    text counted with tiktoken (o200k), each image_url counted once via configured per-image tokens
+    (not double-counted with base64 length).
+    """
+    messages = _build_scoring_messages(homework, attempt, config, material)
+    return _estimate_input_tokens_from_scoring_messages(
+        messages,
+        per_image_tokens=int(config.estimated_image_tokens or 850),
+    )
+
+
+def claim_grading_tasks_batch(max_tasks: int) -> list[int]:
+    """
+    Atomically move up to max_tasks rows from queued -> processing (oldest first).
+    Returns list of task ids claimed in this transaction (empty if none).
+    """
+    if max_tasks < 1:
+        return []
+    db = SessionLocal()
+    try:
+        _reclaim_stale_processing_tasks(db)
+        candidates = (
+            db.query(HomeworkGradingTask)
+            .filter(HomeworkGradingTask.status == "queued")
+            .order_by(HomeworkGradingTask.created_at.asc(), HomeworkGradingTask.id.asc())
+            .limit(max_tasks)
+            .all()
+        )
+        if not candidates:
+            return []
+        now = _now_utc()
+        claimed: list[int] = []
+        for task in candidates:
+            n = (
+                db.query(HomeworkGradingTask)
+                .filter(
+                    HomeworkGradingTask.id == task.id,
+                    HomeworkGradingTask.status == "queued",
+                )
+                .update(
+                    {
+                        HomeworkGradingTask.status: "processing",
+                        HomeworkGradingTask.started_at: now,
+                        HomeworkGradingTask.updated_at: now,
+                        HomeworkGradingTask.task_summary: "处理中",
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if n:
+                claimed.append(int(task.id))
+        if not claimed:
+            db.rollback()
+            return []
+        db.commit()
+        return claimed
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def process_next_grading_task() -> bool:
+    claimed = claim_grading_tasks_batch(1)
+    if not claimed:
+        return False
+    process_grading_task(claimed[0])
+    return True
+
+
+def process_grading_task(task_id: int) -> None:
+    db = SessionLocal()
+    try:
+        _reclaim_stale_processing_tasks(db)
+    finally:
+        db.close()
+    with _grading_lock_for_task(task_id):
+        _process_grading_task_unlocked(task_id)
+
+
+def _process_grading_task_unlocked(task_id: int) -> None:
+    db = SessionLocal()
+    try:
+        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
+        if not task:
+            return
+        if task.status in ("success", "failed"):
+            return
+        if task.status == "queued":
+            # Claim the task (tests call process_grading_task directly; worker uses process_next which pre-sets processing).
+            now = _now_utc()
+            n = (
+                db.query(HomeworkGradingTask)
+                .filter(HomeworkGradingTask.id == task_id, HomeworkGradingTask.status == "queued")
+                .update(
+                    {
+                        HomeworkGradingTask.status: "processing",
+                        HomeworkGradingTask.started_at: now,
+                        HomeworkGradingTask.updated_at: now,
+                        HomeworkGradingTask.task_summary: "处理中",
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not n:
+                return
+            db.commit()
+            task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
+        elif task.status != "processing":
+            return
+        try:
+            _run_grading_after_claim(db, task_id, task)
+        except Exception as exc:
+            db.rollback()
+            task2 = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
+            if task2:
+                _mark_task_failed(db, task2, "unexpected_error", f"评分任务异常：{exc}")
+    finally:
+        db.close()
+
+
+def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTask) -> None:
+    attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
+    if not attempt:
+        _mark_task_failed(db, task, "attempt_not_found", "找不到对应的提交记录。")
+        return
+    homework = db.query(Homework).filter(Homework.id == task.homework_id).first()
+    if not homework:
+        _mark_task_failed(db, task, "homework_not_found", "找不到对应的作业。")
+        return
+    if not homework.auto_grading_enabled:
+        _mark_task_failed(db, task, "auto_grading_disabled", "当前作业未启用自动评分。")
+        return
+    if not task.subject_id:
+        _mark_task_failed(db, task, "course_missing", "当前作业未关联课程，无法使用课程级 LLM 配置。")
+        return
+
+    config = (
+        db.query(CourseLLMConfig)
+        .options(
+            joinedload(CourseLLMConfig.groups)
+            .joinedload(LLMGroup.members)
+            .joinedload(CourseLLMConfigEndpoint.preset),
+            joinedload(CourseLLMConfig.endpoints).joinedload(CourseLLMConfigEndpoint.preset),
+        )
+        .filter(CourseLLMConfig.subject_id == task.subject_id)
+        .first()
+    )
+    if not config or not config.is_enabled:
+        _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
+        return
+
+    if not (config.groups or []) and not (config.endpoints or []):
+        _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
+        return
+
+    routing_warnings = _homework_routing_warnings(db, homework, config)
+    material = _build_student_material(db, homework, attempt, config)
+    base_manifest = material["artifact_manifest"] or {}
+    if not isinstance(base_manifest, dict):
+        base_manifest = {}
+    task.artifact_manifest = {**base_manifest, "llm_routing": {"version": 1, "status": "pending"}}
+    if routing_warnings:
+        task.artifact_manifest["homework_routing_warnings"] = routing_warnings
+        _flag_artifact_manifest_modified(task)
+    task.input_token_estimate = material["estimated_tokens"]
+    task.task_summary = material["summary"]
+
+    if material["all_empty"]:
+        skipped = base_manifest.get("skipped") if isinstance(base_manifest, dict) else None
+        detail = "附件处理后没有可评分内容。"
+        if isinstance(skipped, list) and skipped:
+            lines = ", ".join(f"{s.get('path', '?')}（{s.get('reason', '')}）" for s in skipped[:5])
+            detail = f"{detail} 未纳入：{lines}" + (" 等。" if len(skipped) > 5 else "")
+        _mark_task_failed(db, task, "no_usable_content", detail)
+        return
+
+    allowed, error_code = reserve_quota_tokens(
+        db,
+        task,
+        config,
+        estimated_tokens=int(material["estimated_tokens"] or 0),
+    )
+    if not allowed:
+        quota_msg = {
+            "quota_exceeded_student": "已达到本日学生 token 上限，自动评分未执行。",
+        }.get(error_code or "", "今日额度已用尽，自动评分未执行。")
+        _mark_task_failed(db, task, error_code or "quota_exceeded_student", quota_msg)
+        return
+
+    teacher_exists = (
+        db.query(HomeworkScoreCandidate)
+        .filter(
+            HomeworkScoreCandidate.attempt_id == attempt.id,
+            HomeworkScoreCandidate.source == "teacher",
+        )
+        .first()
+    )
+    if teacher_exists:
+        release_quota_reservation(db, task.id)
+        task.status = "success"
+        task.error_code = None
+        task.error_message = None
+        task.finished_at = _now_utc()
+        task.task_summary = "已跳过：该次提交已有教师评分，未调用模型。"
+        summary = (
+            db.query(HomeworkSubmission)
+            .filter(
+                HomeworkSubmission.homework_id == attempt.homework_id,
+                HomeworkSubmission.student_id == attempt.student_id,
+            )
+            .first()
+        )
+        if summary:
+            summary.latest_task_status = task.status
+            summary.latest_task_error = None
+            refresh_submission_summary(db, summary)
+            notify_student_homework_graded(
+                db,
+                homework_id=homework.id,
+                student_id=attempt.student_id,
+                source_label="自动评分（沿用教师评分）",
+                created_by_user_id=int(homework.created_by),
+            )
+        db.commit()
+        return
+
+    try:
+        response = _grade_with_endpoint_group(
+            db=db,
+            task=task,
+            homework=homework,
+            attempt=attempt,
+            config=config,
+            material=material,
+        )
+    except NonRetryableLLMError as exc:
+        msg = str(exc) or "LLM 调用失败。"
+        _append_llm_call_log(
+            task,
+            {"phase": "routing_failed", "level": "error", "message": msg},
+        )
+        _mark_task_failed(db, task, "llm_call_failed", msg)
+        return
+
+    candidate = HomeworkScoreCandidate(
+        attempt_id=attempt.id,
+        homework_id=homework.id,
+        student_id=attempt.student_id,
+        source="auto",
+        score=normalize_score_for_homework(homework, response["score"]),
+        comment=response["comment"],
+        source_metadata={
+            "task_id": task.id,
+            "endpoint_id": response["endpoint_id"],
+            "raw_response_excerpt": response["raw_response"][:1000],
+        },
+    )
+    db.add(candidate)
+    db.flush()
+
+    task.status = "success"
+    task.error_code = None
+    task.error_message = None
+    task.finished_at = _now_utc()
+    task.task_summary = "评分成功"
+    record_usage_if_needed(db, task, config, response["usage"])
+
+    summary = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.homework_id == attempt.homework_id,
+            HomeworkSubmission.student_id == attempt.student_id,
+        )
+        .first()
+    )
+    if summary:
+        summary.latest_task_status = task.status
+        summary.latest_task_error = None
+        refresh_submission_summary(db, summary)
+        notify_student_homework_graded(
+            db,
+            homework_id=homework.id,
+            student_id=attempt.student_id,
+            source_label="自动评分",
+            created_by_user_id=int(homework.created_by),
+        )
+
+    db.commit()
+
+
+def _maybe_queue_auto_retry(db: Session, attempt: HomeworkAttempt, error_code: str) -> None:
+    """After a failed grading task (committed), optionally enqueue one more try for transient LLM errors."""
+    if error_code not in _AUTO_RETRY_ELIGIBLE_ERROR_CODES:
+        return
+    failed_count = (
+        db.query(func.count(HomeworkGradingTask.id))
+        .filter(HomeworkGradingTask.attempt_id == attempt.id, HomeworkGradingTask.status == "failed")
+        .scalar()
+    )
+    if int(failed_count or 0) > _MAX_AUTO_RETRY_TASKS_PER_ATTEMPT:
+        return
+    queue_grading_task(db, attempt, queue_reason=f"auto_retry_after_{error_code}")
+    db.commit()
+
+
+def _mark_task_failed(
+    db: Session,
+    task: HomeworkGradingTask,
+    error_code: str,
+    error_message: str,
+) -> None:
+    release_quota_reservation(db, task.id)
+    task.status = "failed"
+    task.error_code = error_code
+    task.error_message = error_message
+    task.finished_at = _now_utc()
+    task.task_summary = error_message
+    summary = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.homework_id == task.homework_id,
+            HomeworkSubmission.student_id == task.student_id,
+        )
+        .first()
+    )
+    if summary:
+        summary.latest_task_status = task.status
+        summary.latest_task_error = error_message
+        refresh_submission_summary(db, summary)
+    db.commit()
+    if error_code in _AUTO_RETRY_ELIGIBLE_ERROR_CODES and task.attempt_id:
+        attempt_row = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
+        if attempt_row:
+            _maybe_queue_auto_retry(db, attempt_row, error_code)
+
+
+def _collect_grading_endpoints_for_config(
+    config: CourseLLMConfig,
+) -> tuple[list[LLMGroup], list[CourseLLMConfigEndpoint]]:
+    """Return (ordered groups, flat legacy endpoints when no groups are defined)."""
+    groups = sorted(
+        [g for g in (config.groups or []) if g is not None],
+        key=lambda x: (x.priority, x.id),
+    )
+    if groups and any((g.members or []) for g in groups):
+        return groups, []
+    flat = sorted(
+        (config.endpoints or []),
+        key=lambda row: (row.priority, row.id),
+    )
+    return [], flat
+
+
+def _grade_with_endpoint_group(
+    *,
+    db: Session,
+    task: HomeworkGradingTask,
+    homework: Homework,
+    attempt: HomeworkAttempt,
+    config: CourseLLMConfig,
+    material: dict[str, Any],
+) -> dict[str, Any]:
+    from types import SimpleNamespace
+
+    need_vision = _material_needs_vision(material)
+    spec = homework.llm_routing_spec if isinstance(homework.llm_routing_spec, dict) else None
+    group_rows, flat_endpoints = _collect_grading_endpoints_for_config(config)
+
+    if spec and spec.get("mode") == "latest_passing_validated":
+        preset = (
+            db.query(LLMEndpointPreset)
+            .filter(
+                LLMEndpointPreset.is_active.is_(True),
+                LLMEndpointPreset.validation_status == "validated",
+                LLMEndpointPreset.text_validation_status == "passed",
+            )
+            .order_by(LLMEndpointPreset.validated_at.desc().nullslast(), LLMEndpointPreset.id.desc())
+            .first()
+        )
+        if not preset:
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "routing",
+                    "level": "warn",
+                    "message": "作业要求「最新纯文本测试通过」端点，但无可用预设，回退课程路由。",
+                },
+            )
+        else:
+            bound_ids = {m.preset_id for g in (config.groups or []) for m in (g.members or [])}
+            bound_ids |= {e.preset_id for e in (config.endpoints or [])}
+            if preset.id not in bound_ids:
+                _append_llm_call_log(
+                    task,
+                    {
+                        "phase": "routing",
+                        "level": "warn",
+                        "preset": preset.name,
+                        "message": "该预设未加入本课程配置，仍将尝试直接调用。",
+                    },
+                )
+            flat_endpoints = [
+                SimpleNamespace(
+                    id=-preset.id,
+                    config_id=config.id,
+                    group_id=None,
+                    preset_id=preset.id,
+                    priority=1,
+                    preset=preset,
+                )
+            ]
+            group_rows = []
+
+    group_rows, flat_endpoints, routing_notes = _filter_course_links_for_homework(homework, group_rows, flat_endpoints)
+    for note in routing_notes:
+        _append_llm_call_log(task, {"phase": "routing", "level": "info", "message": note})
+
+    if group_rows:
+        routing = GroupRoutingContext.from_config(group_rows, task_id=task.id)
+
+        def _update_routing_artifact(merge: dict[str, Any]) -> None:
+            if not isinstance(task.artifact_manifest, dict):
+                return
+            base = dict(routing.routing_payload())
+            base.update(merge)
+            task.artifact_manifest["llm_routing"] = base
+            _flag_artifact_manifest_modified(task)
+
+        _update_routing_artifact({"status": "routing"})
+
+        last_error: Optional[str] = None
+        global_index = 0
+        for group_state in routing.group_states:
+            group_state.apply_round_robin_start(task.id)
+            while group_state.current_order:
+                link = group_state.current_order[0]
+                global_index += 1
+                preset: LLMEndpointPreset = link.preset
+                ok, reason = _preset_eligible_for_grading(preset, need_vision=need_vision)
+                if not ok:
+                    last_error = reason
+                    _append_llm_call_log(
+                        task,
+                        {
+                            "phase": "skip_endpoint",
+                            "level": "warn",
+                            "preset": getattr(preset, "name", None),
+                            "message": reason,
+                        },
+                    )
+                    group_state.remove_member(link)
+                    _update_routing_artifact(
+                        {
+                            "status": "invalid_member_skipped",
+                            "last_error": last_error,
+                        }
+                    )
+                    continue
+                task.current_endpoint_index = global_index
+                attempt_limit = max(1, int(preset.max_retries or 0) + 1)
+                member_done = False
+                for request_attempt in range(1, attempt_limit + 1):
+                    task.current_attempt = request_attempt
+                    try:
+                        score_result = _request_grade_from_endpoint(
+                            preset=preset,
+                            homework=homework,
+                            attempt=attempt,
+                            config=config,
+                            material=material,
+                            task=task,
+                        )
+                        score_result["endpoint_id"] = preset.id
+                        _update_routing_artifact({"status": "ok"})
+                        return score_result
+                    except RetryableLLMError as exc:
+                        last_error = str(exc)
+                        n_before = len(group_state.current_order)
+                        routing.note_failure(group_state, link, exc)
+                        if request_attempt >= attempt_limit:
+                            if n_before == 1:
+                                group_state.remove_member(link)
+                            _update_routing_artifact(
+                                {
+                                    "status": "adaptive_shift",
+                                    "last_error": last_error,
+                                }
+                            )
+                            member_done = True
+                            break
+                        _update_routing_artifact(
+                            {
+                                "status": "retry_backoff",
+                                "last_error": last_error,
+                            }
+                        )
+                        wait_seconds = min(
+                            int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
+                            120,
+                        )
+                        if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
+                            time.sleep(wait_seconds)
+                    except NonRetryableLLMError as exc:
+                        last_error = str(exc)
+                        routing.note_failure(group_state, link, exc)
+                        _update_routing_artifact({"status": "endpoint_error", "last_error": last_error})
+                        group_state.remove_member(link)
+                        member_done = True
+                        break
+        _update_routing_artifact({"status": "failed", "message": last_error or ""})
+        raise NonRetryableLLMError(last_error or "所有组内端点都调用失败。")
+
+    last_error_flat: Optional[str] = None
+    for endpoint_index, link in enumerate(flat_endpoints, start=1):
+        preset: LLMEndpointPreset = link.preset
+        ok, reason = _preset_eligible_for_grading(preset, need_vision=need_vision)
+        if not ok:
+            last_error_flat = reason
+            _append_llm_call_log(
+                task,
+                {
+                    "phase": "skip_endpoint",
+                    "level": "warn",
+                    "preset": getattr(preset, "name", None),
+                    "message": reason,
+                },
+            )
+            continue
+        task.current_endpoint_index = endpoint_index
+        attempt_limit = max(1, int(preset.max_retries or 0) + 1)
+        for request_attempt in range(1, attempt_limit + 1):
+            task.current_attempt = request_attempt
+            try:
+                score_result = _request_grade_from_endpoint(
+                    preset=preset,
+                    homework=homework,
+                    attempt=attempt,
+                    config=config,
+                    material=material,
+                    task=task,
+                )
+                score_result["endpoint_id"] = preset.id
+                if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
+                    task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
+                        "version": 1,
+                        "mode": "legacy_priority",
+                        "status": "ok",
+                    }
+                    _flag_artifact_manifest_modified(task)
+                return score_result
+            except RetryableLLMError as exc:
+                last_error_flat = str(exc)
+                if request_attempt >= attempt_limit:
+                    break
+                wait_seconds = min(
+                    int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
+                    120,
+                )
+                if os.environ.get("LLM_GRADING_TEST_SKIP_BACKOFF") != "1":
+                    time.sleep(wait_seconds)
+            except NonRetryableLLMError as exc:
+                last_error_flat = str(exc)
+                break
+    if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
+        task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
+            "version": 1,
+            "mode": "legacy_priority",
+            "status": "failed",
+        }
+        _flag_artifact_manifest_modified(task)
+    raise NonRetryableLLMError(last_error_flat or "所有端点都调用失败。")
+
+
+def _llm_assist_assignment_addendum(attempt: HomeworkAttempt) -> str:
+    if not bool(getattr(attempt, "used_llm_assist", False)):
+        return ""
+    return (
+        "### 学生申报：使用大语言模型辅助作答\n"
+        "该生在提交时**诚信申报**本次曾使用大语言模型辅助。请据此调整评分侧重：\n"
+        "- **着重**考查作答思路、概念迁移、论证链条与问题拆解能力；透过表述**反推**其真实知识功底。\n"
+        "- **弱化**对措辞润色、排版细节、枚举完整性等「表面完美度」的苛求；若核心结论或主干推理错误，仍应体现在 score 上。\n"
+        "- 若与参考答案字面高度相似但推理薄弱，应谨慎给高分。\n"
+    )
+
+
+def _comment_format_system_suffix(system_prompt: str) -> str:
+    base = (system_prompt or "").strip()
+    if "Markdown" in base or "markdown" in base or "LaTeX" in base or "latex" in base:
+        return base
+    return (
+        base
+        + "\n\n除上述格式约束外，JSON 内的 `comment` 字符串可使用 Markdown（标题、列表、加粗等）；"
+        "数学公式可使用 `$...$`（行内）或 `$$...$$`（独立行）LaTeX。"
+    )
+
+
+def _build_scoring_messages(
+    homework: Homework,
+    attempt: HomeworkAttempt,
+    config: CourseLLMConfig,
+    material: dict[str, Any],
+) -> list[dict[str, Any]]:
+    system_prompt = _comment_format_system_suffix(
+        config.system_prompt
+        or (
+            "你是一个严格遵守格式要求的课程作业评分助手。"
+            "你必须只输出 JSON 对象，且字段固定为 score 与 comment。"
+            "绝不能在 JSON 前后输出任何额外说明。"
+        )
+    )
+    response_language = homework.response_language or config.response_language or "zh-CN"
+    teacher_prompt = config.teacher_prompt or ""
+
+    def _expand_hw_md(field: Optional[str]) -> str:
+        return expand_markdown_images_for_llm(field or "")
+
+    content_md = _expand_hw_md(homework.content)
+    ref_md = _expand_hw_md(homework.reference_answer)
+    rubric_md = _expand_hw_md(homework.rubric_text)
+
+    assignment_texts_plain = list(material["assignment_texts"])
+    assignment_texts_plain[1] = (
+        f"作业要求：\n{content_md}"
+        if (homework.content or "").strip()
+        else f"作业要求：\n无"
+    )
+    if homework.reference_answer:
+        idx = next(
+            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("参考答案或提示")),
+            None,
+        )
+        if idx is not None:
+            assignment_texts_plain[idx] = f"参考答案或提示：\n{ref_md}"
+    if homework.rubric_text:
+        idx = next(
+            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("评分要点")),
+            None,
+        )
+        if idx is not None:
+            assignment_texts_plain[idx] = f"评分要点：\n{rubric_md}"
+
+    assignment_body = "\n\n".join(assignment_texts_plain)
+    assignment_text = f"{SECTION_ASSIGNMENT}\n### 教师侧作业说明与材料\n{assignment_body}"
+    if teacher_prompt.strip():
+        assignment_text += f"\n\n### 教师补充提示（课程 LLM 配置）\n{teacher_prompt}"
+    assist_addendum = _llm_assist_assignment_addendum(attempt)
+    if assist_addendum:
+        assignment_text += "\n\n" + assist_addendum
+    student_intro = (
+        f"{SECTION_STUDENT_BODY}\n### 提交元数据\n"
+        f"作业标题：{homework.title}\n"
+        f"满分：{normalize_score_for_homework(homework, homework.max_score)}\n"
+        f"评分精度：{'1 位小数' if homework.grade_precision == 'decimal_1' else '整数'}\n"
+        f"响应语言：{response_language}\n"
+        f"学生是否申报使用大语言模型辅助作答：{'是' if getattr(attempt, 'used_llm_assist', False) else '否'}\n"
+        f"本次提交模式：{'按反馈补充（上一轮正文与附件见「上一轮提交」区块；本轮说明为补充/修订）' if getattr(attempt, 'submission_mode', None) == 'feedback_followup' else '完整提交'}\n"
+        f"提交是否迟交：{'是' if attempt.is_late else '否'}\n"
+        f"迟交默认是否影响得分：{'是' if homework.late_submission_affects_score else '否'}\n"
+    )
+    user_parts: list[dict[str, Any]] = []
+    append_markdown_with_dataurl_images_to_parts(user_parts, assignment_text)
+    append_markdown_with_dataurl_images_to_parts(user_parts, student_intro)
+    prior_text_blocks = [b for b in (material.get("prior_student_blocks") or []) if b.block_type == "text"]
+    prior_image_blocks = [b for b in (material.get("prior_student_blocks") or []) if b.block_type == "image"]
+    if prior_text_blocks or prior_image_blocks:
+        user_parts.append(
+            {
+                "type": "text",
+                "text": (
+                    f"{SECTION_PRIOR_SUBMISSION}\n"
+                    "（以下为学生在**上一轮**提交中的说明与附件解析内容，供对照本轮补充说明；"
+                    "评分请以本轮说明为主，同时结合上一轮与历史评语判断是否改进。）"
+                ),
+            }
+        )
+        for block in prior_text_blocks:
+            meta = _attachment_block_meta_text(block)
+            user_parts.append({"type": "text", "text": (meta + (block.text or "")).strip()})
+        if prior_image_blocks:
+            user_parts.append(
+                {"type": "text", "text": f"{SECTION_IMAGES}\n（以下为上一轮提交中的图片/PDF 页渲染）"}
+            )
+            for block in prior_image_blocks:
+                cap = (
+                    f"[IMAGE_META path={block.logical_path or block.path} "
+                    f"mime={block.mime_hint or 'image'} origin={block.origin or 'prior_attachment'}]"
+                )
+                user_parts.append({"type": "text", "text": cap})
+                user_parts.append({"type": "image_url", "image_url": {"url": block.image_data_url}})
+    text_blocks = [b for b in material["student_blocks"] if b.block_type == "text"]
+    image_blocks = [b for b in material["student_blocks"] if b.block_type == "image"]
+    if text_blocks:
+        user_parts.append(
+            {
+                "type": "text",
+                "text": f"{SECTION_ATTACHMENT}\n（以下为学生在表单中的说明文字，以及从附件解析出的可读文本）",
+            }
+        )
+        for block in text_blocks:
+            meta = _attachment_block_meta_text(block)
+            user_parts.append({"type": "text", "text": (meta + (block.text or "")).strip()})
+    if image_blocks:
+        user_parts.append({"type": "text", "text": f"{SECTION_IMAGES}\n（以下为提交中的图片/PDF 页渲染，按顺序评分）"})
+        for block in image_blocks:
+            cap = (
+                f"[IMAGE_META path={block.logical_path or block.path} "
+                f"mime={block.mime_hint or 'image'} origin={block.origin or 'attachment'}]"
+            )
+            user_parts.append({"type": "text", "text": cap})
+            user_parts.append({"type": "image_url", "image_url": {"url": block.image_data_url}})
+    if material["notes_text"]:
+        user_parts.append({"type": "text", "text": f"{SECTION_NOTES}\n{material['notes_text']}"})
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_parts},
+    ]
+
+
+def _best_score_candidate_for_attempt(db: Session, attempt_id: int) -> Optional[HomeworkScoreCandidate]:
+    """Pick the display score row for one attempt (same rule as teacher submission history)."""
+    candidates = (
+        db.query(HomeworkScoreCandidate)
+        .filter(HomeworkScoreCandidate.attempt_id == attempt_id)
+        .order_by(HomeworkScoreCandidate.updated_at.desc(), HomeworkScoreCandidate.id.desc())
+        .all()
+    )
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda item: (
+            float(item.score or 0),
+            1 if item.source == "teacher" else 0,
+            item.updated_at or item.created_at,
+        ),
+    )
+
+
+def _format_iteration_context_for_prompt(db: Session, homework: Homework, attempt: HomeworkAttempt) -> Optional[str]:
+    """
+    Text-only summary of the last N prior attempts for the same student+homework (same submission summary).
+    Full multimodal re-parse of old attachments is intentionally omitted to save tokens.
+    """
+    summary_id = attempt.submission_summary_id
+    if not summary_id:
+        return None
+    priors = (
+        db.query(HomeworkAttempt)
+        .filter(
+            HomeworkAttempt.homework_id == homework.id,
+            HomeworkAttempt.student_id == attempt.student_id,
+            HomeworkAttempt.submission_summary_id == summary_id,
+            HomeworkAttempt.id < attempt.id,
+        )
+        .order_by(HomeworkAttempt.id.desc())
+        .limit(ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS)
+        .all()
+    )
+    if not priors:
+        return None
+    priors_chrono = list(reversed(priors))
+    lines: list[str] = [
+        "### 迭代上下文（仅保留最近 "
+        f"{ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS} 次历史提交的文字摘要；更早轮次已省略以节省 token）",
+        "以下为该学生此前提交的要点，供你判断是否在反馈基础上有改进（当前要评的是最新一次提交，见后文）。",
+        "多轮评分时请关注各轮**分数与评语的走势**：若本轮相对历史有显著进步或退步，请在 `comment` 中简要对比说明原因。",
+    ]
+    for idx, prev in enumerate(priors_chrono, start=1):
+        cand = _best_score_candidate_for_attempt(db, prev.id)
+        score_part = ""
+        if cand is not None and cand.score is not None:
+            src = "教师" if cand.source == "teacher" else "自动"
+            score_part = f"当时展示分（{src}）：{normalize_score_for_homework(homework, cand.score)}。"
+        comment = (cand.comment or "").strip() if cand else ""
+        if len(comment) > ITERATION_PRIOR_COMMENT_CHAR_MAX:
+            comment = comment[:ITERATION_PRIOR_COMMENT_CHAR_MAX] + "…"
+        body = (prev.content or "").strip()
+        if len(body) > ITERATION_PRIOR_NOTE_CHAR_MAX:
+            body = body[:ITERATION_PRIOR_NOTE_CHAR_MAX] + "…"
+        att = "有附件" if prev.attachment_url else "无附件"
+        att_name = f"（{prev.attachment_name}）" if prev.attachment_name else ""
+        llm_tag = "是" if getattr(prev, "used_llm_assist", False) else "否"
+        lines.append(f"- 历史第 {idx} 轮：{att}{att_name}。{score_part}申报使用大模型辅助：{llm_tag}。")
+        if body:
+            lines.append(f"  学生说明摘录：{body}")
+        if comment:
+            lines.append(f"  当时评语摘录：{comment}")
+    lines.append(
+        "请结合上述有限历史与当前稿评分；若当前稿明显回应了此前评语中的问题，可在 score 上合理体现进步。"
+    )
+    return "\n".join(lines)
+
+
+def _collect_attempt_material_blocks(attempt: HomeworkAttempt) -> tuple[list[MaterialBlock], list[dict[str, str]]]:
+    """Raw student material blocks plus parse-time skips (e.g. zip limits) before global budget."""
+    student_blocks: list[MaterialBlock] = []
+    skipped_all: list[dict[str, str]] = []
+    if attempt.content:
+        text, truncated = _truncate_text(attempt.content)
+        note = "\n\n[说明] 提交说明过长，已截断。" if truncated else ""
+        student_blocks.append(
+            MaterialBlock(
+                priority=2,
+                path="submission-note",
+                block_type="text",
+                text=f"### 学生正文（提交说明）\n{text}{note}",
+                estimated_tokens=int(len(text) / 4) + 50,
+                logical_path="submission-note",
+                mime_hint="text/plain",
+                origin="submission_body",
+                truncated=truncated,
+            )
+        )
+    if attempt.attachment_url:
+        attachment_blocks, skipped_items = _collect_attachment_blocks(
+            attempt.attachment_url,
+            attempt.attachment_name or "attachment",
+        )
+        student_blocks.extend(attachment_blocks)
+        skipped_all.extend(skipped_items or [])
+    student_blocks.sort(key=lambda item: (item.priority, item.path))
+    return student_blocks, skipped_all
+
+
+def _apply_blocks_char_and_image_budget(
+    blocks: list[MaterialBlock],
+    *,
+    remaining_chars: int,
+    remaining_image_budget: int,
+) -> tuple[list[MaterialBlock], list[dict[str, str]], list[str]]:
+    final_blocks: list[MaterialBlock] = []
+    skipped: list[dict[str, str]] = []
+    truncation_notes: list[str] = []
+    rem_chars = remaining_chars
+    rem_img = remaining_image_budget
+    for block in blocks:
+        if block.block_type == "text":
+            block_text = block.text or ""
+            if rem_chars <= 0:
+                skipped.append({"path": block.path, "reason": "超出输入长度预算"})
+                continue
+            if len(block_text) > rem_chars:
+                truncated_text, _ = _truncate_text(block_text, rem_chars)
+                final_blocks.append(
+                    MaterialBlock(
+                        priority=block.priority,
+                        path=block.path,
+                        block_type="text",
+                        text=truncated_text,
+                        estimated_tokens=int(len(truncated_text) / 4) + 50,
+                        logical_path=block.logical_path,
+                        mime_hint=block.mime_hint,
+                        origin=block.origin,
+                        truncated=True,
+                    )
+                )
+                truncation_notes.append(f"{block.path} 已按预算截断")
+                rem_chars = 0
+                continue
+            final_blocks.append(block)
+            rem_chars -= len(block_text)
+        else:
+            estimated_tokens = block.estimated_tokens or settings.DEFAULT_ESTIMATED_IMAGE_TOKENS
+            if rem_img < estimated_tokens:
+                skipped.append({"path": block.path, "reason": "超出图片 token 预算"})
+                continue
+            final_blocks.append(block)
+            rem_img -= estimated_tokens
+    return final_blocks, skipped, truncation_notes
+
+
+def _build_student_material(
+    db: Session,
+    homework: Homework,
+    attempt: HomeworkAttempt,
+    config: CourseLLMConfig,
+) -> dict[str, Any]:
+    def _expand_hw_md(field: Optional[str]) -> str:
+        return expand_markdown_images_for_llm(field or "")
+
+    content_md = _expand_hw_md(homework.content)
+    ref_md = _expand_hw_md(homework.reference_answer)
+    rubric_md = _expand_hw_md(homework.rubric_text)
+
+    assignment_texts = [
+        f"作业标题：{homework.title}",
+        f"作业要求：\n{content_md if (homework.content or '').strip() else '无'}",
+    ]
+    iteration_ctx = _format_iteration_context_for_prompt(db, homework, attempt)
+    if iteration_ctx:
+        assignment_texts.append(iteration_ctx)
+    if homework.reference_answer:
+        assignment_texts.append(f"参考答案或提示：\n{ref_md}")
+    if homework.rubric_text:
+        assignment_texts.append(f"评分要点：\n{rubric_md}")
+    if getattr(attempt, "submission_mode", None) == "feedback_followup" and getattr(attempt, "prior_attempt_id", None):
+        assignment_texts.append(
+            "### 本轮为「按反馈补充」提交\n"
+            "学生在表单中**本轮说明**可能只写了针对上一轮评语的改进点；**上一轮正文与附件**已单独放在提示中的「上一轮提交」区块。\n"
+            "请综合上一轮材料、本轮补充与历史评语判断是否在不足点上有所改进，并据此给分；不要因本轮说明较短而直接给极低分。"
+        )
+    prior_attempt_id = getattr(attempt, "prior_attempt_id", None)
+    prior_blocks_raw: list[MaterialBlock] = []
+    prior_parse_skipped: list[dict[str, str]] = []
+    if prior_attempt_id and getattr(attempt, "submission_mode", None) == "feedback_followup":
+        prior_row = (
+            db.query(HomeworkAttempt)
+            .filter(
+                HomeworkAttempt.id == int(prior_attempt_id),
+                HomeworkAttempt.homework_id == homework.id,
+                HomeworkAttempt.student_id == attempt.student_id,
+                HomeworkAttempt.submission_summary_id == attempt.submission_summary_id,
+            )
+            .first()
+        )
+        if prior_row:
+            prior_blocks_raw, prior_parse_skipped = _collect_attempt_material_blocks(prior_row)
+
+    current_blocks_raw, current_parse_skipped = _collect_attempt_material_blocks(attempt)
+
+    text_budget = int((config.max_input_tokens or 16000) * (config.estimated_chars_per_token or 4.0))
+    reserved_text = "\n\n".join(assignment_texts)
+    remaining_chars = max(2000, text_budget - len(reserved_text))
+    remaining_image_budget = config.max_input_tokens or 16000
+
+    prior_final: list[MaterialBlock] = []
+    prior_skipped: list[dict[str, str]] = []
+    prior_trunc_notes: list[str] = []
+    if prior_blocks_raw:
+        prior_final, prior_skipped, prior_trunc_notes = _apply_blocks_char_and_image_budget(
+            prior_blocks_raw,
+            remaining_chars=remaining_chars,
+            remaining_image_budget=remaining_image_budget,
+        )
+        for block in prior_final:
+            if block.block_type == "text":
+                remaining_chars -= len(block.text or "")
+            else:
+                remaining_image_budget -= block.estimated_tokens or settings.DEFAULT_ESTIMATED_IMAGE_TOKENS
+
+    final_blocks, skipped, truncation_notes = _apply_blocks_char_and_image_budget(
+        current_blocks_raw,
+        remaining_chars=remaining_chars,
+        remaining_image_budget=remaining_image_budget,
+    )
+
+    notes_text_parts: list[str] = []
+    if prior_trunc_notes:
+        notes_text_parts.append("上一轮截断说明：\n- " + "\n- ".join(prior_trunc_notes))
+    if prior_skipped:
+        prior_skipped_lines = [f"{item['path']}：{item['reason']}" for item in prior_skipped]
+        notes_text_parts.append("上一轮未纳入内容：\n- " + "\n- ".join(prior_skipped_lines))
+    if truncation_notes:
+        notes_text_parts.append("截断说明：\n- " + "\n- ".join(truncation_notes))
+    if skipped:
+        skipped_lines = [f"{item['path']}：{item['reason']}" for item in skipped]
+        notes_text_parts.append("未纳入内容：\n- " + "\n- ".join(skipped_lines))
+    parse_skipped_for_notes = [x for x in (current_parse_skipped + prior_parse_skipped) if x]
+    if parse_skipped_for_notes:
+        lines = [f"{s.get('path', '?')}：{s.get('reason', '')}" for s in parse_skipped_for_notes]
+        notes_text_parts.append("附件解析跳过：\n- " + "\n- ".join(lines))
+    notes_text = "\n\n".join([p for p in notes_text_parts if p])
+    temp_material: dict[str, Any] = {
+        "assignment_texts": assignment_texts,
+        "student_blocks": final_blocks,
+        "notes_text": notes_text,
+    }
+    if prior_final:
+        temp_material["prior_student_blocks"] = prior_final
+    estimated_tokens = estimate_request_tokens_from_material(
+        config,
+        temp_material,
+        homework=homework,
+        attempt=attempt,
+    )
+    artifact_manifest = {
+        "included": [
+            {
+                "path": block.path,
+                "type": block.block_type,
+                "logical_path": block.logical_path,
+                "mime_hint": block.mime_hint,
+                "origin": block.origin,
+                "truncated": block.truncated,
+            }
+            for block in final_blocks
+        ],
+        "skipped": skipped + current_parse_skipped,
+        "prior_included": [
+            {
+                "path": block.path,
+                "type": block.block_type,
+                "logical_path": block.logical_path,
+                "mime_hint": block.mime_hint,
+                "origin": block.origin,
+                "truncated": block.truncated,
+            }
+            for block in prior_final
+        ]
+        if prior_final
+        else [],
+        "prior_skipped": prior_skipped + prior_parse_skipped,
+    }
+    summary_parts = [f"纳入 {len(final_blocks)} 个片段，跳过 {len(skipped)} 个文件/片段"]
+    if prior_final:
+        summary_parts.append(f"上一轮纳入 {len(prior_final)} 个片段")
+    return {
+        "assignment_texts": assignment_texts,
+        "student_blocks": final_blocks,
+        "prior_student_blocks": prior_final,
+        "notes_text": notes_text,
+        "estimated_tokens": estimated_tokens,
+        "artifact_manifest": artifact_manifest,
+        "summary": "；".join(summary_parts),
+        "all_empty": len(final_blocks) == 0 and len(prior_final) == 0,
+    }

@@ -13,11 +13,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.auth import get_password_hash
-from app.database import Base, SessionLocal, engine
-from app.llm_grading import get_best_score_candidate, process_grading_task, process_next_grading_task
-from app.main import app
-from app.models import (
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.llm_grading import get_best_score_candidate, process_grading_task, process_next_grading_task
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import (
     HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkSubmission,
@@ -39,7 +39,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -312,7 +312,7 @@ def test_second_task_hits_token_cap_after_first_billed(client: TestClient):
     with patch_httpx_post(
         lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(90.0, "c"))
     ), mock.patch(
-        "app.llm_grading.reserve_quota_tokens", side_effect=[(True, None), (False, "quota_exceeded_student")]
+        "apps.backend.wailearning_backend.llm_grading.reserve_quota_tokens", side_effect=[(True, None), (False, "quota_exceeded_student")]
     ):
         process_grading_task(tids[0])
         process_grading_task(tids[1])

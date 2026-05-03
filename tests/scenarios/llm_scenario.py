@@ -8,9 +8,9 @@ import uuid
 import httpx
 from fastapi.testclient import TestClient
 
-from app.auth import get_password_hash
-from app.database import SessionLocal
-from app.models import (
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import SessionLocal
+from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseLLMConfig,

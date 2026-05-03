@@ -93,6 +93,8 @@ These tests are the closest to a user-visible workflow because they exercise:
 
 Additional targeted suite: **`e2e-discussion-cover-llm-tier3.spec.js`** — discussion LLM (`invoke_llm`), long reply preview (3 logical lines + expand), and course cover (API + UI). Run only that file with `npx playwright test e2e-discussion-cover-llm-tier3.spec.js` from `apps/web/admin` when iterating on those features.
 
+Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases) — homework submission table **content/comment preview** truncation, **LLM grading** long comments + regrade + 429 recovery, **multi-role** API guards, and **course cover** flows (teacher/admin UI + API). Run alone with `npx playwright test e2e-homework-comment-cover-tier4.spec.js` from `apps/web/admin`.
+
 They also have the highest dependence on the local execution environment.
 
 This directory also contains a future-coverage expansion file pair:
@@ -100,17 +102,19 @@ This directory also contains a future-coverage expansion file pair:
 - `tests/e2e/web-admin/future-advanced-coverage.spec.js`
 - `tests/e2e/web-admin/future-advanced-coverage-2.spec.js`
 
-Those files are intentionally checked in as a bank of higher-difficulty E2E scenarios. They are **not** treated as validated regression coverage until individually implemented.
+In this branch, those files are no longer placeholders. They contain real `test(...)` bodies and participate in normal `npm run test:e2e` runs.
 
-Revision note: once **`future-advanced-coverage*.spec.js`** contains **`test(...)` bodies** (with **`future-advanced-coverage-helpers.cjs`** support), they participate in normal **`npm run test:e2e`** runs alongside other specs in **`tests/e2e/web-admin/`**; the **`E2E_ENABLE_BACKLOG_SPECS`** gate described below is legacy for branches that still carried skipped placeholders.
+How to interpret them correctly:
 
-Those files are intentionally checked in as a bank of higher-difficulty E2E scenarios and are currently marked `skip` so the cases exist in the repository without being treated as already-validated regression coverage. Default Playwright runs still skip the backlog describes unless **`E2E_ENABLE_BACKLOG_SPECS`** is truthy; see [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md) for the updated mechanism.
+- they still function as a bank of higher-difficulty scenarios
+- they are now part of actual runnable regression coverage, not a skipped queue
+- historical references to `E2E_ENABLE_BACKLOG_SPECS` apply only when reading older branches that still carried skipped placeholders
 
 Operational summary:
 
-- **`E2E_ENABLE_BACKLOG_SPECS`** — When unset/falsy, the backlog suite describes are registered as skipped so default Playwright runs match only implemented specs (~60 tests instead of ~90 placeholder rows). When truthy, the backlog describes run and each scenario reports skipped with a documented placeholder reason until replaced by real `test(...)` implementations.
-- Helpers: **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`** (when scenarios are implemented); legacy helper **`tests/e2e/web-admin/backlog-e2e.cjs`** applied only to older skipped-placeholder revisions.
-- Full scenario index and workflow: [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md).
+- Helpers: `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
+- Runtime contract: same Playwright config, same `globalSetup`, and the same `/api/e2e/dev/reset-scenario` seed/reset flow as the other admin E2E specs
+- Historical workflow and old placeholder interpretation: [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md)
 
 ### `tests/scenarios/`
 
@@ -248,4 +252,4 @@ If Playwright fails first, read [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITF
 
 ### Linux / CI agents
 
-The same escalation order applies. Additional traps that showed up outside the original Windows-focused validation—managed Playwright `webServer` using a system Python without `uvicorn`, Element Plus message-box locale vs Chinese labels, strict-mode duplicate text matches, homework submit vs discussion `textarea` ordering, materials list `page_size` vs API `le=` limits—are recorded as Pitfalls 11–16 in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md). Suspected product or structural weaknesses inferred during full-suite repair are accumulated in [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md), including a short **next regression pass** checklist.
+The same escalation order applies. Additional traps that showed up outside the original Windows-focused validation — managed Playwright `webServer` using a system Python without `uvicorn`, Element Plus message-box locale vs Chinese labels, strict-mode duplicate text matches, homework submit vs discussion `textarea` ordering, materials list `page_size` vs API `le=` limits — are recorded as Pitfalls 11–16 in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md). Suspected product or structural weaknesses inferred during full-suite repair are accumulated in [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md), including a short next-regression-pass checklist.

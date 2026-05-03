@@ -10,13 +10,15 @@ Read in this order first:
 2. [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md)
 3. [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md) if you are evaluating test cleanup or consolidation
 4. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
-5. the feature-specific document for the workflow you are about to touch
-6. when triaging full-suite outcomes or structural risk from tests, optionally read [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
+5. [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md) before deleting legacy-looking code, compatibility branches, or duplicate helpers
+6. the feature-specific document for the workflow you are about to touch
+7. when triaging full-suite outcomes or structural risk from tests, optionally read [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 Why this is mandatory:
 
-- the repository includes compatibility layers that are easy to misinterpret if you only inspect paths
+- the repository has strict package-boundary rules that are easy to misread if you only inspect paths
 - Windows + PowerShell execution has known traps that can produce false test failures
+- Windows + PowerShell sessions can also mis-render UTF-8 text; cleanup and documentation edits must follow the encoding-safety rules in [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md)
 - Playwright failures in this repository are often environment or process-management issues before they are product regressions
 - local artifact directories can look like source or canonical output if you do not read the structure notes first
 - cross-platform and cloud-automation runs can hit additional traps (Element Plus locale, Playwright selector ambiguity, API `page_size` limits, stale ports); see [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) Pitfalls 11–16 and [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) for follow-up risk notes
@@ -25,8 +27,8 @@ Why this is mandatory:
 
 Before running commands, understand the repository boundary rules in [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md). In particular:
 
-- the real backend source lives in `apps/backend/app/`,
-- the root `app/` package is a compatibility shim that still powers current imports and startup commands,
+- the canonical backend package lives in `apps/backend/wailearning_backend/`,
+- the canonical backend import root is `apps.backend.wailearning_backend`,
 - the root `conftest.py` is intentionally repository-scoped,
 - Windows launcher scripts live in `../../ops/scripts/windows/`.
 
@@ -36,7 +38,7 @@ Before running commands, understand the repository boundary rules in [../archite
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+python -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 Optional Windows convenience launcher:
@@ -75,18 +77,27 @@ ops\scripts\windows\start-parent-frontend.bat
 
 ## Key Development Settings
 
-Defined in [`../../apps/backend/app/config.py`](../../apps/backend/app/config.py):
+Defined in [`../../apps/backend/wailearning_backend/core/config.py`](../../apps/backend/wailearning_backend/core/config.py):
 
 - `APP_ENV`
 - `DEBUG`
 - `DATABASE_URL`
 - `SECRET_KEY`
+- `BACKEND_CORS_ORIGINS`
+- `TRUSTED_HOSTS`
+- `INIT_ADMIN_USERNAME`
+- `INIT_ADMIN_PASSWORD`
+- `INIT_ADMIN_REAL_NAME`
 - `ALLOW_PUBLIC_REGISTRATION`
 - `INIT_DEFAULT_DATA`
 - `E2E_DEV_SEED_ENABLED`
 - `E2E_DEV_SEED_TOKEN`
 - `ENABLE_LLM_GRADING_WORKER`
 - `LLM_GRADING_WORKER_LEADER`
+- `LLM_GRADING_WORKER_POLL_SECONDS`
+- `LLM_GRADING_TASK_STALE_SECONDS`
+- `DEFAULT_LLM_API_KEY`
+- `REQUIRE_STRONG_SECRETS`
 
 ## Test Layers
 
@@ -134,11 +145,21 @@ Before running Playwright on Windows, read the pitfalls document first. Known fa
 - sandbox `EPERM` during subprocess startup,
 - readiness checks that accept the wrong HTTP response.
 
-### Playwright backlog scenarios (optional)
+### Playwright advanced-coverage scenarios
 
-Two specs under `tests/e2e/web-admin/` hold **placeholder titles** for advanced E2E coverage (`future-advanced-coverage*.spec.js`). By default they do not inflate routine run counts: see **`E2E_ENABLE_BACKLOG_SPECS`** and [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md) for how to enable them while implementing scenarios.
+In this branch, the pair below is already implemented as normal runnable Playwright coverage:
 
-Follow-up: when present in your tree, **`future-advanced-coverage.spec.js`** / **`future-advanced-coverage-2.spec.js`** should contain **real tests** and **`future-advanced-coverage-helpers.cjs`** shared helpers; treat them like other Playwright specs unless your branch still documents the older skipped-placeholder workflow.
+- `tests/e2e/web-admin/future-advanced-coverage.spec.js`
+- `tests/e2e/web-admin/future-advanced-coverage-2.spec.js`
+
+Shared helpers live in:
+
+- `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
+
+Historical note:
+
+- older documentation and older branches described these files as a skipped placeholder backlog behind `E2E_ENABLE_BACKLOG_SPECS`
+- that description is no longer true for this branch, but the historical workflow is still preserved in [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md) so future maintainers can interpret older commits correctly
 
 ## E2E Seed and Environment
 
@@ -176,6 +197,13 @@ $env:E2E_DEV_SEED_TOKEN='test-playwright-seed'
 npm run test:e2e
 ```
 
+Concrete safe-edit strategy for multilingual files in this repository:
+
+- prefer editing through repository-aware patching instead of copying terminal-rendered Chinese text back into files
+- do not trust PowerShell display output as the source of truth for non-ASCII content
+- if a Chinese string must be changed, anchor the edit on surrounding ASCII structure (`data-testid`, route path, JSON key, Markdown heading, or code identifier) rather than on terminal-rendered mojibake
+- after editing, verify via git diff and file-local context instead of trusting the console glyphs alone
+
 ## Current High-Value Regression Areas
 
 These are the areas most worth testing when behavior changes:
@@ -205,6 +233,8 @@ Recent behavior coverage includes scenarios such as:
 
 Browser note: `tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js` (15 cases) exercises **discussion LLM assistant**, **long-body preview/collapse**, and **course cover** flows against the seeded scenario; `POST /api/e2e/dev/reset-scenario` now seeds a per-run **`discussion_llm_profile`** plus an enabled course LLM row wired to the mock chat endpoint so discussion jobs can complete without manual admin setup.
 
+Additional browser coverage: `tests/e2e/web-admin/e2e-homework-comment-cover-tier4.spec.js` (15 cases) stresses **homework submissions list** `content_preview` / `comment_preview` ellipsis behavior (teacher UI uses stable `data-testid`s), **LLM auto-grade** long comments, **regrade** and **429-then-success** mock paths, concurrent teacher/student API interactions, and **course cover** uploads (teacher UI + admin POST + student-visible banners).
+
 ## Practical Testing Rules
 
 - Assert authoritative business state before asserting visual transitions.
@@ -215,27 +245,28 @@ Browser note: `tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js` (15 c
 
 ### Incremental lessons from higher-difficulty browser/API suites (May 2026)
 
-When extending Playwright or threaded pytest coverage, the friction usually clusters around **contract mismatches** (HTTP method/parameter shape), **router redirects by role**, **SQLite races**, and **Playwright locator ambiguity**. Pitfalls **17–24** were appended to [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)— read those before debugging failures that look like “flaky UI” but are actually environment or selector discipline issues.
+When extending Playwright or threaded pytest coverage, the friction usually clusters around **contract mismatches** (HTTP method/parameter shape), **router redirects by role**, **SQLite races**, and **Playwright locator ambiguity**. Pitfalls **17–24** were appended to [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md); read those before debugging failures that look like flaky UI but are actually environment or selector discipline issues.
 
-Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded as pitfalls **25–31** in the same document (double `apiBase`, JSON encoding, schema `ge=` limits, homework title DOM vs API, password-change token capture, attachment ACL). A subsequent **full `pytest` + full admin Playwright** pass on a Linux agent added pitfalls **32–37** (MessageBox a11y, duplicate course title rows, disabled `force` clicks, `waitForResponse` race, password button label, Vite `goto` races). A **pitfall-guard** follow-up added **38–39** (delete-list UI vs API truth, per-route `page_size` limits).
+Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded as pitfalls **25–31** in the same document (double `apiBase`, JSON encoding, schema `ge=` limits, homework title DOM vs API, password-change token capture, attachment ACL). A subsequent **full `pytest` + full admin Playwright** pass on a Linux agent added pitfalls **32–37** (MessageBox a11y, duplicate course title rows, disabled `force` clicks, `waitForResponse` race, password button label, Vite `goto` races). A later pitfall-guard follow-up added **38–39** (delete-list UI vs API truth, per-route `page_size` limits).
 
 ### Recommendations for new test samples (E2E and API)
 
-- **Confirm the contract first**: path, verb, query vs body, and Pydantic bounds — align with `apps/backend/app/routers/*.py` and `schemas.py`, and mirror the admin client in `apps/web/admin/src/api` when in doubt.
+- **Confirm the contract first**: path, verb, query vs body, and Pydantic bounds — align with `apps/backend/wailearning_backend/api/routers/*.py` and `apps/backend/wailearning_backend/api/schemas.py`, and mirror the admin client in `apps/web/admin/src/api` when in doubt.
 - **Assert server state before UI**: use `page.request`, shared `apiGetJson`, or `expect.poll` on an API predicate, then reload or widen locators for the UI (see pitfalls 29–30 in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
 - **Prefer stable hooks**: `data-testid`, course context helpers (`enterSeededRequiredCourse`), and explicit `waitForResponse` registration before clicks — especially for Element Plus dialogs and batch actions.
 - **Concurrency**: prefer API-only parallel storms when the UI disables controls; avoid `Promise.all` on clicks that may be no-ops when disabled (see Pitfall 22).
 - **Conditional scenarios**: if a test needs two movable material chapters, a parent code, or a class-teacher seed, use `test.skip` with a clear reason when the seed layout does not support it — document the assumption in the spec comment.
+- **Playwright environment contract**: default managed E2E in this branch starts the API on `8012` and the admin UI on `3012`, uses `PLAYWRIGHT_USE_EXTERNAL_SERVERS` to opt out of managed servers, and accepts `E2E_PYTHON` plus `E2E_USE_REAL_WORKER` for backend-process control; keep docs and CI commands aligned with `apps/web/admin/playwright.config.cjs`.
 - **Regression placement**: put **API contract and idempotency** checks in `pytest` where possible; reserve Playwright for routing, visibility, and multi-tab behavior that HTTP tests cannot see.
 
 ### Sample hygiene: overlap, redundancy, and refinement targets
 
 This is judgment for maintainers, not an automatic delete list:
 
-- **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the optional **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
+- **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the implemented **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
 - Older E2E that still rely on **`toBeHidden`** on Element Plus dialogs alone are **more fragile** than patterns that confirm success via **network response + navigation + table row** (see resilience and boundary specs). Prefer aligning those tests with the “authoritative state first” rule rather than deleting them outright.
 - **`TEST_REDUNDANCY_AUDIT.md`** remains the formal gate for safe deletes; the audit’s **protected** list intentionally keeps high-difficulty files — do not “clean up” stress specs without reading that policy.
-- Optional backlog specs gated by **`E2E_ENABLE_BACKLOG_SPECS`** ([E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md)): if placeholders remain in a branch, do not treat them as failing debt — treat them as a **queue** with explicit enablement.
+- Historical backlog note: if you are reading an older branch where `E2E_ENABLE_BACKLOG_SPECS` still gates placeholder suites, do not treat those placeholders as failing debt; treat them as a queue with explicit enablement. In this branch, the `future-advanced-coverage*.spec.js` pair is already runnable coverage.
 
 ### May 2026: lessons from a full `pytest` + full admin Playwright run (Linux agent)
 

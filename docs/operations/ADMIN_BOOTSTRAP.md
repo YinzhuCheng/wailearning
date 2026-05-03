@@ -23,6 +23,9 @@ These defaults are suitable only for local development. Production deployments m
 - The bootstrap logic creates the admin account only if that username does not already exist.
 - Startup does not overwrite an existing admin password just because environment variables changed later.
 - The bootstrap flow is part of application startup and uses the main backend settings.
+- The admin bootstrap and the demo seed are both controlled during application startup, but they are not the same concern:
+  the admin account uses `INIT_ADMIN_*` values, while the larger demo bundle is controlled by `INIT_DEFAULT_DATA`.
+- In the current implementation, startup also runs schema repair, normalization, roster reconciliation, and optional demo seeding inside the FastAPI lifespan path. Treat bootstrap-related failures as startup-path issues, not only as authentication issues.
 
 ## Demo Seed Bundle
 
@@ -38,6 +41,12 @@ That bundle includes:
 - related roster synchronization behavior.
 
 This is useful for local development and E2E testing, but should usually be disabled in production.
+
+Current implementation context:
+
+- `main.py` creates tables, runs schema-update helpers, normalizes teacher/class and semester links, backfills homework grading data, reconciles student users and roster rows, and only then applies optional demo seeding
+- if `INIT_DEFAULT_DATA=true`, the demo seed is followed by another roster reconciliation before startup completes
+- if `ENABLE_LLM_GRADING_WORKER=true` and `LLM_GRADING_WORKER_LEADER=true`, the in-process grading worker is started after startup initialization
 
 ## Recommended Production Values
 
@@ -64,4 +73,4 @@ The repository should not rely on a stray text file containing credentials. The 
 ## Related Docs
 
 - [Deployment and Operations](DEPLOYMENT_AND_OPERATIONS.md)
-- [Development and Testing](DEVELOPMENT_AND_TESTING.md)
+- [Development and Testing](../development/DEVELOPMENT_AND_TESTING.md)

@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.database import SessionLocal, engine
+from apps.backend.wailearning_backend.db.database import SessionLocal, engine
 from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 

@@ -10,9 +10,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi.testclient import TestClient
 
-from app.auth import get_password_hash
-from app.database import SessionLocal
-from app.models import CourseEnrollment, Homework, Student, Subject, User, UserRole
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import SessionLocal
+from apps.backend.wailearning_backend.db.models import CourseEnrollment, Homework, Student, Subject, User, UserRole
 from tests.llm_scenario import make_grading_course_with_homework
 from tests.material_flow import headers_for
 

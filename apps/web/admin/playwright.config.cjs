@@ -62,7 +62,7 @@ function buildApiCommand() {
     return [
       buildWindowsEnvPrefix(apiEnv),
       `cd /d ${quoteWindowsArg(repoRoot)}`,
-      `${quoteWindowsArg(pythonExe)} -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_API_PORT}`
+      `${quoteWindowsArg(pythonExe)} -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port ${E2E_API_PORT}`
     ].join(' && ')
   }
   const defaultVenvPython = path.join(repoRoot, '.venv', 'bin', 'python')
@@ -71,7 +71,7 @@ function buildApiCommand() {
   const apiEnvString = Object.entries(apiEnv)
     .map(([key, value]) => `${key}=${JSON.stringify(String(value))}`)
     .join(' ')
-  return `bash -lc 'cd "${repoRoot}" && exec env ${apiEnvString} "${pythonExe}" -m uvicorn app.main:app --host 127.0.0.1 --port ${E2E_API_PORT}'`
+  return `bash -lc 'cd "${repoRoot}" && exec env ${apiEnvString} "${pythonExe}" -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port ${E2E_API_PORT}'`
 }
 
 function buildUiCommand() {

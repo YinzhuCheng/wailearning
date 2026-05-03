@@ -151,6 +151,6 @@ Useful operational signals include:
 
 ## Related Docs
 
-- [System Overview](SYSTEM_OVERVIEW.md)
-- [Development and Testing](DEVELOPMENT_AND_TESTING.md)
-- [Deployment and Operations](DEPLOYMENT_AND_OPERATIONS.md)
+- [System Overview](../architecture/SYSTEM_OVERVIEW.md)
+- [Development and Testing](../development/DEVELOPMENT_AND_TESTING.md)
+- [Deployment and Operations](../operations/DEPLOYMENT_AND_OPERATIONS.md)

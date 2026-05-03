@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0\..\..\.."
 
 if exist ".venv\Scripts\python.exe" (
-  ".venv\Scripts\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+  ".venv\Scripts\python.exe" -m uvicorn apps.backend.wailearning_backend.main:app --host 0.0.0.0 --port 8001 --reload
 ) else (
-  python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+  python -m uvicorn apps.backend.wailearning_backend.main:app --host 0.0.0.0 --port 8001 --reload
 )

@@ -22,6 +22,8 @@ npm run dev
 
 The dev server uses Vite and should proxy API requests to the backend.
 
+Current default local dev port from `apps/web/parent/vite.config.js` is `5174` unless `VITE_DEV_PORT` overrides it.
+
 ## Current Shape
 
 The portal is intentionally thinner than the admin frontend.
@@ -51,5 +53,5 @@ Typical endpoints include:
 
 ## Related Docs
 
-- [System Overview](SYSTEM_OVERVIEW.md)
-- [Deployment and Operations](DEPLOYMENT_AND_OPERATIONS.md)
+- [System Overview](../architecture/SYSTEM_OVERVIEW.md)
+- [Deployment and Operations](../operations/DEPLOYMENT_AND_OPERATIONS.md)
