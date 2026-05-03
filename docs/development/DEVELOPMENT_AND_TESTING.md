@@ -7,21 +7,22 @@ Do not start with ad hoc commands if you are new to this repository or returning
 Read in this order first:
 
 1. [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md)
-2. [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md)
-3. [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md) if you are evaluating test cleanup or consolidation
-4. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
-5. [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md) before deleting legacy-looking code, compatibility branches, or duplicate helpers
-6. the feature-specific document for the workflow you are about to touch
-7. when triaging full-suite outcomes or structural risk from tests, optionally read [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
+2. [ENCODING_AND_MOJIBAKE_SAFETY.md](ENCODING_AND_MOJIBAKE_SAFETY.md) if your shell is Windows + PowerShell or you may touch multilingual files
+3. [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md)
+4. [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md) if you are evaluating test cleanup or consolidation
+5. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
+6. [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md) before deleting legacy-looking code, compatibility branches, or duplicate helpers
+7. the feature-specific document for the workflow you are about to touch
+8. when triaging full-suite outcomes or structural risk from tests, optionally read [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 Why this is mandatory:
 
 - the repository has strict package-boundary rules that are easy to misread if you only inspect paths
 - Windows + PowerShell execution has known traps that can produce false test failures
-- Windows + PowerShell sessions can also mis-render UTF-8 text; cleanup and documentation edits must follow the encoding-safety rules in [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md)
+- Windows + PowerShell sessions can also mis-render UTF-8 text; cleanup and documentation edits must follow [ENCODING_AND_MOJIBAKE_SAFETY.md](ENCODING_AND_MOJIBAKE_SAFETY.md) and the structural cleanup rules in [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md)
 - Playwright failures in this repository are often environment or process-management issues before they are product regressions
 - local artifact directories can look like source or canonical output if you do not read the structure notes first
-- cross-platform and cloud-automation runs can hit additional traps (Element Plus locale, Playwright selector ambiguity, API `page_size` limits, stale ports); see [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) Pitfalls 11–16 and [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) for follow-up risk notes
+- cross-platform and cloud-automation runs can hit additional traps such as Element Plus locale behavior, Playwright selector ambiguity, API `page_size` limits, and stale ports; see [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) and [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) for follow-up risk notes
 
 ## Local Development Setup
 
@@ -184,6 +185,7 @@ This repository is actively used on Windows, so path and encoding discipline mat
 - Prefer the repository virtual environment instead of a global Python.
 - Keep documentation and scripted edits ASCII-first when possible.
 - Avoid shell-side bulk rewriting of Chinese strings.
+- Treat terminal-rendered Unicode as display-only until it is verified against file content or git diff.
 - Do not treat local directories such as `frontend/`, `test-results/`, `.e2e-run/`, or `.pytest_tmp/` as source layout. They are local artifacts.
 - For Playwright, explicitly set `PLAYWRIGHT_BROWSERS_PATH` when using a local browser cache.
 
@@ -245,17 +247,17 @@ Additional browser coverage: `tests/e2e/web-admin/e2e-homework-comment-cover-tie
 
 ### Incremental lessons from higher-difficulty browser/API suites (May 2026)
 
-When extending Playwright or threaded pytest coverage, the friction usually clusters around **contract mismatches** (HTTP method/parameter shape), **router redirects by role**, **SQLite races**, and **Playwright locator ambiguity**. Pitfalls **17–24** were appended to [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md); read those before debugging failures that look like flaky UI but are actually environment or selector discipline issues.
+When extending Playwright or threaded pytest coverage, the friction usually clusters around contract mismatches, router redirects by role, SQLite races, and Playwright locator ambiguity. Read the later pitfall entries in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) before debugging failures that look like flaky UI but are actually environment or selector-discipline issues.
 
-Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded as pitfalls **25–31** in the same document (double `apiBase`, JSON encoding, schema `ge=` limits, homework title DOM vs API, password-change token capture, attachment ACL). A subsequent **full `pytest` + full admin Playwright** pass on a Linux agent added pitfalls **32–37** (MessageBox a11y, duplicate course title rows, disabled `force` clicks, `waitForResponse` race, password button label, Vite `goto` races). A later pitfall-guard follow-up added **38–39** (delete-list UI vs API truth, per-route `page_size` limits).
+Further test-authoring lessons from the tier-4 stress E2E pass are recorded in the same document, including `apiBase` mismatches, JSON encoding mistakes, schema `ge=` limits, homework title DOM-vs-API mismatches, password-change token capture, and attachment ACL issues. A subsequent full `pytest` plus full admin Playwright pass on a Linux agent added notes about MessageBox accessibility, duplicate course-title rows, disabled-force click mistakes, `waitForResponse` races, password button labels, and Vite `goto` races. A later pitfall-guard follow-up added delete-list UI-vs-API truth and per-route `page_size` lessons.
 
 ### Recommendations for new test samples (E2E and API)
 
-- **Confirm the contract first**: path, verb, query vs body, and Pydantic bounds — align with `apps/backend/wailearning_backend/api/routers/*.py` and `apps/backend/wailearning_backend/api/schemas.py`, and mirror the admin client in `apps/web/admin/src/api` when in doubt.
-- **Assert server state before UI**: use `page.request`, shared `apiGetJson`, or `expect.poll` on an API predicate, then reload or widen locators for the UI (see pitfalls 29–30 in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
-- **Prefer stable hooks**: `data-testid`, course context helpers (`enterSeededRequiredCourse`), and explicit `waitForResponse` registration before clicks — especially for Element Plus dialogs and batch actions.
+- **Confirm the contract first**: path, verb, query-vs-body shape, and Pydantic bounds should align with `apps/backend/wailearning_backend/api/routers/*.py` and `apps/backend/wailearning_backend/api/schemas.py`, and should mirror the admin client in `apps/web/admin/src/api` when in doubt.
+- **Assert server state before UI**: use `page.request`, shared `apiGetJson`, or `expect.poll` on an API predicate, then reload or widen locators for the UI.
+- **Prefer stable hooks**: `data-testid`, course context helpers such as `enterSeededRequiredCourse`, and explicit `waitForResponse` registration before clicks are safer, especially for Element Plus dialogs and batch actions.
 - **Concurrency**: prefer API-only parallel storms when the UI disables controls; avoid `Promise.all` on clicks that may be no-ops when disabled (see Pitfall 22).
-- **Conditional scenarios**: if a test needs two movable material chapters, a parent code, or a class-teacher seed, use `test.skip` with a clear reason when the seed layout does not support it — document the assumption in the spec comment.
+- **Conditional scenarios**: if a test needs two movable material chapters, a parent code, or a class-teacher seed, use `test.skip` with a clear reason when the seed layout does not support it, and document the assumption in the spec comment.
 - **Playwright environment contract**: default managed E2E in this branch starts the API on `8012` and the admin UI on `3012`, uses `PLAYWRIGHT_USE_EXTERNAL_SERVERS` to opt out of managed servers, and accepts `E2E_PYTHON` plus `E2E_USE_REAL_WORKER` for backend-process control; keep docs and CI commands aligned with `apps/web/admin/playwright.config.cjs`.
 - **Regression placement**: put **API contract and idempotency** checks in `pytest` where possible; reserve Playwright for routing, visibility, and multi-tab behavior that HTTP tests cannot see.
 
@@ -264,8 +266,8 @@ Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded 
 This is judgment for maintainers, not an automatic delete list:
 
 - **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the implemented **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
-- Older E2E that still rely on **`toBeHidden`** on Element Plus dialogs alone are **more fragile** than patterns that confirm success via **network response + navigation + table row** (see resilience and boundary specs). Prefer aligning those tests with the “authoritative state first” rule rather than deleting them outright.
-- **`TEST_REDUNDANCY_AUDIT.md`** remains the formal gate for safe deletes; the audit’s **protected** list intentionally keeps high-difficulty files — do not “clean up” stress specs without reading that policy.
+- Older E2E that still rely on `toBeHidden` on Element Plus dialogs alone are more fragile than patterns that confirm success via network response, navigation, and table-row state. Prefer aligning those tests with the authoritative-state-first rule rather than deleting them outright.
+- **`TEST_REDUNDANCY_AUDIT.md`** remains the formal gate for safe deletes; the audit's protected list intentionally keeps high-difficulty files, so do not clean up stress specs without reading that policy.
 - Historical backlog note: if you are reading an older branch where `E2E_ENABLE_BACKLOG_SPECS` still gates placeholder suites, do not treat those placeholders as failing debt; treat them as a queue with explicit enablement. In this branch, the `future-advanced-coverage*.spec.js` pair is already runnable coverage.
 
 ### May 2026: lessons from a full `pytest` + full admin Playwright run (Linux agent)
@@ -274,25 +276,25 @@ These notes **add** to the bullets above; they do not replace the redundancy aud
 
 **Further recommendations when authoring new samples**
 
-- **MessageBox and locale**: treat delete/confirm flows as “overlay + OK button” problems first; see Pitfall **32** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+- **MessageBox and locale**: treat delete and confirm flows as overlay-plus-confirm-button problems first.
 - **Student course pages**: any test that drives **选课/退选** must scope to the **catalog table** and wait for **enabled** action buttons; see Pitfalls **33–34**.
 - **Network pairing**: for idempotent POSTs that return quickly, pair **`waitForResponse` with `click`** atomically; see Pitfall **35**.
 - **Personal settings**: match the **exact** primary action label (`更新密码`) for password flows; see Pitfall **36**.
 - **Login helpers shared across specs**: harden `goto('/login')` against Vite navigation races; see Pitfall **37**. Any new shared helper should follow the same pattern.
-- **Admin `/users` table**: `el-table`’s inner layout can make raw `.el-table__body` **visibility** checks misleading; prefer waiting for a **known toolbar** `data-testid` (e.g. `users-open-create`) plus a **row/cell** locator scoped to the user table, or poll the API if the scenario allows.
+- **Admin `/users` table**: `el-table` inner layout can make raw `.el-table__body` visibility checks misleading; prefer waiting for a known toolbar `data-testid` such as `users-open-create` plus a row-or-cell locator scoped to the user table, or poll the API if the scenario allows.
 
 **Samples that were misleading or easy to mis-maintain (refine in place, not necessarily delete)**
 
 - **`e2e-scenario-resilience.spec.js` elective dual-context cases** historically used **unscoped** `tr:has-text(courseName)` and **`button.first()`** — wrong target and silent **`force`** on disabled **退选**. The fix is **scoping + enabled waits**; other files that copy the old pattern should be aligned when touched.
 - **Tier-4 password test** using **`/密码/`** on the personal-settings page was **too broad**; prefer explicit labels or testids.
 - **Overlap** between **`e2e-tier4-stress-backlog.spec.js`**, **`e2e-scenario-resilience.spec.js`**, and **`future-advanced-coverage*.spec.js`** remains: before adding a new case, grep for the same **invariant** (enroll idempotency, token invalidation, mark-all-read). Parameterize or extend an existing spec when the setup cost is high.
-- **Redundancy**: still governed by [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md); the audit’s merge-only candidates (courses/roster/LLM token files) are **review prompts**, not an automatic delete list.
+- **Redundancy**: still governed by [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md); the audit's merge-only candidates are review prompts, not an automatic delete list.
 
 ### May 2026 (second pass): pitfall-guard batch specs and `page_size` discipline
 
-- A second small Playwright file **`tests/e2e/web-admin/e2e-pitfall-guard-rails-batch2.spec.js`** was added to widen **`page_size` 422** coverage across **logs**, **points**, **parent scores/homework**, **homework submissions**, and **students** (where `le` differs — see Pitfall **39** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)). Run it alone with:
+- A second small Playwright file **`tests/e2e/web-admin/e2e-pitfall-guard-rails-batch2.spec.js`** was added to widen **`page_size` 422** coverage across **logs**, **points**, **parent scores/homework**, **homework submissions**, and **students** where router-specific `le` limits differ. Run it alone with:
   - `npx playwright test e2e-pitfall-guard-rails-batch2.spec.js`
-- When adding more list-endpoint tests, **parameterize `(path, max_page_size)`** from code or a tiny shared table in the spec — avoid magic `200` unless you confirmed `le` for that router.
+- When adding more list-endpoint tests, **parameterize `(path, max_page_size)`** from code or a tiny shared table in the spec; avoid magic `200` unless you confirmed `le` for that router.
 - **`e2e-pitfall-guard-rails.spec.js`** (15 cases) and **batch2** (10 cases) overlap conceptually with **`e2e-cross-cutting-tier3.spec.js`** HTTP-edge tests; new edges should **extend** batch2 or tier3, not fork a third file, unless the invariant is genuinely new.
 
 ## After Documentation Updates

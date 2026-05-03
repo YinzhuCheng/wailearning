@@ -12,7 +12,7 @@ import tiktoken
 from sqlalchemy import func
 from sqlalchemy.orm.attributes import flag_modified
 
-from apps.backend.wailearning_backend.homework_notifications import notify_student_homework_graded
+from apps.backend.wailearning_backend.domains.homework.notifications import notify_student_homework_graded
 from apps.backend.wailearning_backend.markdown_llm import append_markdown_with_dataurl_images_to_parts, expand_markdown_images_for_llm
 from apps.backend.wailearning_backend.domains.llm.attachments import (
     ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS,
@@ -49,7 +49,7 @@ from apps.backend.wailearning_backend.domains.llm.quota import (
     release_quota_reservation,
     reserve_quota_tokens,
 )
-from apps.backend.wailearning_backend.llm_token_quota import (
+from apps.backend.wailearning_backend.domains.llm.token_quota import (
     quota_calendar_for_timezone,
     resolve_effective_daily_student_tokens,
     resolve_max_parallel_grading_tasks,
@@ -60,7 +60,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from apps.backend.wailearning_backend.core.config import settings
 from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.llm_group_routing import GroupRoutingContext
+from apps.backend.wailearning_backend.domains.llm.routing import GroupRoutingContext
 from apps.backend.wailearning_backend.db.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,

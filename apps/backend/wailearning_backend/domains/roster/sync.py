@@ -10,9 +10,9 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.course_access import prepare_student_course_context, sync_student_course_enrollments
+from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context, sync_student_course_enrollments
 from apps.backend.wailearning_backend.db.models import Student, User, UserRole
-from apps.backend.wailearning_backend.student_user_roster import sync_student_roster_from_user_accounts
+from apps.backend.wailearning_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 
 
 def _clean(s: object | None) -> str:

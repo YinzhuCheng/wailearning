@@ -10,10 +10,10 @@ from sqlalchemy import asc
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import ensure_course_access_http, is_course_instructor
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http, is_course_instructor
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseDiscussionEntry, CourseMaterial, DiscussionLLMJob, Homework, Subject, User, UserRole
-from apps.backend.wailearning_backend.discussion_llm_ui import strip_llm_ui_prefix
+from apps.backend.wailearning_backend.domains.llm.discussion_ui import strip_llm_ui_prefix
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
 from apps.backend.wailearning_backend.api.schemas import (
     CourseDiscussionCreate,

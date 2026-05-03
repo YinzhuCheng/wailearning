@@ -18,7 +18,7 @@ from apps.backend.wailearning_backend.db.models import (
     LLMQuotaReservation,
     LLMTokenUsageLog,
 )
-from apps.backend.wailearning_backend.llm_token_quota import (
+from apps.backend.wailearning_backend.domains.llm.token_quota import (
     quota_calendar_for_timezone,
     resolve_effective_daily_student_tokens,
 )

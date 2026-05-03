@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import (
+from apps.backend.wailearning_backend.domains.courses.access import (
     ensure_course_access,
     get_accessible_courses_query,
     get_enrolled_students,

@@ -14,7 +14,7 @@ from apps.backend.wailearning_backend.attachments import (
     save_attachment,
 )
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import ensure_course_access
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, Subject, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids

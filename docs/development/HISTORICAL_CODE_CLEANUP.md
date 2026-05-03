@@ -47,7 +47,8 @@ This pass intentionally focused on low-risk historical noise, not broad compatib
 
 A shared helper now owns the logic that removes the UI-only `@LLM` first line before content is sent or interpreted:
 
-- `apps/backend/wailearning_backend/discussion_llm_ui.py`
+- historical location: `apps/backend/wailearning_backend/discussion_llm_ui.py`
+- current location: `apps/backend/wailearning_backend/domains/llm/discussion_ui.py`
 
 The following modules previously carried their own duplicate regex + helper:
 
@@ -62,12 +63,17 @@ The sweep removed imports that were no longer read by runtime code from these mo
 
 - `apps/backend/wailearning_backend/bootstrap.py`
 - `apps/backend/wailearning_backend/llm_grading.py`
-- `apps/backend/wailearning_backend/llm_group_routing.py`
-- `apps/backend/wailearning_backend/services.py`
+- historical location: `apps/backend/wailearning_backend/llm_group_routing.py`
+- historical location: `apps/backend/wailearning_backend/services.py`
 - `apps/backend/wailearning_backend/api/routers/homework.py`
 - `apps/backend/wailearning_backend/api/routers/logs.py`
 - `apps/backend/wailearning_backend/api/routers/semesters.py`
 - `apps/backend/wailearning_backend/api/routers/users.py`
+
+Current structure note:
+
+- the old `llm_group_routing.py` logic now lives in `apps/backend/wailearning_backend/domains/llm/routing.py`
+- the old `services.py` log helper now lives in `apps/backend/wailearning_backend/services/logging.py`
 
 This class of cleanup is high-signal and low-risk because it reduces false search hits and makes real dependencies easier to inspect.
 
@@ -86,6 +92,10 @@ These are valid future cleanup targets only after their remaining data or deploy
 ## PowerShell Encoding Safety Rules
 
 This repository is frequently edited from Windows PowerShell sessions where console rendering can misrepresent UTF-8 text. That rendering issue must not be allowed to write mojibake back into the repo.
+
+The detailed editing policy and current hotspot audit now live in:
+
+- [ENCODING_AND_MOJIBAKE_SAFETY.md](ENCODING_AND_MOJIBAKE_SAFETY.md)
 
 Follow these rules when touching any file that contains non-ASCII text, especially Chinese UI strings, shell comments, or mixed-language documentation.
 
@@ -110,6 +120,20 @@ Follow these rules when touching any file that contains non-ASCII text, especial
 2. Leave existing human-language literals untouched unless the task explicitly requires text correction.
 3. If text correction is required, verify the source in a UTF-8-safe editor or use escaped literals where appropriate.
 4. Re-run a syntax-level validation after the edit so structural fixes are not mixed with encoding regressions.
+
+## Current Mojibake Audit Status
+
+Date of audit: `2026-05-03`
+
+This cleanup sweep included an explicit encoding-safety review because the repository is often edited through Windows + PowerShell.
+
+The practical findings were:
+
+- the repository contains a small number of known mojibake-like hotspots,
+- not every suspicious string should be treated as proof of new corruption,
+- and structural refactors must not opportunistically rewrite multilingual text unless the text itself is the target of the change.
+
+At the time of this audit, the tracked hotspot list was moved into [ENCODING_AND_MOJIBAKE_SAFETY.md](ENCODING_AND_MOJIBAKE_SAFETY.md) so future agents can update the inventory without mixing it into cleanup-removal decisions.
 
 ## Validation Standard After Cleanup
 

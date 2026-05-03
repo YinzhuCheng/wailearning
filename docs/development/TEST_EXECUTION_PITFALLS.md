@@ -8,6 +8,10 @@ Later passes (same overall repository layout) added Linux / CI / cloud-agent not
 
 This file is meant to save future test operators from rediscovering the same issues.
 
+For the repository-wide policy on Unicode-safe editing and for the current mojibake hotspot audit, also read:
+
+- [ENCODING_AND_MOJIBAKE_SAFETY.md](ENCODING_AND_MOJIBAKE_SAFETY.md)
+
 ## Read This Before Running Tests
 
 If you are about to run tests, especially as an LLM coding agent on Windows + PowerShell, check these first:

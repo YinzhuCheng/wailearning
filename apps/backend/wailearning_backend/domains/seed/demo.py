@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.course_access import sync_course_enrollments
+from apps.backend.wailearning_backend.domains.courses.access import sync_course_enrollments
 from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
@@ -34,7 +34,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
-from apps.backend.wailearning_backend.student_user_sync import reconcile_student_users_and_roster
+from apps.backend.wailearning_backend.domains.roster.sync import reconcile_student_users_and_roster
 
 _DEMO_PASSWORD = "111111"
 

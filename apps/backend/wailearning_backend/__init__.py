@@ -3,4 +3,3 @@
 Import this package through the full repository-aware namespace:
 `apps.backend.wailearning_backend`.
 """
-# app package

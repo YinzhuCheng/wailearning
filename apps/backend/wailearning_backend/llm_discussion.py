@@ -21,7 +21,7 @@ from apps.backend.wailearning_backend.domains.llm.protocol import (
     RETRYABLE_STATUS_CODES,
     build_chat_completion_url as _build_chat_completion_url,
 )
-from apps.backend.wailearning_backend.discussion_llm_ui import strip_llm_ui_prefix
+from apps.backend.wailearning_backend.domains.llm.discussion_ui import strip_llm_ui_prefix
 from apps.backend.wailearning_backend.domains.llm.quota import (
     record_discussion_usage_if_needed,
     release_discussion_quota_reservation,

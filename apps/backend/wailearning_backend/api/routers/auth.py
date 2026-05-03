@@ -11,9 +11,9 @@ from apps.backend.wailearning_backend.attachments import delete_attachment_file_
 from apps.backend.wailearning_backend.api.schemas import ChangePasswordRequest, MessageResponse, ProfileSelfUpdate, Token, UserCreate, UserResponse
 from apps.backend.wailearning_backend.core.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from apps.backend.wailearning_backend.core.config import settings
-from apps.backend.wailearning_backend.course_access import prepare_student_course_context
-from apps.backend.wailearning_backend.student_user_roster import sync_student_roster_from_user_accounts
-from apps.backend.wailearning_backend.services import LogService
+from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context
+from apps.backend.wailearning_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
+from apps.backend.wailearning_backend.services.logging import LogService
 from apps.backend.wailearning_backend.db.models import UserRole
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])

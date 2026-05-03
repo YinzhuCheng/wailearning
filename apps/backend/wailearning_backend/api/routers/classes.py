@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import get_accessible_class_ids_from_courses
+from apps.backend.wailearning_backend.domains.courses.access import get_accessible_class_ids_from_courses
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Class, Student, Subject, User, UserRole
 from apps.backend.wailearning_backend.api.schemas import ClassCreate, ClassResponse, ClassUpdate
