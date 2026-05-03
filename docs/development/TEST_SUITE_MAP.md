@@ -18,6 +18,7 @@ It is intended for contributors and LLM coding agents who need to answer questio
     backend/                  focused backend pytest modules grouped by domain
     behavior/                 high-level multi-actor and workflow pytest suites
     postgres/                 PostgreSQL-only guards (skip unless TEST_DATABASE_URL is Postgres)
+    security/                 API authorization / abuse-edge regression (roles, tokens)
     e2e/web-admin/            Playwright browser coverage for the admin SPA
   fixtures/                 static files used by tests
   scenarios/                shared scenario builders and stress helpers
@@ -145,6 +146,10 @@ Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — ad
 ### `tests/postgres/`
 
 Small pytest package gated by dialect: when `TEST_DATABASE_URL` is **not** PostgreSQL, tests **skip** at module level. Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/development/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).
+
+### `tests/security/`
+
+API-level **authorization and abuse-edge** regression tests (unauthenticated vs role boundaries, admin-only routes, cross-tenant homework/parent-code actions, invalid tokens). Uses the same DB reset contract as `tests/behavior/`. Run targeted: `python -m pytest tests/security/ -q`.
 
 ## Recommended Reading Order By Task
 

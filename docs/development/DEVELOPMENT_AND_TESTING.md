@@ -348,6 +348,7 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 
 - `tests/postgres/test_postgres_dialect_guards.py` — twenty guards that **skip on SQLite** unless `TEST_DATABASE_URL` is PostgreSQL (see `tests/postgres/conftest.py`).
 - `tests/e2e/web-admin/e2e-agent-followup-batch.spec.js` — ten API/navigation checks complementary to pitfall rails.
+- `tests/security/test_security_regression.py` — twenty API security-boundary checks (admin vs teacher vs student, unauthenticated paths, invalid JWT).
 
 ## Test Cleanup Policy
 
