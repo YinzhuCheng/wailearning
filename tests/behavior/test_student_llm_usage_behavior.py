@@ -1,4 +1,4 @@
-"""S1–S3: Student quota API (My Courses card data) vs submission-driven usage."""
+"""S0–S3: Student quota API — global daily pool + per-course attribution vs submission-driven usage."""
 
 from __future__ import annotations
 
@@ -26,6 +26,18 @@ def test_s0_student_quotas_summary_lists_enrolled_course(client: TestClient) -> 
     row = next(c for c in body["courses"] if c["subject_id"] == ctx["subject_id"])
     assert row.get("subject_name")
     assert "usage_date" in row and "quota_timezone" in row
+    # Summary header: one global pool for the student (same calendar on every row).
+    assert "usage_date" in body and "quota_timezone" in body
+    assert "daily_student_token_limit" in body and body["daily_student_token_limit"] is not None
+    assert "student_used_tokens_total" in body and body["student_used_tokens_total"] is not None
+    assert "student_remaining_tokens_today" in body and body["student_remaining_tokens_today"] is not None
+    lim = body["daily_student_token_limit"]
+    rem_g = body["student_remaining_tokens_today"]
+    for c in body["courses"]:
+        assert c["usage_date"] == body["usage_date"]
+        assert c["quota_timezone"] == body["quota_timezone"]
+        assert c["daily_student_token_limit"] == lim
+        assert c["student_remaining_tokens_today"] == rem_g
 
 
 def test_s1_student_quota_loaded_vs_not_enrolled(client: TestClient) -> None:

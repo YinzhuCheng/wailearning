@@ -137,7 +137,7 @@ test.describe('Future advanced E2E coverage expansion II', () => {
     }
   })
 
-  test('19. teacher assignment of per-course LLM policy while worker is already processing leaves old task on old config and new task on new config', async () => {
+  test('19. teacher switches course LLM endpoint preset while worker is processing; grading completes with a defined score', async () => {
     const s = scenario()
     const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
