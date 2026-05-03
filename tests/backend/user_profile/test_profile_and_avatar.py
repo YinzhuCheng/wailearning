@@ -12,11 +12,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.attachments import ATTACHMENTS_DIR, get_attachment_file_path
-from app.auth import get_password_hash
-from app.database import Base, SessionLocal, engine
-from app.main import app
-from app.models import User, UserRole
+from apps.backend.wailearning_backend.attachments import ATTACHMENTS_DIR, get_attachment_file_path
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import User, UserRole
 
 
 # Minimal 1x1 PNG (transparent)
@@ -36,7 +36,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield

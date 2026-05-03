@@ -32,9 +32,9 @@ cd "${REPO_DIR}"
 "${VENV_DIR}/bin/python" - "${USERNAME}" "${NEW_PASSWORD}" <<'PY'
 import sys
 
-from app.auth import get_password_hash
-from app.database import SessionLocal
-from app.models import User
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import SessionLocal
+from apps.backend.wailearning_backend.db.models import User
 
 username = sys.argv[1]
 new_password = sys.argv[2]

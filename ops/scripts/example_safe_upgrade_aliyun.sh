@@ -71,9 +71,9 @@ rsync -a --delete \
 
 echo "==> 6. Validate Python source"
 "${PYTHON_BIN}" -m py_compile \
-  "${TMP_DIR}/source/apps/backend/app/config.py" \
-  "${TMP_DIR}/source/app/main.py" \
-  "${TMP_DIR}/source/app/bootstrap.py"
+  "${TMP_DIR}/source/apps/backend/wailearning_backend/core/config.py" \
+  "${TMP_DIR}/source/apps/backend/wailearning_backend/main.py" \
+  "${TMP_DIR}/source/apps/backend/wailearning_backend/bootstrap.py"
 
 echo "==> 7. Stop backend before replacing source"
 systemctl stop "${APP_SERVICE}"
@@ -85,11 +85,11 @@ echo "==> 9. Rebuild backend environment"
 "${APP_ROOT}/venv/bin/pip" install -r "${SOURCE_DIR}/requirements.txt"
 
 echo "==> 10. Run bootstrap/schema sync against existing database"
-"${APP_ROOT}/venv/bin/python" -m app.bootstrap
+"${APP_ROOT}/venv/bin/python" -m apps.backend.wailearning_backend.bootstrap
 
 echo "==> 11. Build frontend assets"
 (
-  cd "${SOURCE_DIR}/frontend"
+  cd "${SOURCE_DIR}/apps/web/admin"
   npm install
   npm run build
 )

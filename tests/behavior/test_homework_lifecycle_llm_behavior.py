@@ -7,9 +7,9 @@ from unittest import mock
 import httpx
 from fastapi.testclient import TestClient
 
-from app.database import SessionLocal
-from app.llm_grading import process_grading_task
-from app.models import Homework, HomeworkGradingTask, HomeworkSubmission, LLMTokenUsageLog
+from apps.backend.wailearning_backend.db.database import SessionLocal
+from apps.backend.wailearning_backend.llm_grading import process_grading_task
+from apps.backend.wailearning_backend.db.models import Homework, HomeworkGradingTask, HomeworkSubmission, LLMTokenUsageLog
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 

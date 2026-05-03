@@ -16,10 +16,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.database import Base, SessionLocal, engine
-from app.llm_grading import process_grading_task
-from app.main import app
-from app.models import (
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.llm_grading import process_grading_task
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
     Homework,
@@ -44,7 +44,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield

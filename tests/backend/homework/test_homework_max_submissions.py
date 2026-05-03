@@ -6,9 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.database import Base, SessionLocal, engine
-from app.main import app
-from app.models import Homework
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import Homework
 from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
@@ -22,7 +22,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield

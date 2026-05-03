@@ -1,6 +1,6 @@
 """Unit tests for Markdown image expansion for LLM prompts."""
 
-from app.markdown_llm import append_markdown_with_dataurl_images_to_parts, expand_markdown_images_for_llm
+from apps.backend.wailearning_backend.markdown_llm import append_markdown_with_dataurl_images_to_parts, expand_markdown_images_for_llm
 
 
 def test_expand_markdown_images_empty():

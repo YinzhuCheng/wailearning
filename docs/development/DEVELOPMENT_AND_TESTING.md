@@ -15,7 +15,7 @@ Read in this order first:
 
 Why this is mandatory:
 
-- the repository includes compatibility layers that are easy to misinterpret if you only inspect paths
+- the repository has strict package-boundary rules that are easy to misread if you only inspect paths
 - Windows + PowerShell execution has known traps that can produce false test failures
 - Playwright failures in this repository are often environment or process-management issues before they are product regressions
 - local artifact directories can look like source or canonical output if you do not read the structure notes first
@@ -25,8 +25,8 @@ Why this is mandatory:
 
 Before running commands, understand the repository boundary rules in [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md). In particular:
 
-- the real backend source lives in `apps/backend/app/`,
-- the root `app/` package is a compatibility shim that still powers current imports and startup commands,
+- the canonical backend package lives in `apps/backend/wailearning_backend/`,
+- the canonical backend import root is `apps.backend.wailearning_backend`,
 - the root `conftest.py` is intentionally repository-scoped,
 - Windows launcher scripts live in `../../ops/scripts/windows/`.
 
@@ -36,7 +36,7 @@ Before running commands, understand the repository boundary rules in [../archite
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+python -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 Optional Windows convenience launcher:
@@ -75,7 +75,7 @@ ops\scripts\windows\start-parent-frontend.bat
 
 ## Key Development Settings
 
-Defined in [`../../apps/backend/app/config.py`](../../apps/backend/app/config.py):
+Defined in [`../../apps/backend/wailearning_backend/core/config.py`](../../apps/backend/wailearning_backend/core/config.py):
 
 - `APP_ENV`
 - `DEBUG`
@@ -223,7 +223,7 @@ Further **test-authoring** lessons from the tier-4 stress E2E pass are recorded 
 
 ### Recommendations for new test samples (E2E and API)
 
-- **Confirm the contract first**: path, verb, query vs body, and Pydantic bounds — align with `apps/backend/app/routers/*.py` and `schemas.py`, and mirror the admin client in `apps/web/admin/src/api` when in doubt.
+- **Confirm the contract first**: path, verb, query vs body, and Pydantic bounds — align with `apps/backend/wailearning_backend/api/routers/*.py` and `apps/backend/wailearning_backend/api/schemas.py`, and mirror the admin client in `apps/web/admin/src/api` when in doubt.
 - **Assert server state before UI**: use `page.request`, shared `apiGetJson`, or `expect.poll` on an API predicate, then reload or widen locators for the UI (see pitfalls 29–30 in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
 - **Prefer stable hooks**: `data-testid`, course context helpers (`enterSeededRequiredCourse`), and explicit `waitForResponse` registration before clicks — especially for Element Plus dialogs and batch actions.
 - **Concurrency**: prefer API-only parallel storms when the UI disables controls; avoid `Promise.all` on clicks that may be no-ops when disabled (see Pitfall 22).

@@ -31,7 +31,7 @@ If you skip this checklist, you may spend time debugging the shell, temp directo
 - Frontend package runner: `npm.cmd` / `npx.cmd`
 - Browser cache path: `C:\Users\bloom\AppData\Local\ms-playwright`
 - Tested after repository structure migration into:
-  - `apps/backend/app/`
+  - `apps/backend/wailearning_backend/`
   - `apps/web/admin/`
   - `apps/web/parent/`
   - `ops/`
@@ -502,7 +502,7 @@ The test passes `JSON.stringify(body)` while the helper also sets `Content-Type:
 
 ### How to avoid (test side)
 
-- Before writing polls, confirm field names against **`apps/backend/app/schemas.py`** or a sample `GET` in Swagger/OpenAPI.
+- Before writing polls, confirm field names against **`apps/backend/wailearning_backend/api/schemas.py`** or a sample `GET` in Swagger/OpenAPI.
 - For “title updated” convergence, prefer **`GET /api/homeworks/{id}`** (or the list endpoint) for the homework record, not the submission history response.
 
 ## Pitfall 28: Pydantic validation limits are easy to violate in scripted payloads
@@ -660,7 +660,7 @@ Copy-pasting “`page_size=200` means 422” from homework/materials/notificatio
 
 ### How to avoid (test side)
 
-- Read the **`Query(..., le=)`** on the FastAPI handler (or grep `page_size` in `apps/backend/app/routers/`) before picking an out-of-range value. Prefer **`page_size = max_allowed + 1`** per route family.
+- Read the **`Query(..., le=)`** on the FastAPI handler (or grep `page_size` in `apps/backend/wailearning_backend/api/routers/`) before picking an out-of-range value. Prefer **`page_size = max_allowed + 1`** per route family.
 
 ## Proven Command Patterns
 

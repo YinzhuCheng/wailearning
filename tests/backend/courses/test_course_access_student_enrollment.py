@@ -5,10 +5,10 @@ import uuid
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.main import app
-from app.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
-from app.course_access import prepare_student_course_context
+from apps.backend.wailearning_backend.db.database import SessionLocal
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
+from apps.backend.wailearning_backend.course_access import prepare_student_course_context
 
 
 def _seed_student_two_courses(db: Session):
@@ -69,7 +69,7 @@ def test_student_course_list_only_enrolled_subjects():
         db.close()
 
     client = TestClient(app)
-    from app.auth import create_access_token
+    from apps.backend.wailearning_backend.core.auth import create_access_token
 
     token = create_access_token(data={"sub": user.username})
     res = client.get("/api/subjects", headers={"Authorization": f"Bearer {token}"})

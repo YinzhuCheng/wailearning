@@ -55,19 +55,19 @@ See [docs/product/LLM_HOMEWORK_GUIDE.md](docs/product/LLM_HOMEWORK_GUIDE.md) for
 ## Repository Layout
 
 ```text
-apps/backend/app/   FastAPI backend package
-apps/web/admin/     Admin SPA and Playwright config
-apps/web/parent/    Parent-facing SPA
-docs/               Documentation hub organized by topic
-ops/                CI, nginx, systemd, and deployment scripts
-tests/              Backend, behavior, and browser E2E suites
+apps/backend/wailearning_backend/   Canonical FastAPI backend package
+apps/web/admin/                     Admin SPA and Playwright config
+apps/web/parent/                    Parent-facing SPA
+docs/                               Documentation hub organized by topic
+ops/                                CI, nginx, systemd, and deployment scripts
+tests/                              Backend, behavior, and browser E2E suites
 ```
 
 Repository-boundary rules:
 
 - The repository root should contain only repository-level entry files and configuration such as `README.md`, `LICENSE`, `requirements.txt`, `pytest.ini`, and the root `conftest.py`.
 - Windows convenience launchers live under `ops/scripts/windows/` instead of being scattered across the root or app folders.
-- The root `app/` package is an intentional compatibility shim. The real backend code lives in `apps/backend/app/`, but the shim remains because the current backend still imports `app.*` internally and several deployment/test entrypoints still depend on that module path.
+- The backend import namespace is intentionally explicit: `apps.backend.wailearning_backend`. Do not reintroduce a root compatibility package or a second shorter alias.
 - Local runtime artifacts such as `frontend/`, `.pytest_tmp/`, `.e2e-run/`, `test-results/`, and `uploads/` are not part of the source layout even if they appear on a developer machine.
 
 See [docs/architecture/REPOSITORY_STRUCTURE.md](docs/architecture/REPOSITORY_STRUCTURE.md) for the detailed structure contract and migration rationale.
@@ -80,7 +80,7 @@ See [docs/architecture/REPOSITORY_STRUCTURE.md](docs/architecture/REPOSITORY_STR
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+python -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 Windows convenience launcher:
@@ -126,7 +126,7 @@ ops\scripts\windows\start-parent-frontend.bat
 
 ## Core Environment Variables
 
-Key backend settings are defined in [`apps/backend/app/config.py`](apps/backend/app/config.py).
+Key backend settings are defined in [`apps/backend/wailearning_backend/core/config.py`](apps/backend/wailearning_backend/core/config.py).
 
 - `DATABASE_URL`
 - `SECRET_KEY`
@@ -176,6 +176,7 @@ The authoritative project documentation now lives under [`docs/`](docs/README.md
 - [Documentation Hub](docs/README.md)
 - [Repository Structure](docs/architecture/REPOSITORY_STRUCTURE.md)
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md)
+- [Backend Package Structure](docs/architecture/BACKEND_PACKAGE_STRUCTURE.md)
 - [LLM and Homework Guide](docs/product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](docs/development/DEVELOPMENT_AND_TESTING.md)
 - [Test Suite Map](docs/development/TEST_SUITE_MAP.md)

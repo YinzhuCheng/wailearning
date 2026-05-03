@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.config import Settings
+from apps.backend.wailearning_backend.core.config import Settings
 
 
 def test_production_rejects_default_secret_key():

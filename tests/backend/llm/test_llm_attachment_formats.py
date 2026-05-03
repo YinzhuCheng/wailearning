@@ -10,7 +10,7 @@ import zipfile
 import pytest
 from docx import Document
 
-from app.llm_grading import _classify_and_extract, _walk_rar_bytes, _walk_zip_bytes
+from apps.backend.wailearning_backend.llm_grading import _classify_and_extract, _walk_rar_bytes, _walk_zip_bytes
 
 
 def _blocks_to_text(blocks: list) -> str:

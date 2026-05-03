@@ -72,8 +72,11 @@ The implementation details are documented in [../product/LLM_HOMEWORK_GUIDE.md](
 
 ### Backend
 
-- FastAPI application in `apps/backend/app/`
-- Root compatibility import package in `app/` so existing `app.*` imports and entrypoints continue to resolve
+- FastAPI application in `apps/backend/wailearning_backend/`
+- Canonical Python import root `apps.backend.wailearning_backend`
+- API-facing contracts and route modules under `apps/backend/wailearning_backend/api/`
+- Shared auth, config, and permission primitives under `apps/backend/wailearning_backend/core/`
+- SQLAlchemy engine/session/models under `apps/backend/wailearning_backend/db/`
 - SQLAlchemy models and bootstrap migrations
 - PostgreSQL as the primary database
 - In-process grading worker controlled by configuration

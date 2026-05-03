@@ -20,10 +20,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.auth import get_password_hash
-from app.database import Base, SessionLocal, engine
-from app.main import app
-from app.models import (
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseEnrollmentBlock,
@@ -47,7 +47,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     _ensure_admin()
@@ -311,7 +311,7 @@ def test_student_user_class_set_but_no_roster_row(client: TestClient):
 
 def test_duplicate_student_no_across_classes_prepare_does_not_move_roster(client: TestClient):
     """同一学号两条花名册不同班：prepare 不得误迁（ambiguous，不移动）。"""
-    from app.course_access import prepare_student_course_context
+    from apps.backend.wailearning_backend.course_access import prepare_student_course_context
 
     suffix = uuid.uuid4().hex[:8]
     db = SessionLocal()
@@ -584,7 +584,7 @@ def test_batch_import_students_existing_course_all_get_enrollment(client: TestCl
 def test_public_register_student_then_roster_same_username_gets_enrollments(client: TestClient, monkeypatch):
     """公开注册学生后补同用户名花名册：应有该班课程的选课。"""
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
-    from app.config import settings
+    from apps.backend.wailearning_backend.core.config import settings
 
     monkeypatch.setattr(settings, "ALLOW_PUBLIC_REGISTRATION", True)
 

@@ -8,8 +8,8 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from app.database import SessionLocal
-from app.models import LLMEndpointPreset
+from apps.backend.wailearning_backend.db.database import SessionLocal
+from apps.backend.wailearning_backend.db.models import LLMEndpointPreset
 from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 

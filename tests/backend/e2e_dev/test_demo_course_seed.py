@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from app.database import Base, SessionLocal, engine
-from app.demo_course_seed import seed_demo_course_bundle
-from app.auth import get_password_hash
-from app.main import app
-from app.models import (
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.demo_course_seed import seed_demo_course_bundle
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseExamWeight,
     CourseGradeScheme,
@@ -34,7 +34,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
 

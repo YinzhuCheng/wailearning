@@ -21,10 +21,10 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import text
 
-from app.auth import get_password_hash
-from app.database import Base, SessionLocal, engine
-from app.main import app
-from app.models import (
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseLLMConfig,
@@ -39,7 +39,7 @@ from app.models import (
     User,
     UserRole,
 )
-from app.llm_grading import process_grading_task, process_next_grading_task
+from apps.backend.wailearning_backend.llm_grading import process_grading_task, process_next_grading_task
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
@@ -53,7 +53,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -160,7 +160,7 @@ def test_png_attachment_sends_image_url_in_llm_request(client: TestClient):
     task_id: int | None = None
     db = SessionLocal()
     try:
-        from app.models import HomeworkGradingTask
+        from apps.backend.wailearning_backend.db.models import HomeworkGradingTask
 
         task = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first()
         assert task
@@ -199,13 +199,13 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     assert r.status_code == 200
     db = SessionLocal()
     try:
-        from app.models import HomeworkGradingTask
+        from apps.backend.wailearning_backend.db.models import HomeworkGradingTask
 
         tid1 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(50.0, "a"))):
-        with mock.patch("app.llm_grading.quota_calendar_for_timezone", return_value=("2000-05-20", "UTC")):
+        with mock.patch("apps.backend.wailearning_backend.llm_grading.quota_calendar_for_timezone", return_value=("2000-05-20", "UTC")):
             process_grading_task(tid1)
     r2 = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
@@ -215,13 +215,13 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     assert r2.status_code == 200
     db = SessionLocal()
     try:
-        from app.models import HomeworkGradingTask
+        from apps.backend.wailearning_backend.db.models import HomeworkGradingTask
 
         tid2 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(55.0, "b"))):
-        with mock.patch("app.llm_grading.quota_calendar_for_timezone", return_value=("2000-05-21", "UTC")):
+        with mock.patch("apps.backend.wailearning_backend.llm_grading.quota_calendar_for_timezone", return_value=("2000-05-21", "UTC")):
             process_grading_task(tid2)
     db = SessionLocal()
     try:
@@ -254,7 +254,7 @@ def test_429_then_200_succeeds_after_retry(client: TestClient):
     assert r.status_code == 200
     db = SessionLocal()
     try:
-        from app.models import HomeworkGradingTask, LLMEndpointPreset
+        from apps.backend.wailearning_backend.db.models import HomeworkGradingTask, LLMEndpointPreset
 
         tid = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first().id
         pr = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.id == ctx["preset_id"]).one()

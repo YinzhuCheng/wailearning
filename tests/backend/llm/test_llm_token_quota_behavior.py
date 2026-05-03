@@ -14,10 +14,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.attachments import ATTACHMENTS_DIR
-from app.auth import get_password_hash
-from app.database import Base, SessionLocal, engine
-from app.llm_grading import (
+from apps.backend.wailearning_backend.attachments import ATTACHMENTS_DIR
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.llm_grading import (
     VISION_TEST_IMAGE_DATA_URL,
     MaterialBlock,
     _build_scoring_messages,
@@ -27,8 +27,8 @@ from app.llm_grading import (
     process_grading_task,
     record_usage_if_needed,
 )
-from app.main import app
-from app.models import (
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
@@ -43,7 +43,7 @@ from app.models import (
     User,
     UserRole,
 )
-from app.llm_token_quota import quota_calendar_for_timezone
+from apps.backend.wailearning_backend.llm_token_quota import quota_calendar_for_timezone
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
@@ -64,7 +64,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -86,8 +86,8 @@ def test_precheck_quota_student_cap_only():
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
-        with mock.patch("app.llm_grading._get_used_tokens_for_scope") as mock_used, mock.patch(
-            "app.llm_grading.resolve_effective_daily_student_tokens", return_value=1000
+        with mock.patch("apps.backend.wailearning_backend.llm_grading._get_used_tokens_for_scope") as mock_used, mock.patch(
+            "apps.backend.wailearning_backend.llm_grading.resolve_effective_daily_student_tokens", return_value=1000
         ):
 
             def used_tokens(db_inner, **kw):
@@ -570,7 +570,7 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
         db.commit()
         db.refresh(hw)
         db.refresh(att)
-        with mock.patch("app.llm_grading.MAX_ZIP_FILES", 1):
+        with mock.patch("apps.backend.wailearning_backend.llm_grading.MAX_ZIP_FILES", 1):
             material = _build_student_material(db, hw, att, cfg)
         skipped = (material.get("artifact_manifest") or {}).get("skipped") or []
         assert any("超出展开文件数" in (s.get("reason") or "") for s in skipped)

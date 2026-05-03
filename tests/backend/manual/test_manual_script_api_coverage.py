@@ -12,11 +12,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.auth import get_password_hash
-from app.database import Base, SessionLocal, engine
-from app.main import app
-from app.bootstrap import seed_default_system_settings
-from app.models import Class, SystemSetting, User, UserRole
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.main import app
+from apps.backend.wailearning_backend.bootstrap import seed_default_system_settings
+from apps.backend.wailearning_backend.db.models import Class, SystemSetting, User, UserRole
 from tests.llm_scenario import ensure_admin, login_api
 
 
@@ -30,7 +30,7 @@ def _reset_db():
     else:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    from app.bootstrap import ensure_schema_updates
+    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     db = SessionLocal()
@@ -190,8 +190,8 @@ def test_settings_public_and_all(client: TestClient, admin_headers: dict[str, st
 
 def test_dashboard_stats_direct_router_call():
     """Covers former test_dashboard.py DB + router call path (no HTTP)."""
-    from app.routers.classes import get_accessible_class_ids
-    from app.routers.dashboard import get_dashboard_stats
+    from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
+    from apps.backend.wailearning_backend.api.routers.dashboard import get_dashboard_stats
 
     ensure_admin()
     db = SessionLocal()
