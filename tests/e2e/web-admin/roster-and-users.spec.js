@@ -30,7 +30,10 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
 
     const row = page.locator(`[data-testid="table-roster-enroll-pick"] tr:has-text("${s.student_b.username}")`)
     await expect(row).toBeVisible({ timeout: 30000 })
-    await row.locator('.el-checkbox').first().click({ force: true })
+    // Do not use force:true on the table checkbox — Element Plus selection may not update, leaving submit disabled and producing no POST.
+    await row.locator('.el-checkbox').first().click()
+    const submitBtn = page.getByTestId('btn-roster-enroll-submit')
+    await expect(submitBtn).toBeEnabled({ timeout: 15000 })
     // Pair listener with submit so a fast 200 cannot be missed (avoids flaky waitForResponse timeout).
     const [rosterResp] = await Promise.all([
       page.waitForResponse(
@@ -40,7 +43,7 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
           r.ok(),
         { timeout: 120000 }
       ),
-      page.getByTestId('btn-roster-enroll-submit').click({ force: true })
+      submitBtn.click()
     ])
 
     await expect(page.getByTestId('dialog-roster-enroll')).toBeHidden({ timeout: 90000 })
