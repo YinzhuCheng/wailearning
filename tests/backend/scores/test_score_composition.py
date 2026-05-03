@@ -9,7 +9,9 @@ from sqlalchemy import text
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import HomeworkScoreCandidate, HomeworkSubmission
-from apps.backend.wailearning_backend.score_composition import OTHER_DAILY_EXAM_TYPE
+from apps.backend.wailearning_backend.domains.scores.composition import (
+    OTHER_DAILY_EXAM_TYPE,
+)
 from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 

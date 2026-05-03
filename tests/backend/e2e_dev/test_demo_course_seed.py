@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
-from apps.backend.wailearning_backend.demo_course_seed import seed_demo_course_bundle
+from apps.backend.wailearning_backend.domains.seed.demo import seed_demo_course_bundle
 from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import (

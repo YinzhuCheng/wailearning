@@ -311,7 +311,9 @@ def test_student_user_class_set_but_no_roster_row(client: TestClient):
 
 def test_duplicate_student_no_across_classes_prepare_does_not_move_roster(client: TestClient):
     """同一学号两条花名册不同班：prepare 不得误迁（ambiguous，不移动）。"""
-    from apps.backend.wailearning_backend.course_access import prepare_student_course_context
+    from apps.backend.wailearning_backend.domains.courses.access import (
+        prepare_student_course_context,
+    )
 
     suffix = uuid.uuid4().hex[:8]
     db = SessionLocal()

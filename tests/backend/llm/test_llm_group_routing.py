@@ -22,7 +22,7 @@ from apps.backend.wailearning_backend.llm_grading import (
     validate_text_connectivity,
     validate_vision_connectivity,
 )
-from apps.backend.wailearning_backend.llm_group_routing import _GroupState
+from apps.backend.wailearning_backend.domains.llm.routing import _GroupState
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import (
     Class,
