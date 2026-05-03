@@ -30,6 +30,8 @@ from apps.backend.wailearning_backend.db.models import (
     UserRole,
 )
 from apps.backend.wailearning_backend.api.schemas import (
+    AdminResetUserPasswordRequest,
+    MessageResponse,
     StudentResponse,
     StudentRosterUpsertFromUsersRequest,
     StudentRosterUpsertFromUsersResponse,
@@ -447,6 +449,59 @@ def create_user(
     )
 
     return user
+
+
+def _default_plain_password_for_admin_reset(user: User) -> str:
+    role = (user.role or "").strip()
+    if role == UserRole.STUDENT.value:
+        return (user.username or "").strip() or ""
+    if role in (UserRole.TEACHER.value, UserRole.CLASS_TEACHER.value):
+        return "111111"
+    return ""
+
+
+@router.post("/{user_id}/reset-password", response_model=MessageResponse)
+def admin_reset_user_password(
+    user_id: int,
+    payload: AdminResetUserPasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以重置密码")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    explicit = payload.new_password
+    if explicit is not None:
+        plain = explicit
+    else:
+        if (user.role or "").strip() == UserRole.ADMIN.value:
+            raise HTTPException(status_code=400, detail="重置管理员账号密码时必须指定新密码")
+        plain = _default_plain_password_for_admin_reset(user)
+        if not plain:
+            raise HTTPException(status_code=400, detail="无法推导默认密码，请指定新密码")
+
+    user.hashed_password = get_password_hash(plain)
+    user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
+    db.add(user)
+    db.commit()
+
+    LogService.log(
+        db=db,
+        action="admin_reset_password",
+        target_type="用户",
+        user_id=current_user.id,
+        username=current_user.username,
+        target_id=user.id,
+        target_name=f"{user.real_name}({user.username})",
+        details="Administrator reset user password.",
+        result="success",
+    )
+
+    return {"message": "Password reset successfully"}
 
 
 @router.get("/{user_id}", response_model=UserResponse)

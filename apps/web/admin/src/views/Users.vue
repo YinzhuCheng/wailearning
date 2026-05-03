@@ -56,9 +56,18 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220">
+        <el-table-column label="操作" width="300">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
+            <el-button
+              v-if="isAdmin"
+              type="warning"
+              size="small"
+              data-testid="users-reset-password"
+              @click="openResetPasswordDialog(row)"
+            >
+              重置密码
+            </el-button>
             <el-button
               type="danger"
               size="small"
@@ -113,6 +122,49 @@
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="resetPasswordDialogVisible"
+      title="重置密码"
+      width="480px"
+      destroy-on-close
+      data-testid="dialog-reset-password"
+      @closed="resetResetPasswordDialog"
+    >
+      <el-alert type="warning" :closable="false" class="batch-class-alert">
+        <template #title>说明</template>
+        <p class="batch-class-alert-body">
+          学生默认重置为<strong>学号（用户名）</strong>；任课老师、班主任默认重置为
+          <strong>111111</strong>。管理员账号必须填写新密码。操作后该用户需用新密码重新登录。
+        </p>
+      </el-alert>
+      <el-form label-width="120px" style="margin-top: 16px">
+        <el-form-item label="目标用户">
+          <span>{{ resetTargetUser?.real_name }}（{{ resetTargetUser?.username }}）</span>
+        </el-form-item>
+        <el-form-item label="自定义新密码">
+          <el-switch v-model="resetUseCustom" :disabled="resetTargetUser?.role === 'admin'" />
+          <span v-if="resetTargetUser?.role === 'admin'" style="margin-left: 8px; color: var(--el-text-color-secondary)">
+            管理员须指定密码
+          </span>
+        </el-form-item>
+        <el-form-item v-if="resetUseCustom || resetTargetUser?.role === 'admin'" label="新密码" required>
+          <el-input
+            v-model="resetCustomPassword"
+            type="password"
+            show-password
+            autocomplete="new-password"
+            placeholder="至少 8 位"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resetPasswordDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="resetPasswordSubmitting" @click="submitResetPassword">
+          确认重置
+        </el-button>
       </template>
     </el-dialog>
 
@@ -316,6 +368,11 @@ const addToCourseDialogVisible = ref(false)
 const addToCourseSubjectId = ref(null)
 const addToCourseSubmitting = ref(false)
 const allSubjects = ref([])
+const resetPasswordDialogVisible = ref(false)
+const resetPasswordSubmitting = ref(false)
+const resetTargetUser = ref(null)
+const resetUseCustom = ref(false)
+const resetCustomPassword = ref('')
 
 const form = reactive({
   username: '',
@@ -605,6 +662,49 @@ const openEditDialog = user => {
     is_active: user.is_active
   })
   dialogVisible.value = true
+}
+
+const resetResetPasswordDialog = () => {
+  resetTargetUser.value = null
+  resetUseCustom.value = false
+  resetCustomPassword.value = ''
+}
+
+const openResetPasswordDialog = user => {
+  resetTargetUser.value = user
+  resetUseCustom.value = user.role === 'admin'
+  resetCustomPassword.value = ''
+  resetPasswordDialogVisible.value = true
+}
+
+const submitResetPassword = async () => {
+  const u = resetTargetUser.value
+  if (!u) {
+    return
+  }
+  const needCustom = resetUseCustom.value || u.role === 'admin'
+  if (needCustom) {
+    const p = (resetCustomPassword.value || '').trim()
+    if (p.length < 8) {
+      ElMessage.warning('自定义新密码至少 8 位')
+      return
+    }
+  }
+  resetPasswordSubmitting.value = true
+  try {
+    const body =
+      needCustom && (resetCustomPassword.value || '').trim()
+        ? { new_password: (resetCustomPassword.value || '').trim() }
+        : {}
+    await api.users.resetPassword(u.id, body)
+    ElMessage.success('密码已重置')
+    resetPasswordDialogVisible.value = false
+    resetResetPasswordDialog()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    resetPasswordSubmitting.value = false
+  }
 }
 
 const buildPayload = () => ({
