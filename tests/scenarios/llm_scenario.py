@@ -15,6 +15,7 @@ from apps.backend.wailearning_backend.db.models import (
     CourseEnrollment,
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
+    Gender,
     Homework,
     LLMEndpointPreset,
     LLMStudentTokenOverride,
@@ -85,7 +86,12 @@ def make_grading_course_with_homework(
         db.add(su)
         db.flush()
 
-        stud = Student(name="Student One", student_no=stu_username, class_id=klass.id)
+        stud = Student(
+            name="Student One",
+            student_no=stu_username,
+            gender=Gender.MALE,
+            class_id=klass.id,
+        )
         db.add(stud)
         db.flush()
 
@@ -221,7 +227,7 @@ def make_multi_student_scenario(
                 class_id=klass.id)
             db.add(u)
             db.flush()
-            st = Student(name=f"Name{i}", student_no=un, class_id=klass.id)
+            st = Student(name=f"Name{i}", student_no=un, gender=Gender.MALE, class_id=klass.id)
             db.add(st)
             db.flush()
             db.add(
