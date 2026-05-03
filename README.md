@@ -162,6 +162,71 @@ python -m pytest
 python -m pytest tests/behavior -q
 ```
 
+### PostgreSQL-Aligned UI/E2E Validation
+
+PostgreSQL is the production database for this project. For serious UI/UX audits,
+browser E2E validation, schema-sensitive backend changes, concurrency-sensitive
+flows, or any result that will be used as a production-aligned signal, use a
+dedicated throwaway PostgreSQL database instead of treating SQLite as the
+reference environment.
+
+Use a database name and user that are clearly reserved for local automation, for
+example `wailearning_uiux_audit` or `wailearning_e2e_test`. Never point
+`DATABASE_URL` or `TEST_DATABASE_URL` at a production database, a shared staging
+database with real users, or any database whose contents must be preserved.
+
+Recommended local pattern:
+
+```powershell
+# Example only. Create the database through your local PostgreSQL tooling first.
+$env:DATABASE_URL = 'postgresql://USER:PASSWORD@127.0.0.1:5432/wailearning_uiux_audit'
+$env:E2E_DEV_SEED_ENABLED = 'true'
+$env:E2E_DEV_SEED_TOKEN = 'test-playwright-seed'
+$env:INIT_DEFAULT_DATA = 'false'
+$env:SECRET_KEY = 'local-uiux-test-secret-key-minimum-32-chars'
+$env:ENABLE_LLM_GRADING_WORKER = 'false'
+python -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port 8001
+```
+
+Then point the admin frontend at that backend:
+
+```powershell
+cd apps/web/admin
+$env:VITE_PROXY_TARGET = 'http://127.0.0.1:8001'
+npm.cmd run dev
+```
+
+Seed browser-test data through the guarded E2E reset endpoint, using the same
+token supplied to the backend:
+
+```powershell
+Invoke-WebRequest `
+  -Method POST `
+  -Uri 'http://127.0.0.1:8001/api/e2e/dev/reset-scenario' `
+  -Headers @{ 'X-E2E-Seed-Token' = 'test-playwright-seed' } `
+  -UseBasicParsing
+```
+
+The admin Playwright config currently has a fast default that provisions a
+SQLite database for ordinary local E2E runs. That path is useful for quick
+feedback and for compatibility with machines that do not have PostgreSQL
+running, but it is not the production-aligned reference for database behavior.
+When validating UI/UX behavior that depends on real persistence semantics, run
+against an explicitly started PostgreSQL backend and set:
+
+```powershell
+$env:PLAYWRIGHT_USE_EXTERNAL_SERVERS = '1'
+$env:E2E_API_URL = 'http://127.0.0.1:8001'
+$env:PLAYWRIGHT_BASE_URL = 'http://127.0.0.1:3000'
+$env:E2E_DEV_SEED_TOKEN = 'test-playwright-seed'
+npx.cmd playwright test
+```
+
+For backend pytest runs that should exercise PostgreSQL-only guards, set
+`TEST_DATABASE_URL` to a separate throwaway PostgreSQL database before running
+`python -m pytest`. The test reset helpers may drop and recreate schema in that
+database, so do not reuse a database that contains data you care about.
+
 Frontend E2E:
 
 ```bash
