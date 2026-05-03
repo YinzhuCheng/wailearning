@@ -1,6 +1,19 @@
 <template>
   <div class="settings-container">
-    <el-card>
+    <div class="settings-section-nav" aria-label="设置页分区导航">
+      <button
+        v-for="section in settingsSections"
+        :key="section.id"
+        type="button"
+        class="settings-section-nav__item"
+        @click="scrollToSettingsSection(section.id)"
+      >
+        <span>{{ section.label }}</span>
+        <small>{{ section.description }}</small>
+      </button>
+    </div>
+
+    <el-card id="settings-section-system" class="settings-section-card">
       <template #header>
         <div class="card-header">
           <span><el-icon><Setting /></el-icon> 系统设置</span>
@@ -68,7 +81,7 @@
       </el-form>
     </el-card>
 
-    <el-card class="preview-card">
+    <el-card id="settings-section-login-preview" class="preview-card settings-section-card">
       <template #header>
         <span><el-icon><View /></el-icon> 登录页面预览</span>
       </template>
@@ -89,7 +102,7 @@
       </div>
     </el-card>
 
-    <el-card class="preview-card">
+    <el-card id="settings-section-llm-presets" class="preview-card settings-section-card">
       <template #header>
         <div class="card-header card-header--space">
           <span><el-icon><Connection /></el-icon> LLM 端点预设</span>
@@ -150,7 +163,7 @@
       </el-table>
     </el-card>
 
-    <el-card class="preview-card">
+    <el-card id="settings-section-llm-quota" class="preview-card settings-section-card">
       <template #header>
         <span><el-icon><Setting /></el-icon> LLM 用量与额度（全平台）</span>
       </template>
@@ -370,6 +383,36 @@ const presetForm = reactive({
 })
 
 const originalForm = ref({})
+
+const settingsSections = [
+  {
+    id: 'settings-section-system',
+    label: '系统资料',
+    description: '名称、Logo、背景'
+  },
+  {
+    id: 'settings-section-login-preview',
+    label: '登录预览',
+    description: '校验品牌呈现'
+  },
+  {
+    id: 'settings-section-llm-presets',
+    label: 'LLM 端点',
+    description: '模型与连通性'
+  },
+  {
+    id: 'settings-section-llm-quota',
+    label: '用量额度',
+    description: '全局与批量策略'
+  }
+]
+
+const scrollToSettingsSection = id => {
+  document.getElementById(id)?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  })
+}
 
 const backgroundStyle = computed(() => {
   if (form.value.login_background) {
@@ -692,6 +735,63 @@ onMounted(() => {
   min-width: 0;
 }
 
+.settings-section-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.94);
+  backdrop-filter: blur(8px);
+}
+
+.settings-section-nav__item {
+  min-width: 0;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 10px 12px;
+  text-align: left;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.settings-section-nav__item:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08);
+}
+
+.settings-section-nav__item span,
+.settings-section-nav__item small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-section-nav__item span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settings-section-nav__item small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.settings-section-card {
+  scroll-margin-top: 92px;
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -829,6 +929,20 @@ onMounted(() => {
 @media (max-width: 768px) {
   .settings-container {
     padding: 16px 14px;
+  }
+
+  .settings-section-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0 -2px 14px;
+    padding: 8px;
+  }
+
+  .settings-section-nav__item {
+    padding: 9px 10px;
+  }
+
+  .settings-section-card {
+    scroll-margin-top: 126px;
   }
 
   .settings-container :deep(.el-card__body) {

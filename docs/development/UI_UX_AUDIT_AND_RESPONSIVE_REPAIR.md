@@ -277,6 +277,40 @@ Behavioral intent:
   horizontal overflow;
 - leave a larger settings-page restructuring for a dedicated pass.
 
+### Follow-up: settings section navigation
+
+A subsequent incremental pass added a compact settings-section navigator at the
+top of `Settings.vue`.
+
+Key changes:
+
+- added four section buttons:
+  - system identity;
+  - login preview;
+  - LLM endpoint presets;
+  - LLM quota and usage policy;
+- assigned stable section ids to the existing settings cards;
+- added a `settingsSections` metadata array and `scrollToSettingsSection`
+  helper;
+- used `scrollIntoView({ behavior: 'smooth', block: 'start' })` for in-page
+  jumps;
+- kept the controls as native `<button>` elements instead of turning the page
+  into a tabbed state machine;
+- kept all existing settings content visible in the document flow;
+- added sticky, compact, responsive styling so desktop uses four columns and
+  mobile uses two columns.
+
+Reasoning:
+
+- the settings page is an operational surface, so the change should help
+  scanning without hiding detailed configuration behind new state;
+- anchoring existing cards avoids changing data loading, form submission, LLM
+  preset validation, or quota behavior;
+- native buttons preserve keyboard reachability without introducing Element Plus
+  tab state that would need additional persistence and test coverage;
+- this is an intermediate improvement, not a substitute for a future full
+  settings information-architecture pass.
+
 ## Validation Performed
 
 ### Static patch validation
@@ -318,6 +352,8 @@ Observed after-state:
 - school-wide course catalog uses mobile cards instead of a crushed table;
 - the settings page remains long but no longer depends on page-level overflow
   for its LLM table;
+- the settings page now exposes a compact top section navigator for system
+  identity, login preview, LLM endpoints, and quota policy;
 - the teacher homework page shows a purposeful empty state with a primary next
   action.
 
@@ -370,11 +406,12 @@ Recommended next UI/UX work, in order:
    - status colors;
    - theme variants for blue, green, warm, and grayscale.
 2. Refactor settings into tabs or anchored sections:
-   - system identity;
-   - login preview;
-   - LLM endpoints;
-   - global quota policy;
-   - bulk quota override.
+   - a compact anchored-section navigator now exists;
+   - remaining work is a deeper information-architecture pass if maintainers
+     want progressive disclosure, per-section save affordances, or persistent
+     active-section state;
+   - do not remove detailed LLM explanations when restructuring, because they
+     encode operational constraints future agents need.
 3. Add maintained Playwright assertions for the mobile layout regressions:
    - mobile sidebar does not reduce main content width when closed;
    - `.course-card` bounding boxes stay within viewport;
