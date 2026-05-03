@@ -46,6 +46,7 @@ from apps.backend.wailearning_backend.db.models import (
     UserRole,
 )
 from apps.backend.wailearning_backend.domains.homework.cleanup import purge_homework_row
+from apps.backend.wailearning_backend.semester_utils import normalize_semester_name
 from apps.backend.wailearning_backend.api.schemas import (
     AttachmentUploadResponse,
     CourseTimeItem,
@@ -153,7 +154,7 @@ def _normalize_semester_label(semester: Optional[str], db: Session) -> Optional[
     if not semester:
         return semester
 
-    normalized = semester.strip()
+    normalized = normalize_semester_name(semester)
     if not normalized:
         return normalized
 
@@ -162,27 +163,17 @@ def _normalize_semester_label(semester: Optional[str], db: Session) -> Optional[
         return exact_semester.name
 
     parts = normalized.split("-")
-    if len(parts) == 2 and parts[0].isdigit():
+    if len(parts) == 2 and parts[0].isdigit() and parts[1] in {"1", "2"}:
         year, term = parts
-        if term in {"1", "2"}:
-            candidates = (
-                db.query(Semester)
-                .filter(Semester.year == int(year))
-                .order_by(Semester.created_at.asc(), Semester.id.asc())
-                .all()
-            )
-            term_index = int(term) - 1
-            if 0 <= term_index < len(candidates):
-                return candidates[term_index].name
-        if term == "1":
-            return f"{year}-\u6625\u5b63"
-        if term == "2":
-            return f"{year}-\u79cb\u5b63"
-        if term == "1":
-            return f"{year}-春季"
-        if term == "2":
-            return f"{year}-秋季"
-
+        candidates = (
+            db.query(Semester)
+            .filter(Semester.year == int(year))
+            .order_by(Semester.created_at.asc(), Semester.id.asc())
+            .all()
+        )
+        term_index = int(term) - 1
+        if 0 <= term_index < len(candidates):
+            return candidates[term_index].name
     return normalized
 
 

@@ -1,5 +1,3 @@
-import re
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -8,30 +6,11 @@ from apps.backend.wailearning_backend.db.models import Score, Subject, User, Sem
 from apps.backend.wailearning_backend.api.schemas import SemesterCreate, SemesterResponse
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.core.permissions import is_admin
+from apps.backend.wailearning_backend.semester_utils import DEFAULT_SEMESTERS, normalize_semester_name
 
 router = APIRouter(prefix="/api/semesters", tags=["学期管理"])
-
-
-def normalize_semester_name(name: str) -> str:
-    normalized = (name or "").strip()
-    matched = re.fullmatch(r"(\d{4})-(1|2)", normalized)
-    if not matched:
-        return normalized
-
-    year, term = matched.groups()
-    return f"{year}-\u6625\u5b63" if term == "1" else f"{year}-\u79cb\u5b63"
-
 def init_default_semesters(db: Session):
-    default_semesters = [
-        {"name": "2024-\u6625\u5b63", "year": 2024},
-        {"name": "2024-\u79cb\u5b63", "year": 2024},
-        {"name": "2025-\u6625\u5b63", "year": 2025},
-        {"name": "2025-\u79cb\u5b63", "year": 2025},
-        {"name": "2026-\u6625\u5b63", "year": 2026},
-        {"name": "2026-\u79cb\u5b63", "year": 2026},
-    ]
-    
-    for sem_data in default_semesters:
+    for sem_data in DEFAULT_SEMESTERS:
         existing = db.query(Semester).filter(Semester.name == sem_data["name"]).first()
         if not existing:
             semester = Semester(

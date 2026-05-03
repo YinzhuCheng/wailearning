@@ -1,5 +1,4 @@
 import os
-import re
 from datetime import datetime, timezone
 
 from sqlalchemy import text
@@ -11,6 +10,7 @@ from apps.backend.wailearning_backend.core.config import settings
 from apps.backend.wailearning_backend.course_access import sync_course_enrollments
 from apps.backend.wailearning_backend.demo_course_seed import seed_demo_course_bundle
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.semester_utils import DEFAULT_SEMESTERS, normalize_semester_name
 from apps.backend.wailearning_backend.student_user_sync import reconcile_student_users_and_roster
 from apps.backend.wailearning_backend.db.models import (
     CourseMaterial,
@@ -32,15 +32,6 @@ from apps.backend.wailearning_backend.db.models import (
     UserRole,
 )
 
-
-DEFAULT_SEMESTERS = [
-    {"name": "2024-\u6625\u5b63", "year": 2024},
-    {"name": "2024-\u79cb\u5b63", "year": 2024},
-    {"name": "2025-\u6625\u5b63", "year": 2025},
-    {"name": "2025-\u79cb\u5b63", "year": 2025},
-    {"name": "2026-\u6625\u5b63", "year": 2026},
-    {"name": "2026-\u79cb\u5b63", "year": 2026},
-]
 
 DEFAULT_SYSTEM_SETTINGS = [
     ("system_name", "BIMSA-CLASS", "System display name."),
@@ -809,21 +800,6 @@ def seed_default_semesters(db) -> None:
     if created:
         db.commit()
     print(f"Ensured default semesters. Added {created} item(s).")
-
-
-def normalize_semester_name(name: str | None) -> str | None:
-    if not name:
-        return name
-
-    normalized = name.strip()
-    match = re.fullmatch(r"(\d{4})-(1|2)", normalized)
-    if not match:
-        return normalized
-
-    year, term = match.groups()
-    return f"{year}-\u6625\u5b63" if term == "1" else f"{year}-\u79cb\u5b63"
-
-
 def normalize_semester_catalog(db) -> None:
     semesters = db.query(Semester).order_by(Semester.created_at.asc(), Semester.id.asc()).all()
     changed = 0
