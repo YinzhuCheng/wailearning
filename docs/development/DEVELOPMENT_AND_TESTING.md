@@ -315,6 +315,18 @@ If you only run `pytest` on the default SQLite configuration, note that `tests/b
 
 **RAR attachment tests:** `tests/backend/llm/test_llm_attachment_formats.py` includes cases that shell out to the **`rar`** CLI to build archives; Debian/Ubuntu provide it in the **`rar`** package (non-free section may need `contrib` / mirror enabled). Without `rar`, those tests skip; **`unrar`** is used when unpacking in-app paths.
 
+**Full regression prerequisites (what maintainers should enable before claiming “no skips”):**  
+CI machines and anyone publishing “green full-suite” results should install **`rar`** (and typically **`unrar`**) and provision a **throwaway PostgreSQL** database plus `TEST_DATABASE_URL`, then run at least once:
+
+```bash
+export TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/DBNAME'
+python -m pytest
+```
+
+That executes **`tests/postgres/`** (twenty dialect guards), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and avoids skipping the two **`test_llm_attachment_formats`** RAR builders. The agent validation environment (May 2026) ran those targets successfully with Postgres + `rar` installed. Default `pytest` without Postgres/`rar` remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
+
+**Authoring convention — database-backed tests:** When adding or reviewing tests that touch persistence, schema, transactions, concurrency, or dialect-specific behavior, **assume PostgreSQL as the production-aligned reference**: write assertions and fixtures compatible with Postgres first; use SQLite for speed locally where the suite allows, but **do not rely on SQLite-only semantics** as proof for shipping schema-sensitive changes. Re-validate meaningful DB changes against **`TEST_DATABASE_URL`** (Postgres).
+
 ### Agent triage notes (incremental, May 2026): pitfalls, sample hygiene, residual risk
 
 This subsection records lessons from a focused repair pass (pytest + Playwright + PostgreSQL smoke). It **adds** to earlier guidance; it does not replace [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) or [TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).

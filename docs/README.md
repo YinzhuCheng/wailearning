@@ -27,6 +27,7 @@ This directory is the authoritative documentation home for the repository. The r
 - If behavior changes in code, update these documents in the same change set.
 - Contributors, including LLM agents, are expected to read the task-relevant documents before changing code, tests, structure, or deployment assets.
 - The documentation set is part of the implementation surface, not optional commentary.
+- For database-related tests and “zero-skip” full `pytest` claims, see the **full regression prerequisites** and **PostgreSQL authoring convention** in [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md) (`TEST_DATABASE_URL`, `rar` CLI).
 
 ## Mandatory Reading By Task
 
