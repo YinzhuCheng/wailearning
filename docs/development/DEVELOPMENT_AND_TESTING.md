@@ -311,6 +311,10 @@ and then any targeted Playwright spec that covers the affected workflow.
 
 If you only run `pytest` on the default SQLite configuration, note that `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` is skipped unless the dialect is PostgreSQL. Full PostgreSQL-only assertions require `TEST_DATABASE_URL` (or equivalent) pointing at a live Postgres instance with migrated schema. This does not replace the default workflow for most changes; it matters when validating schema-level regressions.
 
+**PostgreSQL local smoke (Linux example):** Install Postgres, create a dedicated empty database and user, export `TEST_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DBNAME`, then run `python -m pytest`. Tests recreate schema via `tests/db_reset.py` (`DROP SCHEMA public CASCADE` on non-SQLite). Use a database reserved for automation only; do not point at production. Avoid running two pytest processes against the same `TEST_DATABASE_URL` concurrently — resets collide.
+
+**RAR attachment tests:** `tests/backend/llm/test_llm_attachment_formats.py` includes cases that shell out to the **`rar`** CLI to build archives; Debian/Ubuntu provide it in the **`rar`** package (non-free section may need `contrib` / mirror enabled). Without `rar`, those tests skip; **`unrar`** is used when unpacking in-app paths.
+
 ## Test Cleanup Policy
 
 If you are considering deleting or consolidating tests, do not start from ad hoc judgment.

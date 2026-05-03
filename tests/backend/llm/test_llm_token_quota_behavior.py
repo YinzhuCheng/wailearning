@@ -12,11 +12,10 @@ from unittest import mock
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 from apps.backend.wailearning_backend.attachments import ATTACHMENTS_DIR
 from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.wailearning_backend.db.database import SessionLocal
 from apps.backend.wailearning_backend.llm_grading import (
     VISION_TEST_IMAGE_DATA_URL,
     MaterialBlock,
@@ -58,14 +57,9 @@ def _tiny_png_bytes() -> bytes:
 
 @pytest.fixture(autouse=True)
 def _reset_db():
-    if engine.dialect.name == "sqlite":
-        with engine.begin() as conn:
-            conn.execute(text("PRAGMA foreign_keys=OFF"))
-            Base.metadata.drop_all(bind=conn)
-            conn.execute(text("PRAGMA foreign_keys=ON"))
-    else:
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    from tests.db_reset import reset_test_database_schema
+
+    reset_test_database_schema()
     from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
