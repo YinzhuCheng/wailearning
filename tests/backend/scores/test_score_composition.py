@@ -9,20 +9,17 @@ from sqlalchemy import text
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import HomeworkScoreCandidate, HomeworkSubmission
-from apps.backend.wailearning_backend.score_composition import OTHER_DAILY_EXAM_TYPE
+from apps.backend.wailearning_backend.domains.scores.composition import (
+    OTHER_DAILY_EXAM_TYPE,
+)
 from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
 @pytest.fixture(autouse=True)
 def _reset_db():
-    if engine.dialect.name == "sqlite":
-        with engine.begin() as conn:
-            conn.execute(text("PRAGMA foreign_keys=OFF"))
-            Base.metadata.drop_all(bind=conn)
-            conn.execute(text("PRAGMA foreign_keys=ON"))
-    else:
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    from tests.db_reset import reset_test_database_schema
+
+    reset_test_database_schema()
     from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()

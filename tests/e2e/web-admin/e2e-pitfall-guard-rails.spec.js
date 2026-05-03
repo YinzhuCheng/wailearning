@@ -266,7 +266,9 @@ test.describe('E2E pitfall guard rails (15 cases)', () => {
     await expect(page.getByTestId('dialog-roster-enroll')).toBeVisible({ timeout: 30000 })
     const row = page.locator(`[data-testid="table-roster-enroll-pick"] tr:has-text("${s.student_b.username}")`)
     await expect(row).toBeVisible({ timeout: 30000 })
-    await row.locator('.el-checkbox').first().click({ force: true })
+    await row.locator('.el-checkbox').first().click()
+    const submitBtn = page.getByTestId('btn-roster-enroll-submit')
+    await expect(submitBtn).toBeEnabled({ timeout: 15000 })
     const [resp] = await Promise.all([
       page.waitForResponse(
         r =>
@@ -275,7 +277,7 @@ test.describe('E2E pitfall guard rails (15 cases)', () => {
           r.ok(),
         { timeout: 120000 }
       ),
-      page.getByTestId('btn-roster-enroll-submit').click({ force: true })
+      submitBtn.click()
     ])
     expect(resp.ok()).toBeTruthy()
   })

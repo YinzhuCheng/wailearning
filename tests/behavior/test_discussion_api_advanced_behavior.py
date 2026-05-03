@@ -23,14 +23,9 @@ from tests.material_flow import headers_for
 
 @pytest.fixture(autouse=True)
 def _reset_db():
-    if engine.dialect.name == "sqlite":
-        with engine.begin() as conn:
-            conn.execute(text("PRAGMA foreign_keys=OFF"))
-            Base.metadata.drop_all(bind=conn)
-            conn.execute(text("PRAGMA foreign_keys=ON"))
-    else:
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    from tests.db_reset import reset_test_database_schema
+
+    reset_test_database_schema()
     from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
@@ -286,8 +281,12 @@ def test_behavior_discussion_barrier_burst_then_first_page_order_monotonic_ids(c
     )
     assert page.status_code == 200
     data = page.json()["data"]
-    ids_on_page = [row["id"] for row in data]
-    assert ids_on_page == sorted(ids_on_page)
+    # API orders by (created_at, id). Under concurrent inserts, id assignment order may differ from
+    # commit-time order on PostgreSQL, so row ids on a page are not guaranteed to be sorted by id alone.
+    for prev, nxt in zip(data, data[1:]):
+        p_key = (prev["created_at"], prev["id"])
+        n_key = (nxt["created_at"], nxt["id"])
+        assert p_key <= n_key, (p_key, n_key)
 
 
 def test_behavior_discussion_student_cannot_delete_after_teacher_deleted_404(client: TestClient):

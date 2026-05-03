@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from apps.backend.wailearning_backend.db.database import SessionLocal
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
-from apps.backend.wailearning_backend.course_access import prepare_student_course_context
+from apps.backend.wailearning_backend.domains.courses.access import (
+    prepare_student_course_context,
+)
 
 
 def _seed_student_two_courses(db: Session):

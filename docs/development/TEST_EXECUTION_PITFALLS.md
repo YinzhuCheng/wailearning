@@ -666,6 +666,22 @@ Copy-pasting “`page_size=200` means 422” from homework/materials/notificatio
 
 - Read the **`Query(..., le=)`** on the FastAPI handler (or grep `page_size` in `apps/backend/wailearning_backend/api/routers/`) before picking an out-of-range value. Prefer **`page_size = max_allowed + 1`** per route family.
 
+## Pitfall 40: `force: true` on Element Plus table row checkboxes can skip selection state
+
+### Symptom
+
+`page.waitForResponse` for `POST .../roster-enroll` times out (up to 120s) on `Subjects.vue` “从花名册进课” even though the dialog and row are visible.
+
+### Why it happens
+
+`btn-roster-enroll-submit` stays **disabled** until `rosterEnrollSelection` is non-empty selection from `el-table` **selection-change**. A forced click on the row checkbox can fail to run the same code path as a normal user click, so no row is selected, the primary button remains disabled, and a second **`click({ force: true })` on the disabled button** is a no-op—no network request, endless wait for response.
+
+### How to avoid (test side)
+
+- Click the table selection checkbox **without** `force: true` (or use the table’s public selection API if you add one in the app for tests only).
+- **`await expect(getByTestId('btn-roster-enroll-submit')).toBeEnabled()`** before pairing `waitForResponse` with submit.
+- If you need `force` on the submit click, do not use it on the checkbox first; re-read Pitfall 34 for disabled-control semantics.
+
 ## Proven Command Patterns
 
 ### Backend full suite

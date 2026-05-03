@@ -22,7 +22,7 @@ from apps.backend.wailearning_backend.llm_grading import (
     validate_text_connectivity,
     validate_vision_connectivity,
 )
-from apps.backend.wailearning_backend.llm_group_routing import _GroupState
+from apps.backend.wailearning_backend.domains.llm.routing import _GroupState
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import (
     Class,
@@ -46,14 +46,9 @@ from tests.llm_scenario import ensure_admin, json_llm_response, login_api
 
 @pytest.fixture(autouse=True)
 def _reset_db():
-    if engine.dialect.name == "sqlite":
-        with engine.begin() as conn:
-            conn.execute(text("PRAGMA foreign_keys=OFF"))
-            Base.metadata.drop_all(bind=conn)
-            conn.execute(text("PRAGMA foreign_keys=ON"))
-    else:
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    from tests.db_reset import reset_test_database_schema
+
+    reset_test_database_schema()
     from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()

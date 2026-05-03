@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
-from apps.backend.wailearning_backend.demo_course_seed import seed_demo_course_bundle
+from apps.backend.wailearning_backend.domains.seed.demo import seed_demo_course_bundle
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import (
     Class,
@@ -28,14 +28,9 @@ from apps.backend.wailearning_backend.db.models import (
 
 
 def _reset_db():
-    if engine.dialect.name == "sqlite":
-        with engine.begin() as conn:
-            conn.execute(text("PRAGMA foreign_keys=OFF"))
-            Base.metadata.drop_all(bind=conn)
-            conn.execute(text("PRAGMA foreign_keys=ON"))
-    else:
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    from tests.db_reset import reset_test_database_schema
+
+    reset_test_database_schema()
     from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
@@ -168,7 +163,9 @@ def test_roster_display_name_change_visible_after_login(client: TestClient):
     finally:
         db.close()
 
-    from apps.backend.wailearning_backend.student_user_sync import sync_student_user_from_roster_row
+    from apps.backend.wailearning_backend.domains.roster.sync import (
+        sync_student_user_from_roster_row,
+    )
 
     db = SessionLocal()
     try:

@@ -1,4 +1,4 @@
-"""Shared fixtures for API-level LLM behavior tests under tests/behavior/."""
+"""Shared DB reset for security regression tests (same contract as behavior/)."""
 
 from __future__ import annotations
 
@@ -25,14 +25,3 @@ def client() -> TestClient:
     from apps.backend.wailearning_backend.main import app
 
     return TestClient(app)
-
-
-@pytest.fixture(scope="session")
-def behavior_base_url() -> str:
-    """Reserved for future Playwright runs; API tests use TestClient."""
-    return "http://127.0.0.1:5174"
-
-
-@pytest.fixture(scope="session")
-def behavior_api_base_url() -> str:
-    return "http://127.0.0.1:8001/api"

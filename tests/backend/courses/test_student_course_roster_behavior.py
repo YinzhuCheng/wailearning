@@ -39,14 +39,9 @@ from tests.llm_scenario import login_api
 
 @pytest.fixture(autouse=True)
 def _reset_db():
-    if engine.dialect.name == "sqlite":
-        with engine.begin() as conn:
-            conn.execute(text("PRAGMA foreign_keys=OFF"))
-            Base.metadata.drop_all(bind=conn)
-            conn.execute(text("PRAGMA foreign_keys=ON"))
-    else:
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    from tests.db_reset import reset_test_database_schema
+
+    reset_test_database_schema()
     from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
@@ -311,7 +306,9 @@ def test_student_user_class_set_but_no_roster_row(client: TestClient):
 
 def test_duplicate_student_no_across_classes_prepare_does_not_move_roster(client: TestClient):
     """同一学号两条花名册不同班：prepare 不得误迁（ambiguous，不移动）。"""
-    from apps.backend.wailearning_backend.course_access import prepare_student_course_context
+    from apps.backend.wailearning_backend.domains.courses.access import (
+        prepare_student_course_context,
+    )
 
     suffix = uuid.uuid4().hex[:8]
     db = SessionLocal()
