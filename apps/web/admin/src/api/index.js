@@ -202,7 +202,8 @@ const api = {
     get: id => http.get(`/users/${id}`),
     create: data => http.post('/users', data, { timeout: rosterHeavyTimeout }),
     update: (id, data) => http.put(`/users/${id}`, data),
-    delete: id => http.delete(`/users/${id}`)
+    delete: id => http.delete(`/users/${id}`),
+    resetPassword: (id, data) => http.post(`/users/${id}/reset-password`, data ?? {})
   },
   classes: {
     list: () => http.get('/classes'),

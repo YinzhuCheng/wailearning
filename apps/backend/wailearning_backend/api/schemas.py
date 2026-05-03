@@ -193,6 +193,32 @@ class AttachmentUploadResponse(BaseModel):
     size: int
 
 
+class AdminResetUserPasswordRequest(BaseModel):
+    """Admin-only: omit new_password to apply role defaults (student → username as password, teacher/class_teacher → 111111)."""
+
+    new_password: Optional[str] = None
+
+    @field_validator("new_password", mode="before")
+    @classmethod
+    def strip_optional_password(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        return stripped or None
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_explicit_password(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        encoded = value.encode("utf-8")
+        if len(encoded) < 8:
+            raise ValueError("When set, new password must be at least 8 characters.")
+        if len(encoded) > 72:
+            raise ValueError("When set, new password must be 72 bytes or fewer.")
+        return value
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
