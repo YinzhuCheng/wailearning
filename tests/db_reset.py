@@ -23,4 +23,26 @@ def reset_test_database_schema() -> None:
             conn.execute(text("DROP SCHEMA public CASCADE"))
             conn.execute(text("CREATE SCHEMA public"))
             conn.execute(text("GRANT ALL ON SCHEMA public TO PUBLIC"))
+            # SQLAlchemy creates PostgreSQL ENUM types as standalone pg types; they can survive
+            # odd dependency ordering relative to tables. Drop any enum types left in public
+            # so metadata.create_all can recreate them cleanly.
+            conn.execute(
+                text(
+                    """
+                    DO $$
+                    DECLARE r RECORD;
+                    BEGIN
+                      FOR r IN (
+                        SELECT t.typname AS name
+                        FROM pg_type t
+                        JOIN pg_namespace n ON n.oid = t.typnamespace
+                        WHERE n.nspname = 'public' AND t.typtype = 'e'
+                      )
+                      LOOP
+                        EXECUTE format('DROP TYPE IF EXISTS public.%I CASCADE', r.name);
+                      END LOOP;
+                    END $$;
+                    """
+                )
+            )
     Base.metadata.create_all(bind=engine)

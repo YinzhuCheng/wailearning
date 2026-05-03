@@ -311,9 +311,43 @@ and then any targeted Playwright spec that covers the affected workflow.
 
 If you only run `pytest` on the default SQLite configuration, note that `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` is skipped unless the dialect is PostgreSQL. Full PostgreSQL-only assertions require `TEST_DATABASE_URL` (or equivalent) pointing at a live Postgres instance with migrated schema. This does not replace the default workflow for most changes; it matters when validating schema-level regressions.
 
-**PostgreSQL local smoke (Linux example):** Install Postgres, create a dedicated empty database and user, export `TEST_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DBNAME`, then run `python -m pytest`. Tests recreate schema via `tests/db_reset.py` (`DROP SCHEMA public CASCADE` on non-SQLite). Use a database reserved for automation only; do not point at production. Avoid running two pytest processes against the same `TEST_DATABASE_URL` concurrently — resets collide.
+**PostgreSQL local smoke (Linux example):** Install Postgres, create a dedicated empty database and user, export `TEST_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DBNAME`, then run `python -m pytest`. Tests recreate schema via `tests/db_reset.py` (`DROP SCHEMA public CASCADE` on non-SQLite, plus dropping leftover **`pg` ENUM types** in `public` before `create_all` so SQLAlchemy can recreate enums cleanly). Use a database reserved for automation only; do not point at production. Avoid running two pytest processes against the same `TEST_DATABASE_URL` concurrently — resets collide.
 
 **RAR attachment tests:** `tests/backend/llm/test_llm_attachment_formats.py` includes cases that shell out to the **`rar`** CLI to build archives; Debian/Ubuntu provide it in the **`rar`** package (non-free section may need `contrib` / mirror enabled). Without `rar`, those tests skip; **`unrar`** is used when unpacking in-app paths.
+
+### Agent triage notes (incremental, May 2026): pitfalls, sample hygiene, residual risk
+
+This subsection records lessons from a focused repair pass (pytest + Playwright + PostgreSQL smoke). It **adds** to earlier guidance; it does not replace [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) or [TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
+
+#### A. Pitfalls encountered (test-operator / harness side) and how to avoid them
+
+- **Playwright `webServer` + Python:** Managed E2E must use the **repository `.venv`** (or `E2E_PYTHON`) so `uvicorn` sees project deps — see Pitfall 11 in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+- **Element Plus roster-enroll table:** Do not use `click({ force: true })` on **selection checkboxes** then `force` the primary button; selection may not update, the submit stays **disabled**, and `waitForResponse` times out with **no POST**. Prefer a normal checkbox click, then **`expect(btn-roster-enroll-submit).toBeEnabled()`** before pairing `waitForResponse` with submit — see Pitfall 40.
+- **Concurrent discussion list assertions:** The API orders by **`(created_at, id)`**. On PostgreSQL, **serial `id` order can diverge** from insert wall-clock order under concurrent threads; asserting **sorted ids alone** can false-fail. Assert **lexicographic order of `(created_at, id)`** or match the API contract explicitly.
+- **`metadata.drop_all()` on PostgreSQL:** FKs declared with SQLAlchemy **`use_alter=True`** may produce **unnamed** constraints and break `drop_all` during test resets. The suite uses **`tests/db_reset.py`** (`DROP SCHEMA public CASCADE` for non-SQLite) — keep new DB resets aligned with that helper when using Postgres.
+- **Parallel pytest + single `TEST_DATABASE_URL`:** Two processes resetting the same Postgres schema cause **nondeterministic failures**. Run **one** full-suite Postgres job at a time per database.
+
+**Preferred toolchain for serious regression (principle):** install **`rar`** (for attachment format tests) and run **`pytest` with `TEST_DATABASE_URL` pointing at PostgreSQL** so dialect-specific guards (e.g. `information_schema`, transactional visibility, uniqueness behavior) execute instead of skipping. SQLite remains the default fast loop for everyday edits.
+
+#### B. Guidance for future test samples; redundancy and refinement
+
+- **Confirm HTTP contracts before scripting:** Path, verb, query vs body, and **`Query(..., le=)`** bounds must match routers — copy-pasting `page_size=200` across routes causes false reds when one route allows **1000** (students) and another **100** (logs). Prefer a **small shared table** `(path, max_page_size)` in specs or grep routers once.
+- **Prefer stable hooks:** `data-testid`, seeded scenario helpers (`enterSeededRequiredCourse`), and API-first assertions before fragile UI copy.
+- **Overlap without deleting:** `e2e-pitfall-guard-rails*.spec.js`, `e2e-cross-cutting-tier*.spec.js`, and `future-advanced-coverage*.spec.js` intentionally overlap on invariants (pagination, auth). Before adding a file, **grep for the same invariant**; extend or parameterize rather than fork a fourth parallel guard file unless the scenario is genuinely new.
+- **Samples that deserve refinement when touched:** Very broad Playwright regexes (e.g. `/密码/` on settings), **`textarea:first()`** on homework submit (discussion vs submission — use `homework-submit-content`), and **unscoped `tr:has-text(course)`** on **我的课程** (catalog vs cards — scope to `.elective-catalog-card`).
+- **Automated redundancy policy:** Deletions still go through [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md) and `tests/TEST_PROTECTION_RULES.json`; overlap is a **review signal**, not an automatic delete list.
+
+#### C. Residual product / architecture concerns (from tests, not a confirmed bug list)
+
+- **Startup and lifespan coupling:** Heavy bootstrap (schema repair, reconciliation, optional worker) increases **order-dependent** and **environment-sensitive** failure modes; failures often present as **health/E2E boot** issues rather than the edited feature — see existing P1 items in [TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
+- **Notification read-state under concurrency:** Dual-tab mark-all-read remains a **high flake/risk** surface; distinguish **API truth** vs **UI convergence** under automation.
+- **SQLite vs PostgreSQL semantics:** Transaction boundaries, uniqueness timing, and **`SERIAL`** vs SQLite autoincrement can diverge; Postgres-only paths deserve **periodic** CI or manual smoke with `TEST_DATABASE_URL`.
+- **Large orchestration modules (`llm_grading`, heavy routers):** Fixes in one branch of grading or roster flows can **couple** unexpectedly — prefer **narrow pytest** for extracted helpers when refactoring.
+
+**New focused suites (additive):**
+
+- `tests/postgres/test_postgres_dialect_guards.py` — twenty guards that **skip on SQLite** unless `TEST_DATABASE_URL` is PostgreSQL (see `tests/postgres/conftest.py`).
+- `tests/e2e/web-admin/e2e-agent-followup-batch.spec.js` — ten API/navigation checks complementary to pitfall rails.
 
 ## Test Cleanup Policy
 

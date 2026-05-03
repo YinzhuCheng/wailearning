@@ -13,11 +13,12 @@ It is intended for contributors and LLM coding agents who need to answer questio
 
 ## Top-Level Test Layout
 
-```text
-tests/
-  backend/                  focused backend pytest modules grouped by domain
-  behavior/                 high-level multi-actor and workflow pytest suites
-  e2e/web-admin/            Playwright browser coverage for the admin SPA
+  ```text
+  tests/
+    backend/                  focused backend pytest modules grouped by domain
+    behavior/                 high-level multi-actor and workflow pytest suites
+    postgres/                 PostgreSQL-only guards (skip unless TEST_DATABASE_URL is Postgres)
+    e2e/web-admin/            Playwright browser coverage for the admin SPA
   fixtures/                 static files used by tests
   scenarios/                shared scenario builders and stress helpers
   conftest.py               repository test environment defaults
@@ -138,6 +139,12 @@ Compatibility re-export modules remain at:
 - `tests/llm_pressures.py`
 
 These stubs exist so older imports keep working while the actual helper code lives under `tests/scenarios/`.
+
+Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — additive API/navigation checks (pagination boundaries, health, settings public, course entry). Run alone with `npx playwright test e2e-agent-followup-batch.spec.js` from `apps/web/admin`.
+
+### `tests/postgres/`
+
+Small pytest package gated by dialect: when `TEST_DATABASE_URL` is **not** PostgreSQL, tests **skip** at module level. Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/development/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).
 
 ## Recommended Reading Order By Task
 
