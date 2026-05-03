@@ -6,12 +6,14 @@ This directory is the authoritative documentation home for the repository. The r
 
 - [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
 - [System Overview](architecture/SYSTEM_OVERVIEW.md)
+- [Structure Audit And Migration Plan](architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
 - [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
+- [Encoding And Mojibake Safety](development/ENCODING_AND_MOJIBAKE_SAFETY.md)
 - [Test Suite Map](development/TEST_SUITE_MAP.md)
 - [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
 - [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
-- [E2E backlog scenarios (placeholder Playwright specs)](development/E2E_BACKLOG_SCENARIOS.md)
+- [E2E advanced coverage specs and historical backlog note](development/E2E_BACKLOG_SCENARIOS.md)
 - [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
 - [Parent Portal](product/PARENT_PORTAL.md)
 - [Git Workflow](development/GIT_WORKFLOW.md)
@@ -36,6 +38,7 @@ Read:
 
 1. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
 2. [System Overview](architecture/SYSTEM_OVERVIEW.md)
+3. [Structure Audit And Migration Plan](architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
 
 Why:
 
@@ -61,11 +64,13 @@ Why:
 Read:
 
 1. [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
-2. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+2. [Encoding And Mojibake Safety](development/ENCODING_AND_MOJIBAKE_SAFETY.md)
+3. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 
 Why:
 
 - this repository has known Windows + PowerShell execution traps
+- this repository also has known Unicode-display traps where terminal output can misrepresent tracked UTF-8 text
 - Playwright failures can come from port collisions, stale processes, blocked PowerShell shims, or sandbox limits rather than product regressions
 - pytest startup issues can originate from temp-path behavior before application code even runs
 
@@ -88,17 +93,19 @@ Why:
 
 1. [System Overview](architecture/SYSTEM_OVERVIEW.md)
 2. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
-3. [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
-4. [Test-Inferred Risks And Follow-Ups](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
+3. [Structure Audit And Migration Plan](architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
+4. [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
+5. [Test-Inferred Risks And Follow-Ups](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 ### Local development
 
 1. [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
-2. [Test Suite Map](development/TEST_SUITE_MAP.md)
-3. [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
-4. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
-5. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
-6. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+2. [Encoding And Mojibake Safety](development/ENCODING_AND_MOJIBAKE_SAFETY.md)
+3. [Test Suite Map](development/TEST_SUITE_MAP.md)
+4. [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
+5. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
+6. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
+7. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 
 ### Production deployment
 

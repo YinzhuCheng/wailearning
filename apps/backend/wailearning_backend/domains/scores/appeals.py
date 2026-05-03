@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from apps.backend.wailearning_backend.course_access import subject_teacher_user_ids
+from apps.backend.wailearning_backend.domains.courses.access import subject_teacher_user_ids
 from apps.backend.wailearning_backend.db.models import Notification, ScoreGradeAppeal, Subject
 
 

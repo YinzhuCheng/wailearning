@@ -86,8 +86,11 @@ def test_precheck_quota_student_cap_only():
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
-        with mock.patch("apps.backend.wailearning_backend.llm_grading._get_used_tokens_for_scope") as mock_used, mock.patch(
-            "apps.backend.wailearning_backend.llm_grading.resolve_effective_daily_student_tokens", return_value=1000
+        with mock.patch(
+            "apps.backend.wailearning_backend.domains.llm.quota.get_used_tokens_for_scope"
+        ) as mock_used, mock.patch(
+            "apps.backend.wailearning_backend.domains.llm.quota.resolve_effective_daily_student_tokens",
+            return_value=1000,
         ):
 
             def used_tokens(db_inner, **kw):
@@ -277,8 +280,14 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
         db.close()
 
 
-@mock.patch("app.routers.llm_settings.validate_vision_connectivity", return_value=(True, "vision ok"))
-@mock.patch("app.routers.llm_settings.validate_text_connectivity", return_value=(True, "text ok"))
+@mock.patch(
+    "apps.backend.wailearning_backend.api.routers.llm_settings.validate_vision_connectivity",
+    return_value=(True, "vision ok"),
+)
+@mock.patch(
+    "apps.backend.wailearning_backend.api.routers.llm_settings.validate_text_connectivity",
+    return_value=(True, "text ok"),
+)
 def test_get_course_llm_config_includes_quota_usage_shape(_, __, client: TestClient):
     db = SessionLocal()
     try:
@@ -570,7 +579,7 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
         db.commit()
         db.refresh(hw)
         db.refresh(att)
-        with mock.patch("apps.backend.wailearning_backend.llm_grading.MAX_ZIP_FILES", 1):
+        with mock.patch("apps.backend.wailearning_backend.domains.llm.attachments.MAX_ZIP_FILES", 1):
             material = _build_student_material(db, hw, att, cfg)
         skipped = (material.get("artifact_manifest") or {}).get("skipped") or []
         assert any("超出展开文件数" in (s.get("reason") or "") for s in skipped)

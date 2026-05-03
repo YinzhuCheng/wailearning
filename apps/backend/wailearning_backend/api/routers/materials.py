@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
-from apps.backend.wailearning_backend.course_access import ensure_course_access_http
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Class, CourseMaterial, CourseMaterialChapter, CourseMaterialSection, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
@@ -17,7 +17,7 @@ from apps.backend.wailearning_backend.api.schemas import (
     CourseMaterialResponse,
     CourseMaterialUpdate,
 )
-from apps.backend.wailearning_backend.services import LogService
+from apps.backend.wailearning_backend.services.logging import LogService
 
 router = APIRouter(prefix="/api/materials", tags=["课程资料"])
 

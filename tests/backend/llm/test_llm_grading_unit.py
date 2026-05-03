@@ -74,7 +74,8 @@ def test_parse_scoring_json_out_of_range():
     hw = Homework(max_score=10, grade_precision="integer")
     with pytest.raises(RetryableLLMError) as exc:
         _parse_scoring_json('{"score": 99, "comment": "x"}', hw)
-    assert "范围" in str(exc.value) or "超出" in str(exc.value)
+    msg = str(exc.value)
+    assert "范围" in msg or "超出" in msg or "outside" in msg.lower() or "allowed range" in msg.lower()
 
 
 def test_estimate_task_tokens():
@@ -129,7 +130,10 @@ def test_precheck_quota_allows_unlimited():
     db = SessionLocal()
     try:
         cfg = CourseLLMConfig(subject_id=1, is_enabled=True)
-        with mock.patch("apps.backend.wailearning_backend.llm_grading.resolve_effective_daily_student_tokens", return_value=2_000_000_000):
+        with mock.patch(
+            "apps.backend.wailearning_backend.domains.llm.quota.resolve_effective_daily_student_tokens",
+            return_value=2_000_000_000,
+        ):
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=999_999_999)
         assert ok is True
         assert code is None
@@ -146,8 +150,10 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
             is_enabled=True,
             quota_timezone="UTC",
         )
-        with mock.patch("apps.backend.wailearning_backend.llm_grading._get_used_tokens_for_scope", return_value=95), mock.patch(
-            "apps.backend.wailearning_backend.llm_grading.resolve_effective_daily_student_tokens", return_value=100
+        with mock.patch(
+            "apps.backend.wailearning_backend.domains.llm.quota.get_used_tokens_for_scope", return_value=95
+        ), mock.patch(
+            "apps.backend.wailearning_backend.domains.llm.quota.resolve_effective_daily_student_tokens", return_value=100
         ):
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=10)
         assert ok is False

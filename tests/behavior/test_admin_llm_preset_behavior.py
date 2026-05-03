@@ -55,8 +55,12 @@ def test_p3_validate_with_image_then_teacher_sees_preset_in_list(client: TestCli
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
         b"\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x18\xdd\x8d\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
     )
-    with mock.patch("app.routers.llm_settings.validate_text_connectivity", return_value=(True, "ok")), mock.patch(
-        "app.routers.llm_settings.validate_vision_connectivity", return_value=(True, "vision ok")
+    with mock.patch(
+        "apps.backend.wailearning_backend.api.routers.llm_settings.validate_text_connectivity",
+        return_value=(True, "ok"),
+    ), mock.patch(
+        "apps.backend.wailearning_backend.api.routers.llm_settings.validate_vision_connectivity",
+        return_value=(True, "vision ok"),
     ):
         r_val = client.post(
             f"/api/llm-settings/presets/{ctx['preset_id']}/validate",

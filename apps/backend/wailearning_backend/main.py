@@ -13,9 +13,9 @@ from apps.backend.wailearning_backend.bootstrap import (
     normalize_teacher_class_assignments,
     sync_subject_semester_links,
 )
-from apps.backend.wailearning_backend.demo_course_seed import seed_demo_course_bundle
+from apps.backend.wailearning_backend.domains.seed.demo import seed_demo_course_bundle
 from apps.backend.wailearning_backend.core.config import settings
-from apps.backend.wailearning_backend.student_user_sync import reconcile_student_users_and_roster
+from apps.backend.wailearning_backend.domains.roster.sync import reconcile_student_users_and_roster
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.llm_grading import start_grading_worker, worker_manager
 from apps.backend.wailearning_backend.api.routers import (

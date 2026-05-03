@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from apps.backend.wailearning_backend.student_user_roster import sync_student_roster_from_user_accounts
+from apps.backend.wailearning_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
 from apps.backend.wailearning_backend.core.auth import get_current_active_user, get_password_hash
@@ -43,8 +43,8 @@ from apps.backend.wailearning_backend.api.schemas import (
     UserResponse,
     UserUpdate,
 )
-from apps.backend.wailearning_backend.course_access import prepare_student_course_context, sync_student_course_enrollments
-from apps.backend.wailearning_backend.services import LogService
+from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context, sync_student_course_enrollments
+from apps.backend.wailearning_backend.services.logging import LogService
 from apps.backend.wailearning_backend.core.permissions import is_admin
 
 router = APIRouter(prefix="/api/users", tags=["用户管理"])

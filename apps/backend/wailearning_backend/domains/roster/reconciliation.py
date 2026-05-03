@@ -7,7 +7,7 @@ from typing import Iterable
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from apps.backend.wailearning_backend.course_access import prepare_student_course_context
+from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context
 from apps.backend.wailearning_backend.db.models import Class, Gender, Student, User, UserRole
 from apps.backend.wailearning_backend.api.schemas import StudentRosterUpsertFromUsersError, StudentRosterUpsertFromUsersResponse
 

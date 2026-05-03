@@ -370,7 +370,7 @@ def test_flat_legacy_routing_when_no_group_rows():
 
 def test_validate_endpoint_order_text_before_vision():
     """validate_endpoint_connectivity：先发纯文本请求，再发多模态请求。"""
-    from app import llm_grading
+    from apps.backend.wailearning_backend import llm_grading
 
     received: list[str] = []
 

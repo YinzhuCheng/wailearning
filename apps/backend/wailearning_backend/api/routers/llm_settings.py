@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import ensure_course_access, get_student_profile_for_user, prepare_student_course_context
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access, get_student_profile_for_user, prepare_student_course_context
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.llm_grading import (
     build_png_data_url_from_image_bytes,
@@ -18,7 +18,7 @@ from apps.backend.wailearning_backend.llm_grading import (
     validate_text_connectivity,
     validate_vision_connectivity,
 )
-from apps.backend.wailearning_backend.llm_token_quota import (
+from apps.backend.wailearning_backend.domains.llm.token_quota import (
     apply_student_daily_token_overrides,
     get_or_create_global_quota_policy,
     resolve_effective_daily_student_tokens,

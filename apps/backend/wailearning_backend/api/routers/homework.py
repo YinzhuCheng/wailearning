@@ -17,7 +17,7 @@ from apps.backend.wailearning_backend.attachments import (
     get_attachment_file_path,
 )
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import (
+from apps.backend.wailearning_backend.domains.courses.access import (
     ensure_course_access,
     get_enrolled_students,
     get_student_profile_for_user,
@@ -25,8 +25,8 @@ from apps.backend.wailearning_backend.course_access import (
 )
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.domains.homework.cleanup import purge_homework_row
-from apps.backend.wailearning_backend.homework_appeals import mark_appeal_notifications_acknowledged, notify_teachers_grade_appeal
-from apps.backend.wailearning_backend.homework_notifications import notify_student_homework_graded
+from apps.backend.wailearning_backend.domains.homework.appeals import mark_appeal_notifications_acknowledged, notify_teachers_grade_appeal
+from apps.backend.wailearning_backend.domains.homework.notifications import notify_student_homework_graded
 from apps.backend.wailearning_backend.llm_grading import normalize_score_for_homework, queue_grading_task, refresh_submission_summary
 from apps.backend.wailearning_backend.db.models import (
     Class,

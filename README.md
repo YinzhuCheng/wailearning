@@ -11,6 +11,7 @@ Minimum rule:
 - before changing repository structure or file placement, read [docs/architecture/REPOSITORY_STRUCTURE.md](docs/architecture/REPOSITORY_STRUCTURE.md)
 - before changing backend or product behavior, read [docs/architecture/SYSTEM_OVERVIEW.md](docs/architecture/SYSTEM_OVERVIEW.md) and any feature-specific product document such as [docs/product/LLM_HOMEWORK_GUIDE.md](docs/product/LLM_HOMEWORK_GUIDE.md)
 - before running tests or diagnosing failures, read [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) and [docs/development/TEST_EXECUTION_PITFALLS.md](docs/development/TEST_EXECUTION_PITFALLS.md)
+- before editing multilingual files from Windows + PowerShell, read [docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md)
 - when assessing structural risk or full-suite follow-ups inferred from tests, see [docs/architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](docs/architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 - before deployment or service changes, read [docs/operations/DEPLOYMENT_AND_OPERATIONS.md](docs/operations/DEPLOYMENT_AND_OPERATIONS.md) and [docs/operations/ADMIN_BOOTSTRAP.md](docs/operations/ADMIN_BOOTSTRAP.md)
 - before touching parent-facing flows, read [docs/product/PARENT_PORTAL.md](docs/product/PARENT_PORTAL.md)
@@ -61,6 +62,7 @@ apps/web/parent/                    Parent-facing SPA
 docs/                               Documentation hub organized by topic
 ops/                                CI, nginx, systemd, and deployment scripts
 tests/                              Backend, behavior, and browser E2E suites
+tools/                              Repository maintenance and audit helpers
 ```
 
 Repository-boundary rules:
@@ -171,9 +173,9 @@ npm run test:e2e
 
 Read [docs/development/TEST_EXECUTION_PITFALLS.md](docs/development/TEST_EXECUTION_PITFALLS.md) before assuming test failures are product regressions, especially on Windows + PowerShell or when running Playwright.
 
-The historical “backlog” Playwright pair, `tests/e2e/web-admin/future-advanced-coverage*.spec.js`, is now implemented as normal runnable coverage in this branch. The old `E2E_ENABLE_BACKLOG_SPECS` gate survives only as a historical note for older branches; see [docs/development/E2E_BACKLOG_SCENARIOS.md](docs/development/E2E_BACKLOG_SCENARIOS.md).
+The historical "backlog" Playwright pair, `tests/e2e/web-admin/future-advanced-coverage*.spec.js`, is now implemented as normal runnable coverage in this branch. The old `E2E_ENABLE_BACKLOG_SPECS` gate survives only as a historical note for older branches; see [docs/development/E2E_BACKLOG_SCENARIOS.md](docs/development/E2E_BACKLOG_SCENARIOS.md).
 
-See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, reading order, and current regression strategy.
+See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, reading order, and current regression strategy. For encoding-safe editing policy and the current mojibake audit record, also read [docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
 
 ## Documentation
 
@@ -183,8 +185,10 @@ The authoritative project documentation now lives under [`docs/`](docs/README.md
 - [Repository Structure](docs/architecture/REPOSITORY_STRUCTURE.md)
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md)
 - [Backend Package Structure](docs/architecture/BACKEND_PACKAGE_STRUCTURE.md)
+- [Structure Audit And Migration Plan](docs/architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
 - [LLM and Homework Guide](docs/product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](docs/development/DEVELOPMENT_AND_TESTING.md)
+- [Encoding And Mojibake Safety](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md)
 - [Test Suite Map](docs/development/TEST_SUITE_MAP.md)
 - [Deployment and Operations](docs/operations/DEPLOYMENT_AND_OPERATIONS.md)
 - [Parent Portal](docs/product/PARENT_PORTAL.md)

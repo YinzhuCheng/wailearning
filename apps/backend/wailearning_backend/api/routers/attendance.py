@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import ensure_course_access
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Attendance, Student, Subject, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids

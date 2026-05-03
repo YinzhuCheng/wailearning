@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import ensure_course_access_http, is_course_instructor
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http, is_course_instructor
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseMaterial, CourseMaterialChapter, CourseMaterialSection, Subject, User
 from apps.backend.wailearning_backend.api.schemas import (
@@ -16,7 +16,7 @@ from apps.backend.wailearning_backend.api.schemas import (
     CourseMaterialChapterUpdate,
     CourseMaterialSectionReorderRequest,
 )
-from apps.backend.wailearning_backend.services import LogService
+from apps.backend.wailearning_backend.services.logging import LogService
 
 router = APIRouter(prefix="/api/material-chapters", tags=["资料章节"])
 

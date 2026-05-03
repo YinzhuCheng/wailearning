@@ -77,10 +77,29 @@ The implementation details are documented in [../product/LLM_HOMEWORK_GUIDE.md](
 - API-facing contracts and route modules under `apps/backend/wailearning_backend/api/`
 - Shared auth, config, and permission primitives under `apps/backend/wailearning_backend/core/`
 - SQLAlchemy engine/session/models under `apps/backend/wailearning_backend/db/`
+- Business-domain helpers under `apps/backend/wailearning_backend/domains/`
+- Cross-cutting operational helpers under `apps/backend/wailearning_backend/services/`
 - SQLAlchemy models and bootstrap migrations
 - PostgreSQL as the primary database
 - In-process grading worker controlled by configuration
 - File handling and attachment authorization through backend routes
+
+Current backend domain packages:
+
+- `domains/courses/` for course access, enrollment repair, and class-bound rules
+- `domains/homework/` for cleanup, appeal, and notification helpers
+- `domains/llm/` for attachments, protocol parsing, quota accounting, routing, and admin quota-policy helpers
+- `domains/roster/` for student-user synchronization and roster reconciliation
+- `domains/scores/` for score composition and score-appeal helpers
+- `domains/seed/` for demo-seed and bootstrap seed flows
+
+Important package-root modules that still act as shared runtime boundaries:
+
+- `main.py` for app assembly and startup lifecycle
+- `bootstrap.py` for schema repair and normalization entrypoints
+- `llm_grading.py` for the grading worker and grading orchestration
+- `llm_discussion.py` for discussion-LLM runtime orchestration
+- `attachments.py` and `markdown_llm.py` for file and content adaptation concerns
 
 ### Admin frontend
 
@@ -133,9 +152,18 @@ On application startup, the backend:
 - creates tables if needed,
 - applies schema updates,
 - normalizes teacher/class and semester links,
+- synchronizes subject-semester links,
 - backfills homework grading data,
 - reconciles student users and roster rows,
 - optionally seeds demo data,
+- re-runs roster reconciliation after demo seeding when seed mode is enabled,
 - optionally starts the LLM grading worker leader.
+
+The current `lifespan` sequence in `main.py` is intentionally ordered so that:
+
+- schema and normalization run before domain repair logic,
+- roster reconciliation sees the post-normalization model state,
+- demo data seeding happens only after the base repair pass is committed,
+- and worker startup does not race the bootstrap transaction.
 
 See [../operations/ADMIN_BOOTSTRAP.md](../operations/ADMIN_BOOTSTRAP.md) and [../operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md).

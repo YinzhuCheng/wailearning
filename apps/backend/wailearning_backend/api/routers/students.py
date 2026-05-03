@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.course_access import prepare_student_course_context, sync_student_course_enrollments
+from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context, sync_student_course_enrollments
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import (
     Attendance,
@@ -30,7 +30,7 @@ from apps.backend.wailearning_backend.db.models import (
 )
 from apps.backend.wailearning_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.wailearning_backend.api.schemas import StudentCreate, StudentListResponse, StudentResponse, StudentUpdate
-from apps.backend.wailearning_backend.student_user_sync import sync_student_user_from_roster_row
+from apps.backend.wailearning_backend.domains.roster.sync import sync_student_user_from_roster_row
 
 
 router = APIRouter(prefix="/api/students", tags=["学生管理"])

@@ -4,6 +4,10 @@
 
 This document defines the current repository layout after the full backend namespace migration.
 
+For the current branch-state assessment of repository-level structural debt, migration order, and risk themes, also read:
+
+- [STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
+
 It is written for both human contributors and LLM coding agents. Read it before:
 
 - moving files,
@@ -136,39 +140,37 @@ apps/backend/wailearning_backend/
     database.py                    engine, session, Base, and DB dependency wiring
     models.py                      SQLAlchemy models and enums
   domains/
-    llm/                           extracted LLM attachment/quota/protocol helpers
-    homework/                      extracted homework cleanup/delete helpers
+    courses/                       course access and enrollment logic
+    homework/                      homework lifecycle helpers
+    llm/                           LLM attachment/quota/protocol/routing helpers
+    roster/                        user-roster reconciliation logic
+    scores/                        score composition and appeal helpers
+    seed/                          demo and bootstrap seed helpers
+  services/
+    logging.py                     operation-log write helpers
   attachments.py                   attachment storage and authorization helpers
-  course_access.py                 course access and enrollment logic
-  demo_course_seed.py              test/demo seeding support
-  homework_appeals.py
-  homework_notifications.py
   llm_discussion.py
   llm_grading.py
-  llm_group_routing.py
-  llm_token_quota.py
   markdown_llm.py
-  score_composition.py
-  score_grade_appeals.py
-  services.py
-  student_user_roster.py
-  student_user_sync.py
+  semester_utils.py
 ```
 
-This layout is deliberately not fully domain-normalized yet. It does, however, establish three meaningful foundational layers plus an emerging domain-extraction area:
+This layout now establishes three foundational layers plus explicit domain subpackages:
 
 - `api/` for HTTP-facing shape and route registration,
 - `core/` for configuration, authentication, and shared access rules,
-- `db/` for persistence primitives.
-- `domains/` for extracted business helpers that were previously buried in oversized root modules or routers.
+- `db/` for persistence primitives,
+- `domains/` for business-domain logic,
+- `services/` for the small remaining cross-cutting service layer.
 
-Future domain extraction should build on these layers rather than bypass them. In particular:
+The backend package root should now stay intentionally small. In particular:
 
-- cross-route cleanup or lifecycle helpers should prefer `domains/homework/` instead of living inside a router module,
-- heavy LLM attachment/material parsing should prefer `domains/llm/attachments.py` instead of expanding `llm_grading.py`,
-- shared LLM quota reservation and usage-accounting helpers should prefer `domains/llm/quota.py`,
-- shared LLM endpoint/protocol parsing helpers should prefer `domains/llm/protocol.py`,
-- new domain packages should be concrete and business-scoped, not generic helper buckets.
+- new course logic should prefer `domains/courses/`,
+- new roster-reconciliation logic should prefer `domains/roster/`,
+- new score composition or score appeal logic should prefer `domains/scores/`,
+- new homework lifecycle helpers should prefer `domains/homework/`,
+- new LLM routing/quota/protocol helpers should prefer `domains/llm/`,
+- new cross-cutting operational service code should prefer `services/` over package-root utility files.
 
 For deeper backend-package guidance, read [BACKEND_PACKAGE_STRUCTURE.md](BACKEND_PACKAGE_STRUCTURE.md).
 
@@ -298,14 +300,19 @@ When adding or moving files, use these rules:
 
 ## Near-Term Cleanup Direction
 
-The repository is in a better state than before, but the backend still contains large modules and heavy route files.
+The repository is in a better state than before, and a first major backend flattening pass has already been completed.
+
+Interpretation of current state:
+
+- top-level repository shape is already mostly correct and should be preserved
+- the backend package root is now reserved primarily for entrypoints and a shrinking set of still-heavy orchestration modules
+- the main remaining structural debt is concentrated in large modules such as `llm_grading.py`, `llm_discussion.py`, and `bootstrap.py`
 
 The next structural steps should focus on domain extraction inside `apps/backend/wailearning_backend/`, especially around:
 
 - LLM grading,
-- homework lifecycle,
-- roster synchronization,
-- subject and course management,
-- score and appeal handling.
+- route-heavy homework flows,
+- route-heavy subject/course flows,
+- and further reduction of monolithic orchestration in `bootstrap.py`.
 
 That work should preserve the current namespace rules and build richer domain subpackages without reintroducing ambiguous import roots.

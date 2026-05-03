@@ -1,17 +1,18 @@
 import os
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from apps.backend.wailearning_backend.attachments import ensure_upload_directories
 from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.core.config import settings
-from apps.backend.wailearning_backend.course_access import sync_course_enrollments
-from apps.backend.wailearning_backend.demo_course_seed import seed_demo_course_bundle
+from apps.backend.wailearning_backend.domains.courses.access import sync_course_enrollments
+from apps.backend.wailearning_backend.domains.seed.demo import seed_demo_course_bundle
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.semester_utils import DEFAULT_SEMESTERS, normalize_semester_name
-from apps.backend.wailearning_backend.student_user_sync import reconcile_student_users_and_roster
+from apps.backend.wailearning_backend.domains.roster.sync import reconcile_student_users_and_roster
 from apps.backend.wailearning_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
@@ -620,7 +621,11 @@ def _ensure_llm_assistant_system_user() -> None:
                 is_active=False,
             )
         )
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Parallel startup or repeated bootstrap can race the unique username insert.
+            db.rollback()
     except Exception:
         db.rollback()
         raise
