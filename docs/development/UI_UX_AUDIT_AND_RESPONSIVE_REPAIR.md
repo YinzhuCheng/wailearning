@@ -429,6 +429,142 @@ Recommended next UI/UX work, in order:
    existing mojibake-like tracked Chinese strings except where new UI text was
    necessary and inserted directly through patching.
 
+## Incremental Pitfalls And Resolutions From The Follow-Up Pass
+
+This section records additional pitfalls encountered after the first responsive
+repair commit. It is intentionally additive and does not replace the earlier
+PostgreSQL-backed audit notes in this document or
+`docs/development/TEST_EXECUTION_PITFALLS.md`.
+
+### Pitfall: the local audit script originally overwrote baseline screenshots
+
+Observed:
+
+- the local ignored screenshot script initially hard-coded names such as
+  `before-mobile-student-courses-postgres.png`;
+- rerunning it after code changes would overwrite the baseline evidence unless
+  the operator manually copied files elsewhere first.
+
+Resolution:
+
+- the local ignored script under `.e2e-run/` was changed to accept an
+  environment-controlled screenshot prefix;
+- use `UI_UX_AUDIT_PREFIX=after` for post-change screenshots;
+- keep `before-*` and `after-*` screenshots side by side in the ignored artifact
+  directory;
+- do not track the script or screenshots unless maintainers deliberately promote
+  the workflow into a maintained test or tool.
+
+Portable command shape:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:UI_UX_AUDIT_PREFIX='after'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+### Pitfall: desktop containment fixes were not enough for mobile course catalog UX
+
+Observed:
+
+- adding `overflow-x: auto` to the course catalog table stopped page-level
+  horizontal overflow;
+- however, on a `390 px` mobile viewport, the catalog was still a compressed
+  table and was hard to scan;
+- the page was technically contained, but the user experience remained too close
+  to "desktop table squeezed into a phone."
+
+Resolution:
+
+- the desktop Element Plus table was retained for information-dense desktop use;
+- a mobile-only catalog card list was added below the table markup;
+- CSS hides the table on mobile and shows the card list instead;
+- the card list reuses the same enrollment/drop business logic already used by
+  the table, avoiding duplicate API behavior;
+- mobile course names, class names, teacher names, and enrollment hints use
+  `min-width: 0` plus wrapping to handle seeded long names.
+
+### Pitfall: settings-page density needed navigation before a full IA rewrite
+
+Observed:
+
+- the settings page contains system identity controls, login preview, LLM
+  endpoint presets, quota policy, and bulk quota override in one long document;
+- a full tabbed rewrite would be larger and would introduce new state-management
+  and test coverage requirements;
+- hiding detailed LLM explanations would be harmful because those explanations
+  encode operational constraints future agents need.
+
+Resolution:
+
+- a compact anchored section navigator was added at the top of `Settings.vue`;
+- existing cards stayed in the document flow;
+- each card received a stable section id;
+- native `<button>` controls call `scrollIntoView` for smooth in-page jumps;
+- the navigator uses four columns on desktop and two columns on mobile;
+- this improves scanability without changing API calls, save behavior, LLM
+  preset validation, or quota behavior.
+
+### Pitfall: Vite/esbuild build validation can fail under restricted process spawning
+
+Observed:
+
+- `npm.cmd run build` can fail in the default restricted execution environment
+  with `spawn EPERM` while loading Vite/esbuild;
+- the failure is an execution-environment problem, not direct evidence of a
+  Vue/CSS compile error.
+
+Resolution:
+
+- rerun the same build command in the approved execution context when validation
+  matters;
+- treat a successful production build as the syntax/compile gate for Vue template
+  and CSS changes;
+- continue to note large chunk warnings separately from build failures.
+
+Validated result:
+
+- `npm.cmd run build` completed successfully after the responsive and settings
+  navigation changes;
+- the build emitted only existing category warnings:
+  - Vite CJS Node API deprecation;
+  - chunks larger than `500 kB`.
+
+### Pitfall: Windows PowerShell output can display mojibake for tracked Chinese text
+
+Observed:
+
+- reading Vue files through PowerShell can display Chinese text as mojibake even
+  when the underlying tracked file content is valid;
+- patching around those strings by copying terminal output risks corrupting
+  source text.
+
+Resolution:
+
+- avoid rewriting existing Chinese copy when the task is unrelated to encoding
+  cleanup;
+- anchor patches on ASCII identifiers, class names, component names, ids,
+  `data-testid` values, and nearby stable structure;
+- when new UI text is necessary, insert it deliberately through patching rather
+  than copying from terminal-rendered existing text;
+- leave broader mojibake cleanup for a dedicated encoding-safe task.
+
+### Pitfall: local artifact paths are useful for handoff but unsafe for tracked docs
+
+Observed:
+
+- future local agents need exact screenshot, PostgreSQL runtime, browser cache,
+  and handoff paths to resume quickly on the same machine;
+- tracked documentation should not expose user-specific absolute paths.
+
+Resolution:
+
+- tracked docs use placeholders such as `<repo>`, `<user-home>`,
+  `<artifact-dir>`, `<api-port>`, and `<ui-port>`;
+- local handoff documents under `.e2e-run/` may include exact absolute paths;
+- `.e2e-run/`, Vite `dist/`, logs, screenshots, PostgreSQL binaries, and local
+  data directories remain ignored and must not be staged.
+
 ## Commit Hygiene For This Work
 
 Do include:
