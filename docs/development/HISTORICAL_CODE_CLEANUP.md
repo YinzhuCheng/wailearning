@@ -84,10 +84,30 @@ Several areas still look historical but were not deleted in this pass because th
 - course schedule fallback logic in `api/routers/subjects.py`
 - attachment directory fallback logic in `wailearning_backend/attachments.py`
 - deployment-time upload migration logic in `ops/scripts/deploy_backend.sh`
-- branding normalization and bootstrap migration helpers
+- branding normalization and bootstrap migration helpers (`normalize_legacy_branding` renamed to `normalize_branding_text` for clarity; behavior unchanged)
 - legacy document-format extraction in `domains/llm/attachments.py`
 
 These are valid future cleanup targets only after their remaining data or deployment contracts are explicitly retired.
+
+### 4. LLM quota + estimation moved off `CourseLLMConfig`
+
+Date of sweep: `2026-05-03` (same day as the earlier items in this section; appended without rewriting prior bullets).
+
+What changed:
+
+- Removed per-course `quota_timezone`, `estimated_chars_per_token`, and `estimated_image_tokens` from `course_llm_configs` (ORM + API + admin course LLM dialog). Bootstrap drops those DB columns on upgrade when supported.
+- Extended `LLMGlobalQuotaPolicy` with the estimation fields; student daily caps + calendar + estimation are now edited from **Settings → LLM 用量与额度** alongside `default_daily_student_tokens` / `quota_timezone` / `max_parallel_grading_tasks`.
+- Quota enforcement (`domains/llm/quota.py`) now keys reservations/usage logs off the **global** policy timezone; precheck sums **all** usage for the student for that calendar day (not a separate per-subject cap pool). Student APIs still return per-course attribution rows where helpful.
+- Renamed a few internal symbols for clarity without behavior changes intended beyond the quota merge: demo seed `merge_demo_class_by_legacy_name`, subjects helper `single_slot_course_times`, grading routing artifact mode string `flat_priority` (replacing `legacy_priority`).
+
+Why this is documented here:
+
+- it removes a confusing split-brain model (global cap vs per-course quota clock) that looked like migration residue,
+- and it changes operational expectations (admins must use global settings for quota calendar + estimation).
+
+### 5. Course schedule helper rename (read path unchanged)
+
+- `_build_legacy_course_times` in `api/routers/subjects.py` was renamed to `single_slot_course_times` to avoid implying the path is dead; it still materializes a single-slot schedule when `course_times` is empty but legacy weekly fields exist.
 
 ## PowerShell Encoding Safety Rules
 

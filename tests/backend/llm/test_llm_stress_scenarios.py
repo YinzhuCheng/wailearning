@@ -123,9 +123,6 @@ def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 850,
             "max_input_tokens": 8000,
             "max_output_tokens": 1000,
             "endpoints": [],
@@ -161,9 +158,6 @@ def test_disable_course_llm_before_grading_fails(client: TestClient):
         headers=th,
         json={
             "is_enabled": False,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 850,
             "max_input_tokens": 8000,
             "max_output_tokens": 1000,
             "endpoints": [
@@ -283,9 +277,6 @@ def test_course_config_validation_rejects_too_low_max_input(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 850,
             "max_input_tokens": 5,
             "max_output_tokens": 1000,
             "endpoints": [{"preset_id": pid, "priority": 1}],
@@ -412,9 +403,6 @@ def test_four_role_parallel_stress(client: TestClient):
             json={
                 "is_enabled": True,
                 "response_language": "en",
-                "quota_timezone": "UTC",
-                "estimated_chars_per_token": 4.0,
-                "estimated_image_tokens": 850,
                 "max_input_tokens": 8000,
                 "max_output_tokens": 1000,
                 "endpoints": [{"preset_id": int(pid), "priority": 1}],

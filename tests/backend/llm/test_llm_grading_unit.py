@@ -18,9 +18,9 @@ from apps.backend.wailearning_backend.llm_grading import (
     ensure_course_llm_config,
     estimate_request_tokens_from_material,
     estimate_task_tokens,
-    precheck_quota,
     validate_endpoint_connectivity,
 )
+from apps.backend.wailearning_backend.domains.llm.quota import precheck_quota
 import base64
 from apps.backend.wailearning_backend.db.models import CourseLLMConfig, Homework, HomeworkAttempt, Subject
 
@@ -74,22 +74,13 @@ def test_parse_scoring_json_out_of_range():
 
 
 def test_estimate_task_tokens():
-    cfg = CourseLLMConfig(
-        subject_id=1,
-        estimated_chars_per_token=4.0,
-        estimated_image_tokens=100,
-        max_input_tokens=8000,
-        max_output_tokens=500,
-    )
-    t = estimate_task_tokens(cfg, text_length=400, image_count=1)
+    t = estimate_task_tokens(chars_per_token=4.0, image_tokens_per_image=100, text_length=400, image_count=1)
     assert 150 < t < 400
 
 
 def test_estimate_request_tokens_from_material_uses_tiktoken_not_base64_payload():
     cfg = CourseLLMConfig(
         subject_id=1,
-        estimated_chars_per_token=4.0,
-        estimated_image_tokens=800,
         max_input_tokens=8000,
         max_output_tokens=500,
     )
@@ -117,19 +108,24 @@ def test_estimate_request_tokens_from_material_uses_tiktoken_not_base64_payload(
         class_id=1,
         content="",
     )
-    t = estimate_request_tokens_from_material(cfg, material, homework=hw, attempt=att)
+    t = estimate_request_tokens_from_material(
+        material,
+        homework=hw,
+        attempt=att,
+        per_image_tokens=800,
+        config=cfg,
+    )
     assert 200 < t < 2500
 
 
 def test_precheck_quota_allows_unlimited():
     db = SessionLocal()
     try:
-        cfg = CourseLLMConfig(subject_id=1, is_enabled=True)
         with mock.patch(
             "apps.backend.wailearning_backend.domains.llm.quota.resolve_effective_daily_student_tokens",
             return_value=2_000_000_000,
         ):
-            ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=999_999_999)
+            ok, code = precheck_quota(db, student_id=1, estimated_tokens=999_999_999)
         assert ok is True
         assert code is None
     finally:
@@ -137,20 +133,15 @@ def test_precheck_quota_allows_unlimited():
 
 
 def test_precheck_quota_blocks_student_when_mocked_usage_high():
-    """precheck uses _get_used_tokens_for_scope; mock to force exceed without heavy DB."""
+    """precheck uses get_used_tokens_for_scope; mock to force exceed without heavy DB."""
     db = SessionLocal()
     try:
-        cfg = CourseLLMConfig(
-            subject_id=1,
-            is_enabled=True,
-            quota_timezone="UTC",
-        )
         with mock.patch(
             "apps.backend.wailearning_backend.domains.llm.quota.get_used_tokens_for_scope", return_value=95
         ), mock.patch(
             "apps.backend.wailearning_backend.domains.llm.quota.resolve_effective_daily_student_tokens", return_value=100
         ):
-            ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=10)
+            ok, code = precheck_quota(db, student_id=1, estimated_tokens=10)
         assert ok is False
         assert code == "quota_exceeded_student"
     finally:

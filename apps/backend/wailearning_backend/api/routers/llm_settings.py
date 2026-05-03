@@ -12,15 +12,20 @@ from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.llm_grading import (
     build_png_data_url_from_image_bytes,
     ensure_course_llm_config,
-    get_quota_usage_snapshot,
-    get_student_quota_usage_snapshot,
     purge_invalid_course_llm_endpoints_for_preset,
     validate_text_connectivity,
     validate_vision_connectivity,
 )
+from apps.backend.wailearning_backend.domains.llm.quota import (
+    get_quota_usage_snapshot,
+    get_student_quota_usage_snapshot,
+    get_used_tokens_for_scope,
+    sum_reserved_tokens,
+)
 from apps.backend.wailearning_backend.domains.llm.token_quota import (
     apply_student_daily_token_overrides,
     get_or_create_global_quota_policy,
+    quota_calendar_for_timezone,
     resolve_effective_daily_student_tokens,
     resolve_student_ids_for_scope,
 )
@@ -121,17 +126,14 @@ def _serialize_course_config(config: CourseLLMConfig, db: Optional[Session] = No
             key=lambda row: (row.priority, row.id),
         )
 
-    quota_usage = get_quota_usage_snapshot(db, config) if db is not None else None
+    quota_usage = get_quota_usage_snapshot(db) if db is not None else None
     return CourseLLMConfigResponse(
         id=config.id,
         subject_id=config.subject_id,
         is_enabled=bool(config.is_enabled),
         response_language=config.response_language,
-        estimated_chars_per_token=config.estimated_chars_per_token,
-        estimated_image_tokens=config.estimated_image_tokens,
         max_input_tokens=config.max_input_tokens,
         max_output_tokens=config.max_output_tokens,
-        quota_timezone=config.quota_timezone,
         system_prompt=config.system_prompt,
         teacher_prompt=config.teacher_prompt,
         endpoints=[_serialize_endpoint_item(item) for item in flat],
@@ -308,7 +310,7 @@ def list_student_llm_quotas_for_enrolled_courses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Per-course LLM token budget for the student (each course uses its own quota_timezone day)."""
+    """Student LLM quota: global daily pool; per-course rows show attribution (used tokens per subject)."""
     if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Only students can view personal LLM quota.")
 
@@ -323,6 +325,22 @@ def list_student_llm_quotas_for_enrolled_courses(
     ov = db.query(LLMStudentTokenOverride).filter(LLMStudentTokenOverride.student_id == student.id).first()
     uses_override = ov is not None
 
+    usage_date, tz_name = quota_calendar_for_timezone(pol.quota_timezone or "Asia/Shanghai")
+    used_total = get_used_tokens_for_scope(
+        db,
+        usage_date=usage_date,
+        timezone_name=tz_name,
+        student_id=student.id,
+        subject_id=None,
+    ) + sum_reserved_tokens(
+        db,
+        usage_date=usage_date,
+        timezone_name=tz_name,
+        student_id=student.id,
+        subject_id=None,
+    )
+    remaining_global = max(0, lim - used_total)
+
     rows: list[StudentLLMCourseQuotaRow] = []
     enrollments = (
         db.query(CourseEnrollment, Subject)
@@ -332,9 +350,12 @@ def list_student_llm_quotas_for_enrolled_courses(
         .all()
     )
     for _enr, subj in enrollments:
-        cfg = ensure_course_llm_config(db, subj.id, current_user.id)
-        db.flush()
-        snap = get_student_quota_usage_snapshot(db, cfg, student_id=student.id)
+        snap = get_student_quota_usage_snapshot(
+            db,
+            student_id=student.id,
+            subject_id=int(subj.id),
+            global_remaining_override=remaining_global,
+        )
         rows.append(
             StudentLLMCourseQuotaRow(
                 subject_id=int(subj.id),
@@ -348,6 +369,11 @@ def list_student_llm_quotas_for_enrolled_courses(
         )
     db.commit()
     return StudentLLMQuotasSummaryResponse(
+        usage_date=usage_date,
+        quota_timezone=tz_name,
+        daily_student_token_limit=lim,
+        student_used_tokens_total=used_total,
+        student_remaining_tokens_today=remaining_global,
         courses=rows,
         global_default_daily_student_tokens=int(pol.default_daily_student_tokens),
         uses_personal_override=uses_override,
@@ -383,10 +409,28 @@ def get_student_llm_quota_for_course(
     ov = db.query(LLMStudentTokenOverride).filter(LLMStudentTokenOverride.student_id == student.id).first()
     uses_override = ov is not None
 
-    config = ensure_course_llm_config(db, subject_id, current_user.id)
-    db.commit()
-    db.refresh(config)
-    snap = get_student_quota_usage_snapshot(db, config, student_id=student.id)
+    usage_date, tz_name = quota_calendar_for_timezone(pol.quota_timezone or "Asia/Shanghai")
+    used_total = get_used_tokens_for_scope(
+        db,
+        usage_date=usage_date,
+        timezone_name=tz_name,
+        student_id=student.id,
+        subject_id=None,
+    ) + sum_reserved_tokens(
+        db,
+        usage_date=usage_date,
+        timezone_name=tz_name,
+        student_id=student.id,
+        subject_id=None,
+    )
+    remaining_global = max(0, lim - used_total)
+
+    snap = get_student_quota_usage_snapshot(
+        db,
+        student_id=student.id,
+        subject_id=subject_id,
+        global_remaining_override=remaining_global,
+    )
     return StudentLLMQuotaUsageResponse(
         subject_id=subject_id,
         usage_date=snap["usage_date"],
@@ -413,6 +457,8 @@ def get_llm_global_quota_policy(
         default_daily_student_tokens=int(row.default_daily_student_tokens),
         quota_timezone=row.quota_timezone or "UTC",
         max_parallel_grading_tasks=int(getattr(row, "max_parallel_grading_tasks", None) or 3),
+        estimated_chars_per_token=float(getattr(row, "estimated_chars_per_token", None) or 4.0),
+        estimated_image_tokens=int(getattr(row, "estimated_image_tokens", None) or 850),
     )
 
 
@@ -431,6 +477,10 @@ def update_llm_global_quota_policy(
         row.quota_timezone = (payload.quota_timezone or "UTC").strip() or "UTC"
     if payload.max_parallel_grading_tasks is not None:
         row.max_parallel_grading_tasks = int(payload.max_parallel_grading_tasks)
+    if payload.estimated_chars_per_token is not None:
+        row.estimated_chars_per_token = float(payload.estimated_chars_per_token)
+    if payload.estimated_image_tokens is not None:
+        row.estimated_image_tokens = int(payload.estimated_image_tokens)
     db.commit()
     db.refresh(row)
     return LLMGlobalQuotaPolicyResponse(
@@ -438,6 +488,8 @@ def update_llm_global_quota_policy(
         default_daily_student_tokens=int(row.default_daily_student_tokens),
         quota_timezone=row.quota_timezone or "UTC",
         max_parallel_grading_tasks=int(getattr(row, "max_parallel_grading_tasks", None) or 3),
+        estimated_chars_per_token=float(getattr(row, "estimated_chars_per_token", None) or 4.0),
+        estimated_image_tokens=int(getattr(row, "estimated_image_tokens", None) or 850),
     )
 
 
@@ -547,11 +599,8 @@ def update_course_llm_config(
 
     config.is_enabled = payload.is_enabled
     config.response_language = payload.response_language
-    config.estimated_chars_per_token = payload.estimated_chars_per_token
-    config.estimated_image_tokens = payload.estimated_image_tokens
     config.max_input_tokens = payload.max_input_tokens
     config.max_output_tokens = payload.max_output_tokens
-    config.quota_timezone = payload.quota_timezone.strip() or "UTC"
     config.system_prompt = payload.system_prompt
     config.teacher_prompt = payload.teacher_prompt
     config.updated_by = current_user.id

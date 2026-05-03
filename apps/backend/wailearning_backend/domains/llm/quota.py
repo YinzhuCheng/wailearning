@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.db.database import engine
 from apps.backend.wailearning_backend.db.models import (
-    CourseLLMConfig,
     DiscussionLLMJob,
     HomeworkGradingTask,
     LLMDiscussionQuotaReservation,
@@ -19,27 +18,37 @@ from apps.backend.wailearning_backend.db.models import (
     LLMTokenUsageLog,
 )
 from apps.backend.wailearning_backend.domains.llm.token_quota import (
+    get_or_create_global_quota_policy,
     quota_calendar_for_timezone,
     resolve_effective_daily_student_tokens,
 )
 
 
-def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, Any]:
-    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
-    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+def _global_quota_calendar(db: Session) -> tuple[str, str]:
+    pol = get_or_create_global_quota_policy(db)
+    tz_raw = (pol.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
+    return quota_calendar_for_timezone(tz_raw)
+
+
+def get_quota_usage_snapshot(db: Session) -> dict[str, Any]:
+    usage_date, timezone_name = _global_quota_calendar(db)
     return {
         "usage_date": usage_date,
         "quota_timezone": timezone_name,
     }
 
 
-def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, student_id: int) -> dict[str, Any]:
-    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
-    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+def get_student_quota_usage_snapshot(
+    db: Session,
+    *,
+    student_id: int,
+    subject_id: Optional[int] = None,
+    global_remaining_override: Optional[int] = None,
+) -> dict[str, Any]:
+    usage_date, timezone_name = _global_quota_calendar(db)
     lim_stu = resolve_effective_daily_student_tokens(db, student_id)
-    sid = int(config.subject_id)
     snap: dict[str, Any] = {
-        "subject_id": sid,
+        "subject_id": int(subject_id) if subject_id is not None else None,
         "usage_date": usage_date,
         "quota_timezone": timezone_name,
         "daily_student_token_limit": lim_stu,
@@ -51,23 +60,25 @@ def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, st
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
-        subject_id=sid,
+        subject_id=subject_id,
     )
     used_stu += sum_reserved_tokens(
         db,
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
-        subject_id=sid,
+        subject_id=subject_id,
     )
     snap["student_used_tokens_today"] = used_stu
-    snap["student_remaining_tokens_today"] = max(0, lim_stu - used_stu)
+    if global_remaining_override is not None:
+        snap["student_remaining_tokens_today"] = max(0, int(global_remaining_override))
+    else:
+        snap["student_remaining_tokens_today"] = max(0, lim_stu - used_stu)
     return snap
 
 
 def quota_delta_violations(
     db: Session,
-    config: CourseLLMConfig,
     *,
     usage_date: str,
     timezone_name: str,
@@ -82,7 +93,7 @@ def quota_delta_violations(
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
-        subject_id=subject_id,
+        subject_id=None,
     )
     if used_by_student + delta_tokens > lim_stu:
         violations.append("student")
@@ -169,17 +180,14 @@ def hash_to_pg_advisory_key(label: str) -> int:
 def pg_quota_advisory_keys(
     *,
     student_id: int,
-    subject_id: int,
     usage_date: str,
     timezone_name: str,
     effective_student_daily_cap: int,
 ) -> list[int]:
     keys: list[int] = []
-    if effective_student_daily_cap and effective_student_daily_cap > 0 and subject_id:
+    if effective_student_daily_cap and effective_student_daily_cap > 0 and student_id:
         keys.append(
-            hash_to_pg_advisory_key(
-                f"llm_quota|student|{student_id}|subject|{subject_id}|{usage_date}|{timezone_name}"
-            )
+            hash_to_pg_advisory_key(f"llm_quota|student|{student_id}|{usage_date}|{timezone_name}")
         )
     return sorted(set(keys))
 
@@ -193,29 +201,25 @@ def release_quota_reservation(db: Session, task_id: int) -> None:
 
 def quota_precheck_in_session(
     db: Session,
-    config: CourseLLMConfig,
     *,
     student_id: int,
-    subject_id: Optional[int],
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
-    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
-    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+    usage_date, timezone_name = _global_quota_calendar(db)
     lim_stu = resolve_effective_daily_student_tokens(db, student_id)
-    sid = int(subject_id) if subject_id is not None else int(config.subject_id)
     used_by_student = get_used_tokens_for_scope(
         db,
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
-        subject_id=sid,
+        subject_id=None,
     )
     used_by_student += sum_reserved_tokens(
         db,
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,
-        subject_id=sid,
+        subject_id=None,
     )
     if used_by_student + estimated_tokens > lim_stu:
         return False, "quota_exceeded_student"
@@ -224,35 +228,23 @@ def quota_precheck_in_session(
 
 def precheck_quota(
     db: Session,
-    config: CourseLLMConfig,
     *,
     student_id: int,
-    subject_id: Optional[int],
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
-    return quota_precheck_in_session(
-        db, config, student_id=student_id, subject_id=subject_id or config.subject_id, estimated_tokens=estimated_tokens
-    )
+    return quota_precheck_in_session(db, student_id=student_id, estimated_tokens=estimated_tokens)
 
 
 def reserve_quota_tokens(
     db: Session,
     task: HomeworkGradingTask,
-    config: CourseLLMConfig,
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
-    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
-    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+    usage_date, timezone_name = _global_quota_calendar(db)
 
     def _try_insert_reservation(sess: Session) -> tuple[bool, Optional[str]]:
         release_quota_reservation(sess, task.id)
-        ok, err = quota_precheck_in_session(
-            sess,
-            config,
-            student_id=task.student_id,
-            subject_id=task.subject_id,
-            estimated_tokens=estimated_tokens,
-        )
+        ok, err = quota_precheck_in_session(sess, student_id=task.student_id, estimated_tokens=estimated_tokens)
         if not ok:
             return ok, err
         sess.add(
@@ -271,7 +263,6 @@ def reserve_quota_tokens(
     if engine.dialect.name == "postgresql":
         keys = pg_quota_advisory_keys(
             student_id=task.student_id,
-            subject_id=int(task.subject_id or 0),
             usage_date=usage_date,
             timezone_name=timezone_name,
             effective_student_daily_cap=resolve_effective_daily_student_tokens(db, task.student_id),
@@ -297,15 +288,13 @@ def reserve_quota_tokens(
 def record_usage_if_needed(
     db: Session,
     task: HomeworkGradingTask,
-    config: CourseLLMConfig,
     usage: dict[str, Any],
 ) -> None:
     existing = db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == task.id).first()
     if existing:
         return
     release_quota_reservation(db, task.id)
-    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
-    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+    usage_date, timezone_name = _global_quota_calendar(db)
     prompt_tokens = usage.get("prompt_tokens")
     completion_tokens = usage.get("completion_tokens")
     total_tokens = usage.get("total_tokens")
@@ -315,7 +304,6 @@ def record_usage_if_needed(
     prompt_for_quota = int(prompt_tokens or 0)
     violations = quota_delta_violations(
         db,
-        config,
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=task.student_id,
@@ -352,24 +340,16 @@ def release_discussion_quota_reservation(db: Session, job_id: int) -> None:
 def reserve_discussion_quota_tokens(
     db: Session,
     job: DiscussionLLMJob,
-    config: CourseLLMConfig,
     *,
     student_id: int,
     subject_id: int,
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
-    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
-    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+    usage_date, timezone_name = _global_quota_calendar(db)
 
     def _try_insert(sess: Session) -> tuple[bool, Optional[str]]:
         release_discussion_quota_reservation(sess, job.id)
-        ok, err = quota_precheck_in_session(
-            sess,
-            config,
-            student_id=student_id,
-            subject_id=subject_id,
-            estimated_tokens=estimated_tokens,
-        )
+        ok, err = quota_precheck_in_session(sess, student_id=student_id, estimated_tokens=estimated_tokens)
         if not ok:
             return ok, err
         sess.add(
@@ -388,7 +368,6 @@ def reserve_discussion_quota_tokens(
     if engine.dialect.name == "postgresql":
         keys = pg_quota_advisory_keys(
             student_id=student_id,
-            subject_id=int(subject_id or 0),
             usage_date=usage_date,
             timezone_name=timezone_name,
             effective_student_daily_cap=resolve_effective_daily_student_tokens(db, student_id),
@@ -414,7 +393,6 @@ def reserve_discussion_quota_tokens(
 def record_discussion_usage_if_needed(
     db: Session,
     job: DiscussionLLMJob,
-    config: CourseLLMConfig,
     student_id: int,
     subject_id: int,
     usage: dict[str, Any],
@@ -423,8 +401,7 @@ def record_discussion_usage_if_needed(
     if existing:
         return
     release_discussion_quota_reservation(db, job.id)
-    tz_raw = (config.quota_timezone or "Asia/Shanghai").strip() or "Asia/Shanghai"
-    usage_date, timezone_name = quota_calendar_for_timezone(tz_raw)
+    usage_date, timezone_name = _global_quota_calendar(db)
     prompt_tokens = usage.get("prompt_tokens")
     completion_tokens = usage.get("completion_tokens")
     total_tokens = usage.get("total_tokens")
@@ -434,7 +411,6 @@ def record_discussion_usage_if_needed(
     prompt_for_quota = int(prompt_tokens or 0)
     violations = quota_delta_violations(
         db,
-        config,
         usage_date=usage_date,
         timezone_name=timezone_name,
         student_id=student_id,

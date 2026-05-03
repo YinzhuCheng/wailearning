@@ -37,8 +37,7 @@ from apps.backend.wailearning_backend.db.models import (
     Student,
     Subject,
     User,
-    UserRole,
-)
+    UserRole)
 from apps.backend.wailearning_backend.llm_grading import process_grading_task, process_next_grading_task
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
@@ -94,8 +93,7 @@ def test_drain_queued_tasks_via_process_next_only(client: TestClient):
         r = client.post(
             f"/api/homeworks/{ctx['homework_id']}/submission",
             headers=s_h,
-            json={"content": f"answer {content}"},
-        )
+            json={"content": f"answer {content}"})
         assert r.status_code == 200, r.text
 
     calls: list[None] = []
@@ -130,16 +128,13 @@ def test_png_attachment_sends_image_url_in_llm_request(client: TestClient):
         "max_input_tokens": 16000,
         "max_output_tokens": 1200,
         "response_language": "zh-CN",
-        "quota_timezone": "UTC",
-        "estimated_image_tokens": 850,
         "endpoints": [{"preset_id": ctx["preset_id"], "priority": 1}],
     }
     assert client.put(u, headers=t_h, json=p).status_code == 200
     r_up = client.post(
         "/api/files/upload",
         headers=s_h,
-        files={"file": ("shot.png", _make_one_pixel_png(), "image/png")},
-    )
+        files={"file": ("shot.png", _make_one_pixel_png(), "image/png")})
     assert r_up.status_code == 200, r_up.text
     up = r_up.json()
     r_sub = client.post(
@@ -149,8 +144,7 @@ def test_png_attachment_sends_image_url_in_llm_request(client: TestClient):
             "content": "见附图",
             "attachment_name": up.get("attachment_name", "shot.png"),
             "attachment_url": up["attachment_url"],
-        },
-    )
+        })
     assert r_sub.status_code == 200, r_sub.text
     task_id: int | None = None
     db = SessionLocal()
@@ -183,14 +177,12 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework(
         course_llm_enabled=True,
-        daily_student_token_limit=5000,
-    )
+        daily_student_token_limit=5000)
     s_h = login_api(client, ctx["student_username"], ctx["student_password"])
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
         headers=s_h,
-        json={"content": "d1"},
-    )
+        json={"content": "d1"})
     assert r.status_code == 200
     db = SessionLocal()
     try:
@@ -200,13 +192,15 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(50.0, "a"))):
-        with mock.patch("apps.backend.wailearning_backend.llm_grading.quota_calendar_for_timezone", return_value=("2000-05-20", "UTC")):
+        with mock.patch(
+            "apps.backend.wailearning_backend.domains.llm.quota.quota_calendar_for_timezone",
+            return_value=("2000-05-20", "UTC"),
+        ):
             process_grading_task(tid1)
     r2 = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
         headers=s_h,
-        json={"content": "d2"},
-    )
+        json={"content": "d2"})
     assert r2.status_code == 200
     db = SessionLocal()
     try:
@@ -216,7 +210,10 @@ def test_quota_resets_across_patched_usage_dates(client: TestClient):
     finally:
         db.close()
     with mock.patch.object(httpx.Client, "post", return_value=httpx.Response(200, json=json_llm_response(55.0, "b"))):
-        with mock.patch("apps.backend.wailearning_backend.llm_grading.quota_calendar_for_timezone", return_value=("2000-05-21", "UTC")):
+        with mock.patch(
+            "apps.backend.wailearning_backend.domains.llm.quota.quota_calendar_for_timezone",
+            return_value=("2000-05-21", "UTC"),
+        ):
             process_grading_task(tid2)
     db = SessionLocal()
     try:
@@ -244,8 +241,7 @@ def test_429_then_200_succeeds_after_retry(client: TestClient):
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
         headers=s_h,
-        json={"content": "q"},
-    )
+        json={"content": "q"})
     assert r.status_code == 200
     db = SessionLocal()
     try:
@@ -275,8 +271,6 @@ def _full_course_config_payload() -> dict:
         "max_input_tokens": 16000,
         "max_output_tokens": 1200,
         "response_language": "zh-CN",
-        "quota_timezone": "UTC",
-        "estimated_image_tokens": 850,
     }
 
 
@@ -295,8 +289,7 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
             username=f"tg_{uid}",
             hashed_password=get_password_hash("tgp"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         stu_u = User(
@@ -304,8 +297,7 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
             hashed_password=get_password_hash("sgp"),
             real_name="S",
             role=UserRole.STUDENT.value,
-            class_id=cl.id,
-        )
+            class_id=cl.id)
         db.add(stu_u)
         db.flush()
         stud = Student(name="S1", student_no=stu_u.username, class_id=cl.id)
@@ -319,8 +311,7 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
                 subject_id=course.id,
                 student_id=stud.id,
                 class_id=cl.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
         fail_p = LLMEndpointPreset(
             name=f"failp-{uid}",
@@ -330,8 +321,7 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
             max_retries=0,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         ok_p = LLMEndpointPreset(
             name=f"okp-{uid}",
             base_url="https://ok.t/v1/",
@@ -340,11 +330,10 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
             max_retries=0,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add_all([fail_p, ok_p])
         db.flush()
-        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=True, quota_timezone="UTC", max_input_tokens=4000, max_output_tokens=500)
+        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=True, max_input_tokens=4000, max_output_tokens=500)
         db.add(cfg)
         db.flush()
         g1 = LLMGroup(config_id=cfg.id, priority=1, name="gfail")
@@ -352,10 +341,10 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
         db.add_all([g1, g2])
         db.flush()
         db.add(
-            CourseLLMConfigEndpoint(config_id=cfg.id, group_id=g1.id, preset_id=fail_p.id, priority=1),
+            CourseLLMConfigEndpoint(config_id=cfg.id, group_id=g1.id, preset_id=fail_p.id, priority=1)
         )
         db.add(
-            CourseLLMConfigEndpoint(config_id=cfg.id, group_id=g2.id, preset_id=ok_p.id, priority=1),
+            CourseLLMConfigEndpoint(config_id=cfg.id, group_id=g2.id, preset_id=ok_p.id, priority=1)
         )
         hw = Homework(
             title="gtest",
@@ -364,8 +353,7 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
             subject_id=course.id,
             max_score=100,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw)
         db.commit()
         subject_id, hid, p_fail, p_ok = course.id, hw.id, fail_p.id, ok_p.id
@@ -379,24 +367,19 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
         headers=t_h,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
             "max_output_tokens": 500,
             "groups": [
                 {"name": "A", "members": [{"preset_id": p_fail, "priority": 1}]},
                 {"name": "B", "members": [{"preset_id": p_ok, "priority": 1}]},
             ],
-        },
-    )
+        })
     assert r_put.status_code == 200, r_put.text
     s_h = login_api(client, student_login, "sgp")
     r_sub = client.post(
         f"/api/homeworks/{hid}/submission",
         headers=s_h,
-        json={"content": "gr"},
-    )
+        json={"content": "gr"})
     assert r_sub.status_code == 200, r_sub.text
     tdb = SessionLocal()
     try:
@@ -511,8 +494,7 @@ def test_read_side_after_regrade_shows_new_auto_score(client: TestClient):
     r_re = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submissions/{r0.json()['id']}/regrade",
         headers=t_h,
-        json={},
-    )
+        json={})
     assert r_re.status_code == 200, r_re.text
     tdb2 = SessionLocal()
     try:
@@ -546,28 +528,24 @@ def test_llm_and_homework_rbac_matrix(client: TestClient):
             username=f"rbt1_{uid}",
             hashed_password=get_password_hash("p1"),
             real_name="T1",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         t2 = User(
             username=f"rbt2_{uid}",
             hashed_password=get_password_hash("p2"),
             real_name="T2",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         cl_t = User(
             username=f"rbc_{uid}",
             hashed_password=get_password_hash("pc"),
             real_name="CT",
             role=UserRole.CLASS_TEACHER.value,
-            class_id=k.id,
-        )
+            class_id=k.id)
         s_u = User(
             username=f"rbs_{uid}",
             hashed_password=get_password_hash("ps"),
             real_name="S",
             role=UserRole.STUDENT.value,
-            class_id=k.id,
-        )
+            class_id=k.id)
         db.add_all([t1, t2, cl_t, s_u])
         db.flush()
         st = Student(name="S", student_no=s_u.username, class_id=k.id)
@@ -586,16 +564,14 @@ def test_llm_and_homework_rbac_matrix(client: TestClient):
             model_name="m",
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add(p)
         db.flush()
         cfg = CourseLLMConfig(
             subject_id=subj.id,
             is_enabled=True,
             max_input_tokens=2000,
-            max_output_tokens=200,
-        )
+            max_output_tokens=200)
         db.add(cfg)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=p.id, priority=1))
@@ -628,8 +604,7 @@ def test_zip_with_inner_txt_sends_file_content_in_messages(client: TestClient):
     r_up = client.post(
         "/api/files/upload",
         headers=s_h,
-        files={"file": ("pack.zip", b.getvalue(), "application/zip")},
-    )
+        files={"file": ("pack.zip", b.getvalue(), "application/zip")})
     assert r_up.status_code == 200, r_up.text
     up = r_up.json()
     u = f"/api/llm-settings/courses/{ctx['subject_id']}"
@@ -642,8 +617,7 @@ def test_zip_with_inner_txt_sends_file_content_in_messages(client: TestClient):
             "content": "zip submit",
             "attachment_name": "pack.zip",
             "attachment_url": up["attachment_url"],
-        },
-    )
+        })
     assert r_sub.status_code == 200, r_sub.text
     tdb = SessionLocal()
     try:
@@ -678,8 +652,7 @@ def test_flat_priority_failover_401_to_second_preset(client: TestClient):
             model_name="mb",
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add(p2)
         db.commit()
         pid2 = p2.id
@@ -687,8 +660,7 @@ def test_flat_priority_failover_401_to_second_preset(client: TestClient):
         db.close()
     t_h, s_h = (
         login_api(client, ctx["teacher_username"], ctx["teacher_password"]),
-        login_api(client, ctx["student_username"], ctx["student_password"]),
-    )
+        login_api(client, ctx["student_username"], ctx["student_password"]))
     r_put = client.put(
         f"/api/llm-settings/courses/{ctx['subject_id']}",
         headers=t_h,
@@ -698,8 +670,7 @@ def test_flat_priority_failover_401_to_second_preset(client: TestClient):
                 {"preset_id": ctx["preset_id"], "priority": 1},
                 {"preset_id": pid2, "priority": 2},
             ],
-        },
-    )
+        })
     assert r_put.status_code == 200, r_put.text
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission", headers=s_h, json={"content": "ff"}
@@ -745,15 +716,13 @@ def test_parallel_different_students_independent_outcomes(client: TestClient):
     assert client.put(
         f"/api/llm-settings/courses/{m['subject_id']}",
         headers=t_h,
-        json={**_full_course_config_payload(), "endpoints": [{"preset_id": m["preset_id"], "priority": 1}]},
-    ).status_code == 200
+        json={**_full_course_config_payload(), "endpoints": [{"preset_id": m["preset_id"], "priority": 1}]}).status_code == 200
     for st in m["students"]:
         h = login_api(client, st["username"], st["password"])
         r = client.post(
             f"/api/homeworks/{m['homework_id']}/submission",
             headers=h,
-            json={"content": f"STU_CONTENT_{st['student_id']}_END"},
-        )
+            json={"content": f"STU_CONTENT_{st['student_id']}_END"})
         assert r.status_code == 200
     tdb = SessionLocal()
     try:
@@ -797,16 +766,13 @@ def test_long_submission_respects_truncate_and_succeeds(client: TestClient):
     ctx = make_grading_course_with_homework()
     t_h, s_h = (
         login_api(client, ctx["teacher_username"], ctx["teacher_password"]),
-        login_api(client, ctx["student_username"], ctx["student_password"]),
-    )
+        login_api(client, ctx["student_username"], ctx["student_password"]))
     u = f"/api/llm-settings/courses/{ctx['subject_id']}"
     p = {
         "is_enabled": True,
         "max_input_tokens": 4000,
         "max_output_tokens": 300,
         "response_language": "zh-CN",
-        "quota_timezone": "UTC",
-        "estimated_chars_per_token": 3.0,
         "endpoints": [{"preset_id": ctx["preset_id"], "priority": 1}],
     }
     assert client.put(u, headers=t_h, json=p).status_code == 200
@@ -841,8 +807,7 @@ def test_student_sees_friendly_error_when_config_disabled(client: TestClient):
     ctx = make_grading_course_with_homework(course_llm_enabled=False)
     t_h, s_h = (
         login_api(client, ctx["teacher_username"], ctx["teacher_password"]),
-        login_api(client, ctx["student_username"], ctx["student_password"]),
-    )
+        login_api(client, ctx["student_username"], ctx["student_password"]))
     u = f"/api/llm-settings/courses/{ctx['subject_id']}"
     p = {**_full_course_config_payload(), "is_enabled": True, "endpoints": [{"preset_id": ctx["preset_id"], "priority": 1}]}
     assert client.put(u, headers=t_h, json=p).status_code == 200

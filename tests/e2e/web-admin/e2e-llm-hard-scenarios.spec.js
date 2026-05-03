@@ -167,11 +167,8 @@ async function setFlatCourseConfig(token, subjectId, presetIds, extra = {}) {
   return updateCourseConfig(token, subjectId, {
     is_enabled: true,
     response_language: 'zh-CN',
-    estimated_chars_per_token: 4.0,
-    estimated_image_tokens: 850,
     max_input_tokens: 16000,
     max_output_tokens: 1200,
-    quota_timezone: 'Asia/Shanghai',
     system_prompt: null,
     teacher_prompt: null,
     endpoints: presetIds.map((presetId, index) => ({ preset_id: presetId, priority: index + 1 })),
@@ -184,11 +181,8 @@ async function setGroupCourseConfig(token, subjectId, groups, extra = {}) {
   return updateCourseConfig(token, subjectId, {
     is_enabled: true,
     response_language: 'zh-CN',
-    estimated_chars_per_token: 4.0,
-    estimated_image_tokens: 850,
     max_input_tokens: 16000,
     max_output_tokens: 1200,
-    quota_timezone: 'Asia/Shanghai',
     system_prompt: null,
     teacher_prompt: null,
     groups,
@@ -400,7 +394,7 @@ test.describe('E2E LLM hard scenarios', () => {
     expect(presets.some(row => row.name === presetName && row.validation_status === 'validated')).toBeTruthy()
   })
 
-  test('teacher UI save updates course defaults without wiping API-configured llm groups', async ({ page }) => {
+  test('teacher UI save updates course tuning without wiping API-configured llm groups', async ({ page }) => {
     const s = scenario()
     const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
@@ -419,28 +413,27 @@ test.describe('E2E LLM hard scenarios', () => {
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await page.goto('/subjects')
     await page.getByTestId(`subjects-open-llm-${s.course_required_id}`).click()
-    await expect(page.getByTestId('dialog-course-llm')).toBeVisible({ timeout: 20000 })
-    const timezoneInput = page.getByTestId('llm-course-timezone')
-    await expect(timezoneInput).toHaveValue('Asia/Shanghai', { timeout: 15000 })
-    await timezoneInput.click()
-    await timezoneInput.press('Control+A')
-    await timezoneInput.press('Delete')
-    await timezoneInput.type('UTC')
-    await expect(timezoneInput).toHaveValue('UTC')
-    await timezoneInput.press('Tab')
+    const dialog = page.getByTestId('dialog-course-llm')
+    await expect(dialog).toBeVisible({ timeout: 20000 })
+    const outSpin = dialog
+      .locator('.el-form-item')
+      .filter({ hasText: '输出 token' })
+      .getByRole('spinbutton')
+      .first()
+    await outSpin.fill('1199')
     await page.getByTestId('llm-course-save').click()
-    await expect(page.getByTestId('dialog-course-llm')).toBeHidden({ timeout: 25000 })
+    await expect(dialog).toBeHidden({ timeout: 25000 })
 
     await expect
       .poll(async () => {
         const config = await courseConfig(teacherToken, s.course_required_id)
         return {
-          timezone: config.quota_timezone,
+          max_output_tokens: config.max_output_tokens,
           groups: (config.groups || []).map(g => `${g.name}:${(g.members || []).map(m => m.preset_id).join(',')}`),
         }
       }, { timeout: 30000 })
       .toEqual({
-        timezone: 'UTC',
+        max_output_tokens: 1199,
         groups: [`alpha:${presetA.id}`, `beta:${presetB.id}`],
       })
   })

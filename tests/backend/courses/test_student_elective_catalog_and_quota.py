@@ -17,8 +17,7 @@ from apps.backend.wailearning_backend.db.models import (
     Student,
     Subject,
     User,
-    UserRole,
-)
+    UserRole)
 
 
 @pytest.fixture(autouse=True)
@@ -56,16 +55,14 @@ def _seed_student_and_elective(client: TestClient):
             hashed_password=get_password_hash("p"),
             real_name="学生一",
             role=UserRole.STUDENT.value,
-            class_id=kid,
-        )
+            class_id=kid)
         db.add(stu_user)
         db.flush()
         roster = Student(
             name="学生一",
             student_no="stu_e1",
             gender=Gender.MALE,
-            class_id=kid,
-        )
+            class_id=kid)
         db.add(roster)
         db.flush()
         other_class = Class(name="高一乙", grade=1)
@@ -75,20 +72,17 @@ def _seed_student_and_elective(client: TestClient):
             name="机器人选修",
             class_id=kid,
             course_type="elective",
-            status="active",
-        )
+            status="active")
         el_other = Subject(
             name="外班选修",
             class_id=other_class.id,
             course_type="elective",
-            status="active",
-        )
+            status="active")
         req = Subject(
             name="语文必修",
             class_id=kid,
             course_type="required",
-            status="active",
-        )
+            status="active")
         db.add_all([el_same, el_other, req])
         db.flush()
         eid, oid, rid = el_same.id, el_other.id, req.id
@@ -113,8 +107,7 @@ def test_elective_catalog_lists_active_electives_schoolwide(client: TestClient):
     [
         ("oid", "elective_other_class"),
         ("rid", "required_course"),
-    ],
-)
+    ])
 def test_student_cannot_self_enroll_forbidden_course_types(
     client: TestClient, target_subject_key: str, case_label: str
 ):
@@ -161,9 +154,7 @@ def test_student_quota_endpoint(client: TestClient):
         assert stu_row is not None
         cfg = CourseLLMConfig(
             subject_id=eid,
-            is_enabled=True,
-            quota_timezone="UTC",
-        )
+            is_enabled=True)
         db.add(cfg)
         db.add(LLMStudentTokenOverride(student_id=stu_row.id, daily_tokens=1000))
         db.commit()
@@ -186,8 +177,7 @@ def test_student_quota_forbidden_for_teacher(client: TestClient):
             username="t_quota",
             hashed_password=get_password_hash("tp"),
             real_name="老师",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.flush()
         course = Subject(name="老师课", teacher_id=t.id, class_id=kid, course_type="required", status="active")
@@ -211,8 +201,7 @@ def test_elective_catalog_forbidden_for_teacher(client: TestClient):
             username="t_cat",
             hashed_password=get_password_hash("tp"),
             real_name="老师2",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.commit()
     finally:

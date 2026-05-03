@@ -398,9 +398,6 @@ test.describe('E2E resilience scenarios', () => {
     await apiPutJson(`/api/llm-settings/courses/${s.course_required_id}`, teacherToken, {
       is_enabled: true,
       response_language: baselineConfig.response_language || null,
-      quota_timezone: 'Asia/Shanghai',
-      estimated_chars_per_token: baselineConfig.estimated_chars_per_token,
-      estimated_image_tokens: baselineConfig.estimated_image_tokens,
       max_input_tokens: baselineConfig.max_input_tokens,
       max_output_tokens: baselineConfig.max_output_tokens,
       system_prompt: baselineConfig.system_prompt || '',
@@ -784,7 +781,7 @@ test.describe('E2E resilience scenarios', () => {
     }
   })
 
-  test('course LLM config keeps default timezone and recovers cleanly after a failed save', async ({ page }) => {
+  test('course LLM config recovers cleanly after a failed save', async ({ page }) => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
     const courseName = `E2E必修课_${s.suffix}`
@@ -800,18 +797,17 @@ test.describe('E2E resilience scenarios', () => {
     const dialog = page.getByRole('dialog', { name: /LLM/ })
     await expect(dialog).toBeVisible({ timeout: 15000 })
 
-    const timezoneInput = dialog
+    const outSpin = dialog
       .locator('.el-form-item')
-      .filter({ has: page.getByText(/时区|quota_timezone|Asia\/Shanghai/) })
-      .locator('input')
+      .filter({ hasText: '输出 token' })
+      .getByRole('spinbutton')
       .first()
-
-    await expect(timezoneInput).toHaveValue('Asia/Shanghai', { timeout: 15000 })
+    await expect(outSpin).toBeVisible({ timeout: 15000 })
 
     const enableSwitch = dialog.getByRole('switch')
     await expect(enableSwitch).toHaveAttribute('aria-checked', 'true', { timeout: 15000 })
     await expect(dialog.locator('.attachment-help')).toBeVisible({ timeout: 15000 })
-    await timezoneInput.fill('')
+    await outSpin.fill('800')
 
     await page.route(`**/api/llm-settings/courses/${s.course_required_id}`, async route => {
       if (!failedOnce && route.request().method() === 'PUT') {
@@ -828,8 +824,9 @@ test.describe('E2E resilience scenarios', () => {
 
     await dialog.getByRole('button', { name: /保存配置/ }).click()
     await expect(dialog).toBeVisible({ timeout: 15000 })
-    await expect(timezoneInput).toHaveValue('', { timeout: 15000 })
+    await expect(outSpin).toHaveValue('800', { timeout: 15000 })
 
+    await outSpin.fill('1200')
     await dialog.getByRole('button', { name: /保存配置/ }).click()
     await expect(dialog).toBeHidden({ timeout: 25000 })
 
@@ -838,12 +835,12 @@ test.describe('E2E resilience scenarios', () => {
         const config = await apiGetCourseLlmConfig(teacherToken, s.course_required_id)
         return {
           is_enabled: Boolean(config.is_enabled),
-          quota_timezone: config.quota_timezone
+          max_output_tokens: config.max_output_tokens
         }
       }, { timeout: 30000 })
       .toEqual({
         is_enabled: true,
-        quota_timezone: 'Asia/Shanghai'
+        max_output_tokens: 1200
       })
   })
 

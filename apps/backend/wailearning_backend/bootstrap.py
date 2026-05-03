@@ -30,8 +30,7 @@ from apps.backend.wailearning_backend.db.models import (
     Subject,
     SystemSetting,
     User,
-    UserRole,
-)
+    UserRole)
 
 
 DEFAULT_SYSTEM_SETTINGS = [
@@ -51,7 +50,7 @@ LEGACY_SYSTEM_SETTING_VALUES = {
 }
 
 
-def normalize_legacy_branding(value: str) -> str:
+def normalize_branding_text(value: str) -> str:
     if not value:
         return value
     return re.sub(r"dd-class", "BIMSA-CLASS", value, flags=re.IGNORECASE)
@@ -250,11 +249,8 @@ def ensure_schema_updates() -> None:
             subject_id INTEGER NOT NULL UNIQUE REFERENCES subjects(id),
             is_enabled BOOLEAN DEFAULT FALSE,
             response_language VARCHAR,
-            estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0,
-            estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             max_input_tokens INTEGER NOT NULL DEFAULT 16000,
             max_output_tokens INTEGER NOT NULL DEFAULT 1000,
-            quota_timezone VARCHAR NOT NULL DEFAULT 'Asia/Shanghai',
             system_prompt TEXT,
             teacher_prompt TEXT,
             created_by INTEGER REFERENCES users(id),
@@ -306,11 +302,15 @@ def ensure_schema_updates() -> None:
             default_daily_student_tokens INTEGER NOT NULL DEFAULT 100000,
             quota_timezone VARCHAR NOT NULL DEFAULT 'UTC',
             max_parallel_grading_tasks INTEGER NOT NULL DEFAULT 3,
+            estimated_chars_per_token DOUBLE PRECISION NOT NULL DEFAULT 4.0,
+            estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
         "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS max_parallel_grading_tasks INTEGER NOT NULL DEFAULT 3",
         "UPDATE llm_global_quota_policies SET max_parallel_grading_tasks = 3 WHERE max_parallel_grading_tasks IS NULL",
+        "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS estimated_chars_per_token DOUBLE PRECISION NOT NULL DEFAULT 4.0",
+        "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS estimated_image_tokens INTEGER NOT NULL DEFAULT 850",
         """
         CREATE TABLE IF NOT EXISTS llm_student_token_overrides (
             id INTEGER PRIMARY KEY,
@@ -463,8 +463,16 @@ def ensure_schema_updates() -> None:
             connection.execute(
                 text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS daily_course_token_limit")
             )
+            connection.execute(text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS quota_timezone"))
+            connection.execute(text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS estimated_chars_per_token"))
+            connection.execute(text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS estimated_image_tokens"))
         else:
-            for _col in ("daily_student_token_limit", "daily_course_token_limit"):
+            for _col in (
+                "daily_student_token_limit",
+                "daily_course_token_limit",
+                "quota_timezone",
+                "estimated_chars_per_token",
+                "estimated_image_tokens"):
                 try:
                     connection.execute(text(f"ALTER TABLE course_llm_configs DROP COLUMN {_col}"))
                 except OperationalError:
@@ -489,8 +497,7 @@ def _backfill_course_material_chapters() -> None:
                 db.query(CourseMaterialChapter)
                 .filter(
                     CourseMaterialChapter.subject_id == subj.id,
-                    CourseMaterialChapter.is_uncategorized.is_(True),
-                )
+                    CourseMaterialChapter.is_uncategorized.is_(True))
                 .first()
             )
             if not unc:
@@ -499,8 +506,7 @@ def _backfill_course_material_chapters() -> None:
                     parent_id=None,
                     title="未分类",
                     sort_order=0,
-                    is_uncategorized=True,
-                )
+                    is_uncategorized=True)
                 db.add(unc)
                 db.flush()
 
@@ -515,8 +521,7 @@ def _backfill_course_material_chapters() -> None:
                     db.query(CourseMaterialSection)
                     .filter(
                         CourseMaterialSection.material_id == mat.id,
-                        CourseMaterialSection.chapter_id == unc.id,
-                    )
+                        CourseMaterialSection.chapter_id == unc.id)
                     .first()
                 )
                 if not exists:
@@ -524,8 +529,7 @@ def _backfill_course_material_chapters() -> None:
                         CourseMaterialSection(
                             material_id=mat.id,
                             chapter_id=unc.id,
-                            sort_order=idx,
-                        )
+                            sort_order=idx)
                     )
         db.commit()
     except Exception:
@@ -568,8 +572,7 @@ def _ensure_default_llm_endpoint_preset() -> None:
                 text_validation_message=None,
                 vision_validation_status="skipped",
                 vision_validation_message=None,
-                validated_at=now,
-            )
+                validated_at=now)
         )
         db.commit()
     except Exception:
@@ -587,6 +590,10 @@ def _ensure_llm_global_quota_policy_row() -> None:
         if row:
             if getattr(row, "max_parallel_grading_tasks", None) is None:
                 row.max_parallel_grading_tasks = 3
+            if getattr(row, "estimated_chars_per_token", None) is None:
+                row.estimated_chars_per_token = 4.0
+            if getattr(row, "estimated_image_tokens", None) is None:
+                row.estimated_image_tokens = 850
             db.commit()
             return
         db.add(
@@ -595,6 +602,8 @@ def _ensure_llm_global_quota_policy_row() -> None:
                 default_daily_student_tokens=100_000,
                 quota_timezone="Asia/Shanghai",
                 max_parallel_grading_tasks=3,
+                estimated_chars_per_token=4.0,
+                estimated_image_tokens=850,
             )
         )
         db.commit()
@@ -618,8 +627,7 @@ def _ensure_llm_assistant_system_user() -> None:
                 hashed_password=get_password_hash(os.urandom(16).hex()),
                 real_name="智能助教",
                 role=UserRole.TEACHER.value,
-                is_active=False,
-            )
+                is_active=False)
         )
         try:
             db.commit()
@@ -704,8 +712,7 @@ def backfill_homework_grading_data(db) -> None:
                 .filter(
                     HomeworkAttempt.homework_id == submission.homework_id,
                     HomeworkAttempt.student_id == submission.student_id,
-                    HomeworkAttempt.submission_summary_id == submission.id,
-                )
+                    HomeworkAttempt.submission_summary_id == submission.id)
                 .order_by(HomeworkAttempt.submitted_at.desc(), HomeworkAttempt.id.desc())
                 .first()
             )
@@ -729,8 +736,7 @@ def backfill_homework_grading_data(db) -> None:
                 is_late=is_late,
                 counts_toward_final_score=counts_toward,
                 submitted_at=submission.submitted_at,
-                updated_at=submission.updated_at,
-            )
+                updated_at=submission.updated_at)
             db.add(attempt)
             db.flush()
             created_attempts += 1
@@ -745,8 +751,7 @@ def backfill_homework_grading_data(db) -> None:
                 .filter(
                     HomeworkScoreCandidate.attempt_id == attempt.id,
                     HomeworkScoreCandidate.source == "teacher",
-                    HomeworkScoreCandidate.score == submission.review_score,
-                )
+                    HomeworkScoreCandidate.score == submission.review_score)
                 .first()
             )
             if not existing_candidate:
@@ -760,8 +765,7 @@ def backfill_homework_grading_data(db) -> None:
                         comment=submission.review_comment,
                         source_metadata={"legacy_migration": True},
                         created_at=submission.updated_at or submission.submitted_at,
-                        updated_at=submission.updated_at or submission.submitted_at,
-                    )
+                        updated_at=submission.updated_at or submission.submitted_at)
                 )
                 created_candidates += 1
 
@@ -786,8 +790,7 @@ def seed_default_admin(db) -> None:
         hashed_password=get_password_hash(settings.INIT_ADMIN_PASSWORD),
         real_name=settings.INIT_ADMIN_REAL_NAME,
         role="admin",
-        is_active=True,
-    )
+        is_active=True)
     db.add(admin_user)
     db.commit()
     print(f"Created bootstrap admin '{settings.INIT_ADMIN_USERNAME}'.")
@@ -888,7 +891,7 @@ def seed_default_system_settings(db) -> None:
     for key, value, description in DEFAULT_SYSTEM_SETTINGS:
         exists = db.query(SystemSetting).filter(SystemSetting.setting_key == key).first()
         if exists:
-            normalized_value = normalize_legacy_branding(exists.setting_value)
+            normalized_value = normalize_branding_text(exists.setting_value)
             if exists.setting_value in LEGACY_SYSTEM_SETTING_VALUES.get(key, set()) or normalized_value != exists.setting_value:
                 exists.setting_value = normalized_value if normalized_value else value
                 exists.description = description
@@ -898,8 +901,7 @@ def seed_default_system_settings(db) -> None:
             SystemSetting(
                 setting_key=key,
                 setting_value=value,
-                description=description,
-            )
+                description=description)
         )
         created += 1
 

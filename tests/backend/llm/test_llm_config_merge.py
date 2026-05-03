@@ -17,8 +17,7 @@ from apps.backend.wailearning_backend.db.models import (
     LLMGroup,
     Subject,
     User,
-    UserRole,
-)
+    UserRole)
 from tests.llm_scenario import ensure_admin, login_api
 
 
@@ -51,8 +50,7 @@ def test_put_flat_preserves_group_routing_when_config_has_groups(client: TestCli
             username="merge_t",
             hashed_password=get_password_hash("t"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.flush()
         s = Subject(name="merge-subj", teacher_id=t.id, class_id=k.id)
@@ -65,8 +63,7 @@ def test_put_flat_preserves_group_routing_when_config_has_groups(client: TestCli
             model_name="a",
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         b = LLMEndpointPreset(
             name="mgb",
             base_url="https://b.mg/v1/",
@@ -74,11 +71,10 @@ def test_put_flat_preserves_group_routing_when_config_has_groups(client: TestCli
             model_name="b",
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add_all([a, b])
         db.flush()
-        cfg = CourseLLMConfig(subject_id=s.id, is_enabled=True, quota_timezone="UTC", max_input_tokens=4000, max_output_tokens=500)
+        cfg = CourseLLMConfig(subject_id=s.id, is_enabled=True, max_input_tokens=4000, max_output_tokens=500)
         db.add(cfg)
         db.flush()
         g1 = LLMGroup(config_id=cfg.id, priority=1, name="G1")
@@ -96,14 +92,10 @@ def test_put_flat_preserves_group_routing_when_config_has_groups(client: TestCli
         headers=th,
         json={
             "is_enabled": False,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
             "max_output_tokens": 500,
             "endpoints": [{"preset_id": pid_a, "priority": 1}],
-        },
-    )
+        })
     assert r.status_code == 200, r.text
     g = client.get(f"/api/llm-settings/courses/{sid}", headers=th).json()["groups"]
     assert len(g) == 1
@@ -123,8 +115,7 @@ def test_put_replace_flag_drops_groups(client: TestClient):
             username="merge2_t",
             hashed_password=get_password_hash("t2"),
             real_name="T2",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.flush()
         s = Subject(name="merge2-subj", teacher_id=t.id, class_id=k.id)
@@ -137,8 +128,7 @@ def test_put_replace_flag_drops_groups(client: TestClient):
             model_name="a",
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         b = LLMEndpointPreset(
             name="m2b",
             base_url="https://b2.mg/v1/",
@@ -146,11 +136,10 @@ def test_put_replace_flag_drops_groups(client: TestClient):
             model_name="b",
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add_all([a, b])
         db.flush()
-        cfg = CourseLLMConfig(subject_id=s.id, is_enabled=True, quota_timezone="UTC", max_input_tokens=4000, max_output_tokens=500)
+        cfg = CourseLLMConfig(subject_id=s.id, is_enabled=True, max_input_tokens=4000, max_output_tokens=500)
         db.add(cfg)
         db.flush()
         g1 = LLMGroup(config_id=cfg.id, priority=1, name="G1")
@@ -168,15 +157,11 @@ def test_put_replace_flag_drops_groups(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
             "max_output_tokens": 500,
             "endpoints": [{"preset_id": pid_a, "priority": 1}],
             "replace_group_routing_with_flat_endpoints": True,
-        },
-    )
+        })
     assert r.status_code == 200, r.text
     g = client.get(f"/api/llm-settings/courses/{sid}", headers=th).json()["groups"]
     assert len(g) == 0

@@ -56,8 +56,7 @@ def test_student_homework_list_and_detail_include_rubric_and_reference(client: T
     r_list = client.get(
         "/api/homeworks",
         params={"class_id": class_id, "subject_id": ctx["subject_id"]},
-        headers=sh,
-    )
+        headers=sh)
     assert r_list.status_code == 200, r_list.text
     rows = r_list.json().get("data") or []
     match = next((x for x in rows if x["id"] == hid), None)
@@ -106,8 +105,7 @@ def test_material_content_embedded_attachment_url_is_referenced():
             username=f"mat_t_{uid}",
             hashed_password=get_password_hash("tp"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         course = Subject(name=f"mat_c_{uid}", teacher_id=teacher.id, class_id=klass.id)
@@ -120,8 +118,7 @@ def test_material_content_embedded_attachment_url_is_referenced():
                 content=f"![]({embed_url})",
                 class_id=klass.id,
                 subject_id=course.id,
-                created_by=teacher.id,
-            )
+                created_by=teacher.id)
         )
         db.commit()
         assert attachment_is_referenced(db, embed_url) is True
@@ -144,22 +141,17 @@ def test_build_scoring_messages_splits_data_url_in_homework_content():
         grade_precision="integer",
         created_by=1,
         rubric_text=None,
-        reference_answer=None,
-    )
+        reference_answer=None)
     att = HomeworkAttempt(
         homework_id=1,
         student_id=1,
         subject_id=1,
         class_id=1,
-        content="仅文字",
-    )
+        content="仅文字")
     cfg = CourseLLMConfig(
         subject_id=1,
-        estimated_chars_per_token=4.0,
-        estimated_image_tokens=800,
         max_input_tokens=8000,
-        max_output_tokens=500,
-    )
+        max_output_tokens=500)
     material = {
         "assignment_texts": [f"作业标题：{hw.title}", "作业要求：\n无"],
         "student_blocks": [],

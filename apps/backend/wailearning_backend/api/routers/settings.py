@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.bootstrap import normalize_legacy_branding
+from apps.backend.wailearning_backend.bootstrap import normalize_branding_text
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import SystemSetting, User
 from apps.backend.wailearning_backend.api.schemas import SystemSettingResponse, SystemSettingUpdate, SystemSettingsResponse
@@ -27,8 +27,8 @@ PUBLIC_SETTING_KEYS = {
 def get_public_settings(db: Session = Depends(get_db)):
     settings = db.query(SystemSetting).filter(SystemSetting.setting_key.in_(PUBLIC_SETTING_KEYS)).all()
     settings_dict = {item.setting_key: item.setting_value for item in settings}
-    settings_dict["system_name"] = normalize_legacy_branding(settings_dict.get("system_name", ""))
-    settings_dict["copyright"] = normalize_legacy_branding(settings_dict.get("copyright", ""))
+    settings_dict["system_name"] = normalize_branding_text(settings_dict.get("system_name", ""))
+    settings_dict["copyright"] = normalize_branding_text(settings_dict.get("copyright", ""))
 
     return SystemSettingsResponse(
         system_name=settings_dict.get("system_name", "BIMSA-CLASS 大学生教学管理系统"),
@@ -51,7 +51,7 @@ def get_all_settings(
     records = db.query(SystemSetting).order_by(SystemSetting.id).all()
     for record in records:
         if record.setting_key in {"system_name", "copyright"}:
-            record.setting_value = normalize_legacy_branding(record.setting_value)
+            record.setting_value = normalize_branding_text(record.setting_value)
     return records
 
 

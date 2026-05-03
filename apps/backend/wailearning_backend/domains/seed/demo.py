@@ -130,7 +130,6 @@ def _ensure_demo_subject_llm_binding(
             created_by=teacher_id,
             updated_by=teacher_id,
             is_enabled=bool(enable_auto_grading),
-            quota_timezone="Asia/Shanghai",
         )
         db.add(cfg)
         db.flush()
@@ -495,8 +494,8 @@ def _seed_demo_material_chapters(db: Session, *, subject_id: int) -> None:
     print("Created demo course material chapter outline (3 levels).")
 
 
-def _merge_legacy_demo_class_into_target(db: Session, *, target: Class) -> None:
-    """Rename or merge old demo class name into 人工智能1班 so existing installs keep one roster."""
+def merge_demo_class_by_legacy_name(db: Session, *, target: Class) -> None:
+    """Rename or merge old demo class name into the target class so existing installs keep one roster."""
     legacy = db.query(Class).filter(Class.name == _LEGACY_CLASS_NAME).first()
     if not legacy or legacy.id == target.id:
         return
@@ -685,7 +684,7 @@ def seed_demo_course_bundle(db: Session) -> None:
         print(f"Created demo class '{_CLASS_NAME}'.")
     else:
         print(f"Demo class '{_CLASS_NAME}' already exists.")
-    _merge_legacy_demo_class_into_target(db, target=klass)
+    merge_demo_class_by_legacy_name(db, target=klass)
 
     student_specs = [
         ("stu1", "学生一", "13800001001"),

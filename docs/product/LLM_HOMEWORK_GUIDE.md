@@ -20,7 +20,9 @@ The LLM feature set is built around four layers:
 - `LLMEndpointPreset`
   Stores base URL, API key, model name, timeout, retry, activation, and validation state.
 - `CourseLLMConfig`
-  Stores the course-level enable switch, prompts, token estimation limits, and `quota_timezone`.
+  Stores the course-level enable switch, prompts, and per-request `max_input_tokens` / `max_output_tokens` (used for prompt sizing and model calls). Endpoint routing (flat list or grouped failover) is stored via `CourseLLMConfigEndpoint` / `LLMGroup`.
+- `LLMGlobalQuotaPolicy` (singleton row)
+  Stores the **global** LLM quota calendar (`quota_timezone`), default per-student daily token cap, **token estimation knobs** used for grading pre-reservation (`estimated_chars_per_token`, `estimated_image_tokens`), and `max_parallel_grading_tasks`.
 - `CourseLLMConfigEndpoint`
   Links validated presets into a course-specific endpoint order.
 
@@ -51,7 +53,8 @@ Admins can:
 - activate or deactivate presets,
 - validate text and vision capability,
 - tune timeout and retry behavior,
-- define global quota defaults,
+- define global quota defaults **and** the global quota calendar timezone,
+- configure token estimation knobs used for grading reservations,
 - set per-student quota overrides.
 
 The system assumes presets are the reusable source of truth. Courses do not create raw endpoints independently.
@@ -62,11 +65,10 @@ Teachers configure LLM behavior per course.
 
 - Enable or disable LLM use at the course level.
 - Set prompts and response language.
-- Choose endpoint order from validated presets.
-- Control quota-day boundaries through `quota_timezone`.
-- Preserve course-specific behavior even when global defaults change.
+- Choose endpoint order (or grouped routing) from validated presets.
+- Tune per-request input/output token limits for grading prompts.
 
-This design matters because quota day boundaries are course-scoped, not globally merged across all courses.
+Quota day boundaries and student daily caps are **not** configured per course anymore; see `LLMGlobalQuotaPolicy` and admin LLM settings.
 
 ## Homework Workflow
 
@@ -113,13 +115,14 @@ In single-process local development, one process can both serve the API and drai
 
 ## Quotas and Timezones
 
-Quota behavior is easy to describe incorrectly, so the practical rules matter:
+Practical rules (current implementation):
 
-- Limits are enforced per student.
-- Usage is recorded per student and per course.
-- The day boundary is determined by the course config `quota_timezone`.
-- Global admin policy provides defaults, but course quota-day calculation is still course-scoped.
-- Per-student overrides can split outcomes between students on the same course.
+- The **numeric** per-student daily cap comes from `LLMGlobalQuotaPolicy.default_daily_student_tokens`, optionally overridden per student (`LLMStudentTokenOverride`).
+- The **calendar day** for reservations + `LLMTokenUsageLog` / discussion logs is determined by **`LLMGlobalQuotaPolicy.quota_timezone`** (same clock for all courses).
+- **Precheck / reservation** for grading uses the global policy’s estimation parameters (`estimated_chars_per_token`, `estimated_image_tokens`) when sizing expected prompt usage.
+- Usage rows still record `subject_id` for attribution/analytics, but **enforcement** is against the **student’s total** usage for that global calendar day (not a separate per-course cap pool).
+
+Historical note: older docs described per-course `quota_timezone` for student quotas; that behavior was removed in favor of the global policy row above.
 
 ## Failure and Recovery Patterns
 

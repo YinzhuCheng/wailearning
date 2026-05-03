@@ -20,8 +20,7 @@ from apps.backend.wailearning_backend.db.models import (
     Student,
     Subject,
     User,
-    UserRole,
-)
+    UserRole)
 from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 from tests.backend.llm.test_llm_token_quota_behavior import _tiny_png_bytes
 
@@ -55,8 +54,7 @@ def _seed_student_course_and_config(client: TestClient):
             hashed_password=get_password_hash("p1"),
             real_name="S",
             role=UserRole.STUDENT.value,
-            class_id=k.id,
-        )
+            class_id=k.id)
         db.add(su)
         db.flush()
         st = Student(name="S", student_no=su.username, gender=Gender.MALE, class_id=k.id)
@@ -66,8 +64,7 @@ def _seed_student_course_and_config(client: TestClient):
             username=f"t_admq_{uid}",
             hashed_password=get_password_hash("tp"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.flush()
         course = Subject(name=f"C_{uid}", teacher_id=t.id, class_id=k.id)
@@ -76,7 +73,7 @@ def _seed_student_course_and_config(client: TestClient):
         db.add(
             CourseEnrollment(subject_id=course.id, student_id=st.id, class_id=k.id, enrollment_type="required")
         )
-        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=False, quota_timezone="UTC")
+        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=False)
         db.add(cfg)
         db.commit()
         return {
@@ -109,8 +106,7 @@ def test_student_quota_reflects_default_policy_and_admin_update(client: TestClie
     r_put = client.put(
         "/api/llm-settings/admin/quota-policy",
         headers=admin_h,
-        json={"default_daily_student_tokens": 50_000, "quota_timezone": "UTC"},
-    )
+        json={"default_daily_student_tokens": 50_000, "quota_timezone": "UTC"})
     assert r_put.status_code == 200, r_put.text
 
     r1 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=ctx["student_headers"])
@@ -129,8 +125,7 @@ def test_admin_single_student_override_visible_in_quota_api(client: TestClient):
     r_put = client.put(
         f"/api/llm-settings/admin/students/{ctx['student_id']}/quota-override",
         headers=admin_h,
-        json={"daily_tokens": 12_345},
-    )
+        json={"daily_tokens": 12_345})
     assert r_put.status_code == 200, r_put.text
 
     r = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=ctx["student_headers"])
@@ -143,8 +138,7 @@ def test_admin_single_student_override_visible_in_quota_api(client: TestClient):
     r_clear = client.put(
         f"/api/llm-settings/admin/students/{ctx['student_id']}/quota-override",
         headers=admin_h,
-        json={"clear_override": True},
-    )
+        json={"clear_override": True})
     assert r_clear.status_code == 200, r_clear.text
 
     r2 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=ctx["student_headers"])
@@ -175,8 +169,7 @@ def test_bulk_class_scope_updates_all_students_in_class(client: TestClient):
                 hashed_password=get_password_hash("p"),
                 real_name=f"N{i}",
                 role=UserRole.STUDENT.value,
-                class_id=k.id,
-            )
+                class_id=k.id)
             db.add(u)
             db.flush()
             st = Student(name=f"N{i}", student_no=f"bstu_{uid}_{i}", class_id=k.id)
@@ -193,8 +186,7 @@ def test_bulk_class_scope_updates_all_students_in_class(client: TestClient):
     r = client.post(
         "/api/llm-settings/admin/quota-overrides/bulk",
         headers=admin_h,
-        json={"scope": "class", "class_id": class_id, "daily_tokens": 77_777},
-    )
+        json={"scope": "class", "class_id": class_id, "daily_tokens": 77_777})
     assert r.status_code == 200, r.text
     assert r.json()["affected_students"] == 2
 
@@ -216,21 +208,16 @@ def test_teacher_course_config_response_omits_student_limit_field(client: TestCl
     client.post(
         f"/api/llm-settings/presets/{pid}/validate",
         headers=admin_h,
-        files={"image": ("t.png", _tiny_png_bytes(), "image/png")},
-    )
+        files={"image": ("t.png", _tiny_png_bytes(), "image/png")})
     client.put(
         f"/api/llm-settings/courses/{sid}",
         headers=teacher_h,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 850,
             "max_input_tokens": 8000,
             "max_output_tokens": 1000,
             "endpoints": [{"preset_id": pid, "priority": 1}],
-        },
-    )
+        })
     g = client.get(f"/api/llm-settings/courses/{sid}", headers=teacher_h)
     assert g.status_code == 200
     assert g.json().get("daily_student_token_limit") is None
@@ -245,8 +232,7 @@ def test_global_quota_policy_includes_max_parallel_grading_tasks(client: TestCli
     r2 = client.put(
         "/api/llm-settings/admin/quota-policy",
         headers=admin_h,
-        json={"max_parallel_grading_tasks": 5},
-    )
+        json={"max_parallel_grading_tasks": 5})
     assert r2.status_code == 200
     assert r2.json()["max_parallel_grading_tasks"] == 5
 
@@ -258,6 +244,5 @@ def test_non_admin_cannot_change_global_policy(client: TestClient):
     r = client.put(
         "/api/llm-settings/admin/quota-policy",
         headers=teacher_h,
-        json={"default_daily_student_tokens": 1},
-    )
+        json={"default_daily_student_tokens": 1})
     assert r.status_code == 403

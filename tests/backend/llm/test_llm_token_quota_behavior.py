@@ -22,10 +22,9 @@ from apps.backend.wailearning_backend.llm_grading import (
     _build_scoring_messages,
     _build_student_material,
     estimate_request_tokens_from_material,
-    precheck_quota,
     process_grading_task,
-    record_usage_if_needed,
 )
+from apps.backend.wailearning_backend.domains.llm.quota import precheck_quota, record_usage_if_needed
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import (
     Class,
@@ -40,9 +39,9 @@ from apps.backend.wailearning_backend.db.models import (
     Student,
     Subject,
     User,
-    UserRole,
-)
+    UserRole)
 from apps.backend.wailearning_backend.domains.llm.token_quota import (
+    get_or_create_global_quota_policy,
     quota_calendar_for_timezone,
 )
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
@@ -75,32 +74,27 @@ def client() -> TestClient:
 def test_precheck_quota_student_cap_only():
     db = SessionLocal()
     try:
-        cfg = CourseLLMConfig(
-            subject_id=42,
-            is_enabled=True,
-            quota_timezone="UTC",
-            max_input_tokens=16000,
-            max_output_tokens=1200,
-        )
         with mock.patch(
             "apps.backend.wailearning_backend.domains.llm.quota.get_used_tokens_for_scope"
         ) as mock_used, mock.patch(
+            "apps.backend.wailearning_backend.domains.llm.quota.sum_reserved_tokens", return_value=0
+        ), mock.patch(
             "apps.backend.wailearning_backend.domains.llm.quota.resolve_effective_daily_student_tokens",
             return_value=1000,
         ):
 
             def used_tokens(db_inner, **kw):
-                if kw.get("student_id") is not None:
+                if kw.get("student_id") is not None and kw.get("subject_id") is None:
                     return 950
                 return 0
 
             mock_used.side_effect = used_tokens
-            ok, code = precheck_quota(db, cfg, student_id=1, subject_id=42, estimated_tokens=100)
+            ok, code = precheck_quota(db, student_id=1, estimated_tokens=100)
             assert ok is False
             assert code == "quota_exceeded_student"
 
             mock_used.side_effect = lambda db_inner, **kw: 0
-            ok3, code3 = precheck_quota(db, cfg, student_id=1, subject_id=42, estimated_tokens=100)
+            ok3, code3 = precheck_quota(db, student_id=1, estimated_tokens=100)
             assert ok3 is True
             assert code3 is None
     finally:
@@ -114,8 +108,7 @@ def test_grading_task_failed_precheck_student_shows_student_error_code(client: T
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
         headers=student_h,
-        json={"content": "answer for quota student"},
-    )
+        json={"content": "answer for quota student"})
     assert r.status_code == 200, r.text
     db = SessionLocal()
     try:
@@ -140,8 +133,7 @@ def test_usage_log_always_written_after_successful_llm_call(client: TestClient):
     r = client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
         headers=student_h,
-        json={"content": "graded once"},
-    )
+        json={"content": "graded once"})
     assert r.status_code == 200, r.text
     db = SessionLocal()
     try:
@@ -176,8 +168,7 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
             username=f"bt_{uid}",
             hashed_password=get_password_hash("p"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         stu_user = User(
@@ -185,8 +176,7 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
             hashed_password=get_password_hash("p"),
             real_name="S",
             role=UserRole.STUDENT.value,
-            class_id=klass.id,
-        )
+            class_id=klass.id)
         db.add(stu_user)
         db.flush()
         stud = Student(name="S", student_no=f"sn_{uid}", class_id=klass.id)
@@ -198,10 +188,8 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
-            max_output_tokens=1200,
-        )
+            max_output_tokens=1200)
         db.add(cfg)
         db.flush()
         db.add(LLMStudentTokenOverride(student_id=stud.id, daily_tokens=1000))
@@ -212,8 +200,7 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
             model_name="m",
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add(preset)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=preset.id, priority=1))
@@ -224,8 +211,7 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
             subject_id=course.id,
             max_score=100,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw)
         db.flush()
         att = HomeworkAttempt(
@@ -233,8 +219,7 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
             student_id=stud.id,
             subject_id=course.id,
             class_id=klass.id,
-            content="x",
-        )
+            content="x")
         db.add(att)
         db.flush()
         old_task = HomeworkGradingTask(
@@ -242,11 +227,10 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
             homework_id=hw.id,
             student_id=stud.id,
             subject_id=course.id,
-            status="success",
-        )
+            status="success")
         db.add(old_task)
         db.flush()
-        usage_date, tz = quota_calendar_for_timezone(cfg.quota_timezone or "UTC")
+        usage_date, tz = quota_calendar_for_timezone(get_or_create_global_quota_policy(db).quota_timezone or "UTC")
         db.add(
             LLMTokenUsageLog(
                 task_id=old_task.id,
@@ -262,11 +246,10 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
             homework_id=hw.id,
             student_id=stud.id,
             subject_id=course.id,
-            status="processing",
-        )
+            status="processing")
         db.add(new_task)
         db.commit()
-        record_usage_if_needed(db, new_task, cfg, {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200})
+        record_usage_if_needed(db, new_task, {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200})
         db.commit()
         log = db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == new_task.id).first()
         assert log is not None
@@ -278,12 +261,10 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
 
 @mock.patch(
     "apps.backend.wailearning_backend.api.routers.llm_settings.validate_vision_connectivity",
-    return_value=(True, "vision ok"),
-)
+    return_value=(True, "vision ok"))
 @mock.patch(
     "apps.backend.wailearning_backend.api.routers.llm_settings.validate_text_connectivity",
-    return_value=(True, "text ok"),
-)
+    return_value=(True, "text ok"))
 def test_get_course_llm_config_includes_quota_usage_shape(_, __, client: TestClient):
     db = SessionLocal()
     try:
@@ -294,16 +275,14 @@ def test_get_course_llm_config_includes_quota_usage_shape(_, __, client: TestCli
             username="quota_admin",
             hashed_password=get_password_hash("quota_admin_pass"),
             real_name="A",
-            role=UserRole.ADMIN.value,
-        )
+            role=UserRole.ADMIN.value)
         db.add(admin)
         db.flush()
         teacher = User(
             username="quota_teacher",
             hashed_password=get_password_hash("quota_teacher_pass"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         course = Subject(name="QuotaCourse", teacher_id=teacher.id, class_id=klass.id)
@@ -319,28 +298,22 @@ def test_get_course_llm_config_includes_quota_usage_shape(_, __, client: TestCli
     c = client.post(
         "/api/llm-settings/presets",
         headers=admin_h,
-        json={"name": "quota-preset", "base_url": "https://a.test/v1/", "api_key": "k", "model_name": "m"},
-    )
+        json={"name": "quota-preset", "base_url": "https://a.test/v1/", "api_key": "k", "model_name": "m"})
     assert c.status_code == 200, c.text
     pid = c.json()["id"]
     client.post(
         f"/api/llm-settings/presets/{pid}/validate",
         headers=admin_h,
-        files={"image": ("t.png", _tiny_png_bytes(), "image/png")},
-    )
+        files={"image": ("t.png", _tiny_png_bytes(), "image/png")})
     put = client.put(
         f"/api/llm-settings/courses/{sid}",
         headers=teacher_h,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 850,
             "max_input_tokens": 8000,
             "max_output_tokens": 1000,
             "endpoints": [{"preset_id": pid, "priority": 1}],
-        },
-    )
+        })
     assert put.status_code == 200, put.text
     g = client.get(f"/api/llm-settings/courses/{sid}", headers=teacher_h)
     assert g.status_code == 200
@@ -355,12 +328,8 @@ def test_estimate_request_tokens_grows_with_large_data_url_payload():
         cfg = CourseLLMConfig(
             subject_id=1,
             is_enabled=True,
-            estimated_chars_per_token=4.0,
-            estimated_image_tokens=850,
             max_input_tokens=16000,
-            max_output_tokens=100,
-            quota_timezone="UTC",
-        )
+            max_output_tokens=100)
         small_url = "data:image/png;base64," + "a" * 40
         large_url = "data:image/png;base64," + "b" * 4000
         m_small = {
@@ -375,8 +344,12 @@ def test_estimate_request_tokens_grows_with_large_data_url_payload():
         }
         hw = Homework(title="x", content="", class_id=1, max_score=100, grade_precision="integer", created_by=1)
         att = HomeworkAttempt(homework_id=1, student_id=1, subject_id=1, class_id=1, content="")
-        a = estimate_request_tokens_from_material(cfg, m_small, homework=hw, attempt=att)
-        b = estimate_request_tokens_from_material(cfg, m_large, homework=hw, attempt=att)
+        a = estimate_request_tokens_from_material(
+            m_small, homework=hw, attempt=att, per_image_tokens=850, config=cfg
+        )
+        b = estimate_request_tokens_from_material(
+            m_large, homework=hw, attempt=att, per_image_tokens=850, config=cfg
+        )
         assert abs(b - a) <= 4
     finally:
         db.close()
@@ -393,8 +366,7 @@ def test_artifact_manifest_includes_block_metadata_after_material_build():
             username=f"amt_{uid}",
             hashed_password=get_password_hash("p"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         course = Subject(name=f"amc_{uid}", teacher_id=teacher.id, class_id=klass.id)
@@ -404,9 +376,7 @@ def test_artifact_manifest_includes_block_metadata_after_material_build():
             subject_id=course.id,
             is_enabled=True,
             max_input_tokens=16000,
-            max_output_tokens=1200,
-            quota_timezone="UTC",
-        )
+            max_output_tokens=1200)
         db.add(cfg)
         db.flush()
         hw = Homework(
@@ -416,8 +386,7 @@ def test_artifact_manifest_includes_block_metadata_after_material_build():
             subject_id=course.id,
             max_score=100,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw)
         db.flush()
         stud = Student(name="St", student_no=f"st_{uid}", class_id=klass.id)
@@ -428,8 +397,7 @@ def test_artifact_manifest_includes_block_metadata_after_material_build():
             student_id=stud.id,
             subject_id=course.id,
             class_id=klass.id,
-            content="my submission text",
-        )
+            content="my submission text")
         db.add(att)
         db.commit()
         db.refresh(hw)
@@ -455,8 +423,7 @@ def test_scoring_messages_have_distinct_sections_for_instructor_and_submission()
             username=f"smt_{uid}",
             hashed_password=get_password_hash("p"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         course = Subject(name=f"smc_{uid}", teacher_id=teacher.id, class_id=klass.id)
@@ -467,9 +434,7 @@ def test_scoring_messages_have_distinct_sections_for_instructor_and_submission()
             is_enabled=True,
             teacher_prompt="extra hint",
             max_input_tokens=16000,
-            max_output_tokens=1200,
-            quota_timezone="UTC",
-        )
+            max_output_tokens=1200)
         db.add(cfg)
         db.flush()
         hw = Homework(
@@ -479,8 +444,7 @@ def test_scoring_messages_have_distinct_sections_for_instructor_and_submission()
             subject_id=course.id,
             max_score=10,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw)
         db.flush()
         stud = Student(name="S", student_no=f"sms_{uid}", class_id=klass.id)
@@ -492,8 +456,7 @@ def test_scoring_messages_have_distinct_sections_for_instructor_and_submission()
             subject_id=course.id,
             class_id=klass.id,
             content="hello",
-            is_late=False,
-        )
+            is_late=False)
         db.add(att)
         db.commit()
         db.refresh(hw)
@@ -522,8 +485,7 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
             username=f"zip_t_{uid}",
             hashed_password=get_password_hash("p"),
             real_name="T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         course = Subject(name=f"zip_c_{uid}", teacher_id=teacher.id, class_id=klass.id)
@@ -533,9 +495,7 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
             subject_id=course.id,
             is_enabled=True,
             max_input_tokens=16000,
-            max_output_tokens=1200,
-            quota_timezone="UTC",
-        )
+            max_output_tokens=1200)
         db.add(cfg)
         db.flush()
         hw = Homework(
@@ -545,8 +505,7 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
             subject_id=course.id,
             max_score=100,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw)
         db.flush()
         stud = Student(name="Z", student_no=f"z_{uid}", class_id=klass.id)
@@ -569,8 +528,7 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
             class_id=klass.id,
             content="see zip",
             attachment_name="pack.zip",
-            attachment_url=att_url,
-        )
+            attachment_url=att_url)
         db.add(att)
         db.commit()
         db.refresh(hw)
