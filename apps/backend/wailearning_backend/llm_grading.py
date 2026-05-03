@@ -41,17 +41,12 @@ from apps.backend.wailearning_backend.domains.llm.protocol import (
     redact_endpoint_host as _redact_endpoint_host,
 )
 from apps.backend.wailearning_backend.domains.llm.quota import (
-    get_quota_usage_snapshot,
-    get_student_quota_usage_snapshot,
-    get_used_tokens_for_scope as _get_used_tokens_for_scope,
-    precheck_quota,
     record_usage_if_needed,
     release_quota_reservation,
     reserve_quota_tokens,
 )
 from apps.backend.wailearning_backend.domains.llm.token_quota import (
-    quota_calendar_for_timezone,
-    resolve_effective_daily_student_tokens,
+    get_or_create_global_quota_policy,
     resolve_max_parallel_grading_tasks,
 )
 
@@ -322,11 +317,8 @@ def _copy_course_llm_from_template(db: Session, target: CourseLLMConfig, templat
     """Replace target endpoints/groups with template's validated routing; copy tuning fields."""
     target.is_enabled = bool(template.is_enabled)
     target.response_language = template.response_language
-    target.estimated_chars_per_token = template.estimated_chars_per_token
-    target.estimated_image_tokens = template.estimated_image_tokens
     target.max_input_tokens = template.max_input_tokens
     target.max_output_tokens = template.max_output_tokens
-    target.quota_timezone = template.quota_timezone or "Asia/Shanghai"
     target.system_prompt = template.system_prompt
     target.teacher_prompt = template.teacher_prompt
 
@@ -858,14 +850,16 @@ def validate_endpoint_connectivity(
 
 
 def estimate_task_tokens(
-    config: CourseLLMConfig,
+    *,
+    chars_per_token: float,
+    image_tokens_per_image: int,
     text_length: int,
     image_count: int,
 ) -> int:
     """Rough input-only estimate for lightweight callers (chars heuristic + image cap)."""
-    chars_per_token = float(config.estimated_chars_per_token or 4.0)
-    text_tokens = int(text_length / chars_per_token) + 64
-    image_tokens = int(image_count * (config.estimated_image_tokens or 850))
+    cpt = float(chars_per_token or 4.0)
+    text_tokens = int(text_length / cpt) + 64
+    image_tokens = int(image_count * int(image_tokens_per_image or 850))
     return text_tokens + image_tokens
 
 
@@ -947,11 +941,12 @@ def _attachment_block_meta_text(block: "MaterialBlock") -> str:
 
 
 def estimate_request_tokens_from_material(
-    config: CourseLLMConfig,
     material: dict[str, Any],
     *,
     homework: Homework,
     attempt: HomeworkAttempt,
+    per_image_tokens: int,
+    config: CourseLLMConfig,
 ) -> int:
     """
     Input-only token estimate aligned with the scoring request: same message tree as the API call,
@@ -961,7 +956,7 @@ def estimate_request_tokens_from_material(
     messages = _build_scoring_messages(homework, attempt, config, material)
     return _estimate_input_tokens_from_scoring_messages(
         messages,
-        per_image_tokens=int(config.estimated_image_tokens or 850),
+        per_image_tokens=int(per_image_tokens or 850),
     )
 
 
@@ -1135,7 +1130,6 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
     allowed, error_code = reserve_quota_tokens(
         db,
         task,
-        config,
         estimated_tokens=int(material["estimated_tokens"] or 0),
     )
     if not allowed:
@@ -1221,7 +1215,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
     task.error_message = None
     task.finished_at = _now_utc()
     task.task_summary = "评分成功"
-    record_usage_if_needed(db, task, config, response["usage"])
+    record_usage_if_needed(db, task, response["usage"])
 
     summary = (
         db.query(HomeworkSubmission)
@@ -1655,7 +1649,7 @@ def _grade_with_endpoint_group(
                 if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
                     task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
                         "version": 1,
-                        "mode": "legacy_priority",
+                        "mode": "flat_priority",
                         "status": "ok",
                     }
                     _flag_artifact_manifest_modified(task)
@@ -1676,7 +1670,7 @@ def _grade_with_endpoint_group(
     if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
         task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
             "version": 1,
-            "mode": "legacy_priority",
+            "mode": "flat_priority",
             "status": "failed",
         }
         _flag_artifact_manifest_modified(task)
@@ -1987,6 +1981,9 @@ def _build_student_material(
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
 ) -> dict[str, Any]:
+    pol = get_or_create_global_quota_policy(db)
+    est_chars_per_token = float(getattr(pol, "estimated_chars_per_token", None) or 4.0)
+    est_image_tokens = int(getattr(pol, "estimated_image_tokens", None) or 850)
     def _expand_hw_md(field: Optional[str]) -> str:
         return expand_markdown_images_for_llm(field or "")
 
@@ -2030,7 +2027,7 @@ def _build_student_material(
 
     current_blocks_raw, current_parse_skipped = _collect_attempt_material_blocks(attempt)
 
-    text_budget = int((config.max_input_tokens or 16000) * (config.estimated_chars_per_token or 4.0))
+    text_budget = int((config.max_input_tokens or 16000) * est_chars_per_token)
     reserved_text = "\n\n".join(assignment_texts)
     remaining_chars = max(2000, text_budget - len(reserved_text))
     remaining_image_budget = config.max_input_tokens or 16000
@@ -2080,10 +2077,11 @@ def _build_student_material(
     if prior_final:
         temp_material["prior_student_blocks"] = prior_final
     estimated_tokens = estimate_request_tokens_from_material(
-        config,
         temp_material,
         homework=homework,
         attempt=attempt,
+        per_image_tokens=est_image_tokens,
+        config=config,
     )
     artifact_manifest = {
         "included": [

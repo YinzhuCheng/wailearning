@@ -682,6 +682,34 @@ Copy-pasting “`page_size=200` means 422” from homework/materials/notificatio
 - **`await expect(getByTestId('btn-roster-enroll-submit')).toBeEnabled()`** before pairing `waitForResponse` with submit.
 - If you need `force` on the submit click, do not use it on the checkbox first; re-read Pitfall 34 for disabled-control semantics.
 
+## Pitfall 41: `unittest.mock.patch` targets must follow real import paths after refactors
+
+### Symptom
+
+Tests patch `"apps.backend.wailearning_backend.llm_grading.some_symbol"` but the implementation moved the symbol to another module (for example quota helpers under `apps.backend.wailearning_backend.domains.llm.quota`). The patch silently does nothing or the wrong object is patched; assertions pass or fail in misleading ways.
+
+### Why it matters
+
+Refactors that split packages are correct for production but **brittle for string-based patches**. A green suite before refactor can become a false green (patch no-op) or false red after paths drift.
+
+### How to avoid (test side)
+
+- Prefer patching **the module under test’s import binding** (where the name is used), not a distant definition site, when feasible.
+- After moving code, **grep tests** for the old module path and update patch strings in the same PR.
+- When adding new mocks, add a one-line assertion that the mock was called (or spy on a function guaranteed to run) if the test’s entire claim depends on the patch.
+
+## Pitfall 42: Full `pytest` runs are long; piping through `tail` hides the summary line
+
+### Symptom
+
+Running `python3 -m pytest -q 2>&1 | tail -N` in automation only shows the last *N* lines. The useful **`=== … passed …`** summary can be missing from the captured log, making it easy to misread “no output yet” as a hang or to miss the final pass/fail counts.
+
+### How to avoid (test side)
+
+- For human or CI logs, prefer **`pytest` without truncating the final summary**, or append `; echo EXIT:$?` and tee to a file.
+- For tight loops, use **`pytest -x`** (stop on first failure) or **`pytest path/to/file`** instead of always running the entire tree.
+- Default full-suite wall time in this repository is on the order of **several minutes** on a typical Linux agent even when green — account for that in job timeouts and “wait then read log” scripts.
+
 ## Proven Command Patterns
 
 ### Backend full suite

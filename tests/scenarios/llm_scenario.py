@@ -15,14 +15,14 @@ from apps.backend.wailearning_backend.db.models import (
     CourseEnrollment,
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
+    Gender,
     Homework,
     LLMEndpointPreset,
     LLMStudentTokenOverride,
     Student,
     Subject,
     User,
-    UserRole,
-)
+    UserRole)
 
 
 def login_api(client: TestClient, username: str, password: str) -> dict[str, str]:
@@ -48,8 +48,7 @@ def ensure_admin() -> None:
                     username="pytest_admin",
                     hashed_password=get_password_hash("pytest_admin_pass"),
                     real_name="Pytest Admin",
-                    role=UserRole.ADMIN.value,
-                )
+                    role=UserRole.ADMIN.value)
             )
             db.commit()
     finally:
@@ -61,8 +60,7 @@ def make_grading_course_with_homework(
     auto_grading: bool = True,
     course_llm_enabled: bool = True,
     preset_max_retries: int = 2,
-    daily_student_token_limit: int | None = None,
-) -> dict:
+    daily_student_token_limit: int | None = None) -> dict:
     uid = uuid.uuid4().hex[:10]
     db = SessionLocal()
     try:
@@ -74,8 +72,7 @@ def make_grading_course_with_homework(
             username=f"pytest_teacher_{uid}",
             hashed_password=get_password_hash("pytest_teacher_pass"),
             real_name="Pytest Teacher",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
 
@@ -85,12 +82,16 @@ def make_grading_course_with_homework(
             hashed_password=get_password_hash("stu_pass"),
             real_name="Student One",
             role=UserRole.STUDENT.value,
-            class_id=klass.id,
-        )
+            class_id=klass.id)
         db.add(su)
         db.flush()
 
-        stud = Student(name="Student One", student_no=stu_username, class_id=klass.id)
+        stud = Student(
+            name="Student One",
+            student_no=stu_username,
+            gender=Gender.MALE,
+            class_id=klass.id,
+        )
         db.add(stud)
         db.flush()
 
@@ -103,8 +104,7 @@ def make_grading_course_with_homework(
                 subject_id=course.id,
                 student_id=stud.id,
                 class_id=klass.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
 
         preset = LLMEndpointPreset(
@@ -116,8 +116,7 @@ def make_grading_course_with_homework(
             initial_backoff_seconds=1,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add(preset)
         db.flush()
 
@@ -125,9 +124,7 @@ def make_grading_course_with_homework(
             subject_id=course.id,
             is_enabled=course_llm_enabled,
             max_input_tokens=16000,
-            max_output_tokens=1200,
-            quota_timezone="UTC",
-        )
+            max_output_tokens=1200)
         db.add(cfg)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=preset.id, priority=1))
@@ -141,8 +138,7 @@ def make_grading_course_with_homework(
             subject_id=course.id,
             max_score=100,
             auto_grading_enabled=auto_grading,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw)
         db.commit()
         db.refresh(hw)
@@ -166,8 +162,7 @@ def make_multi_student_scenario(
     num_students: int,
     *,
     auto_grading: bool = True,
-    daily_student_token_limit: int | None = None,
-) -> dict:
+    daily_student_token_limit: int | None = None) -> dict:
     if num_students < 1:
         raise ValueError("num_students must be at least 1")
     uid = uuid.uuid4().hex[:8]
@@ -181,8 +176,7 @@ def make_multi_student_scenario(
             username=f"mt_teach_{uid}",
             hashed_password=get_password_hash("tp"),
             real_name="MT",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
 
@@ -198,8 +192,7 @@ def make_multi_student_scenario(
             max_retries=0,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add(preset)
         db.flush()
 
@@ -207,9 +200,7 @@ def make_multi_student_scenario(
             subject_id=course.id,
             is_enabled=True,
             max_input_tokens=16000,
-            max_output_tokens=1200,
-            quota_timezone="UTC",
-        )
+            max_output_tokens=1200)
         db.add(cfg)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg.id, preset_id=preset.id, priority=1))
@@ -221,8 +212,7 @@ def make_multi_student_scenario(
             subject_id=course.id,
             max_score=100,
             auto_grading_enabled=auto_grading,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw)
         db.flush()
 
@@ -234,11 +224,10 @@ def make_multi_student_scenario(
                 hashed_password=get_password_hash("p"),
                 real_name=f"S{i}",
                 role=UserRole.STUDENT.value,
-                class_id=klass.id,
-            )
+                class_id=klass.id)
             db.add(u)
             db.flush()
-            st = Student(name=f"Name{i}", student_no=un, class_id=klass.id)
+            st = Student(name=f"Name{i}", student_no=un, gender=Gender.MALE, class_id=klass.id)
             db.add(st)
             db.flush()
             db.add(
@@ -246,8 +235,7 @@ def make_multi_student_scenario(
                     subject_id=course.id,
                     student_id=st.id,
                     class_id=klass.id,
-                    enrollment_type="required",
-                )
+                    enrollment_type="required")
             )
             if daily_student_token_limit is not None:
                 db.merge(LLMStudentTokenOverride(student_id=st.id, daily_tokens=int(daily_student_token_limit)))

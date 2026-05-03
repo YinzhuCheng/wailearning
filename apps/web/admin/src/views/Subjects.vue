@@ -391,28 +391,16 @@
             <el-input-number v-model="llmForm.max_output_tokens" :min="1" :step="100" style="width: 100%" />
           </el-form-item>
 
-          <el-form-item label="字符/token 估算">
-            <el-input-number v-model="llmForm.estimated_chars_per_token" :min="0.5" :step="0.5" :precision="1" style="width: 100%" />
-          </el-form-item>
-
-          <el-form-item label="单图 token 估算">
-            <el-input-number v-model="llmForm.estimated_image_tokens" :min="1" :step="100" style="width: 100%" />
-          </el-form-item>
-
-          <el-form-item label="额度时区">
-            <el-input v-model="llmForm.quota_timezone" data-testid="llm-course-timezone" placeholder="例如 UTC / Asia/Shanghai（本课程 LLM 用量按此时区划分自然日）" />
-          </el-form-item>
-
           <el-alert
             v-if="llmQuotaUsage && llmQuotaUsage.usage_date"
             class="llm-notice"
             type="info"
             :closable="false"
-            :title="`本课程 LLM 用量统计日：${llmQuotaUsage.usage_date}（${llmQuotaUsage.quota_timezone}）`"
+            :title="`全平台 LLM 用量统计日：${llmQuotaUsage.usage_date}（${llmQuotaUsage.quota_timezone}，由系统设置统一管理）`"
           />
           <div v-if="llmForm.is_enabled" class="attachment-help" style="margin-bottom: 12px">
             自动评分会将作业说明、学生文字与附件解析结果分段送入模型；大附件、PDF 多页或 zip 可能被截断或跳过。学生个人日
-            token 由管理员在系统设置中统一配置；每门课在各自「额度时区」下单独统计用量。并发任务数由管理员在系统设置中配置。若本课尚未选择端点，保存或打开配置时会尝试从其他已配置且校验通过的课程自动同步一份模板。
+            token、自然日切分与预占估算由管理员在<strong>系统设置 → LLM 用量与额度</strong>统一配置；任课教师在此仅配置本课开关、提示词与端点路由。若本课尚未选择端点，保存或打开配置时会尝试从其他已配置且校验通过的课程自动同步一份模板。
           </div>
 
           <el-form-item label="系统提示词">
@@ -558,11 +546,8 @@ const rosterEnrollTableRef = ref(null)
 const llmForm = reactive({
   is_enabled: false,
   response_language: '',
-  estimated_chars_per_token: 4.0,
-  estimated_image_tokens: 850,
   max_input_tokens: 16000,
   max_output_tokens: 1200,
-  quota_timezone: 'Asia/Shanghai',
   system_prompt: '',
   teacher_prompt: '',
   endpoints: [],
@@ -997,11 +982,8 @@ const resetLlmForm = () => {
   Object.assign(llmForm, {
     is_enabled: false,
     response_language: '',
-    estimated_chars_per_token: 4.0,
-    estimated_image_tokens: 850,
     max_input_tokens: 16000,
     max_output_tokens: 1200,
-    quota_timezone: 'Asia/Shanghai',
     system_prompt: '',
     teacher_prompt: '',
     endpoints: [],
@@ -1019,11 +1001,8 @@ const applyLlmConfig = config => {
   llmVisualValidationNotice.value = config.visual_validation_notice || llmVisualValidationNotice.value
   llmForm.is_enabled = Boolean(config.is_enabled)
   llmForm.response_language = config.response_language || ''
-  llmForm.estimated_chars_per_token = config.estimated_chars_per_token ?? 4.0
-  llmForm.estimated_image_tokens = config.estimated_image_tokens ?? 850
   llmForm.max_input_tokens = config.max_input_tokens ?? 16000
   llmForm.max_output_tokens = config.max_output_tokens ?? 1200
-  llmForm.quota_timezone = config.quota_timezone || 'Asia/Shanghai'
   llmForm.system_prompt = config.system_prompt || ''
   llmForm.teacher_prompt = config.teacher_prompt || ''
   llmForm.endpoints = (config.endpoints || []).map(item => ({
@@ -1101,11 +1080,8 @@ const saveLlmConfig = async () => {
     await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
       is_enabled: llmForm.is_enabled,
       response_language: llmForm.response_language?.trim() || null,
-      estimated_chars_per_token: llmForm.estimated_chars_per_token,
-      estimated_image_tokens: llmForm.estimated_image_tokens,
       max_input_tokens: llmForm.max_input_tokens,
       max_output_tokens: llmForm.max_output_tokens,
-      quota_timezone: llmForm.quota_timezone?.trim() || 'Asia/Shanghai',
       system_prompt: llmForm.system_prompt?.trim() || null,
       teacher_prompt: llmForm.teacher_prompt?.trim() || null,
       ...(

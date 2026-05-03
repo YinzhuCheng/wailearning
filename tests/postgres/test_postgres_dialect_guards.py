@@ -1,7 +1,11 @@
-"""Twenty PostgreSQL-specific or Postgres-revealing guards (skip on SQLite).
+"""Thirty PostgreSQL-specific or Postgres-revealing guards (skip on SQLite).
 
 These complement default SQLite runs: concurrency, information_schema, and type checks
 that differ from SQLite. Requires ``TEST_DATABASE_URL`` for PostgreSQL.
+
+The tests ``test_pg21``–``test_pg30`` are API contracts that matter most when the app
+is exercised against PostgreSQL (global LLM quota shape, student summary consistency,
+and silent-ignore of removed course-level quota keys).
 """
 
 from __future__ import annotations
@@ -60,7 +64,13 @@ def test_pg03_information_schema_course_llm_configs_no_legacy_token_columns():
                 """
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'course_llm_configs'
-                  AND column_name IN ('daily_course_token_limit', 'daily_student_token_limit')
+                  AND column_name IN (
+                    'daily_course_token_limit',
+                    'daily_student_token_limit',
+                    'quota_timezone',
+                    'estimated_chars_per_token',
+                    'estimated_image_tokens'
+                  )
                 """
             )
         ).fetchall()
@@ -320,3 +330,137 @@ def test_pg20_classes_list_teacher(client: TestClient):
     r = client.get("/api/classes", headers=h)
     assert r.status_code == 200
     assert isinstance(r.json(), list)
+
+
+def test_pg21_information_schema_llm_global_quota_policy_has_estimation_columns():
+    db = SessionLocal()
+    try:
+        rows = {
+            r[0]
+            for r in db.execute(
+                text(
+                    """
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'llm_global_quota_policies'
+                      AND column_name IN ('estimated_chars_per_token', 'estimated_image_tokens')
+                    """
+                )
+            ).fetchall()
+        }
+        assert rows == {"estimated_chars_per_token", "estimated_image_tokens"}
+    finally:
+        db.close()
+
+
+def test_pg22_admin_quota_policy_includes_estimation_fields(client: TestClient):
+    ensure_admin()
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    r = client.get("/api/llm-settings/admin/quota-policy", headers=ah)
+    assert r.status_code == 200
+    body = r.json()
+    assert "estimated_chars_per_token" in body
+    assert "estimated_image_tokens" in body
+    assert isinstance(body["estimated_chars_per_token"], (int, float))
+    assert isinstance(body["estimated_image_tokens"], int)
+
+
+def test_pg23_teacher_cannot_read_admin_quota_policy(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.get("/api/llm-settings/admin/quota-policy", headers=th)
+    assert r.status_code == 403
+
+
+def test_pg24_course_llm_get_response_has_no_legacy_quota_fields(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.get(f"/api/llm-settings/courses/{ctx['subject_id']}", headers=th)
+    assert r.status_code == 200
+    body = r.json()
+    for bad in ("quota_timezone", "estimated_chars_per_token", "estimated_image_tokens"):
+        assert bad not in body
+
+
+def test_pg25_course_llm_put_ignores_removed_quota_fields_in_body(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    before = client.get(f"/api/llm-settings/courses/{ctx['subject_id']}", headers=th).json()
+    r = client.put(
+        f"/api/llm-settings/courses/{ctx['subject_id']}",
+        headers=th,
+        json={
+            "is_enabled": before["is_enabled"],
+            "max_input_tokens": before["max_input_tokens"],
+            "max_output_tokens": before["max_output_tokens"],
+            "system_prompt": before.get("system_prompt"),
+            "teacher_prompt": before.get("teacher_prompt"),
+            "endpoints": [{"preset_id": ep["preset_id"], "priority": ep["priority"]} for ep in before["endpoints"]],
+            "groups": [],
+            "quota_timezone": "Antarctica/Troll",
+            "estimated_chars_per_token": 0.01,
+            "estimated_image_tokens": 999999,
+        },
+    )
+    assert r.status_code == 200
+    after = r.json()
+    assert after["max_input_tokens"] == before["max_input_tokens"]
+    assert after["max_output_tokens"] == before["max_output_tokens"]
+    for bad in ("quota_timezone", "estimated_chars_per_token", "estimated_image_tokens"):
+        assert bad not in after
+
+
+def test_pg26_student_llm_quotas_summary_matches_per_course_remaining(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    r = client.get("/api/llm-settings/courses/student-quotas", headers=sh)
+    assert r.status_code == 200
+    body = r.json()
+    for key in (
+        "usage_date",
+        "quota_timezone",
+        "daily_student_token_limit",
+        "student_used_tokens_total",
+        "student_remaining_tokens_today",
+        "courses",
+    ):
+        assert key in body
+    rem = body["student_remaining_tokens_today"]
+    for row in body["courses"]:
+        assert row["student_remaining_tokens_today"] == rem
+        assert row["daily_student_token_limit"] == body["daily_student_token_limit"]
+
+
+def test_pg27_student_llm_quota_for_course_aligns_with_summary(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    summary = client.get("/api/llm-settings/courses/student-quotas", headers=sh).json()
+    r = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=sh)
+    assert r.status_code == 200
+    one = r.json()
+    assert one["usage_date"] == summary["usage_date"]
+    assert one["quota_timezone"] == summary["quota_timezone"]
+    assert one["student_remaining_tokens_today"] == summary["student_remaining_tokens_today"]
+
+
+def test_pg28_logs_page_size_boundary_422(client: TestClient):
+    ensure_admin()
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    r = client.get("/api/logs?page=1&page_size=200", headers=ah)
+    assert r.status_code == 422
+
+
+def test_pg29_points_exchanges_page_size_boundary_422(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.get("/api/points/exchanges?page=1&page_size=200", headers=th)
+    assert r.status_code == 422
+
+
+def test_pg30_students_list_accepts_page_size_200(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.get(f"/api/students?class_id={ctx['class_id']}&page=1&page_size=200", headers=th)
+    assert r.status_code == 200
+    data = r.json()
+    assert "data" in data
+    assert isinstance(data["data"], list)

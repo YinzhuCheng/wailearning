@@ -14,17 +14,36 @@
       >
         <template #header>
           <div class="quota-card-header-row">
-            <span>各课程 · LLM 日额度（按课程分别统计）</span>
+            <span>LLM 日额度（全平台统一池，按课程展示归因）</span>
             <el-button size="small" :loading="quotasLoading" @click="loadStudentQuotasSummary">刷新</el-button>
           </div>
         </template>
         <div v-loading="quotasLoading" class="quota-body">
+          <p v-if="quotasSummary?.usage_date" class="quota-line muted">
+            统计日 {{ quotasSummary.usage_date }}（{{ quotasSummary.quota_timezone }}）
+          </p>
           <p v-if="quotasSummary?.uses_personal_override" class="quota-line quota-hint">
-            当前账号使用管理员单独配置的日 token 上限；各课程条形图共用上限制，用量按课程分别累计。
+            当前账号使用管理员单独配置的日 token 上限。
           </p>
           <p v-else-if="quotasSummary?.global_default_daily_student_tokens != null" class="quota-line quota-hint muted">
-            全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}（各课用量独立统计）。
+            全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}。
           </p>
+          <p v-if="quotasSummary?.daily_student_token_limit != null" class="quota-line">
+            今日已用 {{ quotasSummary.student_used_tokens_total ?? 0 }} / 限额 {{ quotasSummary.daily_student_token_limit }}
+            <span v-if="quotasSummary.student_remaining_tokens_today != null" class="muted">
+              · 剩余 {{ quotasSummary.student_remaining_tokens_today }}
+            </span>
+          </p>
+          <el-progress
+            v-if="quotasSummary?.daily_student_token_limit"
+            :percentage="quotaGlobalPercent(quotasSummary)"
+            :stroke-width="16"
+            :show-text="false"
+            :color="quotaBarColors"
+            class="quota-progress"
+            style="margin-bottom: 12px"
+          />
+          <p class="quota-line muted" style="margin-bottom: 8px">各课程用量占今日已用比例（归因，非单独限额）</p>
           <template v-if="quotasSummary?.courses?.length">
             <div
               v-for="row in quotasSummary.courses"
@@ -35,21 +54,22 @@
               <div class="quota-course-title">
                 <span class="quota-course-name">{{ row.subject_name }}</span>
                 <span class="quota-course-nums">
-                  已用 {{ row.student_used_tokens_today ?? 0 }} / 限额 {{ row.daily_student_token_limit ?? '—' }}
-                  <span v-if="row.student_remaining_tokens_today != null" class="muted">
-                    · 剩余 {{ row.student_remaining_tokens_today }}
+                  本课已用 {{ row.student_used_tokens_today ?? 0 }}
+                  <span v-if="quotasSummary.student_used_tokens_total" class="muted">
+                    （占今日已用
+                    {{ quotaCourseSharePercent(row, quotasSummary) }}%）
                   </span>
                 </span>
               </div>
               <el-progress
-                :percentage="quotaBarPercent(row)"
+                :percentage="quotaCourseSharePercent(row, quotasSummary)"
                 :stroke-width="16"
                 :show-text="false"
                 :color="quotaBarColors"
                 class="quota-progress"
               />
               <p class="quota-subline muted">
-                统计日 {{ row.usage_date }}（{{ row.quota_timezone }}）
+                与全平台同一统计日：{{ row.usage_date }}（{{ row.quota_timezone }}）
               </p>
             </div>
           </template>
@@ -481,13 +501,22 @@ const loadStudentQuotasSummary = async () => {
 
 const isCurrentCourseId = id => String(userStore.selectedCourse?.id || '') === String(id || '')
 
-const quotaBarPercent = row => {
-  const lim = Number(row?.daily_student_token_limit)
-  const used = Number(row?.student_used_tokens_today ?? 0)
+const quotaGlobalPercent = summary => {
+  const lim = Number(summary?.daily_student_token_limit)
+  const used = Number(summary?.student_used_tokens_total ?? 0)
   if (!lim || lim <= 0) {
     return 0
   }
   return Math.min(100, Math.round((used / lim) * 1000) / 10)
+}
+
+const quotaCourseSharePercent = (row, summary) => {
+  const total = Number(summary?.student_used_tokens_total ?? 0)
+  const used = Number(row?.student_used_tokens_today ?? 0)
+  if (!total || total <= 0) {
+    return 0
+  }
+  return Math.min(100, Math.round((used / total) * 1000) / 10)
 }
 
 const quotaBarColors = [

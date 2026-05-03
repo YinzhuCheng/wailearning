@@ -1,8 +1,8 @@
 """
-PCQ1–PCQ5: Per-course LLM quota pools, template clone, preset purge + re-sync, student-quotas API.
+PCQ1–PCQ5: LLM quota (global student daily pool), template clone, preset purge + re-sync, student-quotas API.
 
-These tests assume each course keeps its own usage ledger (student + subject + course quota day)
-while the numeric daily cap still comes from admin policy / student override.
+Student LLM usage is aggregated under the global quota timezone; per-course API rows attribute usage by subject.
+The numeric daily cap comes from admin policy / student override.
 """
 
 from __future__ import annotations
@@ -27,8 +27,7 @@ from apps.backend.wailearning_backend.db.models import (
     Student,
     Subject,
     User,
-    UserRole,
-)
+    UserRole)
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
@@ -44,15 +43,13 @@ def _validated_preset_row(*, uid: str, name_suffix: str = "") -> LLMEndpointPres
         supports_vision=True,
         validation_status="validated",
         text_validation_status="passed",
-        vision_validation_status="passed",
-    )
+        vision_validation_status="passed")
 
 
-def test_pcq1_two_courses_independent_usage_pools_under_same_numeric_cap(client: TestClient) -> None:
+def test_pcq1_two_courses_share_global_usage_pool_under_same_numeric_cap(client: TestClient) -> None:
     """
-    Same numeric daily cap: grading reserves large estimated prompt budgets, so the cap must be generous.
-    After two successful runs (one per course), each course's ledger must show ~only that course's prompt
-    tokens (would fail if logs/reservations were still merged across subjects into one pool).
+    Same numeric daily cap: two successful grading runs should both bill into the same student+day pool.
+    Per-course student-quota snapshots still attribute usage to each subject_id.
     """
     ensure_admin()
     ctx = make_grading_course_with_homework(daily_student_token_limit=500_000)
@@ -77,16 +74,13 @@ def test_pcq1_two_courses_independent_usage_pools_under_same_numeric_cap(client:
                 subject_id=course_b.id,
                 student_id=stud.id,
                 class_id=klass.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
         cfg_b = CourseLLMConfig(
             subject_id=course_b.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
-            max_output_tokens=1200,
-        )
+            max_output_tokens=1200)
         db.add(cfg_b)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg_b.id, preset_id=p2.id, priority=1))
@@ -98,8 +92,7 @@ def test_pcq1_two_courses_independent_usage_pools_under_same_numeric_cap(client:
             subject_id=course_b.id,
             max_score=100,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw_b)
         db.commit()
         hw_b_id = hw_b.id
@@ -112,16 +105,14 @@ def test_pcq1_two_courses_independent_usage_pools_under_same_numeric_cap(client:
         client.post(
             f"/api/homeworks/{ctx['homework_id']}/submission",
             headers=st,
-            json={"content": "course A burn"},
-        ).status_code
+            json={"content": "course A burn"}).status_code
         == 200
     )
     assert (
         client.post(
             f"/api/homeworks/{hw_b_id}/submission",
             headers=st,
-            json={"content": "course B burn"},
-        ).status_code
+            json={"content": "course B burn"}).status_code
         == 200
     )
 
@@ -163,6 +154,7 @@ def test_pcq1_two_courses_independent_usage_pools_under_same_numeric_cap(client:
     ua = int(qa["student_used_tokens_today"] or 0)
     ub = int(qb["student_used_tokens_today"] or 0)
     assert ua == 10 and ub == 10
+    assert int(qa.get("student_remaining_tokens_today") or 0) == int(qb.get("student_remaining_tokens_today") or 0)
 
 
 def test_pcq2_empty_course_clones_llm_from_latest_validated_peer(client: TestClient) -> None:
@@ -184,10 +176,9 @@ def test_pcq2_empty_course_clones_llm_from_latest_validated_peer(client: TestCli
                 subject_id=course_c.id,
                 student_id=stud.id,
                 class_id=klass.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
-        cfg_c = CourseLLMConfig(subject_id=course_c.id, is_enabled=False, quota_timezone="Pacific/Honolulu")
+        cfg_c = CourseLLMConfig(subject_id=course_c.id, is_enabled=False)
         db.add(cfg_c)
         db.commit()
         subject_c_id = course_c.id
@@ -198,7 +189,9 @@ def test_pcq2_empty_course_clones_llm_from_latest_validated_peer(client: TestCli
     r = client.get(f"/api/llm-settings/courses/{subject_c_id}", headers=th)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["quota_timezone"] == "UTC"
+    qu = body.get("quota_usage") or {}
+    assert qu.get("usage_date")
+    assert qu.get("quota_timezone")
     assert len(body.get("endpoints") or []) >= 1
     assert body["endpoints"][0]["preset_id"] == ctx["preset_id"]
 
@@ -229,16 +222,13 @@ def test_pcq3_deactivate_primary_preset_then_peer_course_resyncs_from_survivor(c
                 subject_id=course_b.id,
                 student_id=stud.id,
                 class_id=klass.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
         cfg_b = CourseLLMConfig(
             subject_id=course_b.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=8000,
-            max_output_tokens=600,
-        )
+            max_output_tokens=600)
         db.add(cfg_b)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg_b.id, preset_id=p2.id, priority=1))
@@ -251,17 +241,14 @@ def test_pcq3_deactivate_primary_preset_then_peer_course_resyncs_from_survivor(c
                 subject_id=course_c.id,
                 student_id=stud.id,
                 class_id=klass.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
         cfg_a = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == ctx["subject_id"]).one()
         cfg_c = CourseLLMConfig(
             subject_id=course_c.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
-            max_output_tokens=1200,
-        )
+            max_output_tokens=1200)
         db.add(cfg_c)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg_c.id, preset_id=ctx["preset_id"], priority=1))
@@ -283,8 +270,7 @@ def test_pcq3_deactivate_primary_preset_then_peer_course_resyncs_from_survivor(c
     r_off = client.put(
         f"/api/llm-settings/presets/{ctx['preset_id']}",
         headers=ah,
-        json={"is_active": False},
-    )
+        json={"is_active": False})
     assert r_off.status_code == 200, r_off.text
 
     db = SessionLocal()
@@ -348,16 +334,13 @@ def test_pcq4_student_quotas_summary_splits_usage_by_subject(client: TestClient)
                 subject_id=course_b.id,
                 student_id=stud.id,
                 class_id=klass.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
         cfg_b = CourseLLMConfig(
             subject_id=course_b.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
-            max_output_tokens=1200,
-        )
+            max_output_tokens=1200)
         db.add(cfg_b)
         db.flush()
         db.add(CourseLLMConfigEndpoint(config_id=cfg_b.id, preset_id=p2.id, priority=1))
@@ -369,8 +352,7 @@ def test_pcq4_student_quotas_summary_splits_usage_by_subject(client: TestClient)
             subject_id=course_b.id,
             max_score=100,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw_b)
         db.commit()
         hw_b_id = hw_b.id
@@ -388,8 +370,7 @@ def test_pcq4_student_quotas_summary_splits_usage_by_subject(client: TestClient)
         client.post(
             f"/api/homeworks/{ctx['homework_id']}/submission",
             headers=st,
-            json={"content": "only A"},
-        ).status_code
+            json={"content": "only A"}).status_code
         == 200
     )
     db = SessionLocal()

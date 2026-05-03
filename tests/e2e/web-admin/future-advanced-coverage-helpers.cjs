@@ -235,11 +235,8 @@ async function setFlatCourseConfig(token, subjectId, presetIds, extra = {}) {
   return updateCourseLlmConfig(token, subjectId, {
     is_enabled: true,
     response_language: 'zh-CN',
-    estimated_chars_per_token: 4.0,
-    estimated_image_tokens: 850,
     max_input_tokens: 16000,
     max_output_tokens: 1200,
-    quota_timezone: 'Asia/Shanghai',
     system_prompt: null,
     teacher_prompt: null,
     endpoints: presetIds.map((presetId, index) => ({ preset_id: presetId, priority: index + 1 })),

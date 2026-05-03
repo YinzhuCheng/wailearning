@@ -20,8 +20,7 @@ from apps.backend.wailearning_backend.llm_grading import (
     process_grading_task,
     queue_grading_task,
     validate_text_connectivity,
-    validate_vision_connectivity,
-)
+    validate_vision_connectivity)
 from apps.backend.wailearning_backend.domains.llm.routing import _GroupState
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import (
@@ -39,8 +38,7 @@ from apps.backend.wailearning_backend.db.models import (
     Student,
     Subject,
     User,
-    UserRole,
-)
+    UserRole)
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api
 
 
@@ -72,8 +70,7 @@ def _make_grouped_course_with_homework() -> dict:
             username="g_teach",
             hashed_password=get_password_hash("g_tp"),
             real_name="G T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         stu = User(
@@ -81,8 +78,7 @@ def _make_grouped_course_with_homework() -> dict:
             hashed_password=get_password_hash("g_sp"),
             real_name="G S",
             role=UserRole.STUDENT.value,
-            class_id=klass.id,
-        )
+            class_id=klass.id)
         db.add(stu)
         db.flush()
         stud = Student(name="G S", student_no="g_stu", class_id=klass.id)
@@ -96,8 +92,7 @@ def _make_grouped_course_with_homework() -> dict:
                 subject_id=course.id,
                 student_id=stud.id,
                 class_id=klass.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
         p1 = LLMEndpointPreset(
             name="preset_g1",
@@ -107,8 +102,7 @@ def _make_grouped_course_with_homework() -> dict:
             max_retries=0,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         p2 = LLMEndpointPreset(
             name="preset_g2",
             base_url="https://g2.test/v1/",
@@ -117,8 +111,7 @@ def _make_grouped_course_with_homework() -> dict:
             max_retries=0,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         p3 = LLMEndpointPreset(
             name="preset_g3",
             base_url="https://g3.test/v1/",
@@ -127,17 +120,14 @@ def _make_grouped_course_with_homework() -> dict:
             max_retries=0,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add_all([p1, p2, p3])
         db.flush()
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=True,
             max_input_tokens=8000,
-            max_output_tokens=1000,
-            quota_timezone="UTC",
-        )
+            max_output_tokens=1000)
         db.add(cfg)
         db.flush()
         g1 = LLMGroup(config_id=cfg.id, priority=1, name="primary")
@@ -149,24 +139,21 @@ def _make_grouped_course_with_homework() -> dict:
                 config_id=cfg.id,
                 group_id=g1.id,
                 preset_id=p1.id,
-                priority=1,
-            )
+                priority=1)
         )
         db.add(
             CourseLLMConfigEndpoint(
                 config_id=cfg.id,
                 group_id=g2.id,
                 preset_id=p2.id,
-                priority=1,
-            )
+                priority=1)
         )
         db.add(
             CourseLLMConfigEndpoint(
                 config_id=cfg.id,
                 group_id=g2.id,
                 preset_id=p3.id,
-                priority=2,
-            )
+                priority=2)
         )
         hw = Homework(
             title="g-hw",
@@ -175,8 +162,7 @@ def _make_grouped_course_with_homework() -> dict:
             subject_id=course.id,
             max_score=100,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(hw)
         db.commit()
         db.refresh(hw)
@@ -207,8 +193,7 @@ def test_two_groups_failover_to_second_group(client: TestClient):
     client.post(
         f"/api/homeworks/{ctx['homework_id']}/submission",
         headers=ctx["student_headers"],
-        json={"content": "answer"},
-    )
+        json={"content": "answer"})
     db = SessionLocal()
     try:
         tid = db.query(HomeworkGradingTask).one().id
@@ -260,8 +245,7 @@ def test_put_course_config_with_groups_payload(client: TestClient):
     c = client.post(
         "/api/llm-settings/presets",
         headers=admin_h,
-        json={"name": "g-api-p", "base_url": "https://x.test/v1/", "api_key": "k", "model_name": "m"},
-    )
+        json={"name": "g-api-p", "base_url": "https://x.test/v1/", "api_key": "k", "model_name": "m"})
     pid = c.json()["id"]
     db = SessionLocal()
     try:
@@ -272,8 +256,7 @@ def test_put_course_config_with_groups_payload(client: TestClient):
             username="g_put_t",
             hashed_password=get_password_hash("x"),
             real_name="G Put T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.flush()
         s = Subject(name="ApiSubj", teacher_id=t.id, class_id=k.id)
@@ -285,8 +268,7 @@ def test_put_course_config_with_groups_payload(client: TestClient):
     p2r = client.post(
         "/api/llm-settings/presets",
         headers=admin_h,
-        json={"name": "g-api-p2", "base_url": "https://x2.test/v1/", "api_key": "k2", "model_name": "m2"},
-    )
+        json={"name": "g-api-p2", "base_url": "https://x2.test/v1/", "api_key": "k2", "model_name": "m2"})
     p2 = p2r.json()["id"]
     db = SessionLocal()
     try:
@@ -304,9 +286,6 @@ def test_put_course_config_with_groups_payload(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 100,
             "max_input_tokens": 8000,
             "max_output_tokens": 500,
             "groups": [
@@ -323,8 +302,7 @@ def test_put_course_config_with_groups_payload(client: TestClient):
                     ],
                 },
             ],
-        },
-    )
+        })
     assert r.status_code == 200, r.text
     g = r.json()["groups"]
     assert len(g) == 2
@@ -332,8 +310,8 @@ def test_put_course_config_with_groups_payload(client: TestClient):
     assert g[0]["members"][0]["preset_id"] == pid
 
 
-def test_flat_legacy_routing_when_no_group_rows():
-    """No LLMGroup rows: use flat priority list (legacy / empty-catalog mode)."""
+def test_flat_routing_when_no_group_rows():
+    """No LLMGroup rows: use flat priority list (single-catalog mode)."""
     from tests.llm_scenario import make_grading_course_with_homework
 
     _ = make_grading_course_with_homework()
@@ -440,8 +418,7 @@ def test_admin_validate_calls_text_then_vision_in_order(client: TestClient):
     c = client.post(
         "/api/llm-settings/presets",
         headers=admin_h,
-        json={"name": "v-order-2", "base_url": "https://vord2.test/v1/", "api_key": "k", "model_name": "m"},
-    )
+        json={"name": "v-order-2", "base_url": "https://vord2.test/v1/", "api_key": "k", "model_name": "m"})
     assert c.status_code == 200, c.text
     pid = c.json()["id"]
 
@@ -454,13 +431,11 @@ def test_admin_validate_calls_text_then_vision_in_order(client: TestClient):
 
     with (
         mock.patch.object(llm_settings, "validate_text_connectivity", side_effect=t_txt),
-        mock.patch.object(llm_settings, "validate_vision_connectivity", side_effect=t_vis),
-    ):
+        mock.patch.object(llm_settings, "validate_vision_connectivity", side_effect=t_vis)):
         r = client.post(
             f"/api/llm-settings/presets/{pid}/validate",
             headers=admin_h,
-            files={"image": ("t.png", tiny_png, "image/png")},
-        )
+            files={"image": ("t.png", tiny_png, "image/png")})
     assert r.status_code == 200, r.text
     assert r.json().get("validation_status") == "validated"
     assert r.json().get("text_validation_status") == "passed"
@@ -474,14 +449,12 @@ def test_get_endpoints_list_order_is_group1_then_group2(client: TestClient):
     c = client.post(
         "/api/llm-settings/presets",
         headers=admin_h,
-        json={"name": "ordp1", "base_url": "https://o1.test/v1/", "api_key": "a", "model_name": "x1"},
-    )
+        json={"name": "ordp1", "base_url": "https://o1.test/v1/", "api_key": "a", "model_name": "x1"})
     p1 = c.json()["id"]
     c2 = client.post(
         "/api/llm-settings/presets",
         headers=admin_h,
-        json={"name": "ordp2", "base_url": "https://o2.test/v1/", "api_key": "a", "model_name": "x2"},
-    )
+        json={"name": "ordp2", "base_url": "https://o2.test/v1/", "api_key": "a", "model_name": "x2"})
     p2 = c2.json()["id"]
     db = SessionLocal()
     try:
@@ -492,8 +465,7 @@ def test_get_endpoints_list_order_is_group1_then_group2(client: TestClient):
             username="o_t",
             hashed_password=get_password_hash("o"),
             real_name="O T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.flush()
         s = Subject(name="OSubj", teacher_id=t.id, class_id=k.id)
@@ -513,9 +485,6 @@ def test_get_endpoints_list_order_is_group1_then_group2(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
             "max_output_tokens": 500,
             "groups": [
@@ -528,8 +497,7 @@ def test_get_endpoints_list_order_is_group1_then_group2(client: TestClient):
                     "members": [{"preset_id": p2, "priority": 1}],
                 },
             ],
-        },
-    )
+        })
     assert r.status_code == 200, r.text
     data = r.json()["endpoints"]
     order = [e["preset_id"] for e in data]
@@ -550,8 +518,7 @@ def test_put_rejects_empty_group(client: TestClient):
             username="e_t",
             hashed_password=get_password_hash("e"),
             real_name="E T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.flush()
         s = Subject(name="ESubj", teacher_id=t.id, class_id=k.id)
@@ -566,9 +533,6 @@ def test_put_rejects_empty_group(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
             "max_output_tokens": 500,
             "groups": [
@@ -577,8 +541,7 @@ def test_put_rejects_empty_group(client: TestClient):
                     "members": [],
                 }
             ],
-        },
-    )
+        })
     assert r.status_code == 400
     assert "至少" in (r.json().get("detail") or "")
 
@@ -589,8 +552,7 @@ def test_put_rejects_duplicate_preset_in_same_course(client: TestClient):
     c = client.post(
         "/api/llm-settings/presets",
         headers=admin_h,
-        json={"name": "dup1", "base_url": "https://d.test/v1/", "api_key": "a", "model_name": "m"},
-    )
+        json={"name": "dup1", "base_url": "https://d.test/v1/", "api_key": "a", "model_name": "m"})
     pid = c.json()["id"]
     db = SessionLocal()
     try:
@@ -601,8 +563,7 @@ def test_put_rejects_duplicate_preset_in_same_course(client: TestClient):
             username="d_t",
             hashed_password=get_password_hash("d"),
             real_name="D T",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(t)
         db.flush()
         s = Subject(name="DSubj", teacher_id=t.id, class_id=k.id)
@@ -621,9 +582,6 @@ def test_put_rejects_duplicate_preset_in_same_course(client: TestClient):
         headers=th,
         json={
             "is_enabled": True,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 100,
             "max_input_tokens": 4000,
             "max_output_tokens": 500,
             "groups": [
@@ -640,8 +598,7 @@ def test_put_rejects_duplicate_preset_in_same_course(client: TestClient):
                     ],
                 },
             ],
-        },
-    )
+        })
     assert r.status_code == 400
     assert "一次" in (r.json().get("detail") or "")
 
@@ -658,8 +615,7 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             username="r_t2",
             hashed_password=get_password_hash("r2"),
             real_name="R T2",
-            role=UserRole.TEACHER.value,
-        )
+            role=UserRole.TEACHER.value)
         db.add(teacher)
         db.flush()
         stu = User(
@@ -667,8 +623,7 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             hashed_password=get_password_hash("s2"),
             real_name="R S2",
             role=UserRole.STUDENT.value,
-            class_id=klass.id,
-        )
+            class_id=klass.id)
         db.add(stu)
         db.flush()
         stud = Student(name="R S2", student_no="r_s2", class_id=klass.id)
@@ -682,8 +637,7 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
                 subject_id=course.id,
                 student_id=stud.id,
                 class_id=klass.id,
-                enrollment_type="required",
-            )
+                enrollment_type="required")
         )
         a = LLMEndpointPreset(
             name="r-a-2",
@@ -693,8 +647,7 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             max_retries=0,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         b = LLMEndpointPreset(
             name="r-b-2",
             base_url="https://b2.test/v1/",
@@ -703,17 +656,14 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             max_retries=0,
             is_active=True,
             supports_vision=True,
-            validation_status="validated",
-        )
+            validation_status="validated")
         db.add_all([a, b])
         db.flush()
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=True,
             max_input_tokens=4000,
-            max_output_tokens=500,
-            quota_timezone="UTC",
-        )
+            max_output_tokens=500)
         db.add(cfg)
         db.flush()
         g = LLMGroup(config_id=cfg.id, priority=1, name="rg2")
@@ -728,8 +678,7 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             subject_id=course.id,
             max_score=100,
             auto_grading_enabled=True,
-            created_by=teacher.id,
-        )
+            created_by=teacher.id)
         db.add(h)
         db.flush()
         sub = HomeworkSubmission(
@@ -737,8 +686,7 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             student_id=stud.id,
             subject_id=course.id,
             class_id=klass.id,
-            content="seed",
-        )
+            content="seed")
         db.add(sub)
         db.flush()
         att = HomeworkAttempt(
@@ -748,8 +696,7 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             class_id=klass.id,
             submission_summary_id=sub.id,
             content="seed",
-            is_late=False,
-        )
+            is_late=False)
         db.add(att)
         db.flush()
         sub.latest_attempt_id = att.id

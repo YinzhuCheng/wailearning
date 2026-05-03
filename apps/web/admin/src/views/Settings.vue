@@ -158,7 +158,7 @@
         type="info"
         :closable="false"
         class="llm-notice"
-        title="学生个人日 token 上限由下方默认值或批量覆盖决定；每门课在教师设置的「额度时区」下单独统计用量。下方「额度统计时区」仅用于全局展示与并发策略等，不再统一切分各课用量日。并发数为同时处理的自动评分任务数上限。"
+        title="学生个人日 token 上限由下方默认值或批量覆盖决定；自然日与预占/用量统计统一使用「额度统计时区」。字符/token 与单图 token 估算用于自动评分前的输入侧预占（管理员在此统一配置）。并发数为同时处理的自动评分任务数上限。"
       />
       <el-form v-loading="llmQuotaLoading" label-width="200px" style="max-width: 640px">
         <el-form-item label="默认每人每日 token">
@@ -169,6 +169,12 @@
         </el-form-item>
         <el-form-item label="额度统计时区">
           <el-input v-model="llmQuotaForm.quota_timezone" data-testid="settings-llm-quota-timezone" placeholder="例如 Asia/Shanghai" />
+        </el-form-item>
+        <el-form-item label="字符 / token 估算">
+          <el-input-number v-model="llmQuotaForm.estimated_chars_per_token" :min="0.5" :step="0.5" :precision="1" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="单图 token 估算">
+          <el-input-number v-model="llmQuotaForm.estimated_image_tokens" :min="1" :step="100" style="width: 100%" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" data-testid="settings-llm-quota-save" :loading="llmQuotaSaving" @click="saveLlmQuotaPolicy">保存全局策略</el-button>
@@ -337,7 +343,9 @@ const llmQuotaSaving = ref(false)
 const llmQuotaForm = reactive({
   default_daily_student_tokens: 100000,
   quota_timezone: 'Asia/Shanghai',
-  max_parallel_grading_tasks: 3
+  max_parallel_grading_tasks: 3,
+  estimated_chars_per_token: 4.0,
+  estimated_image_tokens: 850
 })
 const bulkQuotaLoading = ref(false)
 const bulkQuotaForm = reactive({
@@ -417,6 +425,8 @@ const fetchLlmQuotaPolicy = async () => {
     llmQuotaForm.default_daily_student_tokens = row.default_daily_student_tokens ?? 100000
     llmQuotaForm.quota_timezone = row.quota_timezone || 'Asia/Shanghai'
     llmQuotaForm.max_parallel_grading_tasks = row.max_parallel_grading_tasks ?? 3
+    llmQuotaForm.estimated_chars_per_token = row.estimated_chars_per_token ?? 4.0
+    llmQuotaForm.estimated_image_tokens = row.estimated_image_tokens ?? 850
   } catch (error) {
     ElMessage.error(`获取 LLM 额度策略失败：${formatApiError(error)}`)
   } finally {
@@ -430,7 +440,9 @@ const saveLlmQuotaPolicy = async () => {
     await api.llmSettings.updateGlobalQuotaPolicy({
       default_daily_student_tokens: llmQuotaForm.default_daily_student_tokens,
       quota_timezone: (llmQuotaForm.quota_timezone || 'Asia/Shanghai').trim(),
-      max_parallel_grading_tasks: llmQuotaForm.max_parallel_grading_tasks
+      max_parallel_grading_tasks: llmQuotaForm.max_parallel_grading_tasks,
+      estimated_chars_per_token: llmQuotaForm.estimated_chars_per_token,
+      estimated_image_tokens: llmQuotaForm.estimated_image_tokens
     })
     ElMessage.success('LLM 全局额度策略已保存')
     await fetchLlmQuotaPolicy()

@@ -462,7 +462,6 @@ def _run_discussion_llm_reply_unlocked(
     allowed, err = reserve_discussion_quota_tokens(
         db,
         job,
-        config,
         student_id=student.id,
         subject_id=subject_id,
         estimated_tokens=est,
@@ -512,5 +511,5 @@ def _run_discussion_llm_reply_unlocked(
     job.status = "success"
     job.error_message = None
     job.finished_at = datetime.now(timezone.utc)
-    record_discussion_usage_if_needed(db, job, config, student.id, subject_id, usage)
+    record_discussion_usage_if_needed(db, job, student.id, subject_id, usage)
     db.commit()

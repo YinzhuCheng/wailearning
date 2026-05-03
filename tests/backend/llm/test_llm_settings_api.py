@@ -195,9 +195,6 @@ def test_get_put_course_config(_, __, client: TestClient, admin_headers, teacher
     payload = {
         "is_enabled": True,
         "response_language": "zh",
-        "quota_timezone": "UTC",
-        "estimated_chars_per_token": 4.0,
-        "estimated_image_tokens": 850,
         "max_input_tokens": 8000,
         "max_output_tokens": 1000,
         "endpoints": [{"preset_id": pid, "priority": 1}],
@@ -225,9 +222,6 @@ def test_cannot_bind_unvalidated_preset(client: TestClient, admin_headers, teach
         headers=teacher_headers,
         json={
             "is_enabled": False,
-            "quota_timezone": "UTC",
-            "estimated_chars_per_token": 4.0,
-            "estimated_image_tokens": 850,
             "max_input_tokens": 16000,
             "max_output_tokens": 1200,
             "endpoints": [{"preset_id": pid, "priority": 1}],

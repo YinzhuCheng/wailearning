@@ -74,7 +74,7 @@ def _sort_course_times(course_times: List[CourseTimeItem]) -> List[CourseTimeIte
     )
 
 
-def _build_legacy_course_times(
+def single_slot_course_times(
     weekly_schedule: Optional[str],
     course_start_at,
     course_end_at,
@@ -100,7 +100,7 @@ def _resolve_course_times(
     normalized = [CourseTimeItem.model_validate(item) for item in (course_times or [])]
 
     if not normalized:
-        normalized = _build_legacy_course_times(
+        normalized = single_slot_course_times(
             weekly_schedule=weekly_schedule,
             course_start_at=course_start_at,
             course_end_at=course_end_at,
@@ -126,7 +126,7 @@ def _deserialize_course_times(course: Subject) -> List[CourseTimeItem]:
         except Exception:
             pass
 
-    return _build_legacy_course_times(
+    return single_slot_course_times(
         weekly_schedule=course.weekly_schedule,
         course_start_at=course.course_start_at,
         course_end_at=course.course_end_at,
