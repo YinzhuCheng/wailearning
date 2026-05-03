@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.db.database import get_db

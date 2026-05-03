@@ -10,13 +10,15 @@ Read in this order first:
 2. [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md)
 3. [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md) if you are evaluating test cleanup or consolidation
 4. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
-5. the feature-specific document for the workflow you are about to touch
-6. when triaging full-suite outcomes or structural risk from tests, optionally read [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
+5. [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md) before deleting legacy-looking code, compatibility branches, or duplicate helpers
+6. the feature-specific document for the workflow you are about to touch
+7. when triaging full-suite outcomes or structural risk from tests, optionally read [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 Why this is mandatory:
 
 - the repository has strict package-boundary rules that are easy to misread if you only inspect paths
 - Windows + PowerShell execution has known traps that can produce false test failures
+- Windows + PowerShell sessions can also mis-render UTF-8 text; cleanup and documentation edits must follow the encoding-safety rules in [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md)
 - Playwright failures in this repository are often environment or process-management issues before they are product regressions
 - local artifact directories can look like source or canonical output if you do not read the structure notes first
 - cross-platform and cloud-automation runs can hit additional traps (Element Plus locale, Playwright selector ambiguity, API `page_size` limits, stale ports); see [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) Pitfalls 11–16 and [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) for follow-up risk notes

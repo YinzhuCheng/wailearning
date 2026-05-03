@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from apps.backend.wailearning_backend.db.models import CourseLLMConfigEndpoint, LLMEndpointPreset, LLMGroup
+    from apps.backend.wailearning_backend.db.models import CourseLLMConfigEndpoint, LLMGroup
 
 # Non-retryable auth: keep order; do not shift to end (same member would fail again).
 NON_RETRYABLE_STATUS_CODES = {401, 403}

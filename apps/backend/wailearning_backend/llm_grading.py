@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from zoneinfo import ZoneInfo
 
 import httpx
 import tiktoken
@@ -17,59 +15,37 @@ from apps.backend.wailearning_backend.markdown_llm import append_markdown_with_d
 from apps.backend.wailearning_backend.domains.llm.attachments import (
     MaterialBlock,
     VISION_TEST_IMAGE_DATA_URL,
-    _classify_and_extract,
     _collect_attachment_blocks,
     _truncate_text,
-    _walk_rar_bytes,
-    _walk_zip_bytes,
-    build_png_data_url_from_image_bytes,
 )
 
 
 from apps.backend.wailearning_backend.domains.llm.protocol import (
-    NON_RETRYABLE_STATUS_CODES,
-    RETRYABLE_STATUS_CODES,
     build_chat_completion_url as _build_chat_completion_url,
     extract_message_content as _extract_message_content,
-    parse_scoring_json as _parse_scoring_json,
-    redact_endpoint_host as _redact_endpoint_host,
 )
 from apps.backend.wailearning_backend.domains.llm.quota import (
-    get_quota_usage_snapshot,
-    get_student_quota_usage_snapshot,
-    get_used_tokens_for_scope as _get_used_tokens_for_scope,
-    precheck_quota,
-    record_discussion_usage_if_needed,
     record_usage_if_needed,
-    release_discussion_quota_reservation,
     release_quota_reservation,
-    reserve_discussion_quota_tokens,
     reserve_quota_tokens,
-    sum_reserved_tokens as _sum_reserved_tokens,
-    quota_delta_violations as _quota_delta_violations,
 )
 
 
 from sqlalchemy.orm import Session, joinedload
 
 from apps.backend.wailearning_backend.core.config import settings
-from apps.backend.wailearning_backend.db.database import SessionLocal, engine
+from apps.backend.wailearning_backend.db.database import SessionLocal
 from apps.backend.wailearning_backend.llm_group_routing import GroupRoutingContext
 from apps.backend.wailearning_backend.db.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
-    DiscussionLLMJob,
     Homework,
     HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
-    LLMDiscussionQuotaReservation,
-    LLMDiscussionTokenUsageLog,
     LLMEndpointPreset,
     LLMGroup,
-    LLMQuotaReservation,
-    LLMTokenUsageLog,
 )
 
 # After the first failed grading task for an attempt, enqueue at most this many extra tries.

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import threading
 from typing import Literal, Optional, Tuple
 
@@ -14,6 +13,7 @@ from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.course_access import ensure_course_access_http, is_course_instructor
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseDiscussionEntry, CourseMaterial, DiscussionLLMJob, Homework, Subject, User, UserRole
+from apps.backend.wailearning_backend.discussion_llm_ui import strip_llm_ui_prefix
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
 from apps.backend.wailearning_backend.api.schemas import (
     CourseDiscussionCreate,
@@ -29,13 +29,6 @@ MAX_PAGE_SIZE = 50
 MAX_BODY_LEN = 8000
 
 TargetType = Literal["homework", "material"]
-
-_LLM_FIRST_LINE = re.compile(r"^\s*@LLM\s*\n?", re.IGNORECASE)
-
-
-def _strip_llm_ui_prefix(body: str) -> str:
-    """Remove leading @LLM line inserted by the client UI (not sent to the model as a literal tag)."""
-    return _LLM_FIRST_LINE.sub("", body or "", count=1).strip()
 
 
 def _run_discussion_llm_job(job_id: int) -> None:
@@ -225,7 +218,7 @@ def create_discussion(
     body_for_display = body
     llm_invocation = False
     if invoke_llm:
-        inner = _strip_llm_ui_prefix(body)
+        inner = strip_llm_ui_prefix(body)
         if not inner:
             raise HTTPException(status_code=400, detail="智能助教模式下请填写具体问题或说明（@LLM 之后的内容不能为空）。")
         llm_invocation = True

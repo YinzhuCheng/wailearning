@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -22,6 +21,7 @@ from apps.backend.wailearning_backend.domains.llm.protocol import (
     RETRYABLE_STATUS_CODES,
     build_chat_completion_url as _build_chat_completion_url,
 )
+from apps.backend.wailearning_backend.discussion_llm_ui import strip_llm_ui_prefix
 from apps.backend.wailearning_backend.domains.llm.quota import (
     record_discussion_usage_if_needed,
     release_discussion_quota_reservation,
@@ -40,13 +40,6 @@ from apps.backend.wailearning_backend.db.models import (
     Subject,
     User,
 )
-
-_LLM_FIRST_LINE = re.compile(r"^\s*@LLM\s*\n?", re.IGNORECASE)
-
-
-def _strip_llm_ui_prefix(body: str) -> str:
-    return _LLM_FIRST_LINE.sub("", body or "", count=1).strip()
-
 
 def resolve_student_for_discussion_llm(db: Session, user: User, course: Subject) -> Student:
     """Student roster row for quota billing (username == student_no, same class as course)."""
@@ -453,7 +446,7 @@ def _run_discussion_llm_reply_unlocked(
         subject_id=subject_id,
         class_id=class_id,
     )
-    user_visible = _strip_llm_ui_prefix(user_body)
+    user_visible = strip_llm_ui_prefix(user_body)
     if not user_visible:
         user_visible = (user_body or "").strip()
     messages = _build_discussion_messages(
@@ -521,4 +514,3 @@ def _run_discussion_llm_reply_unlocked(
     job.finished_at = datetime.now(timezone.utc)
     record_discussion_usage_if_needed(db, job, config, student.id, subject_id, usage)
     db.commit()
-

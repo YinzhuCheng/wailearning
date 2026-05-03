@@ -13,12 +13,10 @@ from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseMaterial,
-    Gender,
     Homework,
     HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
-    HomeworkSubmission,
     LLMQuotaReservation,
     LLMTokenUsageLog,
     Notification,
@@ -33,7 +31,6 @@ from apps.backend.wailearning_backend.db.models import (
 )
 from apps.backend.wailearning_backend.api.schemas import (
     StudentResponse,
-    StudentRosterUpsertFromUsersError,
     StudentRosterUpsertFromUsersRequest,
     StudentRosterUpsertFromUsersResponse,
     StudentUserBatchCreateError,

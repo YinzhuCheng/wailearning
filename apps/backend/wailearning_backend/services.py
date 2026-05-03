@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
 from apps.backend.wailearning_backend.db.models import OperationLog
 from typing import Optional
-from datetime import datetime
 
 class LogService:
     @staticmethod
