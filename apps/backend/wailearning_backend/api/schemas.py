@@ -217,6 +217,18 @@ class ChangePasswordRequest(BaseModel):
         return self
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Non-admin users submit from the login page; server notifies administrators."""
+
+    username: str = Field(..., min_length=1, max_length=120)
+
+
+class AdminResetUserPasswordRequest(BaseModel):
+    """Admin reset: optional explicit password; required when target is another admin."""
+
+    new_password: Optional[str] = Field(default=None, max_length=128)
+
+
 class ClassCreate(BaseModel):
     name: str
     grade: int

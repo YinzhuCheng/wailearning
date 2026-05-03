@@ -46,7 +46,25 @@
             {{ loading ? '登录中...' : '登录' }}
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button type="primary" link class="forgot-link" @click="openForgotDialog">忘记密码</el-button>
+        </el-form-item>
       </el-form>
+
+      <el-dialog v-model="forgotVisible" title="忘记密码" width="440px" destroy-on-close @closed="resetForgot">
+        <p class="forgot-hint">
+          将向管理员反馈并重置密码，请使用邮箱或其他通讯手段联系管理员获取新密码。
+        </p>
+        <el-form ref="forgotFormRef" :model="forgotForm" :rules="forgotRules" label-width="0">
+          <el-form-item prop="username">
+            <el-input v-model="forgotForm.username" placeholder="请输入用户名" clearable />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="forgotVisible = false">取消</el-button>
+          <el-button type="primary" :loading="forgotSubmitting" @click="submitForgot">确定</el-button>
+        </template>
+      </el-dialog>
 
       <div class="login-footer">
         {{ settings.copyright }}
@@ -64,8 +82,9 @@ import { Lock, User } from '@element-plus/icons-vue'
 
 import { normalizeSystemSettings } from '@/utils/branding'
 import { useUserStore } from '@/stores/user'
+import api from '@/api'
 
-const api = axios.create({ baseURL: '/api' })
+const apiPublic = axios.create({ baseURL: '/api' })
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -86,6 +105,38 @@ const form = reactive({
   username: '',
   password: ''
 })
+
+const forgotVisible = ref(false)
+const forgotSubmitting = ref(false)
+const forgotFormRef = ref(null)
+const forgotForm = reactive({ username: '' })
+const forgotRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }]
+}
+
+const openForgotDialog = () => {
+  forgotForm.username = form.username?.trim() || ''
+  forgotVisible.value = true
+}
+
+const resetForgot = () => {
+  forgotForm.username = ''
+  forgotFormRef.value?.clearValidate?.()
+}
+
+const submitForgot = async () => {
+  await forgotFormRef.value?.validate?.()
+  forgotSubmitting.value = true
+  try {
+    const msg = await api.auth.forgotPassword({ username: forgotForm.username.trim() })
+    ElMessage.success(msg?.message || '已提交')
+    forgotVisible.value = false
+  } catch (e) {
+    console.error(e)
+  } finally {
+    forgotSubmitting.value = false
+  }
+}
 
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
@@ -116,7 +167,7 @@ const hasBackground = computed(() => {
 
 const fetchBingBackground = async () => {
   try {
-    const res = await api.get('/bing-background')
+    const res = await apiPublic.get('/bing-background')
     if (res.data.url) {
       bingBackground.value = res.data.url
     }
@@ -127,7 +178,7 @@ const fetchBingBackground = async () => {
 
 const fetchSettings = async () => {
   try {
-    const res = await api.get('/settings/public')
+    const res = await apiPublic.get('/settings/public')
     const normalizedSettings = normalizeSystemSettings(res.data)
     settings.value = normalizedSettings
     document.title = normalizedSettings?.system_name || 'BIMSA-CLASS 管理端'
@@ -250,6 +301,18 @@ onMounted(async () => {
   width: 100%;
   height: 46px;
   border-radius: 14px;
+}
+
+.forgot-link {
+  padding: 0;
+  font-size: 14px;
+}
+
+.forgot-hint {
+  margin: 0 0 16px;
+  color: #475569;
+  line-height: 1.65;
+  font-size: 14px;
 }
 
 .login-footer {

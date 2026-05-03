@@ -1,4 +1,5 @@
 from datetime import timedelta
+from html import escape
 from pathlib import Path
 from typing import Optional
 
@@ -6,15 +7,22 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from apps.backend.wailearning_backend.db.database import get_db
-from apps.backend.wailearning_backend.db.models import User
+from apps.backend.wailearning_backend.db.models import Notification, User, UserRole
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced, save_attachment
-from apps.backend.wailearning_backend.api.schemas import ChangePasswordRequest, MessageResponse, ProfileSelfUpdate, Token, UserCreate, UserResponse
+from apps.backend.wailearning_backend.api.schemas import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+    MessageResponse,
+    ProfileSelfUpdate,
+    Token,
+    UserCreate,
+    UserResponse,
+)
 from apps.backend.wailearning_backend.core.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from apps.backend.wailearning_backend.core.config import settings
 from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context
 from apps.backend.wailearning_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 from apps.backend.wailearning_backend.services.logging import LogService
-from apps.backend.wailearning_backend.db.models import UserRole
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -68,6 +76,76 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         db.commit()
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+def _admin_reset_link_path(user_id: int) -> str:
+    return f"/users?open_reset_password_user_id={int(user_id)}"
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+    request: Request = None,
+):
+    """Non-admin login-page flow: notify administrators to reset the account password."""
+    raw = (payload.username or "").strip()
+    if not raw:
+        return {"message": "若账号存在且需要重置密码，已向管理员发送提醒。"}
+
+    user = db.query(User).filter(User.username == raw).first()
+    if not user or (user.role or "").strip() == UserRole.ADMIN.value:
+        return {"message": "若账号存在且需要重置密码，已向管理员发送提醒。"}
+
+    system_actor = (
+        db.query(User).filter(User.role == UserRole.ADMIN.value).order_by(User.id.asc()).first()
+    )
+    if not system_actor:
+        return {"message": "若账号存在且需要重置密码，已向管理员发送提醒。"}
+
+    base = (settings.FRONTEND_ADMIN_BASE_URL or "").strip().rstrip("/")
+    link_href = f"{base}{_admin_reset_link_path(user.id)}" if base else _admin_reset_link_path(user.id)
+    safe_name = escape(user.real_name or user.username or "")
+    safe_user = escape(user.username or "")
+    safe_href = escape(link_href)
+    content = (
+        f"<p>用户「{safe_name}」（用户名 <code>{safe_user}</code>）在登录页发起了<strong>忘记密码</strong>请求，"
+        f"请通过安全渠道告知其新密码。</p>"
+        f'<p><a href="{safe_href}">打开用户管理并执行密码重置</a></p>'
+    )
+    note = Notification(
+        title=f"忘记密码：{user.username}",
+        content=content,
+        priority="important",
+        is_pinned=False,
+        class_id=None,
+        subject_id=None,
+        target_student_id=None,
+        related_homework_id=None,
+        related_student_id=None,
+        related_appeal_id=None,
+        target_user_id=None,
+        notification_kind="password_reset_request",
+        created_by=system_actor.id,
+    )
+    db.add(note)
+    db.commit()
+
+    LogService.log(
+        db=db,
+        action="forgot_password_request",
+        target_type="auth",
+        user_id=None,
+        username=raw,
+        target_id=user.id,
+        target_name=user.username,
+        details="Forgot-password notification created for administrators.",
+        ip_address=_client_ip(request),
+        user_agent=str(request.headers.get("user-agent")) if request else None,
+        result="success",
+    )
+    return {"message": "若账号存在且需要重置密码，已向管理员发送提醒。"}
+
 
 @router.post("/register", response_model=UserResponse)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):

@@ -144,7 +144,27 @@ httpQuiet.interceptors.response.use(
   }
 )
 
-export { http, httpQuiet, apiBaseUrl }
+/** Unauthenticated API calls (login page); no Bearer header, same base URL. */
+const httpPublic = axios.create({
+  baseURL: apiBaseUrl,
+  timeout: 10000
+})
+httpPublic.interceptors.response.use(
+  response => (response.config?.returnFullResponse ? response : response.data),
+  async error => {
+    if (error.response) {
+      const message = await extractErrorMessage(error)
+      ElMessage.error(message)
+    } else if (error.code === 'ECONNABORTED') {
+      ElMessage.error('Request timed out')
+    } else {
+      ElMessage.error('Network error')
+    }
+    return Promise.reject(error)
+  }
+)
+
+export { http, httpQuiet, httpPublic, apiBaseUrl }
 
 /** Course list/sync can exceed default timeout on large SQLite E2E databases. */
 const subjectsHeavyTimeout = 60000
@@ -191,7 +211,8 @@ const api = {
       })
     },
     deleteAvatar: () => http.delete('/auth/me/avatar'),
-    changePassword: data => http.post('/auth/change-password', data)
+    changePassword: data => http.post('/auth/change-password', data),
+    forgotPassword: data => httpPublic.post('/auth/forgot-password', data)
   },
   users: {
     list: params => http.get('/users', { params, timeout: rosterHeavyTimeout }),
@@ -202,7 +223,8 @@ const api = {
     get: id => http.get(`/users/${id}`),
     create: data => http.post('/users', data, { timeout: rosterHeavyTimeout }),
     update: (id, data) => http.put(`/users/${id}`, data),
-    delete: id => http.delete(`/users/${id}`)
+    delete: id => http.delete(`/users/${id}`),
+    resetPassword: (id, data) => http.post(`/users/${id}/reset-password`, data)
   },
   classes: {
     list: () => http.get('/classes'),

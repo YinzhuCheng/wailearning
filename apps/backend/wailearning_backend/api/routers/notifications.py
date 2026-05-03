@@ -50,6 +50,14 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
             or_(Notification.target_student_id.is_(None), Notification.target_student_id == student.id),
         )
 
+    if current_user.role != UserRole.ADMIN:
+        query = query.filter(
+            or_(
+                Notification.notification_kind.is_(None),
+                Notification.notification_kind != "password_reset_request",
+            )
+        )
+
     if current_user.role in (UserRole.TEACHER, UserRole.CLASS_TEACHER):
         query = query.filter(
             or_(Notification.target_user_id.is_(None), Notification.target_user_id == current_user.id)
@@ -167,6 +175,9 @@ def get_notification(
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found.")
 
+    if (notification.notification_kind or "") == "password_reset_request" and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="You do not have access to this notification.")
+
     class_ids = get_accessible_class_ids(current_user, db)
     if current_user.role != UserRole.ADMIN and notification.class_id and notification.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="You do not have access to this notification.")
@@ -213,6 +224,10 @@ def create_notification(
         if data.class_id and course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
+    kind = (data.notification_kind or "general").strip()
+    if kind == "password_reset_request":
+        raise HTTPException(status_code=403, detail="This notification kind is reserved for the system.")
+
     notification = Notification(
         title=data.title,
         content=data.content,
@@ -249,6 +264,9 @@ def update_notification(
     notification = db.query(Notification).filter(Notification.id == notification_id).first()
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found.")
+
+    if (notification.notification_kind or "") == "password_reset_request" and not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
     if not is_admin(current_user) and notification.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can only edit your own notifications.")
@@ -288,6 +306,11 @@ def update_notification(
         notification.class_id = None if data.class_id == 0 else data.class_id
     if data.subject_id is not None:
         notification.subject_id = data.subject_id
+    if data.notification_kind is not None:
+        nk = (data.notification_kind or "").strip()
+        if nk == "password_reset_request":
+            raise HTTPException(status_code=403, detail="This notification kind is reserved for the system.")
+        notification.notification_kind = nk or "general"
 
     db.commit()
     db.refresh(notification)
@@ -306,6 +329,9 @@ def delete_notification(
     notification = db.query(Notification).filter(Notification.id == notification_id).first()
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found.")
+
+    if (notification.notification_kind or "") == "password_reset_request" and not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
     if not is_admin(current_user) and notification.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can only delete your own notifications.")
@@ -327,6 +353,9 @@ def mark_as_read(
     notification = db.query(Notification).filter(Notification.id == notification_id).first()
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found.")
+
+    if (notification.notification_kind or "") == "password_reset_request" and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
     read_record = db.query(NotificationRead).filter(
         NotificationRead.notification_id == notification_id,

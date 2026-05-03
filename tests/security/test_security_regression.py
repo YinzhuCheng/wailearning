@@ -174,3 +174,17 @@ def test_sec20_notification_subject_id_rejects_non_integer(client: TestClient):
     th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
     r = client.get("/api/notifications?subject_id=not-an-int", headers=th)
     assert r.status_code == 422
+
+
+def test_sec21_teacher_cannot_reset_user_password(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.post(f"/api/users/{ctx['student_user_id']}/reset-password", headers=th, json={})
+    assert r.status_code == 403
+
+
+def test_sec22_student_cannot_reset_user_password(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    st = login_api(client, ctx["student_username"], ctx["student_password"])
+    r = client.post(f"/api/users/{ctx['teacher_id']}/reset-password", headers=st, json={"new_password": "x"})
+    assert r.status_code == 403

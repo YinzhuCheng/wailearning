@@ -201,8 +201,7 @@ const adminHiddenPaths = [
   '/points',
   '/materials',
   '/homework',
-  '/homework/students',
-  '/notifications'
+  '/homework/students'
 ]
 
 router.beforeEach(async (to, from, next) => {

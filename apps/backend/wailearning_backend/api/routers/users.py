@@ -30,6 +30,8 @@ from apps.backend.wailearning_backend.db.models import (
     UserRole,
 )
 from apps.backend.wailearning_backend.api.schemas import (
+    AdminResetUserPasswordRequest,
+    MessageResponse,
     StudentResponse,
     StudentRosterUpsertFromUsersRequest,
     StudentRosterUpsertFromUsersResponse,
@@ -463,6 +465,51 @@ def get_user(
         raise HTTPException(status_code=404, detail="用户不存在")
 
     return user
+
+
+@router.post("/{user_id}/reset-password", response_model=MessageResponse)
+def admin_reset_user_password(
+    user_id: int,
+    payload: AdminResetUserPasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="只有管理员可以重置用户密码")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    role = (user.role or "").strip()
+    explicit = (payload.new_password or "").strip() if payload.new_password else ""
+
+    if role == UserRole.ADMIN.value:
+        if not explicit:
+            raise HTTPException(status_code=400, detail="重置其他管理员密码时必须填写新密码")
+        new_plain = explicit
+    elif role == UserRole.STUDENT.value:
+        new_plain = explicit or (user.username or "").strip()
+        if not new_plain:
+            raise HTTPException(status_code=400, detail="学生用户名缺失，无法使用默认密码规则")
+    else:
+        new_plain = explicit or "111111"
+
+    user.hashed_password = get_password_hash(new_plain)
+    user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
+    db.add(user)
+    db.commit()
+
+    LogService.log_update(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        target_type="用户",
+        target_id=user.id,
+        target_name=f"{user.real_name}({user.username})",
+        changes="密码已由管理员重置",
+    )
+    return {"message": "密码已重置"}
 
 
 @router.put("/{user_id}", response_model=UserResponse)

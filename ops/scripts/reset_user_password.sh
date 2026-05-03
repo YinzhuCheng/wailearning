@@ -47,6 +47,7 @@ try:
 
     user.hashed_password = get_password_hash(new_password)
     user.is_active = True
+    user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
     db.add(user)
     db.commit()
 

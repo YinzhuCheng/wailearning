@@ -168,7 +168,21 @@
         <el-descriptions-item label="优先级">{{ priorityText(currentNotification.priority) }}</el-descriptions-item>
         <el-descriptions-item label="发布人">{{ currentNotification.creator_name }}</el-descriptions-item>
         <el-descriptions-item label="发布时间" :span="2">{{ formatDate(currentNotification.created_at) }}</el-descriptions-item>
-        <el-descriptions-item label="通知内容" :span="2">{{ currentNotification.content || '暂无内容' }}</el-descriptions-item>
+        <el-descriptions-item label="通知内容" :span="2">
+          <div
+            v-if="currentNotification.notification_kind === 'password_reset_request'"
+            class="notification-html"
+            v-html="currentNotification.content"
+          />
+          <template v-else>{{ currentNotification.content || '暂无内容' }}</template>
+        </el-descriptions-item>
+        <el-descriptions-item
+          v-if="currentNotification.notification_kind === 'password_reset_request' && userStore.isAdmin"
+          label="快捷操作"
+          :span="2"
+        >
+          <el-button type="primary" @click="gotoUsersResetFromDetail">打开密码重置（用户管理）</el-button>
+        </el-descriptions-item>
         <el-descriptions-item v-if="canOpenAppealFromDetail" label="申诉处理" :span="2">
           <el-button type="primary" @click="goGradeAppeal(currentNotification)">打开对应作业评分页</el-button>
         </el-descriptions-item>
@@ -224,8 +238,14 @@ const currentClassCourses = computed(() => filterCoursesByClassId(classTeacherCo
 const currentClassCourseIds = computed(() => new Set(currentClassCourses.value.map(course => Number(course.id))))
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
 
-const pageTitle = computed(() => (isClassTeacherView.value ? '通知信息' : '通知中心'))
+const pageTitle = computed(() => {
+  if (userStore.isAdmin) return '消息与通知'
+  return isClassTeacherView.value ? '通知信息' : '通知中心'
+})
 const pageSubtitle = computed(() => {
+  if (userStore.isAdmin) {
+    return '含忘记密码等系统提醒；忘记密码通知中的链接可直达用户管理中的密码重置。'
+  }
   if (isClassTeacherView.value) {
     return currentClassId.value
       ? `${currentClassName.value} 全部课程的重要通知`
@@ -238,6 +258,9 @@ const pageSubtitle = computed(() => {
 })
 
 const showEmpty = computed(() => {
+  if (userStore.isAdmin) {
+    return !notifications.value.length
+  }
   if (isClassTeacherView.value) {
     return !currentClassId.value
   }
@@ -245,7 +268,10 @@ const showEmpty = computed(() => {
   return !selectedCourse.value
 })
 
-const emptyText = computed(() => (isClassTeacherView.value ? '当前班主任账号没有绑定班级。' : '请先选择一门课程。'))
+const emptyText = computed(() => {
+  if (userStore.isAdmin) return '暂无通知。'
+  return isClassTeacherView.value ? '当前班主任账号没有绑定班级。' : '请先选择一门课程。'
+})
 const showCreateButton = computed(() => !userStore.isStudent && !isClassTeacherView.value && Boolean(selectedCourse.value))
 const showAppealActionColumn = computed(
   () => !userStore.isStudent && !isClassTeacherView.value && Boolean(selectedCourse.value)
@@ -254,7 +280,8 @@ const showAppealActionColumn = computed(
 const showManageColumn = computed(
   () =>
     !userStore.isStudent &&
-    (isClassTeacherView.value ? Boolean(currentClassId.value) : Boolean(selectedCourse.value))
+    (userStore.isAdmin ||
+      (isClassTeacherView.value ? Boolean(currentClassId.value) : Boolean(selectedCourse.value)))
 )
 
 const canOpenAppealFromDetail = computed(
@@ -332,10 +359,18 @@ const loadLegacyNotifications = async () => {
   unreadCount.value = Number(result?.unread_count || 0)
 }
 
+const loadAdminNotifications = async () => {
+  const rows = await loadAllPages(params => api.notifications.list(params))
+  notifications.value = rows || []
+  unreadCount.value = notifications.value.filter(item => !item.is_read).length
+}
+
 const loadNotifications = async () => {
   loading.value = true
   try {
-    if (isClassTeacherView.value) {
+    if (userStore.isAdmin) {
+      await loadAdminNotifications()
+    } else if (isClassTeacherView.value) {
       await loadClassTeacherNotifications()
     } else {
       await loadLegacyNotifications()
@@ -463,7 +498,12 @@ const downloadFormAttachment = async () => {
   await downloadAttachment(form.attachment_url, attachmentDisplayName.value)
 }
 
-const canManageNotification = row => userStore.isAdmin || row.created_by === userStore.userInfo?.id
+const canManageNotification = row => {
+  if ((row?.notification_kind || '') === 'password_reset_request') {
+    return userStore.isAdmin
+  }
+  return userStore.isAdmin || row.created_by === userStore.userInfo?.id
+}
 
 const deleteNotification = async row => {
   try {
@@ -479,8 +519,23 @@ const deleteNotification = async row => {
   }
 }
 
+const gotoUsersResetFromDetail = () => {
+  const html = currentNotification.value?.content || ''
+  const m = html.match(/open_reset_password_user_id=(\d+)/)
+  if (!m) {
+    router.push('/users')
+  } else {
+    router.push({ path: '/users', query: { open_reset_password_user_id: m[1] } })
+  }
+  detailVisible.value = false
+}
+
 const markAllRead = async () => {
-  if (isClassTeacherView.value) {
+  if (userStore.isAdmin) {
+    await Promise.all(
+      notifications.value.filter(item => !item.is_read).map(item => api.notifications.markRead(item.id))
+    )
+  } else if (isClassTeacherView.value) {
     await Promise.all(
       notifications.value
         .filter(item => !item.is_read)
@@ -598,5 +653,16 @@ watch(
   .page-header {
     flex-direction: column;
   }
+}
+
+.notification-html :deep(p) {
+  margin: 0 0 8px;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.notification-html :deep(a) {
+  color: #2563eb;
+  text-decoration: underline;
 }
 </style>

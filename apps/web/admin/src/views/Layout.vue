@@ -222,7 +222,7 @@ const notificationSyncParams = computed(() => {
 })
 
 const pollNotificationSync = async () => {
-  if (userStore.isAdmin || !userStore.isLoggedIn) {
+  if (!userStore.isLoggedIn) {
     return
   }
 
@@ -281,7 +281,7 @@ const routeNameMap = {
   '/homework': '作业管理',
   '/homework/students': '学生作业一览',
   '/homework/by-student': '学生作业一览',
-  '/notifications': '通知信息',
+  '/notifications': '消息与通知',
   '/personal-settings': '个人设置'
 }
 
@@ -346,6 +346,7 @@ const adminMenu = [
   { path: '/users', label: '用户管理', icon: UserFilled },
   { path: '/subjects', label: '课程管理', icon: Reading },
   { path: '/semesters', label: '学期管理', icon: Collection },
+  { path: '/notifications', label: '消息与通知', icon: Bell },
   { path: '/logs', label: '操作日志', icon: Collection },
   { path: '/settings', label: '系统设置', icon: Setting }
 ]
