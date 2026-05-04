@@ -588,7 +588,9 @@ layout invariants that failed in the original mobile screenshot:
 - on a `390 x 844` mobile viewport, the table-heavy `/students`, `/users`,
   `/subjects`, `/scores`, and `/attendance` pages must not create document-level
   horizontal overflow after their wide table or grid surfaces are contained
-  inside cards.
+  inside cards;
+- on desktop, the sidebar edge handle must hide the navigation rail completely
+  and restore it without leaving the main content offset.
 
 Preferred targeted command from `apps/web/admin`:
 
@@ -613,6 +615,8 @@ Validated result in the adding session:
 
 - initial responsive-course version: `3 passed`, runtime about `17s`;
 - after adding the table-heavy page guard: `4 passed`, runtime about `20s`;
+- after adding the desktop sidebar edge-handle guard: `5 passed`, runtime about
+  `30s`;
 - only the existing Vite CJS Node API deprecation warning was emitted by the
   web server.
 
@@ -627,9 +631,54 @@ Interpretation guidance:
 - if the table-heavy page case fails only on one route, inspect that route's
   outer page container, card body containment, toolbar wrapping, and any
   fixed-width grid/table implementation before changing global layout;
+- if the desktop sidebar handle case fails, inspect `Layout.vue` state
+  separation between `isCollapsed` and `isSidebarHidden`, plus the persisted
+  `wailearning-admin-sidebar-state` localStorage key;
 - this maintained spec complements PostgreSQL-backed screenshot audits. It is a
   fast guard for the responsive layout contract, not a replacement for real
   browser observation when continuing the larger UI/UX optimization task.
+
+## Sidebar Hidden / Pull-Out Interaction Follow-Up
+
+The shared admin shell now supports a more explicit hide-and-pull interaction
+for the sidebar in addition to the original icon-collapsed state.
+
+Implemented behavior:
+
+- desktop users can still use the in-sidebar circular collapse button to switch
+  between expanded navigation and the icon-only rail;
+- desktop users can use the fixed left-edge handle to hide the sidebar
+  completely, allowing the main content container to start at the viewport edge;
+- clicking the same edge handle restores the sidebar to the expanded state;
+- desktop sidebar preference is persisted in localStorage under
+  `wailearning-admin-sidebar-state`, with values conceptually matching
+  `expanded`, `collapsed`, and `hidden`;
+- mobile users keep the overlay drawer behavior from the responsive repair pass;
+- on mobile, the same edge handle opens or closes the drawer and never reserves
+  document-flow width;
+- route changes close the mobile drawer so a navigation click does not leave the
+  next page covered by the sidebar.
+
+Implementation notes:
+
+- `Layout.vue` now separates `isCollapsed` from `isSidebarHidden`; avoid
+  re-merging those concepts into one boolean because "icon rail" and "fully
+  hidden" have different layout implications;
+- `sidebarWidth` returns `0px` only for mobile-closed or desktop-hidden states;
+- the edge handle is a native `button` with `aria-label`, `title`, a stable
+  `data-testid`, and an Element Plus arrow icon;
+- the handle is deliberately small and rail-like rather than a text button, so
+  it remains available without becoming another toolbar item;
+- the handle position follows the current sidebar width on desktop and follows
+  the drawer edge on mobile.
+
+Validation:
+
+- `tests/e2e/web-admin/ui-responsive-layout-regression.spec.js` includes a
+  desktop handle test that verifies the sidebar width collapses to zero and the
+  main container x-position returns to the viewport edge;
+- the same spec still verifies the mobile course-page and table-heavy-page
+  no-overflow invariants after the shell change.
 
 ## Table-Heavy Page Containment Follow-Up
 

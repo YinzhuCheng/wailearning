@@ -12,6 +12,7 @@ const { loadE2eScenario, resetE2eScenario } = require('./fixtures.cjs')
 const { login } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
+const sidebarStateKey = 'wailearning-admin-sidebar-state'
 
 async function expectNoPageHorizontalOverflow(page) {
   await expect
@@ -41,6 +42,12 @@ async function expectLocatorBoxesWithinViewport(page, locator) {
   }
 }
 
+async function clearSidebarState(page) {
+  await page.addInitScript(key => {
+    window.localStorage.removeItem(key)
+  }, sidebarStateKey)
+}
+
 test.describe('responsive layout regression guard rails', () => {
   test.describe.configure({ timeout: 120_000 })
 
@@ -54,6 +61,7 @@ test.describe('responsive layout regression guard rails', () => {
   test('mobile student courses page has no sidebar-driven horizontal overflow', async ({ page }) => {
     const s = scenario()
     await page.setViewportSize({ width: 390, height: 844 })
+    await clearSidebarState(page)
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto('/courses', { waitUntil: 'domcontentloaded', timeout: 60000 })
 
@@ -75,6 +83,7 @@ test.describe('responsive layout regression guard rails', () => {
   test('mobile course cards and catalog cards stay inside a 390px viewport', async ({ page }) => {
     const s = scenario()
     await page.setViewportSize({ width: 390, height: 844 })
+    await clearSidebarState(page)
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto('/courses', { waitUntil: 'domcontentloaded', timeout: 60000 })
 
@@ -90,6 +99,7 @@ test.describe('responsive layout regression guard rails', () => {
   test('desktop student courses page keeps the catalog table as the primary catalog surface', async ({ page }) => {
     const s = scenario()
     await page.setViewportSize({ width: 1280, height: 900 })
+    await clearSidebarState(page)
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto('/courses', { waitUntil: 'domcontentloaded', timeout: 60000 })
 
@@ -99,9 +109,47 @@ test.describe('responsive layout regression guard rails', () => {
     await expect(page.locator('article.course-card').first()).toBeVisible({ timeout: 60000 })
   })
 
+  test('desktop sidebar edge handle hides and restores the navigation rail', async ({ page }) => {
+    const s = scenario()
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await clearSidebarState(page)
+    await login(page, s.admin.username, s.admin.password)
+    await page.goto('/students', { waitUntil: 'domcontentloaded', timeout: 60000 })
+
+    const sidebar = page.locator('.sidebar')
+    const mainContainer = page.locator('.layout-container > .el-container')
+    const handle = page.getByTestId('sidebar-edge-handle')
+    await expect(sidebar).toBeVisible({ timeout: 30000 })
+    await expect(handle).toBeVisible({ timeout: 30000 })
+
+    const expandedSidebarBox = await sidebar.boundingBox()
+    const expandedMainBox = await mainContainer.boundingBox()
+    expect(expandedSidebarBox.width).toBeGreaterThan(200)
+    expect(expandedMainBox.x).toBeGreaterThan(200)
+
+    await handle.click()
+    await expect
+      .poll(async () => {
+        const sidebarBox = await sidebar.boundingBox()
+        const mainBox = await mainContainer.boundingBox()
+        return sidebarBox.width <= 1 && mainBox.x <= 1
+      }, { timeout: 10000 })
+      .toBeTruthy()
+
+    await handle.click()
+    await expect
+      .poll(async () => {
+        const sidebarBox = await sidebar.boundingBox()
+        const mainBox = await mainContainer.boundingBox()
+        return sidebarBox.width > 200 && mainBox.x > 200
+      }, { timeout: 10000 })
+      .toBeTruthy()
+  })
+
   test('mobile table-heavy admin and teacher pages contain wide data surfaces inside the page', async ({ page }) => {
     const s = scenario()
     await page.setViewportSize({ width: 390, height: 844 })
+    await clearSidebarState(page)
 
     await login(page, s.admin.username, s.admin.password)
     for (const routePath of ['/students', '/users', '/subjects']) {

@@ -1,10 +1,13 @@
 <template>
   <el-container
     class="layout-container"
-    :class="{ 'layout-container--mobile-sidebar-open': isMobile && !isCollapsed }"
+    :class="{
+      'layout-container--mobile-sidebar-open': isMobile && !isCollapsed,
+      'layout-container--sidebar-hidden': !isMobile && isSidebarHidden
+    }"
   >
     <div v-if="isMobile && !isCollapsed" class="mobile-sidebar-backdrop" @click="isCollapsed = true" />
-    <el-aside :width="sidebarWidth" class="sidebar">
+    <el-aside :width="sidebarWidth" class="sidebar" :class="{ 'sidebar--hidden': isSidebarHidden && !isMobile }">
       <div class="logo">
         <div class="logo-main">
           <div class="logo-icon">
@@ -20,7 +23,8 @@
           :icon="isCollapsed ? Expand : Fold"
           circle
           size="small"
-          @click="isCollapsed = !isCollapsed"
+          :aria-label="isCollapsed ? '展开侧边栏' : '收起侧边栏'"
+          @click="toggleSidebarCollapse"
         />
       </div>
 
@@ -64,6 +68,24 @@
       </div>
     </el-aside>
 
+    <button
+      type="button"
+      class="sidebar-edge-handle"
+      :class="{
+        'sidebar-edge-handle--hidden': !isMobile && isSidebarHidden,
+        'sidebar-edge-handle--drawer-open': isMobile && !isCollapsed
+      }"
+      :style="sidebarHandleStyle"
+      :aria-label="sidebarHandleLabel"
+      :title="sidebarHandleLabel"
+      data-testid="sidebar-edge-handle"
+      @click="toggleSidebarDrawer"
+    >
+      <el-icon :size="18">
+        <component :is="sidebarHandleIcon" />
+      </el-icon>
+    </button>
+
     <el-container>
       <el-header class="header">
         <div class="header-left">
@@ -73,7 +95,8 @@
             :icon="isCollapsed ? Expand : Fold"
             circle
             size="small"
-            @click="isCollapsed = !isCollapsed"
+            aria-label="打开导航菜单"
+            @click="toggleMobileSidebar"
           />
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: homePath }">首页</el-breadcrumb-item>
@@ -162,6 +185,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   Bell,
   Collection,
   DataAnalysis,
@@ -190,7 +215,9 @@ const userStore = useUserStore()
 
 const adminHomePath = '/students'
 const mobileBreakpoint = 768
+const desktopSidebarStorageKey = 'wailearning-admin-sidebar-state'
 const isCollapsed = ref(false)
+const isSidebarHidden = ref(false)
 const isMobile = ref(false)
 
 const headerAvatarSrc = ref('')
@@ -274,7 +301,31 @@ const sidebarWidth = computed(() => {
   if (isMobile.value) {
     return isCollapsed.value ? '0px' : '240px'
   }
+  if (isSidebarHidden.value) {
+    return '0px'
+  }
   return isCollapsed.value ? '72px' : '240px'
+})
+const sidebarHandleStyle = computed(() => {
+  if (isMobile.value) {
+    return { left: isCollapsed.value ? '0px' : '240px' }
+  }
+
+  return { left: isSidebarHidden.value ? '0px' : sidebarWidth.value }
+})
+const sidebarHandleLabel = computed(() => {
+  if (isMobile.value) {
+    return isCollapsed.value ? '打开导航菜单' : '关闭导航菜单'
+  }
+
+  return isSidebarHidden.value ? '拉出侧边栏' : '隐藏侧边栏'
+})
+const sidebarHandleIcon = computed(() => {
+  if (isMobile.value) {
+    return isCollapsed.value ? ArrowRight : ArrowLeft
+  }
+
+  return isSidebarHidden.value ? ArrowRight : ArrowLeft
 })
 const classContextText = computed(() => `班级课程 ${classTeacherCourses.value.length} 门`)
 
@@ -393,14 +444,80 @@ const roleText = role => ({
   student: '学生'
 }[role] || '未知角色')
 
+const persistDesktopSidebarState = () => {
+  if (typeof window === 'undefined' || isMobile.value) {
+    return
+  }
+
+  const state = isSidebarHidden.value ? 'hidden' : isCollapsed.value ? 'collapsed' : 'expanded'
+  window.localStorage.setItem(desktopSidebarStorageKey, state)
+}
+
+const restoreDesktopSidebarState = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const state = window.localStorage.getItem(desktopSidebarStorageKey)
+  if (state === 'hidden') {
+    isSidebarHidden.value = true
+    isCollapsed.value = false
+    return
+  }
+  if (state === 'collapsed') {
+    isSidebarHidden.value = false
+    isCollapsed.value = true
+    return
+  }
+  isSidebarHidden.value = false
+  isCollapsed.value = false
+}
+
+const toggleSidebarCollapse = () => {
+  if (isSidebarHidden.value) {
+    isSidebarHidden.value = false
+    isCollapsed.value = false
+    persistDesktopSidebarState()
+    return
+  }
+
+  isCollapsed.value = !isCollapsed.value
+  persistDesktopSidebarState()
+}
+
+const toggleMobileSidebar = () => {
+  isCollapsed.value = !isCollapsed.value
+}
+
+const toggleSidebarDrawer = () => {
+  if (isMobile.value) {
+    toggleMobileSidebar()
+    return
+  }
+
+  isSidebarHidden.value = !isSidebarHidden.value
+  if (!isSidebarHidden.value) {
+    isCollapsed.value = false
+  }
+  persistDesktopSidebarState()
+}
+
 const syncResponsiveSidebar = () => {
   if (typeof window === 'undefined') {
     return
   }
 
-  isMobile.value = window.innerWidth <= mobileBreakpoint
+  const nextIsMobile = window.innerWidth <= mobileBreakpoint
+  const changedMode = nextIsMobile !== isMobile.value
+  isMobile.value = nextIsMobile
   if (isMobile.value) {
+    isSidebarHidden.value = false
     isCollapsed.value = true
+    return
+  }
+
+  if (changedMode) {
+    restoreDesktopSidebarState()
   }
 }
 
@@ -461,6 +578,7 @@ const handleCommand = command => {
 }
 
 onMounted(async () => {
+  restoreDesktopSidebarState()
   syncResponsiveSidebar()
   window.addEventListener('resize', syncResponsiveSidebar)
   window.addEventListener('focus', handleWindowFocus)
@@ -503,6 +621,9 @@ watch(
 watch(
   () => route.fullPath,
   async () => {
+    if (isMobile.value) {
+      isCollapsed.value = true
+    }
     await syncTeacherCourses(true)
     await pollNotificationSync()
   }
@@ -530,6 +651,46 @@ watch(notificationSyncParams, () => {
   background: linear-gradient(180deg, #0f172a 0%, #132238 100%);
   color: #fff;
   transition: width 0.2s ease, transform 0.2s ease;
+}
+
+.sidebar--hidden {
+  overflow: hidden;
+}
+
+.sidebar-edge-handle {
+  position: fixed;
+  top: 96px;
+  z-index: 1000;
+  display: inline-flex;
+  width: 28px;
+  height: 58px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-left: none;
+  border-radius: 0 18px 18px 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.96));
+  color: #2563eb;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+  cursor: pointer;
+  transition: left 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.sidebar-edge-handle:hover,
+.sidebar-edge-handle:focus-visible {
+  transform: translateX(2px);
+  background: #ffffff;
+  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.22);
+  outline: none;
+}
+
+.sidebar-edge-handle--hidden {
+  color: #0f766e;
+}
+
+.sidebar-edge-handle--drawer-open {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .mobile-sidebar-backdrop {
@@ -769,6 +930,12 @@ watch(notificationSyncParams, () => {
 
   .sidebar[style*="0px"] {
     transform: translateX(-100%);
+  }
+
+  .sidebar-edge-handle {
+    top: 88px;
+    width: 30px;
+    height: 54px;
   }
 
   .layout-container--mobile-sidebar-open {
