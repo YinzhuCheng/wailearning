@@ -735,6 +735,81 @@ Maintenance guidance:
   controls available in the sidebar/drawer rather than hiding the tree state
   behind route changes.
 
+## Course Materials Node-Level +/- Follow-Up
+
+The follow-up pass keeps the existing explicit `expandedChapterKeys` state model
+and adds a visible per-node affordance. The goal is not to create a second
+outline implementation; it is to make the existing multi-level course-materials
+tree discoverable to users who expect a `+` / `-` control beside expandable
+items.
+
+Implementation details:
+
+- `apps/web/admin/src/views/Materials.vue` now renders the `el-tree` default
+  slot with both `node` and `data` so the visual control can reflect the current
+  Element Plus node state;
+- parent nodes render a stable `button.chapter-node-toggle` before the chapter
+  title;
+- expanded parent nodes show the Element Plus `Minus` icon, collapsed parent
+  nodes show the Element Plus `Plus` icon;
+- leaf nodes render `chapter-node-toggle-spacer` so title alignment stays stable
+  across mixed parent/leaf lists;
+- the default Element Plus caret is hidden for this tree only, preventing two
+  competing disclosure controls from appearing in the same row;
+- clicking the `+` / `-` button calls `toggleChapterExpansion(data)` and stops
+  propagation, so it does not select the chapter and does not trigger teacher
+  management actions;
+- clicking the chapter title still selects the chapter and expands the selected
+  ancestor path through the existing `ensureSelectedChapterPathExpanded()`
+  contract;
+- the node-level toggle updates `expandedChapterKeys`, calls
+  `syncTreeExpandedState()`, and persists the result under the same
+  `wailearning-materials-expanded-chapters:<subject-id>` localStorage key used
+  by the expand-all/collapse-all buttons;
+- the per-node button exposes `aria-label`, `title`, and a stable
+  `data-testid="materials-chapter-toggle-<chapter-id>"` hook.
+
+Visual contract:
+
+- the disclosure button is intentionally small but not text-like: it has a
+  fixed `24px` square footprint, a `7px` radius, translucent blue background,
+  light border, and a restrained shadow;
+- hover uses a stronger blue tint, slightly higher shadow, and a small scale
+  transform so the row has a tangible interactive response without causing the
+  surrounding tree text to reflow;
+- focus-visible has an explicit outline so keyboard users can operate the same
+  control;
+- the spacer keeps title x-position stable when sibling rows alternate between
+  expandable and leaf chapters;
+- the tree content keeps `min-height: 32px`, which is enough for dense desktop
+  sidebar scanning while still giving the explicit icon button a reliable mobile
+  tap target.
+
+Regression guard:
+
+- `tests/e2e/web-admin/ui-materials-outline-regression.spec.js` still verifies
+  the bulk collapse/expand path;
+- the same spec now also clicks the parent node's
+  `materials-chapter-toggle-<id>` control, verifies the child is hidden, clicks
+  it again, and verifies the child is visible;
+- this matters because the node-level control and the bulk toolbar controls
+  share `expandedChapterKeys`, and a future refactor must keep both entry
+  points synchronized instead of allowing one of them to become a purely visual
+  toggle.
+
+Guidance for future multi-level content surfaces:
+
+- prefer one explicit expansion state source per page or component;
+- keep "select/open item" separate from "expand/collapse children" when the row
+  also navigates or filters content;
+- if a tree has bulk expand/collapse actions, reuse the same state and
+  persistence contract for per-node toggles;
+- provide a stable spacer for leaf rows when using custom disclosure controls;
+- hide framework-native caret controls only inside the local tree scope, never
+  globally;
+- add `data-testid` hooks on the disclosure controls rather than asserting
+  against icon SVG internals.
+
 ## Admin Radius Hierarchy Follow-Up
 
 The admin SPA now has a small shared radius vocabulary for future visual work:

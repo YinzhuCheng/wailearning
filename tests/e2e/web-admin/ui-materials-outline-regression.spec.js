@@ -43,20 +43,35 @@ test.describe('materials outline expand/collapse guard rails', () => {
     await page.goto('/materials', { waitUntil: 'domcontentloaded', timeout: 60000 })
 
     await expect(page.locator('.chapter-tree')).toBeVisible({ timeout: 60000 })
-    await expect(page.getByText(parentTitle, { exact: true })).toBeVisible({ timeout: 60000 })
-    await expect(page.getByText(childTitle, { exact: true })).toBeVisible({ timeout: 60000 })
+    const chapterTree = page.locator('.chapter-tree')
+    const parentNode = chapterTree.getByText(parentTitle, { exact: true })
+    const childNode = chapterTree.getByText(childTitle, { exact: true })
 
-    await page.getByTestId('materials-collapse-all-chapters').click()
-    await expect(page.getByText(parentTitle, { exact: true })).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText(childTitle, { exact: true })).toBeHidden({ timeout: 30000 })
+    await expect(parentNode).toBeVisible({ timeout: 60000 })
 
     await page.getByTestId('materials-expand-all-chapters').click()
-    await expect(page.getByText(childTitle, { exact: true })).toBeVisible({ timeout: 30000 })
+    await expect(childNode).toBeVisible({ timeout: 30000 })
 
-    await page.getByText(childTitle, { exact: true }).click()
+    await page.getByTestId('materials-collapse-all-chapters').click()
+    await expect(parentNode).toBeVisible({ timeout: 30000 })
+    await expect(childNode).toBeHidden({ timeout: 30000 })
+
+    await page.getByTestId('materials-expand-all-chapters').click()
+    await expect(childNode).toBeVisible({ timeout: 30000 })
+
+    await page.getByTestId(`materials-chapter-toggle-${parent.id}`).click()
+    await expect(childNode).toBeHidden({ timeout: 30000 })
+
+    await page.getByTestId(`materials-chapter-toggle-${parent.id}`).click()
+    await expect(childNode).toBeVisible({ timeout: 30000 })
+
+    await childNode.click()
     await expect(page.getByTestId('materials-current-chapter')).toContainText(childTitle, { timeout: 30000 })
 
+    await page.getByTestId('materials-expand-all-chapters').click()
+    await expect(childNode).toBeVisible({ timeout: 30000 })
+
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
-    await expect(page.getByText(childTitle, { exact: true })).toBeVisible({ timeout: 60000 })
+    await expect(page.locator('.chapter-tree').getByText(childTitle, { exact: true })).toBeVisible({ timeout: 60000 })
   })
 })

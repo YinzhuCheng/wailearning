@@ -68,7 +68,22 @@
             @node-collapse="handleChapterCollapse"
             @node-drop="handleChapterDrop"
           >
-            <template #default="{ data }">
+            <template #default="{ node, data }">
+              <button
+                v-if="isChapterExpandable(data)"
+                class="chapter-node-toggle"
+                type="button"
+                :aria-label="node.expanded ? '收起子章节' : '展开子章节'"
+                :title="node.expanded ? '收起子章节' : '展开子章节'"
+                :data-testid="`materials-chapter-toggle-${data.id}`"
+                @click.stop="toggleChapterExpansion(node, data)"
+              >
+                <el-icon>
+                  <Minus v-if="node.expanded" />
+                  <Plus v-else />
+                </el-icon>
+              </button>
+              <span v-else class="chapter-node-toggle-spacer" aria-hidden="true" />
               <span class="tree-node-label">
                 {{ data.title }}
                 <el-tag v-if="data.is_uncategorized" size="small" type="info" class="tree-tag">默认</el-tag>
@@ -288,9 +303,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Expand, Fold } from '@element-plus/icons-vue'
+import { Expand, Fold, Minus, Plus } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
@@ -421,11 +436,15 @@ const restoreExpandedChapterKeys = nodes => {
 }
 
 const syncTreeExpandedState = () => {
-  const open = new Set(expandedChapterKeys.value)
+  const open = new Set(expandedChapterKeys.value.map(id => String(id)))
   for (const id of collectChapterIds(chapterTreeNodes.value)) {
     const node = treeRef.value?.getNode?.(id)
     if (node) {
-      node.expanded = open.has(id)
+      if (open.has(String(id))) {
+        node.expand?.()
+      } else {
+        node.collapse?.()
+      }
     }
   }
 }
@@ -451,6 +470,30 @@ const collapseAllChapters = () => {
   expandedChapterKeys.value = []
   syncTreeExpandedState()
   persistExpandedChapterKeys()
+}
+
+const isChapterExpandable = data => Boolean(data?.children?.length)
+
+const toggleChapterExpansion = (node, data) => {
+  if (!isChapterExpandable(data)) {
+    return
+  }
+  if (node?.expanded) {
+    node.collapse?.()
+  } else if (node?.expand) {
+    node.expand()
+  } else {
+    const current = new Map(expandedChapterKeys.value.map(id => [String(id), id]))
+    const key = String(data.id)
+    if (current.has(key)) {
+      current.delete(key)
+    } else {
+      current.set(key, data.id)
+    }
+    expandedChapterKeys.value = Array.from(current.values())
+    syncTreeExpandedState()
+    persistExpandedChapterKeys()
+  }
 }
 
 const flatChapterOptions = computed(() => {
@@ -513,9 +556,10 @@ const loadChapterTree = async () => {
     }
     expandedChapterKeys.value = restoreExpandedChapterKeys(chapterTreeNodes.value)
     ensureSelectedChapterPathExpanded()
-    requestAnimationFrame(syncTreeExpandedState)
   } finally {
     treeLoading.value = false
+    await nextTick()
+    syncTreeExpandedState()
   }
 }
 
@@ -867,6 +911,9 @@ watch(selectedCourse, async () => {
 })
 
 watch(selectedChapterId, () => {
+  if (treeLoading.value) {
+    return
+  }
   ensureSelectedChapterPathExpanded()
   syncTreeExpandedState()
   persistExpandedChapterKeys()
@@ -974,11 +1021,53 @@ watch(selectedChapterId, () => {
   align-items: flex-start;
 }
 
+.chapter-tree :deep(.el-tree-node__expand-icon) {
+  display: none;
+}
+
+.chapter-node-toggle,
+.chapter-node-toggle-spacer {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  margin: 4px 4px 4px 0;
+}
+
+.chapter-node-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 7px;
+  background: rgba(239, 246, 255, 0.84);
+  color: #2563eb;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.chapter-node-toggle:hover {
+  background: #dbeafe;
+  border-color: rgba(37, 99, 235, 0.38);
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.16);
+  transform: scale(1.08);
+}
+
+.chapter-node-toggle:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.36);
+  outline-offset: 2px;
+}
+
 .tree-node-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  min-height: 32px;
   padding-right: 8px;
 }
 
