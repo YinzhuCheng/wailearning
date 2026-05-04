@@ -318,6 +318,7 @@ def list_student_llm_quotas_for_enrolled_courses(
         raise HTTPException(status_code=400, detail="未找到与账号匹配的花名册。")
 
     pol = get_or_create_global_quota_policy(db)
+    lim = resolve_effective_daily_student_tokens(db, student.id)
     ov = db.query(LLMStudentTokenOverride).filter(LLMStudentTokenOverride.student_id == student.id).first()
     uses_override = ov is not None
     usage_date, timezone_name = resolve_global_quota_calendar(db)

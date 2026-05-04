@@ -486,14 +486,11 @@ const teacherMenu = [
   { path: '/notifications', label: '通知中心', icon: Bell }
 ]
 
-const studentBaseMenu = [
-  { path: '/courses', label: '我的课程', icon: Reading },
-  { path: '/course-home', label: '课程主页', icon: School }
-]
-
 const studentMenu = [
-  { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/courses', label: '我的课程', icon: Reading },
+  { path: '/course-home', label: '课程主页', icon: School },
   { path: '/homework', label: '课程作业', icon: Reading },
+  { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/student-scores', label: '我的成绩', icon: Collection },
   { path: '/notifications', label: '课程通知', icon: Bell }
 ]
@@ -511,7 +508,7 @@ const adminMenu = [
 
 const menuItems = computed(() => {
   if (userStore.isStudent) {
-    return selectedCourse.value ? [...studentBaseMenu, ...studentMenu] : [studentBaseMenu[0]]
+    return studentMenu
   }
 
   if (userStore.isAdmin) {
@@ -750,36 +747,40 @@ watch(notificationSyncParams, () => {
   top: 50%;
   z-index: 1000;
   display: inline-flex;
-  width: 28px;
-  height: 58px;
+  width: 22px;
+  height: 46px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-left: none;
   border-radius: 0 var(--wa-radius-xl) var(--wa-radius-xl) 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, var(--wa-color-primary-50) 94%, white));
-  color: var(--wa-color-primary-600);
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+  background: color-mix(in srgb, var(--wa-sidebar-bg-start) 78%, rgba(255, 255, 255, 0.22));
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
   cursor: pointer;
   transform: translateY(-50%);
-  transition: left 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  backdrop-filter: blur(10px);
+  transition: left 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
 
 .sidebar-edge-handle:hover,
 .sidebar-edge-handle:focus-visible {
   transform: translateY(-50%) translateX(2px);
-  background: #ffffff;
-  box-shadow: 0 14px 32px color-mix(in srgb, var(--wa-color-primary-600) 22%, transparent);
+  background: color-mix(in srgb, var(--wa-color-primary-500) 62%, rgba(255, 255, 255, 0.2));
+  color: #ffffff;
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--wa-color-primary-600) 26%, transparent);
   outline: none;
 }
 
 .sidebar-edge-handle--hidden {
-  color: var(--wa-color-accent-700);
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--wa-color-primary-600);
 }
 
 .sidebar-edge-handle--drawer-open {
-  color: var(--wa-color-text);
-  background: rgba(255, 255, 255, 0.94);
+  color: #ffffff;
+  background: color-mix(in srgb, var(--wa-sidebar-bg-start) 80%, rgba(255, 255, 255, 0.24));
 }
 
 .mobile-sidebar-backdrop {
@@ -859,6 +860,21 @@ watch(notificationSyncParams, () => {
   padding: 12px 8px;
 }
 
+.sidebar-menu :deep(.el-sub-menu),
+.sidebar-menu :deep(.el-menu--inline),
+.sidebar-menu :deep(.el-sub-menu .el-menu) {
+  background: transparent;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu) {
+  padding: 0;
+}
+
+.sidebar-menu :deep(.el-sub-menu__title),
+.sidebar-menu :deep(.el-sub-menu .el-menu-item) {
+  background-color: transparent;
+}
+
 .sidebar-menu :deep(.el-menu-item) {
   margin: 6px 0;
   border-radius: var(--wa-radius-lg);
@@ -876,6 +892,10 @@ watch(notificationSyncParams, () => {
 .sidebar-menu :deep(.el-menu-item.is-active) {
   background: var(--wa-sidebar-active-bg);
   color: #fff;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu-item.is-active) {
+  background: var(--wa-sidebar-active-bg);
 }
 
 .sidebar-menu :deep(.el-sub-menu__title) {
@@ -1109,8 +1129,8 @@ watch(notificationSyncParams, () => {
   }
 
   .sidebar-edge-handle {
-    width: 30px;
-    height: 54px;
+    width: 26px;
+    height: 52px;
   }
 
   .layout-container--mobile-sidebar-open {

@@ -1,6 +1,6 @@
 <template>
-  <div class="login-container" :class="{ 'has-background': hasBackground }" :style="backgroundStyle">
-    <div class="login-card">
+  <div class="login-container" :class="{ 'has-background': hasBackground }" :style="backgroundStyle" data-testid="login-page">
+    <div class="login-card" data-testid="login-panel">
       <div class="login-header">
         <div v-if="settings.system_logo" class="logo-container">
           <img :src="settings.system_logo" alt="Logo" class="system-logo" />

@@ -1372,3 +1372,78 @@ Do not include:
 - Vite `dist/`;
 - local logs;
 - local handoff files.
+
+## Sidebar And Login Screenshot Repair Pass
+
+This pass responded to screenshot findings from the PostgreSQL-backed
+interaction/quota audit. The relevant local artifacts were generated under an
+ignored audit directory and should be referred to in committed documentation
+with placeholders such as `<artifact-dir>/interaction-quota-*.png`, not with
+machine-specific absolute paths.
+
+Findings addressed:
+
+- `<artifact-dir>/interaction-quota-teacher-homework-postgres.png` showed a
+  white rectangle below the expanded teacher "homework" submenu. The product
+  issue was not the route content. It came from Element Plus submenu internals:
+  nested `.el-menu--inline` / submenu wrapper nodes can keep their default
+  light background even when the visible sidebar shell is themed dark. The fix
+  belongs in the sidebar shell CSS, scoped under `.sidebar-menu`, so all submenu
+  wrapper layers inherit the dark/transparent sidebar treatment.
+- A follow-up screenshot review showed that part of the perceived "white
+  block" was also the centered sidebar edge handle. When the sidebar is open,
+  the handle should visually belong to the dark sidebar instead of appearing as
+  a bright rectangular tab over an active menu row. Keep the handle vertically
+  centered, but use a smaller dark/translucent surface with enough contrast for
+  the arrow icon. The hidden-sidebar state can still use a lighter affordance
+  because it appears against the page background rather than on top of the dark
+  navigation.
+- `<artifact-dir>/interaction-quota-student-courses-postgres.png` showed a
+  desktop student sidebar with only one primary item when no course was selected
+  at initial render. Although the route guard can redirect course-scoped routes
+  back to the course picker when needed, the visual shell looked incomplete.
+  Student navigation should therefore render a complete navigation structure
+  consistently: course picker, course home, homework, materials, scores, and
+  notifications. The empty-selection state is a routing/data concern, not a
+  reason to collapse desktop navigation down to one item.
+- The same student screenshot also contained stale `Internal Server Error`
+  toast evidence. That was a real backend issue in the quota summary endpoint,
+  not just a screenshot artifact: the student quota summary route used the
+  effective token limit value before assigning it. The endpoint should resolve
+  the effective student limit once, then use that value for the summary and for
+  per-course attribution.
+- `<artifact-dir>/interaction-quota-login-postgres.png` was visually blank even
+  though the JSON DOM snapshot showed login text and buttons. This is an audit
+  synchronization pitfall. The login page should expose stable test IDs for the
+  page and panel, and screenshot scripts should wait for the login panel to be
+  visible before capture.
+
+Implementation guidance for future agents:
+
+- Prefer adding stable `data-testid` anchors to long-lived page containers over
+  waiting on incidental text. This keeps screenshot tooling robust even when UI
+  copy changes.
+- For Element Plus dark sidebars, style not only `.el-menu-item` and
+  `.el-sub-menu__title`, but also submenu wrapper layers such as
+  `.el-sub-menu`, `.el-menu--inline`, and `.el-sub-menu .el-menu`.
+- Treat floating shell controls as part of the screenshot audit. A technically
+  correct control can still look like a rendering defect when it overlaps a
+  dense navigation area with the wrong background color.
+- Avoid forcing submenu hover backgrounds to transparent if a later rule is
+  expected to provide hover affordance. Wrapper backgrounds should be
+  transparent; actual menu rows can keep their active/hover state.
+- Do not hide available student navigation merely because `selectedCourse` is
+  temporarily absent. Let guards and page-level empty states explain missing
+  course context.
+- Treat global `ElMessage.error(...)` toasts in screenshots as potential
+  product regressions first. Inspect the corresponding API route or network
+  response before dismissing them as test noise.
+
+Validation expectation:
+
+- Capture or inspect the teacher homework page with the homework submenu open;
+  no white block should appear under the nested submenu area.
+- Capture or inspect the student courses page before selecting a course; the
+  sidebar should still show the full student navigation shell.
+- Capture login only after `[data-testid="login-panel"]` is visible; a DOM JSON
+  snapshot alone is not enough proof that the screenshot timing was correct.

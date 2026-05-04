@@ -848,6 +848,28 @@ accepting connections. For clean audit runs, either shut PostgreSQL down
 gracefully or reinitialize a new throwaway data directory such as
 `data-clean`.
 
+### Pitfall J: DOM snapshots and screenshots can disagree during page startup
+
+A UI audit can produce a JSON snapshot showing that page text, buttons, and
+routes exist while the paired screenshot is still blank or partially painted.
+This usually means the screenshot was taken before the stable visual container
+was visible, not that the JSON snapshot is wrong.
+
+For login and other app-shell entry pages, do not rely on `page.goto(...)`
+alone. Add stable page-level test IDs in product code and wait for the visible
+panel before capture. Example pattern:
+
+```javascript
+await page.goto('/login', { waitUntil: 'domcontentloaded' })
+await page.getByTestId('login-panel').waitFor({ state: 'visible', timeout: 30000 })
+await page.waitForTimeout(300)
+await capture(page, 'login')
+```
+
+The exact script path should be documented as `<repo>/...` or
+`<artifact-dir>/...` in committed docs. If the machine-specific path matters for
+a handoff, put it in an ignored local note instead.
+
 ### Artifact hygiene
 
 Keep all of the following out of tracked source:
