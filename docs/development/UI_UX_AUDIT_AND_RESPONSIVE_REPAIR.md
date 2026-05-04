@@ -1447,3 +1447,125 @@ Validation expectation:
   sidebar should still show the full student navigation shell.
 - Capture login only after `[data-testid="login-panel"]` is visible; a DOM JSON
   snapshot alone is not enough proof that the screenshot timing was correct.
+
+## Course Home Material Outline Preview Pass
+
+This pass continued the multi-level content expansion work. The important
+starting observation was that the full course-materials page already had a
+maintained outline implementation:
+
+- source: `apps/web/admin/src/views/Materials.vue`;
+- maintained guard: `tests/e2e/web-admin/ui-materials-outline-regression.spec.js`;
+- interaction: explicit parent-only `+` / `-` controls, leaf alignment spacer,
+  title click separate from expansion, local expanded-state memory, and bulk
+  expand/collapse actions.
+
+Because that first-entry sample already existed, the pass did not duplicate a
+second editable tree. Instead, it promoted the same interaction pattern into a
+read-only course-home preview where students and teachers first scan a selected
+course.
+
+### Product intent
+
+The course home page is a dashboard-style overview. Before this pass, its
+materials block showed only a flat "recent materials" list. That list is useful
+for recency, but it does not communicate course structure. For a course with a
+real outline, users should be able to see chapter hierarchy immediately without
+leaving the overview page.
+
+The course home page now displays:
+
+- a compact read-only material chapter outline;
+- parent-node `+` / `-` buttons;
+- leaf spacer alignment so titles do not shift between expandable and leaf
+  rows;
+- bulk "expand" and "collapse" actions in the preview header;
+- existing recent-material rows below the outline;
+- title clicks that navigate to the full materials page instead of pretending
+  to be an in-place editor.
+
+This is intentionally not a replacement for `Materials.vue`. The full materials
+page still owns:
+
+- chapter creation, rename, delete, and drag/drop reordering;
+- material creation and editing;
+- material placement across multiple chapters;
+- material detail dialogs and discussion context.
+
+The course home preview owns only scanning and navigation.
+
+### Implementation shape
+
+The implementation stays frontend-only:
+
+- `StudentCourseHome.vue` calls the existing
+  `api.materialChapters.tree({ subject_id })` endpoint alongside the existing
+  materials, homework, and notification summary calls.
+- The preview keeps local component state in `materialOutlineExpandedIds`.
+- Default state expands only the root-level chapter rows after loading the tree.
+- `expandMaterialOutline` collects every chapter id from the current tree.
+- `collapseMaterialOutline` clears the expanded id list.
+- `toggleMaterialOutline` changes only expansion state; it does not navigate.
+- Clicking a chapter title navigates to `/materials`, where the full tree and
+  material list live.
+
+No backend schema or API contract change was required.
+
+### UI details
+
+The preview follows the same principles as the full materials tree:
+
+- parent rows get a real button;
+- leaf rows get a fixed-size spacer;
+- controls are square-ish and icon-based rather than text pills;
+- hover scale is subtle and constrained to the button, not the entire row;
+- row indentation is depth-based and reduced slightly on mobile;
+- title text ellipsizes within the card rather than forcing the panel wider;
+- focus-visible outlines are explicit for keyboard operation.
+
+This also keeps the course home page visually quiet. The outline is framed
+inside the existing materials card, not a nested card inside another card.
+
+### Regression guard
+
+Added:
+
+```text
+tests/e2e/web-admin/ui-course-home-outline-regression.spec.js
+```
+
+The guard:
+
+- resets the E2E scenario;
+- creates a parent and child material chapter through the API;
+- logs in as the seeded student;
+- enters the seeded required course;
+- opens `/course-home`;
+- verifies the outline is visible;
+- verifies the child is visible by default under the expanded root parent;
+- clicks `course-home-material-toggle-<chapter-id>` and verifies the child is
+  hidden;
+- clicks the same toggle again and verifies the child returns.
+
+This mirrors the maintained full-materials-page guard while keeping the new
+course-home invariant narrow.
+
+### Pitfalls and future guidance
+
+- Do not replace the existing materials page tree with this preview. The preview
+  intentionally has no editing affordances.
+- Do not make the whole row both navigate and toggle. Users need one predictable
+  target for expansion and another predictable target for navigation.
+- Do not store this preview state in the backend. It is low-value, page-local UI
+  state. If persistence becomes necessary, prefer localStorage and keep it
+  separate from the full materials page storage key.
+- Do not assume the course home page has only students. Teachers can also reach
+  course home-like overview paths after course selection, so the preview should
+  remain role-neutral.
+- If the E2E guard fails to find the seeded course card, check the existing
+  `enterSeededRequiredCourse` helper and the E2E seed cache before assuming the
+  outline component is broken.
+- If screenshot evidence shows a blank or incomplete course home panel while
+  the JSON snapshot contains text, apply the same visual-readiness lesson as the
+  login screenshot pitfall: wait for a stable visible panel or `data-testid`
+  before capture.
