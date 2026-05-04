@@ -924,6 +924,304 @@ Maintenance guidance:
 - when adding a user-facing theme picker later, persist one of the canonical
   values listed above and let `theme.js` handle normalization.
 
+## Configurable Appearance Styles Follow-Up
+
+The next continuation pass promoted the earlier token foundation into a
+user-configurable appearance system. This section is intentionally detailed
+because future agents should be able to extend or debug the appearance surface
+without rediscovering the data-priority model, encoding constraints, and
+screenshot validation workflow.
+
+### Product model
+
+The appearance system now has four layers:
+
+1. Built-in system default behavior, currently `professional-blue`.
+2. Official presets, maintained as recommended combinations.
+3. A user's current unsaved custom combination, applied immediately in the
+   browser for preview only.
+4. A user's saved personal styles, owned by that user and named by that user.
+
+Official presets are not the full design space. They are curated examples that
+cover practical combinations of:
+
+- `primary` color;
+- `accent` color;
+- `texture`;
+- `shadow`;
+- `transparency`;
+- `radius`;
+- `density`.
+
+The custom model deliberately does not allow arbitrary CSS injection. It exposes
+controlled tokens only, so user configuration can remain flexible without
+letting invalid CSS, unreadable contrast, or layout-breaking values enter the
+database.
+
+### Effective style priority
+
+The runtime priority is:
+
+1. selected saved user style;
+2. system default preset from `system_settings.appearance_default_preset`;
+3. built-in fallback `professional-blue`.
+
+The login page cannot know the user before authentication, so it can only use
+public system settings. After login, `App.vue` fetches the logged-in user's
+appearance state and reapplies the effective style. When a user switches a style
+inside Personal Settings, the client applies the draft immediately so screenshot
+review and human inspection show the real token result without waiting for a
+full reload.
+
+### Backend implementation
+
+Files:
+
+- `apps/backend/wailearning_backend/db/models.py`;
+- `apps/backend/wailearning_backend/api/schemas.py`;
+- `apps/backend/wailearning_backend/api/routers/appearance.py`;
+- `apps/backend/wailearning_backend/api/routers/settings.py`;
+- `apps/backend/wailearning_backend/bootstrap.py`;
+- `apps/backend/wailearning_backend/main.py`.
+
+New table:
+
+```text
+user_appearance_styles
+  id
+  user_id
+  name
+  source
+  preset_key
+  config
+  is_selected
+  created_at
+  updated_at
+```
+
+Important database rules:
+
+- `(user_id, name)` is unique, so one user cannot accidentally save two styles
+  with the same visible name;
+- different users may use the same style name;
+- only one style should be selected per user. The router clears previous
+  selected rows before selecting or creating a selected style;
+- the config column stores the controlled appearance config as JSON;
+- schema repair creates the table and indexes through `ensure_schema_updates()`;
+- `DEFAULT_SYSTEM_SETTINGS` now seeds `appearance_default_preset`.
+
+Route family:
+
+```text
+GET    /api/appearance/presets
+GET    /api/appearance/me
+POST   /api/appearance/me/styles
+PUT    /api/appearance/me/styles/{style_id}
+POST   /api/appearance/me/styles/{style_id}/select
+POST   /api/appearance/me/use-system
+DELETE /api/appearance/me/styles/{style_id}
+```
+
+The system settings router also exposes `appearance_default_preset` through
+`GET /api/settings/public`. Admin `POST /api/settings/batch-update` now creates
+missing keys instead of silently ignoring unknown keys, which matters for
+existing deployments whose `system_settings` rows predate the appearance key.
+
+### Frontend implementation
+
+Files:
+
+- `apps/web/admin/src/utils/theme.js`;
+- `apps/web/admin/src/style.css`;
+- `apps/web/admin/src/App.vue`;
+- `apps/web/admin/src/stores/user.js`;
+- `apps/web/admin/src/api/index.js`;
+- `apps/web/admin/src/components/AppearanceStylePanel.vue`;
+- `apps/web/admin/src/views/PersonalSettings.vue`;
+- `apps/web/admin/src/views/Settings.vue`;
+- `apps/web/admin/src/views/Layout.vue`.
+
+`theme.js` now owns:
+
+- official preset definitions;
+- legacy theme alias compatibility (`blue`, `green`, `warm`, `grayscale`);
+- appearance config normalization;
+- effective style resolution from system settings plus user state;
+- writing color, radius, shadow, transparency, texture, and density tokens to
+  `document.documentElement`.
+
+The root element receives data attributes:
+
+```text
+data-wa-theme
+data-wa-texture
+data-wa-shadow
+data-wa-transparency
+data-wa-radius
+data-wa-density
+```
+
+The global stylesheet uses those attributes for:
+
+- background texture overlays;
+- density font-size adjustments;
+- Element Plus primary-color variables;
+- shared surface/object shadows;
+- radius scale changes.
+
+The Personal Settings page now contains:
+
+- official preset cards with swatches;
+- custom controls for color, texture, shadow, transparency, radius, and density;
+- a preview surface that shows sidebar, toolbar, cards, and table-like rows;
+- save-and-use behavior for named styles;
+- one-session preview behavior that does not persist;
+- saved style list with use, load, and delete actions;
+- follow-system-default action.
+
+The Settings page contains only the global default selector. Do not move personal
+style management into admin system settings; that would mix system policy and
+user preference in one surface.
+
+### Official presets
+
+Current official preset keys:
+
+- `professional-blue`;
+- `fresh-green`;
+- `warm-amber`;
+- `minimal-gray`;
+- `academic-navy`;
+- `high-contrast`.
+
+The visual intent of each preset:
+
+- `professional-blue`: default operational school-management look, blue primary
+  plus cyan secondary signal, no texture, restrained shadow, balanced radius.
+- `fresh-green`: green primary, blue accent, soft-paper texture, and softer
+  radius. This should feel fresher without turning the whole app into one green
+  surface.
+- `warm-amber`: amber primary, teal accent, subtle grid texture, medium shadow,
+  solid surfaces. This is intentionally warmer but must remain table-readable.
+- `minimal-gray`: gray primary, violet accent, flat shadow, compact density, and
+  smaller radii. This is the most utilitarian preset.
+- `academic-navy`: navy primary with amber accent and fine texture. This is a
+  formal academic variant.
+- `high-contrast`: slate primary, red accent, solid surfaces, stronger shadows,
+  and subtle radii. This is not a full dark mode; main content remains readable
+  on light operational surfaces.
+
+Maintenance guidance:
+
+- add a new preset only when it demonstrates a genuinely useful combination;
+- keep presets as configuration objects, not hand-coded CSS branches;
+- avoid one-hue presets where primary, accent, background, and preview all sit
+  in the same hue family;
+- keep textures subtle enough that table rows, form fields, and long Chinese
+  labels remain readable;
+- do not make all cards very rounded just because a preset is soft. Dense admin
+  surfaces still need table/form discipline.
+
+### Sidebar edge handle refinement
+
+The sidebar edge handle previously used fixed top offsets such as `96px` and
+`88px`. After this pass it is vertically centered:
+
+```css
+top: 50%;
+transform: translateY(-50%);
+```
+
+Hover/focus adds only the horizontal affordance:
+
+```css
+transform: translateY(-50%) translateX(2px);
+```
+
+This makes the pull handle read as a persistent edge control rather than a small
+button competing with the page header/title area.
+
+### Screenshot validation evidence
+
+PostgreSQL-backed screenshot audit was run after implementation and again after
+the final visual-state fixes:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:UI_UX_AUDIT_PREFIX='appearance-final'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+The local ignored script was temporarily extended to capture:
+
+- `appearance-final-admin-personal-appearance-postgres.png`;
+- one screenshot per official preset;
+- existing admin, teacher, student, and mobile audit pages.
+
+Reviewed screenshots:
+
+- `appearance-final-admin-personal-appearance-postgres.png`;
+- `appearance-final-admin-appearance-professional-blue-postgres.png`;
+- `appearance-final-admin-appearance-fresh-green-postgres.png`;
+- `appearance-final-admin-appearance-warm-amber-postgres.png`;
+- `appearance-final-admin-appearance-minimal-gray-postgres.png`;
+- `appearance-final-admin-appearance-academic-navy-postgres.png`;
+- `appearance-final-admin-appearance-high-contrast-postgres.png`;
+- `appearance-final-admin-settings-postgres.png`;
+- `appearance-final-mobile-student-courses-postgres.png`.
+
+Observed final state:
+
+- preset card highlighting follows the selected draft preset;
+- the Personal Settings page is denser and no longer leaves the profile/avatar
+  sections as oversized one-column cards on desktop;
+- all official presets keep main content readable;
+- textures are visible only as background atmosphere and do not invade table or
+  form content;
+- high contrast produces a stronger shell and controls while keeping the working
+  surface light;
+- the sidebar edge handle sits near the vertical center and no longer competes
+  with page titles;
+- the mobile student courses screenshot still avoids document-level horizontal
+  overflow.
+
+Artifacts remain ignored under `.e2e-run/` and must not be committed.
+
+### Validation performed
+
+Static and automated validation from this pass:
+
+```powershell
+git diff --check
+& '<repo>\.venv\Scripts\python.exe' -m pytest tests\backend\user_profile\test_appearance_styles.py -q
+cd apps\web\admin
+npm.cmd run build
+```
+
+Results:
+
+- `git diff --check` passed;
+- backend appearance tests passed: `3 passed`;
+- frontend production build passed;
+- frontend build emitted only the existing Vite CJS API deprecation warning and
+  large chunk warnings.
+
+### Encoding and editing notes
+
+This pass touched Vue files with existing Chinese UI text. The edits followed
+the repository encoding policy:
+
+- use patch-based structural edits;
+- anchor around ASCII identifiers, component names, and stable test IDs when
+  possible;
+- avoid copying PowerShell-rendered Chinese text back into source;
+- treat screenshot text as visual evidence, not as a source for rewriting
+  strings.
+
+Future agents extending this area should keep the same discipline. Appearance
+work tends to touch text-heavy Vue files, so accidental mojibake is a real risk
+if terminal-rendered Chinese is copied back into templates.
+
 ## Commit Hygiene For This Work
 
 Do include:

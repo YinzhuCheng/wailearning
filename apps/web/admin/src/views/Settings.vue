@@ -70,6 +70,20 @@
           <el-input v-model="form.copyright" placeholder="请输入版权信息" />
         </el-form-item>
 
+        <el-form-item label="默认外观">
+          <div class="appearance-default-field">
+            <el-select v-model="form.appearance_default_preset" data-testid="settings-appearance-default">
+              <el-option
+                v-for="preset in appearancePresetOptions"
+                :key="preset.key"
+                :label="preset.name"
+                :value="preset.key"
+              />
+            </el-select>
+            <div class="field-tip">作为全站默认风格；用户未选择个人风格时生效，个人设置可覆盖。</div>
+          </div>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="saveSettings">
             <el-icon><Select /></el-icon> 保存设置
@@ -305,6 +319,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, Refresh, Select, Setting, UploadFilled, View } from '@element-plus/icons-vue'
 import { normalizeBrandingText } from '@/utils/branding'
+import { appearancePresets } from '@/utils/theme'
 import { http } from '@/api'
 import api from '@/api'
 
@@ -367,8 +382,11 @@ const form = ref({
   system_logo: '',
   system_intro: '面向大学生的教学管理系统',
   copyright: '(c) 2026 BIMSA-CLASS',
-  use_bing_background: true
+  use_bing_background: true,
+  appearance_default_preset: 'professional-blue'
 })
+
+const appearancePresetOptions = appearancePresets
 
 const presetForm = reactive({
   name: '',
@@ -443,7 +461,8 @@ const fetchSettings = async () => {
       system_logo: settingsData.system_logo || '',
       system_intro: settingsData.system_intro || '面向大学生的教学管理系统',
       copyright: settingsData.copyright || '(c) 2026 BIMSA-CLASS',
-      use_bing_background: settingsData.use_bing_background === 'true'
+      use_bing_background: settingsData.use_bing_background === 'true',
+      appearance_default_preset: settingsData.appearance_default_preset || 'professional-blue'
     }
     originalForm.value = { ...form.value }
   } catch (error) {
@@ -527,7 +546,10 @@ const fetchPresets = async () => {
 const saveSettings = async () => {
   saving.value = true
   try {
-    await http.post('/settings/batch-update', form.value)
+    await http.post('/settings/batch-update', {
+      ...form.value,
+      use_bing_background: form.value.use_bing_background ? 'true' : 'false'
+    })
     ElMessage.success('设置保存成功')
     originalForm.value = { ...form.value }
   } catch (error) {
@@ -838,6 +860,12 @@ onMounted(() => {
   margin-top: 8px;
   font-size: 12px;
   color: #909399;
+}
+
+.appearance-default-field {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 8px;
 }
 
 .switch-group {

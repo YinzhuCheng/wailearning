@@ -18,6 +18,7 @@ export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
   const userInfo = ref(JSON.parse(localStorage.getItem('user') || 'null'))
   const systemSettings = ref(cachedSystemSettings)
+  const appearanceState = ref(null)
   const selectedCourse = ref(cachedSelectedCourse)
   const teachingCourses = ref([])
   const teachingCoursesLoaded = ref(false)
@@ -144,6 +145,7 @@ export const useUserStore = defineStore('user', () => {
     }
 
     await fetchSystemSettings()
+    await fetchAppearanceState()
 
     return userData
   }
@@ -167,10 +169,32 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  async function fetchAppearanceState() {
+    if (!token.value) {
+      appearanceState.value = null
+      return null
+    }
+
+    try {
+      const data = await api.appearance.getMine()
+      appearanceState.value = data
+      return data
+    } catch (error) {
+      console.error('Failed to fetch appearance state', error)
+      appearanceState.value = null
+      return null
+    }
+  }
+
+  function setAppearanceState(nextState) {
+    appearanceState.value = nextState || null
+  }
+
   function logout() {
     token.value = ''
     userInfo.value = null
     systemSettings.value = null
+    appearanceState.value = null
     selectedCourse.value = null
     teachingCourses.value = []
     teachingCoursesLoaded.value = false
@@ -184,6 +208,7 @@ export const useUserStore = defineStore('user', () => {
     token,
     userInfo,
     systemSettings,
+    appearanceState,
     selectedCourse,
     teachingCourses,
     teachingCoursesLoaded,
@@ -198,6 +223,8 @@ export const useUserStore = defineStore('user', () => {
     login,
     logout,
     fetchSystemSettings,
+    fetchAppearanceState,
+    setAppearanceState,
     refreshUserInfo,
     setSelectedCourse,
     clearSelectedCourse,

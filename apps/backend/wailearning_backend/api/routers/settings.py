@@ -20,6 +20,7 @@ PUBLIC_SETTING_KEYS = {
     "system_intro",
     "copyright",
     "use_bing_background",
+    "appearance_default_preset",
 }
 
 
@@ -36,7 +37,8 @@ def get_public_settings(db: Session = Depends(get_db)):
         system_logo=settings_dict.get("system_logo", ""),
         system_intro=settings_dict.get("system_intro", "面向大学生的教学管理系统"),
         copyright=settings_dict.get("copyright", "(c) 2026 BIMSA-CLASS"),
-        use_bing_background=settings_dict.get("use_bing_background", "true").lower() == "true",
+        use_bing_background=str(settings_dict.get("use_bing_background", "true")).lower() == "true",
+        appearance_default_preset=settings_dict.get("appearance_default_preset", "professional-blue"),
     )
 
 
@@ -88,7 +90,10 @@ def batch_update_settings(
         setting = db.query(SystemSetting).filter(SystemSetting.setting_key == key).first()
         if setting:
             setting.setting_value = value
-            updated.append(key)
+        else:
+            setting = SystemSetting(setting_key=key, setting_value=value, description=f"Custom setting: {key}")
+            db.add(setting)
+        updated.append(key)
 
     db.commit()
     return {"message": f"Updated {len(updated)} settings.", "updated": updated}

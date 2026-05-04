@@ -659,7 +659,7 @@ watch(notificationSyncParams, () => {
 
 .sidebar-edge-handle {
   position: fixed;
-  top: 96px;
+  top: 50%;
   z-index: 1000;
   display: inline-flex;
   width: 28px;
@@ -673,12 +673,13 @@ watch(notificationSyncParams, () => {
   color: var(--wa-color-primary-600);
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
   cursor: pointer;
+  transform: translateY(-50%);
   transition: left 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .sidebar-edge-handle:hover,
 .sidebar-edge-handle:focus-visible {
-  transform: translateX(2px);
+  transform: translateY(-50%) translateX(2px);
   background: #ffffff;
   box-shadow: 0 14px 32px color-mix(in srgb, var(--wa-color-primary-600) 22%, transparent);
   outline: none;
@@ -933,7 +934,6 @@ watch(notificationSyncParams, () => {
   }
 
   .sidebar-edge-handle {
-    top: 88px;
     width: 30px;
     height: 54px;
   }

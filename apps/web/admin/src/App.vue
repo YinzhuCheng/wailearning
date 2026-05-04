@@ -6,15 +6,22 @@
 import { onMounted, watch } from 'vue'
 
 import { useUserStore } from '@/stores/user'
-import { applyAdminTheme, resolveAdminTheme } from '@/utils/theme'
+import { applyAppearanceStyle, resolveAppearanceFromState } from '@/utils/theme'
 
 const userStore = useUserStore()
 
 function syncAdminTheme() {
-  applyAdminTheme(resolveAdminTheme(userStore.systemSettings || {}))
+  applyAppearanceStyle(resolveAppearanceFromState(userStore.systemSettings || {}, userStore.appearanceState))
 }
 
 watch(() => userStore.systemSettings, syncAdminTheme, { deep: true })
+watch(() => userStore.appearanceState, syncAdminTheme, { deep: true })
 
-onMounted(syncAdminTheme)
+onMounted(async () => {
+  syncAdminTheme()
+  if (userStore.isLoggedIn) {
+    await userStore.fetchAppearanceState()
+    syncAdminTheme()
+  }
+})
 </script>

@@ -358,6 +358,15 @@ const api = {
     bulkQuotaOverrides: data => http.post('/llm-settings/admin/quota-overrides/bulk', data),
     setStudentQuotaOverride: (studentId, data) => http.put(`/llm-settings/admin/students/${studentId}/quota-override`, data)
   },
+  appearance: {
+    listPresets: () => http.get('/appearance/presets'),
+    getMine: () => http.get('/appearance/me'),
+    createStyle: data => http.post('/appearance/me/styles', data),
+    updateStyle: (id, data) => http.put(`/appearance/me/styles/${id}`, data),
+    selectStyle: id => http.post(`/appearance/me/styles/${id}/select`),
+    useSystem: () => http.post('/appearance/me/use-system'),
+    deleteStyle: id => http.delete(`/appearance/me/styles/${id}`)
+  },
   notifications: {
     syncStatus: params => http.get('/notifications/sync-status', { params }),
     list: params => http.get('/notifications', { params }),

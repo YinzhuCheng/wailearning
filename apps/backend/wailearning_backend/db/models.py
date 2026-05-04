@@ -383,6 +383,26 @@ class SystemSetting(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class UserAppearanceStyle(Base):
+    __tablename__ = "user_appearance_styles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(80), nullable=False)
+    source = Column(String(24), nullable=False, default="custom")
+    preset_key = Column(String(80), nullable=True)
+    config = Column(JSON, nullable=False, default=dict)
+    is_selected = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_user_appearance_style_name"),
+    )
+
+    user = relationship("User", backref="appearance_styles")
+
+
 class Homework(Base):
     __tablename__ = "homeworks"
 
