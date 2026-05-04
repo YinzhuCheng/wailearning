@@ -288,13 +288,13 @@ watch(selectedCourse, () => {
   --sch-radius: 12px;
   --sch-radius-sm: 8px;
   --sch-gap: 16px;
-  --sch-border: #e2e8f0;
-  --sch-surface: #ffffff;
-  --sch-muted: #64748b;
-  --sch-text: #0f172a;
-  --sch-accent: #2563eb;
-  --sch-accent-soft: #eff6ff;
-  --sch-row-bg: #f8fafc;
+  --sch-border: var(--wa-border-subtle);
+  --sch-surface: var(--wa-color-surface);
+  --sch-muted: var(--wa-color-text-muted);
+  --sch-text: var(--wa-color-text);
+  --sch-accent: var(--wa-color-primary-600);
+  --sch-accent-soft: var(--wa-color-primary-50);
+  --sch-row-bg: var(--wa-color-bg-soft);
 
   padding: 24px;
   max-width: 1100px;

@@ -862,6 +862,68 @@ Important limitation:
 - when making that deeper change, preserve the same business actions and stable
   `data-testid` hooks used by the existing E2E suite.
 
+## Admin Theme And Token Foundation
+
+The next continuation pass addressed the previously open theme/token item
+without attempting a page-by-page visual rewrite. The goal was to create a
+working foundation that future agents can extend safely:
+
+- blue remains the default theme;
+- green, warm, and grayscale variants are now available;
+- Element Plus primary color variables are connected to the shared theme tokens;
+- core background, surface, text, border, state, shadow, radius, and type tokens
+  now live in the global admin stylesheet;
+- the main application shell, login default background, and student course home
+  local variables now consume the shared token layer.
+
+Files changed:
+
+- `apps/web/admin/src/utils/theme.js`;
+- `apps/web/admin/src/App.vue`;
+- `apps/web/admin/src/style.css`;
+- `apps/web/admin/src/views/Layout.vue`;
+- `apps/web/admin/src/views/Login.vue`;
+- `apps/web/admin/src/views/StudentCourseHome.vue`.
+
+Runtime behavior:
+
+- `App.vue` applies the theme to `document.documentElement.dataset.waTheme`;
+- the accepted canonical theme names are `blue`, `green`, `warm`, and
+  `grayscale`;
+- aliases such as `default`, `primary`, `teal`, `emerald`, `orange`, `amber`,
+  `neutral`, `gray`, and `grey` are normalized before application;
+- system settings may provide `admin_theme`, `theme`, `theme_color`, or
+  `color_theme`;
+- `localStorage.wailearning-admin-theme` can temporarily override the system
+  setting for inspection or local audit work.
+
+Important boundary:
+
+- this pass provides theme infrastructure and a few high-visibility consumers;
+- it does not yet replace every hard-coded page-level color literal;
+- it does not add a settings-page control for theme selection;
+- it does not introduce dark mode;
+- it intentionally avoids touching Chinese template text because PowerShell may
+  display UTF-8 source as mojibake in this local environment.
+
+Validation:
+
+- `git diff --check` passed;
+- `npm.cmd run build` passed, with only the existing Vite CJS API deprecation
+  warning and large chunk warnings.
+
+Maintenance guidance:
+
+- use `--wa-color-primary-*` for brand/action emphasis;
+- use `--wa-color-accent-*` for secondary contextual chips and non-primary
+  highlights;
+- use `--wa-color-text*`, `--wa-color-bg*`, `--wa-color-surface*`, and
+  `--wa-border-*` before adding new literal slate/gray colors;
+- keep page-specific semantic variables when a view already has them, but map
+  them to global `--wa-*` tokens as done in `StudentCourseHome.vue`;
+- when adding a user-facing theme picker later, persist one of the canonical
+  values listed above and let `theme.js` handle normalization.
+
 ## Commit Hygiene For This Work
 
 Do include:

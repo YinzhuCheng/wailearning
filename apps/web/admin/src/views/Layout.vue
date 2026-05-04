@@ -638,7 +638,7 @@ watch(notificationSyncParams, () => {
 <style scoped>
 .layout-container {
   min-height: 100vh;
-  background: #f4f7fb;
+  background: var(--wa-color-bg);
 }
 
 .layout-container > .el-container {
@@ -648,7 +648,7 @@ watch(notificationSyncParams, () => {
 .sidebar {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #0f172a 0%, #132238 100%);
+  background: var(--wa-sidebar-bg);
   color: #fff;
   transition: width 0.2s ease, transform 0.2s ease;
 }
@@ -669,8 +669,8 @@ watch(notificationSyncParams, () => {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-left: none;
   border-radius: 0 var(--wa-radius-xl) var(--wa-radius-xl) 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.96));
-  color: #2563eb;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, var(--wa-color-primary-50) 94%, white));
+  color: var(--wa-color-primary-600);
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
   cursor: pointer;
   transition: left 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
@@ -680,16 +680,16 @@ watch(notificationSyncParams, () => {
 .sidebar-edge-handle:focus-visible {
   transform: translateX(2px);
   background: #ffffff;
-  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--wa-color-primary-600) 22%, transparent);
   outline: none;
 }
 
 .sidebar-edge-handle--hidden {
-  color: #0f766e;
+  color: var(--wa-color-accent-700);
 }
 
 .sidebar-edge-handle--drawer-open {
-  color: #0f172a;
+  color: var(--wa-color-text);
   background: rgba(255, 255, 255, 0.94);
 }
 
@@ -742,8 +742,8 @@ watch(notificationSyncParams, () => {
   align-items: center;
   justify-content: center;
   border-radius: var(--wa-radius-lg);
-  background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
+  background: color-mix(in srgb, var(--wa-color-primary-500) 22%, transparent);
+  color: var(--wa-color-primary-300);
 }
 
 .logo-texts h2 {
@@ -782,7 +782,7 @@ watch(notificationSyncParams, () => {
 }
 
 .sidebar-menu :deep(.el-menu-item.is-active) {
-  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  background: var(--wa-sidebar-active-bg);
   color: #fff;
 }
 
@@ -806,7 +806,7 @@ watch(notificationSyncParams, () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--wa-border-subtle);
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(10px);
 }
@@ -824,18 +824,18 @@ watch(notificationSyncParams, () => {
   gap: 10px;
   max-width: 100%;
   border-radius: 999px;
-  background: #eff6ff;
+  background: var(--wa-color-primary-50);
   padding: 8px 14px;
-  color: #1d4ed8;
+  color: var(--wa-color-primary-700);
 }
 
 .context-chip--class {
-  background: #ecfeff;
-  color: #0f766e;
+  background: var(--wa-color-accent-50);
+  color: var(--wa-color-accent-700);
 }
 
 .context-chip__label {
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .context-chip__meta {
@@ -854,7 +854,7 @@ watch(notificationSyncParams, () => {
 
 .context-chip__meta span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .header-right {
@@ -873,11 +873,11 @@ watch(notificationSyncParams, () => {
 
 .course-option span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .course-dropdown-menu :deep(.is-current-course) {
-  background: #eff6ff;
+  background: var(--wa-color-primary-50);
 }
 
 .user-box {
@@ -894,12 +894,12 @@ watch(notificationSyncParams, () => {
 }
 
 .user-meta strong {
-  color: #111827;
+  color: var(--wa-color-text);
 }
 
 .user-meta span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .main-content {
@@ -912,7 +912,7 @@ watch(notificationSyncParams, () => {
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 @media (max-width: 768px) {

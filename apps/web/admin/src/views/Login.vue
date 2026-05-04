@@ -235,7 +235,7 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 50%, #38bdf8 100%);
+  background: linear-gradient(135deg, var(--wa-color-primary-900) 0%, var(--wa-color-primary-700) 52%, var(--wa-color-accent-600) 100%);
   position: relative;
   overflow: hidden;
 }
@@ -256,7 +256,7 @@ onMounted(async () => {
   inset: 0;
   background:
     radial-gradient(circle at 20% 80%, rgba(56, 189, 248, 0.28) 0%, transparent 48%),
-    radial-gradient(circle at 80% 20%, rgba(96, 165, 250, 0.2) 0%, transparent 45%);
+    radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--wa-color-primary-300) 24%, transparent) 0%, transparent 45%);
 }
 
 .login-card {
@@ -289,11 +289,12 @@ onMounted(async () => {
   margin: 0 0 12px;
   font-size: 28px;
   color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .system-desc {
   margin: 0;
-  color: #475569;
+  color: var(--wa-color-text-muted);
   line-height: 1.7;
 }
 
@@ -310,7 +311,7 @@ onMounted(async () => {
 
 .forgot-hint {
   margin: 0 0 16px;
-  color: #475569;
+  color: var(--wa-color-text-muted);
   line-height: 1.65;
   font-size: 14px;
 }
@@ -318,7 +319,7 @@ onMounted(async () => {
 .login-footer {
   margin-top: 16px;
   text-align: center;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: 13px;
 }
 
