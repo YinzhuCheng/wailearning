@@ -917,7 +917,7 @@ watch(
 .quota-course-block {
   margin-top: 16px;
   padding: 14px 16px;
-  border-radius: 14px;
+  border-radius: var(--wa-radius-lg);
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border: 1px solid #e2e8f0;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
@@ -1109,7 +1109,7 @@ watch(
 
 .course-section {
   background: #fff;
-  border-radius: 20px;
+  border-radius: var(--wa-radius-2xl);
   padding: 24px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   margin-bottom: 20px;
@@ -1144,7 +1144,7 @@ watch(
 .catalog-cover-thumb {
   width: 64px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-md);
   overflow: hidden;
   border: 1px solid #e2e8f0;
 }
@@ -1152,7 +1152,7 @@ watch(
 .course-card-cover {
   margin: -20px -20px 14px;
   height: 120px;
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--wa-radius-xl) var(--wa-radius-xl) 0 0;
   overflow: hidden;
   background: #e2e8f0;
 }
@@ -1169,7 +1169,7 @@ watch(
 
 .course-card {
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border-radius: var(--wa-radius-xl);
   padding: 20px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1263,7 +1263,7 @@ watch(
 
   .quota-card,
   .elective-catalog-card {
-    border-radius: 6px;
+    border-radius: var(--wa-radius-lg);
   }
 
   .quota-card :deep(.el-card__body),
@@ -1280,18 +1280,18 @@ watch(
   }
 
   .course-section {
-    border-radius: 18px;
+    border-radius: var(--wa-radius-xl);
     padding: 20px;
   }
 
   .course-card {
-    border-radius: 16px;
+    border-radius: var(--wa-radius-xl);
     padding: 18px;
   }
 
   .course-card-cover {
     margin: -18px -18px 14px;
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--wa-radius-xl) var(--wa-radius-xl) 0 0;
   }
 
   .course-card-header {

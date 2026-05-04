@@ -905,7 +905,7 @@ watch(selectedChapterId, () => {
 
 .course-cover-banner {
   margin-bottom: 20px;
-  border-radius: 14px;
+  border-radius: var(--wa-radius-xl);
   overflow: hidden;
   border: 1px solid #e2e8f0;
   max-height: 200px;
@@ -926,7 +926,7 @@ watch(selectedChapterId, () => {
 }
 
 .chapter-sidebar {
-  border-radius: 12px;
+  border-radius: var(--wa-radius-lg);
   background: #fff;
   padding: 12px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
@@ -960,6 +960,7 @@ watch(selectedChapterId, () => {
 .chapter-outline-btn {
   width: 28px;
   height: 28px;
+  border-radius: 50%;
   color: #2563eb;
 }
 

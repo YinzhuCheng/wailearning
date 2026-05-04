@@ -4,6 +4,22 @@
   box-sizing: border-box;
 }
 
+:root {
+  --wa-radius-xs: 4px;
+  --wa-radius-sm: 6px;
+  --wa-radius-md: 8px;
+  --wa-radius-lg: 12px;
+  --wa-radius-xl: 16px;
+  --wa-radius-2xl: 20px;
+  --wa-radius-pill: 999px;
+  --wa-border-subtle: #e2e8f0;
+  --wa-shadow-surface: 0 8px 24px rgba(15, 23, 42, 0.07);
+  --wa-shadow-object: 0 12px 30px rgba(15, 23, 42, 0.09);
+  --el-border-radius-base: var(--wa-radius-sm);
+  --el-border-radius-small: var(--wa-radius-xs);
+  --el-border-radius-round: 18px;
+}
+
 body {
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
   background-color: #f5f7fa;
@@ -17,15 +33,55 @@ body {
   border-right: none !important;
 }
 
+.el-card {
+  border-color: var(--wa-border-subtle);
+  border-radius: var(--wa-radius-lg);
+  overflow: hidden;
+}
+
+.el-button {
+  border-radius: var(--wa-radius-sm);
+}
+
+.el-button.is-circle {
+  border-radius: 50%;
+}
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper,
+.el-input-number,
+.el-date-editor.el-input,
+.el-date-editor.el-input__wrapper {
+  border-radius: var(--wa-radius-sm);
+}
+
+.el-tag {
+  border-radius: var(--wa-radius-pill);
+}
+
+.el-table {
+  --el-table-border-color: #e5e7eb;
+}
+
+.el-table__inner-wrapper {
+  border-radius: var(--wa-radius-xs);
+}
+
+.el-dialog {
+  border-radius: var(--wa-radius-lg);
+  overflow: hidden;
+}
+
 .content-wrapper {
   padding: 20px;
 }
 
 .stat-card {
   background: white;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-lg);
   padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .stat-card .stat-value {
@@ -55,14 +111,14 @@ body {
 
 .table-container {
   background: white;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-lg);
   padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .form-container {
   background: white;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-lg);
   padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--wa-shadow-surface);
 }

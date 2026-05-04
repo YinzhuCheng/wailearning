@@ -308,10 +308,10 @@ const sidebarWidth = computed(() => {
 })
 const sidebarHandleStyle = computed(() => {
   if (isMobile.value) {
-    return { left: isCollapsed.value ? '0px' : '240px' }
+    return { left: isCollapsed.value ? '0px' : '226px' }
   }
 
-  return { left: isSidebarHidden.value ? '0px' : sidebarWidth.value }
+  return { left: isSidebarHidden.value ? '0px' : `calc(${sidebarWidth.value} - 14px)` }
 })
 const sidebarHandleLabel = computed(() => {
   if (isMobile.value) {
@@ -668,7 +668,7 @@ watch(notificationSyncParams, () => {
   justify-content: center;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-left: none;
-  border-radius: 0 18px 18px 0;
+  border-radius: 0 var(--wa-radius-xl) var(--wa-radius-xl) 0;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.96));
   color: #2563eb;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
@@ -741,7 +741,7 @@ watch(notificationSyncParams, () => {
   height: 40px;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: var(--wa-radius-lg);
   background: rgba(59, 130, 246, 0.2);
   color: #93c5fd;
 }
@@ -772,7 +772,7 @@ watch(notificationSyncParams, () => {
 
 .sidebar-menu :deep(.el-menu-item) {
   margin: 6px 0;
-  border-radius: 12px;
+  border-radius: var(--wa-radius-lg);
   color: rgba(255, 255, 255, 0.82);
 }
 
@@ -788,7 +788,7 @@ watch(notificationSyncParams, () => {
 
 .sidebar-menu :deep(.el-sub-menu__title) {
   margin: 6px 0;
-  border-radius: 12px;
+  border-radius: var(--wa-radius-lg);
   color: rgba(255, 255, 255, 0.82);
 }
 

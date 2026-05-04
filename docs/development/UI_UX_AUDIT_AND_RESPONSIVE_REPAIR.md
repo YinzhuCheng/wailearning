@@ -735,6 +735,96 @@ Maintenance guidance:
   controls available in the sidebar/drawer rather than hiding the tree state
   behind route changes.
 
+## Admin Radius Hierarchy Follow-Up
+
+The admin SPA now has a small shared radius vocabulary for future visual work:
+
+- `--wa-radius-xs: 4px`;
+- `--wa-radius-sm: 6px`;
+- `--wa-radius-md: 8px`;
+- `--wa-radius-lg: 12px`;
+- `--wa-radius-xl: 16px`;
+- `--wa-radius-2xl: 20px`;
+- `--wa-radius-pill: 999px`.
+
+The tokens live in:
+
+- `apps/web/admin/src/style.css`.
+
+Reasoning:
+
+- the admin app should not become uniformly rounded, because it is an
+  information-dense teaching-management tool;
+- table-heavy operational pages need restrained surfaces so rows, form fields,
+  and actions remain easy to scan repeatedly;
+- object-focused student surfaces, course cards, quota blocks, and course
+  sections can be softer because they represent individual course objects or
+  student-facing summary cards;
+- utility controls such as icon buttons, tags, progress bars, and side handles
+  can use circular or pill radii because their shapes carry control affordance
+  rather than document structure.
+
+Implemented hierarchy:
+
+- Element Plus card shells default to `--wa-radius-lg` so form/table containers
+  are no longer visually too square, but still read as dashboard work surfaces;
+- standard buttons and form controls default to the smaller `--wa-radius-sm`;
+- tags use the pill token, matching their status-label role;
+- table internals stay almost square via `--wa-radius-xs`, because rounding each
+  row or cell would weaken table alignment;
+- settings section cards and the settings section navigator use `--wa-radius-lg`;
+- settings navigator items and preview-image containers use `--wa-radius-md`;
+- the login preview background uses `--wa-radius-xl`, while the nested login
+  form box uses `--wa-radius-lg`, producing a visible parent/child radius
+  distinction;
+- materials course cover banners use `--wa-radius-xl`, while the chapter sidebar
+  uses `--wa-radius-lg`;
+- student course sections retain the larger `--wa-radius-2xl` on desktop and
+  `--wa-radius-xl` on mobile because those areas are object collections, not
+  dense table shells;
+- individual course cards use `--wa-radius-xl`, with matching top cover radii.
+
+Sidebar handle refinement:
+
+- screenshot review after the radius pass showed that the desktop sidebar edge
+  handle, while functional, could visually intrude into the main content title
+  area when positioned fully outside the sidebar width;
+- `Layout.vue` now keeps the handle half-embedded at the sidebar boundary:
+  - desktop expanded/collapsed: `left: calc(<sidebarWidth> - 14px)`;
+  - desktop hidden: `left: 0px`;
+  - mobile open: `left: 226px` for a `240px` drawer;
+  - mobile closed: `left: 0px`;
+- this preserves the pull-out affordance without covering page headings.
+
+Validation:
+
+- `git diff --check` passed;
+- `npm.cmd run build` passed, with only the existing Vite CJS API and large
+  chunk warnings;
+- PostgreSQL-backed screenshots were captured with
+  `UI_UX_AUDIT_PREFIX=after-radius` and again with
+  `UI_UX_AUDIT_PREFIX=after-radius-handle` after adjusting the sidebar handle;
+- the reviewed screenshots included:
+  - `after-radius-handle-admin-settings-postgres.png`;
+  - `after-radius-handle-student-courses-postgres.png`;
+  - `after-radius-handle-mobile-student-courses-postgres.png`;
+- the screenshot review confirmed the new radius hierarchy is visible without
+  making the operational pages look like card-heavy marketing screens, and the
+  adjusted sidebar handle no longer overlaps the main page title area.
+
+Maintenance guidance:
+
+- prefer the shared `--wa-radius-*` tokens over new literal radius values;
+- use `4px` to `8px` for small internal table/form details;
+- use `12px` for standard dashboard shells and contained panels;
+- use `16px` to `20px` only for object cards, visual previews, course sections,
+  and mobile/student-facing collection surfaces;
+- keep pill/circle radii for tags, progress bars, avatars, icon buttons, and
+  explicit tool handles;
+- do not globally force all Element Plus components to large radii;
+- when future screenshots reveal a collision between a floating control and page
+  content, adjust the control position first before increasing page padding.
+
 ## Table-Heavy Page Containment Follow-Up
 
 After the course-page mobile repair, the next broad responsive risk was the

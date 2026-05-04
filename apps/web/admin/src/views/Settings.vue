@@ -723,7 +723,7 @@ onMounted(() => {
 }
 
 .settings-container :deep(.el-card) {
-  border-radius: 8px;
+  border-radius: var(--wa-radius-lg);
   overflow: hidden;
 }
 
@@ -745,7 +745,7 @@ onMounted(() => {
   margin-bottom: 16px;
   padding: 10px;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-lg);
   background: rgba(248, 250, 252, 0.94);
   backdrop-filter: blur(8px);
 }
@@ -753,7 +753,7 @@ onMounted(() => {
 .settings-section-nav__item {
   min-width: 0;
   border: 1px solid #dbeafe;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-md);
   background: #fff;
   color: #0f172a;
   cursor: pointer;
@@ -831,7 +831,7 @@ onMounted(() => {
 .background-preview img {
   max-width: min(400px, 100%);
   max-height: 200px;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-md);
 }
 
 .field-tip {
@@ -854,14 +854,14 @@ onMounted(() => {
 .login-preview {
   background: #f5f7fa;
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-md);
   overflow: hidden;
 }
 
 .preview-background {
   width: 100%;
   height: 400px;
-  border-radius: 12px;
+  border-radius: var(--wa-radius-xl);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -872,7 +872,7 @@ onMounted(() => {
 .preview-login-box {
   background: rgba(255, 255, 255, 0.95);
   padding: 40px;
-  border-radius: 12px;
+  border-radius: var(--wa-radius-lg);
   width: min(350px, 100%);
   min-width: 0;
   text-align: center;
