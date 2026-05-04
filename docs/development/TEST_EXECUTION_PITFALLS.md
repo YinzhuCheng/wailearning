@@ -900,6 +900,163 @@ placeholders such as:
 Local handoff files can contain machine-specific paths when the next operator on
 the same machine needs them, but committed docs should stay portable.
 
+## Frontend Build And Playwright Invocation Directory Pitfalls
+
+This subsection records command-invocation mistakes encountered while adding a
+focused UI outline guard. The product code was not the root cause; the failures
+came from running the right tools from the wrong directory or outside the test
+configuration boundary.
+
+### Pitfall: root-level `npm.cmd run build` can fail with missing `package.json`
+
+Symptom:
+
+```text
+npm error enoent Could not read package.json
+npm error path <repo>/package.json
+```
+
+Cause:
+
+The admin frontend package lives under:
+
+```text
+<repo>/apps/web/admin
+```
+
+The repository root is not the frontend package root and does not own the
+admin SPA `package.json`.
+
+Fix:
+
+Run the build from the frontend app directory:
+
+```text
+cd <repo>/apps/web/admin
+npm.cmd run build
+```
+
+Interpretation:
+
+Do not treat this failure as a dependency install failure or a Vite failure.
+It is a working-directory failure. Re-run from the frontend package before
+changing code, reinstalling packages, or editing build configuration.
+
+### Pitfall: Playwright project names disappear when running from the spec directory
+
+Symptom:
+
+```text
+Error: Project(s) "chromium" not found. Available projects: ""
+```
+
+Cause:
+
+The Playwright config for the admin SPA is in:
+
+```text
+<repo>/apps/web/admin/playwright.config.cjs
+```
+
+Running `npx.cmd playwright test ... --project=chromium` from
+`<repo>/tests/e2e/web-admin` can fail to load that config. Without the config,
+the CLI does not know about the `chromium` project.
+
+Fix:
+
+Run maintained admin Playwright specs from:
+
+```text
+<repo>/apps/web/admin
+```
+
+Use the configured test file name relative to the configured `testDir`, for
+example:
+
+```text
+npx.cmd playwright test ui-homework-history-outline-regression.spec.js --project=chromium
+```
+
+Interpretation:
+
+This is not evidence that Chromium is missing. It means the command did not
+load the project configuration.
+
+### Pitfall: path arguments outside configured `testDir` may report "No tests found"
+
+Symptom:
+
+```text
+Error: No tests found.
+Make sure that arguments are regular expressions matching test files.
+```
+
+Cause:
+
+The admin Playwright config sets:
+
+```text
+testDir: ../../../tests/e2e/web-admin
+```
+
+Passing a path outside that directory, such as an ignored local script under
+`<artifact-dir>`, does not necessarily behave like a one-off arbitrary spec
+runner. The config still scopes discovery around its `testDir`.
+
+Fix:
+
+For maintained tests, keep the spec under `<repo>/tests/e2e/web-admin` and run
+it by filename from `<repo>/apps/web/admin`.
+
+For local screenshot experiments, either:
+
+- temporarily add screenshot capture to a maintained spec and remove it before
+  commit; or
+- create an ignored local Node script that imports Playwright directly and also
+  recreates any module-resolution setup the Playwright config normally provides.
+
+Interpretation:
+
+Do not expand `testDir` just to run a local screenshot helper. Keep ignored
+artifacts ignored and keep maintained test discovery narrow.
+
+### Pitfall: local Node screenshot scripts may not inherit Playwright config module resolution
+
+Symptom:
+
+```text
+Error: Cannot find module '@playwright/test'
+Require stack:
+- <repo>/tests/e2e/web-admin/fixtures.cjs
+- <artifact-dir>/...
+```
+
+Cause:
+
+The admin Playwright config prepends the frontend `node_modules` directory to
+`NODE_PATH` and calls `Module._initPaths()` before running tests. A direct local
+Node script does not inherit that setup unless it recreates it.
+
+Fix:
+
+For local-only scripts, add the equivalent setup before importing E2E helpers:
+
+```javascript
+const Module = require('module')
+const adminNodeModules = '<repo>/apps/web/admin/node_modules'
+process.env.NODE_PATH = [adminNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
+Module._initPaths()
+```
+
+Use placeholder paths in committed docs. Put real absolute paths only in ignored
+local notes.
+
+Interpretation:
+
+This failure does not mean `@playwright/test` is missing from the frontend app.
+It means the direct script skipped the configuration bootstrap that normally
+makes the package visible to shared E2E helpers.
+
 ## What This Document Does Not Claim
 
 - It does not claim the product code is bug-free.

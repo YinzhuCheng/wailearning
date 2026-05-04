@@ -1569,3 +1569,237 @@ course-home invariant narrow.
   the JSON snapshot contains text, apply the same visual-readiness lesson as the
   login screenshot pitfall: wait for a stable visible panel or `data-testid`
   before capture.
+
+## Homework Submission History Outline Pass
+
+This pass continued the multi-level content expansion work after the maintained
+materials outline and the course-home material preview were already in place.
+The goal was not to add trees everywhere. The goal was to identify pages where
+the product already has a real parent-child information model and where
+progressive disclosure reduces visual noise without hiding primary workflow
+state.
+
+### Candidate scan and selection
+
+The scan covered frontend views and maintained tests for terms such as:
+
+- `el-tree`;
+- `children`;
+- `parent_id`;
+- `chapter`;
+- `collapse`;
+- `expand`;
+- `group`;
+- `section`;
+- `history`;
+- `attempt`.
+
+The scan confirmed that the strongest true tree remains course materials:
+
+- `apps/web/admin/src/views/Materials.vue` is the editable tree owner;
+- `apps/web/admin/src/views/StudentCourseHome.vue` is the read-only course-home
+  outline preview;
+- both are already guarded by focused Playwright tests.
+
+The next appropriate surface was teacher-side homework submission history:
+
+- source: `apps/web/admin/src/views/HomeworkSubmissions.vue`;
+- route shape: `/homework/:id/submissions`;
+- parent object: one student's homework submission row;
+- child objects: individual attempts under that submission;
+- child detail content: submission body, attachment link, review comment,
+  grading task error, score input, review input, and regrade action.
+
+This is a real hierarchy, not a fake tree. A teacher often needs to scan several
+attempts to understand recency, score source, late status, LLM status, and
+whether a specific attempt should be reviewed. Showing every attempt body and
+every action by default makes the dialog visually heavy, especially after
+multiple resubmissions or feedback-follow-up attempts.
+
+Other candidates were intentionally left alone in this pass:
+
+- `StudentScores.vue` has grade composition sections and homework rows, but the
+  table is already compact and not a nested object editor. Turning it into an
+  outline would add more interaction than the current data justifies.
+- `Settings.vue` has anchored sections, not a parent-child content tree. It
+  already has a section navigator and should not be converted into collapsible
+  accordions unless the settings page grows enough that per-section save and
+  progressive disclosure become a product requirement.
+- `CourseDiscussionPanel.vue` has long-body preview/collapse, but discussion
+  rows are a linear conversation stream rather than a stable hierarchy. It also
+  already has its own maintained long-body expansion behavior.
+- Attendance history dots and schedule/calendar components are visual summaries,
+  not multi-level editable or inspectable content trees.
+
+### Product behavior
+
+The teacher history dialog now treats each attempt as a child outline row:
+
+- each attempt card has an explicit square `+` / `-` icon button;
+- the button toggles only the attempt detail area;
+- the attempt summary row remains visible when collapsed;
+- the latest attempt is expanded by default when the history dialog opens;
+- older attempts are collapsed by default but still show timestamp, attempt id,
+  tags, score/status metadata, and a one-line submission preview;
+- collapsing an attempt hides the heavy body, feedback, task error, score input,
+  review input, and attempt-level regrade action;
+- expanding restores the same detail controls without reloading history.
+
+This mirrors the existing outline vocabulary:
+
+- parent-like rows receive a real button;
+- the button is icon-based rather than text-pill based;
+- the visual control uses the same `Plus` and `Minus` Element Plus icons used by
+  the materials outline;
+- hover scale is subtle and constrained to the icon button;
+- focus-visible styling is explicit;
+- title/summary text remains separate from expansion state.
+
+The implementation deliberately does not change backend history semantics:
+
+- no API response shape changed;
+- no database schema changed;
+- no grading or regrade payload changed;
+- no history sorting behavior changed;
+- no score persistence behavior changed.
+
+### Implementation details
+
+`HomeworkSubmissions.vue` gained local dialog state:
+
+```text
+expandedHistoryAttemptIds: Set<string>
+```
+
+The set is updated through:
+
+```text
+isHistoryAttemptExpanded(attemptId)
+toggleHistoryAttempt(attemptId)
+```
+
+`openHistory(row)` now initializes the state to the first loaded attempt:
+
+```text
+historyAttempts.value.slice(0, 1)
+```
+
+The list endpoint and existing history endpoint already order the attempts used
+by the dialog. Therefore the first item is treated as the most relevant/default
+visible child. If a future backend change changes history ordering, the UI
+should either preserve "latest first" or explicitly choose the latest attempt by
+submitted time/id before setting default expanded state.
+
+The detail body and action area use `v-show` rather than `v-if`. That keeps form
+state for score/comment inputs alive while a teacher briefly collapses and
+re-expands an attempt inside the same dialog session.
+
+Stable test hooks were added:
+
+```text
+homework-history-attempt-<attempt-id>
+homework-history-attempt-toggle-<attempt-id>
+homework-history-attempt-preview-<attempt-id>
+homework-history-attempt-body-<attempt-id>
+```
+
+### Visual notes
+
+The history dialog screenshot from this pass showed:
+
+- the dialog keeps a scannable timeline shape;
+- the expanded latest attempt shows its detail controls directly below the
+  summary row;
+- the older attempt is collapsed to a compact one-line preview;
+- the `+` / `-` button is visually discoverable without competing with grading
+  actions;
+- the control aligns with the attempt card text rather than floating detached
+  from the row;
+- the surrounding teacher submission table remains usable behind the modal
+  overlay.
+
+The standard PostgreSQL UI audit screenshots also showed no broad regression on:
+
+- login;
+- admin students;
+- admin settings;
+- personal appearance;
+- official appearance presets;
+- teacher dashboard;
+- teacher homework;
+- student courses;
+- student course home;
+- mobile student courses.
+
+### Regression guard
+
+Added:
+
+```text
+tests/e2e/web-admin/ui-homework-history-outline-regression.spec.js
+```
+
+The guard:
+
+- resets the E2E scenario;
+- submits two attempts as the seeded student through the API;
+- loads the teacher submissions list;
+- reads `latest_attempt_id` from the teacher list row;
+- opens the teacher history dialog;
+- verifies the latest attempt summary and detail body are visible;
+- collapses the latest attempt;
+- verifies the summary remains visible while the body is hidden;
+- expands the same attempt again;
+- verifies the body returns and still contains the latest attempt content.
+
+This keeps the maintained invariant narrow: the test does not assert every tag,
+every score path, or every review action. Existing homework and LLM tests cover
+those broader behaviors. This guard owns only the outline interaction contract.
+
+### Validation
+
+Commands run during this pass:
+
+```text
+git diff --check
+npm.cmd run build
+npx.cmd playwright test ui-homework-history-outline-regression.spec.js --project=chromium
+UI_UX_AUDIT_PREFIX=outline2 node <artifact-dir>/ui-ux-audit/postgres-ui-audit.cjs
+```
+
+Observed results:
+
+- `git diff --check` passed;
+- frontend build passed from `<repo>/apps/web/admin`;
+- the first root-level `npm.cmd run build` attempt failed because the repository
+  root has no `package.json`; the successful invocation used the frontend app
+  directory;
+- the new Playwright guard passed from `<repo>/apps/web/admin`;
+- running Playwright from the spec directory failed because the project config
+  was not loaded there;
+- running a path outside configured `testDir` failed with "No tests found";
+- running browser-backed Playwright and the local PostgreSQL UI audit required
+  execution outside the default restricted sandbox after `spawn EPERM`;
+- PostgreSQL screenshot audit completed and wrote ignored local artifacts under
+  `<artifact-dir>`;
+- a temporary screenshot capture was used to inspect the history dialog and was
+  removed from the maintained spec before commit.
+
+### Future guidance
+
+- Do not promote every long list into an outline. Require a real parent-child
+  model, repeated child records, or heavy detail content.
+- Keep "summary stays visible" as a hard invariant. Collapsed state should never
+  hide the object identity, timestamp, status, or enough preview text for the
+  user to understand what they collapsed.
+- Keep attempt-level grading inputs under the expanded detail area. Otherwise a
+  collapsed row can still look action-heavy, which defeats the purpose of the
+  outline.
+- If student-side `HomeworkSubmission.vue` receives the same treatment later,
+  first verify the file encoding and edit with ASCII anchors. Some terminals may
+  render existing Chinese text incorrectly even when the repository bytes are
+  valid.
+- If a future test needs screenshot artifacts, prefer ignored local scripts or a
+  deliberately temporary spec change that is removed before commit. Do not leave
+  screenshot side effects in maintained regression tests unless the screenshot is
+  itself the maintained artifact.
