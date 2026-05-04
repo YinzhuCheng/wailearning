@@ -24,9 +24,31 @@
         <aside class="chapter-sidebar" :class="{ 'chapter-sidebar--narrow': userStore.isStudent }">
           <div class="chapter-sidebar__head">
             <span class="chapter-sidebar__title">章节</span>
-            <template v-if="canManageChapters">
-              <el-button text type="primary" size="small" @click="openAddChapterDialog(null)">根章节</el-button>
-            </template>
+            <div class="chapter-sidebar__actions">
+              <el-tooltip content="展开全部章节" placement="top">
+                <el-button
+                  class="chapter-outline-btn"
+                  text
+                  circle
+                  :icon="Expand"
+                  aria-label="展开全部章节"
+                  data-testid="materials-expand-all-chapters"
+                  @click="expandAllChapters"
+                />
+              </el-tooltip>
+              <el-tooltip content="收起全部章节" placement="top">
+                <el-button
+                  class="chapter-outline-btn"
+                  text
+                  circle
+                  :icon="Fold"
+                  aria-label="收起全部章节"
+                  data-testid="materials-collapse-all-chapters"
+                  @click="collapseAllChapters"
+                />
+              </el-tooltip>
+              <el-button v-if="canManageChapters" text type="primary" size="small" @click="openAddChapterDialog(null)">根章节</el-button>
+            </div>
           </div>
           <el-skeleton v-if="treeLoading" :rows="6" animated />
           <el-tree
@@ -40,8 +62,10 @@
             :expand-on-click-node="false"
             :draggable="canManageChapters"
             :allow-drop="allowChapterDrop"
-            default-expand-all
+            :default-expanded-keys="expandedChapterKeys"
             @node-click="handleChapterClick"
+            @node-expand="handleChapterExpand"
+            @node-collapse="handleChapterCollapse"
             @node-drop="handleChapterDrop"
           >
             <template #default="{ data }">
@@ -60,7 +84,7 @@
 
         <section class="materials-main">
           <div class="materials-toolbar">
-            <span class="muted-text">
+            <span class="muted-text" data-testid="materials-current-chapter">
               当前章节：<strong>{{ currentChapterTitle }}</strong>
             </span>
           </div>
@@ -266,6 +290,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Expand, Fold } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
@@ -295,6 +320,7 @@ const attachmentFile = ref(null)
 const chapterTreeNodes = ref([])
 const selectedChapterId = ref(null)
 const treeRef = ref(null)
+const expandedChapterKeys = ref([])
 const newChapterTitle = ref('')
 const chapterParentId = ref(null)
 const renameChapterId = ref(null)
@@ -304,6 +330,9 @@ const extraChapterId = ref(null)
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
+const expandedStorageKey = computed(() =>
+  selectedCourse.value?.id ? `wailearning-materials-expanded-chapters:${selectedCourse.value.id}` : null
+)
 
 const isCourseInstructor = computed(() => {
   const c = selectedCourse.value
@@ -340,6 +369,90 @@ const flattenTree = (nodes, depth = 0, acc = []) => {
   return acc
 }
 
+const collectChapterIds = nodes => {
+  const ids = []
+  for (const n of nodes || []) {
+    ids.push(n.id)
+    ids.push(...collectChapterIds(n.children))
+  }
+  return ids
+}
+
+const topLevelChapterIds = nodes => (nodes || []).map(n => n.id).filter(Boolean)
+
+const findChapterPath = (nodes, targetId, path = []) => {
+  for (const n of nodes || []) {
+    const nextPath = [...path, n.id]
+    if (String(n.id) === String(targetId)) {
+      return nextPath
+    }
+    const childPath = findChapterPath(n.children, targetId, nextPath)
+    if (childPath.length) {
+      return childPath
+    }
+  }
+  return []
+}
+
+const persistExpandedChapterKeys = () => {
+  if (!expandedStorageKey.value || typeof window === 'undefined') {
+    return
+  }
+  window.localStorage.setItem(expandedStorageKey.value, JSON.stringify(expandedChapterKeys.value))
+}
+
+const restoreExpandedChapterKeys = nodes => {
+  if (expandedStorageKey.value && typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(expandedStorageKey.value)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          const valid = new Set(collectChapterIds(nodes))
+          return parsed.filter(id => valid.has(id))
+        }
+      }
+    } catch (error) {
+      console.warn('恢复章节展开状态失败', error)
+    }
+  }
+
+  return topLevelChapterIds(nodes)
+}
+
+const syncTreeExpandedState = () => {
+  const open = new Set(expandedChapterKeys.value)
+  for (const id of collectChapterIds(chapterTreeNodes.value)) {
+    const node = treeRef.value?.getNode?.(id)
+    if (node) {
+      node.expanded = open.has(id)
+    }
+  }
+}
+
+const ensureSelectedChapterPathExpanded = () => {
+  if (!selectedChapterId.value) {
+    return
+  }
+  const next = new Set(expandedChapterKeys.value)
+  for (const id of findChapterPath(chapterTreeNodes.value, selectedChapterId.value)) {
+    next.add(id)
+  }
+  expandedChapterKeys.value = Array.from(next)
+}
+
+const expandAllChapters = () => {
+  expandedChapterKeys.value = collectChapterIds(chapterTreeNodes.value)
+  syncTreeExpandedState()
+  persistExpandedChapterKeys()
+}
+
+const collapseAllChapters = () => {
+  expandedChapterKeys.value = []
+  syncTreeExpandedState()
+  persistExpandedChapterKeys()
+}
+
 const flatChapterOptions = computed(() => {
   const flat = flattenTree(chapterTreeNodes.value)
   return flat.map(n => ({
@@ -365,6 +478,18 @@ const findUncategorizedId = nodes => {
 
 const handleChapterClick = data => {
   selectedChapterId.value = data.id
+  ensureSelectedChapterPathExpanded()
+  persistExpandedChapterKeys()
+}
+
+const handleChapterExpand = data => {
+  expandedChapterKeys.value = Array.from(new Set([...expandedChapterKeys.value, data.id]))
+  persistExpandedChapterKeys()
+}
+
+const handleChapterCollapse = data => {
+  expandedChapterKeys.value = expandedChapterKeys.value.filter(id => String(id) !== String(data.id))
+  persistExpandedChapterKeys()
 }
 
 const allowChapterDrop = (draggingNode, dropNode, type) => {
@@ -386,6 +511,9 @@ const loadChapterTree = async () => {
       selectedChapterId.value =
         findUncategorizedId(chapterTreeNodes.value) || chapterTreeNodes.value[0]?.id || null
     }
+    expandedChapterKeys.value = restoreExpandedChapterKeys(chapterTreeNodes.value)
+    ensureSelectedChapterPathExpanded()
+    requestAnimationFrame(syncTreeExpandedState)
   } finally {
     treeLoading.value = false
   }
@@ -436,6 +564,7 @@ const handleChapterDrop = async (draggingNode, dropNode, dropType) => {
     })
     ElMessage.success('章节顺序已更新')
     await loadChapterTree()
+    persistExpandedChapterKeys()
   } catch (e) {
     console.error(e)
     await loadChapterTree()
@@ -648,6 +777,7 @@ const submitRenameChapter = async () => {
     ElMessage.success('已更新')
     renameChapterVisible.value = false
     await loadChapterTree()
+    persistExpandedChapterKeys()
   } finally {
     renameChapterSubmitting.value = false
   }
@@ -668,6 +798,11 @@ const submitNewChapter = async () => {
     ElMessage.success('章节已添加')
     chapterDialogVisible.value = false
     await loadChapterTree()
+    if (chapterParentId.value) {
+      expandedChapterKeys.value = Array.from(new Set([...expandedChapterKeys.value, chapterParentId.value]))
+      syncTreeExpandedState()
+      persistExpandedChapterKeys()
+    }
   } finally {
     chapterSubmitting.value = false
   }
@@ -683,6 +818,8 @@ const confirmDeleteChapter = async data => {
     if (selectedChapterId.value === deletedId) {
       selectedChapterId.value = findUncategorizedId(chapterTreeNodes.value)
     }
+    expandedChapterKeys.value = expandedChapterKeys.value.filter(id => String(id) !== String(deletedId))
+    persistExpandedChapterKeys()
     await loadMaterials()
   } catch (e) {
     if (e !== 'cancel') console.error(e)
@@ -723,12 +860,16 @@ onMounted(async () => {
 
 watch(selectedCourse, async () => {
   selectedChapterId.value = null
+  expandedChapterKeys.value = []
   await loadChapterTree()
   selectedChapterId.value = findUncategorizedId(chapterTreeNodes.value)
   await loadMaterials()
 })
 
 watch(selectedChapterId, () => {
+  ensureSelectedChapterPathExpanded()
+  syncTreeExpandedState()
+  persistExpandedChapterKeys()
   loadMaterials()
 })
 </script>
@@ -799,12 +940,31 @@ watch(selectedChapterId, () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
 .chapter-sidebar__title {
   font-weight: 600;
   color: #0f172a;
+}
+
+.chapter-sidebar__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chapter-outline-btn {
+  width: 28px;
+  height: 28px;
+  color: #2563eb;
+}
+
+.chapter-outline-btn:hover {
+  background: #eff6ff;
 }
 
 .chapter-tree :deep(.el-tree-node__content) {
@@ -860,6 +1020,14 @@ watch(selectedChapterId, () => {
 @media (max-width: 960px) {
   .materials-layout {
     grid-template-columns: 1fr;
+  }
+
+  .chapter-sidebar__head {
+    align-items: flex-start;
+  }
+
+  .chapter-sidebar__actions {
+    flex-wrap: wrap;
   }
 }
 </style>

@@ -680,6 +680,61 @@ Validation:
 - the same spec still verifies the mobile course-page and table-heavy-page
   no-overflow invariants after the shell change.
 
+## Course Materials Outline Expand / Collapse Follow-Up
+
+The first maintained multi-level directory interaction now lives on the course
+materials page:
+
+- `apps/web/admin/src/views/Materials.vue`;
+- maintained guard: `tests/e2e/web-admin/ui-materials-outline-regression.spec.js`.
+
+Before this pass, the materials chapter tree used Element Plus `el-tree` with
+`default-expand-all`, which made every branch open by default. That was workable
+for small seeds, but it does not scale to course outlines with many chapters,
+subchapters, and material references.
+
+Implemented behavior:
+
+- the chapter sidebar header now includes icon-only controls for "expand all"
+  and "collapse all";
+- both controls use native button semantics through Element Plus buttons,
+  tooltips, `aria-label`, and stable `data-testid` hooks;
+- the old root-chapter creation action remains available to teachers/admins in
+  the same header action group;
+- `default-expand-all` was removed;
+- the tree now uses an explicit `expandedChapterKeys` state;
+- expand/collapse events update `expandedChapterKeys`;
+- the selected chapter path is expanded when the user selects a nested chapter
+  or when a selected chapter is restored from page state;
+- "collapse all" sets the expanded key set to an empty array. This matters
+  because Element Plus treats entries in `default-expanded-keys` as nodes whose
+  children are open; putting top-level ids in the array keeps their children
+  visible and is not a true collapsed outline;
+- "expand all" uses all chapter ids from the current tree;
+- per-course outline state is persisted in localStorage under
+  `wailearning-materials-expanded-chapters:<subject-id>`.
+
+Validation:
+
+- `ui-materials-outline-regression.spec.js` creates a parent and child chapter
+  through the API for the seeded required course;
+- the spec enters the seeded required course before visiting `/materials`,
+  because teacher accounts can otherwise default to another course context;
+- it verifies the parent and child are initially visible, collapse-all hides the
+  child while leaving the parent reachable, expand-all restores the child, and a
+  reload preserves the expanded state.
+
+Maintenance guidance:
+
+- do not restore `default-expand-all`; use explicit expanded-state management so
+  large outlines remain scannable;
+- if additional pages gain tree/outline controls, prefer the same interaction
+  vocabulary: chevron-like expand/collapse icons, stable test ids, selected-path
+  expansion, and per-context persistence;
+- if a future mobile-specific materials layout is introduced, keep these outline
+  controls available in the sidebar/drawer rather than hiding the tree state
+  behind route changes.
+
 ## Table-Heavy Page Containment Follow-Up
 
 After the course-page mobile repair, the next broad responsive risk was the
