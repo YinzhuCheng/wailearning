@@ -60,7 +60,8 @@ LLM support is tightly integrated with homework and course configuration.
 
 - Endpoint presets are centrally managed by admins.
 - Course-level LLM config controls whether a course uses LLM grading at all.
-- Courses maintain their own quota timezone and endpoint selection order.
+- Courses maintain endpoint selection order, prompt behavior, response language, and single-call token boundaries.
+- LLM daily quota timezone, student daily caps, reservation estimation, and grading concurrency are system-level policy, not course-level policy.
 - Auto-grading is async and queue-backed.
 - Token usage is tracked per student and per course.
 - Attachments are normalized into model-friendly payloads where possible.

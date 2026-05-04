@@ -14,16 +14,16 @@
       >
         <template #header>
           <div class="quota-card-header-row">
-            <span>各课程 · LLM 日额度（按课程分别统计）</span>
+            <span>全站 LLM 日额度 · 课程归因</span>
             <el-button size="small" :loading="quotasLoading" @click="loadStudentQuotasSummary">刷新</el-button>
           </div>
         </template>
         <div v-loading="quotasLoading" class="quota-body">
           <p v-if="quotasSummary?.uses_personal_override" class="quota-line quota-hint">
-            当前账号使用管理员单独配置的日 token 上限；各课程条形图共用上限制，用量按课程分别累计。
+            当前账号使用管理员单独配置的日 token 上限；下方课程条目仅显示今天用量归因，共用同一个全站额度池。
           </p>
           <p v-else-if="quotasSummary?.global_default_daily_student_tokens != null" class="quota-line quota-hint muted">
-            全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}（各课用量独立统计）。
+            全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}；今日已用 {{ quotaSummaryUsed }}，剩余 {{ quotaSummaryRemaining }}。
           </p>
           <template v-if="quotasSummary?.courses?.length">
             <div
@@ -35,7 +35,7 @@
               <div class="quota-course-title">
                 <span class="quota-course-name">{{ row.subject_name }}</span>
                 <span class="quota-course-nums">
-                  已用 {{ row.student_used_tokens_today ?? 0 }} / 限额 {{ row.daily_student_token_limit ?? '—' }}
+                  今日总用 {{ row.student_used_tokens_today ?? 0 }} / 限额 {{ row.daily_student_token_limit ?? '—' }}
                   <span v-if="row.student_remaining_tokens_today != null" class="muted">
                     · 剩余 {{ row.student_remaining_tokens_today }}
                   </span>
@@ -49,7 +49,7 @@
                 class="quota-progress"
               />
               <p class="quota-subline muted">
-                统计日 {{ row.usage_date }}（{{ row.quota_timezone }}）
+                本课归因 {{ row.course_used_tokens_today ?? 0 }} token · 统计日 {{ row.usage_date }}（{{ row.quota_timezone }}）
               </p>
             </div>
           </template>
@@ -419,6 +419,9 @@ const rules = {
 const activeCourses = computed(() => courses.value.filter(course => course.status !== 'completed'))
 const completedCourses = computed(() => courses.value.filter(course => course.status === 'completed'))
 const canCreateCourse = computed(() => userStore.isTeacher || userStore.isClassTeacher)
+const quotaSummaryUsed = computed(() => quotasSummary.value?.student_used_tokens_today ?? 0)
+const quotaSummaryLimit = computed(() => quotasSummary.value?.daily_student_token_limit ?? quotasSummary.value?.global_default_daily_student_tokens ?? 0)
+const quotaSummaryRemaining = computed(() => quotasSummary.value?.student_remaining_tokens_today ?? Math.max(0, quotaSummaryLimit.value - quotaSummaryUsed.value))
 const rosterSummary = computed(() =>
   rosterStudents.value.length
     ? `已导入 ${rosterStudents.value.length} 名学生`
@@ -524,8 +527,8 @@ const loadStudentQuotasSummary = async () => {
 const isCurrentCourseId = id => String(userStore.selectedCourse?.id || '') === String(id || '')
 
 const quotaBarPercent = row => {
-  const lim = Number(row?.daily_student_token_limit)
-  const used = Number(row?.student_used_tokens_today ?? 0)
+  const lim = Number(row?.daily_student_token_limit ?? quotaSummaryLimit.value)
+  const used = Number(row?.student_used_tokens_today ?? quotaSummaryUsed.value)
   if (!lim || lim <= 0) {
     return 0
   }

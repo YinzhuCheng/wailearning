@@ -149,7 +149,7 @@
             </template>
           </el-dropdown>
 
-          <el-dropdown data-testid="header-user-menu" @command="handleCommand">
+          <el-dropdown trigger="hover" data-testid="header-user-menu" popper-class="user-profile-dropdown" @visible-change="onUserMenuVisible" @command="handleCommand">
             <div class="user-box">
               <el-avatar :size="34" :src="headerAvatarSrc || undefined">
                 {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
@@ -161,6 +161,31 @@
             </div>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item disabled class="user-dropdown-card">
+                  <div class="user-dropdown-profile">
+                    <el-avatar :size="72" :src="headerAvatarSrc || undefined">
+                      {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
+                    </el-avatar>
+                    <div class="user-dropdown-id">
+                      <strong>{{ userStore.userInfo?.real_name || userStore.userInfo?.username || 'User' }}</strong>
+                      <span>{{ roleText(userStore.userInfo?.role) }}</span>
+                      <small>{{ userStore.userInfo?.username }}</small>
+                    </div>
+                  </div>
+                  <div class="user-dropdown-token">
+                    <div class="user-dropdown-token__row">
+                      <span>LLM token</span>
+                      <strong>{{ tokenUsageLabel }}</strong>
+                    </div>
+                    <el-progress
+                      :percentage="tokenUsagePercent"
+                      :stroke-width="10"
+                      :show-text="false"
+                      :color="quotaBarColors"
+                    />
+                    <p>{{ tokenDetailText }}</p>
+                  </div>
+                </el-dropdown-item>
                 <el-dropdown-item command="personal-settings">个人设置</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -222,6 +247,8 @@ const isMobile = ref(false)
 
 const headerAvatarSrc = ref('')
 let headerAvatarBlobUrl = ''
+const headerQuotaSummary = ref(null)
+const headerQuotaLoading = ref(false)
 
 const revokeHeaderAvatarBlob = () => {
   if (headerAvatarBlobUrl) {
@@ -260,6 +287,67 @@ const notificationSyncParams = computed(() => {
 
   return {}
 })
+
+const quotaBarColors = [
+  { color: '#93c5fd', percentage: 60 },
+  { color: '#3b82f6', percentage: 85 },
+  { color: '#f59e0b', percentage: 95 },
+  { color: '#ef4444', percentage: 100 }
+]
+
+const tokenUsageLimit = computed(() =>
+  Number(headerQuotaSummary.value?.daily_student_token_limit ?? headerQuotaSummary.value?.global_default_daily_student_tokens ?? 0)
+)
+const tokenUsageUsed = computed(() => Number(headerQuotaSummary.value?.student_used_tokens_today ?? 0))
+const tokenUsagePercent = computed(() => {
+  if (!userStore.isStudent || !tokenUsageLimit.value) {
+    return 0
+  }
+  return Math.min(100, Math.round((tokenUsageUsed.value / tokenUsageLimit.value) * 1000) / 10)
+})
+const tokenUsageLabel = computed(() => {
+  if (!userStore.isStudent) {
+    return 'system policy'
+  }
+  if (headerQuotaLoading.value) {
+    return 'loading'
+  }
+  if (!tokenUsageLimit.value) {
+    return 'no data'
+  }
+  return `${tokenUsageUsed.value} / ${tokenUsageLimit.value}`
+})
+const tokenDetailText = computed(() => {
+  if (!userStore.isStudent) {
+    return 'Managed in system LLM quota settings.'
+  }
+  if (!headerQuotaSummary.value) {
+    return 'Hover to load today quota.'
+  }
+  const remaining = headerQuotaSummary.value.student_remaining_tokens_today ?? Math.max(0, tokenUsageLimit.value - tokenUsageUsed.value)
+  return `Remaining ${remaining} · ${headerQuotaSummary.value.usage_date || ''} ${headerQuotaSummary.value.quota_timezone || ''}`.trim()
+})
+
+const loadHeaderQuotaSummary = async () => {
+  if (!userStore.isStudent || headerQuotaLoading.value) {
+    return
+  }
+  headerQuotaLoading.value = true
+  try {
+    headerQuotaSummary.value = await api.llmSettings.getStudentQuotasSummary()
+  } catch (error) {
+    console.error('load header quota failed', error)
+    headerQuotaSummary.value = null
+  } finally {
+    headerQuotaLoading.value = false
+  }
+}
+
+const onUserMenuVisible = visible => {
+  if (visible) {
+    loadHeaderQuotaSummary()
+  }
+}
 
 const pollNotificationSync = async () => {
   if (!userStore.isLoggedIn) {
@@ -775,11 +863,14 @@ watch(notificationSyncParams, () => {
   margin: 6px 0;
   border-radius: var(--wa-radius-lg);
   color: rgba(255, 255, 255, 0.82);
+  transform-origin: left center;
+  transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
 .sidebar-menu :deep(.el-menu-item:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
+  transform: translateX(2px) scale(1.025);
 }
 
 .sidebar-menu :deep(.el-menu-item.is-active) {
@@ -791,11 +882,14 @@ watch(notificationSyncParams, () => {
   margin: 6px 0;
   border-radius: var(--wa-radius-lg);
   color: rgba(255, 255, 255, 0.82);
+  transform-origin: left center;
+  transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
 .sidebar-menu :deep(.el-sub-menu__title:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
+  transform: translateX(2px) scale(1.025);
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item) {
@@ -828,6 +922,12 @@ watch(notificationSyncParams, () => {
   background: var(--wa-color-primary-50);
   padding: 8px 14px;
   color: var(--wa-color-primary-700);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.context-chip:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--wa-color-primary-600) 12%, transparent);
 }
 
 .context-chip--class {
@@ -886,6 +986,15 @@ watch(notificationSyncParams, () => {
   align-items: center;
   gap: 12px;
   cursor: pointer;
+  border-radius: var(--wa-radius-pill);
+  padding: 4px 8px 4px 4px;
+  transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.user-box:hover {
+  background: var(--wa-color-primary-50);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  transform: scale(1.025);
 }
 
 .user-meta {
@@ -899,6 +1008,72 @@ watch(notificationSyncParams, () => {
 }
 
 .user-meta span {
+  font-size: 12px;
+  color: var(--wa-color-text-muted);
+}
+
+.user-dropdown-card {
+  width: 300px;
+  cursor: default;
+}
+
+.user-dropdown-card.is-disabled {
+  opacity: 1;
+}
+
+.user-dropdown-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 4px 12px;
+}
+
+.user-dropdown-id {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-dropdown-id strong,
+.user-dropdown-id span,
+.user-dropdown-id small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-dropdown-id strong {
+  color: var(--wa-color-text);
+}
+
+.user-dropdown-id span,
+.user-dropdown-id small {
+  color: var(--wa-color-text-muted);
+}
+
+.user-dropdown-token {
+  border: 1px solid var(--wa-border-subtle);
+  border-radius: var(--wa-radius-md);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 70%, white);
+  padding: 10px;
+}
+
+.user-dropdown-token__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--wa-color-text-soft);
+}
+
+.user-dropdown-token__row strong {
+  color: var(--wa-color-primary-700);
+}
+
+.user-dropdown-token p {
+  margin: 8px 0 0;
   font-size: 12px;
   color: var(--wa-color-text-muted);
 }

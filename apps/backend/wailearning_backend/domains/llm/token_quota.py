@@ -21,6 +21,8 @@ def get_or_create_global_quota_policy(db: Session) -> LLMGlobalQuotaPolicy:
         id=1,
         default_daily_student_tokens=100_000,
         quota_timezone="Asia/Shanghai",
+        estimated_chars_per_token=4.0,
+        estimated_image_tokens=850,
         max_parallel_grading_tasks=3,
     )
     db.add(row)
@@ -31,6 +33,27 @@ def get_or_create_global_quota_policy(db: Session) -> LLMGlobalQuotaPolicy:
 def resolve_max_parallel_grading_tasks(db: Session) -> int:
     pol = get_or_create_global_quota_policy(db)
     return max(1, int(getattr(pol, "max_parallel_grading_tasks", None) or 3))
+
+
+def resolve_global_estimated_chars_per_token(db: Session) -> float:
+    pol = get_or_create_global_quota_policy(db)
+    try:
+        return max(0.1, float(getattr(pol, "estimated_chars_per_token", None) or 4.0))
+    except (TypeError, ValueError):
+        return 4.0
+
+
+def resolve_global_estimated_image_tokens(db: Session) -> int:
+    pol = get_or_create_global_quota_policy(db)
+    try:
+        return max(1, int(getattr(pol, "estimated_image_tokens", None) or 850))
+    except (TypeError, ValueError):
+        return 850
+
+
+def resolve_global_quota_calendar(db: Session) -> tuple[str, str]:
+    pol = get_or_create_global_quota_policy(db)
+    return quota_calendar_for_timezone(getattr(pol, "quota_timezone", None) or "Asia/Shanghai")
 
 
 def quota_calendar_for_timezone(tz_raw: str) -> tuple[str, str]:

@@ -323,11 +323,17 @@ def ensure_schema_updates() -> None:
             id INTEGER PRIMARY KEY,
             default_daily_student_tokens INTEGER NOT NULL DEFAULT 100000,
             quota_timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0,
+            estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             max_parallel_grading_tasks INTEGER NOT NULL DEFAULT 3,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0",
+        "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS estimated_image_tokens INTEGER NOT NULL DEFAULT 850",
         "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS max_parallel_grading_tasks INTEGER NOT NULL DEFAULT 3",
+        "UPDATE llm_global_quota_policies SET estimated_chars_per_token = 4.0 WHERE estimated_chars_per_token IS NULL",
+        "UPDATE llm_global_quota_policies SET estimated_image_tokens = 850 WHERE estimated_image_tokens IS NULL",
         "UPDATE llm_global_quota_policies SET max_parallel_grading_tasks = 3 WHERE max_parallel_grading_tasks IS NULL",
         """
         CREATE TABLE IF NOT EXISTS llm_student_token_overrides (
@@ -598,13 +604,17 @@ def _ensure_default_llm_endpoint_preset() -> None:
 
 
 def _ensure_llm_global_quota_policy_row() -> None:
-    """Single global policy row (id=1) for default per-student daily cap and billing calendar timezone."""
+    """Single global policy row (id=1) for LLM daily caps, estimation, and billing calendar timezone."""
     db = SessionLocal()
     try:
         row = db.query(LLMGlobalQuotaPolicy).filter(LLMGlobalQuotaPolicy.id == 1).first()
         if row:
             if getattr(row, "max_parallel_grading_tasks", None) is None:
                 row.max_parallel_grading_tasks = 3
+            if getattr(row, "estimated_chars_per_token", None) is None:
+                row.estimated_chars_per_token = 4.0
+            if getattr(row, "estimated_image_tokens", None) is None:
+                row.estimated_image_tokens = 850
             db.commit()
             return
         db.add(
@@ -612,6 +622,8 @@ def _ensure_llm_global_quota_policy_row() -> None:
                 id=1,
                 default_daily_student_tokens=100_000,
                 quota_timezone="Asia/Shanghai",
+                estimated_chars_per_token=4.0,
+                estimated_image_tokens=850,
                 max_parallel_grading_tasks=3,
             )
         )

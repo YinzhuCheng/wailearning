@@ -1222,6 +1222,63 @@ Future agents extending this area should keep the same discipline. Appearance
 work tends to touch text-heavy Vue files, so accidental mojibake is a real risk
 if terminal-rendered Chinese is copied back into templates.
 
+## Interaction Polish And Unified Quota Menu Pass
+
+This follow-up pass extended the admin shell interaction model after the
+appearance preset work.
+
+Implemented behavior:
+
+- The header user menu now opens on hover instead of requiring a click.
+- The dropdown begins with a richer profile block that shows a larger avatar,
+  display name, role, username, and an LLM token progress indicator.
+- Student users load their own LLM quota summary through
+  `GET /api/llm-settings/courses/student-quotas` when the menu opens.
+- Non-student users see that LLM token quota is system-managed rather than
+  course-managed.
+- Sidebar menu items and top-context chips use subtle scale on hover. This is
+  intentionally restrained so the navigation feels more responsive without
+  shifting the page layout.
+- Global Element Plus buttons now add a small text glow and shadow on hover,
+  preserving readability for primary and plain buttons.
+
+Screenshot validation evidence from this pass:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:UI_UX_AUDIT_PREFIX='interaction-quota'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+Reviewed screenshot:
+
+- `interaction-quota-admin-settings-postgres.png`
+
+Observed state:
+
+- the admin Settings page shows the LLM quota block as `LLM 用量与额度（全平台）`;
+- quota timezone, character/token estimation, image-token estimation, default
+  daily cap, and grading concurrency are visually grouped in one system-level
+  form;
+- the sidebar edge handle remains vertically centered;
+- the sidebar and button hover styling does not create obvious layout overlap
+  in the captured desktop settings view.
+
+Quota wording in the UI now follows the unified-pool model:
+
+- the student course page shows one daily LLM pool plus course attribution;
+- the course LLM dialog no longer exposes course-level quota timezone or token
+  estimation fields;
+- the admin Settings page owns quota timezone, token estimation parameters,
+  default student cap, and grading concurrency.
+
+Important editing note:
+
+- During this pass, `Layout.vue` was restored after a partial template edit
+  risked writing terminal-rendered mojibake back into the file. Future work in
+  this area should prefer small structural patches and should not copy Chinese
+  strings from PowerShell output into Vue templates.
+
 ## Commit Hygiene For This Work
 
 Do include:

@@ -52,6 +52,8 @@ from apps.backend.wailearning_backend.domains.llm.quota import (
 from apps.backend.wailearning_backend.domains.llm.token_quota import (
     quota_calendar_for_timezone,
     resolve_effective_daily_student_tokens,
+    resolve_global_estimated_chars_per_token,
+    resolve_global_estimated_image_tokens,
     resolve_max_parallel_grading_tasks,
 )
 
@@ -319,14 +321,11 @@ def _pick_latest_validated_course_llm_template(
 
 
 def _copy_course_llm_from_template(db: Session, target: CourseLLMConfig, template: CourseLLMConfig) -> None:
-    """Replace target endpoints/groups with template's validated routing; copy tuning fields."""
+    """Replace target endpoints/groups with template's validated routing and course-owned tuning fields."""
     target.is_enabled = bool(template.is_enabled)
     target.response_language = template.response_language
-    target.estimated_chars_per_token = template.estimated_chars_per_token
-    target.estimated_image_tokens = template.estimated_image_tokens
     target.max_input_tokens = template.max_input_tokens
     target.max_output_tokens = template.max_output_tokens
-    target.quota_timezone = template.quota_timezone or "Asia/Shanghai"
     target.system_prompt = template.system_prompt
     target.teacher_prompt = template.teacher_prompt
 
@@ -863,9 +862,11 @@ def estimate_task_tokens(
     image_count: int,
 ) -> int:
     """Rough input-only estimate for lightweight callers (chars heuristic + image cap)."""
-    chars_per_token = float(config.estimated_chars_per_token or 4.0)
+    db = Session.object_session(config)
+    chars_per_token = resolve_global_estimated_chars_per_token(db) if db else 4.0
     text_tokens = int(text_length / chars_per_token) + 64
-    image_tokens = int(image_count * (config.estimated_image_tokens or 850))
+    per_image_tokens = resolve_global_estimated_image_tokens(db) if db else 850
+    image_tokens = int(image_count * per_image_tokens)
     return text_tokens + image_tokens
 
 
@@ -959,9 +960,10 @@ def estimate_request_tokens_from_material(
     (not double-counted with base64 length).
     """
     messages = _build_scoring_messages(homework, attempt, config, material)
+    db = Session.object_session(config)
     return _estimate_input_tokens_from_scoring_messages(
         messages,
-        per_image_tokens=int(config.estimated_image_tokens or 850),
+        per_image_tokens=resolve_global_estimated_image_tokens(db) if db else 850,
     )
 
 
@@ -1655,7 +1657,7 @@ def _grade_with_endpoint_group(
                 if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
                     task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
                         "version": 1,
-                        "mode": "legacy_priority",
+                        "mode": "flat_priority",
                         "status": "ok",
                     }
                     _flag_artifact_manifest_modified(task)
@@ -1676,7 +1678,7 @@ def _grade_with_endpoint_group(
     if isinstance(task.artifact_manifest, dict) and "llm_routing" in (task.artifact_manifest or {}):
         task.artifact_manifest["llm_routing"] = (task.artifact_manifest.get("llm_routing") or {}) | {
             "version": 1,
-            "mode": "legacy_priority",
+            "mode": "flat_priority",
             "status": "failed",
         }
         _flag_artifact_manifest_modified(task)
@@ -2030,7 +2032,8 @@ def _build_student_material(
 
     current_blocks_raw, current_parse_skipped = _collect_attempt_material_blocks(attempt)
 
-    text_budget = int((config.max_input_tokens or 16000) * (config.estimated_chars_per_token or 4.0))
+    db = Session.object_session(config)
+    text_budget = int((config.max_input_tokens or 16000) * (resolve_global_estimated_chars_per_token(db) if db else 4.0))
     reserved_text = "\n\n".join(assignment_texts)
     remaining_chars = max(2000, text_budget - len(reserved_text))
     remaining_image_budget = config.max_input_tokens or 16000

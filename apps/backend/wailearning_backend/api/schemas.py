@@ -433,13 +433,20 @@ class StudentLLMCourseQuotaRow(BaseModel):
     daily_student_token_limit: Optional[int] = None
     student_used_tokens_today: Optional[int] = None
     student_remaining_tokens_today: Optional[int] = None
+    course_used_tokens_today: Optional[int] = None
+    course_usage_ratio: Optional[float] = None
 
 
 class StudentLLMQuotasSummaryResponse(BaseModel):
-    """Per-course LLM token budget for the logged-in student (each course has its own quota day / pool)."""
+    """System-wide LLM token budget for the logged-in student, with per-course attribution rows."""
 
     courses: list[StudentLLMCourseQuotaRow] = Field(default_factory=list)
     global_default_daily_student_tokens: Optional[int] = None
+    usage_date: Optional[str] = None
+    quota_timezone: Optional[str] = None
+    daily_student_token_limit: Optional[int] = None
+    student_used_tokens_today: Optional[int] = None
+    student_remaining_tokens_today: Optional[int] = None
     uses_personal_override: bool = False
 
 
@@ -447,24 +454,30 @@ class StudentLLMQuotaUsageResponse(BaseModel):
     subject_id: int
     usage_date: str
     quota_timezone: str
-    """Effective per-student daily cap under this course's quota_timezone (usage counted per subject)."""
+    """Effective per-student daily cap in the system-wide LLM usage pool."""
     daily_student_token_limit: Optional[int] = None
     global_default_daily_student_tokens: Optional[int] = None
     uses_personal_override: bool = False
     student_used_tokens_today: Optional[int] = None
     student_remaining_tokens_today: Optional[int] = None
+    course_used_tokens_today: Optional[int] = None
+    course_usage_ratio: Optional[float] = None
 
 
 class LLMGlobalQuotaPolicyResponse(BaseModel):
     id: int
     default_daily_student_tokens: int
     quota_timezone: str
+    estimated_chars_per_token: float = 4.0
+    estimated_image_tokens: int = 850
     max_parallel_grading_tasks: int = 3
 
 
 class LLMGlobalQuotaPolicyUpdate(BaseModel):
     default_daily_student_tokens: Optional[int] = Field(default=None, ge=1)
     quota_timezone: Optional[str] = None
+    estimated_chars_per_token: Optional[float] = Field(default=None, gt=0)
+    estimated_image_tokens: Optional[int] = Field(default=None, ge=1)
     max_parallel_grading_tasks: Optional[int] = Field(default=None, ge=1, le=64)
 
 
@@ -1437,11 +1450,8 @@ class CourseLLMConfigUpdate(BaseModel):
 
     is_enabled: bool = False
     response_language: Optional[str] = None
-    estimated_chars_per_token: float = Field(default=4.0, gt=0)
-    estimated_image_tokens: int = Field(default=850, ge=1)
     max_input_tokens: int = Field(default=16000, ge=1000)
     max_output_tokens: int = Field(default=1000, ge=1)
-    quota_timezone: str = "Asia/Shanghai"
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointSelection] = Field(default_factory=list)
@@ -1474,11 +1484,8 @@ class CourseLLMConfigResponse(BaseModel):
     subject_id: int
     is_enabled: bool = False
     response_language: Optional[str] = None
-    estimated_chars_per_token: float = 4.0
-    estimated_image_tokens: int = 850
     max_input_tokens: int = 16000
     max_output_tokens: int = 1000
-    quota_timezone: str = "Asia/Shanghai"
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)

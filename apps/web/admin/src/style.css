@@ -200,6 +200,15 @@ html[data-wa-density='spacious'] {
 
 .el-button {
   border-radius: var(--wa-radius-sm);
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.el-button:not(.is-disabled):hover {
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--wa-color-primary-600) 14%, transparent);
+}
+
+.el-button:not(.is-disabled):hover > span {
+  text-shadow: 0 0 10px color-mix(in srgb, currentColor 36%, transparent);
 }
 
 .el-button.is-circle {
