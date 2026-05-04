@@ -565,11 +565,116 @@ Resolution:
 - `.e2e-run/`, Vite `dist/`, logs, screenshots, PostgreSQL binaries, and local
   data directories remain ignored and must not be staged.
 
+## Maintained Responsive Regression Spec
+
+The screenshot audit remains useful for visual inspection, but the mobile
+overflow repairs now also have a maintained Playwright spec:
+
+- `tests/e2e/web-admin/ui-responsive-layout-regression.spec.js`
+
+This spec is intentionally narrow. It does not perform screenshot comparison and
+does not attempt to certify every visual state of the admin SPA. It checks the
+layout invariants that failed in the original mobile screenshot:
+
+- on a `390 x 844` mobile viewport, the collapsed sidebar must not reserve
+  document-flow width;
+- the page must not have document-level horizontal overflow;
+- visible `article.course-card` boxes must remain within the viewport;
+- visible `.catalog-mobile-item` boxes must remain within the viewport;
+- the mobile course catalog card list must be visible while the desktop Element
+  Plus catalog table is hidden;
+- on a desktop viewport, the Element Plus catalog table must remain visible and
+  the mobile card list must remain hidden;
+- on a `390 x 844` mobile viewport, the table-heavy `/students`, `/users`,
+  `/subjects`, `/scores`, and `/attendance` pages must not create document-level
+  horizontal overflow after their wide table or grid surfaces are contained
+  inside cards.
+
+Preferred targeted command from `apps/web/admin`:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:E2E_API_PORT='8112'
+$env:E2E_UI_PORT='3112'
+npx.cmd playwright test ui-responsive-layout-regression.spec.js
+```
+
+Why the example uses isolated ports:
+
+- the default managed Playwright ports in this branch are `8012` for the API and
+  `3012` for the admin UI;
+- on Windows, stale server state or readiness timing can make those defaults
+  fail before any test body runs;
+- in the validation session that added this spec, the default-port run reached
+  the approved execution context but timed out waiting for `webServer` health,
+  while the same spec passed on isolated ports `8112` and `3112`.
+
+Validated result in the adding session:
+
+- initial responsive-course version: `3 passed`, runtime about `17s`;
+- after adding the table-heavy page guard: `4 passed`, runtime about `20s`;
+- only the existing Vite CJS Node API deprecation warning was emitted by the
+  web server.
+
+Interpretation guidance:
+
+- if this spec fails inside the default sandbox with `spawn EPERM`, rerun in the
+  approved execution context before diagnosing product code;
+- if this spec times out waiting for `webServer` before tests start, check stale
+  ports and rerun with isolated `E2E_API_PORT` / `E2E_UI_PORT`;
+- if the tests start and then fail on bounding boxes, overflow, or visibility,
+  treat that as a real regression candidate in `Layout.vue` or `MyCourses.vue`;
+- if the table-heavy page case fails only on one route, inspect that route's
+  outer page container, card body containment, toolbar wrapping, and any
+  fixed-width grid/table implementation before changing global layout;
+- this maintained spec complements PostgreSQL-backed screenshot audits. It is a
+  fast guard for the responsive layout contract, not a replacement for real
+  browser observation when continuing the larger UI/UX optimization task.
+
+## Table-Heavy Page Containment Follow-Up
+
+After the course-page mobile repair, the next broad responsive risk was the
+family of admin/teacher pages whose primary surface is a wide Element Plus table
+or custom grid:
+
+- `apps/web/admin/src/views/Students.vue`;
+- `apps/web/admin/src/views/Users.vue`;
+- `apps/web/admin/src/views/Subjects.vue`;
+- `apps/web/admin/src/views/Scores.vue`;
+- `apps/web/admin/src/views/Attendance.vue`.
+
+The first follow-up pass deliberately avoided replacing these tables with
+mobile-specific card lists. The goal was narrower: prevent any single wide data
+surface from increasing the document width while preserving the desktop
+information architecture and existing table behavior.
+
+Conservative containment changes applied:
+
+- page roots now use `min-width: 0` plus `overflow-x: hidden`;
+- page-owned `el-card` instances now have `min-width: 0`;
+- page-owned `el-card__body` containers now allow horizontal scrolling inside
+  the card instead of letting tables push the whole page wider;
+- mobile page padding was reduced to match the responsive course/settings work;
+- selected toolbar/header rows gained `min-width: 0`, wrapping, or stretched
+  mobile alignment so action clusters do not force the viewport wider;
+- the attendance sheet keeps its intentionally wide grid, but `.sheet-scroll`
+  is explicitly capped to `max-width: 100%` and scrolls internally.
+
+Important limitation:
+
+- this is a containment pass, not a full mobile information-architecture pass;
+- some pages may still deserve mobile-native card/list representations later,
+  especially if the table is hard to scan on a phone;
+- when making that deeper change, preserve the same business actions and stable
+  `data-testid` hooks used by the existing E2E suite.
+
 ## Commit Hygiene For This Work
 
 Do include:
 
 - source changes under `apps/web/admin/src/views/`;
+- maintained Playwright specs under `tests/e2e/web-admin/` when a local
+  screenshot finding is promoted into a regression guard;
 - this documentation file;
 - documentation index links.
 

@@ -885,6 +885,16 @@ watch(
 <style scoped>
 .users-page {
   padding: 24px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.users-page :deep(.el-card) {
+  min-width: 0;
+}
+
+.users-page :deep(.el-card__body) {
+  overflow-x: auto;
 }
 
 .page-header {
@@ -902,6 +912,7 @@ watch(
   justify-content: flex-end;
   gap: 10px;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .page-title {
@@ -961,15 +972,20 @@ watch(
 }
 
 @media (max-width: 768px) {
+  .users-page {
+    padding: 18px 14px;
+  }
+
   .page-header,
   .student-import-toolbar {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .page-actions,
   .student-import-actions {
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: stretch;
   }
 }
 </style>

@@ -1286,6 +1286,16 @@ watch(
 <style scoped>
 .courses-page {
   padding: 24px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.courses-page :deep(.el-card) {
+  min-width: 0;
+}
+
+.courses-page :deep(.el-card__body) {
+  overflow-x: auto;
 }
 
 .page-header {
@@ -1447,6 +1457,10 @@ watch(
 }
 
 @media (max-width: 900px) {
+  .courses-page {
+    padding: 18px 14px;
+  }
+
   .course-detail-meta,
   .page-header,
   .course-time-panel__header {

@@ -844,6 +844,16 @@ watch(selectedCourse, async () => {
 <style scoped>
 .scores-page {
   padding: 24px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.scores-page :deep(.el-card) {
+  min-width: 0;
+}
+
+.scores-page :deep(.el-card__body) {
+  overflow-x: auto;
 }
 
 .page-header {
@@ -869,6 +879,7 @@ watch(selectedCourse, async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  min-width: 0;
 }
 
 .stats-card {
@@ -913,6 +924,8 @@ watch(selectedCourse, async () => {
 .toolbar-inline {
   display: flex;
   gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .card-header-inline {
@@ -977,8 +990,13 @@ watch(selectedCourse, async () => {
 }
 
 @media (max-width: 768px) {
+  .scores-page {
+    padding: 18px 14px;
+  }
+
   .page-header {
     flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>
