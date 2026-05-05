@@ -18,14 +18,6 @@
             <p>大学教学管理系统</p>
           </div>
         </div>
-        <el-button
-          class="collapse-btn"
-          :icon="isCollapsed ? Expand : Fold"
-          circle
-          size="small"
-          :aria-label="isCollapsed ? '展开侧边栏' : '收起侧边栏'"
-          @click="toggleSidebarCollapse"
-        />
       </div>
 
       <div class="sidebar-body">
@@ -206,7 +198,6 @@ import {
   DataAnalysis,
   Document,
   Expand,
-  Fold,
   Reading,
   School,
   Setting,
@@ -635,18 +626,6 @@ const restoreDesktopSidebarState = () => {
   isCollapsed.value = false
 }
 
-const toggleSidebarCollapse = () => {
-  if (isSidebarHidden.value) {
-    isSidebarHidden.value = false
-    isCollapsed.value = false
-    persistDesktopSidebarState()
-    return
-  }
-
-  isCollapsed.value = !isCollapsed.value
-  persistDesktopSidebarState()
-}
-
 const toggleMobileSidebar = () => {
   isCollapsed.value = !isCollapsed.value
 }
@@ -884,7 +863,7 @@ watch(notificationSyncParams, () => {
 .logo {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 18px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -916,12 +895,6 @@ watch(notificationSyncParams, () => {
   margin: 4px 0 0;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.65);
-}
-
-.collapse-btn {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: #fff;
 }
 
 .sidebar-menu {

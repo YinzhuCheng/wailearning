@@ -83,7 +83,17 @@ def test_semesters_and_dashboard_stats(client: TestClient, admin_headers: dict[s
     r2 = client.get("/api/dashboard/stats", headers=admin_headers)
     assert r2.status_code == 200, r2.text
     body = r2.json()
-    for key in ("total_students", "total_classes", "total_scores", "avg_score", "attendance_rate"):
+    for key in (
+        "total_students",
+        "total_classes",
+        "total_scores",
+        "avg_score",
+        "max_score",
+        "min_score",
+        "students_with_scores",
+        "distinct_exam_types",
+        "attendance_rate",
+    ):
         assert key in body
 
     if semesters:

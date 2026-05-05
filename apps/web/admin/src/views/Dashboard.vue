@@ -80,10 +80,48 @@
 
           <button type="button" class="score-card" @click="goTo('/scores')">
             <div class="score-card__header">
-              <h3>平均成绩</h3>
+              <h3>成绩分析</h3>
               <span class="score-card__link">前往成绩管理</span>
             </div>
-            <div ref="scoreChartRef" class="chart-box"></div>
+            <div class="score-analysis">
+              <div class="score-kpis">
+                <div class="score-kpi">
+                  <span class="score-kpi__label">总平均分</span>
+                  <strong class="score-kpi__value">{{ fmtScore(stats.avg_score) }}</strong>
+                </div>
+                <div class="score-kpi">
+                  <span class="score-kpi__label">最高分</span>
+                  <strong class="score-kpi__value">{{ stats.total_scores ? fmtScore(stats.max_score) : '—' }}</strong>
+                </div>
+                <div class="score-kpi">
+                  <span class="score-kpi__label">最低分</span>
+                  <strong class="score-kpi__value">{{ stats.total_scores ? fmtScore(stats.min_score) : '—' }}</strong>
+                </div>
+                <div class="score-kpi">
+                  <span class="score-kpi__label">成绩条数</span>
+                  <strong class="score-kpi__value">{{ stats.total_scores || '—' }}</strong>
+                </div>
+                <div class="score-kpi">
+                  <span class="score-kpi__label">有成绩人数</span>
+                  <strong class="score-kpi__value">{{ stats.students_with_scores || '—' }}</strong>
+                </div>
+                <div class="score-kpi">
+                  <span class="score-kpi__label">考核类型数</span>
+                  <strong class="score-kpi__value">{{ stats.distinct_exam_types || '—' }}</strong>
+                </div>
+              </div>
+              <div ref="trendChartRef" class="trend-chart" />
+              <div v-if="topStudents.length" class="score-top">
+                <span class="score-top__title">均分领先（前 5）</span>
+                <ol class="score-top__list">
+                  <li v-for="row in topStudents" :key="row.student_id">
+                    <span class="score-top__name">{{ row.rank }}. {{ row.student_name || '—' }}</span>
+                    <span class="score-top__avg">{{ fmtScore(row.avg_score) }}</span>
+                  </li>
+                </ol>
+              </div>
+              <p v-else class="score-empty">暂无排名数据；录入成绩后将显示。</p>
+            </div>
           </button>
         </div>
 
@@ -120,19 +158,26 @@ const userStore = useUserStore()
 
 const semester = ref('')
 const semesters = ref([])
-const scoreChartRef = ref(null)
 const classDashboardLoading = ref(false)
 const classTeacherCoursePool = ref([])
 const importantNotifications = ref([])
-
-let scoreChart = null
 
 let unsubscribeNotificationRefresh = () => {}
 
 const stats = reactive({
   total_students: 0,
-  avg_score: 0
+  total_scores: 0,
+  avg_score: 0,
+  max_score: 0,
+  min_score: 0,
+  students_with_scores: 0,
+  distinct_exam_types: 0
 })
+
+const scoreTrends = ref({})
+const topStudents = ref([])
+const trendChartRef = ref(null)
+let trendChart = null
 
 const resourceCounts = reactive({
   materials: 0,
@@ -186,10 +231,21 @@ const buildQuery = () => ({
 
 const resetLegacyStats = () => {
   stats.total_students = 0
+  stats.total_scores = 0
   stats.avg_score = 0
+  stats.max_score = 0
+  stats.min_score = 0
+  stats.students_with_scores = 0
+  stats.distinct_exam_types = 0
   resourceCounts.materials = 0
   resourceCounts.homeworks = 0
   resourceCounts.notifications = 0
+  scoreTrends.value = {}
+  topStudents.value = []
+  if (trendChart) {
+    trendChart.dispose()
+    trendChart = null
+  }
 }
 
 const loadSemesters = async () => {
@@ -203,7 +259,113 @@ const loadSemesters = async () => {
 const loadLegacyStats = async () => {
   const data = await api.dashboard.getStats(buildQuery())
   stats.total_students = Number(data?.total_students || 0)
+  stats.total_scores = Number(data?.total_scores || 0)
   stats.avg_score = Number(data?.avg_score || 0)
+  stats.max_score = Number(data?.max_score || 0)
+  stats.min_score = Number(data?.min_score || 0)
+  stats.students_with_scores = Number(data?.students_with_scores || 0)
+  stats.distinct_exam_types = Number(data?.distinct_exam_types || 0)
+}
+
+const loadScoreAnalysis = async () => {
+  if (!selectedCourse.value) {
+    scoreTrends.value = {}
+    topStudents.value = []
+    if (trendChart) {
+      trendChart.dispose()
+      trendChart = null
+    }
+    return
+  }
+
+  const q = buildQuery()
+  const [trends, rankings] = await Promise.all([
+    api.dashboard.getTrends(q),
+    api.dashboard.getStudentRankings({ ...q, limit: 5 })
+  ])
+  scoreTrends.value = trends && typeof trends === 'object' ? trends : {}
+  topStudents.value = Array.isArray(rankings) ? rankings.slice(0, 5) : []
+  await nextTick()
+  updateTrendChart()
+}
+
+const fmtScore = v => {
+  const n = Number(v)
+  if (!Number.isFinite(n)) {
+    return '—'
+  }
+  return n.toFixed(n % 1 === 0 ? 0 : 1)
+}
+
+const ensureTrendChart = async () => {
+  await nextTick()
+  if (trendChartRef.value && !trendChart) {
+    trendChart = echarts.init(trendChartRef.value)
+  }
+}
+
+const updateTrendChart = async () => {
+  const raw = scoreTrends.value || {}
+  const entries = Object.entries(raw).filter(([, v]) => v && Number(v.count) > 0)
+  if (!entries.length) {
+    trendChart?.dispose()
+    trendChart = null
+    return
+  }
+  await ensureTrendChart()
+  if (!trendChart) {
+    return
+  }
+  const categories = entries.map(([k]) => k)
+  const maxBar = Math.max(...entries.map(([, v]) => Number(v.avg) || 0), 0)
+  const yMax = Math.min(150, Math.max(100, Math.ceil(maxBar * 1.08) || 100))
+  trendChart.setOption(
+    {
+      color: ['#2563eb'],
+      grid: { left: 6, right: 8, top: 22, bottom: 2, containLabel: true },
+      tooltip: {
+        trigger: 'axis',
+        formatter: params => {
+          const p = params[0]
+          const row = raw[p.name]
+          if (!row) {
+            return `${p.name}<br/>均分 ${p.value}`
+          }
+          return `${p.name}<br/>均分 ${row.avg} · 最高 ${row.max} · 最低 ${row.min} · ${row.count} 条`
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: categories,
+        axisLabel: {
+          fontSize: 11,
+          color: '#64748b',
+          interval: 0,
+          rotate: categories.length > 4 ? 28 : 0
+        },
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: yMax,
+        splitNumber: 4,
+        axisLabel: { fontSize: 11, color: '#94a3b8' },
+        splitLine: { lineStyle: { color: '#f1f5f9' } }
+      },
+      series: [
+        {
+          name: '平均分',
+          type: 'bar',
+          data: entries.map(([, v]) => v.avg),
+          barMaxWidth: 32,
+          itemStyle: { borderRadius: [4, 4, 0, 0] }
+        }
+      ]
+    },
+    { notMerge: true }
+  )
 }
 
 const loadLegacyResourceCounts = async () => {
@@ -236,61 +398,13 @@ const loadLegacyResourceCounts = async () => {
   resourceCounts.notifications = Number(notificationsResult?.total || 0)
 }
 
-const ensureChart = async () => {
-  await nextTick()
-
-  if (scoreChartRef.value && !scoreChart) {
-    scoreChart = echarts.init(scoreChartRef.value)
-  }
-}
-
-const updateChart = () => {
-  if (!scoreChart) {
-    return
-  }
-
-  scoreChart.setOption({
-    series: [{
-      type: 'gauge',
-      startAngle: 180,
-      endAngle: 0,
-      min: 0,
-      max: 100,
-      splitNumber: 8,
-      axisLine: {
-        lineStyle: {
-          width: 8,
-          color: [
-            [0.4, '#67e8f9'],
-            [0.7, '#38bdf8'],
-            [1, '#2563eb']
-          ]
-        }
-      },
-      pointer: { itemStyle: { color: '#1d4ed8' } },
-      axisTick: { show: false },
-      splitLine: { length: 12, lineStyle: { width: 2, color: '#94a3b8' } },
-      axisLabel: { color: '#64748b' },
-      detail: {
-        valueAnimation: true,
-        formatter: '{value} 分',
-        color: '#0f172a',
-        fontSize: 26
-      },
-      data: [{ value: stats.avg_score || 0 }]
-    }]
-  })
-}
-
 const loadLegacyDashboard = async () => {
   if (isTeachingDashboard.value && !selectedCourse.value) {
     resetLegacyStats()
     return
   }
 
-  await Promise.all([loadLegacyStats(), loadLegacyResourceCounts()])
-  await ensureChart()
-  updateChart()
+  await Promise.all([loadLegacyStats(), loadLegacyResourceCounts(), loadScoreAnalysis()])
 }
 
 const loadClassTeacherDashboard = async () => {
@@ -329,7 +443,7 @@ const loadClassTeacherDashboard = async () => {
 }
 
 const resizeChart = () => {
-  scoreChart?.resize()
+  trendChart?.resize()
 }
 
 const goTo = path => {
@@ -360,7 +474,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   unsubscribeNotificationRefresh()
   window.removeEventListener('resize', resizeChart)
-  scoreChart?.dispose()
+  trendChart?.dispose()
 })
 
 watch(
@@ -568,8 +682,83 @@ watch(selectedCourse, async () => {
   color: #2563eb;
 }
 
-.chart-box {
-  height: 280px;
+.score-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.score-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.score-kpi {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.score-kpi__label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.score-kpi__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.trend-chart {
+  height: 168px;
+  width: 100%;
+}
+
+.score-top__title {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.score-top__list {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.score-top__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.score-top__avg {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.score-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .score-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1200px) {
