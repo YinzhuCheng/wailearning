@@ -167,11 +167,8 @@ async function setFlatCourseConfig(token, subjectId, presetIds, extra = {}) {
   return updateCourseConfig(token, subjectId, {
     is_enabled: true,
     response_language: 'zh-CN',
-    estimated_chars_per_token: 4.0,
-    estimated_image_tokens: 850,
     max_input_tokens: 16000,
     max_output_tokens: 1200,
-    quota_timezone: 'Asia/Shanghai',
     system_prompt: null,
     teacher_prompt: null,
     endpoints: presetIds.map((presetId, index) => ({ preset_id: presetId, priority: index + 1 })),
@@ -184,11 +181,8 @@ async function setGroupCourseConfig(token, subjectId, groups, extra = {}) {
   return updateCourseConfig(token, subjectId, {
     is_enabled: true,
     response_language: 'zh-CN',
-    estimated_chars_per_token: 4.0,
-    estimated_image_tokens: 850,
     max_input_tokens: 16000,
     max_output_tokens: 1200,
-    quota_timezone: 'Asia/Shanghai',
     system_prompt: null,
     teacher_prompt: null,
     groups,
@@ -420,14 +414,9 @@ test.describe('E2E LLM hard scenarios', () => {
     await page.goto('/subjects')
     await page.getByTestId(`subjects-open-llm-${s.course_required_id}`).click()
     await expect(page.getByTestId('dialog-course-llm')).toBeVisible({ timeout: 20000 })
-    const timezoneInput = page.getByTestId('llm-course-timezone')
-    await expect(timezoneInput).toHaveValue('Asia/Shanghai', { timeout: 15000 })
-    await timezoneInput.click()
-    await timezoneInput.press('Control+A')
-    await timezoneInput.press('Delete')
-    await timezoneInput.type('UTC')
-    await expect(timezoneInput).toHaveValue('UTC')
-    await timezoneInput.press('Tab')
+    const enableSwitch = page.getByTestId('dialog-course-llm').getByRole('switch')
+    await page.getByTestId('llm-course-enable').click()
+    await expect(enableSwitch).toHaveAttribute('aria-checked', 'false')
     await page.getByTestId('llm-course-save').click()
     await expect(page.getByTestId('dialog-course-llm')).toBeHidden({ timeout: 25000 })
 
@@ -435,12 +424,12 @@ test.describe('E2E LLM hard scenarios', () => {
       .poll(async () => {
         const config = await courseConfig(teacherToken, s.course_required_id)
         return {
-          timezone: config.quota_timezone,
+          is_enabled: Boolean(config.is_enabled),
           groups: (config.groups || []).map(g => `${g.name}:${(g.members || []).map(m => m.preset_id).join(',')}`),
         }
       }, { timeout: 30000 })
       .toEqual({
-        timezone: 'UTC',
+        is_enabled: false,
         groups: [`alpha:${presetA.id}`, `beta:${presetB.id}`],
       })
   })

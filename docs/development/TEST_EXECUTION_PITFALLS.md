@@ -1059,6 +1059,148 @@ makes the package visible to shared E2E helpers.
 
 ## What This Document Does Not Claim
 
+### Pitfall: system-wide student quota totals are repeated on course attribution rows
+
+Symptom:
+
+```text
+assert used_b1 == used_b0
+E       assert 10 == 0
+```
+
+Context:
+
+A behavior test submitted homework in course A, then read the
+`/api/llm-settings/courses/student-quotas` summary and expected the course B row
+to keep `student_used_tokens_today` unchanged.
+
+Cause:
+
+After quota consolidation, `student_used_tokens_today` is the student's
+system-wide daily LLM usage total. It is intentionally repeated on every course
+row so each row can show the same daily pool context. The per-course field is
+`course_used_tokens_today`; that field is the attribution value that should stay
+unchanged for a course that did not receive new usage.
+
+Fix:
+
+When testing the post-consolidation model, assert both sides explicitly:
+
+```text
+course A row student_used_tokens_today == course B row student_used_tokens_today
+course A row course_used_tokens_today increased
+course B row course_used_tokens_today did not change
+```
+
+Interpretation:
+
+This failure is not evidence that course attribution broke. It is evidence that
+the old per-course-pool mental model leaked into a test assertion.
+
+### Pitfall: Element Plus switch test id may be on the wrapper, not the role element
+
+Symptom:
+
+```text
+expect(locator).toHaveAttribute("aria-checked", "false")
+Received: ""
+locator resolved to <div class="el-switch" data-testid="...">...</div>
+```
+
+Cause:
+
+Element Plus can render the `data-testid` on the switch wrapper while the
+actual accessible switch state lives on the nested element with `role="switch"`.
+The wrapper is useful for clicking, but it may not carry `aria-checked`.
+
+Fix:
+
+Click the stable test id if that is the most convenient target, then assert on
+the role locator inside the same dialog or component:
+
+```text
+const enableSwitch = dialog.getByRole('switch')
+await page.getByTestId('llm-course-enable').click()
+await expect(enableSwitch).toHaveAttribute('aria-checked', 'false')
+```
+
+Interpretation:
+
+This is a selector issue in the test, not evidence that the UI failed to toggle.
+
+### Pitfall: parallel Playwright commands can reset local E2E backend fetches
+
+Symptom:
+
+```text
+TypeError: fetch failed
+[cause]: Error: read ECONNRESET
+```
+
+Context:
+
+Two separate Playwright CLI commands were started at the same time from
+`<repo>/apps/web/admin`, both using the default admin Playwright config.
+
+Relevant config shape:
+
+```text
+E2E_API_PORT defaults to 8012
+E2E_UI_PORT defaults to 3012
+DATABASE_URL defaults to a temp SQLite file keyed by E2E_API_PORT
+webServer starts FastAPI at http://127.0.0.1:8012
+webServer starts Vite at http://127.0.0.1:3012
+```
+
+Cause:
+
+The two CLI processes share the same default local ports and temp SQLite file.
+One process can reset/restart/tear down the backend while the other process is
+performing a Node-side `fetch(...)` against the local API. The resulting error
+is a local backend/webServer connection reset. It is not evidence of Codex
+platform high demand, and it is not evidence that a real external LLM provider
+was called.
+
+How to identify the target:
+
+For the admin Playwright config, helper `apiBase()` resolves to:
+
+```text
+http://127.0.0.1:<E2E_API_PORT>
+```
+
+The affected LLM hard-scenario tests create presets with mock base URLs such as:
+
+```text
+http://127.0.0.1:<E2E_API_PORT>/api/e2e/dev/mock-llm/<profile>/v1/
+```
+
+Therefore a `fetch failed` in those helpers should first be investigated as a
+local backend/webServer issue unless the stack trace or preset data shows a
+non-localhost URL.
+
+Fix:
+
+Prefer one Playwright CLI process at a time when using the default local
+webServer config. If parallel CLI processes are required, give each process its
+own ports and isolated database, for example:
+
+```text
+E2E_API_PORT=8013 E2E_UI_PORT=3013 npx playwright test ...
+E2E_API_PORT=8014 E2E_UI_PORT=3014 npx playwright test ...
+```
+
+On Windows PowerShell use separate `$env:` assignments in the same command
+session before invoking Playwright. Keep `NO_PROXY=localhost,127.0.0.1,::1` when
+a local HTTP proxy is configured so localhost E2E traffic does not leave the
+machine.
+
+Interpretation:
+
+If the same test passes when rerun serially with the same code and local mock
+LLM endpoint, treat the earlier `ECONNRESET` as local E2E orchestration
+contention rather than product behavior.
+
 - It does not claim the product code is bug-free.
 - It does not claim all Windows environments need the exact same workarounds.
 - It does not claim the sandbox restrictions seen here will match CI or a developer's normal terminal.

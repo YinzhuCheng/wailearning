@@ -332,8 +332,14 @@ function applyTransparency(root, mode) {
 }
 
 function applySidebar(root, primary, config) {
-  const bottom = config.primary === 'amber' ? '#3f2f20' : primary[900]
-  root.style.setProperty('--wa-sidebar-bg', `linear-gradient(180deg, ${primary[900]} 0%, ${bottom} 100%)`)
+  if (config.primary === 'amber') {
+    const accent = colorScales[config.accent] || colorScales.teal
+    root.style.setProperty('--wa-sidebar-bg', `linear-gradient(180deg, #111827 0%, ${accent[900]} 100%)`)
+    root.style.setProperty('--wa-sidebar-active-bg', `linear-gradient(90deg, ${primary[600]} 0%, ${accent[600]} 100%)`)
+    return
+  }
+
+  root.style.setProperty('--wa-sidebar-bg', `linear-gradient(180deg, ${primary[900]} 0%, ${primary[900]} 100%)`)
   root.style.setProperty('--wa-sidebar-active-bg', `linear-gradient(90deg, ${primary[700]} 0%, ${primary[500]} 100%)`)
 }
 

@@ -1,8 +1,10 @@
 """
-PCQ1–PCQ5: Per-course LLM quota pools, template clone, preset purge + re-sync, student-quotas API.
+PCQ1-PCQ5: System-wide LLM quota pool with course attribution, template clone,
+preset purge + re-sync, and student-quotas API.
 
-These tests assume each course keeps its own usage ledger (student + subject + course quota day)
-while the numeric daily cap still comes from admin policy / student override.
+The daily cap and quota calendar come from admin policy / student override.
+Course IDs stay on logs and student summaries for attribution only; they do not
+create independent daily token pools.
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ def _validated_preset_row(*, uid: str, name_suffix: str = "") -> LLMEndpointPres
     )
 
 
-def test_pcq1_two_courses_independent_usage_pools_under_same_numeric_cap(client: TestClient) -> None:
+def test_pcq1_two_courses_share_system_pool_but_keep_course_attribution(client: TestClient) -> None:
     """
     Same numeric daily cap: grading reserves large estimated prompt budgets, so the cap must be generous.
     After two successful runs (one per course), each course's ledger must show ~only that course's prompt
@@ -160,9 +162,12 @@ def test_pcq1_two_courses_independent_usage_pools_under_same_numeric_cap(client:
 
     qa = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
     qb = client.get(f"/api/llm-settings/courses/student-quota/{subject_b_id}", headers=st).json()
-    ua = int(qa["student_used_tokens_today"] or 0)
-    ub = int(qb["student_used_tokens_today"] or 0)
-    assert ua == 10 and ub == 10
+    ua_total = int(qa["student_used_tokens_today"] or 0)
+    ub_total = int(qb["student_used_tokens_today"] or 0)
+    ua_course = int(qa["course_used_tokens_today"] or 0)
+    ub_course = int(qb["course_used_tokens_today"] or 0)
+    assert ua_total == ub_total == 20
+    assert ua_course == 10 and ub_course == 10
 
 
 def test_pcq2_empty_course_clones_llm_from_latest_validated_peer(client: TestClient) -> None:
@@ -198,7 +203,7 @@ def test_pcq2_empty_course_clones_llm_from_latest_validated_peer(client: TestCli
     r = client.get(f"/api/llm-settings/courses/{subject_c_id}", headers=th)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["quota_timezone"] == "UTC"
+    assert "quota_timezone" not in body
     assert len(body.get("endpoints") or []) >= 1
     assert body["endpoints"][0]["preset_id"] == ctx["preset_id"]
 
@@ -383,6 +388,8 @@ def test_pcq4_student_quotas_summary_splits_usage_by_subject(client: TestClient)
     by_id = {c["subject_id"]: c for c in before["courses"]}
     used_a0 = int(by_id[ctx["subject_id"]]["student_used_tokens_today"] or 0)
     used_b0 = int(by_id[sid_b]["student_used_tokens_today"] or 0)
+    course_used_a0 = int(by_id[ctx["subject_id"]]["course_used_tokens_today"] or 0)
+    course_used_b0 = int(by_id[sid_b]["course_used_tokens_today"] or 0)
 
     assert (
         client.post(
@@ -407,8 +414,13 @@ def test_pcq4_student_quotas_summary_splits_usage_by_subject(client: TestClient)
     by_id2 = {c["subject_id"]: c for c in after["courses"]}
     used_a1 = int(by_id2[ctx["subject_id"]]["student_used_tokens_today"] or 0)
     used_b1 = int(by_id2[sid_b]["student_used_tokens_today"] or 0)
+    course_used_a1 = int(by_id2[ctx["subject_id"]]["course_used_tokens_today"] or 0)
+    course_used_b1 = int(by_id2[sid_b]["course_used_tokens_today"] or 0)
     assert used_a1 >= used_a0 + 10
-    assert used_b1 == used_b0
+    assert used_b1 == used_a1
+    assert used_b1 >= used_b0 + 10
+    assert course_used_a1 >= course_used_a0 + 10
+    assert course_used_b1 == course_used_b0
 
 
 def test_pcq5_non_student_cannot_read_student_quotas_summary(client: TestClient) -> None:

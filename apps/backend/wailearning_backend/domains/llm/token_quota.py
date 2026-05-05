@@ -57,7 +57,7 @@ def resolve_global_quota_calendar(db: Session) -> tuple[str, str]:
 
 
 def quota_calendar_for_timezone(tz_raw: str) -> tuple[str, str]:
-    """Calendar day for LLM usage logs and per-course quota math (ISO date + normalized tz name)."""
+    """Calendar day for the system-wide LLM usage pool and course attribution snapshots."""
     tz_name = (tz_raw or "UTC").strip() or "UTC"
     try:
         tz = ZoneInfo(tz_name)

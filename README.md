@@ -37,10 +37,11 @@ The LLM subsystem is one of the core product features, not an add-on.
 
 - Admins manage reusable endpoint presets under `/api/llm-settings`.
 - Presets track validation state, vision capability, retry settings, and timeouts.
-- Teachers configure LLM behavior per course, including enablement, prompts, endpoint order, timezone-aware quota boundaries, and token estimation limits.
+- Teachers configure LLM behavior per course, including enablement, prompts, endpoint order, and per-call input/output token boundaries.
+- Admins manage the system-wide LLM usage policy, including the quota timezone, token estimation knobs, per-student daily caps, and grading concurrency.
 - Homework can opt into async auto-grading while still allowing teacher override and regrade.
 - Submissions support text and attachment flows, including images, PDFs, notebooks, archives, and extracted text payloads.
-- The grading worker is database-backed, can reclaim stale tasks, and records token usage per student and per course.
+- The grading worker is database-backed, can reclaim stale tasks, and records token usage per student with course-level attribution.
 - Failure handling includes quota enforcement, endpoint failover, retry logic, manual regrade, and observable task states.
 
 See [docs/product/LLM_HOMEWORK_GUIDE.md](docs/product/LLM_HOMEWORK_GUIDE.md) for the current implementation details.

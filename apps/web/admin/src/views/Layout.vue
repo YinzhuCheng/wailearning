@@ -249,6 +249,7 @@ const headerAvatarSrc = ref('')
 let headerAvatarBlobUrl = ''
 const headerQuotaSummary = ref(null)
 const headerQuotaLoading = ref(false)
+const headerQuotaError = ref(false)
 
 const revokeHeaderAvatarBlob = () => {
   if (headerAvatarBlobUrl) {
@@ -312,6 +313,9 @@ const tokenUsageLabel = computed(() => {
   if (headerQuotaLoading.value) {
     return 'loading'
   }
+  if (headerQuotaError.value) {
+    return 'unavailable'
+  }
   if (!tokenUsageLimit.value) {
     return 'no data'
   }
@@ -321,10 +325,16 @@ const tokenDetailText = computed(() => {
   if (!userStore.isStudent) {
     return 'Managed in system LLM quota settings.'
   }
+  if (headerQuotaError.value) {
+    return 'Unable to load today quota.'
+  }
   if (!headerQuotaSummary.value) {
     return 'Hover to load today quota.'
   }
   const remaining = headerQuotaSummary.value.student_remaining_tokens_today ?? Math.max(0, tokenUsageLimit.value - tokenUsageUsed.value)
+  if (tokenUsageLimit.value > 0 && tokenUsageUsed.value > tokenUsageLimit.value) {
+    return `Over limit by ${tokenUsageUsed.value - tokenUsageLimit.value} · ${headerQuotaSummary.value.usage_date || ''} ${headerQuotaSummary.value.quota_timezone || ''}`.trim()
+  }
   return `Remaining ${remaining} · ${headerQuotaSummary.value.usage_date || ''} ${headerQuotaSummary.value.quota_timezone || ''}`.trim()
 })
 
@@ -335,9 +345,11 @@ const loadHeaderQuotaSummary = async () => {
   headerQuotaLoading.value = true
   try {
     headerQuotaSummary.value = await api.llmSettings.getStudentQuotasSummary()
+    headerQuotaError.value = false
   } catch (error) {
     console.error('load header quota failed', error)
     headerQuotaSummary.value = null
+    headerQuotaError.value = true
   } finally {
     headerQuotaLoading.value = false
   }

@@ -74,7 +74,7 @@
             请 LLM 回复
           </el-button>
           <el-text v-if="llmMode" type="info" size="small">
-            将附带「@LLM」并消耗你的课程 LLM 额度；输出长度由教师在课程 LLM 设置中的 max_output_tokens 控制。
+            将附带「@LLM」并消耗你的全站 LLM 日额度；输出长度由教师在课程 LLM 设置中的 max_output_tokens 控制。
           </el-text>
         </div>
         <el-input

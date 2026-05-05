@@ -1803,3 +1803,321 @@ Observed results:
   deliberately temporary spec change that is removed before commit. Do not leave
   screenshot side effects in maintained regression tests unless the screenshot is
   itself the maintained artifact.
+
+## Round 3: LLM Quota Semantics And Header Interaction Boundary Review
+
+This pass followed the earlier quota consolidation work and focused on removing
+places where maintained code, tests, or user-facing copy still implied that a
+course owns the daily LLM quota calendar, estimation policy, or independent
+daily token pool.
+
+### Documents and code read before editing
+
+Before changing files, the operator reread the repository entry documentation
+and the current UI/test pitfall notes:
+
+```text
+README.md
+docs/development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md
+docs/development/TEST_EXECUTION_PITFALLS.md
+```
+
+The previous handoff for this round had already inspected the architecture and
+LLM product documents. The repeated read was still useful because `README.md`
+contained stale high-level product wording: it still described teacher course
+LLM configuration as owning quota day boundaries and token estimation limits.
+That was no longer true after the system-level quota policy migration.
+
+### Product decision reaffirmed
+
+The maintained product model after this pass is:
+
+- administrators own the system-wide LLM usage policy;
+- the system policy owns quota timezone, estimation knobs, default per-student
+  daily token cap, personal overrides, and grading concurrency;
+- teacher course LLM configuration owns enablement, response language, prompts,
+  endpoint routing, and per-call input/output token boundaries;
+- student daily quota is one system-wide pool for the account on the current
+  quota day;
+- course IDs remain attached to usage logs and quota summaries for attribution,
+  audit, and UI explanation;
+- course attribution rows do not imply independent per-course daily token pools.
+
+This split intentionally preserves useful attribution without reintroducing the
+older double-track mental model.
+
+### User-facing cleanup
+
+Updated the root README LLM section so it no longer tells agents or developers
+that teachers configure:
+
+```text
+timezone-aware quota boundaries
+token estimation limits
+```
+
+The README now points those controls at the admin-owned system-wide quota
+policy and describes worker usage as per-student usage with course-level
+attribution.
+
+Updated the course discussion LLM hint. The old hint said that asking LLM in a
+discussion consumed the student's "course LLM quota". The new copy says it
+consumes the student's system-wide daily LLM quota, while still noting that
+output length comes from the course LLM `max_output_tokens` boundary.
+
+Updated the homework auto-grading help text. The old hint said the daily token
+limit was configured in course settings. The new hint says the daily token
+limit, quota timezone, and pre-reservation estimation are configured by an
+administrator in system settings.
+
+### API/test semantic cleanup
+
+The behavior test that previously asserted a course-level `quota_timezone`
+controlled the student quota calendar was renamed and inverted. It now proves
+that:
+
+- an administrator can set the global quota policy timezone;
+- a teacher can still send an old `quota_timezone` field in the course config
+  payload without causing an error;
+- the course config response does not expose `quota_timezone`;
+- the student quota response still reports the global quota policy timezone.
+
+This is an important compatibility contract: old clients may send ignored
+fields, but new clients must not learn or depend on them from the course config
+response.
+
+The advanced quota behavior test file was retargeted from "per-course quota
+pools" to "system-wide quota pool with course attribution". The most important
+assertion now checks both sides of the intended model:
+
+- the two course-specific quota endpoints show the same system-wide total used
+  count for the student;
+- each endpoint still reports only that course's attributed token usage in
+  `course_used_tokens_today`.
+
+This keeps the old independent-pool assumption from creeping back in through
+test names or test expectations.
+
+The backend LLM settings API test now explicitly asserts that course config
+responses do not include:
+
+```text
+quota_timezone
+estimated_chars_per_token
+estimated_image_tokens
+```
+
+The E2E helper payloads in maintained browser specs no longer send quota
+timezone or estimation fields when configuring course LLM routing. These fields
+are still ignored server-side for compatibility, but helpers should model the
+current product API and should not train future tests to depend on legacy
+payload shape.
+
+The resilience E2E scenario that used to edit a course timezone input was
+rewritten to prove that the course LLM dialog does not expose legacy quota or
+estimation field names. It still exercises failed-save recovery by toggling the
+course LLM enable switch, failing the first save request, checking that the
+local form state remains visible, and then saving successfully.
+
+### Compatibility deliberately retained
+
+This pass did not drop database columns or remove all model constructor uses of
+legacy-looking fields. The following remain as compatibility and fixture noise
+until a dedicated schema cleanup pass proves they are no longer needed:
+
+```text
+CourseLLMConfig.quota_timezone
+CourseLLMConfig.estimated_chars_per_token
+CourseLLMConfig.estimated_image_tokens
+course_llm_configs quota/estimation columns in bootstrap/model definitions
+tests that directly construct CourseLLMConfig rows with those fields
+historical pressure/scenario helpers that are not maintained browser UI helpers
+```
+
+The reason is practical: deleting DB columns is a migration decision, not just
+a UI cleanup. Existing local or deployed databases may still contain those
+columns, and some old fixtures may still construct rows with them. The current
+runtime quota logic uses the global policy helpers for estimation and calendar
+math, so leaving the columns in place does not keep the product double-track
+alive as long as they are not exposed as course configuration controls.
+
+If a later database cleanup round happens, it should first verify:
+
+- no runtime logic reads course-level quota timezone for student quota
+  calendars;
+- no runtime logic reads course-level estimation fields for reservation or
+  grading prompt budget estimation;
+- no public course config schema exposes those fields;
+- no maintained frontend code renders course-level quota controls;
+- no tests depend on course config responses containing those fields;
+- bootstrap/migration handling is safe for SQLite and PostgreSQL installations
+  that may already have or not have the old columns.
+
+### Header avatar and token dropdown boundary review
+
+The header user menu already had a hover-triggered profile dropdown with a
+large avatar, role identity, and LLM token progress bar. This pass tightened
+the token edge states:
+
+- non-students continue to see a system policy explanation;
+- students see `loading` while the quota summary request is in flight;
+- students see `no data` when no quota limit is available;
+- students see `unavailable` and an explicit unavailable detail when the quota
+  request fails;
+- over-limit usage keeps the progress bar capped visually at 100 percent but
+  the detail text reports how far over the limit the student is.
+
+This keeps the hover menu from looking like a normal zero-usage state when the
+network/API call actually failed.
+
+The sidebar handle remained centered along the interface edge from the previous
+round. Sidebar menu rows and submenu titles still use a small hover scale and
+translation. The review did not add more aggressive movement because the
+current interaction already gives feedback without making dense navigation feel
+unstable.
+
+### Screenshot expectations for this round
+
+The standard PostgreSQL UI audit should be rerun after the build. Relevant
+screenshots for visual inspection include:
+
+```text
+<artifact-dir>/<prefix>-login-postgres.png
+<artifact-dir>/<prefix>-teacher-homework-postgres.png
+<artifact-dir>/<prefix>-student-courses-postgres.png
+<artifact-dir>/<prefix>-student-course-home-postgres.png
+<artifact-dir>/<prefix>-appearance-personal-postgres.png
+<artifact-dir>/<prefix>-appearance-official-postgres.png
+```
+
+For this pass, the expected visual checks are:
+
+- login is not blank;
+- teacher homework no longer shows a confusing blank/white frame in the audited
+  viewport;
+- student courses has enough left-side/navigation context to avoid a single
+  lonely sidebar item feel;
+- course LLM and homework text no longer describe course-owned quota policy;
+- header avatar hover menu remains visually stable and the token bar fits
+  inside the dropdown card;
+- sidebar hover scaling does not overlap adjacent items;
+- top/course dropdown hover behavior remains restrained.
+
+Real absolute artifact paths belong only in ignored local notes. Committed
+documents should use `<artifact-dir>` or another placeholder.
+
+### Validation notes
+
+The first pre-validation command in this pass was:
+
+```text
+git diff --check
+```
+
+It passed before the screenshot/test run phase. Full build, targeted backend
+tests, browser checks, screenshot audit, and final commit metadata should be
+recorded by the operator before pushing this round.
+
+### Final validation recorded before commit
+
+The Round 3 closeout performed the required status and documentation checks:
+
+```text
+git status --short
+git diff --stat
+README.md
+docs/development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md
+docs/development/TEST_EXECUTION_PITFALLS.md
+```
+
+The final tracked source set included the quota semantic cleanup, header token
+edge states, focused E2E selector/payload updates, and a small Warm Amber theme
+adjustment. `.e2e-run/` remained a local ignored artifact directory and was not
+staged.
+
+Warm Amber review:
+
+- `round3-admin-appearance-warm-amber-postgres.png` showed that the preset was
+  visually readable but too dominated by brown/orange in the sidebar and action
+  treatment.
+- The frontend-only adjustment kept amber as the action color but changed the
+  shell to a slate/teal direction and changed the active sidebar treatment to an
+  amber-to-teal accent.
+- This affected only the theme token mapping in `apps/web/admin/src/utils/theme.js`
+  and the legacy warm fallback variables in `apps/web/admin/src/style.css`.
+- It did not change persistence, backend behavior, or database schema.
+
+PostgreSQL-backed audit was rerun after the Warm Amber adjustment:
+
+```powershell
+$env:HTTP_PROXY='http://127.0.0.1:7897'
+$env:HTTPS_PROXY='http://127.0.0.1:7897'
+$env:NO_PROXY='localhost,127.0.0.1,::1'
+$env:UI_UX_AUDIT_PREFIX='round3-final'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+Result:
+
+```text
+[ui-ux-audit] audit complete
+[ui-ux-audit] postgres exited null
+[ui-ux-audit] api exited null
+[ui-ux-audit] vite exited null
+```
+
+Final screenshot evidence stayed under ignored local artifacts:
+
+```text
+.e2e-run/ui-ux-audit/round3-final-login-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-settings-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-personal-appearance-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-appearance-warm-amber-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-appearance-minimal-gray-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-appearance-academic-navy-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-appearance-high-contrast-postgres.png
+.e2e-run/ui-ux-audit/round3-final-student-course-home-postgres.png
+.e2e-run/ui-ux-audit/round3-final-mobile-student-courses-postgres.png
+```
+
+Visual conclusions:
+
+- Warm Amber no longer reads as a one-note brown/orange page; amber remains
+  visible as the action color while the shell is balanced by teal/slate.
+- Minimal Gray, Academic Navy, and High Contrast remain readable, with no
+  obvious text overlap or broken card containment in the audited viewport.
+- The mobile student courses screenshot remains contained and scannable; the
+  sidebar is not consuming document-flow width.
+- The StudentCourseHome screenshot still shows skeleton bars in the homework,
+  materials, and notification cards. The course overview and shell are already
+  rendered, so this is treated as an audit-script waiting-timing limitation for
+  this pass rather than a product regression. Future screenshot audits should
+  wait for those loading states to settle before using course-home screenshots
+  as final visual evidence.
+
+Validation commands completed for the final source state:
+
+```text
+npm.cmd run build
+git diff --check
+```
+
+The frontend build passed with only the existing Vite CJS API deprecation and
+large chunk warnings. Earlier targeted tests in the same Round 3 source state
+passed:
+
+```text
+15 passed, 67 warnings
+1 passed: e2e-scenario-resilience course LLM config keeps system quota
+1 passed: e2e-llm-hard-scenarios teacher UI save updates course defaults
+```
+
+The earlier `TypeError: fetch failed` / `ECONNRESET` was classified as local
+Playwright webServer contention against the default local API, not Codex high
+demand and not a real external LLM provider call. The relevant target is the
+local admin Playwright API at `http://127.0.0.1:8012`, and the hard-scenario
+mock LLM endpoint is local:
+
+```text
+/api/e2e/dev/mock-llm/<profile>/v1/
+```

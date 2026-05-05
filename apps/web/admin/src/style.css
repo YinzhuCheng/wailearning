@@ -105,7 +105,8 @@ html[data-wa-theme='warm'] {
   --wa-color-accent-600: #0d9488;
   --wa-color-accent-700: #0f766e;
   --wa-color-bg: #f8fafc;
-  --wa-sidebar-bg: linear-gradient(180deg, #1f2937 0%, #3f2f20 100%);
+  --wa-sidebar-bg: linear-gradient(180deg, #111827 0%, #134e4a 100%);
+  --wa-sidebar-active-bg: linear-gradient(90deg, #d97706 0%, #0d9488 100%);
   --wa-focus-ring: 0 0 0 3px rgba(234, 88, 12, 0.18);
 }
 

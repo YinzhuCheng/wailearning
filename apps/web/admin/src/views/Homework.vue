@@ -235,7 +235,7 @@
           <el-switch v-model="form.auto_grading_enabled" />
           <div class="attachment-help">
             启用后，学生新提交会进入异步评分队列；展示分数始终按最高分规则计算。模型会分段读取作业说明、学生文字与附件（PDF/图片/部分文本与
-            ipynb 等）；过大内容可能被截断。日 token 限额在课程设置中配置。
+            ipynb 等）；过大内容可能被截断。日 token 限额、统计时区与预占估算由管理员在系统设置中统一配置。
           </div>
         </el-form-item>
         <el-form-item v-if="form.auto_grading_enabled" label="LLM 路由">
