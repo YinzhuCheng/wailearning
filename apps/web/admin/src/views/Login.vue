@@ -51,7 +51,24 @@
         </el-form-item>
       </el-form>
 
-      <el-dialog v-model="forgotVisible" title="忘记密码" width="440px" destroy-on-close @closed="resetForgot">
+      <div class="login-footer">
+        {{ settings.copyright }}
+      </div>
+    </div>
+
+    <!-- Outside .login-card so layout is not clipped by the card; teleports to body with full-viewport modal. -->
+    <teleport to="body">
+      <el-dialog
+        v-model="forgotVisible"
+        title="忘记密码"
+        width="440px"
+        align-center
+        append-to-body
+        destroy-on-close
+        class="login-forgot-dialog"
+        modal-class="login-forgot-dialog__overlay"
+        @closed="resetForgot"
+      >
         <p class="forgot-hint">
           将向管理员反馈并重置密码，请使用邮箱或其他通讯手段联系管理员获取新密码。
         </p>
@@ -65,11 +82,7 @@
           <el-button type="primary" :loading="forgotSubmitting" @click="submitForgot">确定</el-button>
         </template>
       </el-dialog>
-
-      <div class="login-footer">
-        {{ settings.copyright }}
-      </div>
-    </div>
+    </teleport>
   </div>
 </template>
 
@@ -314,6 +327,14 @@ onMounted(async () => {
   color: var(--wa-color-text-muted);
   line-height: 1.65;
   font-size: 14px;
+}
+
+:deep(.login-forgot-dialog__overlay) {
+  z-index: 3000;
+}
+
+:deep(.login-forgot-dialog.el-overlay-dialog) {
+  z-index: 3001;
 }
 
 .login-footer {
