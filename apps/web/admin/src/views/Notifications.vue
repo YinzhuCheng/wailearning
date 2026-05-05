@@ -27,6 +27,12 @@
     <template v-else>
       <el-card shadow="never">
         <el-table :data="notifications" v-loading="loading" @row-click="viewNotification">
+          <el-table-column label="已读" width="88" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.is_read" type="success" size="small" effect="plain">已读</el-tag>
+              <el-tag v-else type="warning" size="small" effect="plain">未读</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column width="70">
             <template #default="{ row }">
               <el-tag v-if="row.is_pinned" type="warning" size="small">置顶</el-tag>
@@ -230,7 +236,7 @@ import {
   resolveClassTeacherClassName
 } from '@/utils/classTeacher'
 import { loadAllPages } from '@/utils/pagedFetch'
-import { broadcastNotificationChange, onNotificationRefresh } from '@/utils/notificationSync'
+import { broadcastNotificationChange, emitNotificationRefresh, onNotificationRefresh } from '@/utils/notificationSync'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -494,6 +500,7 @@ const submitForm = async () => {
     dialogVisible.value = false
     await loadNotifications()
     broadcastNotificationChange()
+    emitNotificationRefresh()
   } finally {
     submitting.value = false
   }

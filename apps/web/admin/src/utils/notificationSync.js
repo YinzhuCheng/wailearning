@@ -4,7 +4,9 @@
  */
 
 const BROADCAST_CHANNEL = 'ddclass-notification-sync'
-const DEFAULT_POLL_INTERVAL_MS = 45_000
+/** Header and list refresh interval; keep low enough for timely toasts without hammering `/api/notifications/sync-status`. */
+export const DEFAULT_NOTIFICATION_POLL_INTERVAL_MS = 12_000
+const DEFAULT_POLL_INTERVAL_MS = DEFAULT_NOTIFICATION_POLL_INTERVAL_MS
 
 const listeners = new Set()
 

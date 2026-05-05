@@ -58,6 +58,10 @@ Subgroups:
   - upload compliance allow-list and sniffing (`test_attachment_upload_compliance.py`)
 - `tests/backend/content_format/`
   - optional `content_format` / `body_format` persistence on homework, submissions, discussions, notifications
+
+### Notification UX (admin SPA)
+
+See [Notification header badge and realtime sync](NOTIFICATION_HEADER_AND_REALTIME_SYNC.md) for avatar badge, dropdown entry, polling interval, and `emitNotificationRefresh` vs `BroadcastChannel` behavior.
 - `tests/backend/scores/`
   - score composition and derived grading behavior
 - `tests/backend/points/`
