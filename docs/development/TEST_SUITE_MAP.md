@@ -167,6 +167,44 @@ Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — ad
 
 Another additive hazard file: **`e2e-agent-hazard-tier-15.spec.js`** (15 cases) — API-only checks for authz edges, LLM admin vs student boundaries, parallel `mark-all-read`, and E2E dev seed header gates. Same globalSetup contract as `e2e-postgres-hazard-tier.spec.js`; run serially (Pitfall 41).
 
+### Coverage gap addressed in May 2026 (notification header badge + sync-status)
+
+Earlier Playwright suites exercised **`POST /api/notifications`** and list/mark-read flows extensively, but **did not systematically assert** the admin SPA header surfaces documented in [NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](NOTIFICATION_HEADER_AND_REALTIME_SYNC.md):
+
+- `data-testid="header-notification-badge"` (Element Plus badge content vs `sync-status.unread_count`),
+- course-scoped unread when **`header-course-switch`** changes `selectedCourse` (maps to `subject_id` on `syncStatus`),
+- convergence after **`window.dispatchEvent(new Event('focus'))`** (same hook as user returning to the tab — exercises `pollNotificationSync` without waiting `DEFAULT_NOTIFICATION_POLL_INTERVAL_MS`).
+
+**New Playwright module (10 cases):** `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js`
+
+**Deeper follow-up (15 cases):** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` — admin global totals vs list, teacher explicit course switch before badge asserts, corrupt `selected_course` healing, concurrent publishes, cross-teacher isolation, mobile viewport, reload-based cold poll, delete race on `/notifications`. Run alone:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
+  npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
+```
+
+- Run from `<REPO_ROOT>/apps/web/admin` (same `playwright.config.cjs` as other admin E2E):
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
+  npx playwright test e2e-notification-header-sync-tier.spec.js --project=chromium
+```
+
+**New behavior pytest module (10 cases):** `tests/behavior/test_notification_sync_api_edge_behavior.py`
+
+- Stresses **HTTP contract alignment** between `GET /api/notifications` aggregates and `GET /api/notifications/sync-status`, plus concurrent writers/readers and **403** when a student passes a **foreign** `subject_id`.
+- Uses the standard `tests/behavior/conftest.py` reset (SQLite by default); run:
+
+```bash
+cd <REPO_ROOT>
+python3 -m pytest tests/behavior/test_notification_sync_api_edge_behavior.py -q
+```
+
+Operational notes for agents authoring similar specs live under **“Pitfall 50”** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (secondary-browser-tab login, disabled course-card affordances after `/courses`, badge vs API race windows).
+
 ### `tests/postgres/`
 
 Small pytest package gated by dialect: when the effective engine is **not** PostgreSQL, tests **skip** at module level (set `TEST_DATABASE_URL`, or on Linux/macOS after `ops/scripts/dev/provision_postgres_pytest.sh` set **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects the standard throwaway URL). Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/development/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).

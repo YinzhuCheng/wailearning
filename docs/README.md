@@ -16,6 +16,7 @@ This directory is the authoritative documentation home for the repository. The r
 - [Test Suite Map](development/TEST_SUITE_MAP.md)
 - [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
 - [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+- [Full admin Playwright E2E runbook (`npm run test:e2e`)](development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md)
 - [UI/UX Audit And Responsive Repair Notes](development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md)
 - [E2E advanced coverage specs and historical backlog note](development/E2E_BACKLOG_SCENARIOS.md)
 - [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
