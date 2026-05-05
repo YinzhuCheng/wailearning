@@ -143,6 +143,8 @@ These stubs exist so older imports keep working while the actual helper code liv
 
 Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — additive API/navigation checks (pagination boundaries, health, settings public, course entry). Run alone with `npx playwright test e2e-agent-followup-batch.spec.js` from `apps/web/admin`.
 
+Another additive hazard file: **`e2e-agent-hazard-tier-15.spec.js`** (15 cases) — API-only checks for authz edges, LLM admin vs student boundaries, parallel `mark-all-read`, and E2E dev seed header gates. Same globalSetup contract as `e2e-postgres-hazard-tier.spec.js`; run serially (Pitfall 41).
+
 ### `tests/postgres/`
 
 Small pytest package gated by dialect: when the effective engine is **not** PostgreSQL, tests **skip** at module level (set `TEST_DATABASE_URL`, or on Linux/macOS after `ops/scripts/dev/provision_postgres_pytest.sh` set **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects the standard throwaway URL). Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/development/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).
@@ -254,6 +256,8 @@ Files under `tests/backend/e2e_dev/` can be harder than normal unit-style backen
 - demo seed data,
 - startup assumptions,
 - test-environment feature flags.
+
+The module **`test_e2e_dev_api_hazard_tier.py`** adds fifteen **TestClient** checks that chain `reset-scenario` with cross-role HTTP calls (seed token gates, teacher vs student LLM quota routes, parallel `mark-all-read`, homework delete authz). It shares the same per-test DB reset pattern as `test_e2e_dev_seed.py`.
 
 ## Operational Advice
 

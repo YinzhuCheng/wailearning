@@ -335,7 +335,7 @@ WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/
 
 That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the additive **quota / constraint hazard** module described below), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and avoids skipping the two **`test_llm_attachment_formats`** RAR builders when `rar` is installed.
 
-**Skip counts (reference):** On **SQLite** with `rar`/`unrar` installed but **without** `TEST_DATABASE_URL` / auto-Postgres, expect **43 skipped** (PostgreSQL-only modules + `test_r3`). With **`rar` missing**, add **2** skips for the RAR builder tests (**45** total). With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, expect **417 passed, 0 skipped** in the current collection (May 2026).
+**Skip counts (reference):** On **SQLite** with `rar`/`unrar` installed but **without** `TEST_DATABASE_URL` / auto-Postgres, expect **43 skipped** (PostgreSQL-only modules + `test_r3`). With **`rar` missing**, add **2** skips for the RAR builder tests (**45** total). With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, expect **432 passed, 0 skipped** in the current collection (same **432** tests collected as SQLite; Postgres runs the previously skipped `tests/postgres/*` and `test_r3`, May 2026).
 
 Default `pytest` without Postgres/`rar` remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
 
@@ -452,12 +452,12 @@ This subsection records **machine-verified** outcomes so future agents do not re
 
 | Configuration | Command pattern | Outcome (representative) | Wall-clock order of magnitude |
 |---------------|-----------------|---------------------------|--------------------------------|
-| **Default SQLite** (no `TEST_DATABASE_URL`, no `WAILEARNING_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | **372 passed**, **43 skipped** if `rar` is installed; **45 skipped** if `rar` is missing (adds 2 RAR-only tests) | ~8 minutes on a typical cloud CPU |
-| **PostgreSQL** (`TEST_DATABASE_URL` **or** `WAILEARNING_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | **417 passed**, **0 skipped** (with `rar` + Postgres provisioned) | ~9.5 minutes on a typical cloud CPU |
+| **Default SQLite** (no `TEST_DATABASE_URL`, no `WAILEARNING_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | **389 passed**, **43 skipped** if `rar` is installed; **45 skipped** if `rar` is missing (adds 2 RAR-only tests) | ~8 minutes on a typical cloud CPU |
+| **PostgreSQL** (`TEST_DATABASE_URL` **or** `WAILEARNING_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | **432 passed**, **0 skipped** (with `rar` + Postgres provisioned) | ~9.5 minutes on a typical cloud CPU |
 
 Interpretation for agents:
 
-- The **delta** (`417 - 372 = 45` extra tests executed on Postgres) is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
+- The **delta** (`432 - 389 = 43` extra tests executed on Postgres vs default SQLite) is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
 - **Zero-skip CI:** install **`rar`** / **`unrar`**, run **`ops/scripts/dev/provision_postgres_pytest.sh`**, then set **`WAILEARNING_AUTO_PG_TESTS=1`** (Linux agents) or **`TEST_DATABASE_URL`** explicitly (portable).
 
 **Not executed in the same session:** a full `npx playwright test` over **all** `tests/e2e/web-admin/*.spec.js` files (that run is hours-wide and belongs in a dedicated CI job). What **was** executed after the PostgreSQL pytest pass is the **additive** hazard file only:
@@ -468,6 +468,8 @@ CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-postgres-ha
 ```
 
 Outcome: **15 passed** (API + light UI checks for LLM global vs course boundaries).
+
+**Machine re-check (same agent session, after adding ``test_e2e_dev_api_hazard_tier.py``):** `python3 -m pytest tests/` on default SQLite reported **389 passed, 43 skipped** (~8m24s); `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/` reported **432 passed, 0 skipped** (~9m58s) when the throwaway Postgres from ``ops/scripts/dev/provision_postgres_pytest.sh`` was present and `rar`/`unrar` installed.
 
 **Playwright CLI pitfall observed:** `npx playwright test ... -q` may fail with `error: unknown option '-q'` on some Playwright versions bundled with the repo. Prefer **no `-q`** flag, or use `PLAYWRIGHT_HTML_REPORT=0` / reporter flags documented upstream for your installed version.
 
@@ -529,7 +531,53 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 - `tests/postgres/test_postgres_quota_api_and_constraints.py` — fifteen **HTTP + SQL** hazard checks for quota policy, course LLM boundaries, uniqueness, and FK violations.
 - `tests/e2e/web-admin/e2e-agent-followup-batch.spec.js` — ten API/navigation checks complementary to pitfall rails.
 - `tests/e2e/web-admin/e2e-postgres-hazard-tier.spec.js` — fifteen **API + UI** checks for global quota vs course LLM (see subsection **4** above for commands).
+- `tests/e2e/web-admin/e2e-agent-hazard-tier-15.spec.js` — fifteen **API-only** Playwright checks (pagination `422` boundaries, LLM admin vs student, parallel `mark-all-read`, E2E seed header gates, `forgot-password` empty username, registration disabled). Same seed contract as other web-admin E2E; run **serially** (Pitfall 41).
+- `tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py` — fifteen **pytest + TestClient** checks against `/api/e2e/dev/*` and cross-actor HTTP edges using the same DB reset as `test_e2e_dev_seed.py` (no Playwright; fast in CI when `E2E_DEV_SEED_ENABLED` is toggled per test).
 - `tests/security/test_security_regression.py` — twenty API security-boundary checks (admin vs teacher vs student, unauthenticated paths, invalid JWT).
+- `ops/scripts/dev/provision_postgres_pytest.sh` — idempotent **throwaway PostgreSQL** role+database for zero-skip full `pytest` (see Cross-platform smoke expectations above and **Pitfall 45** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
+
+#### D. Agent hazard pass (additive, May 2026): new tests, pitfalls observed, worries, coverage gaps
+
+This subsection documents a follow-up **hazard-tier** pass that added **15 Playwright API tests** and **15 pytest E2E-dev API tests** (see file list under “New focused suites”). It is written primarily for LLM agents that need searchable, exhaustive context; humans may skim headings.
+
+##### D1. Commands used to validate the new modules
+
+```bash
+# Fast pytest module (resets DB per test via e2e_dev fixtures; ~20s typical)
+cd <REPO_ROOT>
+python3 -m pytest tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py -q
+
+# Playwright file (requires globalSetup + E2E_DEV_SEED_TOKEN; run alone — Pitfall 41)
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-agent-hazard-tier-15.spec.js --project=chromium
+```
+
+##### D2. Pitfalls encountered while authoring these tests (concrete)
+
+1. **Discussion list `page_size` vs FastAPI `Query(le=...)`:** `GET /api/discussions` declares `page_size: Optional[int] = Query(None, ge=1, le=100)`. Values **above 100** therefore return **422** before the handler’s internal clamp (`_resolve_page_size` maps into `[MIN_PAGE_SIZE, MAX_PAGE_SIZE]`). A hazard test that expected “HTTP 200 + clamped page_size” for `page_size=200` would be **wrong** for this router — the correct high-difficulty assertion on the allowed branch is `page_size=100` → **200 OK** with `page_size <= 50` in the JSON body. This mirrors the general rule in subsection **B**: always grep the router for `Query(..., le=)` before scripting pagination edge cases.
+
+2. **`httpx` / Starlette deprecation when using `TestClient.post(..., data=bytes)`:** Passing raw form bytes via the `data=` parameter on `TestClient` can trigger `DeprecationWarning: Use 'content=<...>' to upload raw bytes`. Prefer `content=body.encode("utf-8")` with `Content-Type: application/x-www-form-urlencoded` for OAuth2-style login in pytest (fixed in `test_e2e_dev_api_hazard_tier.py::_login_form`).
+
+3. **E2E seed token header is mandatory for every `/api/e2e/dev/*` call:** Even when `E2E_DEV_SEED_ENABLED` is true in tests, omitting `X-E2E-Seed-Token` must yield **403** (not 404) on guarded dev routes — this is part of the contract validated by `test_hz03` and the Playwright case `08`.
+
+4. **Student quota endpoints are student-only:** Teachers receive **403** on `/api/llm-settings/courses/student-quotas` and `/api/llm-settings/courses/student-quota/{subject_id}` — do not assume instructors can “inspect student quota for debugging” without an explicit admin/teacher API (the hazard tests encode the current contract).
+
+5. **Parallel `mark-all-read`:** After the server-side upsert hardening (Round-4 continuation), issuing **two concurrent** `POST /api/notifications/mark-all-read` from the same student token should both return **200** and leave `sync-status.unread_count === 0`. If either request fails with `IntegrityError` in logs, that is a **regression** in the batch upsert path, not a flake.
+
+6. **Playwright scripts must match real admin LLM quota routes:** An early draft of `e2e-agent-hazard-tier-15.spec.js` called `POST /api/llm-settings/admin/quota-overrides/students`, which **does not exist** (HTTP **404**). The repository exposes **`PUT /api/llm-settings/admin/students/{student_id}/quota-override`** for a single student and **`POST /api/llm-settings/admin/quota-overrides/bulk`** for scoped bulk updates (`LLMQuotaBulkOverrideRequest`). Before writing E2E against admin quota mutations, run `rg "quota-override" apps/backend/wailearning_backend/api/routers/llm_settings.py` and copy the exact path + verb from the router.
+
+##### D3. “Worries” from this pass (planning signals, not confirmed defects)
+
+- **Playwright-only API tests still depend on globalSetup:** If `E2E_DEV_SEED_TOKEN` is missing, the entire describe block skips — CI must export the token for hazard-tier Playwright files the same way as `e2e-postgres-hazard-tier.spec.js`.
+- **pytest `TestClient` + full app import:** The `tests/backend/e2e_dev/*` modules import `main:app` after `tests/conftest.py` sets `DATABASE_URL`. If a future refactor moves engine creation **before** env setup, imports could fail with empty URL errors — keep `tests/conftest.py` at the top of the pytest plugin order (repository root `conftest.py` is Windows-only temp hacks; `tests/conftest.py` owns `DATABASE_URL`).
+- **Public registration test (`hz10` Playwright):** When `ALLOW_PUBLIC_REGISTRATION` is false (default), `POST /api/auth/register` returns **403**. If an environment enables public registration for experiments, the same test accepts **400** (validation) as an alternate success class — agents should not treat “400 vs 403” as a product regression without reading `settings.ALLOW_PUBLIC_REGISTRATION`.
+
+##### D4. Coverage gaps explicitly *not* closed by these 30 tests
+
+- **Parent portal** and **mobile viewport** hazard coverage remain thin; new tests target admin/teacher/student API edges on the **admin-seeded** scenario only.
+- **Real SMTP / password reset email** flows are not exercised (`forgot-password` only checks empty username returns a safe 200 message).
+- **Multi-worker Gunicorn** LLM worker leader election, wall-clock stale reclaim, and cross-process file locking are not represented in Playwright or the 15-pytest dev module.
+- **Production `APP_ENV`** cannot be covered by the dev-seed tests; production gating remains documented in subsection **2d** (`expose_e2e_dev_api`, router dependency).
 
 ## Test Cleanup Policy
 
