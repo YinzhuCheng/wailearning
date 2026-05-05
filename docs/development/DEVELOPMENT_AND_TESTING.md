@@ -341,6 +341,23 @@ The **SQLite-only `passed` integer** (for example **389** when **43** tests skip
 
 Default `pytest` without Postgres or **`unrar`** remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
 
+**Agent recipe — Debian/Ubuntu cloud image with only `apt` (no preinstalled Node):** Minimal Python-only sandboxes can still reach **432 passed, 0 skipped** and run **one** Playwright hazard file without hand-installing Node from upstream tarballs:
+
+1. **PostgreSQL + throwaway DB:** `sudo apt-get install -y postgresql postgresql-contrib` → `sudo pg_ctlcluster 16 main start` (version may differ) → `bash <REPO_ROOT>/ops/scripts/dev/provision_postgres_pytest.sh` (requires `sudo -u postgres`).
+2. **RAR extractors:** `sudo apt-get install -y unrar rar` (or `unrar-free` where `unrar` is unavailable).
+3. **pytest:** `python3 -m pip install -r <REPO_ROOT>/requirements.txt` then `cd <REPO_ROOT> && WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` → expect **432 passed, 0 skipped** when steps 1–2 succeeded.
+4. **Node + Playwright (apt, not `nvm`):** `sudo apt-get install -y nodejs npm` — on Ubuntu 24.04 this typically yields **Node 18.x** and **npm 9.x**, sufficient for `<REPO_ROOT>/apps/web/admin/package.json`.
+5. **Admin deps + browser:** `cd <REPO_ROOT>/apps/web/admin && npm ci && npx playwright install chromium`.
+6. **E2E run:** Use **`E2E_PYTHON`** pointing at an interpreter that has **`uvicorn`** on `PYTHONPATH` (repository **`.venv`** if present, else **`/usr/bin/python3`** after `pip install -r requirements.txt`). Example smoke:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=/usr/bin/python3 E2E_DEV_SEED_TOKEN=test-playwright-seed \
+  npx playwright test e2e-agent-hazard-tier-15.spec.js --project=chromium
+```
+
+Observed in one cloud session: **`npm ci` + `npx playwright install chromium` + the command above** produced **15 passed** for `e2e-agent-hazard-tier-15.spec.js` in ~15s wall time. Do **not** run multiple Playwright CLI processes on default ports **8012/3012** (Pitfall 41).
+
 **Authoring convention — database-backed tests:** When adding or reviewing tests that touch persistence, schema, transactions, concurrency, or dialect-specific behavior, **assume PostgreSQL as the production-aligned reference**: write assertions and fixtures compatible with Postgres first; use SQLite for speed locally where the suite allows, but **do not rely on SQLite-only semantics** as proof for shipping schema-sensitive changes. Re-validate meaningful DB changes against **`TEST_DATABASE_URL`** (Postgres).
 
 ### PostgreSQL full-suite and cloud-agent session notes (additive, for LLM agents)

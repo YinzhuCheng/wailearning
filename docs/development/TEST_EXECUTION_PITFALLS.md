@@ -1261,7 +1261,7 @@ Cloud CI images optimized for Python may omit Node.js entirely. The repository�
 
 ### Fix
 
-Install a supported Node.js + npm toolchain for your platform, then:
+**Preferred (portable):** Install a supported **Node.js + npm** from your OS or from **https://nodejs.org** (LTS), then:
 
 ```bash
 cd <REPO_ROOT>/apps/web/admin
@@ -1269,9 +1269,23 @@ npm ci
 npx playwright install chromium
 ```
 
+**Debian/Ubuntu without `nvm` / upstream tarball:** Use distribution packages when the image is Python-first and blocks custom installers:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y nodejs npm
+cd <REPO_ROOT>/apps/web/admin
+npm ci
+npx playwright install chromium
+```
+
+On Ubuntu **24.04** this commonly provides **Node 18.x** and **npm 9.x**, which satisfies the admin `package.json` lockfile in this repository. If `npm ci` fails with an engine mismatch, upgrade Node via NodeSource or official binaries — document the failure in CI logs rather than pinning unsupported ranges in `package.json` without maintainer review.
+
+**Playwright backend process:** `playwright.config.cjs` defaults `E2E_PYTHON` to `<REPO_ROOT>/.venv/bin/python` when that path exists; otherwise **`python3`**. If **`uvicorn` is missing** from the system `python3`, either create `.venv` + `pip install -r requirements.txt` or set **`E2E_PYTHON=/path/to/python-with-deps`** explicitly (observed working: **`E2E_PYTHON=/usr/bin/python3`** after `pip install -r requirements.txt` on the same machine).
+
 ### Interpretation
 
-**pytest-only CI** can stay green while **Playwright never runs** — track Node availability separately from Python bootstrap (**Pitfall 46**).
+**pytest-only CI** can stay green while **Playwright never runs** — track Node availability separately from Python bootstrap (**Pitfall 46**). **`npm: command not found`** is resolved by **any** compliant Node toolchain, including **`apt-get install nodejs npm`** on Debian-derived agents.
 
 ### Pitfall 49: Student sidebar label rename broke brittle Playwright text assertions
 
