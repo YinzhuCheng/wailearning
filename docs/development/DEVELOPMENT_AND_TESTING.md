@@ -534,24 +534,24 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 - `tests/e2e/web-admin/e2e-agent-followup-batch.spec.js` — ten API/navigation checks complementary to pitfall rails.
 - `tests/e2e/web-admin/e2e-postgres-hazard-tier.spec.js` — fifteen **API + UI** checks for global quota vs course LLM (see subsection **4** above for commands).
 - `tests/e2e/web-admin/e2e-agent-hazard-tier-15.spec.js` — fifteen **API-only** Playwright checks (pagination `422` boundaries, LLM admin vs student, parallel `mark-all-read`, E2E seed header gates, `forgot-password` empty username, registration disabled). Same seed contract as other web-admin E2E; run **serially** (Pitfall 41).
-- `tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py` — fifteen **pytest + TestClient** checks against `/api/e2e/dev/*` and cross-actor HTTP edges using the same DB reset as `test_e2e_dev_seed.py` (no Playwright; fast in CI when `E2E_DEV_SEED_ENABLED` is toggled per test).
+- `tests/e2e/web-admin/e2e-agent-hazard-tier-2-15.spec.js` — second **fifteen-case** API-only batch: unauthenticated health/settings/parent-verify, **teacher** forbidden student catalog routes, per-route `page_size` `le` mismatches (materials/points/homeworks vs **students** `le=1000`), admin global policy `max_parallel_grading_tasks` **422** at **0**, **triple** concurrent `mark-all-read`, unknown student quota override **404**. File header documents contract surprises (e.g. parent `verify` returns **200** + `valid: false`, not HTTP 404).
+- `tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py` — **thirty** **pytest + TestClient** checks (``hz01``–``hz30``) against `/api/e2e/dev/*` and cross-actor HTTP edges using the same DB reset as `test_e2e_dev_seed.py` (no Playwright; fast in CI when `E2E_DEV_SEED_ENABLED` is toggled per test). The first fifteen cases match the original hazard tier; **hz16–hz30** add health/settings/public smokes, parent soft-invalid, course-catalog **403** for teachers, materials/points/homeworks **422** for `page_size=200`, **422** for `max_parallel_grading_tasks=0`, **triple** threaded `mark-all-read`, and **students** list `page_size` **200** vs **2000** boundary.
 - `tests/security/test_security_regression.py` — twenty API security-boundary checks (admin vs teacher vs student, unauthenticated paths, invalid JWT).
 - `ops/scripts/dev/provision_postgres_pytest.sh` — idempotent **throwaway PostgreSQL** role+database for zero-skip full `pytest` (see Cross-platform smoke expectations above and **Pitfall 45** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
 
 #### D. Agent hazard pass (additive, May 2026): new tests, pitfalls observed, worries, coverage gaps
 
-This subsection documents a follow-up **hazard-tier** pass that added **15 Playwright API tests** and **15 pytest E2E-dev API tests** (see file list under “New focused suites”). It is written primarily for LLM agents that need searchable, exhaustive context; humans may skim headings.
+This subsection documents a follow-up **hazard-tier** pass that added **15 Playwright API tests** and **15 pytest E2E-dev API tests** (see file list under “New focused suites”), later **extended** by a second batch (**15 + 15** additional cases) documented in **§D5** below. It is written primarily for LLM agents that need searchable, exhaustive context; humans may skim headings.
 
 ##### D1. Commands used to validate the new modules
 
 ```bash
-# Fast pytest module (resets DB per test via e2e_dev fixtures; ~20s typical)
-cd <REPO_ROOT>
+# Second batch: extended dev API module (adds ~20s; 30 cases total)
 python3 -m pytest tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py -q
 
-# Playwright file (requires globalSetup + E2E_DEV_SEED_TOKEN; run alone — Pitfall 41)
+# Playwright second batch (same globalSetup + token; run alone — Pitfall 41)
 cd <REPO_ROOT>/apps/web/admin
-CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-agent-hazard-tier-15.spec.js --project=chromium
+CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-agent-hazard-tier-2-15.spec.js --project=chromium
 ```
 
 ##### D2. Pitfalls encountered while authoring these tests (concrete)
@@ -580,6 +580,41 @@ CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-agent-hazar
 - **Real SMTP / password reset email** flows are not exercised (`forgot-password` only checks empty username returns a safe 200 message).
 - **Multi-worker Gunicorn** LLM worker leader election, wall-clock stale reclaim, and cross-process file locking are not represented in Playwright or the 15-pytest dev module.
 - **Production `APP_ENV`** cannot be covered by the dev-seed tests; production gating remains documented in subsection **2d** (`expose_e2e_dev_api`, router dependency).
+
+##### D5. Hazard tier 2 extension (additive, 2026-05): thirty-case pytest module + fifteen-case Playwright twin
+
+This subsection records the **second** hazard batch alongside operational friction observed while authoring it.
+
+**What was added**
+
+- **`tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py`** now contains **`test_hz01` … `test_hz30`**. The first fifteen tests preserve the original contract; **`hz16`–`hz30`** add:
+  - unauthenticated **`GET /health`** + **`GET /api/health`** parity,
+  - **`GET /api/settings/public`** without JWT,
+  - **`GET /api/parent/verify/<code>`** soft-invalid (`HTTP 200`, JSON ``valid: false`` — **not** HTTP 404),
+  - **teacher** rejection paths for **`/api/subjects/course-catalog`** and **`/api/subjects/elective-catalog`** (both **403** for non-students),
+  - **422** pagination validation on **`/api/homeworks`**, **`/api/materials`**, **`/api/points/records/{id}`** when `page_size=200` (each endpoint declares `le=100` in its router),
+  - **`GET /api/subjects`** without auth → **401**,
+  - admin **`PUT /api/llm-settings/admin/quota-policy`** with **`max_parallel_grading_tasks=0`** → **422** (schema requires **`ge=1`**),
+  - student **`GET /api/discussions`** with **`page_size=200`** → **422** (distinct from **`hz15`**, which exercises the clamp branch at **`page_size=100`**),
+  - **`ThreadPoolExecutor`** triple **`POST /api/notifications/mark-all-read`** (stress beyond dual **`Promise.all`**),
+  - admin **`PUT .../quota-override`** for a nonexistent **`student_id`** → **404**,
+  - **`GET /api/students`** demonstrates **`le=1000`** accepts **`page_size=1000`** but rejects **`2000`** with **422** — intentional contrast so agents do not assume “every list endpoint is **le=100**.”
+
+- **`tests/e2e/web-admin/e2e-agent-hazard-tier-2-15.spec.js`** mirrors the above boundaries using **`fetch`** against **`E2E_API_URL`** after **`resetE2eScenario()`** (same globalSetup + **`.cache/scenario.json`** contract as the first Playwright hazard file).
+
+**Pitfall observed while implementing `hz21` / E2E case 06 (route prefix)**
+
+- The homework list router is mounted at **`/api/homeworks`** (plural). An early draft of the hazard test used **`/api/homework`**, which is **not** a list endpoint in this repository — the failure mode was a **404** (or a mistaken success on an unrelated path) instead of the expected **422** validation error. **Fix:** grep ``homework.py`` for ``APIRouter(prefix=`` before scripting pagination edges.
+
+**Environment pitfalls encountered during validation**
+
+- **`npm: command not found`:** Minimal Linux sandboxes may ship **Python + pytest** but **not Node/npm**. You cannot execute **`npx playwright test`** until **`npm install`** (from `<REPO_ROOT>/apps/web/admin`) succeeds — see also **Pitfall 46** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) for the symmetric **`pytest` missing** bootstrap failure.
+
+**Worries / residual coverage from this extension**
+
+- **Playwright still API-heavy:** Tier-2 does **not** open browser tabs except indirectly via Playwright’s runner; UI convergence bugs remain outside scope — compare **P1** dual-tab notification flake notes in [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
+- **Seed-dependent IDs:** All assertions anchor on **`reset-scenario`** outputs (`course_required_id`, `student_plain.student_row_id`, etc.). If the seed layout changes without updating scenario keys, these tests will fail loudly — treat that as a **contract migration signal**, not random flake.
+- **Parent rate limiter:** `/api/parent/verify` applies an in-memory per-IP rolling window (`_parent_hits`). Extremely parallel CI **could** theoretically hit **429** if many workers hammer the same loopback IP; keep Playwright **workers=1** for hazard files (repository default) or space out calls.
 
 ## Test Cleanup Policy
 

@@ -160,6 +160,8 @@ Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — ad
 
 Another additive hazard file: **`e2e-agent-hazard-tier-15.spec.js`** (15 cases) — API-only checks for authz edges, LLM admin vs student boundaries, parallel `mark-all-read`, and E2E dev seed header gates. Same globalSetup contract as `e2e-postgres-hazard-tier.spec.js`; run serially (Pitfall 41).
 
+Companion second batch: **`e2e-agent-hazard-tier-2-15.spec.js`** (15 cases) — extends the same API-first pattern with health/settings/parent-verify smoke, teacher-vs-student catalog gates, `page_size` **422** edges that differ by router (**`/api/students`** allows **`le=1000`** while homework/materials/points use **`le=100`**), triple concurrent `mark-all-read`, and admin quota边界 (**`max_parallel_grading_tasks=0`** → **422**). Read the file header before asserting **`GET /api/parent/verify/...`** HTTP codes — unknown codes return **200** + **`valid: false`**, not **404**.
+
 ### `tests/postgres/`
 
 Small pytest package gated by dialect: when the effective engine is **not** PostgreSQL, tests **skip** at module level (set `TEST_DATABASE_URL`, or on Linux/macOS after `ops/scripts/dev/provision_postgres_pytest.sh` set **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects the standard throwaway URL). Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/development/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).

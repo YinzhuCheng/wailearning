@@ -1216,6 +1216,63 @@ Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TES
 
 This is **runner bootstrap debt**, not a failing test or a broken import path in `apps.backend.wailearning_backend`. Do not edit `tests/conftest.py` or `pytest.ini` to “fix” a missing `pytest` package on the system interpreter.
 
+### Pitfall 47: `GET /api/homework` is not the student homework list — the plural router is `/api/homeworks`
+
+### Symptom
+
+A hazard or E2E test expects **HTTP 422** (or a JSON list) from:
+
+```text
+GET /api/homework?page=1&page_size=200
+```
+
+but receives **404** or an HTML error page, so pagination validation never runs.
+
+### Context
+
+`apps/backend/wailearning_backend/api/routers/homework.py` registers `APIRouter(prefix="/api/homeworks", ...)`. There is no first-class list route at `/api/homework` in this branch.
+
+### Fix
+
+Use **`/api/homeworks`** for list queries. Re-run `rg "APIRouter\\(prefix=" apps/backend/wailearning_backend/api/routers/homework.py` before freezing URL literals in new tests.
+
+### Interpretation
+
+This is a **test contract bug** (wrong path), not evidence that FastAPI removed validation for oversized `page_size`.
+
+### Pitfall 48: `npm: command not found` blocks Playwright E2E even when pytest is green
+
+### Symptom
+
+```text
+npm: command not found
+```
+
+when attempting:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+npx playwright test e2e-agent-hazard-tier-2-15.spec.js
+```
+
+### Context
+
+Cloud CI images optimized for Python may omit Node.js entirely. The repository’s Playwright specs live under `<REPO_ROOT>/tests/e2e/web-admin/` but execute via **`apps/web/admin/playwright.config.cjs`**, which requires **`npm ci`** / **`npm install`** inside **`apps/web/admin`** before **`npx playwright`** exists.
+
+### Fix
+
+Install a supported Node.js + npm toolchain for your platform, then:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+npm ci
+npx playwright install chromium
+```
+
+### Interpretation
+
+**pytest-only CI** can stay green while **Playwright never runs** — track Node availability separately from Python bootstrap (**Pitfall 46**).
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
