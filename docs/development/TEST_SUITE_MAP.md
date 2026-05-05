@@ -177,6 +177,14 @@ Earlier Playwright suites exercised **`POST /api/notifications`** and list/mark-
 
 **New Playwright module (10 cases):** `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js`
 
+**Deeper follow-up (15 cases):** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` — admin global totals vs list, teacher explicit course switch before badge asserts, corrupt `selected_course` healing, concurrent publishes, cross-teacher isolation, mobile viewport, reload-based cold poll, delete race on `/notifications`. Run alone:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
+  npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
+```
+
 - Run from `<REPO_ROOT>/apps/web/admin` (same `playwright.config.cjs` as other admin E2E):
 
 ```bash

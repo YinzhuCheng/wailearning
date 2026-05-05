@@ -128,6 +128,21 @@ CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
   npx playwright test e2e-notification-header-sync-tier.spec.js --project=chromium
 ```
 
+### Playwright deep tier (follow-up hazards)
+
+- **File:** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` (**15** `test(...)` cases).
+- **Why it exists:** The first tier proved baseline badge wiring; this module stresses **role-specific** aggregation (**admin** global `sync-status` vs **teacher/student** course-scoped params), **corrupt `selected_course` localStorage** healing, **concurrent** teacher `POST`s, **teacher-owned vs other-teacher** notification isolation, **403** on inaccessible `subject_id`, **mobile viewport**, **full page reload** (`onMounted` → `pollNotificationSync` without relying on manual focus), and **delete race** while the student notifications view loads.
+- **Lessons baked into the spec comments:**
+  - Teachers may land on **`/dashboard`** with **`ensureSelectedCourse`** picking a **non-required** course first (ranking by semester/id). Assertions against **`course_required_id`** must **explicitly switch** via **`header-course-switch`** → `.course-dropdown-menu .course-option` (click **switcher**, not hover-only).
+  - Overriding **`document.visibilityState`** in Playwright did **not** stop `pollNotificationSync` reliably in Chromium (the visibility descriptor is not consistently honored for interval timers). The **`visibility hidden`** scenario was replaced by **`page.reload()`** evidence for cold-start polling — document that **true background-tab** gating remains a **residual risk** not fully automated here.
+- **Run command:**
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
+  npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
+```
+
 ### pytest behavior (HTTP contract stress)
 
 - **File:** `tests/behavior/test_notification_sync_api_edge_behavior.py` (**10** tests).
