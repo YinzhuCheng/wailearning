@@ -1,7 +1,7 @@
 """Default demo data: teacher `teacher`, class 人工智能1班, students stu1–stu5.
 
 - **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业。
-- **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业，**不**自动写入全班选课。
+- **选修课**「大语言模型」：同班开设；默认种子会为全班写入选课记录（与必修课一致），便于首次部署后师生立即可用。
 
 若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（`ensure_schema_updates` 会写入内置默认预设），本种子会为演示必修课/选修课**幂等绑定**首个可用预设（必修课同时 `is_enabled=True` 以配合自动评分作业）；否则不写入端点，由管理员或教师在课程 LLM 配置中手动选择。
 
@@ -19,6 +19,7 @@ from apps.backend.wailearning_backend.domains.courses.access import sync_course_
 from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
+    CourseEnrollmentBlock,
     CourseExamWeight,
     CourseGradeScheme,
     CourseLLMConfig,
@@ -26,6 +27,7 @@ from apps.backend.wailearning_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    Gender,
     Homework,
     LLMEndpointPreset,
     Semester,
@@ -51,7 +53,7 @@ _LLM_WEEKLY = "每周四 15:00–17:00（选修，以教务通知为准）"
 _LLM_MATERIAL_TITLE = "【选修】大语言模型：课程说明与阅读材料"
 _LLM_MATERIAL_CONTENT = """## 欢迎选修「大语言模型」
 
-本课程为**选修课**，请在「我的课程」页面使用**选课**按钮加入后，方可查看作业与完整资料池。
+本课程为**选修课**。在默认演示数据中，系统已为全班预置选课记录，便于首次部署后直接进入作业与资料；生产环境可自行调整选课策略。
 
 ### 学习目标
 
@@ -542,14 +544,50 @@ def _get_or_create_uncategorized_chapter(db: Session, *, subject_id: int) -> Cou
     return unc
 
 
+def _sync_demo_elective_enrollments_for_class(db: Session, *, course: Subject, klass: Class) -> int:
+    """
+    Ensure every roster student in the demo class is enrolled in the demo elective.
+
+    Clears enrollment blocks for this course so login-time student sync cannot suppress the row.
+    """
+    if not course.class_id:
+        return 0
+    class_students = db.query(Student).filter(Student.class_id == klass.id).all()
+    existing = {
+        row.student_id
+        for row in db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).all()
+    }
+    created = 0
+    for st in class_students:
+        db.query(CourseEnrollmentBlock).filter(
+            CourseEnrollmentBlock.subject_id == course.id,
+            CourseEnrollmentBlock.student_id == st.id,
+        ).delete(synchronize_session=False)
+        if st.id in existing:
+            continue
+        db.add(
+            CourseEnrollment(
+                subject_id=course.id,
+                student_id=st.id,
+                class_id=course.class_id,
+                enrollment_type="elective",
+                can_remove=True,
+            )
+        )
+        created += 1
+    if created:
+        db.flush()
+    return created
+
+
 def _seed_llm_elective_course(
     db: Session,
     *,
     teacher: User,
     klass: Class,
     semester: Semester | None,
-) -> None:
-    """Elective on the same demo class; students self-enroll (no roster-wide auto enrollment)."""
+) -> Subject:
+    """Elective on the same demo class; seed also adds roster enrollments for the demo bundle."""
     course = (
         db.query(Subject)
         .filter(
@@ -650,11 +688,13 @@ def _seed_llm_elective_course(
         hw.rubric_text = _LLM_RUBRIC_TEXT
         hw.due_date = hw.due_date or due
 
+    return course
+
 
 def seed_demo_course_bundle(db: Session) -> None:
     """
     Idempotent seed: teacher `teacher`, class 人工智能1班, students stu1–stu5,
-    必修课「数据挖掘」+ 选修课「大语言模型」。
+    必修课「数据挖掘」+ 选修课「大语言模型」（全班默认已选课）。
     Password for all demo accounts: 111111.
     """
     pwd_hash = get_password_hash(_DEMO_PASSWORD)
@@ -721,6 +761,7 @@ def seed_demo_course_bundle(db: Session) -> None:
                 Student(
                     name=display,
                     student_no=uname,
+                    gender=Gender.MALE,
                     class_id=klass.id,
                     teacher_id=teacher.id,
                     phone=phone,
@@ -730,6 +771,8 @@ def seed_demo_course_bundle(db: Session) -> None:
         else:
             st.teacher_id = teacher.id
             st.phone = phone
+            if st.gender is None:
+                st.gender = Gender.MALE
             if (st.name or "") != display:
                 st.name = display
 
@@ -827,7 +870,10 @@ def seed_demo_course_bundle(db: Session) -> None:
         hw.max_submissions = hw.max_submissions if hw.max_submissions is not None else 3
         print("Demo homework already exists; refreshed text fields.")
 
-    _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)
+    llm_course = _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)
+    n_elective = _sync_demo_elective_enrollments_for_class(db, course=llm_course, klass=klass)
+    if n_elective:
+        print(f"Synced demo elective enrollments: +{n_elective}.")
 
     reconcile_student_users_and_roster(db)
     db.commit()

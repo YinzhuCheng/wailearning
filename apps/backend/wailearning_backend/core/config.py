@@ -53,8 +53,10 @@ class Settings(BaseSettings):
     LLM_GRADING_TASK_STALE_SECONDS: int = 600
     DEFAULT_ESTIMATED_IMAGE_TOKENS: int = 850
 
-    # Optional: seed / override API key for the default LLM preset name (see bootstrap).
+    # Optional: seed API key for the default LLM preset on first insert (see bootstrap).
+    # DEFAULT_LLM_PRESET_API_KEY is an alias for operators who prefer an explicit deploy-time name.
     DEFAULT_LLM_API_KEY: str = ""
+    DEFAULT_LLM_PRESET_API_KEY: str = ""
 
     # When True, refuse weak SECRET_KEY / default DATABASE_URL even if APP_ENV is not production.
     REQUIRE_STRONG_SECRETS: bool = False
@@ -129,6 +131,14 @@ class Settings(BaseSettings):
             )
 
         return self
+
+    def resolved_default_llm_api_key(self) -> str:
+        """First non-empty key from deploy-time env vars (never persisted in repo)."""
+        for raw in (self.DEFAULT_LLM_API_KEY, self.DEFAULT_LLM_PRESET_API_KEY):
+            s = (raw or "").strip()
+            if s:
+                return s
+        return ""
 
 
 settings = Settings()

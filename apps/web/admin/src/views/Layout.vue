@@ -202,6 +202,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  Brush,
   Collection,
   DataAnalysis,
   Document,
@@ -461,7 +462,8 @@ const homeworkMenuOpenIndices = computed(() => {
       p.startsWith('/homework') ||
       p.startsWith('/materials') ||
       p.startsWith('/student-scores') ||
-      p.startsWith('/notifications')
+      p.startsWith('/notifications') ||
+      p.startsWith('/personal-settings')
     ) {
       return ['student-learning']
     }
@@ -482,7 +484,8 @@ const homeworkMenuOpenIndices = computed(() => {
       p.startsWith('/dashboard') ||
       p.startsWith('/students') ||
       p.startsWith('/subjects') ||
-      p.startsWith('/notifications')
+      p.startsWith('/notifications') ||
+      p.startsWith('/personal-settings')
     ) {
       return ['class-teaching']
     }
@@ -491,7 +494,14 @@ const homeworkMenuOpenIndices = computed(() => {
   if (p.startsWith('/homework') || p.startsWith('/materials')) {
     return ['homework-and-materials']
   }
-  if (p.startsWith('/dashboard') || p.startsWith('/students') || p.startsWith('/scores') || p.startsWith('/attendance') || p.startsWith('/notifications')) {
+  if (
+    p.startsWith('/dashboard') ||
+    p.startsWith('/students') ||
+    p.startsWith('/scores') ||
+    p.startsWith('/attendance') ||
+    p.startsWith('/notifications') ||
+    p.startsWith('/personal-settings')
+  ) {
     return ['class-teaching']
   }
   return []
@@ -507,7 +517,8 @@ const classTeacherMenu = [
       { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
       { path: '/students', label: '学生信息', icon: User },
       { path: '/subjects', label: '课程信息', icon: Reading },
-      { path: '/notifications', label: '通知信息', icon: Bell }
+      { path: '/notifications', label: '通知信息', icon: Bell },
+      { path: '/personal-settings', label: '个人设置', icon: Brush }
     ]
   }
 ]
@@ -523,7 +534,8 @@ const teacherMenu = [
       { path: '/students', label: '学生管理', icon: User },
       { path: '/scores', label: '成绩管理', icon: Collection },
       { path: '/attendance', label: '考勤管理', icon: Collection },
-      { path: '/notifications', label: '通知中心', icon: Bell }
+      { path: '/notifications', label: '通知中心', icon: Bell },
+      { path: '/personal-settings', label: '个人设置', icon: Brush }
     ]
   },
   {
@@ -551,7 +563,8 @@ const studentMenu = [
       { path: '/homework', label: '课程作业', icon: Document },
       { path: '/materials', label: '课程资料', icon: Collection },
       { path: '/student-scores', label: '我的成绩', icon: Collection },
-      { path: '/notifications', label: '课程通知', icon: Bell }
+      { path: '/notifications', label: '课程通知', icon: Bell },
+      { path: '/personal-settings', label: '个人设置', icon: Brush }
     ]
   }
 ]
@@ -561,6 +574,7 @@ const adminMenu = [
   { path: '/classes', label: '班级管理', icon: School },
   { path: '/users', label: '用户管理', icon: UserFilled },
   { path: '/subjects', label: '课程管理', icon: Reading },
+  { path: '/personal-settings', label: '个人设置', icon: Brush },
   {
     type: 'submenu',
     index: 'admin-academic-config',
@@ -992,7 +1006,7 @@ watch(notificationSyncParams, () => {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--wa-border-subtle);
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, #ffffff var(--wa-header-alpha), transparent);
   backdrop-filter: blur(10px);
 }
 

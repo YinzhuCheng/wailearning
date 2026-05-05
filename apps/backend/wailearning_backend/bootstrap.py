@@ -564,15 +564,15 @@ def _ensure_default_llm_endpoint_preset() -> None:
     Seed the built-in LLM preset (name = DEFAULT_LLM_PRESET_NAME) when missing so new installs
     match admin UI defaults. Does not overwrite an existing preset of the same name.
 
-    Set DEFAULT_LLM_API_KEY in the environment to supply the API key on first insert (never
-    committed to the repository).
+    Set DEFAULT_LLM_API_KEY or DEFAULT_LLM_PRESET_API_KEY in the environment to supply the API
+    key on first insert (never committed to the repository).
     """
     db = SessionLocal()
     try:
         row = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.name == DEFAULT_LLM_PRESET_NAME).first()
         if row:
             return
-        api_key = (settings.DEFAULT_LLM_API_KEY or "").strip()
+        api_key = settings.resolved_default_llm_api_key()
         now = datetime.now(timezone.utc)
         db.add(
             LLMEndpointPreset(
@@ -835,6 +835,8 @@ def seed_default_semesters(db) -> None:
     if created:
         db.commit()
     print(f"Ensured default semesters. Added {created} item(s).")
+
+
 def normalize_semester_catalog(db) -> None:
     semesters = db.query(Semester).order_by(Semester.created_at.asc(), Semester.id.asc()).all()
     changed = 0

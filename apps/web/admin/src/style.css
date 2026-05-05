@@ -53,7 +53,27 @@
   --wa-radius-lg: 12px;
   --wa-radius-xl: 16px;
   --wa-radius-2xl: 20px;
+  /* Alternating: controls slightly squarer than cards/dialogs */
+  --wa-radius-control: 7px;
+  --wa-radius-card: 13px;
+  --wa-radius-dialog: 17px;
   --wa-radius-pill: 999px;
+  --wa-space-xs: 6px;
+  --wa-space-sm: 10px;
+  --wa-space-md: 14px;
+  --wa-space-lg: 18px;
+  --wa-space-xl: 24px;
+  --wa-control-padding-v: 8px;
+  --wa-control-padding-h: 14px;
+  --wa-table-cell-padding-v: 8px;
+  --wa-table-cell-padding-h: 10px;
+  --wa-menu-item-padding-v: 8px;
+  --wa-menu-item-padding-h: 14px;
+  --wa-surface-alpha: 1;
+  --wa-body-bg-mix: 0%;
+  --wa-texture-opacity: 0.38;
+  --wa-header-alpha: 0.96;
+  --wa-surface-blend-pct: 100%;
   --wa-border-subtle: #e2e8f0;
   --wa-border-strong: #cbd5e1;
   --wa-shadow-surface: 0 8px 24px rgba(15, 23, 42, 0.07);
@@ -65,9 +85,9 @@
   --el-color-primary-light-8: var(--wa-color-primary-100);
   --el-color-primary-light-9: var(--wa-color-primary-50);
   --el-color-primary-dark-2: var(--wa-color-primary-700);
-  --el-border-radius-base: var(--wa-radius-sm);
+  --el-border-radius-base: var(--wa-radius-control);
   --el-border-radius-small: var(--wa-radius-xs);
-  --el-border-radius-round: 18px;
+  --el-border-radius-round: var(--wa-radius-xl);
 }
 
 html[data-wa-theme='green'] {
@@ -131,14 +151,17 @@ html[data-wa-theme='grayscale'] {
 
 body {
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
-  background-color: var(--wa-color-bg);
+  font-size: var(--wa-font-size-md);
+  line-height: var(--wa-line-height-normal);
+  background-color: color-mix(in srgb, var(--wa-color-primary-50) var(--wa-body-bg-mix), var(--wa-color-bg));
+  background-attachment: fixed;
   color: var(--wa-color-text);
 }
 
 body::before {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
   content: '';
   opacity: 0;
@@ -146,41 +169,33 @@ body::before {
 
 html[data-wa-texture='subtle-grid'] body::before {
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
   background-size: 28px 28px;
-  opacity: 1;
+  opacity: var(--wa-texture-opacity);
 }
 
 html[data-wa-texture='soft-paper'] body::before {
   background-image:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.9) 0 1px, transparent 1px),
-    radial-gradient(circle at 80% 60%, rgba(148, 163, 184, 0.2) 0 1px, transparent 1px);
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.95) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 60%, rgba(148, 163, 184, 0.22) 0 1px, transparent 1px);
   background-size: 18px 18px, 24px 24px;
-  opacity: 0.72;
+  opacity: var(--wa-texture-opacity);
 }
 
 html[data-wa-texture='fine-noise'] body::before {
   background-image:
-    radial-gradient(circle at 25% 30%, rgba(15, 23, 42, 0.08) 0 1px, transparent 1px),
-    radial-gradient(circle at 75% 70%, rgba(255, 255, 255, 0.8) 0 1px, transparent 1px);
+    radial-gradient(circle at 25% 30%, rgba(15, 23, 42, 0.1) 0 1px, transparent 1px),
+    radial-gradient(circle at 75% 70%, rgba(255, 255, 255, 0.85) 0 1px, transparent 1px);
   background-size: 12px 12px, 16px 16px;
-  opacity: 0.42;
+  opacity: var(--wa-texture-opacity);
 }
 
-html[data-wa-density='compact'] {
-  --wa-font-size-md: 13px;
-  --wa-font-size-lg: 16px;
-  --wa-font-size-xl: 18px;
-}
-
-html[data-wa-density='spacious'] {
-  --wa-font-size-md: 15px;
-  --wa-font-size-lg: 19px;
-  --wa-font-size-xl: 22px;
-}
+/* Density: token-driven from JS (preview + app share the same variables on :root) */
 
 #app {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
 }
 
@@ -190,17 +205,21 @@ html[data-wa-density='spacious'] {
 
 .el-card {
   border-color: var(--wa-border-subtle);
-  border-radius: var(--wa-radius-lg);
+  border-radius: var(--wa-radius-card);
   overflow: hidden;
+  background-color: color-mix(in srgb, var(--wa-color-surface) var(--wa-surface-blend-pct), transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .el-card,
 .el-dialog {
-  background-color: var(--wa-color-surface);
+  background-color: color-mix(in srgb, var(--wa-color-surface) var(--wa-surface-blend-pct), transparent);
 }
 
 .el-button {
-  border-radius: var(--wa-radius-sm);
+  border-radius: var(--wa-radius-control);
+  padding: var(--wa-control-padding-v) var(--wa-control-padding-h);
+  font-size: var(--wa-font-size-md);
   transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
@@ -222,7 +241,9 @@ html[data-wa-density='spacious'] {
 .el-input-number,
 .el-date-editor.el-input,
 .el-date-editor.el-input__wrapper {
-  border-radius: var(--wa-radius-sm);
+  border-radius: var(--wa-radius-control);
+  padding: var(--wa-control-padding-v) var(--wa-control-padding-h);
+  font-size: var(--wa-font-size-md);
 }
 
 .el-tag {
@@ -235,25 +256,31 @@ html[data-wa-density='spacious'] {
   --el-table-header-text-color: var(--wa-color-text-soft);
   --el-table-text-color: var(--wa-color-text);
   --el-table-row-hover-bg-color: var(--wa-color-primary-50);
+  font-size: var(--wa-font-size-md);
 }
 
 .el-table__inner-wrapper {
-  border-radius: var(--wa-radius-xs);
+  border-radius: var(--wa-radius-md);
+}
+
+.el-table .cell {
+  padding: var(--wa-table-cell-padding-v) var(--wa-table-cell-padding-h);
 }
 
 .el-dialog {
-  border-radius: var(--wa-radius-lg);
+  border-radius: var(--wa-radius-dialog);
   overflow: hidden;
+  box-shadow: var(--wa-shadow-object);
 }
 
 .content-wrapper {
-  padding: 20px;
+  padding: var(--wa-space-lg);
 }
 
 .stat-card {
-  background: var(--wa-color-surface);
-  border-radius: var(--wa-radius-lg);
-  padding: 20px;
+  background: color-mix(in srgb, var(--wa-color-surface) var(--wa-surface-blend-pct), transparent);
+  border-radius: var(--wa-radius-card);
+  padding: var(--wa-space-lg);
   box-shadow: var(--wa-shadow-surface);
 }
 
@@ -283,15 +310,62 @@ html[data-wa-density='spacious'] {
 }
 
 .table-container {
-  background: var(--wa-color-surface);
-  border-radius: var(--wa-radius-lg);
-  padding: 20px;
+  background: color-mix(in srgb, var(--wa-color-surface) var(--wa-surface-blend-pct), transparent);
+  border-radius: var(--wa-radius-card);
+  padding: var(--wa-space-lg);
   box-shadow: var(--wa-shadow-surface);
 }
 
 .form-container {
-  background: var(--wa-color-surface);
-  border-radius: var(--wa-radius-lg);
-  padding: 20px;
+  background: color-mix(in srgb, var(--wa-color-surface) var(--wa-surface-blend-pct), transparent);
+  border-radius: var(--wa-radius-card);
+  padding: var(--wa-space-lg);
   box-shadow: var(--wa-shadow-surface);
+}
+
+/* Mini preview host: same texture + body tint as the real app */
+.wa-appearance-preview-host {
+  position: relative;
+  isolation: isolate;
+  background-color: color-mix(in srgb, var(--wa-color-primary-50) var(--wa-body-bg-mix), var(--wa-color-bg-soft, #f8fafc));
+  border-radius: var(--wa-radius-md);
+  overflow: hidden;
+}
+
+.wa-appearance-preview-host::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: '';
+  opacity: 0;
+}
+
+.wa-appearance-preview-host[data-wa-texture='subtle-grid']::before {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: var(--wa-texture-opacity);
+}
+
+.wa-appearance-preview-host[data-wa-texture='soft-paper']::before {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.95) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 60%, rgba(148, 163, 184, 0.22) 0 1px, transparent 1px);
+  background-size: 18px 18px, 24px 24px;
+  opacity: var(--wa-texture-opacity);
+}
+
+.wa-appearance-preview-host[data-wa-texture='fine-noise']::before {
+  background-image:
+    radial-gradient(circle at 25% 30%, rgba(15, 23, 42, 0.1) 0 1px, transparent 1px),
+    radial-gradient(circle at 75% 70%, rgba(255, 255, 255, 0.85) 0 1px, transparent 1px);
+  background-size: 12px 12px, 16px 16px;
+  opacity: var(--wa-texture-opacity);
+}
+
+.wa-appearance-preview-host > * {
+  position: relative;
+  z-index: 1;
 }

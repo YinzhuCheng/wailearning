@@ -10,6 +10,7 @@ from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import (
     Class,
+    CourseEnrollment,
     CourseExamWeight,
     CourseGradeScheme,
     CourseLLMConfig,
@@ -128,6 +129,14 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert el_cfg is not None
         assert el_cfg.is_enabled is False
         assert db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == el_cfg.id).count() >= 1
+
+        class_students = db.query(Student).filter(Student.class_id == course.class_id).all()
+        assert len(class_students) >= 5
+        req_ids = {e.student_id for e in db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id)}
+        llm_ids = {e.student_id for e in db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == llm.id)}
+        for st in class_students:
+            assert st.id in req_ids
+            assert st.id in llm_ids
     finally:
         db.close()
 
