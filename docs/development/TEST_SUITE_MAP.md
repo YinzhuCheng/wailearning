@@ -151,6 +151,7 @@ Files:
 
 - `test_postgres_dialect_guards.py` — broad dialect and API smoke guards.
 - `test_postgres_llm_schema_and_policy.py` — **LLM quota schema** guards (`llm_global_quota_policies`, `course_llm_configs` column set, preset FK `ON DELETE CASCADE`, `get_or_create_global_quota_policy` ORM read).
+- `test_postgres_quota_api_and_constraints.py` — **HTTP + SQL hazard** module (admin `422` paths, auth edges, duplicate `course_llm_config_endpoints`, enrollment uniqueness, orphan FK attempts). Uses the shared `client` fixture from `tests/postgres/conftest.py` (PostgreSQL-only autouse reset).
 
 ### `tests/security/`
 

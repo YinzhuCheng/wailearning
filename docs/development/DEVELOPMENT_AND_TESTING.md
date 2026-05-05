@@ -323,9 +323,105 @@ export TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/DBNAME'
 python -m pytest
 ```
 
-That executes **`tests/postgres/`** (twenty dialect guards), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and avoids skipping the two **`test_llm_attachment_formats`** RAR builders. The agent validation environment (May 2026) ran those targets successfully with Postgres + `rar` installed. Default `pytest` without Postgres/`rar` remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
+That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the additive **quota / constraint hazard** module described below), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and avoids skipping the two **`test_llm_attachment_formats`** RAR builders. The agent validation environment (May 2026) ran those targets successfully with Postgres + `rar` installed. Default `pytest` without Postgres/`rar` remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
 
 **Authoring convention — database-backed tests:** When adding or reviewing tests that touch persistence, schema, transactions, concurrency, or dialect-specific behavior, **assume PostgreSQL as the production-aligned reference**: write assertions and fixtures compatible with Postgres first; use SQLite for speed locally where the suite allows, but **do not rely on SQLite-only semantics** as proof for shipping schema-sensitive changes. Re-validate meaningful DB changes against **`TEST_DATABASE_URL`** (Postgres).
+
+### PostgreSQL full-suite and cloud-agent session notes (additive, for LLM agents)
+
+This subsection is intentionally long. The primary reader is an automated coding agent that benefits from exhaustive, searchable operational detail. Human maintainers may skim the headings and follow links to [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+
+#### 1. Environment recipe used when validating `TEST_DATABASE_URL` on a blank Linux VM
+
+The following pattern is representative; replace `<REPO_ROOT>`, `<DBNAME>`, `<USER>`, `<PASSWORD>` with your own throwaway values. Never point `TEST_DATABASE_URL` at production.
+
+1. Install PostgreSQL server packages (example: `postgresql` / `postgresql-contrib` on Debian-derived images).
+2. Start the cluster (example: `pg_ctlcluster 16 main start` or your distribution’s equivalent).
+3. Create a dedicated role and database:
+
+```sql
+DROP DATABASE IF EXISTS <DBNAME>;
+DROP ROLE IF EXISTS <USER>;
+CREATE USER <USER> WITH PASSWORD '<PASSWORD>';
+CREATE DATABASE <DBNAME> OWNER <USER>;
+```
+
+4. Export before pytest:
+
+```bash
+export TEST_DATABASE_URL='postgresql://<USER>:<PASSWORD>@127.0.0.1:5432/<DBNAME>'
+cd <REPO_ROOT>
+python3 -m pytest tests/ -q
+```
+
+5. **Concurrency rule:** do not run two `pytest` processes against the same `TEST_DATABASE_URL`. `tests/db_reset.py` issues `DROP SCHEMA public CASCADE` on PostgreSQL; concurrent resets produce nondeterministic failures that look like product bugs.
+
+#### 2. Concrete failures observed during a full `pytest tests/` run on PostgreSQL (and fixes)
+
+These are documented so the next agent does not burn time re-diagnosing the same issues.
+
+**2a. `IN (...)` trailing comma is a syntax error on PostgreSQL only**
+
+Symptom: `psycopg2.errors.SyntaxError: syntax error at or near ")"` when executing raw SQL in tests such as `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` or `tests/postgres/test_postgres_dialect_guards.py::test_pg03_...`.
+
+Cause: PostgreSQL rejects `WHERE col IN ('a','b',)` (note the comma before the closing parenthesis). SQLite’s parser tolerated the same text in some configurations.
+
+Fix: remove the trailing comma after the last literal in the `IN` list. See **Pitfall 42** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+
+**2b. Behavioral test `test_a3` assumed a per-course quota calendar**
+
+Symptom: `AssertionError: assert 'Asia/Shanghai' == 'UTC'` after the global admin policy timezone was changed.
+
+Cause: after round-4 schema cleanup, **only** `LLMGlobalQuotaPolicy` defines the student-visible quota calendar. There is no longer a stable “course calendar pins UTC while admin changes global” behavior.
+
+Fix: the test was renamed and inverted to assert that **student quota snapshots follow the global policy** when the admin updates `quota_timezone`. See `tests/behavior/test_admin_llm_policy_behavior.py::test_a3_global_timezone_change_reflects_in_student_quota_calendar`.
+
+**2c. SQLAlchemy `Session.merge()` on `llm_student_token_overrides` can still attempt INSERT**
+
+Symptom: `UniqueViolation` on `llm_student_token_overrides_student_id_key` when a test called `merge()` twice in one session after deleting the row in a way that left SQLAlchemy’s identity map inconsistent with the intended “upsert” mental model.
+
+Cause: `merge()` is not a generic substitute for “UPDATE if exists”; for tables with a **natural unique key** (`student_id`) and no application-level merge key loaded in the session, the second `merge()` can resolve to an INSERT that collides with the row created by the first `merge()` in the same transaction boundary.
+
+Fix for tests: prefer explicit `query(...).one()` then attribute mutation, or use the repository’s `apply_student_daily_token_overrides` API helpers instead of raw `merge()` in hazard tests. See **Pitfall 43** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+
+#### 3. Agent “worries” and residual coverage gaps (explicit, not a bug list)
+
+These are risk statements for planning; they are not confirmed production defects.
+
+- **Worries**
+  - **Dialect drift:** SQLite-first developers can ship SQL that parses on SQLite but fails on PostgreSQL (see `IN` trailing commas). CI that only runs SQLite will miss this until merge.
+  - **Semantic drift after quota consolidation:** tests that encoded the old “per-course calendar” model will fail loudly on PostgreSQL full runs; that is desirable, but agents must read failure text as a **spec migration signal**, not random flakiness.
+  - **E2E harness fragility:** Playwright `webServer` + fixed ports (`<E2E_API_HOST>:8012`, `<E2E_UI_HOST>:3012` by default) plus mock LLM on-loopback can produce `ECONNRESET` when parallelized; see Pitfall 41.
+  - **`merge()` foot-guns:** ORM convenience methods behave differently per mapper configuration; hazard tests should prefer API-level assertions for business invariants.
+
+- **Coverage gaps (examples, not exhaustive)**
+  - **Multi-instance grading worker** leader election and stale-task reclamation under real wall-clock delays are not fully exercised by fast pytest loops.
+  - **True external LLM providers** (network, rate limits, TLS) are intentionally mocked in E2E; production-only failure modes are not represented.
+  - **Very large attachments** (multi-hundred-MB archives) and disk-quota interactions are only partially covered.
+  - **Parent portal** and **mobile viewports** have thinner automated coverage than admin + student flows.
+  - **Backup/restore and rolling upgrades** across schema versions are operational concerns, not unit-tested end-to-end in this repository.
+
+#### 4. New additive suites (PostgreSQL hazard + E2E hazard tier)
+
+The following files are **additive** regression nets. They do not replace the directories listed later under “New focused suites”; they extend them.
+
+- **`tests/postgres/test_postgres_llm_schema_and_policy.py`** — `information_schema` and FK-shape checks for LLM global policy vs course config (round-4 alignment).
+- **`tests/postgres/test_postgres_quota_api_and_constraints.py`** — fifteen **HTTP + raw SQL** checks: admin validation (`422` paths), teacher/student authorization edges, duplicate endpoint rows (`uq_course_llm_config_endpoint`), duplicate enrollment, orphan FK attempts, and metadata checks. Requires PostgreSQL (`TEST_DATABASE_URL`); skipped on SQLite.
+- **`tests/e2e/web-admin/e2e-postgres-hazard-tier.spec.js`** — fifteen **API + light UI** checks: global quota policy round-trip, legacy JSON keys on course PUT, student quota alignment after admin timezone change, bulk overrides, parallel duplicate GETs, Settings and Subjects LLM dialog smoke. Requires Playwright global setup (`E2E_DEV_SEED_TOKEN`). Run **serially** with other Playwright jobs (`CI=1` recommended).
+
+Example commands:
+
+```bash
+# PostgreSQL-only package (skips automatically without TEST_DATABASE_URL)
+export TEST_DATABASE_URL='postgresql://<USER>:<PASSWORD>@127.0.0.1:5432/<DBNAME>'
+python3 -m pytest tests/postgres/ -q
+
+# E2E hazard tier (from admin frontend package root)
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-postgres-hazard-tier.spec.js --project=chromium
+```
+
+Artifacts: Playwright may write `<REPO_ROOT>/apps/web/admin/test-results/` and `<REPO_ROOT>/apps/web/admin/playwright-report/`; these paths must remain **untracked** and must not be committed.
 
 ### Agent triage notes (incremental, May 2026): pitfalls, sample hygiene, residual risk
 
@@ -358,8 +454,11 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 
 **New focused suites (additive):**
 
-- `tests/postgres/test_postgres_dialect_guards.py` — twenty guards that **skip on SQLite** unless `TEST_DATABASE_URL` is PostgreSQL (see `tests/postgres/conftest.py`).
+- `tests/postgres/test_postgres_dialect_guards.py` — dialect and transactional guards that **skip on SQLite** unless `TEST_DATABASE_URL` is PostgreSQL (see `tests/postgres/conftest.py`).
+- `tests/postgres/test_postgres_llm_schema_and_policy.py` — LLM **schema shape** guards (`information_schema`, FK `ON DELETE CASCADE`, nullable attribution columns).
+- `tests/postgres/test_postgres_quota_api_and_constraints.py` — fifteen **HTTP + SQL** hazard checks for quota policy, course LLM boundaries, uniqueness, and FK violations.
 - `tests/e2e/web-admin/e2e-agent-followup-batch.spec.js` — ten API/navigation checks complementary to pitfall rails.
+- `tests/e2e/web-admin/e2e-postgres-hazard-tier.spec.js` — fifteen **API + UI** checks for global quota vs course LLM (see subsection **4** above for commands).
 - `tests/security/test_security_regression.py` — twenty API security-boundary checks (admin vs teacher vs student, unauthenticated paths, invalid JWT).
 
 ## Test Cleanup Policy

@@ -18,3 +18,13 @@ def _postgres_reset_schema():
     ensure_schema_updates()
     yield
     SessionLocal().close()
+
+
+@pytest.fixture
+def client():
+    """HTTP client against the live FastAPI app (same process as other API tests)."""
+    from fastapi.testclient import TestClient
+
+    from apps.backend.wailearning_backend.main import app
+
+    return TestClient(app)

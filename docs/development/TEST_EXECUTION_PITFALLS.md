@@ -1061,22 +1061,6 @@ makes the package visible to shared E2E helpers.
 
 It does not claim SQLite and PostgreSQL accept the same SQL text for every ad hoc query embedded in tests.
 
-### Pitfall 42: PostgreSQL `IN (...)` lists reject a trailing comma
-
-Symptom:
-
-```text
-psycopg2.errors.SyntaxError: syntax error at or near ")"
-```
-
-Cause:
-
-In PostgreSQL, `WHERE column_name IN ('a', 'b',)` is invalid because of the trailing comma after the last literal. Some editors or copy-paste patterns introduce that comma when extending a list of legacy column names.
-
-Fix:
-
-Remove the trailing comma after the final element in the `IN` list (or use a tuple/array constructor that your dialect documents).
-
 ### Pitfall 41: Playwright `read ECONNRESET` / `TypeError: fetch failed` with default E2E ports
 
 Symptom:
@@ -1110,6 +1094,48 @@ Interpretation:
 
 This failure pattern is usually harness contention, not Codex rate limits and not remote LLM API
 instability.
+
+### Pitfall 42: PostgreSQL `IN (...)` lists reject a trailing comma
+
+Symptom:
+
+```text
+psycopg2.errors.SyntaxError: syntax error at or near ")"
+```
+
+Cause:
+
+In PostgreSQL, `WHERE column_name IN ('a', 'b',)` is invalid because of the trailing comma after the last literal. Some editors or copy-paste patterns introduce that comma when extending a list of legacy column names.
+
+Fix:
+
+Remove the trailing comma after the final element in the `IN` list (or use a tuple/array constructor that your dialect documents).
+
+### Pitfall 43: `Session.merge()` is not always a safe “upsert” in tests
+
+Symptom:
+
+```text
+sqlalchemy.exc.IntegrityError: UniqueViolation ... llm_student_token_overrides_student_id_key
+```
+
+Context:
+
+A test tries to model “update the per-student override twice” by calling `Session.merge(LLMStudentTokenOverride(...))` twice in the same session.
+
+Cause:
+
+`merge()` resolves identity using SQLAlchemy’s merge algorithm and the current session state. For rows keyed by a **natural unique column** (`student_id`) without a stable primary-key object already loaded, a second `merge()` can still emit an **INSERT** that collides with the first row, especially when the session’s identity map does not contain the persisted instance the test author assumed.
+
+Fix:
+
+- Prefer **`query(...).one()` then mutate attributes** and `commit()`, or
+- Call the **application service** (`apply_student_daily_token_overrides` / HTTP API) that already encodes upsert semantics, or
+- Use **`db.execute(update(...))`** with an explicit `WHERE student_id = :sid` in low-level constraint tests.
+
+Interpretation:
+
+This is usually a **test harness bug**, not evidence that the database unique constraint is wrong.
 
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
