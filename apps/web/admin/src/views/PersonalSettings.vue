@@ -236,7 +236,7 @@ const saveProfile = async () => {
 }
 
 const beforeAvatarUpload = rawFile => {
-  const hint = validateAttachmentFile(rawFile)
+  const hint = validateAttachmentFile(rawFile, { imageOnly: true })
   if (!hint.valid) {
     ElMessage.warning(hint.message)
     return false

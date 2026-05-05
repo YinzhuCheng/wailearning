@@ -100,7 +100,9 @@ http.interceptors.response.use(
   async error => {
     if (error.response) {
       const message = await extractErrorMessage(error)
-      ElMessage.error(message)
+      if (!error.config?.skipGlobalErrorMessage) {
+        ElMessage.error(message)
+      }
       if (error.response.status === 401) {
         localStorage.removeItem('token')
         localStorage.removeItem('user')
@@ -401,10 +403,17 @@ const api = {
     upload: file => {
       const formData = new FormData()
       formData.append('file', file)
-      return http.post('/files/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        ...fileTransferRequestConfig
-      })
+      return http
+        .post('/files/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          ...fileTransferRequestConfig,
+          skipGlobalErrorMessage: true
+        })
+        .catch(async err => {
+          const message = await extractErrorMessage(err)
+          ElMessage.error(message)
+          return Promise.reject(err)
+        })
     }
   }
 }

@@ -9,6 +9,7 @@ from fastapi import HTTPException, Request, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from apps.backend.wailearning_backend.attachment_compliance import assert_attachment_format_compliant
 from apps.backend.wailearning_backend.core.config import settings
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -97,6 +98,9 @@ async def save_attachment(file: UploadFile, request: Request) -> dict[str, objec
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
     if size > MAX_ATTACHMENT_SIZE:
         raise HTTPException(status_code=400, detail="Attachment size must be 20 MB or smaller.")
+
+    upload_filename = (file.filename or "").strip()
+    assert_attachment_format_compliant(filename=upload_filename, extension=extension, content=content)
 
     stored_name = f"{uuid4().hex}{extension}"
     target_path = ATTACHMENTS_DIR / stored_name
