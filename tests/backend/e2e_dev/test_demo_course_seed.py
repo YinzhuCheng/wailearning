@@ -17,7 +17,9 @@ from apps.backend.wailearning_backend.db.models import (
     CourseLLMConfigEndpoint,
     CourseMaterial,
     CourseMaterialChapter,
+    CourseMaterialSection,
     Homework,
+    HomeworkSubmission,
     Student,
     Subject,
     User,
@@ -97,6 +99,25 @@ def test_demo_seed_creates_teacher_students_course_homework():
         )
         assert leaf is not None
 
+        dm_materials = (
+            db.query(CourseMaterial)
+            .filter(CourseMaterial.subject_id == course.id, CourseMaterial.title.startswith("【讲义】"))
+            .all()
+        )
+        assert len(dm_materials) >= 3
+        for m in dm_materials:
+            assert m.content and len(m.content.strip()) > 200
+        linked = (
+            db.query(CourseMaterialSection)
+            .join(CourseMaterial, CourseMaterial.id == CourseMaterialSection.material_id)
+            .filter(
+                CourseMaterialSection.chapter_id == leaf.id,
+                CourseMaterial.subject_id == course.id,
+            )
+            .count()
+        )
+        assert linked >= 3
+
         hw = (
             db.query(Homework)
             .filter(
@@ -117,11 +138,37 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert llm is not None
         assert llm.course_type == "elective"
         assert db.query(CourseMaterial).filter(CourseMaterial.subject_id == llm.id).count() >= 1
-        assert (
+        llm_hw = (
             db.query(Homework)
             .filter(Homework.subject_id == llm.id, Homework.title.contains("大语言模型"))
             .first()
         )
+        assert llm_hw is not None
+
+        dm_submitted = (
+            db.query(HomeworkSubmission)
+            .filter(
+                HomeworkSubmission.homework_id == hw.id,
+                HomeworkSubmission.review_score.isnot(None),
+            )
+            .all()
+        )
+        assert len(dm_submitted) >= 4
+        dm_scores = sorted(float(s.review_score) for s in dm_submitted)
+        assert min(dm_scores) < max(dm_scores)
+
+        llm_submitted = (
+            db.query(HomeworkSubmission)
+            .filter(
+                HomeworkSubmission.homework_id == llm_hw.id,
+                HomeworkSubmission.review_score.isnot(None),
+            )
+            .all()
+        )
+        assert len(llm_submitted) >= 3
+        llm_scores = sorted(float(s.review_score) for s in llm_submitted)
+        assert min(llm_scores) < max(llm_scores)
+
         req_cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == course.id).first()
         assert req_cfg is not None and req_cfg.is_enabled is True
         assert db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == req_cfg.id).count() >= 1
