@@ -1059,7 +1059,25 @@ makes the package visible to shared E2E helpers.
 
 ## What This Document Does Not Claim
 
-## Pitfall 41: Playwright `read ECONNRESET` / `TypeError: fetch failed` with default E2E ports
+It does not claim SQLite and PostgreSQL accept the same SQL text for every ad hoc query embedded in tests.
+
+### Pitfall 42: PostgreSQL `IN (...)` lists reject a trailing comma
+
+Symptom:
+
+```text
+psycopg2.errors.SyntaxError: syntax error at or near ")"
+```
+
+Cause:
+
+In PostgreSQL, `WHERE column_name IN ('a', 'b',)` is invalid because of the trailing comma after the last literal. Some editors or copy-paste patterns introduce that comma when extending a list of legacy column names.
+
+Fix:
+
+Remove the trailing comma after the final element in the `IN` list (or use a tuple/array constructor that your dialect documents).
+
+### Pitfall 41: Playwright `read ECONNRESET` / `TypeError: fetch failed` with default E2E ports
 
 Symptom:
 

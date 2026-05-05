@@ -147,6 +147,11 @@ Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — ad
 
 Small pytest package gated by dialect: when `TEST_DATABASE_URL` is **not** PostgreSQL, tests **skip** at module level. Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/development/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).
 
+Files:
+
+- `test_postgres_dialect_guards.py` — broad dialect and API smoke guards.
+- `test_postgres_llm_schema_and_policy.py` — **LLM quota schema** guards (`llm_global_quota_policies`, `course_llm_configs` column set, preset FK `ON DELETE CASCADE`, `get_or_create_global_quota_policy` ORM read).
+
 ### `tests/security/`
 
 API-level **authorization and abuse-edge** regression tests (unauthenticated vs role boundaries, admin-only routes, cross-tenant homework/parent-code actions, invalid tokens). Uses the same DB reset contract as `tests/behavior/`. Run targeted: `python -m pytest tests/security/ -q`.

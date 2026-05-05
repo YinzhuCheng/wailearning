@@ -65,7 +65,7 @@ def test_pg03_information_schema_course_llm_configs_no_legacy_token_columns():
                       'daily_student_token_limit',
                       'quota_timezone',
                       'estimated_chars_per_token',
-                      'estimated_image_tokens',
+                      'estimated_image_tokens'
                   )
                 """
             )

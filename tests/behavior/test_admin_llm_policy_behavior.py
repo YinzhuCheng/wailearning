@@ -36,7 +36,8 @@ def test_a2_change_default_student_cap_visible_on_student_quota(client: TestClie
     assert sq["global_default_daily_student_tokens"] == 88_888
 
 
-def test_a3_global_timezone_change_does_not_shift_student_quota_when_course_calendar_is_fixed(client: TestClient) -> None:
+def test_a3_global_timezone_change_reflects_in_student_quota_calendar(client: TestClient) -> None:
+    """Student quota snapshots follow LLMGlobalQuotaPolicy only (no per-course quota calendar)."""
     ensure_admin()
     ctx = make_grading_course_with_homework()
     ah = login_api(client, "pytest_admin", "pytest_admin_pass")
@@ -52,7 +53,7 @@ def test_a3_global_timezone_change_does_not_shift_student_quota_when_course_cale
         json={"quota_timezone": "Asia/Shanghai"},
     )
     u2 = client.get(f"/api/llm-settings/courses/student-quota/{ctx['subject_id']}", headers=st).json()
-    assert u2["quota_timezone"] == "UTC"
+    assert u2["quota_timezone"] == "Asia/Shanghai"
 
 
 def test_a4_parallel_policy_persists(client: TestClient) -> None:
