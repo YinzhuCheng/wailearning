@@ -27,6 +27,7 @@ from apps.backend.wailearning_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    Gender,
     Homework,
     LLMEndpointPreset,
     Semester,
@@ -760,6 +761,7 @@ def seed_demo_course_bundle(db: Session) -> None:
                 Student(
                     name=display,
                     student_no=uname,
+                    gender=Gender.MALE,
                     class_id=klass.id,
                     teacher_id=teacher.id,
                     phone=phone,
@@ -769,6 +771,8 @@ def seed_demo_course_bundle(db: Session) -> None:
         else:
             st.teacher_id = teacher.id
             st.phone = phone
+            if st.gender is None:
+                st.gender = Gender.MALE
             if (st.name or "") != display:
                 st.name = display
 

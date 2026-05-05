@@ -72,11 +72,13 @@ def build_student_response(
     class_name: Optional[str] = None,
     has_user: bool = False,
 ) -> StudentResponse:
+    # API schema requires gender; legacy/demo rows may have NULL in DB.
+    gender = student.gender if student.gender is not None else Gender.MALE
     return StudentResponse(
         id=student.id,
         name=student.name,
         student_no=student.student_no,
-        gender=student.gender,
+        gender=gender,
         phone=student.phone,
         parent_phone=student.parent_phone,
         address=student.address,
