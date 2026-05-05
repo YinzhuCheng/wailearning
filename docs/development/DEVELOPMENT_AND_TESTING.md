@@ -309,21 +309,35 @@ and then any targeted Playwright spec that covers the affected workflow.
 
 ### Cross-platform and CI smoke expectations
 
-If you only run `pytest` on the default SQLite configuration, note that `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` is skipped unless the dialect is PostgreSQL. That guard asserts `information_schema` shows **no** legacy token-limit or course-level quota-policy columns on `course_llm_configs` (including removed `quota_timezone`, `estimated_chars_per_token`, `estimated_image_tokens`). Full PostgreSQL-only assertions require `TEST_DATABASE_URL` (or equivalent) pointing at a live Postgres instance with migrated schema. This does not replace the default workflow for most changes; it matters when validating schema-level regressions.
+If you only run `pytest` on the default SQLite configuration, note that `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` is skipped unless the dialect is PostgreSQL (unless you set **`WAILEARNING_AUTO_PG_TESTS=1`** after provisioning the standard throwaway DB — see below). That guard asserts `information_schema` shows **no** legacy token-limit or course-level quota-policy columns on `course_llm_configs` (including removed `quota_timezone`, `estimated_chars_per_token`, `estimated_image_tokens`). Full PostgreSQL-only assertions require `TEST_DATABASE_URL` (or auto-pick) pointing at a live Postgres instance with migrated schema. This does not replace the default workflow for most changes; it matters when validating schema-level regressions.
 
-**PostgreSQL local smoke (Linux example):** Install Postgres, create a dedicated empty database and user, export `TEST_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DBNAME`, then run `python -m pytest`. Tests recreate schema via `tests/db_reset.py` (`DROP SCHEMA public CASCADE` on non-SQLite, plus dropping leftover **`pg` ENUM types** in `public` before `create_all` so SQLAlchemy can recreate enums cleanly). Use a database reserved for automation only; do not point at production. Avoid running two pytest processes against the same `TEST_DATABASE_URL` concurrently — resets collide.
+**PostgreSQL local smoke (Linux example):** Install Postgres, then either:
 
-**RAR attachment tests:** `tests/backend/llm/test_llm_attachment_formats.py` includes cases that shell out to the **`rar`** CLI to build archives; Debian/Ubuntu provide it in the **`rar`** package (non-free section may need `contrib` / mirror enabled). Without `rar`, those tests skip; **`unrar`** is used when unpacking in-app paths.
+1. **Idempotent helper (recommended):** run `bash ops/scripts/dev/provision_postgres_pytest.sh` as a user who may `sudo -u postgres psql` (creates role `wailearning_test`, database `wailearning_pytest_all`, password `wailearning_test` by default; override with `WAILEARNING_PYTEST_DB_*` env vars documented in the script). Then either export the printed `TEST_DATABASE_URL`, **or** run pytest with **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects that URL when TCP + credentials succeed (no manual export).
+
+2. **Manual:** create a dedicated empty database and user, export `TEST_DATABASE_URL=postgresql+psycopg2://USER:PASSWORD@127.0.0.1:5432/DBNAME`, then run `python3 -m pytest`.
+
+Tests recreate schema via `tests/db_reset.py` (`DROP SCHEMA public CASCADE` on non-SQLite, plus dropping leftover **`pg` ENUM types** in `public` before `create_all` so SQLAlchemy can recreate enums cleanly). Use a database reserved for automation only; do not point at production. Avoid running two pytest processes against the same `TEST_DATABASE_URL` concurrently — resets collide.
+
+**RAR attachment tests:** `tests/backend/llm/test_llm_attachment_formats.py` includes cases that shell out to the **`rar`** CLI to build archives; Debian/Ubuntu provide it in the **`rar`** package (multiverse / non-free mirror may be required). Without `rar`, those two tests skip; **`unrar`** (or `unrar-free` where applicable) is used when unpacking in-app paths (`domains/llm/attachments.py`).
 
 **Full regression prerequisites (what maintainers should enable before claiming “no skips”):**  
-CI machines and anyone publishing “green full-suite” results should install **`rar`** (and typically **`unrar`**) and provision a **throwaway PostgreSQL** database plus `TEST_DATABASE_URL`, then run at least once:
+CI machines and anyone publishing “green full-suite” results should install **`rar`** and **`unrar`**, provision the throwaway database (see `ops/scripts/dev/provision_postgres_pytest.sh`), then run one of:
 
 ```bash
-export TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/DBNAME'
-python -m pytest
+# Option A — explicit URL (works on all platforms once Postgres listens on TCP)
+export TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all'
+python3 -m pytest tests/
+
+# Option B — Linux/macOS: auto-pick the same URL when the probe DB answers (after provision script)
+WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/
 ```
 
-That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the additive **quota / constraint hazard** module described below), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and avoids skipping the two **`test_llm_attachment_formats`** RAR builders. The agent validation environment (May 2026) ran those targets successfully with Postgres + `rar` installed. Default `pytest` without Postgres/`rar` remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
+That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the additive **quota / constraint hazard** module described below), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and avoids skipping the two **`test_llm_attachment_formats`** RAR builders when `rar` is installed.
+
+**Skip counts (reference):** On **SQLite** with `rar`/`unrar` installed but **without** `TEST_DATABASE_URL` / auto-Postgres, expect **43 skipped** (PostgreSQL-only modules + `test_r3`). With **`rar` missing**, add **2** skips for the RAR builder tests (**45** total). With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, expect **417 passed, 0 skipped** in the current collection (May 2026).
+
+Default `pytest` without Postgres/`rar` remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
 
 **Authoring convention — database-backed tests:** When adding or reviewing tests that touch persistence, schema, transactions, concurrency, or dialect-specific behavior, **assume PostgreSQL as the production-aligned reference**: write assertions and fixtures compatible with Postgres first; use SQLite for speed locally where the suite allows, but **do not rely on SQLite-only semantics** as proof for shipping schema-sensitive changes. Re-validate meaningful DB changes against **`TEST_DATABASE_URL`** (Postgres).
 
@@ -438,13 +452,13 @@ This subsection records **machine-verified** outcomes so future agents do not re
 
 | Configuration | Command pattern | Outcome (representative) | Wall-clock order of magnitude |
 |---------------|-----------------|---------------------------|--------------------------------|
-| **Default SQLite** (no `TEST_DATABASE_URL`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | **367 passed**, **45 skipped**, remainder warnings only | ~8 minutes on a typical cloud CPU |
-| **PostgreSQL** (`TEST_DATABASE_URL` set to a **throwaway** database on `127.0.0.1:5432`) | `export TEST_DATABASE_URL='postgresql://<USER>:<PASSWORD>@127.0.0.1:5432/<DBNAME>'` then the same `pytest` command | **410 passed**, **2 skipped**, remainder warnings only | ~9.5 minutes on a typical cloud CPU |
+| **Default SQLite** (no `TEST_DATABASE_URL`, no `WAILEARNING_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | **372 passed**, **43 skipped** if `rar` is installed; **45 skipped** if `rar` is missing (adds 2 RAR-only tests) | ~8 minutes on a typical cloud CPU |
+| **PostgreSQL** (`TEST_DATABASE_URL` **or** `WAILEARNING_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | **417 passed**, **0 skipped** (with `rar` + Postgres provisioned) | ~9.5 minutes on a typical cloud CPU |
 
 Interpretation for agents:
 
-- The **delta** (`410 - 367 = 43`) is dominated by **`tests/postgres/*`** modules that **skip entirely** when the dialect is not PostgreSQL. Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
-- The **two skips** on the PostgreSQL full run are environment-dependent (commonly **RAR CLI missing** for `tests/backend/llm/test_llm_attachment_formats.py` builders, or other explicitly `@pytest.mark.skip` guards). Inspect the pytest summary line in your CI log; do not assume zero skips means “no skips configured” — it means **no skips triggered in that environment**.
+- The **delta** (`417 - 372 = 45` extra tests executed on Postgres) is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
+- **Zero-skip CI:** install **`rar`** / **`unrar`**, run **`ops/scripts/dev/provision_postgres_pytest.sh`**, then set **`WAILEARNING_AUTO_PG_TESTS=1`** (Linux agents) or **`TEST_DATABASE_URL`** explicitly (portable).
 
 **Not executed in the same session:** a full `npx playwright test` over **all** `tests/e2e/web-admin/*.spec.js` files (that run is hours-wide and belongs in a dedicated CI job). What **was** executed after the PostgreSQL pytest pass is the **additive** hazard file only:
 

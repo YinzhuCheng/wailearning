@@ -1158,6 +1158,33 @@ Fix:
 - Remove `-q` and rely on Playwright’s default reporter, or
 - Use supported reporter flags for your installed version (see upstream Playwright release notes for `<REPO_ROOT>/apps/web/admin/node_modules/@playwright/test`).
 
+### Pitfall 45: Many pytest “skips” are environment gates (Postgres + `rar`), not optional quality
+
+Symptom:
+
+```text
+43 skipped  (or 45 skipped)
+```
+
+Context:
+
+- **`tests/postgres/*`** and **`test_r3`** in `test_regression_llm_quota_behavior.py` require a **PostgreSQL** engine (`information_schema`, transactional semantics).
+- **`test_llm_attachment_formats.py`** RAR cases need the **`rar`** CLI to build fixtures; in-app unpack uses **`unrar`**.
+
+Cause:
+
+Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or auto-pick is enabled — see below).
+
+Fix:
+
+1. Install **`rar`** and **`unrar`** (Debian/Ubuntu: packages `rar` and `unrar`, often in multiverse).
+2. Run **`bash ops/scripts/dev/provision_postgres_pytest.sh`** (creates `wailearning_pytest_all` + role `wailearning_test`; needs `sudo -u postgres`).
+3. Either `export TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all'`, or set **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` probes that URL and switches `DATABASE_URL` before importing the app.
+
+Interpretation:
+
+**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for **417 passed, 0 skipped** with the recipe above.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
