@@ -172,15 +172,17 @@
           </el-form-item>
 
           <el-form-item label="诚信申报">
-            <el-switch
-              v-model="form.used_llm_assist"
-              data-testid="homework-submit-used-llm-assist"
-              :disabled="isSubmitDisabled"
-              active-text="本次作答曾使用大语言模型辅助"
-              inactive-text="未使用大语言模型辅助作答"
-            />
-            <div class="attachment-help">
-              请如实选择。若选择「曾使用」，自动评分将更关注思路与知识功底，弱化措辞与排版细节。
+            <div class="integrity-declaration">
+              <el-switch
+                v-model="form.used_llm_assist"
+                data-testid="homework-submit-used-llm-assist"
+                :disabled="isSubmitDisabled"
+                active-text="本次作答曾使用大语言模型辅助"
+                inactive-text="未使用大语言模型辅助作答"
+              />
+              <p class="integrity-declaration__hint">
+                请如实选择。若选择「曾使用」，自动评分将更关注思路与知识功底，弱化措辞与排版细节。
+              </p>
             </div>
           </el-form-item>
 
@@ -681,6 +683,23 @@ watch(
 
 .attachment-help {
   margin-top: 8px;
+}
+
+.integrity-declaration {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 28px;
+  row-gap: 14px;
+}
+
+.integrity-declaration__hint {
+  margin: 0;
+  flex: 1 1 220px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .submission-alerts {
