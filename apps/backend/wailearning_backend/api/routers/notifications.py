@@ -7,10 +7,15 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import ObjectDeletedError
 
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access, get_student_profile_for_user, prepare_student_course_context
+from apps.backend.wailearning_backend.domains.courses.access import (
+    ensure_course_access_http,
+    get_student_profile_for_user,
+    prepare_student_course_context,
+)
 from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Class, Notification, NotificationRead, User, UserRole
@@ -40,7 +45,7 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
     class_ids = get_accessible_class_ids(current_user, db)
 
     if subject_id:
-        course = ensure_course_access(subject_id, current_user, db)
+        course = ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(or_(Notification.subject_id == course.id, Notification.subject_id.is_(None)))
 
     if current_user.role == UserRole.STUDENT:
@@ -130,10 +135,18 @@ def get_notifications(
         if not read_record or not read_record.is_read:
             unread_count += 1
 
+    out = []
+    for notification in notifications:
+        try:
+            out.append(_serialize_notification(notification, current_user, db))
+        except ObjectDeletedError:
+            # Concurrent DELETE can expire ORM rows between OFFSET/LIMIT fetch and serialization (SQLite E2E stress).
+            continue
+
     return NotificationListResponse(
         total=total,
         unread_count=unread_count,
-        data=[_serialize_notification(notification, current_user, db) for notification in notifications],
+        data=out,
     )
 
 
@@ -187,7 +200,7 @@ def get_notification(
         raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
     if notification.subject_id:
-        ensure_course_access(notification.subject_id, current_user, db)
+        ensure_course_access_http(notification.subject_id, current_user, db)
 
     if current_user.role == UserRole.STUDENT:
         prepare_student_course_context(current_user, db)
@@ -224,7 +237,7 @@ def create_notification(
             raise HTTPException(status_code=403, detail="You can only publish notifications for accessible classes.")
 
     if data.subject_id:
-        course = ensure_course_access(data.subject_id, current_user, db)
+        course = ensure_course_access_http(data.subject_id, current_user, db)
         if data.class_id and course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
@@ -285,7 +298,7 @@ def update_notification(
             raise HTTPException(status_code=403, detail="You can only publish notifications for accessible classes.")
 
     if data.subject_id is not None:
-        course = ensure_course_access(data.subject_id, current_user, db)
+        course = ensure_course_access_http(data.subject_id, current_user, db)
         target_class_id = notification.class_id if data.class_id is None else data.class_id
         if target_class_id and course.class_id and course.class_id != target_class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
@@ -318,6 +331,8 @@ def update_notification(
         if nk == "password_reset_request":
             raise HTTPException(status_code=403, detail="This notification kind is reserved for the system.")
         notification.notification_kind = nk or "general"
+
+    notification.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(notification)

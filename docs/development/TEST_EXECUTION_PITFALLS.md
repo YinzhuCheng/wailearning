@@ -1309,6 +1309,46 @@ Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/
 
 This is usually a **test harness expectation drift**, not a routing regression — verify with `router.beforeEach` guards and direct navigation before rewriting product copy back to the old label.
 
+### Pitfall 50: Notification header badge E2E — disabled course card clicks, hover-only dropdowns, badge/API races
+
+### Symptom
+
+Playwright scenarios around **`data-testid="header-notification-badge"`** time out on **`进入课程|查看课程`** with **`element is not enabled`**, or assertions fail because the avatar dropdown **`header-menu-notifications`** stays **hidden** despite **`aria-disabled="false"`**, or the badge digit **lags** `GET /api/notifications/sync-status` by one poll.
+
+### Context
+
+- **`enterSeededRequiredCourse`** (`tests/e2e/web-admin/fixtures.cjs`) clicks the course-card primary button. After a student visits **`/courses`**, the UI may keep that button **disabled** until client enrollment reconciliation catches up — **re-clicking the card is unsafe** for routing-edge specs.
+- Element Plus dropdown menus attached to **`header-user-menu`** may not expose dropdown items to **`toBeVisible`** under **`hover()`** alone when CI timing is tight — **`click()`** on the trigger is more reliable than hover-only opens for **`header-menu-notifications`**.
+- **`Layout.vue`** updates **`headerUnreadCount`** from **`pollNotificationSync`** (route watcher + focus handler). Parallel **`fetch`** writes from the test can advance **`sync-status`** **before** the next **`pollNotificationSync`** completes — **`expect.poll`** pairing badge text with **`sync-status`** avoids flaky strict equality.
+
+### Fix
+
+- For **“return from `/courses` with fresh unread”** scenarios, **`page.goto('/course-home')`** after **`window.dispatchEvent(new Event('focus'))`** rather than calling **`enterSeededRequiredCourse`** twice.
+- Open the user menu with **`getByTestId('header-user-menu').click()`** before asserting **`header-menu-notifications`** text.
+- After multi-step API mutations (two **`POST /api/notifications`**, **`POST .../read`**), use **`expect.poll`** until **`badge digit === sync.unread_count`**.
+
+### Interpretation
+
+These failures showed up while authoring **`tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js`** on a Linux agent with **`npm`** installed via **`apt-get install nodejs npm`** (see **Pitfall 48**). They are **harness timing / selector** issues unless **`sync-status`** itself diverges from list totals — in that case prefer **`tests/behavior/test_notification_sync_api_edge_behavior.py`** to isolate HTTP contracts first.
+
+### Pitfall 51: Teacher dashboard default course may not be the seeded required course
+
+### Symptom
+
+Playwright asserts **`badge digit === sync-status(...?subject_id=<course_required_id>)`** after **`page.goto('/dashboard')`** but the badge stays **0** or matches a **different** subject.
+
+### Context
+
+**`ensureSelectedCourse`** picks **`rankTeachingCourses`** order (semester + id), not necessarily **`E2E必修课_<suffix>`**. **`notificationSyncParams`** uses **`selectedCourse.id`**, so the layout polls **`sync-status`** for whatever course is selected — which may **not** be `course_required_id` from the seed JSON.
+
+### Fix
+
+Before comparing UI to API for **`course_required_id`**, open **`header-course-switch`** with **`click()`** and select the **`.course-option`** row whose **heading text** matches the seeded required course name.
+
+### Interpretation
+
+Documented while authoring **`tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js`** case **02**.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
