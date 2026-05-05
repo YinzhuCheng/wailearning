@@ -156,3 +156,11 @@ Playwright E2E was **not** re-run as part of this agent turn because the reposit
 - Vue layout: `apps/web/admin/src/views/Layout.vue`
 - Homework list: `apps/web/admin/src/views/Homework.vue`
 - Theme tokens (unchanged in this doc’s scope but related to prior appearance work): `apps/web/admin/src/utils/theme.js`, `apps/web/admin/src/style.css`
+
+## Dead code removed in related follow-up (admin theme shim)
+
+The admin SPA previously exported `normalizeAdminTheme`, `resolveAdminTheme`, `applyAdminTheme`, and `adminThemeNames` from `apps/web/admin/src/utils/theme.js`. Nothing in the repository imported these symbols after the appearance preset pipeline became authoritative; they were removed to prevent drift.
+
+`resolveAppearanceFromState` no longer reads deprecated client-only keys `admin_theme`, `theme`, `theme_color`, or `color_theme` from cached settings objects—only `appearance_default_preset` / `system_default_preset` participate in preset resolution.
+
+`style.css` blocks `html[data-wa-theme='green'|'warm'|'grayscale']` were removed because `data-wa-theme` now carries palette keys such as `green` (fresh-green preset) or `gray` (minimal-gray), not the old four-token shim names; theme colors are supplied entirely via inline CSS variables from `buildAppearanceCssVars`.
