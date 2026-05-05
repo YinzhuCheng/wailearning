@@ -88,7 +88,7 @@ const insertCode = () => insertAtCursor('\n```\n代码\n```\n')
 
 const onImagePick = async uploadFile => {
   const file = uploadFile.raw
-  const result = validateAttachmentFile(file)
+  const result = validateAttachmentFile(file, { imageOnly: true })
   if (!result.valid) {
     ElMessage.error(result.message)
     return false
