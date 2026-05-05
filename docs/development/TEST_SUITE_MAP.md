@@ -106,24 +106,60 @@ Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases
 
 They also have the highest dependence on the local execution environment.
 
-This directory also contains a future-coverage expansion file pair:
+This directory also contains the **`future-advanced-coverage`** pair — thirty higher-difficulty Playwright scenarios split across two files (not a separate “backlog” pipeline; they run with the rest of `npm run test:e2e`).
 
-- `tests/e2e/web-admin/future-advanced-coverage.spec.js`
-- `tests/e2e/web-admin/future-advanced-coverage-2.spec.js`
+Files:
 
-In this branch, those files are no longer placeholders. They contain real `test(...)` bodies and participate in normal `npm run test:e2e` runs.
+- `tests/e2e/web-admin/future-advanced-coverage.spec.js` — scenarios **1–15**
+- `tests/e2e/web-admin/future-advanced-coverage-2.spec.js` — scenarios **16–30**
 
-How to interpret them correctly:
+Helpers: `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
 
-- they still function as a bank of higher-difficulty scenarios
-- they are now part of actual runnable regression coverage, not a skipped queue
-- historical references to `E2E_ENABLE_BACKLOG_SPECS` apply only when reading older branches that still carried skipped placeholders
+Runtime contract: same `apps/web/admin/playwright.config.cjs`, `tests/e2e/web-admin/global-setup.cjs`, `POST /api/e2e/dev/reset-scenario`, and `E2E_DEV_SEED_TOKEN` as other admin E2E specs.
 
-Operational summary:
+Targeted run from `apps/web/admin`:
 
-- Helpers: `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
-- Runtime contract: same Playwright config, same `globalSetup`, and the same `/api/e2e/dev/reset-scenario` seed/reset flow as the other admin E2E specs
-- Historical workflow and old placeholder interpretation: [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md)
+```bash
+npx playwright test future-advanced-coverage.spec.js future-advanced-coverage-2.spec.js
+```
+
+#### Scenario index (`future-advanced-coverage*.spec.js`)
+
+**Part I (`future-advanced-coverage.spec.js`)**
+
+1. Student stale-tab homework resubmit after teacher hard review — one authoritative attempt history.
+2. Teacher concurrent material chapter reorder from two tabs — one final chapter sequence.
+3. Admin delete-class blocked while roster/course references exist.
+4. Teacher LLM endpoint failover during async grading — one completed task, no orphan queue rows.
+5. Student dual-tab score appeal — one pending appeal and one notification chain.
+6. Admin batch user activation with stale filters — final active state matches API.
+7. Student notification deep-link with corrupted `selected_course` — rebind to accessible course only.
+8. Teacher concurrent max-submission edit vs student submit — cap enforcement after race.
+9. Parent portal vs student web-admin notification read-state isolation (per policy).
+10. Teacher duplicate attendance save retries — one row per student/date.
+11. Admin semester switch plus stale score composition tab — one valid composition.
+12. Teacher points award vs student redemption race — consistent balance and ranking.
+13. Student attachment replace after flaky upload — one surviving attachment reference.
+14. Admin dual-tab system settings save — final branding consistent, no mixed fields.
+15. Teacher targeted notification — privacy across student, classmate, admin, parent.
+
+**Part II (`future-advanced-coverage-2.spec.js`)**
+
+16. Teacher dual-tab material publish vs delete — one surviving material record.
+17. Student stale homework detail after teacher unpublish — safe recovery.
+18. Admin class rename during teacher session — labels update, course identity stable.
+19. Per-course LLM policy change while worker processing — old vs new task config separation.
+20. Student plus parent concurrent visibility after appeal reopen — permissions consistent.
+21. Teacher rapid notification create/edit/delete — no duplicate unread counters on student dashboard.
+22. Admin orphan user plus roster sync race — no duplicate student rows after reconcile.
+23. Teacher score composition formula change while student scores open — one computed total everywhere.
+24. Teacher materials attachment replace under flaky network — one downloadable file, no stale section ref.
+25. Student stale elective selection after backend block — self-enroll affordance correct.
+26. Teacher bulk attendance plus notification from parallel tabs — one batch, correct fanout.
+27. Admin repeated demo-seed reset during session — safe re-login, no cross-scenario bleed.
+28. Student avatar replace plus logout/login across tabs — one final avatar URL.
+29. Teacher pinned notification reorder/unpin race — deterministic student list order.
+30. Teacher stale grade-candidate page after manual override — obsolete candidate not resurrected.
 
 ### `tests/scenarios/`
 

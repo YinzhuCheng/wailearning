@@ -159,10 +159,7 @@ Shared helpers live in:
 
 - `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
 
-Historical note:
-
-- older documentation and older branches described these files as a skipped placeholder backlog behind `E2E_ENABLE_BACKLOG_SPECS`
-- that description is no longer true for this branch, but the historical workflow is still preserved in [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md) so future maintainers can interpret older commits correctly
+Scenario index (cases 1–30), verification commands, and interpretation notes are consolidated in [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md) under the Playwright section — there is no separate env-gated “backlog” suite in this repository.
 
 ## E2E Seed and Environment
 
@@ -267,10 +264,9 @@ Further test-authoring lessons from the tier-4 stress E2E pass are recorded in t
 
 This is judgment for maintainers, not an automatic delete list:
 
-- **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the implemented **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
+- **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
 - Older E2E that still rely on `toBeHidden` on Element Plus dialogs alone are more fragile than patterns that confirm success via network response, navigation, and table-row state. Prefer aligning those tests with the authoritative-state-first rule rather than deleting them outright.
 - **`TEST_REDUNDANCY_AUDIT.md`** remains the formal gate for safe deletes; the audit's protected list intentionally keeps high-difficulty files, so do not clean up stress specs without reading that policy.
-- Historical backlog note: if you are reading an older branch where `E2E_ENABLE_BACKLOG_SPECS` still gates placeholder suites, do not treat those placeholders as failing debt; treat them as a queue with explicit enablement. In this branch, the `future-advanced-coverage*.spec.js` pair is already runnable coverage.
 
 ### May 2026: lessons from a full `pytest` + full admin Playwright run (Linux agent)
 
