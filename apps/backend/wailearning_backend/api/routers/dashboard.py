@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
@@ -49,8 +49,20 @@ def get_dashboard_stats(
     if selected_course:
         score_query = score_query.filter(Score.subject_id == selected_course.id)
 
-    total_scores = score_query.count()
-    avg_score = round(score_query.with_entities(func.avg(Score.score)).scalar() or 0, 2)
+    agg = score_query.with_entities(
+        func.count(Score.id),
+        func.avg(Score.score),
+        func.max(Score.score),
+        func.min(Score.score),
+        func.count(distinct(Score.student_id)),
+        func.count(distinct(Score.exam_type)),
+    ).first()
+    total_scores = int(agg[0] or 0) if agg else 0
+    avg_score = round(float(agg[1] or 0), 2) if agg else 0.0
+    max_score = round(float(agg[2] or 0), 2) if agg and agg[2] is not None else 0.0
+    min_score = round(float(agg[3] or 0), 2) if agg and agg[3] is not None else 0.0
+    students_with_scores = int(agg[4] or 0) if agg else 0
+    distinct_exam_types = int(agg[5] or 0) if agg else 0
 
     attendance_query = apply_class_id_filter(db.query(Attendance), Attendance.class_id, class_ids)
     if selected_course:
@@ -90,6 +102,10 @@ def get_dashboard_stats(
         total_classes=total_classes,
         total_scores=total_scores,
         avg_score=avg_score,
+        max_score=max_score,
+        min_score=min_score,
+        students_with_scores=students_with_scores,
+        distinct_exam_types=distinct_exam_types,
         attendance_rate=attendance_rate,
         recent_scores=recent_score_list,
         class_rankings=[],

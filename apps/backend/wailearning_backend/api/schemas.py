@@ -747,6 +747,10 @@ class DashboardStats(BaseModel):
     total_classes: int
     total_scores: int = 0
     avg_score: float
+    max_score: float = 0.0
+    min_score: float = 0.0
+    students_with_scores: int = 0
+    distinct_exam_types: int = 0
     attendance_rate: float = 0.0
     recent_scores: List[ScoreResponse] = []
     class_rankings: List[ClassRanking] = []
