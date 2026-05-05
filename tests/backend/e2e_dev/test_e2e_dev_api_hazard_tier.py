@@ -1,9 +1,13 @@
-"""Fifteen high-difficulty API checks against the seeded E2E dev surface (auth, seed gates, LLM dev helpers).
+"""High-difficulty API checks against the seeded E2E dev surface (auth, seed gates, LLM dev helpers).
 
-Reuses the same DB reset contract as ``test_e2e_dev_seed.py`` so each test starts from a clean schema.
+The ``hz01``–``hz15`` block matches the original fifteen-case hazard tier; ``hz16``–``hz30`` extend it with
+pagination validation edges, public/unauthenticated routes, parent-code verification, and parallel
+stress on notification upserts (same reset contract as ``test_e2e_dev_seed.py`` — clean schema per test).
 """
 
 from __future__ import annotations
+
+import concurrent.futures
 
 import pytest
 from fastapi.testclient import TestClient
@@ -258,3 +262,167 @@ def test_hz15_discussion_list_clamps_page_size_above_user_max(client: TestClient
     assert r.status_code == 200, r.text
     body = r.json()
     assert int(body.get("page_size") or 0) <= 50
+
+
+def test_hz16_health_root_and_prefixed_both_ok(client: TestClient) -> None:
+    """Smoke both legacy ``/health`` and ``/api/health`` (SPA proxies sometimes hit only one)."""
+    assert client.get("/health").status_code == 200
+    assert client.get("/api/health").status_code == 200
+
+
+def test_hz17_settings_public_unauthenticated_ok(client: TestClient) -> None:
+    r = client.get("/api/settings/public")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert isinstance(body, dict)
+
+
+def test_hz18_parent_verify_unknown_code_returns_soft_invalid(client: TestClient) -> None:
+    """``verify`` never raises HTTP errors for unknown codes — returns JSON ``valid: false``."""
+    r = client.get("/api/parent/verify/NOTREAL01")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("valid") is False
+
+
+def test_hz19_teacher_forbidden_student_course_catalog(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    r = client.get("/api/subjects/course-catalog", headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 403
+
+
+def test_hz20_teacher_forbidden_elective_catalog(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    r = client.get("/api/subjects/elective-catalog", headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 403
+
+
+def test_hz21_student_homework_list_rejects_page_size_over_100(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["student_plain"]["username"], s["password_teacher_student"])
+    r = client.get("/api/homeworks?page=1&page_size=200", headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 422
+
+
+def test_hz22_teacher_materials_list_rejects_page_size_over_100(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    subj = int(s["course_required_id"])
+    r = client.get(
+        f"/api/materials?subject_id={subj}&page=1&page_size=200",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    assert r.status_code == 422
+
+
+def test_hz23_teacher_points_records_rejects_page_size_over_100(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    sid = int(s["student_plain"]["student_row_id"])
+    r = client.get(
+        f"/api/points/records/{sid}?page=1&page_size=200",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    assert r.status_code == 422
+
+
+def test_hz24_unauthenticated_subjects_list_returns_401(client: TestClient) -> None:
+    assert client.get("/api/subjects").status_code == 401
+
+
+def test_hz25_admin_put_quota_policy_rejects_parallel_tasks_zero(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["admin"]["username"], s["password_admin"])
+    before = client.get("/api/llm-settings/admin/quota-policy", headers={"Authorization": f"Bearer {tok}"})
+    assert before.status_code == 200, before.text
+    payload = {**before.json(), "max_parallel_grading_tasks": 0}
+    r = client.put(
+        "/api/llm-settings/admin/quota-policy",
+        headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
+        json=payload,
+    )
+    assert r.status_code == 422
+
+
+def test_hz26_student_discussions_rejects_page_size_over_query_cap(client: TestClient) -> None:
+    """Distinct from ``hz15``: ``page_size=200`` must fail validation before handler clamp logic."""
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["student_plain"]["username"], s["password_teacher_student"])
+    mid = int(s["material_discussion_id"])
+    subj = int(s["course_required_id"])
+    cls = int(s["class_id_1"])
+    path = (
+        f"/api/discussions?target_type=material&target_id={mid}"
+        f"&subject_id={subj}&class_id={cls}&page=1&page_size=200"
+    )
+    assert client.get(path, headers={"Authorization": f"Bearer {tok}"}).status_code == 422
+
+
+def test_hz27_parallel_triple_mark_all_read_all_200(client: TestClient) -> None:
+    """Stress the upsert path harder than dual-tab: three concurrent mark-all-read storms."""
+    s = _reset_scenario(client)
+    st_tok = _login_form(client, s["student_plain"]["username"], s["password_teacher_student"])
+    th_tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    subj = int(s["course_required_id"])
+    cls = int(s["class_id_1"])
+    for i in range(3):
+        cr = client.post(
+            "/api/notifications",
+            headers={"Authorization": f"Bearer {th_tok}", "Content-Type": "application/json"},
+            json={"title": f"triple-{i}", "content": "x", "class_id": cls, "subject_id": subj},
+        )
+        assert cr.status_code == 200, cr.text
+
+    def _mark() -> int:
+        return client.post(
+            "/api/notifications/mark-all-read",
+            headers={"Authorization": f"Bearer {st_tok}"},
+            params={"subject_id": subj},
+        ).status_code
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        statuses = list(pool.map(lambda _: _mark(), range(3)))
+    assert statuses == [200, 200, 200]
+    sync = client.get(
+        "/api/notifications/sync-status",
+        headers={"Authorization": f"Bearer {st_tok}"},
+        params={"subject_id": subj},
+    )
+    assert sync.status_code == 200, sync.text
+    assert int(sync.json().get("unread_count") or 0) == 0
+
+
+def test_hz28_admin_quota_override_unknown_student_returns_404(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["admin"]["username"], s["password_admin"])
+    r = client.put(
+        "/api/llm-settings/admin/students/999999999/quota-override",
+        headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
+        json={"daily_tokens": 5000},
+    )
+    assert r.status_code == 404
+
+
+def test_hz29_teacher_students_list_allows_page_size_1000(client: TestClient) -> None:
+    """Guards against mistaking every list endpoint for ``le=100`` — ``students`` uses ``le=1000``."""
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    cls = int(s["class_id_1"])
+    r = client.get(
+        f"/api/students?class_id={cls}&page=1&page_size=1000",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_hz30_teacher_students_list_rejects_page_size_over_1000(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    cls = int(s["class_id_1"])
+    r = client.get(
+        f"/api/students?class_id={cls}&page=1&page_size=2000",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    assert r.status_code == 422
