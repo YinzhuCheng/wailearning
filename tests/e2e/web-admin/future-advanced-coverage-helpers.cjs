@@ -9,6 +9,22 @@ function escapeRegex(text) {
   return `${text || ''}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/**
+ * Open header course dropdown (click; Layout uses trigger="hover" but click reliably opens popper)
+ * and select a course row by visible label text inside `.course-option`.
+ * Prefer over hover()+deep click — avoids "element is not visible / not stable" with Element Plus teleported menus.
+ */
+async function clickCourseSwitcherOption(page, courseLabel) {
+  const switcher = page.getByTestId('header-course-switch')
+  await expect(switcher).toBeVisible({ timeout: 15000 })
+  await switcher.click()
+  const menu = page.locator('.course-dropdown-menu').filter({ visible: true }).first()
+  await expect(menu).toBeVisible({ timeout: 15000 })
+  const row = menu.locator('.course-option').filter({ hasText: courseLabel }).first()
+  await expect(row).toBeVisible({ timeout: 12000 })
+  await row.click({ force: true })
+}
+
 function isDestroyedContextError(err) {
   const msg = `${err && err.message ? err.message : err}`
   return (
@@ -391,6 +407,7 @@ module.exports = {
   apiBase,
   seedHeaders,
   escapeRegex,
+  clickCourseSwitcherOption,
   login,
   obtainAccessToken,
   apiGetJson,

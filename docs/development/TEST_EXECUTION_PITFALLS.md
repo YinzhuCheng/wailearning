@@ -1574,6 +1574,61 @@ After **`ensure_course_access_http`**, build usage via **`get_student_quota_usag
 
 Teachers still invoke **`ensure_course_llm_config`** through **`GET/PUT /api/llm-settings/courses/{subject_id}`** when editing LLM settings — that path intentionally creates/configures rows.
 
+### Pitfall 63: Stale `node` / `uvicorn` on default E2E ports after interrupted full run
+
+### Symptom
+
+`npm run test:e2e` aborts before tests start:
+
+```text
+Error: http://127.0.0.1:3012/ is already used
+Error: http://127.0.0.1:8012/api/health is already used
+```
+
+### Context
+
+Playwright `webServer` in **`apps/web/admin/playwright.config.cjs`** tries to bind **Vite** and **uvicorn**. A killed CLI may leave the child **`node`** (Vite) or Python server alive; **`fuser`** may be missing in the image.
+
+### Fix
+
+**`lsof -i :<E2E_UI_PORT>`** and **`lsof -i :<E2E_API_PORT>`** then **`kill -9`**, or use **`PLAYWRIGHT_USE_EXTERNAL_SERVERS=1`** and manage processes explicitly.
+
+### Interpretation
+
+This is an **operator / environment** failure, not a test assertion failure. Documented in [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md) as runbook **Pitfall 63** (mirrors this pitfall number for cross-linking).
+
+### Pitfall 64: `header-course-switch` — hover-based Element Plus dropdown vs Playwright click
+
+### Symptom
+
+**`e2e-notification-header-sync-tier.spec.js`** / **`e2e-notification-sync-deep-tier.spec.js`**: timeout on **`.course-dropdown-menu`** click — “element is not visible / not stable”.
+
+### Context
+
+**`el-dropdown` `trigger="hover"`** + teleported menu: **`hover()` + getByText** on nested **`<strong>`** is fragile; **`scrollIntoViewIfNeeded`** on an animating popper can block until test timeout.
+
+### Fix
+
+**`clickCourseSwitcherOption`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`**: click **切换课程**, visible **`.course-dropdown-menu`**, **force** click **`.course-option`**.
+
+### Pitfall 65: Mock LLM `discuss_<suffix>` profile cursor drift in full Playwright run
+
+### Symptom
+
+**`e2e-homework-comment-cover-tier4.spec.js`** case **08** — **`expect.poll` on `comment_preview`** never contains **`复`**, value stays **`discuss_<hex>:ok`**.
+
+### Context
+
+**`/api/e2e/dev/mock-llm/<profile>/v1/chat/completions`** advances a **per-profile cursor** in **`e2e_dev.py`**. Other specs (discussion LLM, validation) and ordering can exhaust **`steps`** so the handler falls back to default **`{profile}:ok`**.
+
+### Fix
+
+After the first graded comment is confirmed, **`configureMockLlm`** again with **only** the step intended for the **regrade** attempt.
+
+### Interpretation
+
+Same numbered narrative as **FULL_PLAYWRIGHT_E2E_RUNBOOK.md** sections **Pitfall 64–65** (course switcher vs mock cursor).
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

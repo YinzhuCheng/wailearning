@@ -180,6 +180,26 @@ Do not immediately blame “browser randomness” when:
 8. Geometry: visible + capped scans.
 9. Text: narrow matchers / `data-testid`.
 
+### Port / process hygiene (Pitfall 63)
+
+`playwright.config.cjs` starts **two** `webServer` processes (API on `<E2E_API_HOST>:<E2E_API_PORT>`, Vite UI on `<E2E_UI_PORT>`). If a prior run was interrupted, **`node`** (Vite) or **`uvicorn`** may still listen; the next `npm run test:e2e` fails immediately with **`… is already used`** on **`8012`** or **`3012`** (placeholders; actual ports come from **`E2E_API_PORT`** / **`E2E_UI_PORT`**).
+
+**Recover:** use **`lsof -i :3012`** and **`lsof -i :8012`** (when **`ss`** / **`fuser`** are absent on minimal images), then **`kill -9 <pid>`**.
+
+**Alternative:** export **`PLAYWRIGHT_USE_EXTERNAL_SERVERS=1`** and launch API + UI yourself so ports are explicit.
+
+### Header course switcher interactions (Pitfall 64)
+
+`Layout.vue` uses **`el-dropdown` `trigger="hover"`** for **`data-testid="header-course-switch"`**. Tests that **`hover()`** then click menu text often flake with **element not visible / not stable** because Element Plus teleports the dropdown.
+
+**Harness:** **`clickCourseSwitcherOption(page, courseLabel)`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`** opens via **click**, anchors **`.course-dropdown-menu.filter({ visible: true })`**, then **`.click({ force: true })`** on **`.course-option`**. Avoid **`scrollIntoViewIfNeeded`** on poppers when animations fight stability.
+
+### Shared mock-LLM cursor across specs (Pitfall 65)
+
+In-memory mock profiles in **`e2e_dev.py`** advance on **every** **`POST .../mock-llm/<profile>/v1/chat/completions`**. Full-suite order plus discussion traffic can leave the cursor past your **`steps`** array; the handler then returns the default **`discuss_<suffix>:ok`** text instead of an expected Chinese comment.
+
+**Spec pattern:** after asserting the **first** grading outcome, call **`configureMockLlm`** again with **only** the step(s) needed for the **next** grading wave (see **`e2e-homework-comment-cover-tier4.spec.js`** case **08**).
+
 ---
 
 ## Command reference

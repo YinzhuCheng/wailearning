@@ -17,7 +17,8 @@ const {
   apiPostJson,
   apiGetJson,
   apiDelete,
-  apiPutJson
+  apiPutJson,
+  clickCourseSwitcherOption
 } = require('./future-advanced-coverage-helpers.cjs')
 const { resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
@@ -85,12 +86,7 @@ test.describe('E2E notification sync deep tier (15 cases)', () => {
     await expect(page.getByTestId('header-course-switch')).toBeVisible({ timeout: 20000 })
 
     const reqLabel = `E2E必修课_${s.suffix}`
-    await page.getByTestId('header-course-switch').click()
-    await page
-      .locator('.course-dropdown-menu')
-      .locator('.course-option')
-      .filter({ hasText: reqLabel })
-      .click()
+    await clickCourseSwitcherOption(page, reqLabel)
     await page.waitForURL(/\/course-home|\/dashboard/)
 
     await apiPostJson('/api/notifications', teacherTok, {
@@ -413,14 +409,8 @@ test.describe('E2E notification sync deep tier (15 cases)', () => {
       subject_id: s.course_elective_id
     })
 
-    const switcher = page.getByTestId('header-course-switch')
-    await expect(switcher).toBeVisible({ timeout: 15000 })
-
     const flip = async courseLabel => {
-      await switcher.click()
-      const menu = page.locator('.course-dropdown-menu')
-      await expect(menu).toBeVisible({ timeout: 10000 })
-      await menu.locator('.course-option').filter({ hasText: courseLabel }).click()
+      await clickCourseSwitcherOption(page, courseLabel)
       await page.waitForURL(/\/course-home|\/dashboard/)
       await triggerHeaderPoll(page)
     }

@@ -15,7 +15,7 @@ const {
   apiPostJson,
   apiGetJson,
   apiDelete,
-  escapeRegex
+  clickCourseSwitcherOption
 } = require('./future-advanced-coverage-helpers.cjs')
 const { resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
@@ -118,11 +118,8 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
     const badge = await badgeContentLocator(page)
     await expect(badge).toBeVisible({ timeout: 20000 })
 
-    const switcher = page.getByTestId('header-course-switch')
-    await expect(switcher).toBeVisible({ timeout: 15000 })
-    await switcher.hover()
     const electiveLabel = `E2E选修课_${s.suffix}`
-    await page.locator('.course-dropdown-menu').getByText(new RegExp(escapeRegex(electiveLabel))).click()
+    await clickCourseSwitcherOption(page, electiveLabel)
     await page.waitForURL(/\/course-home|\/dashboard/)
     await triggerHeaderPoll(page)
 
