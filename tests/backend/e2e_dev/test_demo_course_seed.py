@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import text
 
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
@@ -57,6 +59,12 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert course is not None
         assert course.weekly_schedule
         assert course.description
+        assert "教学日历" in (course.description or "")
+        assert course.course_start_at is not None and course.course_end_at is not None
+        assert course.course_start_at < course.course_end_at
+        dm_times = json.loads(course.course_times or "[]")
+        assert isinstance(dm_times, list) and len(dm_times) >= 2
+        assert all("weekly_schedule" in x and "course_start_at" in x for x in dm_times)
 
         assert db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == course.id).first() is not None
         exam_w = db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == course.id).first()
@@ -115,6 +123,10 @@ def test_demo_seed_creates_teacher_students_course_homework():
         llm = db.query(Subject).filter(Subject.name == "大语言模型").first()
         assert llm is not None
         assert llm.course_type == "elective"
+        assert "教学日历" in (llm.description or "")
+        assert llm.course_start_at is not None and llm.course_end_at is not None
+        llm_times = json.loads(llm.course_times or "[]")
+        assert isinstance(llm_times, list) and len(llm_times) >= 2
         assert db.query(CourseMaterial).filter(CourseMaterial.subject_id == llm.id).count() >= 1
         assert (
             db.query(Homework)
