@@ -103,11 +103,48 @@
             <header class="panel-header">
               <div class="panel-header__titles">
                 <h2 class="panel-title">课程资料</h2>
-                <p class="panel-desc">最近发布的资料</p>
+                <p class="panel-desc">章节目录与最近资料</p>
               </div>
               <el-button text type="primary" class="panel-link" @click="router.push('/materials')">查看全部</el-button>
             </header>
             <el-skeleton :loading="loading" animated :rows="2">
+              <div v-if="materialOutlineRows.length" class="material-outline" data-testid="course-home-material-outline">
+                <div class="material-outline__head">
+                  <span>章节目录</span>
+                  <div class="material-outline__actions">
+                    <el-button text size="small" @click="expandMaterialOutline">展开</el-button>
+                    <el-button text size="small" @click="collapseMaterialOutline">收起</el-button>
+                  </div>
+                </div>
+                <ul class="material-outline__list">
+                  <li
+                    v-for="row in materialOutlineRows"
+                    :key="row.id"
+                    class="material-outline__item"
+                    :style="{ '--outline-depth': row.depth }"
+                  >
+                    <button
+                      v-if="row.hasChildren"
+                      class="material-outline__toggle"
+                      type="button"
+                      :aria-label="isMaterialOutlineExpanded(row.id) ? '收起子章节' : '展开子章节'"
+                      :title="isMaterialOutlineExpanded(row.id) ? '收起子章节' : '展开子章节'"
+                      :data-testid="`course-home-material-toggle-${row.id}`"
+                      @click="toggleMaterialOutline(row.id)"
+                    >
+                      <el-icon>
+                        <Minus v-if="isMaterialOutlineExpanded(row.id)" />
+                        <Plus v-else />
+                      </el-icon>
+                    </button>
+                    <span v-else class="material-outline__toggle-spacer" aria-hidden="true" />
+                    <button class="material-outline__title" type="button" @click="router.push('/materials')">
+                      <span>{{ row.title }}</span>
+                      <el-tag v-if="row.is_uncategorized" size="small" type="info">默认</el-tag>
+                    </button>
+                  </li>
+                </ul>
+              </div>
               <template v-if="!materials.length">
                 <p class="empty-inline">暂无资料。</p>
                 <el-button text type="primary" size="small" class="empty-cta empty-cta--text" @click="router.push('/materials')">
@@ -164,7 +201,7 @@
 </template>
 
 <script setup>
-import { Bell, Calendar, Clock, Document, EditPen, User } from '@element-plus/icons-vue'
+import { Bell, Calendar, Clock, Document, EditPen, Minus, Plus, User } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -192,12 +229,61 @@ const visibleCourseTimes = computed(() => {
 
 const loading = ref(false)
 const materials = ref([])
+const materialChapterTree = ref([])
+const materialOutlineExpandedIds = ref([])
 const homeworks = ref([])
 const notifications = ref([])
 
 const materialsPreview = computed(() => (materials.value || []).slice(0, PREVIEW_COUNT))
 const homeworksPreview = computed(() => (homeworks.value || []).slice(0, PREVIEW_COUNT))
 const notificationsPreview = computed(() => (notifications.value || []).slice(0, PREVIEW_COUNT))
+
+const collectMaterialChapterIds = nodes => {
+  const ids = []
+  for (const node of nodes || []) {
+    ids.push(node.id)
+    ids.push(...collectMaterialChapterIds(node.children))
+  }
+  return ids
+}
+
+const visibleMaterialOutlineRows = (nodes, depth = 0, rows = []) => {
+  for (const node of nodes || []) {
+    const children = node.children || []
+    const hasChildren = children.length > 0
+    rows.push({
+      id: node.id,
+      title: node.title,
+      depth,
+      hasChildren,
+      is_uncategorized: Boolean(node.is_uncategorized)
+    })
+    if (hasChildren && materialOutlineExpandedIds.value.includes(node.id)) {
+      visibleMaterialOutlineRows(children, depth + 1, rows)
+    }
+  }
+  return rows
+}
+
+const materialOutlineRows = computed(() => visibleMaterialOutlineRows(materialChapterTree.value))
+
+const isMaterialOutlineExpanded = id => materialOutlineExpandedIds.value.includes(id)
+
+const toggleMaterialOutline = id => {
+  if (isMaterialOutlineExpanded(id)) {
+    materialOutlineExpandedIds.value = materialOutlineExpandedIds.value.filter(item => item !== id)
+    return
+  }
+  materialOutlineExpandedIds.value = [...materialOutlineExpandedIds.value, id]
+}
+
+const expandMaterialOutline = () => {
+  materialOutlineExpandedIds.value = collectMaterialChapterIds(materialChapterTree.value)
+}
+
+const collapseMaterialOutline = () => {
+  materialOutlineExpandedIds.value = []
+}
 
 const formatCourseTimeTitle = courseTime =>
   [courseTime?.dateRange, courseTime?.weekday].filter(Boolean).join('，')
@@ -228,6 +314,8 @@ const priorityText = priority => {
 const loadWorkspace = async () => {
   if (!selectedCourse.value) {
     materials.value = []
+    materialChapterTree.value = []
+    materialOutlineExpandedIds.value = []
     homeworks.value = []
     notifications.value = []
     return
@@ -237,13 +325,14 @@ const loadWorkspace = async () => {
   loading.value = true
 
   try {
-    const [materialsResult, homeworksResult, notificationsResult] = await Promise.all([
+    const [materialsResult, chapterTreeResult, homeworksResult, notificationsResult] = await Promise.all([
       api.materials.list({
         class_id: selectedCourse.value.class_id,
         subject_id: selectedCourse.value.id,
         page: 1,
         page_size: 5
       }),
+      api.materialChapters.tree({ subject_id: selectedCourse.value.id }),
       api.homework.list({
         class_id: selectedCourse.value.class_id,
         subject_id: selectedCourse.value.id,
@@ -258,6 +347,8 @@ const loadWorkspace = async () => {
     ])
 
     materials.value = materialsResult?.data || []
+    materialChapterTree.value = chapterTreeResult?.nodes || []
+    materialOutlineExpandedIds.value = (materialChapterTree.value || []).map(node => node.id)
     homeworks.value = homeworksResult?.data || []
     notifications.value = notificationsResult?.data || []
   } finally {
@@ -288,13 +379,13 @@ watch(selectedCourse, () => {
   --sch-radius: 12px;
   --sch-radius-sm: 8px;
   --sch-gap: 16px;
-  --sch-border: #e2e8f0;
-  --sch-surface: #ffffff;
-  --sch-muted: #64748b;
-  --sch-text: #0f172a;
-  --sch-accent: #2563eb;
-  --sch-accent-soft: #eff6ff;
-  --sch-row-bg: #f8fafc;
+  --sch-border: var(--wa-border-subtle);
+  --sch-surface: var(--wa-color-surface);
+  --sch-muted: var(--wa-color-text-muted);
+  --sch-text: var(--wa-color-text);
+  --sch-accent: var(--wa-color-primary-600);
+  --sch-accent-soft: var(--wa-color-primary-50);
+  --sch-row-bg: var(--wa-color-bg-soft);
 
   padding: 24px;
   max-width: 1100px;
@@ -548,6 +639,111 @@ watch(selectedCourse, () => {
   font-weight: 500;
 }
 
+.material-outline {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--sch-border);
+  border-radius: var(--sch-radius-sm);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.88), rgba(255, 255, 255, 0.96)),
+    var(--sch-surface);
+}
+
+.material-outline__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--sch-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.material-outline__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.material-outline__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.material-outline__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: calc(var(--outline-depth, 0) * 18px);
+}
+
+.material-outline__toggle,
+.material-outline__toggle-spacer {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+
+.material-outline__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 7px;
+  background: rgba(239, 246, 255, 0.86);
+  color: var(--sch-accent);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.material-outline__toggle:hover {
+  border-color: rgba(37, 99, 235, 0.38);
+  background: #dbeafe;
+  transform: scale(1.06);
+}
+
+.material-outline__toggle:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.32);
+  outline-offset: 2px;
+}
+
+.material-outline__title {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 5px 7px;
+  color: var(--sch-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.material-outline__title:hover {
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--sch-accent);
+}
+
+.material-outline__title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .empty-inline {
   margin: 0 0 8px;
   font-size: 13px;
@@ -580,6 +776,15 @@ watch(selectedCourse, () => {
   .overview-meta {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .material-outline__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .material-outline__item {
+    padding-left: calc(var(--outline-depth, 0) * 14px);
   }
 }
 </style>

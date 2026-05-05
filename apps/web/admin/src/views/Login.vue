@@ -1,6 +1,6 @@
 <template>
-  <div class="login-container" :class="{ 'has-background': hasBackground }" :style="backgroundStyle">
-    <div class="login-card">
+  <div class="login-container" :class="{ 'has-background': hasBackground }" :style="backgroundStyle" data-testid="login-page">
+    <div class="login-card" data-testid="login-panel">
       <div class="login-header">
         <div v-if="settings.system_logo" class="logo-container">
           <img :src="settings.system_logo" alt="Logo" class="system-logo" />
@@ -46,7 +46,25 @@
             {{ loading ? '登录中...' : '登录' }}
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button type="primary" link class="forgot-link" @click="openForgotDialog">忘记密码</el-button>
+        </el-form-item>
       </el-form>
+
+      <el-dialog v-model="forgotVisible" title="忘记密码" width="440px" destroy-on-close @closed="resetForgot">
+        <p class="forgot-hint">
+          将向管理员反馈并重置密码，请使用邮箱或其他通讯手段联系管理员获取新密码。
+        </p>
+        <el-form ref="forgotFormRef" :model="forgotForm" :rules="forgotRules" label-width="0">
+          <el-form-item prop="username">
+            <el-input v-model="forgotForm.username" placeholder="请输入用户名" clearable />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="forgotVisible = false">取消</el-button>
+          <el-button type="primary" :loading="forgotSubmitting" @click="submitForgot">确定</el-button>
+        </template>
+      </el-dialog>
 
       <div class="login-footer">
         {{ settings.copyright }}
@@ -64,8 +82,9 @@ import { Lock, User } from '@element-plus/icons-vue'
 
 import { normalizeSystemSettings } from '@/utils/branding'
 import { useUserStore } from '@/stores/user'
+import api from '@/api'
 
-const api = axios.create({ baseURL: '/api' })
+const apiPublic = axios.create({ baseURL: '/api' })
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -86,6 +105,38 @@ const form = reactive({
   username: '',
   password: ''
 })
+
+const forgotVisible = ref(false)
+const forgotSubmitting = ref(false)
+const forgotFormRef = ref(null)
+const forgotForm = reactive({ username: '' })
+const forgotRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }]
+}
+
+const openForgotDialog = () => {
+  forgotForm.username = form.username?.trim() || ''
+  forgotVisible.value = true
+}
+
+const resetForgot = () => {
+  forgotForm.username = ''
+  forgotFormRef.value?.clearValidate?.()
+}
+
+const submitForgot = async () => {
+  await forgotFormRef.value?.validate?.()
+  forgotSubmitting.value = true
+  try {
+    const msg = await api.auth.forgotPassword({ username: forgotForm.username.trim() })
+    ElMessage.success(msg?.message || '已提交')
+    forgotVisible.value = false
+  } catch (e) {
+    console.error(e)
+  } finally {
+    forgotSubmitting.value = false
+  }
+}
 
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
@@ -116,7 +167,7 @@ const hasBackground = computed(() => {
 
 const fetchBingBackground = async () => {
   try {
-    const res = await api.get('/bing-background')
+    const res = await apiPublic.get('/bing-background')
     if (res.data.url) {
       bingBackground.value = res.data.url
     }
@@ -127,7 +178,7 @@ const fetchBingBackground = async () => {
 
 const fetchSettings = async () => {
   try {
-    const res = await api.get('/settings/public')
+    const res = await apiPublic.get('/settings/public')
     const normalizedSettings = normalizeSystemSettings(res.data)
     settings.value = normalizedSettings
     document.title = normalizedSettings?.system_name || 'BIMSA-CLASS 管理端'
@@ -184,7 +235,7 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 50%, #38bdf8 100%);
+  background: linear-gradient(135deg, var(--wa-color-primary-900) 0%, var(--wa-color-primary-700) 52%, var(--wa-color-accent-600) 100%);
   position: relative;
   overflow: hidden;
 }
@@ -205,7 +256,7 @@ onMounted(async () => {
   inset: 0;
   background:
     radial-gradient(circle at 20% 80%, rgba(56, 189, 248, 0.28) 0%, transparent 48%),
-    radial-gradient(circle at 80% 20%, rgba(96, 165, 250, 0.2) 0%, transparent 45%);
+    radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--wa-color-primary-300) 24%, transparent) 0%, transparent 45%);
 }
 
 .login-card {
@@ -238,11 +289,12 @@ onMounted(async () => {
   margin: 0 0 12px;
   font-size: 28px;
   color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .system-desc {
   margin: 0;
-  color: #475569;
+  color: var(--wa-color-text-muted);
   line-height: 1.7;
 }
 
@@ -252,10 +304,22 @@ onMounted(async () => {
   border-radius: 14px;
 }
 
+.forgot-link {
+  padding: 0;
+  font-size: 14px;
+}
+
+.forgot-hint {
+  margin: 0 0 16px;
+  color: var(--wa-color-text-muted);
+  line-height: 1.65;
+  font-size: 14px;
+}
+
 .login-footer {
   margin-top: 16px;
   text-align: center;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: 13px;
 }
 

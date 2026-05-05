@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     INIT_ADMIN_REAL_NAME: str = "System Administrator"
     INIT_DEFAULT_DATA: bool = True
     ALLOW_PUBLIC_REGISTRATION: bool = False
+    # Optional absolute admin SPA origin for links in system emails/notifications (e.g. https://example.com).
+    # If empty, password-reset notifications use a relative /users?... path.
+    FRONTEND_ADMIN_BASE_URL: str = ""
 
     # Ephemeral E2E seed API (/api/e2e/dev/reset-scenario). Never enable in production.
     E2E_DEV_SEED_ENABLED: bool = False

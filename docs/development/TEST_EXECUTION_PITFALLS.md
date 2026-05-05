@@ -715,7 +715,491 @@ $env:PLAYWRIGHT_BROWSERS_PATH='C:\Users\<user>\AppData\Local\ms-playwright'
 7. If a single concurrency scenario fails after a long mostly-green run, rerun that one case in isolation before treating it as a deterministic regression.
 8. On Linux/CI, if the browser suite fails to boot the API, verify `uvicorn` runs under the project venv before assuming application regressions.
 
+## Incremental Field Notes: PostgreSQL-Aligned UI/UX Audit on Windows
+
+This subsection records a later UI/UX audit setup pass where the operator needed
+real browser screenshots against a PostgreSQL-backed backend, not the default
+SQLite-backed Playwright webServer path. These notes are intentionally additive:
+they do not replace the earlier Playwright or PostgreSQL guidance above.
+
+### Goal
+
+The audit goal was to inspect the admin SPA through Playwright screenshots while
+using a production-aligned PostgreSQL database. SQLite was acceptable only for
+quick local smoke and was explicitly rejected as the main evidence source for
+UI/E2E behavior that depends on real persistence semantics.
+
+### What worked
+
+The reliable approach in a restricted Windows automation environment was:
+
+1. Use an ignored artifact directory such as `<repo>/.e2e-run/postgres-runtime/`.
+2. Download an official EDB PostgreSQL Windows x64 binary zip into that ignored
+   directory. The pass used PostgreSQL `16.13`.
+3. Extract the archive locally and use the bundled `initdb.exe`,
+   `postgres.exe`, `psql.exe`, and `pg_isready.exe` from
+   `<artifact-dir>/pgsql/bin/`.
+4. Initialize a local throwaway cluster in an ignored data directory, for
+   example `<artifact-dir>/data-clean`, with local trust auth.
+5. Run PostgreSQL on a non-production loopback port, for example
+   `127.0.0.1:15432`.
+6. Create a clearly disposable database such as `wailearning_uiux_audit`.
+7. Start the backend with:
+   - `DATABASE_URL=postgresql://postgres@127.0.0.1:15432/wailearning_uiux_audit`
+   - `E2E_DEV_SEED_ENABLED=true`
+   - `E2E_DEV_SEED_TOKEN=<test token>`
+   - `INIT_DEFAULT_DATA=false`
+   - `ENABLE_LLM_GRADING_WORKER=false`
+   - a local-only `SECRET_KEY`
+8. Seed data through `POST /api/e2e/dev/reset-scenario` with the same
+   `X-E2E-Seed-Token`.
+9. Start Vite from `apps/web/admin` with
+   `VITE_PROXY_TARGET=http://127.0.0.1:<api-port>`.
+10. Use Playwright screenshots and DOM snapshots against the Vite URL.
+
+### Pitfall A: local machine may have no PostgreSQL service, Docker, psql, or winget
+
+The pass first checked for:
+
+- a running PostgreSQL service,
+- `psql.exe` / `postgres.exe` / `pg_ctl.exe`,
+- Docker,
+- `winget`,
+- `DATABASE_URL` / `TEST_DATABASE_URL`.
+
+None were available in that environment. Do not assume a Windows machine already
+has a database runtime just because the repository is PostgreSQL-first.
+
+### Pitfall B: Chocolatey can exist but still be unusable for PostgreSQL install
+
+Chocolatey was installed, but `choco install postgresql` failed because the shell
+did not have administrator access to Chocolatey system directories and could not
+write `lib-bad` or clear package lock state.
+
+Avoid treating "Chocolatey exists" as equivalent to "the agent can install a
+system PostgreSQL service." If Chocolatey needs admin rights, prefer a
+user-directory binary archive when the task only needs a temporary local
+database.
+
+### Pitfall C: `pg_ctl` can fail on restricted Windows tokens
+
+`initdb.exe` completed the cluster initialization but emitted Windows restricted
+token errors at the end. `pg_ctl.exe start` also failed with restricted token
+errors. The cluster files were still usable.
+
+What worked was direct `postgres.exe -D <data-dir> -h 127.0.0.1 -p <port>` rather
+than `pg_ctl.exe`, provided the process was launched in a context that could keep
+it alive for the audit.
+
+### Pitfall D: PostgreSQL writes normal LOG output to stderr
+
+When wrapping `postgres.exe` with PowerShell, normal PostgreSQL startup lines can
+arrive on stderr. If a wrapper script sets `$ErrorActionPreference = 'Stop'`,
+PowerShell may treat a harmless startup LOG line as a native command error and
+exit before PostgreSQL finishes starting.
+
+For wrapper scripts around `postgres.exe`, either avoid `Stop` for native stderr
+or redirect/handle stderr deliberately.
+
+### Pitfall E: background process lifetime can differ by launcher
+
+Several background launch attempts returned a process id but did not leave a
+listening PostgreSQL server for the next command. Direct foreground startup
+proved PostgreSQL itself was valid, but hidden `Start-Process`, `cmd /c`, and
+PowerShell job patterns were unreliable in that sandboxed automation context.
+
+When cross-command background processes are unreliable, use one orchestrator
+process that starts PostgreSQL, backend, frontend, and Playwright inside the same
+lifetime. In this pass, a local ignored Node script performed that orchestration.
+
+### Pitfall F: Node child process spawn may be blocked in the default sandbox
+
+The orchestrator initially failed with `spawn EPERM`, matching the broader
+Playwright webServer `EPERM` pitfall. The fix was to run the orchestrator outside
+the restricted sandbox/with the necessary execution approval. This is an
+environment restriction, not evidence that PostgreSQL, Vite, or the app is
+broken.
+
+### Pitfall G: Vite must be started from the admin app directory
+
+Starting Vite with the Vite binary path while the current working directory was
+the repository root produced a root URL that returned `404`. The fix was to set
+the frontend process working directory to `<repo>/apps/web/admin` before running
+Vite.
+
+This matters for custom audit scripts and external-server Playwright flows:
+`node <repo>/apps/web/admin/node_modules/vite/bin/vite.js` is not sufficient by
+itself if the working directory is wrong.
+
+### Pitfall H: repeated role login can hang if the previous session is still active
+
+A screenshot script that logs in as admin and then navigates to `/login` to log
+in as teacher/student can hang or redirect unexpectedly if the app immediately
+redirects an already-authenticated user away from `/login`.
+
+The robust helper should clear `localStorage` and `sessionStorage` before each
+fresh role login, then navigate to `/login` and submit credentials.
+
+### Pitfall I: PostgreSQL recovery after forced audit timeouts can add startup delay
+
+Several interrupted experiments left the throwaway cluster needing crash
+recovery. `pg_isready` reported `rejecting connections` before eventually
+accepting connections. For clean audit runs, either shut PostgreSQL down
+gracefully or reinitialize a new throwaway data directory such as
+`data-clean`.
+
+### Pitfall J: DOM snapshots and screenshots can disagree during page startup
+
+A UI audit can produce a JSON snapshot showing that page text, buttons, and
+routes exist while the paired screenshot is still blank or partially painted.
+This usually means the screenshot was taken before the stable visual container
+was visible, not that the JSON snapshot is wrong.
+
+For login and other app-shell entry pages, do not rely on `page.goto(...)`
+alone. Add stable page-level test IDs in product code and wait for the visible
+panel before capture. Example pattern:
+
+```javascript
+await page.goto('/login', { waitUntil: 'domcontentloaded' })
+await page.getByTestId('login-panel').waitFor({ state: 'visible', timeout: 30000 })
+await page.waitForTimeout(300)
+await capture(page, 'login')
+```
+
+The exact script path should be documented as `<repo>/...` or
+`<artifact-dir>/...` in committed docs. If the machine-specific path matters for
+a handoff, put it in an ignored local note instead.
+
+### Artifact hygiene
+
+Keep all of the following out of tracked source:
+
+- downloaded PostgreSQL zips,
+- extracted PostgreSQL binaries,
+- local data directories,
+- audit launch scripts,
+- screenshots,
+- runtime logs,
+- seeded scenario JSON files.
+
+Use ignored directories such as `.e2e-run/`. If a temporary spec is created under
+`tests/e2e/...` for experimentation, delete it before committing unless it is a
+deliberate maintained test.
+
+### Privacy hygiene
+
+Do not paste user-specific absolute paths into committed documentation. Use
+placeholders such as:
+
+- `<repo>`
+- `<user-home>`
+- `<artifact-dir>`
+- `<api-port>`
+- `<ui-port>`
+
+Local handoff files can contain machine-specific paths when the next operator on
+the same machine needs them, but committed docs should stay portable.
+
+## Frontend Build And Playwright Invocation Directory Pitfalls
+
+This subsection records command-invocation mistakes encountered while adding a
+focused UI outline guard. The product code was not the root cause; the failures
+came from running the right tools from the wrong directory or outside the test
+configuration boundary.
+
+### Pitfall: root-level `npm.cmd run build` can fail with missing `package.json`
+
+Symptom:
+
+```text
+npm error enoent Could not read package.json
+npm error path <repo>/package.json
+```
+
+Cause:
+
+The admin frontend package lives under:
+
+```text
+<repo>/apps/web/admin
+```
+
+The repository root is not the frontend package root and does not own the
+admin SPA `package.json`.
+
+Fix:
+
+Run the build from the frontend app directory:
+
+```text
+cd <repo>/apps/web/admin
+npm.cmd run build
+```
+
+Interpretation:
+
+Do not treat this failure as a dependency install failure or a Vite failure.
+It is a working-directory failure. Re-run from the frontend package before
+changing code, reinstalling packages, or editing build configuration.
+
+### Pitfall: Playwright project names disappear when running from the spec directory
+
+Symptom:
+
+```text
+Error: Project(s) "chromium" not found. Available projects: ""
+```
+
+Cause:
+
+The Playwright config for the admin SPA is in:
+
+```text
+<repo>/apps/web/admin/playwright.config.cjs
+```
+
+Running `npx.cmd playwright test ... --project=chromium` from
+`<repo>/tests/e2e/web-admin` can fail to load that config. Without the config,
+the CLI does not know about the `chromium` project.
+
+Fix:
+
+Run maintained admin Playwright specs from:
+
+```text
+<repo>/apps/web/admin
+```
+
+Use the configured test file name relative to the configured `testDir`, for
+example:
+
+```text
+npx.cmd playwright test ui-homework-history-outline-regression.spec.js --project=chromium
+```
+
+Interpretation:
+
+This is not evidence that Chromium is missing. It means the command did not
+load the project configuration.
+
+### Pitfall: path arguments outside configured `testDir` may report "No tests found"
+
+Symptom:
+
+```text
+Error: No tests found.
+Make sure that arguments are regular expressions matching test files.
+```
+
+Cause:
+
+The admin Playwright config sets:
+
+```text
+testDir: ../../../tests/e2e/web-admin
+```
+
+Passing a path outside that directory, such as an ignored local script under
+`<artifact-dir>`, does not necessarily behave like a one-off arbitrary spec
+runner. The config still scopes discovery around its `testDir`.
+
+Fix:
+
+For maintained tests, keep the spec under `<repo>/tests/e2e/web-admin` and run
+it by filename from `<repo>/apps/web/admin`.
+
+For local screenshot experiments, either:
+
+- temporarily add screenshot capture to a maintained spec and remove it before
+  commit; or
+- create an ignored local Node script that imports Playwright directly and also
+  recreates any module-resolution setup the Playwright config normally provides.
+
+Interpretation:
+
+Do not expand `testDir` just to run a local screenshot helper. Keep ignored
+artifacts ignored and keep maintained test discovery narrow.
+
+### Pitfall: local Node screenshot scripts may not inherit Playwright config module resolution
+
+Symptom:
+
+```text
+Error: Cannot find module '@playwright/test'
+Require stack:
+- <repo>/tests/e2e/web-admin/fixtures.cjs
+- <artifact-dir>/...
+```
+
+Cause:
+
+The admin Playwright config prepends the frontend `node_modules` directory to
+`NODE_PATH` and calls `Module._initPaths()` before running tests. A direct local
+Node script does not inherit that setup unless it recreates it.
+
+Fix:
+
+For local-only scripts, add the equivalent setup before importing E2E helpers:
+
+```javascript
+const Module = require('module')
+const adminNodeModules = '<repo>/apps/web/admin/node_modules'
+process.env.NODE_PATH = [adminNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
+Module._initPaths()
+```
+
+Use placeholder paths in committed docs. Put real absolute paths only in ignored
+local notes.
+
+Interpretation:
+
+This failure does not mean `@playwright/test` is missing from the frontend app.
+It means the direct script skipped the configuration bootstrap that normally
+makes the package visible to shared E2E helpers.
+
 ## What This Document Does Not Claim
+
+### Pitfall: system-wide student quota totals are repeated on course attribution rows
+
+Symptom:
+
+```text
+assert used_b1 == used_b0
+E       assert 10 == 0
+```
+
+Context:
+
+A behavior test submitted homework in course A, then read the
+`/api/llm-settings/courses/student-quotas` summary and expected the course B row
+to keep `student_used_tokens_today` unchanged.
+
+Cause:
+
+After quota consolidation, `student_used_tokens_today` is the student's
+system-wide daily LLM usage total. It is intentionally repeated on every course
+row so each row can show the same daily pool context. The per-course field is
+`course_used_tokens_today`; that field is the attribution value that should stay
+unchanged for a course that did not receive new usage.
+
+Fix:
+
+When testing the post-consolidation model, assert both sides explicitly:
+
+```text
+course A row student_used_tokens_today == course B row student_used_tokens_today
+course A row course_used_tokens_today increased
+course B row course_used_tokens_today did not change
+```
+
+Interpretation:
+
+This failure is not evidence that course attribution broke. It is evidence that
+the old per-course-pool mental model leaked into a test assertion.
+
+### Pitfall: Element Plus switch test id may be on the wrapper, not the role element
+
+Symptom:
+
+```text
+expect(locator).toHaveAttribute("aria-checked", "false")
+Received: ""
+locator resolved to <div class="el-switch" data-testid="...">...</div>
+```
+
+Cause:
+
+Element Plus can render the `data-testid` on the switch wrapper while the
+actual accessible switch state lives on the nested element with `role="switch"`.
+The wrapper is useful for clicking, but it may not carry `aria-checked`.
+
+Fix:
+
+Click the stable test id if that is the most convenient target, then assert on
+the role locator inside the same dialog or component:
+
+```text
+const enableSwitch = dialog.getByRole('switch')
+await page.getByTestId('llm-course-enable').click()
+await expect(enableSwitch).toHaveAttribute('aria-checked', 'false')
+```
+
+Interpretation:
+
+This is a selector issue in the test, not evidence that the UI failed to toggle.
+
+### Pitfall: parallel Playwright commands can reset local E2E backend fetches
+
+Symptom:
+
+```text
+TypeError: fetch failed
+[cause]: Error: read ECONNRESET
+```
+
+Context:
+
+Two separate Playwright CLI commands were started at the same time from
+`<repo>/apps/web/admin`, both using the default admin Playwright config.
+
+Relevant config shape:
+
+```text
+E2E_API_PORT defaults to 8012
+E2E_UI_PORT defaults to 3012
+DATABASE_URL defaults to a temp SQLite file keyed by E2E_API_PORT
+webServer starts FastAPI at http://127.0.0.1:8012
+webServer starts Vite at http://127.0.0.1:3012
+```
+
+Cause:
+
+The two CLI processes share the same default local ports and temp SQLite file.
+One process can reset/restart/tear down the backend while the other process is
+performing a Node-side `fetch(...)` against the local API. The resulting error
+is a local backend/webServer connection reset. It is not evidence of Codex
+platform high demand, and it is not evidence that a real external LLM provider
+was called.
+
+How to identify the target:
+
+For the admin Playwright config, helper `apiBase()` resolves to:
+
+```text
+http://127.0.0.1:<E2E_API_PORT>
+```
+
+The affected LLM hard-scenario tests create presets with mock base URLs such as:
+
+```text
+http://127.0.0.1:<E2E_API_PORT>/api/e2e/dev/mock-llm/<profile>/v1/
+```
+
+Therefore a `fetch failed` in those helpers should first be investigated as a
+local backend/webServer issue unless the stack trace or preset data shows a
+non-localhost URL.
+
+Fix:
+
+Prefer one Playwright CLI process at a time when using the default local
+webServer config. If parallel CLI processes are required, give each process its
+own ports and isolated database, for example:
+
+```text
+E2E_API_PORT=8013 E2E_UI_PORT=3013 npx playwright test ...
+E2E_API_PORT=8014 E2E_UI_PORT=3014 npx playwright test ...
+```
+
+On Windows PowerShell use separate `$env:` assignments in the same command
+session before invoking Playwright. Keep `NO_PROXY=localhost,127.0.0.1,::1` when
+a local HTTP proxy is configured so localhost E2E traffic does not leave the
+machine.
+
+Interpretation:
+
+If the same test passes when rerun serially with the same code and local mock
+LLM endpoint, treat the earlier `ECONNRESET` as local E2E orchestration
+contention rather than product behavior.
 
 - It does not claim the product code is bug-free.
 - It does not claim all Windows environments need the exact same workarounds.

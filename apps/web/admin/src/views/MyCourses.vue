@@ -14,16 +14,16 @@
       >
         <template #header>
           <div class="quota-card-header-row">
-            <span>各课程 · LLM 日额度（按课程分别统计）</span>
+            <span>全站 LLM 日额度 · 课程归因</span>
             <el-button size="small" :loading="quotasLoading" @click="loadStudentQuotasSummary">刷新</el-button>
           </div>
         </template>
         <div v-loading="quotasLoading" class="quota-body">
           <p v-if="quotasSummary?.uses_personal_override" class="quota-line quota-hint">
-            当前账号使用管理员单独配置的日 token 上限；各课程条形图共用上限制，用量按课程分别累计。
+            当前账号使用管理员单独配置的日 token 上限；下方课程条目仅显示今天用量归因，共用同一个全站额度池。
           </p>
           <p v-else-if="quotasSummary?.global_default_daily_student_tokens != null" class="quota-line quota-hint muted">
-            全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}（各课用量独立统计）。
+            全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}；今日已用 {{ quotaSummaryUsed }}，剩余 {{ quotaSummaryRemaining }}。
           </p>
           <template v-if="quotasSummary?.courses?.length">
             <div
@@ -35,7 +35,7 @@
               <div class="quota-course-title">
                 <span class="quota-course-name">{{ row.subject_name }}</span>
                 <span class="quota-course-nums">
-                  已用 {{ row.student_used_tokens_today ?? 0 }} / 限额 {{ row.daily_student_token_limit ?? '—' }}
+                  今日总用 {{ row.student_used_tokens_today ?? 0 }} / 限额 {{ row.daily_student_token_limit ?? '—' }}
                   <span v-if="row.student_remaining_tokens_today != null" class="muted">
                     · 剩余 {{ row.student_remaining_tokens_today }}
                   </span>
@@ -49,7 +49,7 @@
                 class="quota-progress"
               />
               <p class="quota-subline muted">
-                统计日 {{ row.usage_date }}（{{ row.quota_timezone }}）
+                本课归因 {{ row.course_used_tokens_today ?? 0 }} token · 统计日 {{ row.usage_date }}（{{ row.quota_timezone }}）
               </p>
             </div>
           </template>
@@ -138,6 +138,48 @@
           </template>
         </el-table-column>
       </el-table>
+      <div v-loading="electiveLoading" class="catalog-mobile-list">
+        <el-empty v-if="!electiveCatalog.length" description="暂无进行中的课程" />
+        <article v-for="row in electiveCatalog" v-else :key="row.id" class="catalog-mobile-item">
+          <div class="catalog-mobile-item__main">
+            <div class="catalog-mobile-item__title-row">
+              <strong>{{ row.name }}</strong>
+              <el-tag :type="row.course_type === 'elective' ? 'warning' : 'success'" size="small">
+                {{ row.course_type === 'elective' ? '选修' : '必修' }}
+              </el-tag>
+            </div>
+            <div class="catalog-mobile-item__meta">
+              <span>{{ row.class_name || '未分配班级' }}</span>
+              <span>{{ row.teacher_name || '未分配教师' }}</span>
+            </div>
+            <p>{{ row.enrollment_hint || '暂无选课说明' }}</p>
+          </div>
+          <div class="catalog-mobile-item__action">
+            <el-button
+              v-if="row.course_type === 'elective' && !row.is_enrolled"
+              type="primary"
+              size="small"
+              :disabled="!row.can_self_enroll_elective"
+              :loading="selfEnrollingId === row.id"
+              @click="selfEnroll(row)"
+            >
+              选课
+            </el-button>
+            <el-button
+              v-else-if="row.course_type === 'elective' && row.is_enrolled"
+              type="danger"
+              plain
+              size="small"
+              :disabled="!isElectiveEnrollment(row.id)"
+              :loading="selfDroppingId === row.id"
+              @click="selfDrop(row)"
+            >
+              退选
+            </el-button>
+            <span v-else class="muted-inline">-</span>
+          </div>
+        </article>
+      </div>
     </el-card>
 
     <el-row :gutter="20" v-loading="loading">
@@ -377,6 +419,9 @@ const rules = {
 const activeCourses = computed(() => courses.value.filter(course => course.status !== 'completed'))
 const completedCourses = computed(() => courses.value.filter(course => course.status === 'completed'))
 const canCreateCourse = computed(() => userStore.isTeacher || userStore.isClassTeacher)
+const quotaSummaryUsed = computed(() => quotasSummary.value?.student_used_tokens_today ?? 0)
+const quotaSummaryLimit = computed(() => quotasSummary.value?.daily_student_token_limit ?? quotasSummary.value?.global_default_daily_student_tokens ?? 0)
+const quotaSummaryRemaining = computed(() => quotasSummary.value?.student_remaining_tokens_today ?? Math.max(0, quotaSummaryLimit.value - quotaSummaryUsed.value))
 const rosterSummary = computed(() =>
   rosterStudents.value.length
     ? `已导入 ${rosterStudents.value.length} 名学生`
@@ -482,8 +527,8 @@ const loadStudentQuotasSummary = async () => {
 const isCurrentCourseId = id => String(userStore.selectedCourse?.id || '') === String(id || '')
 
 const quotaBarPercent = row => {
-  const lim = Number(row?.daily_student_token_limit)
-  const used = Number(row?.student_used_tokens_today ?? 0)
+  const lim = Number(row?.daily_student_token_limit ?? quotaSummaryLimit.value)
+  const used = Number(row?.student_used_tokens_today ?? quotaSummaryUsed.value)
   if (!lim || lim <= 0) {
     return 0
   }
@@ -820,6 +865,8 @@ watch(
 <style scoped>
 .courses-page {
   padding: 24px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .page-header {
@@ -829,6 +876,7 @@ watch(
   flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 24px;
+  min-width: 0;
 }
 
 .page-title {
@@ -847,6 +895,7 @@ watch(
   width: 100%;
   max-width: 720px;
   margin-bottom: 16px;
+  min-width: 0;
 }
 
 .quota-card-header-row {
@@ -854,6 +903,13 @@ watch(
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.quota-card-header-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .quota-hint {
@@ -864,10 +920,11 @@ watch(
 .quota-course-block {
   margin-top: 16px;
   padding: 14px 16px;
-  border-radius: 14px;
+  border-radius: var(--wa-radius-lg);
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border: 1px solid #e2e8f0;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  min-width: 0;
 }
 
 .quota-course-block--current {
@@ -885,13 +942,16 @@ watch(
 }
 
 .quota-course-name {
+  min-width: 0;
   font-weight: 600;
   color: #0f172a;
+  overflow-wrap: anywhere;
 }
 
 .quota-course-nums {
   font-size: 13px;
   color: #475569;
+  overflow-wrap: anywhere;
 }
 
 .quota-progress :deep(.el-progress-bar__outer) {
@@ -924,12 +984,92 @@ watch(
 
 .elective-catalog-card {
   margin-bottom: 20px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.elective-catalog-card :deep(.el-card__body) {
+  overflow-x: auto;
+}
+
+.elective-catalog-card :deep(.el-table) {
+  min-width: 870px;
+}
+
+.catalog-mobile-list {
+  display: none;
+}
+
+.catalog-mobile-item {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.catalog-mobile-item:last-child {
+  border-bottom: none;
+}
+
+.catalog-mobile-item__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.catalog-mobile-item__title-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.catalog-mobile-item__title-row strong {
+  min-width: 0;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.catalog-mobile-item__meta {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.catalog-mobile-item__meta span,
+.catalog-mobile-item p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.catalog-mobile-item p {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.catalog-mobile-item__action {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
 }
 
 .elective-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.elective-header span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .elective-tip {
@@ -972,10 +1112,12 @@ watch(
 
 .course-section {
   background: #fff;
-  border-radius: 20px;
+  border-radius: var(--wa-radius-2xl);
   padding: 24px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   margin-bottom: 20px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .section-header {
@@ -997,14 +1139,15 @@ watch(
 
 .course-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 16px;
+  min-width: 0;
 }
 
 .catalog-cover-thumb {
   width: 64px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-md);
   overflow: hidden;
   border: 1px solid #e2e8f0;
 }
@@ -1012,7 +1155,7 @@ watch(
 .course-card-cover {
   margin: -20px -20px 14px;
   height: 120px;
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--wa-radius-xl) var(--wa-radius-xl) 0 0;
   overflow: hidden;
   background: #e2e8f0;
 }
@@ -1029,11 +1172,13 @@ watch(
 
 .course-card {
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border-radius: var(--wa-radius-xl);
   padding: 20px;
   cursor: pointer;
   transition: all 0.2s ease;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .course-card:hover {
@@ -1057,18 +1202,23 @@ watch(
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+  min-width: 0;
 }
 
 .course-card-header h3 {
+  min-width: 0;
   margin: 0;
   font-size: 20px;
   color: #111827;
+  overflow-wrap: anywhere;
 }
 
 .course-tags {
   display: flex;
+  flex: 0 1 auto;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .course-meta {
@@ -1076,6 +1226,12 @@ watch(
   gap: 6px;
   color: #475569;
   font-size: 14px;
+  min-width: 0;
+}
+
+.course-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .course-description {
@@ -1083,17 +1239,79 @@ watch(
   min-height: 42px;
   color: #64748b;
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .course-actions {
   margin-top: 18px;
   display: flex;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 @media (max-width: 768px) {
+  .courses-page {
+    padding: 18px 14px;
+  }
+
   .page-header {
     flex-direction: column;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .page-title {
+    font-size: 26px;
+  }
+
+  .quota-card,
+  .elective-catalog-card {
+    border-radius: var(--wa-radius-lg);
+  }
+
+  .quota-card :deep(.el-card__body),
+  .elective-catalog-card :deep(.el-card__body) {
+    padding: 16px;
+  }
+
+  .elective-catalog-card :deep(.el-table) {
+    display: none;
+  }
+
+  .catalog-mobile-list {
+    display: block;
+  }
+
+  .course-section {
+    border-radius: var(--wa-radius-xl);
+    padding: 20px;
+  }
+
+  .course-card {
+    border-radius: var(--wa-radius-xl);
+    padding: 18px;
+  }
+
+  .course-card-cover {
+    margin: -18px -18px 14px;
+    border-radius: var(--wa-radius-xl) var(--wa-radius-xl) 0 0;
+  }
+
+  .course-card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .course-tags {
+    justify-content: flex-start;
+  }
+
+  .course-actions {
+    justify-content: stretch;
+  }
+
+  .course-actions :deep(.el-button) {
+    width: 100%;
   }
 }
 </style>

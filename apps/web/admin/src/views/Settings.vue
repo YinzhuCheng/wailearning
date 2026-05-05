@@ -1,6 +1,19 @@
 <template>
   <div class="settings-container">
-    <el-card>
+    <div class="settings-section-nav" aria-label="设置页分区导航">
+      <button
+        v-for="section in settingsSections"
+        :key="section.id"
+        type="button"
+        class="settings-section-nav__item"
+        @click="scrollToSettingsSection(section.id)"
+      >
+        <span>{{ section.label }}</span>
+        <small>{{ section.description }}</small>
+      </button>
+    </div>
+
+    <el-card id="settings-section-system" class="settings-section-card">
       <template #header>
         <div class="card-header">
           <span><el-icon><Setting /></el-icon> 系统设置</span>
@@ -57,6 +70,20 @@
           <el-input v-model="form.copyright" placeholder="请输入版权信息" />
         </el-form-item>
 
+        <el-form-item label="默认外观">
+          <div class="appearance-default-field">
+            <el-select v-model="form.appearance_default_preset" data-testid="settings-appearance-default">
+              <el-option
+                v-for="preset in appearancePresetOptions"
+                :key="preset.key"
+                :label="preset.name"
+                :value="preset.key"
+              />
+            </el-select>
+            <div class="field-tip">作为全站默认风格；用户未选择个人风格时生效，个人设置可覆盖。</div>
+          </div>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="saveSettings">
             <el-icon><Select /></el-icon> 保存设置
@@ -68,7 +95,7 @@
       </el-form>
     </el-card>
 
-    <el-card class="preview-card">
+    <el-card id="settings-section-login-preview" class="preview-card settings-section-card">
       <template #header>
         <span><el-icon><View /></el-icon> 登录页面预览</span>
       </template>
@@ -89,7 +116,7 @@
       </div>
     </el-card>
 
-    <el-card class="preview-card">
+    <el-card id="settings-section-llm-presets" class="preview-card settings-section-card">
       <template #header>
         <div class="card-header card-header--space">
           <span><el-icon><Connection /></el-icon> LLM 端点预设</span>
@@ -150,7 +177,7 @@
       </el-table>
     </el-card>
 
-    <el-card class="preview-card">
+    <el-card id="settings-section-llm-quota" class="preview-card settings-section-card">
       <template #header>
         <span><el-icon><Setting /></el-icon> LLM 用量与额度（全平台）</span>
       </template>
@@ -158,7 +185,7 @@
         type="info"
         :closable="false"
         class="llm-notice"
-        title="学生个人日 token 上限由下方默认值或批量覆盖决定；每门课在教师设置的「额度时区」下单独统计用量。下方「额度统计时区」仅用于全局展示与并发策略等，不再统一切分各课用量日。并发数为同时处理的自动评分任务数上限。"
+        title="学生个人日 token 上限由下方默认值或批量覆盖决定；额度统计时区、预占估算和并发任务数统一由本页维护。课程只保留开关、提示词、端点顺序和单次调用边界。"
       />
       <el-form v-loading="llmQuotaLoading" label-width="200px" style="max-width: 640px">
         <el-form-item label="默认每人每日 token">
@@ -169,6 +196,12 @@
         </el-form-item>
         <el-form-item label="额度统计时区">
           <el-input v-model="llmQuotaForm.quota_timezone" data-testid="settings-llm-quota-timezone" placeholder="例如 Asia/Shanghai" />
+        </el-form-item>
+        <el-form-item label="字符/token 估算">
+          <el-input-number v-model="llmQuotaForm.estimated_chars_per_token" data-testid="settings-llm-estimated-chars" :min="0.5" :step="0.5" :precision="1" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="单图 token 估算">
+          <el-input-number v-model="llmQuotaForm.estimated_image_tokens" data-testid="settings-llm-estimated-image" :min="1" :step="100" style="width: 100%" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" data-testid="settings-llm-quota-save" :loading="llmQuotaSaving" @click="saveLlmQuotaPolicy">保存全局策略</el-button>
@@ -292,6 +325,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, Refresh, Select, Setting, UploadFilled, View } from '@element-plus/icons-vue'
 import { normalizeBrandingText } from '@/utils/branding'
+import { appearancePresets } from '@/utils/theme'
 import { http } from '@/api'
 import api from '@/api'
 
@@ -337,6 +371,8 @@ const llmQuotaSaving = ref(false)
 const llmQuotaForm = reactive({
   default_daily_student_tokens: 100000,
   quota_timezone: 'Asia/Shanghai',
+  estimated_chars_per_token: 4.0,
+  estimated_image_tokens: 850,
   max_parallel_grading_tasks: 3
 })
 const bulkQuotaLoading = ref(false)
@@ -354,8 +390,11 @@ const form = ref({
   system_logo: '',
   system_intro: '面向大学生的教学管理系统',
   copyright: '(c) 2026 BIMSA-CLASS',
-  use_bing_background: true
+  use_bing_background: true,
+  appearance_default_preset: 'professional-blue'
 })
+
+const appearancePresetOptions = appearancePresets
 
 const presetForm = reactive({
   name: '',
@@ -370,6 +409,36 @@ const presetForm = reactive({
 })
 
 const originalForm = ref({})
+
+const settingsSections = [
+  {
+    id: 'settings-section-system',
+    label: '系统资料',
+    description: '名称、Logo、背景'
+  },
+  {
+    id: 'settings-section-login-preview',
+    label: '登录预览',
+    description: '校验品牌呈现'
+  },
+  {
+    id: 'settings-section-llm-presets',
+    label: 'LLM 端点',
+    description: '模型与连通性'
+  },
+  {
+    id: 'settings-section-llm-quota',
+    label: '用量额度',
+    description: '全局与批量策略'
+  }
+]
+
+const scrollToSettingsSection = id => {
+  document.getElementById(id)?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  })
+}
 
 const backgroundStyle = computed(() => {
   if (form.value.login_background) {
@@ -400,7 +469,8 @@ const fetchSettings = async () => {
       system_logo: settingsData.system_logo || '',
       system_intro: settingsData.system_intro || '面向大学生的教学管理系统',
       copyright: settingsData.copyright || '(c) 2026 BIMSA-CLASS',
-      use_bing_background: settingsData.use_bing_background === 'true'
+      use_bing_background: settingsData.use_bing_background === 'true',
+      appearance_default_preset: settingsData.appearance_default_preset || 'professional-blue'
     }
     originalForm.value = { ...form.value }
   } catch (error) {
@@ -416,6 +486,8 @@ const fetchLlmQuotaPolicy = async () => {
     const row = await api.llmSettings.getGlobalQuotaPolicy()
     llmQuotaForm.default_daily_student_tokens = row.default_daily_student_tokens ?? 100000
     llmQuotaForm.quota_timezone = row.quota_timezone || 'Asia/Shanghai'
+    llmQuotaForm.estimated_chars_per_token = row.estimated_chars_per_token ?? 4.0
+    llmQuotaForm.estimated_image_tokens = row.estimated_image_tokens ?? 850
     llmQuotaForm.max_parallel_grading_tasks = row.max_parallel_grading_tasks ?? 3
   } catch (error) {
     ElMessage.error(`获取 LLM 额度策略失败：${formatApiError(error)}`)
@@ -430,6 +502,8 @@ const saveLlmQuotaPolicy = async () => {
     await api.llmSettings.updateGlobalQuotaPolicy({
       default_daily_student_tokens: llmQuotaForm.default_daily_student_tokens,
       quota_timezone: (llmQuotaForm.quota_timezone || 'Asia/Shanghai').trim(),
+      estimated_chars_per_token: llmQuotaForm.estimated_chars_per_token,
+      estimated_image_tokens: llmQuotaForm.estimated_image_tokens,
       max_parallel_grading_tasks: llmQuotaForm.max_parallel_grading_tasks
     })
     ElMessage.success('LLM 全局额度策略已保存')
@@ -484,7 +558,10 @@ const fetchPresets = async () => {
 const saveSettings = async () => {
   saving.value = true
   try {
-    await http.post('/settings/batch-update', form.value)
+    await http.post('/settings/batch-update', {
+      ...form.value,
+      use_bing_background: form.value.use_bing_background ? 'true' : 'false'
+    })
     ElMessage.success('设置保存成功')
     originalForm.value = { ...form.value }
   } catch (error) {
@@ -675,23 +752,104 @@ onMounted(() => {
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.settings-container :deep(.el-card) {
+  border-radius: var(--wa-radius-lg);
+  overflow: hidden;
+}
+
+.settings-container :deep(.el-card__body) {
+  min-width: 0;
+}
+
+.settings-container :deep(.el-form) {
+  min-width: 0;
+}
+
+.settings-section-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--wa-radius-lg);
+  background: rgba(248, 250, 252, 0.94);
+  backdrop-filter: blur(8px);
+}
+
+.settings-section-nav__item {
+  min-width: 0;
+  border: 1px solid #dbeafe;
+  border-radius: var(--wa-radius-md);
+  background: #fff;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 10px 12px;
+  text-align: left;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.settings-section-nav__item:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08);
+}
+
+.settings-section-nav__item span,
+.settings-section-nav__item small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-section-nav__item span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settings-section-nav__item small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.settings-section-card {
+  scroll-margin-top: 92px;
 }
 
 .card-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-size: 18px;
   font-weight: 700;
 }
 
 .card-header--space {
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card-header span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .logo-upload,
 .background-upload {
   width: 100%;
+  min-width: 0;
 }
 
 .logo-preview,
@@ -705,15 +863,21 @@ onMounted(() => {
 }
 
 .background-preview img {
-  max-width: 400px;
+  max-width: min(400px, 100%);
   max-height: 200px;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-md);
 }
 
 .field-tip {
   margin-top: 8px;
   font-size: 12px;
   color: #909399;
+}
+
+.appearance-default-field {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 8px;
 }
 
 .switch-group {
@@ -724,18 +888,20 @@ onMounted(() => {
 
 .preview-card {
   margin-top: 20px;
+  min-width: 0;
 }
 
 .login-preview {
   background: #f5f7fa;
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--wa-radius-md);
+  overflow: hidden;
 }
 
 .preview-background {
   width: 100%;
   height: 400px;
-  border-radius: 12px;
+  border-radius: var(--wa-radius-xl);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -746,8 +912,9 @@ onMounted(() => {
 .preview-login-box {
   background: rgba(255, 255, 255, 0.95);
   padding: 40px;
-  border-radius: 12px;
-  width: 350px;
+  border-radius: var(--wa-radius-lg);
+  width: min(350px, 100%);
+  min-width: 0;
   text-align: center;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
@@ -764,12 +931,14 @@ onMounted(() => {
 .preview-title {
   margin: 10px 0;
   color: #333;
+  overflow-wrap: anywhere;
 }
 
 .preview-intro {
   color: #666;
   font-size: 14px;
   margin-bottom: 20px;
+  overflow-wrap: anywhere;
 }
 
 .preview-footer {
@@ -784,10 +953,76 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.preview-card :deep(.el-table) {
+  min-width: 980px;
+}
+
+.preview-card :deep(.el-table__body-wrapper),
+.preview-card :deep(.el-table__header-wrapper) {
+  min-width: 0;
+}
+
+.preview-card :deep(.el-card__body) {
+  overflow-x: auto;
+}
+
 @media (max-width: 768px) {
+  .settings-container {
+    padding: 16px 14px;
+  }
+
+  .settings-section-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0 -2px 14px;
+    padding: 8px;
+  }
+
+  .settings-section-nav__item {
+    padding: 9px 10px;
+  }
+
+  .settings-section-card {
+    scroll-margin-top: 126px;
+  }
+
+  .settings-container :deep(.el-card__body) {
+    padding: 16px;
+  }
+
+  .settings-container :deep(.el-form-item) {
+    display: block;
+  }
+
+  .settings-container :deep(.el-form-item__label) {
+    display: block;
+    width: 100% !important;
+    margin-bottom: 8px;
+    text-align: left;
+  }
+
+  .settings-container :deep(.el-form-item__content) {
+    display: block;
+    margin-left: 0 !important;
+    min-width: 0;
+  }
+
   .card-header--space {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .login-preview {
+    padding: 12px;
+  }
+
+  .preview-background {
+    min-height: 360px;
+    height: auto;
+    padding: 18px;
+  }
+
+  .preview-login-box {
+    padding: 24px 18px;
   }
 }
 </style>

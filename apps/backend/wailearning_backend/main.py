@@ -20,6 +20,7 @@ from apps.backend.wailearning_backend.db.database import Base, SessionLocal, eng
 from apps.backend.wailearning_backend.llm_grading import start_grading_worker, worker_manager
 from apps.backend.wailearning_backend.api.routers import (
     attendance,
+    appearance,
     auth,
     classes,
     dashboard,
@@ -94,6 +95,7 @@ app.include_router(classes.router)
 app.include_router(students.router)
 app.include_router(scores.router)
 app.include_router(attendance.router)
+app.include_router(appearance.router)
 app.include_router(dashboard.router)
 app.include_router(subjects.router)
 app.include_router(users.router)

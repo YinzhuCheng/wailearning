@@ -208,6 +208,9 @@ def test_get_put_course_config(_, __, client: TestClient, admin_headers, teacher
     assert g.status_code == 200
     data = g.json()
     assert data["is_enabled"] is True
+    assert "quota_timezone" not in data
+    assert "estimated_chars_per_token" not in data
+    assert "estimated_image_tokens" not in data
     assert len(data["endpoints"]) == 1
     assert "visual_validation_notice" in data and len(data["visual_validation_notice"]) > 0
 

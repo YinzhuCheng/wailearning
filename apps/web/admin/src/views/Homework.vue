@@ -31,7 +31,7 @@
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
-      <el-card shadow="never">
+      <el-card shadow="never" class="homework-list-card">
         <el-table
           ref="homeworkTableRef"
           :data="homeworks"
@@ -39,6 +39,24 @@
           row-key="id"
           @selection-change="onHomeworkSelectionChange"
         >
+          <template #empty>
+            <div class="homework-empty-state">
+              <div class="homework-empty-state__title">
+                {{ userStore.isStudent ? '暂无课程作业' : '当前课程还没有作业' }}
+              </div>
+              <p>
+                {{ userStore.isStudent ? '老师发布作业后会显示在这里。' : '发布第一份作业后，学生提交、评分任务和批量策略会在这里汇总。' }}
+              </p>
+              <el-button
+                v-if="!userStore.isStudent"
+                type="primary"
+                data-testid="homework-empty-create"
+                @click="openCreateDialog"
+              >
+                发布作业
+              </el-button>
+            </div>
+          </template>
           <el-table-column
             v-if="!userStore.isStudent"
             type="selection"
@@ -217,7 +235,7 @@
           <el-switch v-model="form.auto_grading_enabled" />
           <div class="attachment-help">
             启用后，学生新提交会进入异步评分队列；展示分数始终按最高分规则计算。模型会分段读取作业说明、学生文字与附件（PDF/图片/部分文本与
-            ipynb 等）；过大内容可能被截断。日 token 限额在课程设置中配置。
+            ipynb 等）；过大内容可能被截断。日 token 限额、统计时区与预占估算由管理员在系统设置中统一配置。
           </div>
         </el-form-item>
         <el-form-item v-if="form.auto_grading_enabled" label="LLM 路由">
@@ -853,6 +871,42 @@ watch(selectedCourse, () => {
   gap: 6px;
 }
 
+.homework-list-card {
+  overflow: hidden;
+}
+
+.homework-list-card :deep(.el-card__body) {
+  overflow-x: auto;
+}
+
+.homework-list-card :deep(.el-table) {
+  min-width: 1060px;
+}
+
+.homework-empty-state {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 16px;
+  color: #64748b;
+  text-align: center;
+}
+
+.homework-empty-state__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.homework-empty-state p {
+  max-width: 420px;
+  margin: 0;
+  line-height: 1.6;
+}
+
 .late-rules {
   display: flex;
   flex-direction: column;
@@ -862,6 +916,14 @@ watch(selectedCourse, () => {
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
+  }
+
+  .homework-page {
+    overflow-x: hidden;
+  }
+
+  .homework-list-card :deep(.el-card__body) {
+    padding: 12px;
   }
 }
 </style>

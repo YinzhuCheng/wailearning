@@ -30,6 +30,7 @@ from apps.backend.wailearning_backend.db.models import (
     Subject,
     SystemSetting,
     User,
+    UserAppearanceStyle,
     UserRole,
 )
 
@@ -41,6 +42,7 @@ DEFAULT_SYSTEM_SETTINGS = [
     ("system_intro", "University teaching management platform", "Short introduction shown on the login page."),
     ("copyright", "(c) 2026 BIMSA-CLASS", "Footer copyright text."),
     ("use_bing_background", "true", "Whether the login page should use the daily Bing background."),
+    ("appearance_default_preset", "professional-blue", "Default admin appearance preset for users who follow system style."),
 ]
 
 DEFAULT_LLM_PRESET_NAME = "gpt-5.4"
@@ -96,6 +98,22 @@ def ensure_schema_updates() -> None:
         """,
         "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
+        """
+        CREATE TABLE IF NOT EXISTS user_appearance_styles (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name VARCHAR(80) NOT NULL,
+            source VARCHAR(24) NOT NULL DEFAULT 'custom',
+            preset_key VARCHAR(80),
+            config JSON NOT NULL DEFAULT '{}',
+            is_selected BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT uq_user_appearance_style_name UNIQUE(user_id, name)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_user_appearance_styles_user_id ON user_appearance_styles(user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_user_appearance_styles_is_selected ON user_appearance_styles(is_selected)",
         """
         CREATE TABLE IF NOT EXISTS homework_grade_appeals (
             id INTEGER PRIMARY KEY,
@@ -305,11 +323,17 @@ def ensure_schema_updates() -> None:
             id INTEGER PRIMARY KEY,
             default_daily_student_tokens INTEGER NOT NULL DEFAULT 100000,
             quota_timezone VARCHAR NOT NULL DEFAULT 'UTC',
+            estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0,
+            estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             max_parallel_grading_tasks INTEGER NOT NULL DEFAULT 3,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0",
+        "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS estimated_image_tokens INTEGER NOT NULL DEFAULT 850",
         "ALTER TABLE llm_global_quota_policies ADD COLUMN IF NOT EXISTS max_parallel_grading_tasks INTEGER NOT NULL DEFAULT 3",
+        "UPDATE llm_global_quota_policies SET estimated_chars_per_token = 4.0 WHERE estimated_chars_per_token IS NULL",
+        "UPDATE llm_global_quota_policies SET estimated_image_tokens = 850 WHERE estimated_image_tokens IS NULL",
         "UPDATE llm_global_quota_policies SET max_parallel_grading_tasks = 3 WHERE max_parallel_grading_tasks IS NULL",
         """
         CREATE TABLE IF NOT EXISTS llm_student_token_overrides (
@@ -580,13 +604,17 @@ def _ensure_default_llm_endpoint_preset() -> None:
 
 
 def _ensure_llm_global_quota_policy_row() -> None:
-    """Single global policy row (id=1) for default per-student daily cap and billing calendar timezone."""
+    """Single global policy row (id=1) for LLM daily caps, estimation, and billing calendar timezone."""
     db = SessionLocal()
     try:
         row = db.query(LLMGlobalQuotaPolicy).filter(LLMGlobalQuotaPolicy.id == 1).first()
         if row:
             if getattr(row, "max_parallel_grading_tasks", None) is None:
                 row.max_parallel_grading_tasks = 3
+            if getattr(row, "estimated_chars_per_token", None) is None:
+                row.estimated_chars_per_token = 4.0
+            if getattr(row, "estimated_image_tokens", None) is None:
+                row.estimated_image_tokens = 850
             db.commit()
             return
         db.add(
@@ -594,6 +622,8 @@ def _ensure_llm_global_quota_policy_row() -> None:
                 id=1,
                 default_daily_student_tokens=100_000,
                 quota_timezone="Asia/Shanghai",
+                estimated_chars_per_token=4.0,
+                estimated_image_tokens=850,
                 max_parallel_grading_tasks=3,
             )
         )

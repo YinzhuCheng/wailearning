@@ -1,0 +1,2123 @@
+# UI/UX Audit And Responsive Repair Notes
+
+## Purpose
+
+This document records the current UI/UX audit workflow and the first responsive
+repair pass for the admin SPA. It is written for future LLM coding agents first:
+it intentionally preserves operational detail, environment assumptions,
+validation evidence, and remaining follow-up context instead of compressing the
+work into a short human-facing changelog.
+
+The specific repair pass documented here targeted visual overflow and layout
+misalignment found in PostgreSQL-backed Playwright screenshots. The highest-risk
+failure was the student courses page on a 390 px mobile viewport: the dark
+sidebar remained in the document flow at collapsed width, the main content was
+compressed, and student course cards overflowed their white section container.
+
+## Required Reading Before Continuing UI Work
+
+Before continuing UI/UX work in this repository, read these files in order:
+
+1. `README.md`
+2. `docs/README.md`
+3. `docs/architecture/REPOSITORY_STRUCTURE.md`
+4. `docs/architecture/SYSTEM_OVERVIEW.md`
+5. `docs/development/DEVELOPMENT_AND_TESTING.md`
+6. `docs/development/TEST_EXECUTION_PITFALLS.md`
+7. `docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`
+8. this document
+
+Rationale:
+
+- the admin SPA is only one part of a larger FastAPI + Vue + PostgreSQL system;
+- local artifact directories such as `.e2e-run/`, `frontend/`, `dist/`, and
+  Playwright screenshots are not source layout;
+- Windows + PowerShell can mis-render tracked UTF-8 Chinese text even when file
+  content is valid, so do not copy terminal-rendered Chinese strings back into
+  source files;
+- serious browser UI evidence should use a PostgreSQL-backed backend, not the
+  default SQLite-backed Playwright fast path, when the result is used as a
+  production-aligned signal.
+
+## Evidence Source And Scope
+
+The UI observations in this pass came from real Playwright screenshots against:
+
+- admin frontend: `apps/web/admin`;
+- backend entrypoint: `apps.backend.wailearning_backend.main:app`;
+- database: a disposable local PostgreSQL database;
+- seed route: `POST /api/e2e/dev/reset-scenario`;
+- roles observed: admin, teacher, and student;
+- viewport sizes:
+  - desktop pages around `1440 x 1000`;
+  - mobile student courses page at `390 x 844`.
+
+The audit did not rely on static code reading alone. Static inspection was used
+to identify the implementation source of the screenshot failures, but browser
+screenshots were the deciding evidence for layout behavior.
+
+## Local Artifact Contract
+
+The audit workflow creates local files under `.e2e-run/`. This directory is
+ignored by git and must stay out of tracked source.
+
+Common local artifact categories:
+
+- local PostgreSQL binary runtime;
+- local PostgreSQL data directory;
+- PostgreSQL, backend, and Vite logs;
+- Playwright screenshots;
+- Playwright DOM/text snapshots;
+- local handoff notes;
+- one-off audit launch scripts.
+
+Tracked documentation must not include machine-specific absolute paths. Use
+portable placeholders such as:
+
+- `<repo>`;
+- `<user-home>`;
+- `<artifact-dir>`;
+- `<api-port>`;
+- `<ui-port>`;
+- `<postgres-port>`.
+
+Local handoff files inside `.e2e-run/` may contain real paths when the next
+operator is on the same machine and needs exact locations.
+
+## PostgreSQL-Backed Screenshot Workflow
+
+The recommended serious-audit shape is:
+
+1. Start a throwaway PostgreSQL cluster or use a known disposable local
+   PostgreSQL database.
+2. Start the backend with `DATABASE_URL` pointing at that disposable database.
+3. Enable only the guarded E2E seed route:
+   - `E2E_DEV_SEED_ENABLED=true`;
+   - `E2E_DEV_SEED_TOKEN=<test-token>`.
+4. Disable unrelated runtime noise:
+   - `INIT_DEFAULT_DATA=false`;
+   - `ENABLE_LLM_GRADING_WORKER=false`.
+5. Start Vite from `apps/web/admin` with `VITE_PROXY_TARGET` pointing at the
+   backend.
+6. Reset the scenario with the same E2E seed token.
+7. Capture screenshots for the target role/page/viewport combinations.
+8. Store screenshots under `.e2e-run/` and keep them untracked.
+
+The local audit script used in this pass follows that shape. It supports a
+filename prefix environment variable so before and after screenshots can coexist:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:UI_UX_AUDIT_PREFIX='after'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+Notes for future agents:
+
+- `.e2e-run\ui-ux-audit\postgres-ui-audit.cjs` is a local ignored script, not a
+  maintained test suite file.
+- The script starts PostgreSQL, the backend, Vite, and Playwright in one process
+  lifetime because background processes were unreliable across separate
+  sandboxed tool calls on Windows.
+- In the observed Windows automation environment, Node child-process spawning
+  required execution outside the default sandbox; otherwise Vite, esbuild, or
+  Playwright can fail with `spawn EPERM`.
+- The local script defaults to `UI_UX_AUDIT_PREFIX=before` when the variable is
+  absent. Set the prefix explicitly for after screenshots so the original
+  baseline remains available.
+
+## Screenshot Set Used In This Repair Pass
+
+The baseline and after screenshots used this naming pattern:
+
+```text
+<prefix>-login-postgres.png
+<prefix>-admin-students-postgres.png
+<prefix>-admin-settings-postgres.png
+<prefix>-teacher-dashboard-postgres.png
+<prefix>-teacher-homework-postgres.png
+<prefix>-student-courses-postgres.png
+<prefix>-student-course-home-postgres.png
+<prefix>-mobile-student-courses-postgres.png
+```
+
+The matching JSON snapshots use the same base names with `.json`.
+
+The highest-value comparison in this pass was:
+
+- `before-mobile-student-courses-postgres.png`;
+- `after-mobile-student-courses-postgres.png`.
+
+## Findings From The Baseline Mobile Screenshot
+
+The original mobile student courses screenshot showed these concrete issues:
+
+1. The dark left sidebar still consumed layout width at `390 px`.
+2. The main content was squeezed into the remaining width instead of using the
+   full viewport.
+3. The current-course header chip had very little horizontal room for a long
+   seeded course name.
+4. The LLM quota card remained readable, but it was unnecessarily cramped by the
+   sidebar.
+5. The school-wide course catalog table collapsed poorly on mobile.
+6. The active course card overflowed horizontally from its white section
+   container.
+7. Long seeded course names and metadata were able to force awkward wrapping
+   without enough `min-width: 0` protection.
+8. The primary course action button was visually pushed toward the edge and in
+   the baseline screenshot appeared partially inaccessible.
+
+The observed cause was not one single CSS rule. It was the combination of:
+
+- `Layout.vue` treating mobile as the same collapsed-sidebar layout used on
+  desktop;
+- flex/grid children missing `min-width: 0`;
+- table components being allowed to participate in page-level width calculation;
+- course cards using `minmax(280px, 1fr)` and internal horizontal title/tag
+  layout without a small-screen fallback;
+- long seeded names exposing width assumptions that shorter hand-entered names
+  might hide.
+
+## Source Changes Made
+
+### `apps/web/admin/src/views/Layout.vue`
+
+The shared shell was updated so mobile side navigation no longer consumes normal
+document-flow width.
+
+Key changes:
+
+- added `isMobile`;
+- added computed `sidebarWidth`;
+- mobile width now becomes `0px` when collapsed and `240px` when open;
+- desktop behavior remains `72px` collapsed and `240px` expanded;
+- added a mobile menu button in the header;
+- added an overlay backdrop when the mobile sidebar is open;
+- made the mobile sidebar fixed-position with a shadow;
+- added `min-width: 0` to the main nested container, header groups, and main
+  content;
+- constrained and ellipsized long current-course/class context text.
+
+Behavioral intent:
+
+- mobile users should get the full viewport width for content by default;
+- the sidebar should be available as an overlay, not as a permanent column;
+- desktop users should keep the existing collapsible sidebar behavior.
+
+### `apps/web/admin/src/views/MyCourses.vue`
+
+The student/teacher course selection page received the largest responsive
+repair because it contained the visible mobile overflow.
+
+Key changes:
+
+- added page-level `overflow-x: hidden` and `min-width: 0` protection;
+- made quota card header and quota rows wrap safely;
+- kept the desktop course catalog table but prevented it from expanding the
+  page width;
+- added a mobile-only course catalog card list;
+- hid the Element Plus table on mobile and displayed mobile catalog cards
+  instead;
+- changed course grid columns from `minmax(280px, 1fr)` to
+  `minmax(min(280px, 100%), 1fr)`;
+- added `min-width: 0` and `overflow-wrap: anywhere` to card titles, metadata,
+  descriptions, and quota labels;
+- stacked course-card title/tags on mobile;
+- made course action buttons fill the card width on mobile.
+
+Behavioral intent:
+
+- desktop keeps the information-dense table;
+- mobile gets scannable course cards with the same enroll/drop actions;
+- long seeded names are treated as realistic stress input, not as an excuse to
+  let layout overflow.
+
+### `apps/web/admin/src/views/Homework.vue`
+
+The teacher homework page was not the primary overflow failure, but the baseline
+screenshot showed a weak empty table experience.
+
+Key changes:
+
+- added `homework-list-card` around the homework table;
+- constrained the table to card-internal horizontal scrolling;
+- added a custom table empty slot;
+- teacher empty state now explains that submissions, grading tasks, and batch
+  policies will appear after the first assignment;
+- teacher empty state includes a primary `homework-empty-create` button;
+- student empty state uses student-appropriate waiting copy;
+- mobile card padding is reduced and page overflow is constrained.
+
+Behavioral intent:
+
+- empty teacher pages should still explain the next useful action;
+- wide assignment tables should not break the page container on smaller screens.
+
+### `apps/web/admin/src/views/Settings.vue`
+
+The admin settings page is long and dense. This pass did not perform a full
+tabbed information-architecture refactor, but it added containment rules so the
+existing layout behaves better across widths.
+
+Key changes:
+
+- added page-level `min-width: 0` and `overflow-x: hidden`;
+- constrained card body, form, upload blocks, preview image, and preview login
+  box widths;
+- made card headers wrap instead of forcing horizontal overflow;
+- made LLM preset tables scroll within the card body;
+- changed mobile form layout so labels and controls stack vertically;
+- reduced mobile settings padding;
+- made login preview height flexible on mobile.
+
+Behavioral intent:
+
+- preserve the existing admin precision and detailed settings surface;
+- prevent tables, preview cards, and long headers from creating page-level
+  horizontal overflow;
+- leave a larger settings-page restructuring for a dedicated pass.
+
+### Follow-up: settings section navigation
+
+A subsequent incremental pass added a compact settings-section navigator at the
+top of `Settings.vue`.
+
+Key changes:
+
+- added four section buttons:
+  - system identity;
+  - login preview;
+  - LLM endpoint presets;
+  - LLM quota and usage policy;
+- assigned stable section ids to the existing settings cards;
+- added a `settingsSections` metadata array and `scrollToSettingsSection`
+  helper;
+- used `scrollIntoView({ behavior: 'smooth', block: 'start' })` for in-page
+  jumps;
+- kept the controls as native `<button>` elements instead of turning the page
+  into a tabbed state machine;
+- kept all existing settings content visible in the document flow;
+- added sticky, compact, responsive styling so desktop uses four columns and
+  mobile uses two columns.
+
+Reasoning:
+
+- the settings page is an operational surface, so the change should help
+  scanning without hiding detailed configuration behind new state;
+- anchoring existing cards avoids changing data loading, form submission, LLM
+  preset validation, or quota behavior;
+- native buttons preserve keyboard reachability without introducing Element Plus
+  tab state that would need additional persistence and test coverage;
+- this is an intermediate improvement, not a substitute for a future full
+  settings information-architecture pass.
+
+## Validation Performed
+
+### Static patch validation
+
+Run from repository root:
+
+```powershell
+git diff --check
+```
+
+Result:
+
+- passed.
+
+### PostgreSQL-backed Playwright screenshot audit
+
+Run from repository root with local Playwright browser cache and the local
+ignored audit script:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:UI_UX_AUDIT_PREFIX='after'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+Result:
+
+- PostgreSQL started on the local audit port;
+- backend started on the local audit API port;
+- Vite started on the local audit UI port;
+- E2E seed reset succeeded;
+- all eight after screenshots were captured.
+
+Observed after-state:
+
+- the `390 x 844` student courses page no longer has a persistent left sidebar
+  consuming width;
+- active course cards remain within their section container;
+- school-wide course catalog uses mobile cards instead of a crushed table;
+- the settings page remains long but no longer depends on page-level overflow
+  for its LLM table;
+- the settings page now exposes a compact top section navigator for system
+  identity, login preview, LLM endpoints, and quota policy;
+- the teacher homework page shows a purposeful empty state with a primary next
+  action.
+
+### Admin frontend production build
+
+Run from `apps/web/admin`:
+
+```powershell
+npm.cmd run build
+```
+
+Result:
+
+- Vite build completed successfully;
+- `2363` modules transformed;
+- build emitted only existing category warnings:
+  - Vite CJS Node API deprecation warning;
+  - large chunk warnings over `500 kB`.
+
+The warnings were not introduced as functional build failures by this responsive
+repair pass. They remain possible future optimization work, especially around
+large shared chunks and dependencies such as rich markdown rendering and xlsx.
+
+## What This Pass Does Not Claim
+
+This pass does not claim a full UI redesign.
+
+It does not implement:
+
+- the requested blue/green/warm/grayscale theme system;
+- a full settings-page tabs or section-navigation refactor;
+- a new global design-token architecture;
+- a full audit of every admin page at every breakpoint;
+- accessibility remediation beyond layout and basic responsive containment;
+- parent portal UI work.
+
+It does claim that the specific screenshot-observed mobile overflow and card
+misalignment problems on the student courses page were addressed and verified
+with after screenshots.
+
+## Remaining Follow-Ups
+
+Recommended next UI/UX work, in order:
+
+1. Formalize admin SPA design tokens:
+   - spacing scale;
+   - radius scale capped at practical dashboard values;
+   - shadow levels;
+   - typography sizes for dashboard surfaces;
+   - status colors;
+   - theme variants for blue, green, warm, and grayscale.
+2. Refactor settings into tabs or anchored sections:
+   - a compact anchored-section navigator now exists;
+   - remaining work is a deeper information-architecture pass if maintainers
+     want progressive disclosure, per-section save affordances, or persistent
+     active-section state;
+   - do not remove detailed LLM explanations when restructuring, because they
+     encode operational constraints future agents need.
+3. Add maintained Playwright assertions for the mobile layout regressions:
+   - mobile sidebar does not reduce main content width when closed;
+   - `.course-card` bounding boxes stay within viewport;
+   - mobile catalog cards are visible on `/courses`;
+   - desktop catalog table remains visible on desktop.
+4. Review additional table-heavy pages for the same pattern:
+   - `Students.vue`;
+   - `Subjects.vue`;
+   - `Users.vue`;
+   - `Scores.vue`;
+   - `Attendance.vue`.
+5. Consider a maintained screenshot smoke script or Playwright spec instead of
+   relying on a local ignored audit script for future visual checks.
+6. Continue encoding cleanup separately. This pass deliberately avoided touching
+   existing mojibake-like tracked Chinese strings except where new UI text was
+   necessary and inserted directly through patching.
+
+## Incremental Pitfalls And Resolutions From The Follow-Up Pass
+
+This section records additional pitfalls encountered after the first responsive
+repair commit. It is intentionally additive and does not replace the earlier
+PostgreSQL-backed audit notes in this document or
+`docs/development/TEST_EXECUTION_PITFALLS.md`.
+
+### Pitfall: the local audit script originally overwrote baseline screenshots
+
+Observed:
+
+- the local ignored screenshot script initially hard-coded names such as
+  `before-mobile-student-courses-postgres.png`;
+- rerunning it after code changes would overwrite the baseline evidence unless
+  the operator manually copied files elsewhere first.
+
+Resolution:
+
+- the local ignored script under `.e2e-run/` was changed to accept an
+  environment-controlled screenshot prefix;
+- use `UI_UX_AUDIT_PREFIX=after` for post-change screenshots;
+- keep `before-*` and `after-*` screenshots side by side in the ignored artifact
+  directory;
+- do not track the script or screenshots unless maintainers deliberately promote
+  the workflow into a maintained test or tool.
+
+Portable command shape:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:UI_UX_AUDIT_PREFIX='after'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+### Pitfall: desktop containment fixes were not enough for mobile course catalog UX
+
+Observed:
+
+- adding `overflow-x: auto` to the course catalog table stopped page-level
+  horizontal overflow;
+- however, on a `390 px` mobile viewport, the catalog was still a compressed
+  table and was hard to scan;
+- the page was technically contained, but the user experience remained too close
+  to "desktop table squeezed into a phone."
+
+Resolution:
+
+- the desktop Element Plus table was retained for information-dense desktop use;
+- a mobile-only catalog card list was added below the table markup;
+- CSS hides the table on mobile and shows the card list instead;
+- the card list reuses the same enrollment/drop business logic already used by
+  the table, avoiding duplicate API behavior;
+- mobile course names, class names, teacher names, and enrollment hints use
+  `min-width: 0` plus wrapping to handle seeded long names.
+
+### Pitfall: settings-page density needed navigation before a full IA rewrite
+
+Observed:
+
+- the settings page contains system identity controls, login preview, LLM
+  endpoint presets, quota policy, and bulk quota override in one long document;
+- a full tabbed rewrite would be larger and would introduce new state-management
+  and test coverage requirements;
+- hiding detailed LLM explanations would be harmful because those explanations
+  encode operational constraints future agents need.
+
+Resolution:
+
+- a compact anchored section navigator was added at the top of `Settings.vue`;
+- existing cards stayed in the document flow;
+- each card received a stable section id;
+- native `<button>` controls call `scrollIntoView` for smooth in-page jumps;
+- the navigator uses four columns on desktop and two columns on mobile;
+- this improves scanability without changing API calls, save behavior, LLM
+  preset validation, or quota behavior.
+
+### Pitfall: Vite/esbuild build validation can fail under restricted process spawning
+
+Observed:
+
+- `npm.cmd run build` can fail in the default restricted execution environment
+  with `spawn EPERM` while loading Vite/esbuild;
+- the failure is an execution-environment problem, not direct evidence of a
+  Vue/CSS compile error.
+
+Resolution:
+
+- rerun the same build command in the approved execution context when validation
+  matters;
+- treat a successful production build as the syntax/compile gate for Vue template
+  and CSS changes;
+- continue to note large chunk warnings separately from build failures.
+
+Validated result:
+
+- `npm.cmd run build` completed successfully after the responsive and settings
+  navigation changes;
+- the build emitted only existing category warnings:
+  - Vite CJS Node API deprecation;
+  - chunks larger than `500 kB`.
+
+### Pitfall: Windows PowerShell output can display mojibake for tracked Chinese text
+
+Observed:
+
+- reading Vue files through PowerShell can display Chinese text as mojibake even
+  when the underlying tracked file content is valid;
+- patching around those strings by copying terminal output risks corrupting
+  source text.
+
+Resolution:
+
+- avoid rewriting existing Chinese copy when the task is unrelated to encoding
+  cleanup;
+- anchor patches on ASCII identifiers, class names, component names, ids,
+  `data-testid` values, and nearby stable structure;
+- when new UI text is necessary, insert it deliberately through patching rather
+  than copying from terminal-rendered existing text;
+- leave broader mojibake cleanup for a dedicated encoding-safe task.
+
+### Pitfall: local artifact paths are useful for handoff but unsafe for tracked docs
+
+Observed:
+
+- future local agents need exact screenshot, PostgreSQL runtime, browser cache,
+  and handoff paths to resume quickly on the same machine;
+- tracked documentation should not expose user-specific absolute paths.
+
+Resolution:
+
+- tracked docs use placeholders such as `<repo>`, `<user-home>`,
+  `<artifact-dir>`, `<api-port>`, and `<ui-port>`;
+- local handoff documents under `.e2e-run/` may include exact absolute paths;
+- `.e2e-run/`, Vite `dist/`, logs, screenshots, PostgreSQL binaries, and local
+  data directories remain ignored and must not be staged.
+
+## Maintained Responsive Regression Spec
+
+The screenshot audit remains useful for visual inspection, but the mobile
+overflow repairs now also have a maintained Playwright spec:
+
+- `tests/e2e/web-admin/ui-responsive-layout-regression.spec.js`
+
+This spec is intentionally narrow. It does not perform screenshot comparison and
+does not attempt to certify every visual state of the admin SPA. It checks the
+layout invariants that failed in the original mobile screenshot:
+
+- on a `390 x 844` mobile viewport, the collapsed sidebar must not reserve
+  document-flow width;
+- the page must not have document-level horizontal overflow;
+- visible `article.course-card` boxes must remain within the viewport;
+- visible `.catalog-mobile-item` boxes must remain within the viewport;
+- the mobile course catalog card list must be visible while the desktop Element
+  Plus catalog table is hidden;
+- on a desktop viewport, the Element Plus catalog table must remain visible and
+  the mobile card list must remain hidden;
+- on a `390 x 844` mobile viewport, the table-heavy `/students`, `/users`,
+  `/subjects`, `/scores`, and `/attendance` pages must not create document-level
+  horizontal overflow after their wide table or grid surfaces are contained
+  inside cards;
+- on desktop, the sidebar edge handle must hide the navigation rail completely
+  and restore it without leaving the main content offset.
+
+Preferred targeted command from `apps/web/admin`:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:E2E_API_PORT='8112'
+$env:E2E_UI_PORT='3112'
+npx.cmd playwright test ui-responsive-layout-regression.spec.js
+```
+
+Why the example uses isolated ports:
+
+- the default managed Playwright ports in this branch are `8012` for the API and
+  `3012` for the admin UI;
+- on Windows, stale server state or readiness timing can make those defaults
+  fail before any test body runs;
+- in the validation session that added this spec, the default-port run reached
+  the approved execution context but timed out waiting for `webServer` health,
+  while the same spec passed on isolated ports `8112` and `3112`.
+
+Validated result in the adding session:
+
+- initial responsive-course version: `3 passed`, runtime about `17s`;
+- after adding the table-heavy page guard: `4 passed`, runtime about `20s`;
+- after adding the desktop sidebar edge-handle guard: `5 passed`, runtime about
+  `30s`;
+- only the existing Vite CJS Node API deprecation warning was emitted by the
+  web server.
+
+Interpretation guidance:
+
+- if this spec fails inside the default sandbox with `spawn EPERM`, rerun in the
+  approved execution context before diagnosing product code;
+- if this spec times out waiting for `webServer` before tests start, check stale
+  ports and rerun with isolated `E2E_API_PORT` / `E2E_UI_PORT`;
+- if the tests start and then fail on bounding boxes, overflow, or visibility,
+  treat that as a real regression candidate in `Layout.vue` or `MyCourses.vue`;
+- if the table-heavy page case fails only on one route, inspect that route's
+  outer page container, card body containment, toolbar wrapping, and any
+  fixed-width grid/table implementation before changing global layout;
+- if the desktop sidebar handle case fails, inspect `Layout.vue` state
+  separation between `isCollapsed` and `isSidebarHidden`, plus the persisted
+  `wailearning-admin-sidebar-state` localStorage key;
+- this maintained spec complements PostgreSQL-backed screenshot audits. It is a
+  fast guard for the responsive layout contract, not a replacement for real
+  browser observation when continuing the larger UI/UX optimization task.
+
+## Sidebar Hidden / Pull-Out Interaction Follow-Up
+
+The shared admin shell now supports a more explicit hide-and-pull interaction
+for the sidebar in addition to the original icon-collapsed state.
+
+Implemented behavior:
+
+- desktop users can still use the in-sidebar circular collapse button to switch
+  between expanded navigation and the icon-only rail;
+- desktop users can use the fixed left-edge handle to hide the sidebar
+  completely, allowing the main content container to start at the viewport edge;
+- clicking the same edge handle restores the sidebar to the expanded state;
+- desktop sidebar preference is persisted in localStorage under
+  `wailearning-admin-sidebar-state`, with values conceptually matching
+  `expanded`, `collapsed`, and `hidden`;
+- mobile users keep the overlay drawer behavior from the responsive repair pass;
+- on mobile, the same edge handle opens or closes the drawer and never reserves
+  document-flow width;
+- route changes close the mobile drawer so a navigation click does not leave the
+  next page covered by the sidebar.
+
+Implementation notes:
+
+- `Layout.vue` now separates `isCollapsed` from `isSidebarHidden`; avoid
+  re-merging those concepts into one boolean because "icon rail" and "fully
+  hidden" have different layout implications;
+- `sidebarWidth` returns `0px` only for mobile-closed or desktop-hidden states;
+- the edge handle is a native `button` with `aria-label`, `title`, a stable
+  `data-testid`, and an Element Plus arrow icon;
+- the handle is deliberately small and rail-like rather than a text button, so
+  it remains available without becoming another toolbar item;
+- the handle position follows the current sidebar width on desktop and follows
+  the drawer edge on mobile.
+
+Validation:
+
+- `tests/e2e/web-admin/ui-responsive-layout-regression.spec.js` includes a
+  desktop handle test that verifies the sidebar width collapses to zero and the
+  main container x-position returns to the viewport edge;
+- the same spec still verifies the mobile course-page and table-heavy-page
+  no-overflow invariants after the shell change.
+
+## Course Materials Outline Expand / Collapse Follow-Up
+
+The first maintained multi-level directory interaction now lives on the course
+materials page:
+
+- `apps/web/admin/src/views/Materials.vue`;
+- maintained guard: `tests/e2e/web-admin/ui-materials-outline-regression.spec.js`.
+
+Before this pass, the materials chapter tree used Element Plus `el-tree` with
+`default-expand-all`, which made every branch open by default. That was workable
+for small seeds, but it does not scale to course outlines with many chapters,
+subchapters, and material references.
+
+Implemented behavior:
+
+- the chapter sidebar header now includes icon-only controls for "expand all"
+  and "collapse all";
+- both controls use native button semantics through Element Plus buttons,
+  tooltips, `aria-label`, and stable `data-testid` hooks;
+- the old root-chapter creation action remains available to teachers/admins in
+  the same header action group;
+- `default-expand-all` was removed;
+- the tree now uses an explicit `expandedChapterKeys` state;
+- expand/collapse events update `expandedChapterKeys`;
+- the selected chapter path is expanded when the user selects a nested chapter
+  or when a selected chapter is restored from page state;
+- "collapse all" sets the expanded key set to an empty array. This matters
+  because Element Plus treats entries in `default-expanded-keys` as nodes whose
+  children are open; putting top-level ids in the array keeps their children
+  visible and is not a true collapsed outline;
+- "expand all" uses all chapter ids from the current tree;
+- per-course outline state is persisted in localStorage under
+  `wailearning-materials-expanded-chapters:<subject-id>`.
+
+Validation:
+
+- `ui-materials-outline-regression.spec.js` creates a parent and child chapter
+  through the API for the seeded required course;
+- the spec enters the seeded required course before visiting `/materials`,
+  because teacher accounts can otherwise default to another course context;
+- it verifies the parent and child are initially visible, collapse-all hides the
+  child while leaving the parent reachable, expand-all restores the child, and a
+  reload preserves the expanded state.
+
+Maintenance guidance:
+
+- do not restore `default-expand-all`; use explicit expanded-state management so
+  large outlines remain scannable;
+- if additional pages gain tree/outline controls, prefer the same interaction
+  vocabulary: chevron-like expand/collapse icons, stable test ids, selected-path
+  expansion, and per-context persistence;
+- if a future mobile-specific materials layout is introduced, keep these outline
+  controls available in the sidebar/drawer rather than hiding the tree state
+  behind route changes.
+
+## Course Materials Node-Level +/- Follow-Up
+
+The follow-up pass keeps the existing explicit `expandedChapterKeys` state model
+and adds a visible per-node affordance. The goal is not to create a second
+outline implementation; it is to make the existing multi-level course-materials
+tree discoverable to users who expect a `+` / `-` control beside expandable
+items.
+
+Implementation details:
+
+- `apps/web/admin/src/views/Materials.vue` now renders the `el-tree` default
+  slot with both `node` and `data` so the visual control can reflect the current
+  Element Plus node state;
+- parent nodes render a stable `button.chapter-node-toggle` before the chapter
+  title;
+- expanded parent nodes show the Element Plus `Minus` icon, collapsed parent
+  nodes show the Element Plus `Plus` icon;
+- leaf nodes render `chapter-node-toggle-spacer` so title alignment stays stable
+  across mixed parent/leaf lists;
+- the default Element Plus caret is hidden for this tree only, preventing two
+  competing disclosure controls from appearing in the same row;
+- clicking the `+` / `-` button calls `toggleChapterExpansion(data)` and stops
+  propagation, so it does not select the chapter and does not trigger teacher
+  management actions;
+- clicking the chapter title still selects the chapter and expands the selected
+  ancestor path through the existing `ensureSelectedChapterPathExpanded()`
+  contract;
+- the node-level toggle updates `expandedChapterKeys`, calls
+  `syncTreeExpandedState()`, and persists the result under the same
+  `wailearning-materials-expanded-chapters:<subject-id>` localStorage key used
+  by the expand-all/collapse-all buttons;
+- the per-node button exposes `aria-label`, `title`, and a stable
+  `data-testid="materials-chapter-toggle-<chapter-id>"` hook.
+
+Visual contract:
+
+- the disclosure button is intentionally small but not text-like: it has a
+  fixed `24px` square footprint, a `7px` radius, translucent blue background,
+  light border, and a restrained shadow;
+- hover uses a stronger blue tint, slightly higher shadow, and a small scale
+  transform so the row has a tangible interactive response without causing the
+  surrounding tree text to reflow;
+- focus-visible has an explicit outline so keyboard users can operate the same
+  control;
+- the spacer keeps title x-position stable when sibling rows alternate between
+  expandable and leaf chapters;
+- the tree content keeps `min-height: 32px`, which is enough for dense desktop
+  sidebar scanning while still giving the explicit icon button a reliable mobile
+  tap target.
+
+Regression guard:
+
+- `tests/e2e/web-admin/ui-materials-outline-regression.spec.js` still verifies
+  the bulk collapse/expand path;
+- the same spec now also clicks the parent node's
+  `materials-chapter-toggle-<id>` control, verifies the child is hidden, clicks
+  it again, and verifies the child is visible;
+- this matters because the node-level control and the bulk toolbar controls
+  share `expandedChapterKeys`, and a future refactor must keep both entry
+  points synchronized instead of allowing one of them to become a purely visual
+  toggle.
+
+Guidance for future multi-level content surfaces:
+
+- prefer one explicit expansion state source per page or component;
+- keep "select/open item" separate from "expand/collapse children" when the row
+  also navigates or filters content;
+- if a tree has bulk expand/collapse actions, reuse the same state and
+  persistence contract for per-node toggles;
+- provide a stable spacer for leaf rows when using custom disclosure controls;
+- hide framework-native caret controls only inside the local tree scope, never
+  globally;
+- add `data-testid` hooks on the disclosure controls rather than asserting
+  against icon SVG internals.
+
+## Admin Radius Hierarchy Follow-Up
+
+The admin SPA now has a small shared radius vocabulary for future visual work:
+
+- `--wa-radius-xs: 4px`;
+- `--wa-radius-sm: 6px`;
+- `--wa-radius-md: 8px`;
+- `--wa-radius-lg: 12px`;
+- `--wa-radius-xl: 16px`;
+- `--wa-radius-2xl: 20px`;
+- `--wa-radius-pill: 999px`.
+
+The tokens live in:
+
+- `apps/web/admin/src/style.css`.
+
+Reasoning:
+
+- the admin app should not become uniformly rounded, because it is an
+  information-dense teaching-management tool;
+- table-heavy operational pages need restrained surfaces so rows, form fields,
+  and actions remain easy to scan repeatedly;
+- object-focused student surfaces, course cards, quota blocks, and course
+  sections can be softer because they represent individual course objects or
+  student-facing summary cards;
+- utility controls such as icon buttons, tags, progress bars, and side handles
+  can use circular or pill radii because their shapes carry control affordance
+  rather than document structure.
+
+Implemented hierarchy:
+
+- Element Plus card shells default to `--wa-radius-lg` so form/table containers
+  are no longer visually too square, but still read as dashboard work surfaces;
+- standard buttons and form controls default to the smaller `--wa-radius-sm`;
+- tags use the pill token, matching their status-label role;
+- table internals stay almost square via `--wa-radius-xs`, because rounding each
+  row or cell would weaken table alignment;
+- settings section cards and the settings section navigator use `--wa-radius-lg`;
+- settings navigator items and preview-image containers use `--wa-radius-md`;
+- the login preview background uses `--wa-radius-xl`, while the nested login
+  form box uses `--wa-radius-lg`, producing a visible parent/child radius
+  distinction;
+- materials course cover banners use `--wa-radius-xl`, while the chapter sidebar
+  uses `--wa-radius-lg`;
+- student course sections retain the larger `--wa-radius-2xl` on desktop and
+  `--wa-radius-xl` on mobile because those areas are object collections, not
+  dense table shells;
+- individual course cards use `--wa-radius-xl`, with matching top cover radii.
+
+Sidebar handle refinement:
+
+- screenshot review after the radius pass showed that the desktop sidebar edge
+  handle, while functional, could visually intrude into the main content title
+  area when positioned fully outside the sidebar width;
+- `Layout.vue` now keeps the handle half-embedded at the sidebar boundary:
+  - desktop expanded/collapsed: `left: calc(<sidebarWidth> - 14px)`;
+  - desktop hidden: `left: 0px`;
+  - mobile open: `left: 226px` for a `240px` drawer;
+  - mobile closed: `left: 0px`;
+- this preserves the pull-out affordance without covering page headings.
+
+Validation:
+
+- `git diff --check` passed;
+- `npm.cmd run build` passed, with only the existing Vite CJS API and large
+  chunk warnings;
+- PostgreSQL-backed screenshots were captured with
+  `UI_UX_AUDIT_PREFIX=after-radius` and again with
+  `UI_UX_AUDIT_PREFIX=after-radius-handle` after adjusting the sidebar handle;
+- the reviewed screenshots included:
+  - `after-radius-handle-admin-settings-postgres.png`;
+  - `after-radius-handle-student-courses-postgres.png`;
+  - `after-radius-handle-mobile-student-courses-postgres.png`;
+- the screenshot review confirmed the new radius hierarchy is visible without
+  making the operational pages look like card-heavy marketing screens, and the
+  adjusted sidebar handle no longer overlaps the main page title area.
+
+Maintenance guidance:
+
+- prefer the shared `--wa-radius-*` tokens over new literal radius values;
+- use `4px` to `8px` for small internal table/form details;
+- use `12px` for standard dashboard shells and contained panels;
+- use `16px` to `20px` only for object cards, visual previews, course sections,
+  and mobile/student-facing collection surfaces;
+- keep pill/circle radii for tags, progress bars, avatars, icon buttons, and
+  explicit tool handles;
+- do not globally force all Element Plus components to large radii;
+- when future screenshots reveal a collision between a floating control and page
+  content, adjust the control position first before increasing page padding.
+
+## Table-Heavy Page Containment Follow-Up
+
+After the course-page mobile repair, the next broad responsive risk was the
+family of admin/teacher pages whose primary surface is a wide Element Plus table
+or custom grid:
+
+- `apps/web/admin/src/views/Students.vue`;
+- `apps/web/admin/src/views/Users.vue`;
+- `apps/web/admin/src/views/Subjects.vue`;
+- `apps/web/admin/src/views/Scores.vue`;
+- `apps/web/admin/src/views/Attendance.vue`.
+
+The first follow-up pass deliberately avoided replacing these tables with
+mobile-specific card lists. The goal was narrower: prevent any single wide data
+surface from increasing the document width while preserving the desktop
+information architecture and existing table behavior.
+
+Conservative containment changes applied:
+
+- page roots now use `min-width: 0` plus `overflow-x: hidden`;
+- page-owned `el-card` instances now have `min-width: 0`;
+- page-owned `el-card__body` containers now allow horizontal scrolling inside
+  the card instead of letting tables push the whole page wider;
+- mobile page padding was reduced to match the responsive course/settings work;
+- selected toolbar/header rows gained `min-width: 0`, wrapping, or stretched
+  mobile alignment so action clusters do not force the viewport wider;
+- the attendance sheet keeps its intentionally wide grid, but `.sheet-scroll`
+  is explicitly capped to `max-width: 100%` and scrolls internally.
+
+Important limitation:
+
+- this is a containment pass, not a full mobile information-architecture pass;
+- some pages may still deserve mobile-native card/list representations later,
+  especially if the table is hard to scan on a phone;
+- when making that deeper change, preserve the same business actions and stable
+  `data-testid` hooks used by the existing E2E suite.
+
+## Admin Theme And Token Foundation
+
+The next continuation pass addressed the previously open theme/token item
+without attempting a page-by-page visual rewrite. The goal was to create a
+working foundation that future agents can extend safely:
+
+- blue remains the default theme;
+- green, warm, and grayscale variants are now available;
+- Element Plus primary color variables are connected to the shared theme tokens;
+- core background, surface, text, border, state, shadow, radius, and type tokens
+  now live in the global admin stylesheet;
+- the main application shell, login default background, and student course home
+  local variables now consume the shared token layer.
+
+Files changed:
+
+- `apps/web/admin/src/utils/theme.js`;
+- `apps/web/admin/src/App.vue`;
+- `apps/web/admin/src/style.css`;
+- `apps/web/admin/src/views/Layout.vue`;
+- `apps/web/admin/src/views/Login.vue`;
+- `apps/web/admin/src/views/StudentCourseHome.vue`.
+
+Runtime behavior:
+
+- `App.vue` applies the theme to `document.documentElement.dataset.waTheme`;
+- the accepted canonical theme names are `blue`, `green`, `warm`, and
+  `grayscale`;
+- aliases such as `default`, `primary`, `teal`, `emerald`, `orange`, `amber`,
+  `neutral`, `gray`, and `grey` are normalized before application;
+- system settings may provide `admin_theme`, `theme`, `theme_color`, or
+  `color_theme`;
+- `localStorage.wailearning-admin-theme` can temporarily override the system
+  setting for inspection or local audit work.
+
+Important boundary:
+
+- this pass provides theme infrastructure and a few high-visibility consumers;
+- it does not yet replace every hard-coded page-level color literal;
+- it does not add a settings-page control for theme selection;
+- it does not introduce dark mode;
+- it intentionally avoids touching Chinese template text because PowerShell may
+  display UTF-8 source as mojibake in this local environment.
+
+Validation:
+
+- `git diff --check` passed;
+- `npm.cmd run build` passed, with only the existing Vite CJS API deprecation
+  warning and large chunk warnings.
+
+Maintenance guidance:
+
+- use `--wa-color-primary-*` for brand/action emphasis;
+- use `--wa-color-accent-*` for secondary contextual chips and non-primary
+  highlights;
+- use `--wa-color-text*`, `--wa-color-bg*`, `--wa-color-surface*`, and
+  `--wa-border-*` before adding new literal slate/gray colors;
+- keep page-specific semantic variables when a view already has them, but map
+  them to global `--wa-*` tokens as done in `StudentCourseHome.vue`;
+- when adding a user-facing theme picker later, persist one of the canonical
+  values listed above and let `theme.js` handle normalization.
+
+## Configurable Appearance Styles Follow-Up
+
+The next continuation pass promoted the earlier token foundation into a
+user-configurable appearance system. This section is intentionally detailed
+because future agents should be able to extend or debug the appearance surface
+without rediscovering the data-priority model, encoding constraints, and
+screenshot validation workflow.
+
+### Product model
+
+The appearance system now has four layers:
+
+1. Built-in system default behavior, currently `professional-blue`.
+2. Official presets, maintained as recommended combinations.
+3. A user's current unsaved custom combination, applied immediately in the
+   browser for preview only.
+4. A user's saved personal styles, owned by that user and named by that user.
+
+Official presets are not the full design space. They are curated examples that
+cover practical combinations of:
+
+- `primary` color;
+- `accent` color;
+- `texture`;
+- `shadow`;
+- `transparency`;
+- `radius`;
+- `density`.
+
+The custom model deliberately does not allow arbitrary CSS injection. It exposes
+controlled tokens only, so user configuration can remain flexible without
+letting invalid CSS, unreadable contrast, or layout-breaking values enter the
+database.
+
+### Effective style priority
+
+The runtime priority is:
+
+1. selected saved user style;
+2. system default preset from `system_settings.appearance_default_preset`;
+3. built-in fallback `professional-blue`.
+
+The login page cannot know the user before authentication, so it can only use
+public system settings. After login, `App.vue` fetches the logged-in user's
+appearance state and reapplies the effective style. When a user switches a style
+inside Personal Settings, the client applies the draft immediately so screenshot
+review and human inspection show the real token result without waiting for a
+full reload.
+
+### Backend implementation
+
+Files:
+
+- `apps/backend/wailearning_backend/db/models.py`;
+- `apps/backend/wailearning_backend/api/schemas.py`;
+- `apps/backend/wailearning_backend/api/routers/appearance.py`;
+- `apps/backend/wailearning_backend/api/routers/settings.py`;
+- `apps/backend/wailearning_backend/bootstrap.py`;
+- `apps/backend/wailearning_backend/main.py`.
+
+New table:
+
+```text
+user_appearance_styles
+  id
+  user_id
+  name
+  source
+  preset_key
+  config
+  is_selected
+  created_at
+  updated_at
+```
+
+Important database rules:
+
+- `(user_id, name)` is unique, so one user cannot accidentally save two styles
+  with the same visible name;
+- different users may use the same style name;
+- only one style should be selected per user. The router clears previous
+  selected rows before selecting or creating a selected style;
+- the config column stores the controlled appearance config as JSON;
+- schema repair creates the table and indexes through `ensure_schema_updates()`;
+- `DEFAULT_SYSTEM_SETTINGS` now seeds `appearance_default_preset`.
+
+Route family:
+
+```text
+GET    /api/appearance/presets
+GET    /api/appearance/me
+POST   /api/appearance/me/styles
+PUT    /api/appearance/me/styles/{style_id}
+POST   /api/appearance/me/styles/{style_id}/select
+POST   /api/appearance/me/use-system
+DELETE /api/appearance/me/styles/{style_id}
+```
+
+The system settings router also exposes `appearance_default_preset` through
+`GET /api/settings/public`. Admin `POST /api/settings/batch-update` now creates
+missing keys instead of silently ignoring unknown keys, which matters for
+existing deployments whose `system_settings` rows predate the appearance key.
+
+### Frontend implementation
+
+Files:
+
+- `apps/web/admin/src/utils/theme.js`;
+- `apps/web/admin/src/style.css`;
+- `apps/web/admin/src/App.vue`;
+- `apps/web/admin/src/stores/user.js`;
+- `apps/web/admin/src/api/index.js`;
+- `apps/web/admin/src/components/AppearanceStylePanel.vue`;
+- `apps/web/admin/src/views/PersonalSettings.vue`;
+- `apps/web/admin/src/views/Settings.vue`;
+- `apps/web/admin/src/views/Layout.vue`.
+
+`theme.js` now owns:
+
+- official preset definitions;
+- legacy theme alias compatibility (`blue`, `green`, `warm`, `grayscale`);
+- appearance config normalization;
+- effective style resolution from system settings plus user state;
+- writing color, radius, shadow, transparency, texture, and density tokens to
+  `document.documentElement`.
+
+The root element receives data attributes:
+
+```text
+data-wa-theme
+data-wa-texture
+data-wa-shadow
+data-wa-transparency
+data-wa-radius
+data-wa-density
+```
+
+The global stylesheet uses those attributes for:
+
+- background texture overlays;
+- density font-size adjustments;
+- Element Plus primary-color variables;
+- shared surface/object shadows;
+- radius scale changes.
+
+The Personal Settings page now contains:
+
+- official preset cards with swatches;
+- custom controls for color, texture, shadow, transparency, radius, and density;
+- a preview surface that shows sidebar, toolbar, cards, and table-like rows;
+- save-and-use behavior for named styles;
+- one-session preview behavior that does not persist;
+- saved style list with use, load, and delete actions;
+- follow-system-default action.
+
+The Settings page contains only the global default selector. Do not move personal
+style management into admin system settings; that would mix system policy and
+user preference in one surface.
+
+### Official presets
+
+Current official preset keys:
+
+- `professional-blue`;
+- `fresh-green`;
+- `warm-amber`;
+- `minimal-gray`;
+- `academic-navy`;
+- `high-contrast`.
+
+The visual intent of each preset:
+
+- `professional-blue`: default operational school-management look, blue primary
+  plus cyan secondary signal, no texture, restrained shadow, balanced radius.
+- `fresh-green`: green primary, blue accent, soft-paper texture, and softer
+  radius. This should feel fresher without turning the whole app into one green
+  surface.
+- `warm-amber`: amber primary, teal accent, subtle grid texture, medium shadow,
+  solid surfaces. This is intentionally warmer but must remain table-readable.
+- `minimal-gray`: gray primary, violet accent, flat shadow, compact density, and
+  smaller radii. This is the most utilitarian preset.
+- `academic-navy`: navy primary with amber accent and fine texture. This is a
+  formal academic variant.
+- `high-contrast`: slate primary, red accent, solid surfaces, stronger shadows,
+  and subtle radii. This is not a full dark mode; main content remains readable
+  on light operational surfaces.
+
+Maintenance guidance:
+
+- add a new preset only when it demonstrates a genuinely useful combination;
+- keep presets as configuration objects, not hand-coded CSS branches;
+- avoid one-hue presets where primary, accent, background, and preview all sit
+  in the same hue family;
+- keep textures subtle enough that table rows, form fields, and long Chinese
+  labels remain readable;
+- do not make all cards very rounded just because a preset is soft. Dense admin
+  surfaces still need table/form discipline.
+
+### Sidebar edge handle refinement
+
+The sidebar edge handle previously used fixed top offsets such as `96px` and
+`88px`. After this pass it is vertically centered:
+
+```css
+top: 50%;
+transform: translateY(-50%);
+```
+
+Hover/focus adds only the horizontal affordance:
+
+```css
+transform: translateY(-50%) translateX(2px);
+```
+
+This makes the pull handle read as a persistent edge control rather than a small
+button competing with the page header/title area.
+
+### Screenshot validation evidence
+
+PostgreSQL-backed screenshot audit was run after implementation and again after
+the final visual-state fixes:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:UI_UX_AUDIT_PREFIX='appearance-final'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+The local ignored script was temporarily extended to capture:
+
+- `appearance-final-admin-personal-appearance-postgres.png`;
+- one screenshot per official preset;
+- existing admin, teacher, student, and mobile audit pages.
+
+Reviewed screenshots:
+
+- `appearance-final-admin-personal-appearance-postgres.png`;
+- `appearance-final-admin-appearance-professional-blue-postgres.png`;
+- `appearance-final-admin-appearance-fresh-green-postgres.png`;
+- `appearance-final-admin-appearance-warm-amber-postgres.png`;
+- `appearance-final-admin-appearance-minimal-gray-postgres.png`;
+- `appearance-final-admin-appearance-academic-navy-postgres.png`;
+- `appearance-final-admin-appearance-high-contrast-postgres.png`;
+- `appearance-final-admin-settings-postgres.png`;
+- `appearance-final-mobile-student-courses-postgres.png`.
+
+Observed final state:
+
+- preset card highlighting follows the selected draft preset;
+- the Personal Settings page is denser and no longer leaves the profile/avatar
+  sections as oversized one-column cards on desktop;
+- all official presets keep main content readable;
+- textures are visible only as background atmosphere and do not invade table or
+  form content;
+- high contrast produces a stronger shell and controls while keeping the working
+  surface light;
+- the sidebar edge handle sits near the vertical center and no longer competes
+  with page titles;
+- the mobile student courses screenshot still avoids document-level horizontal
+  overflow.
+
+Artifacts remain ignored under `.e2e-run/` and must not be committed.
+
+### Validation performed
+
+Static and automated validation from this pass:
+
+```powershell
+git diff --check
+& '<repo>\.venv\Scripts\python.exe' -m pytest tests\backend\user_profile\test_appearance_styles.py -q
+cd apps\web\admin
+npm.cmd run build
+```
+
+Results:
+
+- `git diff --check` passed;
+- backend appearance tests passed: `3 passed`;
+- frontend production build passed;
+- frontend build emitted only the existing Vite CJS API deprecation warning and
+  large chunk warnings.
+
+### Encoding and editing notes
+
+This pass touched Vue files with existing Chinese UI text. The edits followed
+the repository encoding policy:
+
+- use patch-based structural edits;
+- anchor around ASCII identifiers, component names, and stable test IDs when
+  possible;
+- avoid copying PowerShell-rendered Chinese text back into source;
+- treat screenshot text as visual evidence, not as a source for rewriting
+  strings.
+
+Future agents extending this area should keep the same discipline. Appearance
+work tends to touch text-heavy Vue files, so accidental mojibake is a real risk
+if terminal-rendered Chinese is copied back into templates.
+
+## Interaction Polish And Unified Quota Menu Pass
+
+This follow-up pass extended the admin shell interaction model after the
+appearance preset work.
+
+Implemented behavior:
+
+- The header user menu now opens on hover instead of requiring a click.
+- The dropdown begins with a richer profile block that shows a larger avatar,
+  display name, role, username, and an LLM token progress indicator.
+- Student users load their own LLM quota summary through
+  `GET /api/llm-settings/courses/student-quotas` when the menu opens.
+- Non-student users see that LLM token quota is system-managed rather than
+  course-managed.
+- Sidebar menu items and top-context chips use subtle scale on hover. This is
+  intentionally restrained so the navigation feels more responsive without
+  shifting the page layout.
+- Global Element Plus buttons now add a small text glow and shadow on hover,
+  preserving readability for primary and plain buttons.
+
+Screenshot validation evidence from this pass:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='<user-home>\AppData\Local\ms-playwright'
+$env:UI_UX_AUDIT_PREFIX='interaction-quota'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+Reviewed screenshot:
+
+- `interaction-quota-admin-settings-postgres.png`
+
+Observed state:
+
+- the admin Settings page shows the LLM quota block as `LLM 用量与额度（全平台）`;
+- quota timezone, character/token estimation, image-token estimation, default
+  daily cap, and grading concurrency are visually grouped in one system-level
+  form;
+- the sidebar edge handle remains vertically centered;
+- the sidebar and button hover styling does not create obvious layout overlap
+  in the captured desktop settings view.
+
+Quota wording in the UI now follows the unified-pool model:
+
+- the student course page shows one daily LLM pool plus course attribution;
+- the course LLM dialog no longer exposes course-level quota timezone or token
+  estimation fields;
+- the admin Settings page owns quota timezone, token estimation parameters,
+  default student cap, and grading concurrency.
+
+Important editing note:
+
+- During this pass, `Layout.vue` was restored after a partial template edit
+  risked writing terminal-rendered mojibake back into the file. Future work in
+  this area should prefer small structural patches and should not copy Chinese
+  strings from PowerShell output into Vue templates.
+
+## Commit Hygiene For This Work
+
+Do include:
+
+- source changes under `apps/web/admin/src/views/`;
+- maintained Playwright specs under `tests/e2e/web-admin/` when a local
+  screenshot finding is promoted into a regression guard;
+- this documentation file;
+- documentation index links.
+
+Do not include:
+
+- `.e2e-run/`;
+- Playwright screenshots;
+- PostgreSQL binaries or data directories;
+- Vite `dist/`;
+- local logs;
+- local handoff files.
+
+## Sidebar And Login Screenshot Repair Pass
+
+This pass responded to screenshot findings from the PostgreSQL-backed
+interaction/quota audit. The relevant local artifacts were generated under an
+ignored audit directory and should be referred to in committed documentation
+with placeholders such as `<artifact-dir>/interaction-quota-*.png`, not with
+machine-specific absolute paths.
+
+Findings addressed:
+
+- `<artifact-dir>/interaction-quota-teacher-homework-postgres.png` showed a
+  white rectangle below the expanded teacher "homework" submenu. The product
+  issue was not the route content. It came from Element Plus submenu internals:
+  nested `.el-menu--inline` / submenu wrapper nodes can keep their default
+  light background even when the visible sidebar shell is themed dark. The fix
+  belongs in the sidebar shell CSS, scoped under `.sidebar-menu`, so all submenu
+  wrapper layers inherit the dark/transparent sidebar treatment.
+- A follow-up screenshot review showed that part of the perceived "white
+  block" was also the centered sidebar edge handle. When the sidebar is open,
+  the handle should visually belong to the dark sidebar instead of appearing as
+  a bright rectangular tab over an active menu row. Keep the handle vertically
+  centered, but use a smaller dark/translucent surface with enough contrast for
+  the arrow icon. The hidden-sidebar state can still use a lighter affordance
+  because it appears against the page background rather than on top of the dark
+  navigation.
+- `<artifact-dir>/interaction-quota-student-courses-postgres.png` showed a
+  desktop student sidebar with only one primary item when no course was selected
+  at initial render. Although the route guard can redirect course-scoped routes
+  back to the course picker when needed, the visual shell looked incomplete.
+  Student navigation should therefore render a complete navigation structure
+  consistently: course picker, course home, homework, materials, scores, and
+  notifications. The empty-selection state is a routing/data concern, not a
+  reason to collapse desktop navigation down to one item.
+- The same student screenshot also contained stale `Internal Server Error`
+  toast evidence. That was a real backend issue in the quota summary endpoint,
+  not just a screenshot artifact: the student quota summary route used the
+  effective token limit value before assigning it. The endpoint should resolve
+  the effective student limit once, then use that value for the summary and for
+  per-course attribution.
+- `<artifact-dir>/interaction-quota-login-postgres.png` was visually blank even
+  though the JSON DOM snapshot showed login text and buttons. This is an audit
+  synchronization pitfall. The login page should expose stable test IDs for the
+  page and panel, and screenshot scripts should wait for the login panel to be
+  visible before capture.
+
+Implementation guidance for future agents:
+
+- Prefer adding stable `data-testid` anchors to long-lived page containers over
+  waiting on incidental text. This keeps screenshot tooling robust even when UI
+  copy changes.
+- For Element Plus dark sidebars, style not only `.el-menu-item` and
+  `.el-sub-menu__title`, but also submenu wrapper layers such as
+  `.el-sub-menu`, `.el-menu--inline`, and `.el-sub-menu .el-menu`.
+- Treat floating shell controls as part of the screenshot audit. A technically
+  correct control can still look like a rendering defect when it overlaps a
+  dense navigation area with the wrong background color.
+- Avoid forcing submenu hover backgrounds to transparent if a later rule is
+  expected to provide hover affordance. Wrapper backgrounds should be
+  transparent; actual menu rows can keep their active/hover state.
+- Do not hide available student navigation merely because `selectedCourse` is
+  temporarily absent. Let guards and page-level empty states explain missing
+  course context.
+- Treat global `ElMessage.error(...)` toasts in screenshots as potential
+  product regressions first. Inspect the corresponding API route or network
+  response before dismissing them as test noise.
+
+Validation expectation:
+
+- Capture or inspect the teacher homework page with the homework submenu open;
+  no white block should appear under the nested submenu area.
+- Capture or inspect the student courses page before selecting a course; the
+  sidebar should still show the full student navigation shell.
+- Capture login only after `[data-testid="login-panel"]` is visible; a DOM JSON
+  snapshot alone is not enough proof that the screenshot timing was correct.
+
+## Course Home Material Outline Preview Pass
+
+This pass continued the multi-level content expansion work. The important
+starting observation was that the full course-materials page already had a
+maintained outline implementation:
+
+- source: `apps/web/admin/src/views/Materials.vue`;
+- maintained guard: `tests/e2e/web-admin/ui-materials-outline-regression.spec.js`;
+- interaction: explicit parent-only `+` / `-` controls, leaf alignment spacer,
+  title click separate from expansion, local expanded-state memory, and bulk
+  expand/collapse actions.
+
+Because that first-entry sample already existed, the pass did not duplicate a
+second editable tree. Instead, it promoted the same interaction pattern into a
+read-only course-home preview where students and teachers first scan a selected
+course.
+
+### Product intent
+
+The course home page is a dashboard-style overview. Before this pass, its
+materials block showed only a flat "recent materials" list. That list is useful
+for recency, but it does not communicate course structure. For a course with a
+real outline, users should be able to see chapter hierarchy immediately without
+leaving the overview page.
+
+The course home page now displays:
+
+- a compact read-only material chapter outline;
+- parent-node `+` / `-` buttons;
+- leaf spacer alignment so titles do not shift between expandable and leaf
+  rows;
+- bulk "expand" and "collapse" actions in the preview header;
+- existing recent-material rows below the outline;
+- title clicks that navigate to the full materials page instead of pretending
+  to be an in-place editor.
+
+This is intentionally not a replacement for `Materials.vue`. The full materials
+page still owns:
+
+- chapter creation, rename, delete, and drag/drop reordering;
+- material creation and editing;
+- material placement across multiple chapters;
+- material detail dialogs and discussion context.
+
+The course home preview owns only scanning and navigation.
+
+### Implementation shape
+
+The implementation stays frontend-only:
+
+- `StudentCourseHome.vue` calls the existing
+  `api.materialChapters.tree({ subject_id })` endpoint alongside the existing
+  materials, homework, and notification summary calls.
+- The preview keeps local component state in `materialOutlineExpandedIds`.
+- Default state expands only the root-level chapter rows after loading the tree.
+- `expandMaterialOutline` collects every chapter id from the current tree.
+- `collapseMaterialOutline` clears the expanded id list.
+- `toggleMaterialOutline` changes only expansion state; it does not navigate.
+- Clicking a chapter title navigates to `/materials`, where the full tree and
+  material list live.
+
+No backend schema or API contract change was required.
+
+### UI details
+
+The preview follows the same principles as the full materials tree:
+
+- parent rows get a real button;
+- leaf rows get a fixed-size spacer;
+- controls are square-ish and icon-based rather than text pills;
+- hover scale is subtle and constrained to the button, not the entire row;
+- row indentation is depth-based and reduced slightly on mobile;
+- title text ellipsizes within the card rather than forcing the panel wider;
+- focus-visible outlines are explicit for keyboard operation.
+
+This also keeps the course home page visually quiet. The outline is framed
+inside the existing materials card, not a nested card inside another card.
+
+### Regression guard
+
+Added:
+
+```text
+tests/e2e/web-admin/ui-course-home-outline-regression.spec.js
+```
+
+The guard:
+
+- resets the E2E scenario;
+- creates a parent and child material chapter through the API;
+- logs in as the seeded student;
+- enters the seeded required course;
+- opens `/course-home`;
+- verifies the outline is visible;
+- verifies the child is visible by default under the expanded root parent;
+- clicks `course-home-material-toggle-<chapter-id>` and verifies the child is
+  hidden;
+- clicks the same toggle again and verifies the child returns.
+
+This mirrors the maintained full-materials-page guard while keeping the new
+course-home invariant narrow.
+
+### Pitfalls and future guidance
+
+- Do not replace the existing materials page tree with this preview. The preview
+  intentionally has no editing affordances.
+- Do not make the whole row both navigate and toggle. Users need one predictable
+  target for expansion and another predictable target for navigation.
+- Do not store this preview state in the backend. It is low-value, page-local UI
+  state. If persistence becomes necessary, prefer localStorage and keep it
+  separate from the full materials page storage key.
+- Do not assume the course home page has only students. Teachers can also reach
+  course home-like overview paths after course selection, so the preview should
+  remain role-neutral.
+- If the E2E guard fails to find the seeded course card, check the existing
+  `enterSeededRequiredCourse` helper and the E2E seed cache before assuming the
+  outline component is broken.
+- If screenshot evidence shows a blank or incomplete course home panel while
+  the JSON snapshot contains text, apply the same visual-readiness lesson as the
+  login screenshot pitfall: wait for a stable visible panel or `data-testid`
+  before capture.
+
+## Homework Submission History Outline Pass
+
+This pass continued the multi-level content expansion work after the maintained
+materials outline and the course-home material preview were already in place.
+The goal was not to add trees everywhere. The goal was to identify pages where
+the product already has a real parent-child information model and where
+progressive disclosure reduces visual noise without hiding primary workflow
+state.
+
+### Candidate scan and selection
+
+The scan covered frontend views and maintained tests for terms such as:
+
+- `el-tree`;
+- `children`;
+- `parent_id`;
+- `chapter`;
+- `collapse`;
+- `expand`;
+- `group`;
+- `section`;
+- `history`;
+- `attempt`.
+
+The scan confirmed that the strongest true tree remains course materials:
+
+- `apps/web/admin/src/views/Materials.vue` is the editable tree owner;
+- `apps/web/admin/src/views/StudentCourseHome.vue` is the read-only course-home
+  outline preview;
+- both are already guarded by focused Playwright tests.
+
+The next appropriate surface was teacher-side homework submission history:
+
+- source: `apps/web/admin/src/views/HomeworkSubmissions.vue`;
+- route shape: `/homework/:id/submissions`;
+- parent object: one student's homework submission row;
+- child objects: individual attempts under that submission;
+- child detail content: submission body, attachment link, review comment,
+  grading task error, score input, review input, and regrade action.
+
+This is a real hierarchy, not a fake tree. A teacher often needs to scan several
+attempts to understand recency, score source, late status, LLM status, and
+whether a specific attempt should be reviewed. Showing every attempt body and
+every action by default makes the dialog visually heavy, especially after
+multiple resubmissions or feedback-follow-up attempts.
+
+Other candidates were intentionally left alone in this pass:
+
+- `StudentScores.vue` has grade composition sections and homework rows, but the
+  table is already compact and not a nested object editor. Turning it into an
+  outline would add more interaction than the current data justifies.
+- `Settings.vue` has anchored sections, not a parent-child content tree. It
+  already has a section navigator and should not be converted into collapsible
+  accordions unless the settings page grows enough that per-section save and
+  progressive disclosure become a product requirement.
+- `CourseDiscussionPanel.vue` has long-body preview/collapse, but discussion
+  rows are a linear conversation stream rather than a stable hierarchy. It also
+  already has its own maintained long-body expansion behavior.
+- Attendance history dots and schedule/calendar components are visual summaries,
+  not multi-level editable or inspectable content trees.
+
+### Product behavior
+
+The teacher history dialog now treats each attempt as a child outline row:
+
+- each attempt card has an explicit square `+` / `-` icon button;
+- the button toggles only the attempt detail area;
+- the attempt summary row remains visible when collapsed;
+- the latest attempt is expanded by default when the history dialog opens;
+- older attempts are collapsed by default but still show timestamp, attempt id,
+  tags, score/status metadata, and a one-line submission preview;
+- collapsing an attempt hides the heavy body, feedback, task error, score input,
+  review input, and attempt-level regrade action;
+- expanding restores the same detail controls without reloading history.
+
+This mirrors the existing outline vocabulary:
+
+- parent-like rows receive a real button;
+- the button is icon-based rather than text-pill based;
+- the visual control uses the same `Plus` and `Minus` Element Plus icons used by
+  the materials outline;
+- hover scale is subtle and constrained to the icon button;
+- focus-visible styling is explicit;
+- title/summary text remains separate from expansion state.
+
+The implementation deliberately does not change backend history semantics:
+
+- no API response shape changed;
+- no database schema changed;
+- no grading or regrade payload changed;
+- no history sorting behavior changed;
+- no score persistence behavior changed.
+
+### Implementation details
+
+`HomeworkSubmissions.vue` gained local dialog state:
+
+```text
+expandedHistoryAttemptIds: Set<string>
+```
+
+The set is updated through:
+
+```text
+isHistoryAttemptExpanded(attemptId)
+toggleHistoryAttempt(attemptId)
+```
+
+`openHistory(row)` now initializes the state to the first loaded attempt:
+
+```text
+historyAttempts.value.slice(0, 1)
+```
+
+The list endpoint and existing history endpoint already order the attempts used
+by the dialog. Therefore the first item is treated as the most relevant/default
+visible child. If a future backend change changes history ordering, the UI
+should either preserve "latest first" or explicitly choose the latest attempt by
+submitted time/id before setting default expanded state.
+
+The detail body and action area use `v-show` rather than `v-if`. That keeps form
+state for score/comment inputs alive while a teacher briefly collapses and
+re-expands an attempt inside the same dialog session.
+
+Stable test hooks were added:
+
+```text
+homework-history-attempt-<attempt-id>
+homework-history-attempt-toggle-<attempt-id>
+homework-history-attempt-preview-<attempt-id>
+homework-history-attempt-body-<attempt-id>
+```
+
+### Visual notes
+
+The history dialog screenshot from this pass showed:
+
+- the dialog keeps a scannable timeline shape;
+- the expanded latest attempt shows its detail controls directly below the
+  summary row;
+- the older attempt is collapsed to a compact one-line preview;
+- the `+` / `-` button is visually discoverable without competing with grading
+  actions;
+- the control aligns with the attempt card text rather than floating detached
+  from the row;
+- the surrounding teacher submission table remains usable behind the modal
+  overlay.
+
+The standard PostgreSQL UI audit screenshots also showed no broad regression on:
+
+- login;
+- admin students;
+- admin settings;
+- personal appearance;
+- official appearance presets;
+- teacher dashboard;
+- teacher homework;
+- student courses;
+- student course home;
+- mobile student courses.
+
+### Regression guard
+
+Added:
+
+```text
+tests/e2e/web-admin/ui-homework-history-outline-regression.spec.js
+```
+
+The guard:
+
+- resets the E2E scenario;
+- submits two attempts as the seeded student through the API;
+- loads the teacher submissions list;
+- reads `latest_attempt_id` from the teacher list row;
+- opens the teacher history dialog;
+- verifies the latest attempt summary and detail body are visible;
+- collapses the latest attempt;
+- verifies the summary remains visible while the body is hidden;
+- expands the same attempt again;
+- verifies the body returns and still contains the latest attempt content.
+
+This keeps the maintained invariant narrow: the test does not assert every tag,
+every score path, or every review action. Existing homework and LLM tests cover
+those broader behaviors. This guard owns only the outline interaction contract.
+
+### Validation
+
+Commands run during this pass:
+
+```text
+git diff --check
+npm.cmd run build
+npx.cmd playwright test ui-homework-history-outline-regression.spec.js --project=chromium
+UI_UX_AUDIT_PREFIX=outline2 node <artifact-dir>/ui-ux-audit/postgres-ui-audit.cjs
+```
+
+Observed results:
+
+- `git diff --check` passed;
+- frontend build passed from `<repo>/apps/web/admin`;
+- the first root-level `npm.cmd run build` attempt failed because the repository
+  root has no `package.json`; the successful invocation used the frontend app
+  directory;
+- the new Playwright guard passed from `<repo>/apps/web/admin`;
+- running Playwright from the spec directory failed because the project config
+  was not loaded there;
+- running a path outside configured `testDir` failed with "No tests found";
+- running browser-backed Playwright and the local PostgreSQL UI audit required
+  execution outside the default restricted sandbox after `spawn EPERM`;
+- PostgreSQL screenshot audit completed and wrote ignored local artifacts under
+  `<artifact-dir>`;
+- a temporary screenshot capture was used to inspect the history dialog and was
+  removed from the maintained spec before commit.
+
+### Future guidance
+
+- Do not promote every long list into an outline. Require a real parent-child
+  model, repeated child records, or heavy detail content.
+- Keep "summary stays visible" as a hard invariant. Collapsed state should never
+  hide the object identity, timestamp, status, or enough preview text for the
+  user to understand what they collapsed.
+- Keep attempt-level grading inputs under the expanded detail area. Otherwise a
+  collapsed row can still look action-heavy, which defeats the purpose of the
+  outline.
+- If student-side `HomeworkSubmission.vue` receives the same treatment later,
+  first verify the file encoding and edit with ASCII anchors. Some terminals may
+  render existing Chinese text incorrectly even when the repository bytes are
+  valid.
+- If a future test needs screenshot artifacts, prefer ignored local scripts or a
+  deliberately temporary spec change that is removed before commit. Do not leave
+  screenshot side effects in maintained regression tests unless the screenshot is
+  itself the maintained artifact.
+
+## Round 3: LLM Quota Semantics And Header Interaction Boundary Review
+
+This pass followed the earlier quota consolidation work and focused on removing
+places where maintained code, tests, or user-facing copy still implied that a
+course owns the daily LLM quota calendar, estimation policy, or independent
+daily token pool.
+
+### Documents and code read before editing
+
+Before changing files, the operator reread the repository entry documentation
+and the current UI/test pitfall notes:
+
+```text
+README.md
+docs/development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md
+docs/development/TEST_EXECUTION_PITFALLS.md
+```
+
+The previous handoff for this round had already inspected the architecture and
+LLM product documents. The repeated read was still useful because `README.md`
+contained stale high-level product wording: it still described teacher course
+LLM configuration as owning quota day boundaries and token estimation limits.
+That was no longer true after the system-level quota policy migration.
+
+### Product decision reaffirmed
+
+The maintained product model after this pass is:
+
+- administrators own the system-wide LLM usage policy;
+- the system policy owns quota timezone, estimation knobs, default per-student
+  daily token cap, personal overrides, and grading concurrency;
+- teacher course LLM configuration owns enablement, response language, prompts,
+  endpoint routing, and per-call input/output token boundaries;
+- student daily quota is one system-wide pool for the account on the current
+  quota day;
+- course IDs remain attached to usage logs and quota summaries for attribution,
+  audit, and UI explanation;
+- course attribution rows do not imply independent per-course daily token pools.
+
+This split intentionally preserves useful attribution without reintroducing the
+older double-track mental model.
+
+### User-facing cleanup
+
+Updated the root README LLM section so it no longer tells agents or developers
+that teachers configure:
+
+```text
+timezone-aware quota boundaries
+token estimation limits
+```
+
+The README now points those controls at the admin-owned system-wide quota
+policy and describes worker usage as per-student usage with course-level
+attribution.
+
+Updated the course discussion LLM hint. The old hint said that asking LLM in a
+discussion consumed the student's "course LLM quota". The new copy says it
+consumes the student's system-wide daily LLM quota, while still noting that
+output length comes from the course LLM `max_output_tokens` boundary.
+
+Updated the homework auto-grading help text. The old hint said the daily token
+limit was configured in course settings. The new hint says the daily token
+limit, quota timezone, and pre-reservation estimation are configured by an
+administrator in system settings.
+
+### API/test semantic cleanup
+
+The behavior test that previously asserted a course-level `quota_timezone`
+controlled the student quota calendar was renamed and inverted. It now proves
+that:
+
+- an administrator can set the global quota policy timezone;
+- a teacher can still send an old `quota_timezone` field in the course config
+  payload without causing an error;
+- the course config response does not expose `quota_timezone`;
+- the student quota response still reports the global quota policy timezone.
+
+This is an important compatibility contract: old clients may send ignored
+fields, but new clients must not learn or depend on them from the course config
+response.
+
+The advanced quota behavior test file was retargeted from "per-course quota
+pools" to "system-wide quota pool with course attribution". The most important
+assertion now checks both sides of the intended model:
+
+- the two course-specific quota endpoints show the same system-wide total used
+  count for the student;
+- each endpoint still reports only that course's attributed token usage in
+  `course_used_tokens_today`.
+
+This keeps the old independent-pool assumption from creeping back in through
+test names or test expectations.
+
+The backend LLM settings API test now explicitly asserts that course config
+responses do not include:
+
+```text
+quota_timezone
+estimated_chars_per_token
+estimated_image_tokens
+```
+
+The E2E helper payloads in maintained browser specs no longer send quota
+timezone or estimation fields when configuring course LLM routing. These fields
+are still ignored server-side for compatibility, but helpers should model the
+current product API and should not train future tests to depend on legacy
+payload shape.
+
+The resilience E2E scenario that used to edit a course timezone input was
+rewritten to prove that the course LLM dialog does not expose legacy quota or
+estimation field names. It still exercises failed-save recovery by toggling the
+course LLM enable switch, failing the first save request, checking that the
+local form state remains visible, and then saving successfully.
+
+### Compatibility deliberately retained
+
+This pass did not drop database columns or remove all model constructor uses of
+legacy-looking fields. The following remain as compatibility and fixture noise
+until a dedicated schema cleanup pass proves they are no longer needed:
+
+```text
+CourseLLMConfig.quota_timezone
+CourseLLMConfig.estimated_chars_per_token
+CourseLLMConfig.estimated_image_tokens
+course_llm_configs quota/estimation columns in bootstrap/model definitions
+tests that directly construct CourseLLMConfig rows with those fields
+historical pressure/scenario helpers that are not maintained browser UI helpers
+```
+
+The reason is practical: deleting DB columns is a migration decision, not just
+a UI cleanup. Existing local or deployed databases may still contain those
+columns, and some old fixtures may still construct rows with them. The current
+runtime quota logic uses the global policy helpers for estimation and calendar
+math, so leaving the columns in place does not keep the product double-track
+alive as long as they are not exposed as course configuration controls.
+
+If a later database cleanup round happens, it should first verify:
+
+- no runtime logic reads course-level quota timezone for student quota
+  calendars;
+- no runtime logic reads course-level estimation fields for reservation or
+  grading prompt budget estimation;
+- no public course config schema exposes those fields;
+- no maintained frontend code renders course-level quota controls;
+- no tests depend on course config responses containing those fields;
+- bootstrap/migration handling is safe for SQLite and PostgreSQL installations
+  that may already have or not have the old columns.
+
+### Header avatar and token dropdown boundary review
+
+The header user menu already had a hover-triggered profile dropdown with a
+large avatar, role identity, and LLM token progress bar. This pass tightened
+the token edge states:
+
+- non-students continue to see a system policy explanation;
+- students see `loading` while the quota summary request is in flight;
+- students see `no data` when no quota limit is available;
+- students see `unavailable` and an explicit unavailable detail when the quota
+  request fails;
+- over-limit usage keeps the progress bar capped visually at 100 percent but
+  the detail text reports how far over the limit the student is.
+
+This keeps the hover menu from looking like a normal zero-usage state when the
+network/API call actually failed.
+
+The sidebar handle remained centered along the interface edge from the previous
+round. Sidebar menu rows and submenu titles still use a small hover scale and
+translation. The review did not add more aggressive movement because the
+current interaction already gives feedback without making dense navigation feel
+unstable.
+
+### Screenshot expectations for this round
+
+The standard PostgreSQL UI audit should be rerun after the build. Relevant
+screenshots for visual inspection include:
+
+```text
+<artifact-dir>/<prefix>-login-postgres.png
+<artifact-dir>/<prefix>-teacher-homework-postgres.png
+<artifact-dir>/<prefix>-student-courses-postgres.png
+<artifact-dir>/<prefix>-student-course-home-postgres.png
+<artifact-dir>/<prefix>-appearance-personal-postgres.png
+<artifact-dir>/<prefix>-appearance-official-postgres.png
+```
+
+For this pass, the expected visual checks are:
+
+- login is not blank;
+- teacher homework no longer shows a confusing blank/white frame in the audited
+  viewport;
+- student courses has enough left-side/navigation context to avoid a single
+  lonely sidebar item feel;
+- course LLM and homework text no longer describe course-owned quota policy;
+- header avatar hover menu remains visually stable and the token bar fits
+  inside the dropdown card;
+- sidebar hover scaling does not overlap adjacent items;
+- top/course dropdown hover behavior remains restrained.
+
+Real absolute artifact paths belong only in ignored local notes. Committed
+documents should use `<artifact-dir>` or another placeholder.
+
+### Validation notes
+
+The first pre-validation command in this pass was:
+
+```text
+git diff --check
+```
+
+It passed before the screenshot/test run phase. Full build, targeted backend
+tests, browser checks, screenshot audit, and final commit metadata should be
+recorded by the operator before pushing this round.
+
+### Final validation recorded before commit
+
+The Round 3 closeout performed the required status and documentation checks:
+
+```text
+git status --short
+git diff --stat
+README.md
+docs/development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md
+docs/development/TEST_EXECUTION_PITFALLS.md
+```
+
+The final tracked source set included the quota semantic cleanup, header token
+edge states, focused E2E selector/payload updates, and a small Warm Amber theme
+adjustment. `.e2e-run/` remained a local ignored artifact directory and was not
+staged.
+
+Warm Amber review:
+
+- `round3-admin-appearance-warm-amber-postgres.png` showed that the preset was
+  visually readable but too dominated by brown/orange in the sidebar and action
+  treatment.
+- The frontend-only adjustment kept amber as the action color but changed the
+  shell to a slate/teal direction and changed the active sidebar treatment to an
+  amber-to-teal accent.
+- This affected only the theme token mapping in `apps/web/admin/src/utils/theme.js`
+  and the legacy warm fallback variables in `apps/web/admin/src/style.css`.
+- It did not change persistence, backend behavior, or database schema.
+
+PostgreSQL-backed audit was rerun after the Warm Amber adjustment:
+
+```powershell
+$env:HTTP_PROXY='http://127.0.0.1:7897'
+$env:HTTPS_PROXY='http://127.0.0.1:7897'
+$env:NO_PROXY='localhost,127.0.0.1,::1'
+$env:UI_UX_AUDIT_PREFIX='round3-final'
+node .e2e-run\ui-ux-audit\postgres-ui-audit.cjs
+```
+
+Result:
+
+```text
+[ui-ux-audit] audit complete
+[ui-ux-audit] postgres exited null
+[ui-ux-audit] api exited null
+[ui-ux-audit] vite exited null
+```
+
+Final screenshot evidence stayed under ignored local artifacts:
+
+```text
+.e2e-run/ui-ux-audit/round3-final-login-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-settings-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-personal-appearance-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-appearance-warm-amber-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-appearance-minimal-gray-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-appearance-academic-navy-postgres.png
+.e2e-run/ui-ux-audit/round3-final-admin-appearance-high-contrast-postgres.png
+.e2e-run/ui-ux-audit/round3-final-student-course-home-postgres.png
+.e2e-run/ui-ux-audit/round3-final-mobile-student-courses-postgres.png
+```
+
+Visual conclusions:
+
+- Warm Amber no longer reads as a one-note brown/orange page; amber remains
+  visible as the action color while the shell is balanced by teal/slate.
+- Minimal Gray, Academic Navy, and High Contrast remain readable, with no
+  obvious text overlap or broken card containment in the audited viewport.
+- The mobile student courses screenshot remains contained and scannable; the
+  sidebar is not consuming document-flow width.
+- The StudentCourseHome screenshot still shows skeleton bars in the homework,
+  materials, and notification cards. The course overview and shell are already
+  rendered, so this is treated as an audit-script waiting-timing limitation for
+  this pass rather than a product regression. Future screenshot audits should
+  wait for those loading states to settle before using course-home screenshots
+  as final visual evidence.
+
+Validation commands completed for the final source state:
+
+```text
+npm.cmd run build
+git diff --check
+```
+
+The frontend build passed with only the existing Vite CJS API deprecation and
+large chunk warnings. Earlier targeted tests in the same Round 3 source state
+passed:
+
+```text
+15 passed, 67 warnings
+1 passed: e2e-scenario-resilience course LLM config keeps system quota
+1 passed: e2e-llm-hard-scenarios teacher UI save updates course defaults
+```
+
+The earlier `TypeError: fetch failed` / `ECONNRESET` was classified as local
+Playwright webServer contention against the default local API, not Codex high
+demand and not a real external LLM provider call. The relevant target is the
+local admin Playwright API at `http://127.0.0.1:8012`, and the hard-scenario
+mock LLM endpoint is local:
+
+```text
+/api/e2e/dev/mock-llm/<profile>/v1/
+```

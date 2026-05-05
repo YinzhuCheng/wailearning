@@ -150,6 +150,7 @@ def make_grading_course_with_homework(
             "homework_id": hw.id,
             "preset_id": preset.id,
             "student_id": stud.id,
+            "student_user_id": su.id,
             "teacher_id": teacher.id,
             "subject_id": course.id,
             "class_id": klass.id,

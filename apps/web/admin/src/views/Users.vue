@@ -56,9 +56,19 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220">
+        <el-table-column label="操作" width="300">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
+            <el-button
+              v-if="isAdmin"
+              type="warning"
+              size="small"
+              data-testid="users-reset-password"
+              :disabled="row.id === userStore.userInfo?.id"
+              @click="openResetPasswordDialog(row)"
+            >
+              重置密码
+            </el-button>
             <el-button
               type="danger"
               size="small"
@@ -280,11 +290,48 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="resetPwdVisible"
+      data-testid="dialog-reset-password"
+      title="重置密码"
+      width="480px"
+      destroy-on-close
+      @closed="resetPwdFormState"
+    >
+      <el-alert v-if="resetPwdTarget" type="info" :closable="false" class="reset-pwd-alert">
+        <template #title>规则说明</template>
+        <p v-if="resetPwdTarget.role === 'student'" class="reset-pwd-alert-body">
+          学生默认新密码为<strong>用户名（学号）</strong>；也可在下方填写自定义密码。
+        </p>
+        <p v-else-if="resetPwdTarget.role === 'admin'" class="reset-pwd-alert-body">
+          重置<strong>管理员</strong>密码必须填写新密码。
+        </p>
+        <p v-else class="reset-pwd-alert-body">
+          教师/班主任默认新密码为 <strong>111111</strong>；也可在下方填写自定义密码。
+        </p>
+      </el-alert>
+      <el-form ref="resetPwdFormRef" :model="resetPwdForm" :rules="resetPwdRules" label-width="100px" class="reset-pwd-form">
+        <el-form-item label="新密码" prop="new_password">
+          <el-input
+            v-model="resetPwdForm.new_password"
+            type="password"
+            show-password
+            :placeholder="resetPwdPlaceholder"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resetPwdVisible = false">取消</el-button>
+        <el-button type="primary" :loading="resetPwdSubmitting" @click="submitResetPassword">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
@@ -292,6 +339,7 @@ import { useUserStore } from '@/stores/user'
 import { loadAllPages } from '@/utils/pagedFetch'
 
 const userStore = useUserStore()
+const route = useRoute()
 const isAdmin = computed(() => userStore.isAdmin)
 
 const loading = ref(false)
@@ -316,6 +364,12 @@ const addToCourseDialogVisible = ref(false)
 const addToCourseSubjectId = ref(null)
 const addToCourseSubmitting = ref(false)
 const allSubjects = ref([])
+
+const resetPwdVisible = ref(false)
+const resetPwdSubmitting = ref(false)
+const resetPwdTarget = ref(null)
+const resetPwdFormRef = ref(null)
+const resetPwdForm = reactive({ new_password: '' })
 
 const form = reactive({
   username: '',
@@ -354,6 +408,22 @@ const roleTag = role => ({
 }[role] || '')
 
 const isDeleteDisabled = user => user.role === 'admin'
+
+const resetPwdPlaceholder = computed(() => {
+  const r = resetPwdTarget.value?.role
+  if (r === 'student') return '留空则使用用户名（学号）作为新密码'
+  if (r === 'admin') return '必填'
+  return '留空则使用默认 111111'
+})
+
+const resetPwdRules = computed(() => {
+  if (resetPwdTarget.value?.role === 'admin') {
+    return {
+      new_password: [{ required: true, message: '重置管理员密码必须填写新密码', trigger: 'blur' }]
+    }
+  }
+  return { new_password: [] }
+})
 
 const showClassAssignmentField = computed(() => form.role !== 'teacher')
 const selectedPendingCount = computed(() => selectedPendingStudents.value.length)
@@ -607,6 +677,49 @@ const openEditDialog = user => {
   dialogVisible.value = true
 }
 
+const openResetPasswordDialog = row => {
+  resetPwdTarget.value = row
+  resetPwdForm.new_password = ''
+  resetPwdVisible.value = true
+}
+
+const resetPwdFormState = () => {
+  resetPwdTarget.value = null
+  resetPwdForm.new_password = ''
+  resetPwdFormRef.value?.clearValidate?.()
+}
+
+const submitResetPassword = async () => {
+  await resetPwdFormRef.value?.validate?.()
+  resetPwdSubmitting.value = true
+  try {
+    const trimmed = resetPwdForm.new_password?.trim()
+    const payload = trimmed ? { new_password: trimmed } : {}
+    await api.users.resetPassword(resetPwdTarget.value.id, payload)
+    ElMessage.success('密码已重置')
+    resetPwdVisible.value = false
+    await loadUsers()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    resetPwdSubmitting.value = false
+  }
+}
+
+const maybeOpenResetFromQuery = async () => {
+  const raw = route.query.open_reset_password_user_id
+  if (!raw || !isAdmin.value) return
+  const id = Number(raw)
+  if (!id || Number.isNaN(id)) return
+  if (!users.value.length) {
+    await loadUsers()
+  }
+  const u = users.value.find(x => Number(x.id) === id)
+  if (u) {
+    openResetPasswordDialog(u)
+  }
+}
+
 const buildPayload = () => ({
   ...form,
   class_id: form.role === 'teacher' ? null : form.class_id
@@ -758,12 +871,30 @@ const submitStudentImport = async () => {
 
 onMounted(async () => {
   await Promise.all([loadUsers(), loadClasses(), loadSubjectsIfAdmin()])
+  await maybeOpenResetFromQuery()
 })
+
+watch(
+  () => route.query.open_reset_password_user_id,
+  async () => {
+    await maybeOpenResetFromQuery()
+  }
+)
 </script>
 
 <style scoped>
 .users-page {
   padding: 24px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.users-page :deep(.el-card) {
+  min-width: 0;
+}
+
+.users-page :deep(.el-card__body) {
+  overflow-x: auto;
 }
 
 .page-header {
@@ -781,6 +912,7 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 10px;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .page-title {
@@ -840,15 +972,20 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
+  .users-page {
+    padding: 18px 14px;
+  }
+
   .page-header,
   .student-import-toolbar {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .page-actions,
   .student-import-actions {
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: stretch;
   }
 }
 </style>

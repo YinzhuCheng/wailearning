@@ -329,45 +329,72 @@
           :timestamp="formatDate(attempt.submitted_at)"
           placement="top"
         >
-          <div class="attempt-card">
-            <div class="attempt-tags">
-              <el-tag size="small" type="primary">提交 #{{ attempt.id }}</el-tag>
-              <el-tag v-if="attempt.is_late" size="small" type="warning">迟交</el-tag>
-              <el-tag v-if="attempt.used_llm_assist" size="small" type="warning" effect="plain">申报大模型</el-tag>
-              <el-tag
-                v-if="attempt.review_score !== null && attempt.review_score !== undefined"
-                :type="scoreTag(attempt.review_score)"
-                size="small"
+          <div class="attempt-card" :data-testid="`homework-history-attempt-${attempt.id}`">
+            <div class="attempt-summary">
+              <button
+                class="attempt-toggle"
+                type="button"
+                :aria-expanded="isHistoryAttemptExpanded(attempt.id)"
+                :aria-label="isHistoryAttemptExpanded(attempt.id) ? '收起提交明细' : '展开提交明细'"
+                :title="isHistoryAttemptExpanded(attempt.id) ? '收起提交明细' : '展开提交明细'"
+                :data-testid="`homework-history-attempt-toggle-${attempt.id}`"
+                @click="toggleHistoryAttempt(attempt.id)"
               >
-                {{ formatScore(attempt.review_score) }}
-              </el-tag>
-              <el-tooltip
-                v-if="attempt.task_status === 'failed' && attempt.task_error"
-                :content="attemptFailureTooltip(attempt)"
-                placement="top"
-              >
-                <el-tag :type="taskTagType(attempt.task_status)" size="small">
-                  {{ formatTaskStatus(attempt.task_status) }}
-                </el-tag>
-              </el-tooltip>
-              <el-tag v-else-if="attempt.task_status" :type="taskTagType(attempt.task_status)" size="small">
-                {{ formatTaskStatus(attempt.task_status) }}
-              </el-tag>
-              <el-button
-                v-if="attempt.task_log?.length"
-                type="primary"
-                link
-                size="small"
-                data-testid="btn-open-llm-log-history"
-                @click="openTaskLog(currentHistoryRow, attempt)"
-              >
-                LLM 日志
-              </el-button>
-              <el-tag v-if="attempt.score_source === 'teacher'" size="small" type="success">教师评分</el-tag>
-              <el-tag v-else-if="attempt.score_source === 'auto'" size="small" type="info">自动评分</el-tag>
+                <el-icon>
+                  <Minus v-if="isHistoryAttemptExpanded(attempt.id)" />
+                  <Plus v-else />
+                </el-icon>
+              </button>
+
+              <div class="attempt-summary__main">
+                <div class="attempt-tags">
+                  <el-tag size="small" type="primary">提交 #{{ attempt.id }}</el-tag>
+                  <el-tag v-if="attempt.is_late" size="small" type="warning">迟交</el-tag>
+                  <el-tag v-if="attempt.used_llm_assist" size="small" type="warning" effect="plain">申报大模型</el-tag>
+                  <el-tag
+                    v-if="attempt.review_score !== null && attempt.review_score !== undefined"
+                    :type="scoreTag(attempt.review_score)"
+                    size="small"
+                  >
+                    {{ formatScore(attempt.review_score) }}
+                  </el-tag>
+                  <el-tooltip
+                    v-if="attempt.task_status === 'failed' && attempt.task_error"
+                    :content="attemptFailureTooltip(attempt)"
+                    placement="top"
+                  >
+                    <el-tag :type="taskTagType(attempt.task_status)" size="small">
+                      {{ formatTaskStatus(attempt.task_status) }}
+                    </el-tag>
+                  </el-tooltip>
+                  <el-tag v-else-if="attempt.task_status" :type="taskTagType(attempt.task_status)" size="small">
+                    {{ formatTaskStatus(attempt.task_status) }}
+                  </el-tag>
+                  <el-button
+                    v-if="attempt.task_log?.length"
+                    type="primary"
+                    link
+                    size="small"
+                    data-testid="btn-open-llm-log-history"
+                    @click="openTaskLog(currentHistoryRow, attempt)"
+                  >
+                    LLM 日志
+                  </el-button>
+                  <el-tag v-if="attempt.score_source === 'teacher'" size="small" type="success">教师评分</el-tag>
+                  <el-tag v-else-if="attempt.score_source === 'auto'" size="small" type="info">自动评分</el-tag>
+                </div>
+
+                <div class="attempt-summary__preview" :data-testid="`homework-history-attempt-preview-${attempt.id}`">
+                  {{ attempt.content || '无提交说明' }}
+                </div>
+              </div>
             </div>
 
-            <div class="attempt-body">
+            <div
+              v-show="isHistoryAttemptExpanded(attempt.id)"
+              class="attempt-body"
+              :data-testid="`homework-history-attempt-body-${attempt.id}`"
+            >
               <div>{{ attempt.content || '无提交说明' }}</div>
               <div v-if="attempt.attachment_url" class="attempt-link">
                 <el-button type="primary" link @click="openAttachment(attempt.attachment_url, attempt.attachment_name)">
@@ -381,7 +408,7 @@
               <div v-if="attempt.task_error" class="attempt-error">{{ attempt.task_error }}</div>
             </div>
 
-            <div class="attempt-actions">
+            <div v-show="isHistoryAttemptExpanded(attempt.id)" class="attempt-actions">
               <el-input
                 v-model="attempt.review_score_input"
                 :placeholder="`分数 0-${formatScore(homework?.max_score)}`"
@@ -420,6 +447,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Minus, Plus } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
@@ -441,6 +469,7 @@ const selectedRows = ref([])
 const historyVisible = ref(false)
 const currentHistoryRow = ref(null)
 const historyAttempts = ref([])
+const expandedHistoryAttemptIds = ref(new Set())
 const logDialogVisible = ref(false)
 const logDialogTitle = ref('LLM 调用日志')
 const logDialogBody = ref('')
@@ -616,6 +645,19 @@ const openTaskLog = (row, attempt = null) => {
   logDialogVisible.value = true
 }
 
+const isHistoryAttemptExpanded = attemptId => expandedHistoryAttemptIds.value.has(String(attemptId))
+
+const toggleHistoryAttempt = attemptId => {
+  const key = String(attemptId)
+  const next = new Set(expandedHistoryAttemptIds.value)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  expandedHistoryAttemptIds.value = next
+}
+
 const getTodayZipName = () => `${new Date().toLocaleDateString('sv-SE')}.zip`
 
 const resolveDownloadFilename = headers => {
@@ -748,6 +790,7 @@ const openHistory = async row => {
   currentHistoryRow.value = row
   const history = await api.homework.getSubmissionHistory(route.params.id, row.submission_id)
   historyAttempts.value = (history?.attempts || []).map(buildAttemptHistoryRow)
+  expandedHistoryAttemptIds.value = new Set(historyAttempts.value.slice(0, 1).map(attempt => String(attempt.id)))
   historyVisible.value = true
 }
 
@@ -775,6 +818,7 @@ watch(
     historyVisible.value = false
     currentHistoryRow.value = null
     historyAttempts.value = []
+    expandedHistoryAttemptIds.value = new Set()
     submissionPage.value = 1
     filterStudentId.value = route.query.student_id ? Number(route.query.student_id) : null
     detailVisible.value = false
@@ -912,6 +956,61 @@ watch(
   background: #fff;
 }
 
+.attempt-summary {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.attempt-toggle {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  color: #2563eb;
+  background: rgba(239, 246, 255, 0.82);
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.attempt-toggle:hover {
+  transform: scale(1.06);
+  background: #dbeafe;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.16);
+}
+
+.attempt-toggle:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.36);
+  outline-offset: 2px;
+}
+
+.attempt-toggle :deep(.el-icon) {
+  font-size: 14px;
+}
+
+.attempt-summary__main {
+  min-width: 0;
+}
+
+.attempt-summary__preview {
+  margin-top: 8px;
+  max-width: 100%;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .attempt-tags {
   display: flex;
   gap: 8px;
@@ -971,9 +1070,12 @@ watch(
     grid-template-columns: 1fr;
   }
 
+  .attempt-summary {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
   .review-score-input {
     width: 100%;
   }
 }
 </style>
-

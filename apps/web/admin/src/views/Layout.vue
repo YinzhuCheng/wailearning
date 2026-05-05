@@ -1,6 +1,13 @@
 <template>
-  <el-container class="layout-container">
-    <el-aside :width="isCollapsed ? '72px' : '240px'" class="sidebar">
+  <el-container
+    class="layout-container"
+    :class="{
+      'layout-container--mobile-sidebar-open': isMobile && !isCollapsed,
+      'layout-container--sidebar-hidden': !isMobile && isSidebarHidden
+    }"
+  >
+    <div v-if="isMobile && !isCollapsed" class="mobile-sidebar-backdrop" @click="isCollapsed = true" />
+    <el-aside :width="sidebarWidth" class="sidebar" :class="{ 'sidebar--hidden': isSidebarHidden && !isMobile }">
       <div class="logo">
         <div class="logo-main">
           <div class="logo-icon">
@@ -16,7 +23,8 @@
           :icon="isCollapsed ? Expand : Fold"
           circle
           size="small"
-          @click="isCollapsed = !isCollapsed"
+          :aria-label="isCollapsed ? '展开侧边栏' : '收起侧边栏'"
+          @click="toggleSidebarCollapse"
         />
       </div>
 
@@ -60,9 +68,36 @@
       </div>
     </el-aside>
 
+    <button
+      type="button"
+      class="sidebar-edge-handle"
+      :class="{
+        'sidebar-edge-handle--hidden': !isMobile && isSidebarHidden,
+        'sidebar-edge-handle--drawer-open': isMobile && !isCollapsed
+      }"
+      :style="sidebarHandleStyle"
+      :aria-label="sidebarHandleLabel"
+      :title="sidebarHandleLabel"
+      data-testid="sidebar-edge-handle"
+      @click="toggleSidebarDrawer"
+    >
+      <el-icon :size="18">
+        <component :is="sidebarHandleIcon" />
+      </el-icon>
+    </button>
+
     <el-container>
       <el-header class="header">
         <div class="header-left">
+          <el-button
+            v-if="isMobile"
+            class="mobile-menu-btn"
+            :icon="isCollapsed ? Expand : Fold"
+            circle
+            size="small"
+            aria-label="打开导航菜单"
+            @click="toggleMobileSidebar"
+          />
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: homePath }">首页</el-breadcrumb-item>
             <el-breadcrumb-item v-if="homeworkBreadcrumbParent" :to="{ path: '/homework' }">
@@ -114,7 +149,7 @@
             </template>
           </el-dropdown>
 
-          <el-dropdown data-testid="header-user-menu" @command="handleCommand">
+          <el-dropdown trigger="hover" data-testid="header-user-menu" popper-class="user-profile-dropdown" @visible-change="onUserMenuVisible" @command="handleCommand">
             <div class="user-box">
               <el-avatar :size="34" :src="headerAvatarSrc || undefined">
                 {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
@@ -126,6 +161,31 @@
             </div>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item disabled class="user-dropdown-card">
+                  <div class="user-dropdown-profile">
+                    <el-avatar :size="72" :src="headerAvatarSrc || undefined">
+                      {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
+                    </el-avatar>
+                    <div class="user-dropdown-id">
+                      <strong>{{ userStore.userInfo?.real_name || userStore.userInfo?.username || 'User' }}</strong>
+                      <span>{{ roleText(userStore.userInfo?.role) }}</span>
+                      <small>{{ userStore.userInfo?.username }}</small>
+                    </div>
+                  </div>
+                  <div class="user-dropdown-token">
+                    <div class="user-dropdown-token__row">
+                      <span>LLM token</span>
+                      <strong>{{ tokenUsageLabel }}</strong>
+                    </div>
+                    <el-progress
+                      :percentage="tokenUsagePercent"
+                      :stroke-width="10"
+                      :show-text="false"
+                      :color="quotaBarColors"
+                    />
+                    <p>{{ tokenDetailText }}</p>
+                  </div>
+                </el-dropdown-item>
                 <el-dropdown-item command="personal-settings">个人设置</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -150,6 +210,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   Bell,
   Collection,
   DataAnalysis,
@@ -178,10 +240,16 @@ const userStore = useUserStore()
 
 const adminHomePath = '/students'
 const mobileBreakpoint = 768
+const desktopSidebarStorageKey = 'wailearning-admin-sidebar-state'
 const isCollapsed = ref(false)
+const isSidebarHidden = ref(false)
+const isMobile = ref(false)
 
 const headerAvatarSrc = ref('')
 let headerAvatarBlobUrl = ''
+const headerQuotaSummary = ref(null)
+const headerQuotaLoading = ref(false)
+const headerQuotaError = ref(false)
 
 const revokeHeaderAvatarBlob = () => {
   if (headerAvatarBlobUrl) {
@@ -221,8 +289,80 @@ const notificationSyncParams = computed(() => {
   return {}
 })
 
+const quotaBarColors = [
+  { color: '#93c5fd', percentage: 60 },
+  { color: '#3b82f6', percentage: 85 },
+  { color: '#f59e0b', percentage: 95 },
+  { color: '#ef4444', percentage: 100 }
+]
+
+const tokenUsageLimit = computed(() =>
+  Number(headerQuotaSummary.value?.daily_student_token_limit ?? headerQuotaSummary.value?.global_default_daily_student_tokens ?? 0)
+)
+const tokenUsageUsed = computed(() => Number(headerQuotaSummary.value?.student_used_tokens_today ?? 0))
+const tokenUsagePercent = computed(() => {
+  if (!userStore.isStudent || !tokenUsageLimit.value) {
+    return 0
+  }
+  return Math.min(100, Math.round((tokenUsageUsed.value / tokenUsageLimit.value) * 1000) / 10)
+})
+const tokenUsageLabel = computed(() => {
+  if (!userStore.isStudent) {
+    return 'system policy'
+  }
+  if (headerQuotaLoading.value) {
+    return 'loading'
+  }
+  if (headerQuotaError.value) {
+    return 'unavailable'
+  }
+  if (!tokenUsageLimit.value) {
+    return 'no data'
+  }
+  return `${tokenUsageUsed.value} / ${tokenUsageLimit.value}`
+})
+const tokenDetailText = computed(() => {
+  if (!userStore.isStudent) {
+    return 'Managed in system LLM quota settings.'
+  }
+  if (headerQuotaError.value) {
+    return 'Unable to load today quota.'
+  }
+  if (!headerQuotaSummary.value) {
+    return 'Hover to load today quota.'
+  }
+  const remaining = headerQuotaSummary.value.student_remaining_tokens_today ?? Math.max(0, tokenUsageLimit.value - tokenUsageUsed.value)
+  if (tokenUsageLimit.value > 0 && tokenUsageUsed.value > tokenUsageLimit.value) {
+    return `Over limit by ${tokenUsageUsed.value - tokenUsageLimit.value} · ${headerQuotaSummary.value.usage_date || ''} ${headerQuotaSummary.value.quota_timezone || ''}`.trim()
+  }
+  return `Remaining ${remaining} · ${headerQuotaSummary.value.usage_date || ''} ${headerQuotaSummary.value.quota_timezone || ''}`.trim()
+})
+
+const loadHeaderQuotaSummary = async () => {
+  if (!userStore.isStudent || headerQuotaLoading.value) {
+    return
+  }
+  headerQuotaLoading.value = true
+  try {
+    headerQuotaSummary.value = await api.llmSettings.getStudentQuotasSummary()
+    headerQuotaError.value = false
+  } catch (error) {
+    console.error('load header quota failed', error)
+    headerQuotaSummary.value = null
+    headerQuotaError.value = true
+  } finally {
+    headerQuotaLoading.value = false
+  }
+}
+
+const onUserMenuVisible = visible => {
+  if (visible) {
+    loadHeaderQuotaSummary()
+  }
+}
+
 const pollNotificationSync = async () => {
-  if (userStore.isAdmin || !userStore.isLoggedIn) {
+  if (!userStore.isLoggedIn) {
     return
   }
 
@@ -257,6 +397,36 @@ const homePath = computed(() => {
 const showClassContext = computed(() => userStore.isClassTeacher && Boolean(currentClassId.value))
 const showCourseContext = computed(() => !userStore.isAdmin && !userStore.isClassTeacher && Boolean(selectedCourse.value))
 const showCourseSwitcher = computed(() => !userStore.isAdmin && !userStore.isClassTeacher && availableCourses.value.length > 0)
+const sidebarWidth = computed(() => {
+  if (isMobile.value) {
+    return isCollapsed.value ? '0px' : '240px'
+  }
+  if (isSidebarHidden.value) {
+    return '0px'
+  }
+  return isCollapsed.value ? '72px' : '240px'
+})
+const sidebarHandleStyle = computed(() => {
+  if (isMobile.value) {
+    return { left: isCollapsed.value ? '0px' : '226px' }
+  }
+
+  return { left: isSidebarHidden.value ? '0px' : `calc(${sidebarWidth.value} - 14px)` }
+})
+const sidebarHandleLabel = computed(() => {
+  if (isMobile.value) {
+    return isCollapsed.value ? '打开导航菜单' : '关闭导航菜单'
+  }
+
+  return isSidebarHidden.value ? '拉出侧边栏' : '隐藏侧边栏'
+})
+const sidebarHandleIcon = computed(() => {
+  if (isMobile.value) {
+    return isCollapsed.value ? ArrowRight : ArrowLeft
+  }
+
+  return isSidebarHidden.value ? ArrowRight : ArrowLeft
+})
 const classContextText = computed(() => `班级课程 ${classTeacherCourses.value.length} 门`)
 
 const routeNameMap = {
@@ -281,7 +451,7 @@ const routeNameMap = {
   '/homework': '作业管理',
   '/homework/students': '学生作业一览',
   '/homework/by-student': '学生作业一览',
-  '/notifications': '通知信息',
+  '/notifications': '消息与通知',
   '/personal-settings': '个人设置'
 }
 
@@ -328,14 +498,11 @@ const teacherMenu = [
   { path: '/notifications', label: '通知中心', icon: Bell }
 ]
 
-const studentBaseMenu = [
-  { path: '/courses', label: '我的课程', icon: Reading },
-  { path: '/course-home', label: '课程主页', icon: School }
-]
-
 const studentMenu = [
-  { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/courses', label: '我的课程', icon: Reading },
+  { path: '/course-home', label: '课程主页', icon: School },
   { path: '/homework', label: '课程作业', icon: Reading },
+  { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/student-scores', label: '我的成绩', icon: Collection },
   { path: '/notifications', label: '课程通知', icon: Bell }
 ]
@@ -346,13 +513,14 @@ const adminMenu = [
   { path: '/users', label: '用户管理', icon: UserFilled },
   { path: '/subjects', label: '课程管理', icon: Reading },
   { path: '/semesters', label: '学期管理', icon: Collection },
+  { path: '/notifications', label: '消息与通知', icon: Bell },
   { path: '/logs', label: '操作日志', icon: Collection },
   { path: '/settings', label: '系统设置', icon: Setting }
 ]
 
 const menuItems = computed(() => {
   if (userStore.isStudent) {
-    return selectedCourse.value ? [...studentBaseMenu, ...studentMenu] : [studentBaseMenu[0]]
+    return studentMenu
   }
 
   if (userStore.isAdmin) {
@@ -373,9 +541,80 @@ const roleText = role => ({
   student: '学生'
 }[role] || '未知角色')
 
-const syncResponsiveSidebar = () => {
-  if (typeof window !== 'undefined' && window.innerWidth <= mobileBreakpoint) {
+const persistDesktopSidebarState = () => {
+  if (typeof window === 'undefined' || isMobile.value) {
+    return
+  }
+
+  const state = isSidebarHidden.value ? 'hidden' : isCollapsed.value ? 'collapsed' : 'expanded'
+  window.localStorage.setItem(desktopSidebarStorageKey, state)
+}
+
+const restoreDesktopSidebarState = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const state = window.localStorage.getItem(desktopSidebarStorageKey)
+  if (state === 'hidden') {
+    isSidebarHidden.value = true
+    isCollapsed.value = false
+    return
+  }
+  if (state === 'collapsed') {
+    isSidebarHidden.value = false
     isCollapsed.value = true
+    return
+  }
+  isSidebarHidden.value = false
+  isCollapsed.value = false
+}
+
+const toggleSidebarCollapse = () => {
+  if (isSidebarHidden.value) {
+    isSidebarHidden.value = false
+    isCollapsed.value = false
+    persistDesktopSidebarState()
+    return
+  }
+
+  isCollapsed.value = !isCollapsed.value
+  persistDesktopSidebarState()
+}
+
+const toggleMobileSidebar = () => {
+  isCollapsed.value = !isCollapsed.value
+}
+
+const toggleSidebarDrawer = () => {
+  if (isMobile.value) {
+    toggleMobileSidebar()
+    return
+  }
+
+  isSidebarHidden.value = !isSidebarHidden.value
+  if (!isSidebarHidden.value) {
+    isCollapsed.value = false
+  }
+  persistDesktopSidebarState()
+}
+
+const syncResponsiveSidebar = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const nextIsMobile = window.innerWidth <= mobileBreakpoint
+  const changedMode = nextIsMobile !== isMobile.value
+  isMobile.value = nextIsMobile
+  if (isMobile.value) {
+    isSidebarHidden.value = false
+    isCollapsed.value = true
+    return
+  }
+
+  if (changedMode) {
+    restoreDesktopSidebarState()
   }
 }
 
@@ -436,6 +675,7 @@ const handleCommand = command => {
 }
 
 onMounted(async () => {
+  restoreDesktopSidebarState()
   syncResponsiveSidebar()
   window.addEventListener('resize', syncResponsiveSidebar)
   window.addEventListener('focus', handleWindowFocus)
@@ -478,6 +718,9 @@ watch(
 watch(
   () => route.fullPath,
   async () => {
+    if (isMobile.value) {
+      isCollapsed.value = true
+    }
     await syncTeacherCourses(true)
     await pollNotificationSync()
   }
@@ -492,14 +735,71 @@ watch(notificationSyncParams, () => {
 <style scoped>
 .layout-container {
   min-height: 100vh;
-  background: #f4f7fb;
+  background: var(--wa-color-bg);
+}
+
+.layout-container > .el-container {
+  min-width: 0;
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #0f172a 0%, #132238 100%);
+  background: var(--wa-sidebar-bg);
   color: #fff;
+  transition: width 0.2s ease, transform 0.2s ease;
+}
+
+.sidebar--hidden {
+  overflow: hidden;
+}
+
+.sidebar-edge-handle {
+  position: fixed;
+  top: 50%;
+  z-index: 1000;
+  display: inline-flex;
+  width: 22px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-left: none;
+  border-radius: 0 var(--wa-radius-xl) var(--wa-radius-xl) 0;
+  background: color-mix(in srgb, var(--wa-sidebar-bg-start) 78%, rgba(255, 255, 255, 0.22));
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
+  cursor: pointer;
+  transform: translateY(-50%);
+  backdrop-filter: blur(10px);
+  transition: left 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-edge-handle:hover,
+.sidebar-edge-handle:focus-visible {
+  transform: translateY(-50%) translateX(2px);
+  background: color-mix(in srgb, var(--wa-color-primary-500) 62%, rgba(255, 255, 255, 0.2));
+  color: #ffffff;
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--wa-color-primary-600) 26%, transparent);
+  outline: none;
+}
+
+.sidebar-edge-handle--hidden {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--wa-color-primary-600);
+}
+
+.sidebar-edge-handle--drawer-open {
+  color: #ffffff;
+  background: color-mix(in srgb, var(--wa-sidebar-bg-start) 80%, rgba(255, 255, 255, 0.24));
+}
+
+.mobile-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  background: rgba(15, 23, 42, 0.36);
 }
 
 .sidebar-body {
@@ -543,9 +843,9 @@ watch(notificationSyncParams, () => {
   height: 40px;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
+  border-radius: var(--wa-radius-lg);
+  background: color-mix(in srgb, var(--wa-color-primary-500) 22%, transparent);
+  color: var(--wa-color-primary-300);
 }
 
 .logo-texts h2 {
@@ -572,31 +872,56 @@ watch(notificationSyncParams, () => {
   padding: 12px 8px;
 }
 
+.sidebar-menu :deep(.el-sub-menu),
+.sidebar-menu :deep(.el-menu--inline),
+.sidebar-menu :deep(.el-sub-menu .el-menu) {
+  background: transparent;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu) {
+  padding: 0;
+}
+
+.sidebar-menu :deep(.el-sub-menu__title),
+.sidebar-menu :deep(.el-sub-menu .el-menu-item) {
+  background-color: transparent;
+}
+
 .sidebar-menu :deep(.el-menu-item) {
   margin: 6px 0;
-  border-radius: 12px;
+  border-radius: var(--wa-radius-lg);
   color: rgba(255, 255, 255, 0.82);
+  transform-origin: left center;
+  transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
 .sidebar-menu :deep(.el-menu-item:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
+  transform: translateX(2px) scale(1.025);
 }
 
 .sidebar-menu :deep(.el-menu-item.is-active) {
-  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  background: var(--wa-sidebar-active-bg);
   color: #fff;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu-item.is-active) {
+  background: var(--wa-sidebar-active-bg);
 }
 
 .sidebar-menu :deep(.el-sub-menu__title) {
   margin: 6px 0;
-  border-radius: 12px;
+  border-radius: var(--wa-radius-lg);
   color: rgba(255, 255, 255, 0.82);
+  transform-origin: left center;
+  transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
 .sidebar-menu :deep(.el-sub-menu__title:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
+  transform: translateX(2px) scale(1.025);
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item) {
@@ -608,7 +933,7 @@ watch(notificationSyncParams, () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--wa-border-subtle);
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(10px);
 }
@@ -617,42 +942,59 @@ watch(notificationSyncParams, () => {
   display: flex;
   align-items: center;
   gap: 18px;
+  min-width: 0;
 }
 
 .context-chip {
   display: flex;
   align-items: center;
   gap: 10px;
+  max-width: 100%;
   border-radius: 999px;
-  background: #eff6ff;
+  background: var(--wa-color-primary-50);
   padding: 8px 14px;
-  color: #1d4ed8;
+  color: var(--wa-color-primary-700);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.context-chip:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--wa-color-primary-600) 12%, transparent);
 }
 
 .context-chip--class {
-  background: #ecfeff;
-  color: #0f766e;
+  background: var(--wa-color-accent-50);
+  color: var(--wa-color-accent-700);
 }
 
 .context-chip__label {
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .context-chip__meta {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 2px;
 }
 
+.context-chip__meta strong,
+.context-chip__meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .context-chip__meta span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .course-option {
@@ -664,11 +1006,11 @@ watch(notificationSyncParams, () => {
 
 .course-option span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .course-dropdown-menu :deep(.is-current-course) {
-  background: #eff6ff;
+  background: var(--wa-color-primary-50);
 }
 
 .user-box {
@@ -676,6 +1018,15 @@ watch(notificationSyncParams, () => {
   align-items: center;
   gap: 12px;
   cursor: pointer;
+  border-radius: var(--wa-radius-pill);
+  padding: 4px 8px 4px 4px;
+  transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.user-box:hover {
+  background: var(--wa-color-primary-50);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  transform: scale(1.025);
 }
 
 .user-meta {
@@ -685,15 +1036,82 @@ watch(notificationSyncParams, () => {
 }
 
 .user-meta strong {
-  color: #111827;
+  color: var(--wa-color-text);
 }
 
 .user-meta span {
   font-size: 12px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
+}
+
+.user-dropdown-card {
+  width: 300px;
+  cursor: default;
+}
+
+.user-dropdown-card.is-disabled {
+  opacity: 1;
+}
+
+.user-dropdown-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 4px 12px;
+}
+
+.user-dropdown-id {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-dropdown-id strong,
+.user-dropdown-id span,
+.user-dropdown-id small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-dropdown-id strong {
+  color: var(--wa-color-text);
+}
+
+.user-dropdown-id span,
+.user-dropdown-id small {
+  color: var(--wa-color-text-muted);
+}
+
+.user-dropdown-token {
+  border: 1px solid var(--wa-border-subtle);
+  border-radius: var(--wa-radius-md);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 70%, white);
+  padding: 10px;
+}
+
+.user-dropdown-token__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--wa-color-text-soft);
+}
+
+.user-dropdown-token__row strong {
+  color: var(--wa-color-primary-700);
+}
+
+.user-dropdown-token p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--wa-color-text-muted);
 }
 
 .main-content {
+  min-width: 0;
   padding: 0;
 }
 
@@ -702,10 +1120,39 @@ watch(notificationSyncParams, () => {
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 @media (max-width: 768px) {
+  .layout-container {
+    position: relative;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 999;
+    overflow: hidden;
+    box-shadow: 18px 0 40px rgba(15, 23, 42, 0.2);
+  }
+
+  .sidebar[style*="0px"] {
+    transform: translateX(-100%);
+  }
+
+  .sidebar-edge-handle {
+    width: 26px;
+    height: 52px;
+  }
+
+  .layout-container--mobile-sidebar-open {
+    overflow: hidden;
+  }
+
+  .logo {
+    padding: 14px 12px;
+  }
+
   .header {
     height: auto;
     flex-direction: column;
@@ -715,8 +1162,35 @@ watch(notificationSyncParams, () => {
   }
 
   .header-left {
-    flex-direction: column;
+    width: 100%;
+    flex-wrap: wrap;
     align-items: flex-start;
+    gap: 10px;
+  }
+
+  .mobile-menu-btn {
+    flex: 0 0 auto;
+  }
+
+  .header-left :deep(.el-breadcrumb) {
+    min-width: 0;
+    max-width: calc(100% - 44px);
+  }
+
+  .context-chip {
+    width: 100%;
+    border-radius: 18px;
+    align-items: flex-start;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .user-meta {
+    display: none;
   }
 }
 </style>

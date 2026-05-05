@@ -69,6 +69,18 @@ Production rules:
 - set `TRUSTED_HOSTS` and `BACKEND_CORS_ORIGINS` deliberately instead of relying on development defaults,
 - consider `REQUIRE_STRONG_SECRETS=true` even outside strict production startup paths so weak secrets fail early,
 - only one production backend leader should usually run the grading worker.
+- Optional: set `FRONTEND_ADMIN_BASE_URL` to the public admin origin (for example `https://wailearning.xyz`) so **忘记密码** notifications include an absolute link to the password-reset screen; if unset, the notification still contains a relative `/users?...` path that works when opened inside the same admin site.
+
+## Administrator password after deployment (SSH)
+
+If you can SSH into the application server, you can reset any user password (including the bootstrap `INIT_ADMIN_USERNAME`) **without using the web UI** by running the bundled script against the production virtualenv and `.env.production`:
+
+```bash
+cd /opt/dd-class/source
+sudo bash ops/scripts/reset_user_password.sh admin 'YourNewStrongPasswordHere!'
+```
+
+The script updates the password hash in the database and increments `token_version` so existing JWT sessions for that user are invalidated. Alternatively, set `INIT_ADMIN_PASSWORD` before the **first** bootstrap run when `INIT_DEFAULT_DATA=true`; for an already-deployed database, prefer the script above or an in-app admin reset from **用户管理**.
 
 ## Database Initialization
 

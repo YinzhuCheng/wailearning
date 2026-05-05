@@ -5,42 +5,43 @@
       <p class="muted">管理显示名称、头像与登录密码</p>
     </div>
 
-    <el-card class="block-card" shadow="never">
-      <template #header>
-        <span>基本信息</span>
-      </template>
-      <el-form label-position="top" class="profile-form" @submit.prevent>
-        <el-form-item label="用户名">
-          <el-input :model-value="userStore.userInfo?.username || ''" disabled />
-        </el-form-item>
-        <el-form-item label="姓名">
-          <el-input
-            v-model="profileForm.real_name"
-            data-testid="personal-profile-real-name"
-            maxlength="120"
-            show-word-limit
-            placeholder="用于界面显示的姓名"
-          />
-        </el-form-item>
-        <el-form-item label="角色">
-          <el-input :model-value="roleLabel" disabled />
-        </el-form-item>
-        <el-form-item label="讨论区分页（每页回复条数）">
-          <el-input-number
-            v-model="profileForm.discussion_page_size"
-            :min="5"
-            :max="50"
-            :step="1"
-            controls-position="right"
-            data-testid="personal-discussion-page-size"
-          />
-          <p class="hint">默认 10；仅影响作业与资料讨论区的分页，可在 5～50 之间调整。</p>
-        </el-form-item>
-        <el-button type="primary" data-testid="personal-profile-save" :loading="profileSaving" @click="saveProfile">
-          保存基本信息
-        </el-button>
-      </el-form>
-    </el-card>
+    <div class="settings-grid">
+      <el-card class="block-card block-card--profile" shadow="never">
+        <template #header>
+          <span>基本信息</span>
+        </template>
+        <el-form label-position="top" class="profile-form" @submit.prevent>
+          <el-form-item label="用户名">
+            <el-input :model-value="userStore.userInfo?.username || ''" disabled />
+          </el-form-item>
+          <el-form-item label="姓名">
+            <el-input
+              v-model="profileForm.real_name"
+              data-testid="personal-profile-real-name"
+              maxlength="120"
+              show-word-limit
+              placeholder="用于界面显示的姓名"
+            />
+          </el-form-item>
+          <el-form-item label="角色">
+            <el-input :model-value="roleLabel" disabled />
+          </el-form-item>
+          <el-form-item label="讨论区分页（每页回复条数）">
+            <el-input-number
+              v-model="profileForm.discussion_page_size"
+              :min="5"
+              :max="50"
+              :step="1"
+              controls-position="right"
+              data-testid="personal-discussion-page-size"
+            />
+            <p class="hint">默认 10；仅影响作业与资料讨论区的分页，可在 5～50 之间调整。</p>
+          </el-form-item>
+          <el-button type="primary" data-testid="personal-profile-save" :loading="profileSaving" @click="saveProfile">
+            保存基本信息
+          </el-button>
+        </el-form>
+      </el-card>
 
     <el-card class="block-card" shadow="never">
       <template #header>
@@ -123,6 +124,9 @@
         </div>
       </el-form>
     </el-card>
+    </div>
+
+    <AppearanceStylePanel />
   </div>
 </template>
 
@@ -131,6 +135,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import AppearanceStylePanel from '@/components/AppearanceStylePanel.vue'
 import { fetchAttachmentBlobUrl, validateAttachmentFile } from '@/utils/attachments'
 import { useUserStore } from '@/stores/user'
 
@@ -309,8 +314,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .personal-settings {
-  max-width: 720px;
+  max-width: 1080px;
   padding: 24px 28px 48px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 20px;
 }
 
 .page-head {
@@ -333,6 +344,10 @@ onBeforeUnmount(() => {
 .block-card {
   margin-bottom: 20px;
   border-radius: 12px;
+}
+
+.block-card--profile {
+  grid-row: span 2;
 }
 
 .profile-form {
@@ -374,5 +389,19 @@ onBeforeUnmount(() => {
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .personal-settings {
+    padding: 18px 16px 36px;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .block-card--profile {
+    grid-row: auto;
+  }
 }
 </style>

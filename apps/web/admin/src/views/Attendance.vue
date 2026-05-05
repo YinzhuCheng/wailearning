@@ -632,6 +632,16 @@ watch(
   padding: 24px;
   display: grid;
   gap: 20px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.attendance-page :deep(.el-card) {
+  min-width: 0;
+}
+
+.attendance-page :deep(.el-card__body) {
+  overflow-x: auto;
 }
 
 .page-header {
@@ -752,10 +762,12 @@ watch(
 
 .sheet-body {
   min-height: 220px;
+  min-width: 0;
 }
 
 .sheet-scroll {
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .attendance-grid {
@@ -871,7 +883,7 @@ watch(
 
 @media (max-width: 900px) {
   .attendance-page {
-    padding: 16px;
+    padding: 18px 14px;
   }
 
   .page-header {

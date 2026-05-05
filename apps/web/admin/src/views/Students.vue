@@ -978,6 +978,16 @@ watch(
 <style scoped>
 .students-page {
   padding: 24px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.students-page :deep(.el-card) {
+  min-width: 0;
+}
+
+.students-page :deep(.el-card__body) {
+  overflow-x: auto;
 }
 
 .page-header {
@@ -1011,6 +1021,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 
 .card-header {
@@ -1018,6 +1029,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
 }
 
 .card-actions {
@@ -1026,6 +1038,7 @@ watch(
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+  min-width: 0;
 }
 
 @media (max-width: 900px) {
@@ -1107,6 +1120,10 @@ watch(
 }
 
 @media (max-width: 768px) {
+  .students-page {
+    padding: 18px 14px;
+  }
+
   .page-header,
   .card-header {
     flex-direction: column;
