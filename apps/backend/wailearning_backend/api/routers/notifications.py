@@ -2,7 +2,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, false, func, or_
+from sqlalchemy import and_, desc, false, func, or_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -391,6 +393,73 @@ def mark_as_read(
     return {"message": "Notification marked as read."}
 
 
+def _bulk_upsert_notification_reads_mark_read(
+    db: Session, notification_ids: list[int], user_id: int, read_at: datetime
+) -> None:
+    """Idempotently mark many notifications read for one user (concurrency-safe).
+
+    Uses INSERT .. ON CONFLICT DO UPDATE on the composite unique key
+    ``(notification_id, user_id)`` so parallel mark-all-read / mark-read calls
+    cannot fail with IntegrityError on the unique index.
+    """
+    if not notification_ids:
+        return
+    values = [
+        {
+            "notification_id": nid,
+            "user_id": user_id,
+            "is_read": True,
+            "read_at": read_at,
+        }
+        for nid in notification_ids
+    ]
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        ins = pg_insert(NotificationRead).values(values)
+        ins = ins.on_conflict_do_update(
+            index_elements=[NotificationRead.notification_id, NotificationRead.user_id],
+            set_={
+                "is_read": ins.excluded.is_read,
+                "read_at": ins.excluded.read_at,
+            },
+        )
+        db.execute(ins)
+        return
+    if dialect == "sqlite":
+        ins = sqlite_insert(NotificationRead).values(values)
+        ins = ins.on_conflict_do_update(
+            index_elements=[NotificationRead.notification_id, NotificationRead.user_id],
+            set_={
+                "is_read": ins.excluded.is_read,
+                "read_at": ins.excluded.read_at,
+            },
+        )
+        db.execute(ins)
+        return
+    # Other dialects: best-effort row-by-row (tests use SQLite/PostgreSQL only).
+    for nid in notification_ids:
+        record = (
+            db.query(NotificationRead)
+            .filter(
+                NotificationRead.notification_id == nid,
+                NotificationRead.user_id == user_id,
+            )
+            .first()
+        )
+        if not record:
+            db.add(
+                NotificationRead(
+                    notification_id=nid,
+                    user_id=user_id,
+                    is_read=True,
+                    read_at=read_at,
+                )
+            )
+        else:
+            record.is_read = True
+            record.read_at = read_at
+
+
 @router.post("/mark-all-read")
 def mark_all_as_read(
     subject_id: Optional[int] = None,
@@ -398,46 +467,32 @@ def mark_all_as_read(
     current_user: User = Depends(get_current_active_user),
 ):
     notifications = _visible_notifications_query(current_user, db, subject_id).all()
-    updated = 0
-    for notification in notifications:
-        record = db.query(NotificationRead).filter(
-            NotificationRead.notification_id == notification.id,
-            NotificationRead.user_id == current_user.id,
-        ).first()
-        if not record:
-            record = NotificationRead(
-                notification_id=notification.id,
-                user_id=current_user.id,
-                is_read=True,
-                read_at=datetime.now(timezone.utc),
-            )
-            db.add(record)
-            updated += 1
-            continue
-        if not record.is_read:
-            record.is_read = True
-            record.read_at = datetime.now(timezone.utc)
-            updated += 1
+    if not notifications:
+        return {"message": "Marked 0 notifications as read."}
 
+    ids = [int(n.id) for n in notifications]
+    read_at = datetime.now(timezone.utc)
+
+    updated = (
+        db.query(func.count(Notification.id))
+        .outerjoin(
+            NotificationRead,
+            and_(
+                NotificationRead.notification_id == Notification.id,
+                NotificationRead.user_id == current_user.id,
+            ),
+        )
+        .filter(Notification.id.in_(ids))
+        .filter(or_(NotificationRead.id.is_(None), NotificationRead.is_read.is_(False)))
+        .scalar()
+    )
+    updated = int(updated or 0)
+
+    _bulk_upsert_notification_reads_mark_read(db, ids, int(current_user.id), read_at)
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
-        for notification in notifications:
-            record = db.query(NotificationRead).filter(
-                NotificationRead.notification_id == notification.id,
-                NotificationRead.user_id == current_user.id,
-            ).first()
-            if not record:
-                record = NotificationRead(
-                    notification_id=notification.id,
-                    user_id=current_user.id,
-                    is_read=True,
-                    read_at=datetime.now(timezone.utc),
-                )
-                db.add(record)
-                continue
-            record.is_read = True
-            record.read_at = datetime.now(timezone.utc)
+        _bulk_upsert_notification_reads_mark_read(db, ids, int(current_user.id), read_at)
         db.commit()
     return {"message": f"Marked {updated} notifications as read."}

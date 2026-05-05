@@ -20,7 +20,7 @@ The LLM feature set is built around four layers:
 - `LLMEndpointPreset`
   Stores base URL, API key, model name, timeout, retry, activation, and validation state.
 - `CourseLLMConfig`
-  Stores the course-level enable switch, response language, prompts, single-call token boundaries, and endpoint/group routing.
+  Stores the course-level enable switch, response language, prompts, single-call token boundaries, and endpoint/group routing. Quota calendar and reservation estimation knobs are **not** stored on this row; they live on `LLMGlobalQuotaPolicy` and are applied system-wide.
 - `CourseLLMConfigEndpoint`
   Links validated presets into a course-specific endpoint order.
 - `LLMGlobalQuotaPolicy`

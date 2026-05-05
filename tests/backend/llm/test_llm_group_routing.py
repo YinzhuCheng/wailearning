@@ -136,7 +136,6 @@ def _make_grouped_course_with_homework() -> dict:
             is_enabled=True,
             max_input_tokens=8000,
             max_output_tokens=1000,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()
@@ -712,7 +711,6 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
             is_enabled=True,
             max_input_tokens=4000,
             max_output_tokens=500,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()

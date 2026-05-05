@@ -130,7 +130,6 @@ def _ensure_demo_subject_llm_binding(
             created_by=teacher_id,
             updated_by=teacher_id,
             is_enabled=bool(enable_auto_grading),
-            quota_timezone="Asia/Shanghai",
         )
         db.add(cfg)
         db.flush()

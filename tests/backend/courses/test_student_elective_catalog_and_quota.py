@@ -162,7 +162,6 @@ def test_student_quota_endpoint(client: TestClient):
         cfg = CourseLLMConfig(
             subject_id=eid,
             is_enabled=True,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.add(LLMStudentTokenOverride(student_id=stu_row.id, daily_tokens=1000))

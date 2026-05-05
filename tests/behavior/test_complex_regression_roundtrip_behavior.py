@@ -418,6 +418,57 @@ def test_c7_concurrent_notification_read_paths_converge_to_one_row(client: TestC
         db.close()
 
 
+def test_c7b_concurrent_dual_mark_all_read_no_integrity_errors(client: TestClient) -> None:
+    """Two parallel mark-all-read calls must not race on unique (notification_id, user_id)."""
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    class_id = _subject_class_and_teacher(ctx["subject_id"])["class_id"]
+
+    for i in range(3):
+        created = client.post(
+            "/api/notifications",
+            headers=teacher_headers,
+            json={
+                "title": f"bulk-{i}",
+                "content": "bulk",
+                "class_id": class_id,
+                "subject_id": ctx["subject_id"],
+            },
+        )
+        assert created.status_code == 200, created.text
+
+    errors: list[str] = []
+
+    def mark_all() -> None:
+        try:
+            with TestClient(app) as thread_client:
+                resp = thread_client.post(
+                    "/api/notifications/mark-all-read",
+                    headers=student_headers,
+                    params={"subject_id": ctx["subject_id"]},
+                )
+                assert resp.status_code == 200, resp.text
+        except Exception as exc:  # pragma: no cover
+            errors.append(str(exc))
+
+    threads = [threading.Thread(target=mark_all), threading.Thread(target=mark_all)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not errors
+
+    sync = client.get(
+        "/api/notifications/sync-status",
+        headers=student_headers,
+        params={"subject_id": ctx["subject_id"]},
+    )
+    assert sync.status_code == 200, sync.text
+    assert sync.json()["unread_count"] == 0
+
+
 def test_c8_deleting_notification_cleans_read_rows(client: TestClient) -> None:
     ensure_admin()
     ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)

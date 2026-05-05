@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -90,6 +91,9 @@ _AUTO_RETRY_ELIGIBLE_ERROR_CODES = frozenset(
 from apps.backend.wailearning_backend.domains.llm.errors import NonRetryableLLMError, RetryableLLMError
 
 
+logger = logging.getLogger(__name__)
+
+
 class _WorkerManager:
     def __init__(self) -> None:
         self._thread: Optional[threading.Thread] = None
@@ -149,13 +153,14 @@ class _WorkerManager:
                 ex = self._ensure_executor(cap)
                 futs = [ex.submit(process_grading_task, tid) for tid in claimed]
                 wait(futs)
-                for fut in futs:
+                for tid, fut in zip(claimed, futs):
                     try:
                         fut.result()
-                    except Exception as exc:  # pragma: no cover
-                        print(f"LLM grading task error: {exc}")
-            except Exception as exc:  # pragma: no cover - defensive background logging
-                print(f"LLM grading worker loop error: {exc}")
+                    except Exception as exc:
+                        logger.exception("LLM grading task error task_id=%s", tid)
+                        _mark_task_failed_from_worker_executor(tid, exc)
+            except Exception as exc:
+                logger.exception("LLM grading worker loop error")
                 self._stop_event.wait(settings.LLM_GRADING_WORKER_POLL_SECONDS)
 
 
@@ -1292,6 +1297,24 @@ def _mark_task_failed(
         attempt_row = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
         if attempt_row:
             _maybe_queue_auto_retry(db, attempt_row, error_code)
+
+
+def _mark_task_failed_from_worker_executor(task_id: int, exc: BaseException) -> None:
+    """
+    If process_grading_task raises after the inner handler's session is closed (e.g. ThreadPoolExecutor),
+    the task can remain stuck in ``processing`` until stale reclaim. Mark failed using a fresh session.
+    """
+    db = SessionLocal()
+    try:
+        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
+        if not task or task.status not in ("queued", "processing"):
+            return
+        _mark_task_failed(db, task, "unexpected_error", f"评分任务异常（worker）：{exc}")
+    except Exception:
+        db.rollback()
+        logger.exception("failed to persist worker failure state for task_id=%s", task_id)
+    finally:
+        db.close()
 
 
 def _collect_grading_endpoints_for_config(

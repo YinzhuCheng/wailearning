@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import socket
 from pathlib import Path
 
 import pytest
@@ -40,7 +41,64 @@ _tmp_dir = Path(__file__).resolve().parents[1] / ".pytest_tmp"
 _tmp_dir.mkdir(exist_ok=True)
 _tmp = _tmp_dir / "test.sqlite"
 _sqlite_url = "sqlite:///" + _tmp.resolve().as_posix()
-_database_url = os.environ.get("TEST_DATABASE_URL", "").strip() or _sqlite_url
+
+
+def _default_postgres_pytest_url() -> str:
+    """URL used by ops/scripts/dev/provision_postgres_pytest.sh (throwaway CI/local DB)."""
+    return (
+        "postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all"
+    )
+
+
+def _tcp_postgres_reachable(url: str) -> bool:
+    """Cheap probe: can we TCP-connect to host:port (no credentials on wire)."""
+    if "127.0.0.1" not in url and "localhost" not in url:
+        return False
+    try:
+        host, port = "127.0.0.1", 5432
+        if "@127.0.0.1:" in url:
+            rest = url.split("@127.0.0.1:", 1)[1]
+            port = int(rest.split("/", 1)[0])
+        elif "@localhost:" in url:
+            rest = url.split("@localhost:", 1)[1]
+            port = int(rest.split("/", 1)[0])
+        with socket.create_connection((host, port), timeout=0.4):
+            return True
+    except OSError:
+        return False
+
+
+def _auto_pick_postgres_test_url() -> str | None:
+    """If WAILEARNING_AUTO_PG_TESTS is set and Postgres probe URL answers, use it.
+
+    Eliminates skips on ``tests/postgres/*`` and ``test_r3`` without requiring
+    every developer to manually export TEST_DATABASE_URL after running
+    ``ops/scripts/dev/provision_postgres_pytest.sh``.
+    """
+    raw = os.environ.get("WAILEARNING_AUTO_PG_TESTS", "").strip().lower()
+    if raw not in {"1", "true", "yes", "on"}:
+        return None
+    candidate = _default_postgres_pytest_url()
+    if not _tcp_postgres_reachable(candidate):
+        return None
+    try:
+        import psycopg2  # noqa: PLC0415
+
+        psycopg2.connect(
+            dbname="wailearning_pytest_all",
+            user="wailearning_test",
+            password="wailearning_test",
+            host="127.0.0.1",
+            port=5432,
+            connect_timeout=2,
+        ).close()
+    except Exception:
+        return None
+    return candidate
+
+
+_explicit_test_db = os.environ.get("TEST_DATABASE_URL", "").strip()
+_database_url = _explicit_test_db or _auto_pick_postgres_test_url() or _sqlite_url
 
 os.environ["DATABASE_URL"] = _database_url
 os.environ["ENABLE_LLM_GRADING_WORKER"] = _env_flag("TEST_ENABLE_LLM_GRADING_WORKER", False)

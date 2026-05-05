@@ -111,6 +111,9 @@ app.include_router(material_chapters.router)
 app.include_router(materials.router)
 app.include_router(notifications.router)
 app.include_router(parent.router)
+# E2E dev routes are always registered; each handler is gated by
+# ``expose_e2e_dev_api()`` so production returns 404 and tests can toggle
+# ``E2E_DEV_SEED_ENABLED`` at runtime without reloading the app module.
 app.include_router(e2e_dev.router)
 
 ensure_upload_directories()

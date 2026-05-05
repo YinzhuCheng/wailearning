@@ -65,6 +65,8 @@ This scenario is exactly the kind of state-convergence bug that real users hit i
 - verify whether the authoritative backend state was actually correct when the UI timed out
 - run this scenario repeatedly in isolation and in-suite to measure flake rate
 
+**Update (Round-4 continuation, 2026-05):** `POST /api/notifications/mark-all-read` was hardened server-side for **SQLite and PostgreSQL** by batching `notification_reads` updates with `INSERT .. ON CONFLICT DO UPDATE` on the composite unique key `(notification_id, user_id)`, plus a regression test `test_c7b_concurrent_dual_mark_all_read_no_integrity_errors`. This removes a common `IntegrityError` race when two tabs or threads mark-all-read concurrently; UI-level convergence and other client races remain worth monitoring.
+
 ## P1: backend import/startup path is too side-effect-heavy
 
 ### Type

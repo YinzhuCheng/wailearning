@@ -60,7 +60,13 @@ def test_pg03_information_schema_course_llm_configs_no_legacy_token_columns():
                 """
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'course_llm_configs'
-                  AND column_name IN ('daily_course_token_limit', 'daily_student_token_limit')
+                  AND column_name IN (
+                      'daily_course_token_limit',
+                      'daily_student_token_limit',
+                      'quota_timezone',
+                      'estimated_chars_per_token',
+                      'estimated_image_tokens'
+                  )
                 """
             )
         ).fetchall()
