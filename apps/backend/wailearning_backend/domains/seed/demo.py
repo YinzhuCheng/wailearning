@@ -1,7 +1,7 @@
 """Default demo data: teacher `teacher`, class 人工智能1班, students stu1–stu5.
 
-- **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业。
-- **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业，**不**自动写入全班选课。
+- **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业；写入虚构的学期起止与多时段课表 JSON。
+- **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业，**不**自动写入全班选课；同样写入基本教学日历与课表 JSON。
 
 若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（`ensure_schema_updates` 会写入内置默认预设），本种子会为演示必修课/选修课**幂等绑定**首个可用预设（必修课同时 `is_enabled=True` 以配合自动评分作业）；否则不写入端点，由管理员或教师在课程 LLM 配置中手动选择。
 
@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -43,11 +44,6 @@ _LEGACY_CLASS_NAME = "数据挖掘默认班"
 _COURSE_NAME = "数据挖掘"
 
 _LLM_COURSE_NAME = "大语言模型"
-_LLM_COURSE_DESCRIPTION = (
-    "全校默认选修示例：大语言模型基础与应用入门。完成本课需由学生在「我的课程」中自主选课；"
-    "内容包含提示工程简介与一次实践作业。"
-)
-_LLM_WEEKLY = "每周四 15:00–17:00（选修，以教务通知为准）"
 _LLM_MATERIAL_TITLE = "【选修】大语言模型：课程说明与阅读材料"
 _LLM_MATERIAL_CONTENT = """## 欢迎选修「大语言模型」
 
@@ -76,12 +72,102 @@ _LLM_RUBRIC_TEXT = """总分 100。关注是否理解提示工程、模板结构
 """
 
 _TEACHER_DISPLAY_NAME = "李演示"
-_COURSE_WEEKLY_SCHEDULE = "每周二 14:00–16:00（教室以教务通知为准）"
-_COURSE_TIMES = "第1–16周；实验课与讨论课穿插安排，请关注课程群通知。"
 _COURSE_DESCRIPTION = (
     "数据挖掘入门与实践（演示课程）。涵盖 Python 数据分析基础、特征与可视化、"
     "简单预处理与经典数据集探索；平时作业与课堂表现结合考核。"
 )
+
+
+def _spring_term_bounds(year: int) -> tuple[datetime, datetime]:
+    """Fictional spring term window for demo courses (UTC midnight boundaries)."""
+    start = datetime(year, 2, 24, 0, 0, 0, tzinfo=timezone.utc)
+    end = datetime(year, 6, 30, 23, 59, 59, tzinfo=timezone.utc)
+    return start, end
+
+
+def _demo_data_mining_calendar(semester: Semester | None) -> dict:
+    """
+    Fictional syllabus calendar + structured course_times JSON for API consumers.
+
+    Returns keys: weekly_schedule, course_start_at, course_end_at, course_times_json, description
+    """
+    year = int(semester.year) if semester and getattr(semester, "year", None) else 2026
+    term_label = semester.name if semester else f"{year}春季（演示）"
+    start, end = _spring_term_bounds(year)
+    weekly_main = (
+        "每周二 14:00–16:00 理论课；每周四 09:50–11:25 上机与习题讲评（教室与机位以教务为准，以下为演示占位）"
+    )
+    calendar_md = (
+        "### 教学日历（演示数据，虚构）\n\n"
+        f"- **学期**：{term_label}\n"
+        f"- **开课—结课**：{year} 年 2 月 24 日 — {year} 年 6 月 30 日（约 16 教学周，遇节假日顺延）\n"
+        f"- **上课节律**：{weekly_main}\n"
+        "- **理论课地点（演示）**：东十二教学楼 301\n"
+        "- **上机地点（演示）**：计算中心 B201\n"
+        "- **答疑时间**：双周周三 12:30–13:30，线上会议链接于课程群发布\n"
+        "- **期中**：约第 8 周随堂小测；**期末**：报告 + 答辩，截止周次见教务系统\n"
+        "- **总学时（演示）**：48 学时（理论 32 + 上机 16）\n"
+    )
+    desc = f"{_COURSE_DESCRIPTION}\n\n{calendar_md}"
+    items = [
+        {
+            "weekly_schedule": "每周二 14:00–16:00 理论课（演示：东十二-301）",
+            "course_start_at": start.isoformat(),
+            "course_end_at": end.isoformat(),
+        },
+        {
+            "weekly_schedule": "每周四 09:50–11:25 上机与习题讲评（演示：计算中心-B201）",
+            "course_start_at": start.isoformat(),
+            "course_end_at": end.isoformat(),
+        },
+    ]
+    return {
+        "weekly_schedule": items[0]["weekly_schedule"],
+        "course_start_at": start,
+        "course_end_at": end,
+        "course_times_json": json.dumps(items, ensure_ascii=False),
+        "description": desc,
+    }
+
+
+def _demo_llm_elective_calendar(semester: Semester | None) -> dict:
+    """Fictional elective calendar (lighter load) + course_times JSON."""
+    year = int(semester.year) if semester and getattr(semester, "year", None) else 2026
+    term_label = semester.name if semester else f"{year}春季（演示）"
+    start, end = _spring_term_bounds(year)
+    weekly_main = "每周四 15:00–17:00 研讨课（演示占位）"
+    calendar_md = (
+        "### 教学日历（演示数据，虚构）\n\n"
+        f"- **学期**：{term_label}\n"
+        f"- **开课—结课**：{year} 年 2 月 24 日 — {year} 年 6 月 20 日（选修，共约 14 次课）\n"
+        f"- **上课节律**：{weekly_main}\n"
+        "- **教室（演示）**：南一楼 108 讨论室\n"
+        "- **线上回放**：课后 48 小时内上传至课程资料区（演示流程）\n"
+    )
+    base_desc = (
+        "全校默认选修示例：大语言模型基础与应用入门。完成本课需由学生在「我的课程」中自主选课；"
+        "内容包含提示工程简介与一次实践作业。"
+    )
+    desc = f"{base_desc}\n\n{calendar_md}"
+    items = [
+        {
+            "weekly_schedule": "每周四 15:00–17:00 研讨课（演示：南一楼-108）",
+            "course_start_at": start.isoformat(),
+            "course_end_at": end.isoformat(),
+        },
+        {
+            "weekly_schedule": "隔周周五 14:00–15:00 助教答疑（演示：线上）",
+            "course_start_at": start.isoformat(),
+            "course_end_at": end.isoformat(),
+        },
+    ]
+    return {
+        "weekly_schedule": items[0]["weekly_schedule"],
+        "course_start_at": start,
+        "course_end_at": end,
+        "course_times_json": json.dumps(items, ensure_ascii=False),
+        "description": desc,
+    }
 
 # Demo material outline: three chapter nodes (depth 3), idempotent by root title.
 _DEMO_CHAPTER_ROOT = "【演示】第一单元：导论与数据概览"
@@ -550,6 +636,7 @@ def _seed_llm_elective_course(
     semester: Semester | None,
 ) -> None:
     """Elective on the same demo class; students self-enroll (no roster-wide auto enrollment)."""
+    cal = _demo_llm_elective_calendar(semester)
     course = (
         db.query(Subject)
         .filter(
@@ -568,9 +655,11 @@ def _seed_llm_elective_course(
             semester=semester.name if semester else None,
             course_type="elective",
             status="active",
-            weekly_schedule=_LLM_WEEKLY,
-            course_times="选修课：请自主选课；课次以教务与课程群通知为准。",
-            description=_LLM_COURSE_DESCRIPTION,
+            weekly_schedule=cal["weekly_schedule"],
+            course_start_at=cal["course_start_at"],
+            course_end_at=cal["course_end_at"],
+            course_times=cal["course_times_json"],
+            description=cal["description"],
         )
         db.add(course)
         db.flush()
@@ -578,8 +667,11 @@ def _seed_llm_elective_course(
     else:
         course.course_type = "elective"
         course.status = "active"
-        course.weekly_schedule = _LLM_WEEKLY
-        course.description = _LLM_COURSE_DESCRIPTION
+        course.weekly_schedule = cal["weekly_schedule"]
+        course.course_start_at = cal["course_start_at"]
+        course.course_end_at = cal["course_end_at"]
+        course.course_times = cal["course_times_json"]
+        course.description = cal["description"]
         print(f"Demo elective '{_LLM_COURSE_NAME}' already exists; refreshed fields.")
 
     _ensure_demo_subject_llm_binding(
@@ -740,6 +832,8 @@ def seed_demo_course_bundle(db: Session) -> None:
         or db.query(Semester).order_by(Semester.year.desc(), Semester.id.desc()).first()
     )
 
+    dm_cal = _demo_data_mining_calendar(semester)
+
     course = (
         db.query(Subject)
         .filter(
@@ -758,9 +852,11 @@ def seed_demo_course_bundle(db: Session) -> None:
             semester=semester.name if semester else None,
             course_type="required",
             status="active",
-            weekly_schedule=_COURSE_WEEKLY_SCHEDULE,
-            course_times=_COURSE_TIMES,
-            description=_COURSE_DESCRIPTION,
+            weekly_schedule=dm_cal["weekly_schedule"],
+            course_start_at=dm_cal["course_start_at"],
+            course_end_at=dm_cal["course_end_at"],
+            course_times=dm_cal["course_times_json"],
+            description=dm_cal["description"],
         )
         db.add(course)
         db.flush()
@@ -769,9 +865,11 @@ def seed_demo_course_bundle(db: Session) -> None:
         if semester and course.semester_id != semester.id:
             course.semester_id = semester.id
             course.semester = semester.name
-        course.weekly_schedule = _COURSE_WEEKLY_SCHEDULE
-        course.course_times = _COURSE_TIMES
-        course.description = _COURSE_DESCRIPTION
+        course.weekly_schedule = dm_cal["weekly_schedule"]
+        course.course_start_at = dm_cal["course_start_at"]
+        course.course_end_at = dm_cal["course_end_at"]
+        course.course_times = dm_cal["course_times_json"]
+        course.description = dm_cal["description"]
         print(f"Demo course '{_COURSE_NAME}' already exists.")
 
     _ensure_demo_subject_llm_binding(
