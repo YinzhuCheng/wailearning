@@ -1487,6 +1487,93 @@ Clients that deep-link **`/api/files/download/{name}`** without a query paramete
 
 **`tests/backend/files/test_files_attachment_download.py`** still expects **200** when the teacher has access and either there is a single matching URL or paths coincide.
 
+### Pitfall 58: `ensure_course_access` raised `ValueError` inside FastAPI routes (500 instead of 404)
+
+### Symptom
+
+Calling course-scoped endpoints with a non-existent **`subject_id`** returned **500 Internal Server Error** because **`ensure_course_access`** calls **`get_course_or_404`**, which raises **`ValueError("Course not found.")`** — uncaught in many routers.
+
+### Context
+
+Only some handlers wrapped **`try/except ValueError`**. Others assumed **`ensure_course_access`** only raised **`PermissionError`**.
+
+### Fix
+
+**`ensure_course_access_http`** (in **`apps/backend/wailearning_backend/domains/courses/access.py`**) now maps **`ValueError`** to HTTP **404** and **`PermissionError`** to **403**. Route modules were migrated to call **`ensure_course_access_http`** instead of **`ensure_course_access`** for HTTP endpoints (**`homework.py`**, **`scores.py`**, **`attendance.py`**, **`dashboard.py`**, **`subjects.py`**, **`llm_settings.py`**, **`files.py`** attachment ACL helper).
+
+### Interpretation
+
+Regression guard: unknown course IDs must never surface as **500** for authenticated callers.
+
+### Pitfall 59: Homework **`class_id`** vs course **`Subject.class_id`** mismatch
+
+### Symptom
+
+Corrupt rows where **`Homework.class_id`** references class A but **`Homework.subject_id`** points at a **`Subject`** owned by class B caused confusing auth: **`ensure_course_access`** could return **404** (“course not in accessible list”) after the user already passed class-level homework checks.
+
+### Context
+
+Multi-column inconsistency is an administrator/data-import defect; students should not see **404** suggesting “wrong roster” when the real issue is inconsistent homework wiring.
+
+### Fix
+
+**`_ensure_homework_access`** compares **`Subject.class_id`** to **`Homework.class_id`** when both are set and returns **403** with an explicit **data integrity** message before calling **`ensure_course_access_http`**.
+
+### Interpretation
+
+Covered by **`tests/backend/homework/test_homework_course_class_integrity.py`** (admin sees integrity **403**; student is blocked **403**).
+
+### Pitfall 60: `POST /api/auth/forgot-password` spam and throttle semantics
+
+### Symptom
+
+Repeated forgot-password requests for the same username flood **`notifications`** rows for administrators; scripted clients can also hammer the endpoint from one IP.
+
+### Context
+
+The endpoint intentionally returns the **same generic message** for missing accounts (anti-enumeration). Throttling must therefore avoid leaking “account exists” via different HTTP codes — skipped work still returns the canonical success body.
+
+### Fix
+
+- **`FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS`** (default **600**): suppresses a **new** admin notification if another **`password_reset_request`** notification for the same titled user was created within the window. A **`operation_logs`** row with **`result=cooldown`** records the skip (no notification row).
+- **`FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR`** (default **40**): counts **`operation_logs`** rows with **`action=forgot_password_request`** per IP in the rolling hour; when over budget, skip notification creation and log **`result=rate_limited`**.
+
+Disable by setting **`FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS=0`** and/or **`FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR=0`** (zero disables that gate).
+
+### Interpretation
+
+**`tests/backend/auth/test_forgot_password_flow.py`** still expects the first successful path unchanged; add parallel tests if you tighten defaults further.
+
+### Pitfall 61: Public registration with invented **`class_id`**
+
+### Symptom
+
+With **`ALLOW_PUBLIC_REGISTRATION=true`**, **`POST /api/auth/register`** accepted arbitrary **`class_id`** values, creating student accounts pointing at non-existent **`classes`** rows (orphan **`users.class_id`**).
+
+### Fix
+
+When **`PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS`** is **true** (default), **`register`** queries **`classes`** and returns **400** with **`Invalid class_id: class does not exist.`** if missing.
+
+### Interpretation
+
+**`tests/backend/auth/test_public_registration_validation.py`** asserts rejection for a synthetic ID; **`tests/backend/courses/test_student_course_roster_behavior.py::test_public_register_student_then_roster_same_username_gets_enrollments`** still uses a real class from the scenario.
+
+### Pitfall 62: Student LLM quota GET endpoint creating **`CourseLLMConfig`** rows
+
+### Symptom
+
+**`GET /api/llm-settings/courses/student-quota/{subject_id}`** called **`ensure_course_llm_config`**, which inserts **`course_llm_configs`** and may sync template endpoints — an unintended **write** side effect for a read-only quota view.
+
+### Fix
+
+After **`ensure_course_access_http`**, build usage via **`get_student_quota_usage_snapshot(db, None, student_id=..., subject_id=...)`** (extended signature in **`domains/llm/quota.py`**) without initializing course LLM config.
+
+**`GET /api/llm-settings/courses/student-quotas`** no longer calls **`ensure_course_llm_config`** per enrollment row (read-only aggregation).
+
+### Interpretation
+
+Teachers still invoke **`ensure_course_llm_config`** through **`GET/PUT /api/llm-settings/courses/{subject_id}`** when editing LLM settings — that path intentionally creates/configures rows.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

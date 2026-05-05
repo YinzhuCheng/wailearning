@@ -99,6 +99,9 @@ Defined in [`../../apps/backend/wailearning_backend/core/config.py`](../../apps/
 - `LLM_GRADING_TASK_STALE_SECONDS`
 - `DEFAULT_LLM_API_KEY`
 - `REQUIRE_STRONG_SECRETS`
+- `FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS` — minimum seconds between admin notifications for the same username on forgot-password (set `0` to disable per-user cooldown).
+- `FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR` — rolling hourly cap on forgot-password attempts recorded per client IP in `operation_logs` (set `0` to disable the IP gate).
+- `PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS` — when true alongside `ALLOW_PUBLIC_REGISTRATION`, `POST /api/auth/register` rejects unknown `class_id` with HTTP 400.
 
 ## Test Layers
 

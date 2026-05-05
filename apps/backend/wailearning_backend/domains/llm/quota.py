@@ -32,10 +32,22 @@ def get_quota_usage_snapshot(db: Session, config: CourseLLMConfig) -> dict[str, 
     }
 
 
-def get_student_quota_usage_snapshot(db: Session, config: CourseLLMConfig, *, student_id: int) -> dict[str, Any]:
+def get_student_quota_usage_snapshot(
+    db: Session,
+    config: Optional[CourseLLMConfig],
+    *,
+    student_id: int,
+    subject_id: Optional[int] = None,
+) -> dict[str, Any]:
+    """Quota snapshot for a student. Pass ``config`` when a course row exists; otherwise pass ``subject_id`` alone."""
     usage_date, timezone_name = resolve_global_quota_calendar(db)
     lim_stu = resolve_effective_daily_student_tokens(db, student_id)
-    sid = int(config.subject_id)
+    if subject_id is not None:
+        sid = int(subject_id)
+    elif config is not None:
+        sid = int(config.subject_id)
+    else:
+        raise ValueError("subject_id or config with subject_id is required")
     snap: dict[str, Any] = {
         "subject_id": sid,
         "usage_date": usage_date,

@@ -44,6 +44,7 @@ Subgroups:
   - submission limits
   - grading and appeal flows
   - markdown visibility behavior
+  - homework vs course class integrity (`test_homework_course_class_integrity.py`)
 - `tests/backend/courses/`
   - course access
   - roster versus course enrollment behavior
@@ -76,6 +77,9 @@ See [HTTP client slow-response busy hint](HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md
   - smoke-style API coverage that preserves behavior previously exercised by manual scripts
 - `tests/backend/user_profile/`
   - profile and avatar flows
+- `tests/backend/auth/`
+  - forgot-password flow and admin notification content (`test_forgot_password_flow.py`)
+  - public registration validation when `ALLOW_PUBLIC_REGISTRATION` is enabled (`test_public_registration_validation.py`)
 
 ### `tests/behavior/`
 

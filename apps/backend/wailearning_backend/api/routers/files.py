@@ -15,7 +15,7 @@ from apps.backend.wailearning_backend.attachments import (
     save_attachment,
 )
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, Subject, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
@@ -47,8 +47,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         if current_user.role == UserRole.ADMIN or homework.class_id in allowed_class_ids:
             if homework.subject_id:
                 try:
-                    ensure_course_access(homework.subject_id, current_user, db)
-                except (ValueError, PermissionError):
+                    ensure_course_access_http(homework.subject_id, current_user, db)
+                except HTTPException:
                     return False
             return True
         return False
@@ -58,8 +58,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         if current_user.role == UserRole.ADMIN or material.class_id in allowed_class_ids:
             if material.subject_id:
                 try:
-                    ensure_course_access(material.subject_id, current_user, db)
-                except (ValueError, PermissionError):
+                    ensure_course_access_http(material.subject_id, current_user, db)
+                except HTTPException:
                     return False
             return True
         return False
@@ -72,8 +72,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
             return False
         if notification.subject_id:
             try:
-                ensure_course_access(notification.subject_id, current_user, db)
-            except (ValueError, PermissionError):
+                ensure_course_access_http(notification.subject_id, current_user, db)
+            except HTTPException:
                 return False
         return True
 
@@ -84,8 +84,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         if current_user.role == UserRole.ADMIN or submission.class_id in allowed_class_ids:
             if submission.subject_id:
                 try:
-                    ensure_course_access(submission.subject_id, current_user, db)
-                except (ValueError, PermissionError):
+                    ensure_course_access_http(submission.subject_id, current_user, db)
+                except HTTPException:
                     return False
             return True
         return False
@@ -97,8 +97,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         if current_user.role == UserRole.ADMIN or attempt.class_id in allowed_class_ids:
             if attempt.subject_id:
                 try:
-                    ensure_course_access(attempt.subject_id, current_user, db)
-                except (ValueError, PermissionError):
+                    ensure_course_access_http(attempt.subject_id, current_user, db)
+                except HTTPException:
                     return False
             return True
         return False
@@ -106,8 +106,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
     subject_cover = db.query(Subject).filter(Subject.cover_image_url == attachment_url).first()
     if subject_cover:
         try:
-            ensure_course_access(subject_cover.id, current_user, db)
-        except (ValueError, PermissionError):
+            ensure_course_access_http(subject_cover.id, current_user, db)
+        except HTTPException:
             return False
         return True
 
