@@ -182,11 +182,13 @@ def ensure_course_access(course_id: int, user: User, db: Session) -> Subject:
 
 
 def ensure_course_access_http(course_id: int, user: User, db: Session) -> Subject:
-    """Same as ensure_course_access but raises HTTP 403 for FastAPI routes."""
+    """Same as ensure_course_access but maps errors to HTTP responses for FastAPI routes."""
     try:
         return ensure_course_access(course_id, user, db)
     except PermissionError:
         raise HTTPException(status_code=403, detail="You do not have access to this course.") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
 def is_course_instructor(user: User, course: Subject) -> bool:

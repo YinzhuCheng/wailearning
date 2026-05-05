@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Attendance, Student, Subject, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
@@ -62,7 +62,7 @@ def get_attendances(
     if student_name:
         query = query.join(Student, Attendance.student_id == Student.id).filter(Student.name.contains(student_name))
     if subject_id:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
         query = query.filter(Attendance.date >= start_date)
@@ -92,7 +92,7 @@ def create_attendance(
         raise HTTPException(status_code=400, detail="Student not found in the selected class.")
 
     if attendance_data.subject_id:
-        course = ensure_course_access(attendance_data.subject_id, current_user, db)
+        course = ensure_course_access_http(attendance_data.subject_id, current_user, db)
         if course.class_id and course.class_id != attendance_data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
@@ -179,7 +179,7 @@ def get_class_attendance_stats(
 
     query = db.query(Attendance).filter(Attendance.class_id == class_id)
     if subject_id:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
         query = query.filter(Attendance.date >= start_date)
@@ -387,7 +387,7 @@ def get_student_attendance_stats(
 
     query = db.query(Attendance).filter(Attendance.student_id == student_id)
     if subject_id:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
         query = query.filter(Attendance.date >= start_date)

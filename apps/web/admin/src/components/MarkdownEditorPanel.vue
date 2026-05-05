@@ -1,5 +1,5 @@
 <template>
-  <div class="md-panel" :data-testid="dataTestid || undefined">
+  <div class="md-panel">
     <div v-if="isMarkdown" class="md-panel__toolbar">
       <el-button size="small" :disabled="disabled" @click="insertHeading('## ')">标题</el-button>
       <el-button size="small" :disabled="disabled" @click="insertBold">加粗</el-button>
@@ -26,6 +26,7 @@
       :placeholder="effectivePlaceholder"
       :disabled="disabled"
       class="md-panel__input"
+      :data-testid="dataTestid || undefined"
       @update:model-value="v => $emit('update:modelValue', v)"
     />
     <div v-if="hint" class="md-panel__hint">{{ hint }}</div>

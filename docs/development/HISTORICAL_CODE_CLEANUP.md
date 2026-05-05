@@ -160,6 +160,35 @@ This pass targeted **navigation redundancy** in `<repo>/apps/web/admin/src/views
 
 - Playwright specs that navigate by **URL** (`/courses`, `/course-home`, …) are unaffected. Specs that assumed **visible sidebar text** “我的课程” may need selector updates to **选课与进度** or role-based navigation — grep `<repo>/tests/e2e/web-admin` after pulling this change.
 
+### 6. Obsolete E2E backlog documentation removed (`2026-05-05`)
+
+**Removed**
+
+- **`docs/development/E2E_BACKLOG_SCENARIOS.md`** — deleted entirely.
+
+**Why this was dead weight rather than “historical preservation”**
+
+The file documented an **`E2E_ENABLE_BACKLOG_SPECS`** environment gate and a helper path **`tests/e2e/web-admin/backlog-e2e.cjs`**. Static verification on this repository shows:
+
+- **`grep -r E2E_ENABLE_BACKLOG`** across the workspace returns **no code references** (Playwright config, npm scripts, and CI templates never defined or consumed this variable).
+- **`backlog-e2e.cjs`** **does not exist** under `tests/e2e/web-admin/` (the filename appeared only in documentation).
+
+Keeping the document therefore misled agents into believing an alternate test pipeline still existed. That is worse than deleting it: it wasted triage time on fictional env vars.
+
+**Where the useful content went**
+
+The thirty-scenario index for **`future-advanced-coverage.spec.js`** / **`future-advanced-coverage-2.spec.js`** was **merged into** [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md) under the Playwright section (`Scenario index`). Operational commands remain next to that index.
+
+Cross-links were updated:
+
+- [README.md](../../README.md) (repository root)
+- [docs/README.md](README.md) (documentation hub)
+- [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)
+
+**What was intentionally not claimed**
+
+This deletion does **not** remove or rename any Playwright spec files. The **`future-advanced-coverage*.spec.js`** pair remains normal runnable coverage under `npm run test:e2e`.
+
 ## PowerShell Encoding Safety Rules
 
 This repository is frequently edited from Windows PowerShell sessions where console rendering can misrepresent UTF-8 text. That rendering issue must not be allowed to write mojibake back into the repo.

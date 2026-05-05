@@ -5,6 +5,7 @@
  */
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { seedHeaders } = require('./e2e-seed-headers.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -16,11 +17,6 @@ const ONE_PX_PNG = Buffer.from(
 
 function apiBase() {
   return (process.env.E2E_API_URL || 'http://127.0.0.1:8012').replace(/\/$/, '')
-}
-
-function seedHeaders() {
-  const t = (process.env.E2E_DEV_SEED_TOKEN || '').trim()
-  return t ? { 'X-E2E-Seed-Token': t } : {}
 }
 
 async function login(page, username, password) {

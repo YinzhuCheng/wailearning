@@ -12,6 +12,11 @@ process.env.E2E_API_URL = process.env.E2E_API_URL || apiBase
 process.env.E2E_DEV_SEED_TOKEN = process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed'
 process.env.PLAYWRIGHT_BASE_URL =
   process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${E2E_UI_PORT}`
+// Default dual gate for powerful /api/e2e/dev/* routes (mock LLM, grading pump); override with E2E_DEV_REQUIRE_ADMIN_JWT=0.
+process.env.E2E_DEV_REQUIRE_ADMIN_JWT =
+  process.env.E2E_DEV_REQUIRE_ADMIN_JWT !== undefined
+    ? process.env.E2E_DEV_REQUIRE_ADMIN_JWT
+    : 'true'
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..')
 const adminRoot = __dirname
@@ -35,9 +40,14 @@ const useExternalServers = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.PLAYWRIGHT_USE_EXTERNAL_SERVERS || 'false').trim().toLowerCase()
 )
 
+const dualJwt = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.E2E_DEV_REQUIRE_ADMIN_JWT || '').trim().toLowerCase()
+)
+
 const apiEnv = {
   E2E_DEV_SEED_ENABLED: 'true',
   E2E_DEV_SEED_TOKEN: process.env.E2E_DEV_SEED_TOKEN,
+  E2E_DEV_REQUIRE_ADMIN_JWT: dualJwt ? 'true' : 'false',
   INIT_DEFAULT_DATA: 'false',
   DATABASE_URL: sqliteUrl,
   SECRET_KEY: secretKey,

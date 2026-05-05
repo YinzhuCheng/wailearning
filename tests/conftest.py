@@ -124,6 +124,8 @@ def _reset_worker_and_e2e_settings():
     settings.LLM_GRADING_WORKER_POLL_SECONDS = 2
     settings.E2E_DEV_SEED_ENABLED = False
     settings.E2E_DEV_SEED_TOKEN = ""
+    if hasattr(settings, "E2E_DEV_REQUIRE_ADMIN_JWT"):
+        settings.E2E_DEV_REQUIRE_ADMIN_JWT = False
     yield
     worker_manager.stop()
     settings.ENABLE_LLM_GRADING_WORKER = _DEFAULT_ENABLE_WORKER
@@ -131,3 +133,5 @@ def _reset_worker_and_e2e_settings():
     settings.LLM_GRADING_WORKER_POLL_SECONDS = 2
     settings.E2E_DEV_SEED_ENABLED = False
     settings.E2E_DEV_SEED_TOKEN = ""
+    if hasattr(settings, "E2E_DEV_REQUIRE_ADMIN_JWT"):
+        settings.E2E_DEV_REQUIRE_ADMIN_JWT = False

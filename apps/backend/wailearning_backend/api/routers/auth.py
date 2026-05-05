@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
 from typing import Optional
@@ -6,8 +6,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+
 from apps.backend.wailearning_backend.db.database import get_db
-from apps.backend.wailearning_backend.db.models import Notification, User, UserRole
+from apps.backend.wailearning_backend.db.models import Class, Notification, OperationLog, User, UserRole
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced, save_attachment
 from apps.backend.wailearning_backend.api.schemas import (
     ChangePasswordRequest,
@@ -78,6 +80,47 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+def _forgot_password_ip_over_budget(db: Session, ip: Optional[str]) -> bool:
+    lim = int(getattr(settings, "FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR", 40) or 0)
+    if lim <= 0 or not ip:
+        return False
+    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    n = (
+        db.query(func.count(OperationLog.id))
+        .filter(
+            OperationLog.action == "forgot_password_request",
+            OperationLog.ip_address == ip,
+            OperationLog.created_at >= since,
+        )
+        .scalar()
+        or 0
+    )
+    return int(n) >= lim
+
+
+def _forgot_password_user_on_cooldown(db: Session, user: User) -> bool:
+    cooldown = int(getattr(settings, "FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS", 0) or 0)
+    if cooldown <= 0:
+        return False
+    title = f"忘记密码：{user.username}"
+    last = (
+        db.query(Notification)
+        .filter(
+            Notification.notification_kind == "password_reset_request",
+            Notification.title == title,
+        )
+        .order_by(Notification.id.desc())
+        .first()
+    )
+    if not last or not last.created_at:
+        return False
+    prev = last.created_at
+    if prev.tzinfo is None:
+        prev = prev.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - prev
+    return delta.total_seconds() < float(cooldown)
+
+
 def _admin_reset_link_path(user_id: int) -> str:
     return f"/users?open_reset_password_user_id={int(user_id)}"
 
@@ -93,8 +136,41 @@ def forgot_password(
     if not raw:
         return {"message": "若账号存在且需要重置密码，已向管理员发送提醒。"}
 
+    ip = _client_ip(request)
+    if _forgot_password_ip_over_budget(db, ip):
+        LogService.log(
+            db=db,
+            action="forgot_password_request",
+            target_type="auth",
+            user_id=None,
+            username=raw,
+            target_id=None,
+            target_name=None,
+            details="Forgot-password skipped: IP hourly budget exceeded.",
+            ip_address=ip,
+            user_agent=str(request.headers.get("user-agent")) if request else None,
+            result="rate_limited",
+        )
+        return {"message": "若账号存在且需要重置密码，已向管理员发送提醒。"}
+
     user = db.query(User).filter(User.username == raw).first()
     if not user or (user.role or "").strip() == UserRole.ADMIN.value:
+        return {"message": "若账号存在且需要重置密码，已向管理员发送提醒。"}
+
+    if _forgot_password_user_on_cooldown(db, user):
+        LogService.log(
+            db=db,
+            action="forgot_password_request",
+            target_type="auth",
+            user_id=None,
+            username=raw,
+            target_id=user.id,
+            target_name=user.username,
+            details="Forgot-password skipped: per-username cooldown.",
+            ip_address=ip,
+            user_agent=str(request.headers.get("user-agent")) if request else None,
+            result="cooldown",
+        )
         return {"message": "若账号存在且需要重置密码，已向管理员发送提醒。"}
 
     system_actor = (
@@ -160,6 +236,11 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if normalized_role not in {UserRole.STUDENT.value}:
         raise HTTPException(status_code=403, detail="Public registration can only create student accounts.")
 
+    if getattr(settings, "PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS", True):
+        klass = db.query(Class).filter(Class.id == user_data.class_id).first()
+        if not klass:
+            raise HTTPException(status_code=400, detail="Invalid class_id: class does not exist.")
+
     hashed_password = get_password_hash(user_data.password)
     user = User(
         username=user_data.username,
@@ -217,11 +298,13 @@ async def upload_my_avatar(
             detail="Avatar must be a JPEG, PNG, GIF, or WebP image.",
         )
 
-    uploaded = await save_attachment(file, request)
-    size = int(uploaded.get("size") or 0)
-    if size > MAX_AVATAR_BYTES:
-        delete_attachment_file_if_unreferenced(db, str(uploaded.get("attachment_url")))
+    content = await file.read()
+    if len(content) > MAX_AVATAR_BYTES:
         raise HTTPException(status_code=400, detail="Avatar image must be 2 MB or smaller.")
+
+    uploaded = await save_attachment(file, request, preloaded=content)
+    size = int(uploaded.get("size") or 0)
+    assert size <= MAX_AVATAR_BYTES
 
     previous = current_user.avatar_url
     current_user.avatar_url = str(uploaded["attachment_url"])

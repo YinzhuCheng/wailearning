@@ -1,6 +1,8 @@
 const fs = require('fs')
 const path = require('path')
 
+const { refreshE2eAdminBearer } = require('./e2e-seed-headers.cjs')
+
 /**
  * @param {import('@playwright/test').FullConfig} _config
  */
@@ -21,6 +23,7 @@ module.exports = async function globalSetup(_config) {
   }
 
   const data = await res.json()
+  await refreshE2eAdminBearer(data)
   const cacheDir = path.join(__dirname, '.cache')
   fs.mkdirSync(cacheDir, { recursive: true })
   fs.writeFileSync(path.join(cacheDir, 'scenario.json'), JSON.stringify(data, null, 2), 'utf8')
