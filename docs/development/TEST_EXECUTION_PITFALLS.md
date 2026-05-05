@@ -1183,7 +1183,38 @@ Fix:
 
 Interpretation:
 
-**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for **417 passed, 0 skipped** with the recipe above.
+**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for **432 passed, 0 skipped** with the recipe above (same total collection as SQLite; Postgres executes previously skipped modules). Older notes that mention **417** referred to an earlier collection size and should not be used as the current target.
+
+### Pitfall 46: disposable Linux / cloud-agent runners may lack `pytest` until `requirements.txt` is installed
+
+### Symptom
+
+Running the backend suite from `<REPO_ROOT>` fails before any test body executes:
+
+```text
+/usr/bin/python3: No module named pytest
+```
+
+Or the shell reports that `pytest` is not found when invoked as a bare executable.
+
+### Context
+
+Cursor cloud agents, minimal CI images, and fresh clones often do **not** ship with the repository `.venv` pre-created. The canonical developer workflow assumes `pip install -r requirements.txt` (or an equivalent venv step) before `python -m pytest`.
+
+### Fix
+
+At `<REPO_ROOT>`:
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m pytest tests/ -q
+```
+
+Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) Local Development Setup); the important invariant is that the **same interpreter** that runs pytest has project dependencies installed.
+
+### Interpretation
+
+This is **runner bootstrap debt**, not a failing test or a broken import path in `apps.backend.wailearning_backend`. Do not edit `tests/conftest.py` or `pytest.ini` to “fix” a missing `pytest` package on the system interpreter.
 
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
