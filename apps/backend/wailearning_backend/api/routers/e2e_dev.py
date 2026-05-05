@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -37,7 +37,22 @@ from apps.backend.wailearning_backend.db.models import (
     UserRole,
 )
 
-router = APIRouter(prefix="/api/e2e", tags=["e2e-dev"])
+def require_e2e_dev_api_exposed() -> None:
+    """Block every /api/e2e route unless current settings allow the dev API.
+
+    The router stays registered so tests can toggle ``E2E_DEV_SEED_ENABLED`` at runtime
+    without reloading ``main``; production still returns **404** for all paths here
+    when ``expose_e2e_dev_api()`` is false (defense in depth).
+    """
+    if not settings.expose_e2e_dev_api():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+
+router = APIRouter(
+    prefix="/api/e2e",
+    tags=["e2e-dev"],
+    dependencies=[Depends(require_e2e_dev_api_exposed)],
+)
 
 _mock_llm_lock = threading.Lock()
 _mock_llm_profiles: dict[str, dict[str, Any]] = {}

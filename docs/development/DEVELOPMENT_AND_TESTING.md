@@ -168,7 +168,7 @@ The repository includes an E2E-only reset API used by browser tests.
 
 - Route family: `/api/e2e/...`
 - Guarded by `E2E_DEV_SEED_ENABLED` and `E2E_DEV_SEED_TOKEN`
-- Never enable this in production; additionally, `APP_ENV=production` forces `expose_e2e_dev_api()` to **false** so the router is not mounted even if a misconfiguration sets the seed flags (see `tests/backend/test_settings_e2e_router_gate.py`)
+- Never enable this in production; additionally, `APP_ENV=production` forces `expose_e2e_dev_api()` to **false**, so every `/api/e2e/...` request returns **404** even if seed flags were mis-set (see `tests/backend/test_settings_e2e_router_gate.py`). The router remains registered for test-time toggles; access is blocked by a router-level dependency.
 
 Playwright scenarios commonly use:
 
@@ -386,9 +386,10 @@ Fix for tests: prefer explicit `query(...).one()` then attribute mutation, or us
 
 **2d. Round-1 hardening (P0/P1 follow-ups from security audit, code changes)**
 
-- **`/api/e2e/*` router mounting:** `main.py` only calls `app.include_router(e2e_dev.router)` when `settings.expose_e2e_dev_api()` is true (`apps/backend/wailearning_backend/core/config.py`). That helper returns **false** whenever `APP_ENV` is production (defense in depth; `Settings` still rejects `E2E_DEV_SEED_ENABLED` in production at parse time). Regression coverage: `tests/backend/test_settings_e2e_router_gate.py`.
+- **`/api/e2e/*` router access:** `e2e_dev.router` is **always** registered in `main.py` so pytest and tooling can toggle ``E2E_DEV_SEED_ENABLED`` at runtime without reloading the app. Every route on that router depends on ``require_e2e_dev_api_exposed`` (`api/routers/e2e_dev.py`), which raises **404** unless ``settings.expose_e2e_dev_api()`` is true. In production, ``expose_e2e_dev_api()`` is always false; ``Settings`` still rejects ``E2E_DEV_SEED_ENABLED`` with production ``APP_ENV`` at parse time. Regression coverage: `tests/backend/test_settings_e2e_router_gate.py`.
 - **Attachment download by basename:** `apps/backend/wailearning_backend/api/routers/files.py::download_attachment_by_stored_name` resolves every **authorized** candidate URL to an on-disk path; if more than one **distinct** resolved path exists for the same basename, the handler returns **403** instead of picking an arbitrary row (mitigates basename collision widening access while still allowing multiple DB rows that reference the same physical file). Collisions are logged at warning level.
 - **LLM worker executor:** `apps/backend/wailearning_backend/llm_grading.py` `_WorkerManager._run` pairs each `Future` with its `task_id`; on `fut.result()` failure it calls `_mark_task_failed_from_worker_executor` so tasks do not stick in `processing` until stale reclaim. Exceptions use `logging` instead of bare `print`.
+- **Concurrent mark-all-read:** `POST /api/notifications/mark-all-read` uses dialect-specific `INSERT .. ON CONFLICT DO UPDATE` on `notification_reads(notification_id, user_id)` for PostgreSQL and SQLite so parallel mark-all-read / mark-read cannot hit `IntegrityError` on the unique index. Regression: `tests/behavior/test_complex_regression_roundtrip_behavior.py::test_c7b_concurrent_dual_mark_all_read_no_integrity_errors`.
 
 #### 3. Agent “worries” and residual coverage gaps (explicit, not a bug list)
 
