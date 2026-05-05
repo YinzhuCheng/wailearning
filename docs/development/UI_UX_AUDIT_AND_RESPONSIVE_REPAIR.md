@@ -960,17 +960,13 @@ Files changed:
 - `apps/web/admin/src/views/Login.vue`;
 - `apps/web/admin/src/views/StudentCourseHome.vue`.
 
-Runtime behavior:
+Runtime behavior (current implementation; supersedes older audit bullets where they conflict):
 
-- `App.vue` applies the theme to `document.documentElement.dataset.waTheme`;
-- the accepted canonical theme names are `blue`, `green`, `warm`, and
-  `grayscale`;
-- aliases such as `default`, `primary`, `teal`, `emerald`, `orange`, `amber`,
-  `neutral`, `gray`, and `grey` are normalized before application;
-- system settings may provide `admin_theme`, `theme`, `theme_color`, or
-  `color_theme`;
-- `localStorage.wailearning-admin-theme` can temporarily override the system
-  setting for inspection or local audit work.
+- `App.vue` applies `applyAppearanceStyle(resolveAppearanceFromState(...))` on `document.documentElement`, writing CSS variables and `data-wa-*` attributes.
+- The `data-wa-theme` attribute stores the **palette family** key from the resolved preset (`blue`, `green`, `amber`, `gray`, `navy`, `slate`, …), not the historical four-token `green` / `warm` / `grayscale` shim set.
+- String aliases such as `default`, `primary`, `ocean`, `teal`, `orange`, `neutral`, `gray`, and `grey` are still normalized through `legacyThemeAliases` before preset resolution.
+- Public system settings expose **`appearance_default_preset`** (see `SystemSettingsResponse`); older client-only keys such as `admin_theme`, `theme`, `theme_color`, and `color_theme` are no longer read by the admin SPA theme resolver.
+- `localStorage.wailearning-admin-theme` may still exist on long-lived developer machines from historical experiments; it is **not** read by current `App.vue` and can be deleted manually if present.
 
 Important boundary:
 

@@ -225,18 +225,7 @@ export const appearancePresets = [
   }
 ]
 
-export const adminThemeNames = ['blue', 'green', 'warm', 'grayscale']
-export const appearancePresetKeys = appearancePresets.map(item => item.key)
-
 const defaultConfig = appearancePresets[0].config
-
-export function normalizeAdminTheme(value) {
-  const preset = resolveAppearancePreset(value)
-  if (preset?.key === 'fresh-green') return 'green'
-  if (preset?.key === 'warm-amber') return 'warm'
-  if (preset?.key === 'minimal-gray') return 'grayscale'
-  return 'blue'
-}
 
 export function resolveAppearancePreset(value) {
   if (typeof value !== 'string') {
@@ -272,17 +261,9 @@ export function resolveAppearanceFromState(settings = {}, appearanceState = null
 
   const presetKey =
     appearanceState?.system_default_preset ||
-    settings.appearance_default_preset ||
-    settings.admin_theme ||
-    settings.theme ||
-    settings.theme_color ||
-    settings.color_theme
+    settings.appearance_default_preset
 
   return normalizeAppearanceConfig(resolveAppearancePreset(presetKey).config)
-}
-
-export function resolveAdminTheme(settings = {}) {
-  return normalizeAdminTheme(settings.admin_theme || settings.theme || settings.theme_color || settings.color_theme)
 }
 
 /** Radius: controls squarer than cards/dialogs for visual rhythm */
@@ -524,9 +505,4 @@ export function applyAppearanceStyle(configValue) {
   applyCssVarsToElement(root, buildAppearanceCssVars(config))
 
   return config
-}
-
-export function applyAdminTheme(theme) {
-  const preset = resolveAppearancePreset(theme)
-  return applyAppearanceStyle(preset.config).primary
 }
