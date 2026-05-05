@@ -1412,6 +1412,13 @@ Findings addressed:
   effective token limit value before assigning it. The endpoint should resolve
   the effective student limit once, then use that value for the summary and for
   per-course attribution.
+- **Login “忘记密码” dialog clipping:** When `el-dialog` lived inside
+  `.login-card`, the overlay and panel could be constrained by the card’s
+  dimensions and stacking, causing inner scrollbars and clipped footer buttons.
+  Fix: render the dialog **outside** the card (sibling under `.login-container`)
+  and wrap it in `<teleport to="body">` with `append-to-body`, `align-center`,
+  and a dedicated `modal-class` so `:deep(...)` can raise overlay/dialog
+  `z-index` above the frosted login card (`apps/web/admin/src/views/Login.vue`).
 - `<artifact-dir>/interaction-quota-login-postgres.png` was visually blank even
   though the JSON DOM snapshot showed login text and buttons. This is an audit
   synchronization pitfall. The login page should expose stable test IDs for the

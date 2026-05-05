@@ -3,12 +3,55 @@ import { ElMessage } from 'element-plus'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
 
+/** After this many ms without first byte, show a non-blocking busy hint (configurable per product). */
+const SLOW_RESPONSE_THRESHOLD_MS = 3000
+const SLOW_BUSY_MESSAGE = '系统正忙，请等待。'
+
 const http = axios.create({
   baseURL: apiBaseUrl,
   timeout: 10000
 })
 const fileTransferRequestConfig = {
   timeout: 0
+}
+
+const clearSlowBusyIfAny = config => {
+  if (!config) {
+    return
+  }
+  if (config._slowBusyTimer != null) {
+    window.clearTimeout(config._slowBusyTimer)
+    config._slowBusyTimer = null
+  }
+  if (config._slowBusyMessage) {
+    try {
+      config._slowBusyMessage.close()
+    } catch {
+      /* ignore */
+    }
+    config._slowBusyMessage = null
+  }
+}
+
+const attachSlowBusyWatcher = config => {
+  clearSlowBusyIfAny(config)
+  if (config.skipSlowBusyMessage) {
+    return config
+  }
+  const t = config.timeout
+  if (t === 0 || t === false) {
+    return config
+  }
+  config._slowBusyTimer = window.setTimeout(() => {
+    config._slowBusyTimer = null
+    config._slowBusyMessage = ElMessage({
+      message: SLOW_BUSY_MESSAGE,
+      type: 'warning',
+      duration: 0,
+      showClose: true
+    })
+  }, SLOW_RESPONSE_THRESHOLD_MS)
+  return config
 }
 
 /** FastAPI/Pydantic 422: { detail: [{ loc, msg, type }, ...] } — must stringify for ElMessage. */
@@ -90,17 +133,24 @@ http.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    attachSlowBusyWatcher(config)
     return config
   },
   error => Promise.reject(error)
 )
 
 http.interceptors.response.use(
-  response => (response.config?.returnFullResponse ? response : response.data),
+  response => {
+    clearSlowBusyIfAny(response.config)
+    return response.config?.returnFullResponse ? response : response.data
+  },
   async error => {
+    clearSlowBusyIfAny(error.config)
     if (error.response) {
       const message = await extractErrorMessage(error)
-      ElMessage.error(message)
+      if (!error.config?.skipGlobalErrorMessage) {
+        ElMessage.error(message)
+      }
       if (error.response.status === 401) {
         localStorage.removeItem('token')
         localStorage.removeItem('user')
@@ -127,13 +177,18 @@ httpQuiet.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    attachSlowBusyWatcher(config)
     return config
   },
   error => Promise.reject(error)
 )
 httpQuiet.interceptors.response.use(
-  response => (response.config?.returnFullResponse ? response : response.data),
+  response => {
+    clearSlowBusyIfAny(response.config)
+    return response.config?.returnFullResponse ? response : response.data
+  },
   error => {
+    clearSlowBusyIfAny(error.config)
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
@@ -149,9 +204,20 @@ const httpPublic = axios.create({
   baseURL: apiBaseUrl,
   timeout: 10000
 })
+httpPublic.interceptors.request.use(
+  config => {
+    attachSlowBusyWatcher(config)
+    return config
+  },
+  error => Promise.reject(error)
+)
 httpPublic.interceptors.response.use(
-  response => (response.config?.returnFullResponse ? response : response.data),
+  response => {
+    clearSlowBusyIfAny(response.config)
+    return response.config?.returnFullResponse ? response : response.data
+  },
   async error => {
+    clearSlowBusyIfAny(error.config)
     if (error.response) {
       const message = await extractErrorMessage(error)
       ElMessage.error(message)
@@ -401,10 +467,17 @@ const api = {
     upload: file => {
       const formData = new FormData()
       formData.append('file', file)
-      return http.post('/files/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        ...fileTransferRequestConfig
-      })
+      return http
+        .post('/files/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          ...fileTransferRequestConfig,
+          skipGlobalErrorMessage: true
+        })
+        .catch(async err => {
+          const message = await extractErrorMessage(err)
+          ElMessage.error(message)
+          return Promise.reject(err)
+        })
     }
   }
 }

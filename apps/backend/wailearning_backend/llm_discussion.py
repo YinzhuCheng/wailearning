@@ -22,6 +22,7 @@ from apps.backend.wailearning_backend.domains.llm.protocol import (
     build_chat_completion_url as _build_chat_completion_url,
 )
 from apps.backend.wailearning_backend.domains.llm.discussion_ui import strip_llm_ui_prefix
+from apps.backend.wailearning_backend.domains.text_content_format import body_text_for_grading_llm, normalize_content_format
 from apps.backend.wailearning_backend.domains.llm.quota import (
     record_discussion_usage_if_needed,
     release_discussion_quota_reservation,
@@ -67,7 +68,10 @@ def _strip_for_context(text: str, max_chars: int) -> str:
 def _homework_context_blocks(db: Session, hw: Homework, *, student_id: int) -> list[str]:
     parts: list[str] = []
     parts.append(f"【作业标题】\n{hw.title}")
-    parts.append(f"【作业说明】\n{_strip_for_context(hw.content or '', 12000)}")
+    ctx_hw = _strip_for_context(hw.content or '', 12000)
+    if normalize_content_format(getattr(hw, "content_format", None)) == "plain":
+        ctx_hw = _strip_for_context(body_text_for_grading_llm(content=hw.content or "", content_format="plain"), 12000)
+    parts.append(f"【作业说明】\n{ctx_hw}")
     if (hw.rubric_text or "").strip():
         parts.append(f"【评分要点】\n{_strip_for_context(hw.rubric_text, 8000)}")
     if (hw.reference_answer or "").strip():
@@ -89,9 +93,12 @@ def _homework_context_blocks(db: Session, hw: Homework, *, student_id: int) -> l
                 .first()
             )
         if attempt:
+            att_body = attempt.content or ""
+            if normalize_content_format(getattr(attempt, "content_format", None)) == "plain":
+                att_body = body_text_for_grading_llm(content=att_body, content_format="plain")
             parts.append(
                 "【该生本人最近一次提交概要】\n"
-                f"说明/正文：\n{_strip_for_context(attempt.content or '', 8000)}\n"
+                f"说明/正文：\n{_strip_for_context(att_body, 8000)}\n"
                 f"附件：{(attempt.attachment_name or '无').strip()}"
             )
         else:
@@ -102,9 +109,12 @@ def _homework_context_blocks(db: Session, hw: Homework, *, student_id: int) -> l
 
 
 def _material_context_blocks(mat: CourseMaterial) -> list[str]:
+    body = mat.content or ""
+    if normalize_content_format(getattr(mat, "content_format", None)) == "plain":
+        body = body_text_for_grading_llm(content=body, content_format="plain")
     return [
         f"【资料标题】\n{mat.title}",
-        f"【资料正文】\n{_strip_for_context(mat.content or '', 16000)}",
+        f"【资料正文】\n{_strip_for_context(body, 16000)}",
         f"附件：{(mat.attachment_name or '无').strip()}",
     ]
 
@@ -136,7 +146,10 @@ def _discussion_thread_text(
         who = author.real_name or author.username
         kind = "（智能助教）" if entry.message_kind == "llm_assistant" else ""
         inv = " [调用LLM]" if entry.llm_invocation else ""
-        lines.append(f"- {who}{kind}{inv}: {entry.body}")
+        body_line = entry.body
+        if normalize_content_format(getattr(entry, "body_format", None)) == "plain":
+            body_line = body_text_for_grading_llm(content=body_line, content_format="plain")
+        lines.append(f"- {who}{kind}{inv}: {body_line}")
     return "\n".join(lines) if lines else "（尚无留言）"
 
 
@@ -392,6 +405,7 @@ def _run_discussion_llm_reply_unlocked(
                 class_id=class_id,
                 author_user_id=sys_user.id,
                 body=f"【智能助教】暂无法回复：{msg}",
+                body_format="markdown",
                 message_kind="llm_assistant",
                 llm_invocation=False,
             )
@@ -503,6 +517,7 @@ def _run_discussion_llm_reply_unlocked(
         class_id=class_id,
         author_user_id=sys_user.id,
         body=reply_body,
+        body_format="markdown",
         message_kind="llm_assistant",
         llm_invocation=False,
     )

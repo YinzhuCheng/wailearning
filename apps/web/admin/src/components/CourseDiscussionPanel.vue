@@ -37,7 +37,13 @@
             }"
             @click="onBodyClick(row)"
           >
-            <span class="discussion-row__text">{{ displayBody(row) }}</span>
+            <PlainOrMarkdownBlock
+              v-if="isExpanded(row.id)"
+              :text="row.body"
+              :format="row.body_format"
+              variant="student"
+            />
+            <span v-else class="discussion-row__text">{{ collapsedBodyPreview(row) }}</span>
             <button
               v-if="isTruncated(row.body) && isExpanded(row.id)"
               type="button"
@@ -77,6 +83,13 @@
             将附带「@LLM」并消耗你的全站 LLM 日额度；输出长度由教师在课程 LLM 设置中的 max_output_tokens 控制。
           </el-text>
         </div>
+        <div class="discussion-format-bar">
+          <span class="discussion-format-bar__label">回复格式</span>
+          <el-radio-group v-model="draftFormat" size="small">
+            <el-radio-button label="markdown">Markdown</el-radio-button>
+            <el-radio-button label="plain">纯文本</el-radio-button>
+          </el-radio-group>
+        </div>
         <el-input
           v-model="draft"
           type="textarea"
@@ -105,7 +118,9 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
+import { normalizeContentFormat } from '@/utils/contentFormat'
 
 /** Each segment renders as one logical line: a text line (may be empty) or one image. */
 const PREVIEW_LINE_LIMIT = 3
@@ -163,6 +178,7 @@ const page = ref(1)
 const total = ref(0)
 const entries = ref([])
 const draft = ref('')
+const draftFormat = ref('markdown')
 const llmMode = ref(false)
 /** entry id -> expanded full body */
 const expandedEntryIds = ref(new Set())
@@ -278,12 +294,19 @@ function previewText(body) {
   return `${joinSegments(head)}...`
 }
 
-function displayBody(row) {
+function collapsedBodyPreview(row) {
   const body = row?.body ?? ''
-  if (isExpanded(row.id)) {
-    return body
+  if (normalizeContentFormat(row?.body_format) === 'plain') {
+    return previewText(body)
   }
-  return previewText(body)
+  const flat = String(body).replace(/\r?\n+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!flat) {
+    return ''
+  }
+  if (flat.length <= 240) {
+    return flat
+  }
+  return `${flat.slice(0, 238)}…`
 }
 
 function onBodyClick(row) {
@@ -407,9 +430,11 @@ const submit = async () => {
       subject_id: resolvedSubjectId.value,
       class_id: resolvedClassId.value,
       body: text,
+      body_format: normalizeContentFormat(draftFormat.value),
       invoke_llm: invokeLlm
     })
     draft.value = ''
+    draftFormat.value = 'markdown'
     llmMode.value = false
     const lastPage = Math.max(1, Math.ceil((total.value + 1) / effectivePageSize.value))
     page.value = lastPage
@@ -572,6 +597,19 @@ loadList()
   align-items: center;
   gap: 10px;
   margin-top: 8px;
+}
+
+.discussion-format-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.discussion-format-bar__label {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .discussion-input {

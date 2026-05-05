@@ -129,6 +129,7 @@ def _serialize_entry(row: CourseDiscussionEntry, author: User) -> CourseDiscussi
         author_username=author.username,
         author_role=author.role,
         body=row.body,
+        body_format=getattr(row, "body_format", None) or "markdown",
         message_kind=getattr(row, "message_kind", None) or "human",
         llm_invocation=bool(getattr(row, "llm_invocation", False)),
         created_at=row.created_at,
@@ -230,6 +231,7 @@ def create_discussion(
         class_id=payload.class_id,
         author_user_id=current_user.id,
         body=body_for_display,
+        body_format=payload.body_format,
         message_kind="human",
         llm_invocation=llm_invocation,
     )

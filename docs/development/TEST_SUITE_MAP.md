@@ -55,6 +55,13 @@ Subgroups:
   - import behavior
 - `tests/backend/files/`
   - attachment serving and download authorization
+  - upload compliance allow-list and sniffing (`test_attachment_upload_compliance.py`)
+- `tests/backend/content_format/`
+  - optional `content_format` / `body_format` persistence on homework, submissions, discussions, notifications
+
+### HTTP client UX (admin SPA)
+
+See [HTTP client slow-response busy hint](HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md) for the 3s “系统正忙，请等待。” message on `http` / `httpQuiet` / `httpPublic`.
 - `tests/backend/scores/`
   - score composition and derived grading behavior
 - `tests/backend/points/`

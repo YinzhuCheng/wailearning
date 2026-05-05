@@ -139,15 +139,23 @@
           </el-dropdown>
 
           <el-dropdown trigger="hover" data-testid="header-user-menu" popper-class="user-profile-dropdown" @visible-change="onUserMenuVisible" @command="handleCommand">
-            <div class="user-box">
-              <el-avatar :size="34" :src="headerAvatarSrc || undefined">
-                {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
-              </el-avatar>
-              <div v-if="!isCollapsed" class="user-meta">
-                <strong>{{ userStore.userInfo?.real_name }}</strong>
-                <span>{{ roleText(userStore.userInfo?.role) }}</span>
+            <el-badge
+              :value="headerUnreadCount"
+              :hidden="headerUnreadCount === 0"
+              :max="99"
+              class="header-user-badge"
+              data-testid="header-notification-badge"
+            >
+              <div class="user-box">
+                <el-avatar :size="34" :src="headerAvatarSrc || undefined">
+                  {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
+                </el-avatar>
+                <div v-if="!isCollapsed" class="user-meta">
+                  <strong>{{ userStore.userInfo?.real_name }}</strong>
+                  <span>{{ roleText(userStore.userInfo?.role) }}</span>
+                </div>
               </div>
-            </div>
+            </el-badge>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item disabled class="user-dropdown-card">
@@ -175,6 +183,9 @@
                     <p>{{ tokenDetailText }}</p>
                   </div>
                 </el-dropdown-item>
+                <el-dropdown-item command="notifications" data-testid="header-menu-notifications">
+                  {{ notificationsMenuLabel }}
+                </el-dropdown-item>
                 <el-dropdown-item command="personal-settings">个人设置</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -197,6 +208,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElNotification } from 'element-plus'
 import {
   ArrowDown,
   ArrowLeft,
@@ -219,6 +231,7 @@ import { useUserStore } from '@/stores/user'
 import { fetchAttachmentBlobUrl } from '@/utils/attachments'
 import { filterCoursesByClassId, resolveClassTeacherClassId, resolveClassTeacherClassName } from '@/utils/classTeacher'
 import {
+  DEFAULT_NOTIFICATION_POLL_INTERVAL_MS,
   emitNotificationRefresh,
   startNotificationPolling,
   subscribeNotificationBroadcast
@@ -264,6 +277,10 @@ const loadHeaderAvatar = async () => {
 }
 
 const lastNotificationSyncSignature = ref(null)
+const headerUnreadCount = ref(0)
+const headerLastPollUnread = ref(null)
+const headerLastPollTotal = ref(null)
+const lastNotificationToastSignature = ref(null)
 let stopNotificationPolling = () => {}
 let unsubscribeNotificationBroadcast = () => {}
 
@@ -277,6 +294,14 @@ const notificationSyncParams = computed(() => {
   }
 
   return {}
+})
+
+const notificationsMenuLabel = computed(() => {
+  const n = headerUnreadCount.value
+  if (n > 0) {
+    return `查看通知（${n} 条未读）`
+  }
+  return '查看通知'
 })
 
 const quotaBarColors = [
@@ -360,11 +385,40 @@ const pollNotificationSync = async () => {
 
   try {
     const status = await api.notifications.syncStatus(params)
-    const signature = `${status.total}:${status.unread_count}:${status.latest_updated_at || ''}`
-    if (lastNotificationSyncSignature.value !== null && signature !== lastNotificationSyncSignature.value) {
+    const unread = Number(status.unread_count || 0)
+    const total = Number(status.total || 0)
+    headerUnreadCount.value = unread
+
+    const signature = `${total}:${unread}:${status.latest_updated_at || ''}`
+    const hadBaseline = lastNotificationSyncSignature.value !== null
+    const prevUnread = headerLastPollUnread.value
+    const prevTotal = headerLastPollTotal.value
+
+    if (hadBaseline && signature !== lastNotificationSyncSignature.value) {
       emitNotificationRefresh()
     }
+
+    const looksLikeNewUnread =
+      hadBaseline &&
+      (unread > (prevUnread ?? 0) || (total > (prevTotal ?? 0) && unread > 0))
+
+    if (looksLikeNewUnread && lastNotificationToastSignature.value !== signature) {
+      lastNotificationToastSignature.value = signature
+      ElNotification({
+        title: '新通知',
+        message:
+          unread > 0
+            ? `您有 ${unread} 条未读通知，请点击头像菜单「查看通知」或进入通知页。`
+            : '通知列表已更新。',
+        type: unread > 0 ? 'info' : 'success',
+        duration: 5200,
+        position: 'top-right'
+      })
+    }
+
     lastNotificationSyncSignature.value = signature
+    headerLastPollUnread.value = unread
+    headerLastPollTotal.value = total
   } catch (error) {
     console.error('通知同步检查失败', error)
   }
@@ -728,6 +782,11 @@ const handleCourseSwitch = courseId => {
 }
 
 const handleCommand = command => {
+  if (command === 'notifications') {
+    router.push('/notifications')
+    return
+  }
+
   if (command === 'personal-settings') {
     router.push('/personal-settings')
     return
@@ -748,7 +807,7 @@ onMounted(async () => {
   await loadHeaderAvatar()
   await syncTeacherCourses(true)
   await pollNotificationSync()
-  stopNotificationPolling = startNotificationPolling(pollNotificationSync)
+  stopNotificationPolling = startNotificationPolling(pollNotificationSync, DEFAULT_NOTIFICATION_POLL_INTERVAL_MS)
   unsubscribeNotificationBroadcast = subscribeNotificationBroadcast(() => {
     emitNotificationRefresh()
   })
@@ -767,6 +826,10 @@ watch(
   () => userStore.userInfo?.id,
   async () => {
     lastNotificationSyncSignature.value = null
+    lastNotificationToastSignature.value = null
+    headerLastPollUnread.value = null
+    headerLastPollTotal.value = null
+    headerUnreadCount.value = 0
     await syncTeacherCourses(true)
     await pollNotificationSync()
     await loadHeaderAvatar()
@@ -793,6 +856,9 @@ watch(
 
 watch(notificationSyncParams, () => {
   lastNotificationSyncSignature.value = null
+  lastNotificationToastSignature.value = null
+  headerLastPollUnread.value = null
+  headerLastPollTotal.value = null
   pollNotificationSync()
 })
 </script>
@@ -1069,6 +1135,12 @@ watch(notificationSyncParams, () => {
 
 .course-dropdown-menu :deep(.is-current-course) {
   background: var(--wa-color-primary-50);
+}
+
+.header-user-badge :deep(.el-badge__content) {
+  top: 4px;
+  right: 6px;
+  border: 2px solid var(--wa-color-bg, #fff);
 }
 
 .user-box {

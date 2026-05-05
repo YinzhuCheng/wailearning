@@ -31,7 +31,11 @@
           </el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
-            <RichMarkdownDisplay :markdown="homework.content" variant="student" empty-text="暂无作业说明。" />
+            <PlainOrMarkdownBlock
+              :text="homework.content"
+              :format="homework.content_format"
+              variant="student"
+            />
           </el-descriptions-item>
           <el-descriptions-item label="评分要点" :span="2">
             <RichMarkdownDisplay :markdown="homework.rubric_text" variant="student" empty-text="未设置" />
@@ -160,27 +164,33 @@
             </div>
           </el-form-item>
 
-          <el-form-item label="提交说明">
-            <el-input
+          <el-form-item label="正文">
+            <MarkdownEditorPanel
               v-model="form.content"
-              data-testid="homework-submit-content"
-              type="textarea"
-              :rows="6"
+              v-model:content-format="form.content_format"
+              :min-rows="6"
+              :max-rows="22"
               :disabled="isSubmitDisabled"
               :placeholder="contentPlaceholder"
+              hint="可选 Markdown / LaTeX；也可切换为纯文本（字面保存，不解析排版符号）。"
+              :show-format-toggle="true"
+              :enable-image-upload="!isSubmitDisabled"
+              data-testid="homework-submit-content"
             />
           </el-form-item>
 
           <el-form-item label="诚信申报">
-            <el-switch
-              v-model="form.used_llm_assist"
-              data-testid="homework-submit-used-llm-assist"
-              :disabled="isSubmitDisabled"
-              active-text="本次作答曾使用大语言模型辅助"
-              inactive-text="未使用大语言模型辅助作答"
-            />
-            <div class="attachment-help">
-              请如实选择。若选择「曾使用」，自动评分将更关注思路与知识功底，弱化措辞与排版细节。
+            <div class="integrity-declaration">
+              <el-switch
+                v-model="form.used_llm_assist"
+                data-testid="homework-submit-used-llm-assist"
+                :disabled="isSubmitDisabled"
+                active-text="本次作答曾使用大语言模型辅助"
+                inactive-text="未使用大语言模型辅助作答"
+              />
+              <p class="integrity-declaration__hint">
+                请如实选择。若选择「曾使用」，自动评分将更关注思路与知识功底，弱化措辞与排版细节。
+              </p>
             </div>
           </el-form-item>
 
@@ -260,8 +270,13 @@
                 </el-tag>
               </div>
               <div class="attempt-body">
-                <div class="attempt-note-label">提交说明</div>
-                <div class="attempt-plain">{{ attempt.content || '无提交说明' }}</div>
+                <div class="attempt-note-label">正文</div>
+                <PlainOrMarkdownBlock
+                  class="attempt-body-md"
+                  :text="attempt.content || ''"
+                  :format="attempt.content_format"
+                  variant="student"
+                />
                 <div v-if="attempt.attachment_url" class="attempt-link">
                   <el-button type="primary" link @click="openAttachment(attempt.attachment_url, attempt.attachment_name)">
                     {{ attempt.attachment_name || '下载附件' }}
@@ -307,9 +322,12 @@ import { ElMessage } from 'element-plus'
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
+import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
+import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
+import { normalizeContentFormat } from '@/utils/contentFormat'
 
 const route = useRoute()
 const router = useRouter()
@@ -397,6 +415,7 @@ const contentPlaceholder = computed(() => {
 
 const form = reactive({
   content: '',
+  content_format: 'markdown',
   attachment_name: '',
   attachment_url: '',
   remove_attachment: false,
@@ -407,6 +426,7 @@ const form = reactive({
 const applySubmission = submission => {
   hasExistingSubmission.value = Boolean(submission)
   form.content = submission?.content || ''
+  form.content_format = normalizeContentFormat(submission?.content_format)
   form.attachment_name = submission?.attachment_name || ''
   form.attachment_url = submission?.attachment_url || ''
   form.remove_attachment = false
@@ -551,6 +571,7 @@ const submitForm = async () => {
       form.submission_mode === 'feedback_followup' && attempts.value.length ? attempts.value[0].id : undefined
     await api.homework.submit(route.params.id, {
       content: form.content?.trim() || null,
+      content_format: normalizeContentFormat(form.content_format),
       attachment_name: attachment.attachment_name,
       attachment_url: attachment.attachment_url,
       remove_attachment: form.remove_attachment,
@@ -681,6 +702,23 @@ watch(
 
 .attachment-help {
   margin-top: 8px;
+}
+
+.integrity-declaration {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 28px;
+  row-gap: 14px;
+}
+
+.integrity-declaration__hint {
+  margin: 0;
+  flex: 1 1 220px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .submission-alerts {

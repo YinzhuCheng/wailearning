@@ -179,12 +179,14 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS late_submission_affects_score BOOLEAN DEFAULT FALSE",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS max_submissions INTEGER",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS llm_routing_spec JSON",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS content_format VARCHAR NOT NULL DEFAULT 'markdown'",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_score FLOAT",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_comment VARCHAR",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_attempt_id INTEGER",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_task_status VARCHAR",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_task_error TEXT",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS used_llm_assist BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS content_format VARCHAR NOT NULL DEFAULT 'markdown'",
         """
         CREATE TABLE IF NOT EXISTS homework_attempts (
             id INTEGER PRIMARY KEY,
@@ -343,6 +345,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE llm_token_usage_logs ADD COLUMN IF NOT EXISTS billing_note VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS content_format VARCHAR NOT NULL DEFAULT 'markdown'",
         """
         CREATE TABLE IF NOT EXISTS llm_groups (
             id INTEGER PRIMARY KEY,
@@ -360,6 +363,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS used_llm_assist BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS submission_mode VARCHAR NOT NULL DEFAULT 'full'",
         "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS prior_attempt_id INTEGER",
+        "ALTER TABLE homework_attempts ADD COLUMN IF NOT EXISTS content_format VARCHAR NOT NULL DEFAULT 'markdown'",
         """
         CREATE TABLE IF NOT EXISTS course_material_chapters (
             id INTEGER PRIMARY KEY,
@@ -381,6 +385,7 @@ def ensure_schema_updates() -> None:
             CONSTRAINT uq_course_material_section_placement UNIQUE(material_id, chapter_id)
         )
         """,
+        "ALTER TABLE course_materials ADD COLUMN IF NOT EXISTS content_format VARCHAR NOT NULL DEFAULT 'markdown'",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS discussion_page_size INTEGER",
         """
         CREATE TABLE IF NOT EXISTS course_discussion_entries (
@@ -398,6 +403,7 @@ def ensure_schema_updates() -> None:
         "CREATE INDEX IF NOT EXISTS ix_course_discussion_created ON course_discussion_entries(created_at)",
         "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS message_kind VARCHAR NOT NULL DEFAULT 'human'",
         "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS llm_invocation BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS body_format VARCHAR NOT NULL DEFAULT 'markdown'",
         """
         CREATE TABLE IF NOT EXISTS discussion_llm_jobs (
             id INTEGER PRIMARY KEY,

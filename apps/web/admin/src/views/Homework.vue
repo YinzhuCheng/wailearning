@@ -216,10 +216,12 @@
         <el-form-item label="作业内容" prop="content">
           <MarkdownEditorPanel
             v-model="form.content"
+            v-model:content-format="form.content_format"
             :min-rows="6"
             :max-rows="24"
             placeholder="支持 Markdown、LaTeX、插图（上传或 URL）"
             hint="与独立附件并存；自动评分时说明中的远程/附件图片会尽量转为模型可读格式。"
+            :show-format-toggle="true"
           />
         </el-form-item>
         <el-form-item label="满分" prop="max_score">
@@ -358,7 +360,12 @@
           <el-descriptions-item label="自动评分">{{ currentHomework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ currentHomework.grading_rule_hint }}</el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
-            <RichMarkdownDisplay :markdown="currentHomework.content" variant="student" empty-text="暂无内容" />
+            <PlainOrMarkdownBlock
+              :text="currentHomework.content"
+              :format="currentHomework.content_format"
+              variant="student"
+              empty-text="暂无内容"
+            />
           </el-descriptions-item>
           <el-descriptions-item label="评分要点" :span="2">
             <RichMarkdownDisplay :markdown="currentHomework.rubric_text" variant="student" empty-text="未设置" />
@@ -388,9 +395,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
+import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
+import { normalizeContentFormat } from '@/utils/contentFormat'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -420,6 +429,7 @@ const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.
 const form = reactive({
   title: '',
   content: '',
+  content_format: 'markdown',
   due_date: null,
   attachment_name: '',
   attachment_url: '',
@@ -563,6 +573,7 @@ const resetHomeworkForm = () => {
   editingHomeworkId.value = null
   form.title = ''
   form.content = ''
+  form.content_format = 'markdown'
   form.due_date = null
   form.attachment_name = ''
   form.attachment_url = ''
@@ -594,6 +605,7 @@ const openEditDialog = row => {
   editingHomeworkId.value = row.id
   form.title = row.title || ''
   form.content = row.content || ''
+  form.content_format = normalizeContentFormat(row.content_format)
   form.due_date = row.due_date || null
   form.attachment_name = row.attachment_name || ''
   form.attachment_url = row.attachment_url || ''
@@ -670,6 +682,7 @@ const submitForm = async () => {
     const payload = {
       title: form.title,
       content: form.content,
+      content_format: normalizeContentFormat(form.content_format),
       attachment_name: attachment.attachment_name,
       attachment_url: attachment.attachment_url,
       due_date: form.due_date,
