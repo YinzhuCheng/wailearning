@@ -14,46 +14,60 @@
       >
         <template #header>
           <div class="quota-card-header-row">
-            <span>全站 LLM 日额度 · 课程归因</span>
+            <span>全站 LLM 日额度</span>
             <el-button size="small" :loading="quotasLoading" @click="loadStudentQuotasSummary">刷新</el-button>
           </div>
         </template>
         <div v-loading="quotasLoading" class="quota-body">
           <p v-if="quotasSummary?.uses_personal_override" class="quota-line quota-hint">
-            当前账号使用管理员单独配置的日 token 上限；下方课程条目仅显示今天用量归因，共用同一个全站额度池。
+            当前账号使用管理员单独配置的日 token 上限；所有课程共用同一全站额度池，以下仅列出你已选课程便于对照。
           </p>
-          <p v-else-if="quotasSummary?.global_default_daily_student_tokens != null" class="quota-line quota-hint muted">
-            全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}；今日已用 {{ quotaSummaryUsed }}，剩余 {{ quotaSummaryRemaining }}。
+          <p v-else class="quota-line quota-hint muted">
+            学生 LLM 调用统一计入全站日额度；与具体从哪门课入口触发无关。
           </p>
-          <template v-if="quotasSummary?.courses?.length">
-            <div
-              v-for="row in quotasSummary.courses"
-              :key="row.subject_id"
-              class="quota-course-block"
-              :class="{ 'quota-course-block--current': isCurrentCourseId(row.subject_id) }"
-            >
-              <div class="quota-course-title">
-                <span class="quota-course-name">{{ row.subject_name }}</span>
-                <span class="quota-course-nums">
-                  今日总用 {{ row.student_used_tokens_today ?? 0 }} / 限额 {{ row.daily_student_token_limit ?? '—' }}
-                  <span v-if="row.student_remaining_tokens_today != null" class="muted">
-                    · 剩余 {{ row.student_remaining_tokens_today }}
-                  </span>
+
+          <div v-if="quotaSummaryLimit > 0" class="quota-global">
+            <div class="quota-global__head">
+              <span class="quota-global__title">今日用量</span>
+              <span class="quota-global__nums">
+                <strong>{{ quotaSummaryUsed }}</strong>
+                <span class="quota-global__sep">/</span>
+                <span>{{ quotaSummaryLimit }}</span>
+                <span v-if="quotaSummaryRemaining != null" class="quota-global__remain muted">
+                  剩余 {{ quotaSummaryRemaining }}
                 </span>
-              </div>
-              <el-progress
-                :percentage="quotaBarPercent(row)"
-                :stroke-width="16"
-                :show-text="false"
-                :color="quotaBarColors"
-                class="quota-progress"
-              />
-              <p class="quota-subline muted">
-                本课归因 {{ row.course_used_tokens_today ?? 0 }} token · 统计日 {{ row.usage_date }}（{{ row.quota_timezone }}）
-              </p>
+              </span>
             </div>
-          </template>
-          <p v-else-if="!quotasLoading" class="quota-line muted">暂无选课记录或暂无额度数据。</p>
+            <el-progress
+              :percentage="quotaGlobalPercent"
+              :stroke-width="20"
+              :show-text="true"
+              :color="quotaBarColors"
+              striped
+              class="quota-progress quota-progress--global"
+            />
+            <p v-if="quotasSummary?.usage_date" class="quota-meta muted">
+              统计日 {{ quotasSummary.usage_date }}（{{ quotasSummary.quota_timezone || '—' }}）
+              <template v-if="quotasSummary?.global_default_daily_student_tokens != null && !quotasSummary?.uses_personal_override">
+                · 全校默认日限额 {{ quotasSummary.global_default_daily_student_tokens }}
+              </template>
+            </p>
+          </div>
+          <p v-else-if="!quotasLoading" class="quota-line muted">暂无额度配置或限额为 0。</p>
+
+          <div v-if="quotasSummary?.courses?.length" class="quota-courses-note">
+            <span class="quota-courses-note__label">已选课程</span>
+            <div class="quota-chip-list">
+              <span
+                v-for="row in quotasSummary.courses"
+                :key="row.subject_id"
+                class="quota-chip"
+                :class="{ 'quota-chip--current': isCurrentCourseId(row.subject_id) }"
+              >
+                {{ row.subject_name }}
+              </span>
+            </div>
+          </div>
         </div>
       </el-card>
       <el-button
@@ -422,6 +436,15 @@ const canCreateCourse = computed(() => userStore.isTeacher || userStore.isClassT
 const quotaSummaryUsed = computed(() => quotasSummary.value?.student_used_tokens_today ?? 0)
 const quotaSummaryLimit = computed(() => quotasSummary.value?.daily_student_token_limit ?? quotasSummary.value?.global_default_daily_student_tokens ?? 0)
 const quotaSummaryRemaining = computed(() => quotasSummary.value?.student_remaining_tokens_today ?? Math.max(0, quotaSummaryLimit.value - quotaSummaryUsed.value))
+
+const quotaGlobalPercent = computed(() => {
+  const lim = Number(quotaSummaryLimit.value)
+  const used = Number(quotaSummaryUsed.value)
+  if (!lim || lim <= 0) {
+    return 0
+  }
+  return Math.min(100, Math.round((used / lim) * 1000) / 10)
+})
 const rosterSummary = computed(() =>
   rosterStudents.value.length
     ? `已导入 ${rosterStudents.value.length} 名学生`
@@ -525,15 +548,6 @@ const loadStudentQuotasSummary = async () => {
 }
 
 const isCurrentCourseId = id => String(userStore.selectedCourse?.id || '') === String(id || '')
-
-const quotaBarPercent = row => {
-  const lim = Number(row?.daily_student_token_limit ?? quotaSummaryLimit.value)
-  const used = Number(row?.student_used_tokens_today ?? quotaSummaryUsed.value)
-  if (!lim || lim <= 0) {
-    return 0
-  }
-  return Math.min(100, Math.round((used / lim) * 1000) / 10)
-}
 
 const quotaBarColors = [
   { color: '#93c5fd', percentage: 60 },
@@ -893,9 +907,120 @@ watch(
 
 .quota-card {
   width: 100%;
-  max-width: 720px;
+  max-width: 560px;
   margin-bottom: 16px;
   min-width: 0;
+}
+
+.quota-global {
+  margin-top: 12px;
+  padding: 16px 18px;
+  border-radius: var(--wa-radius-xl, 16px);
+  background: linear-gradient(145deg, #f8fafc 0%, #eef2ff 55%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+}
+
+.quota-global__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.quota-global__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.02em;
+}
+
+.quota-global__nums {
+  font-size: 14px;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.quota-global__nums strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e40af;
+}
+
+.quota-global__sep {
+  margin: 0 4px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.quota-global__remain {
+  margin-left: 10px;
+  font-size: 13px;
+}
+
+.quota-meta {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.quota-courses-note {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.quota-courses-note__label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.quota-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quota-chip {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.quota-chip--current {
+  border-color: #93c5fd;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.quota-progress--global :deep(.el-progress-bar__outer) {
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.quota-progress--global :deep(.el-progress-bar__inner) {
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.quota-progress--global :deep(.el-progress__text) {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  min-width: 2.75em;
 }
 
 .quota-card-header-row {
@@ -915,58 +1040,6 @@ watch(
 .quota-hint {
   font-size: 13px;
   line-height: 1.5;
-}
-
-.quota-course-block {
-  margin-top: 16px;
-  padding: 14px 16px;
-  border-radius: var(--wa-radius-lg);
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-  min-width: 0;
-}
-
-.quota-course-block--current {
-  border-color: #93c5fd;
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.12);
-}
-
-.quota-course-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.quota-course-name {
-  min-width: 0;
-  font-weight: 600;
-  color: #0f172a;
-  overflow-wrap: anywhere;
-}
-
-.quota-course-nums {
-  font-size: 13px;
-  color: #475569;
-  overflow-wrap: anywhere;
-}
-
-.quota-progress :deep(.el-progress-bar__outer) {
-  border-radius: 999px;
-  overflow: hidden;
-  background-color: #e2e8f0;
-}
-
-.quota-progress :deep(.el-progress-bar__inner) {
-  border-radius: 999px;
-}
-
-.quota-subline {
-  margin: 8px 0 0;
-  font-size: 12px;
 }
 
 .quota-body {

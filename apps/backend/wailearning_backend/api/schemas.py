@@ -438,7 +438,11 @@ class StudentLLMCourseQuotaRow(BaseModel):
 
 
 class StudentLLMQuotasSummaryResponse(BaseModel):
-    """System-wide LLM token budget for the logged-in student, with per-course attribution rows."""
+    """System-wide LLM token budget for the logged-in student.
+
+    `courses` rows may still carry per-course usage fields for diagnostics, but the effective
+    cap and remaining balance are the top-level student totals (one pool per student per day).
+    """
 
     courses: list[StudentLLMCourseQuotaRow] = Field(default_factory=list)
     global_default_daily_student_tokens: Optional[int] = None
