@@ -210,10 +210,12 @@
         <el-form-item label="资料说明" prop="content">
           <MarkdownEditorPanel
             v-model="form.content"
+            v-model:content-format="form.content_format"
             :min-rows="6"
             :max-rows="24"
             placeholder="支持 Markdown、LaTeX（$...$ / $$...$$）、本地上传或 URL 插图"
             hint="工具栏可插入格式；图片会插入为 Markdown，学生与教师预览一致。"
+            :show-format-toggle="true"
           />
         </el-form-item>
         <el-form-item label="附件">
@@ -247,7 +249,12 @@
         <el-descriptions-item label="发布人">{{ currentMaterial.creator_name }}</el-descriptions-item>
         <el-descriptions-item label="发布时间">{{ formatDate(currentMaterial.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="资料说明" :span="2">
-          <RichMarkdownDisplay :markdown="currentMaterial.content" variant="student" empty-text="暂无说明" />
+          <PlainOrMarkdownBlock
+            :text="currentMaterial.content"
+            :format="currentMaterial.content_format"
+            variant="student"
+            empty-text="暂无说明"
+          />
         </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentMaterial.attachment_url" type="primary" link @click="openAttachment(currentMaterial)">
@@ -310,9 +317,10 @@ import { Expand, Fold, Minus, Plus } from '@element-plus/icons-vue'
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
 import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
-import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
+import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
+import { normalizeContentFormat } from '@/utils/contentFormat'
 
 const userStore = useUserStore()
 
@@ -365,6 +373,7 @@ const showPlacementColumn = computed(() => !userStore.isStudent)
 const form = reactive({
   title: '',
   content: '',
+  content_format: 'markdown',
   attachment_name: '',
   attachment_url: '',
   remove_attachment: false,
@@ -655,6 +664,7 @@ const placementSummary = row => {
 const resetForm = () => {
   form.title = ''
   form.content = ''
+  form.content_format = 'markdown'
   form.attachment_name = ''
   form.attachment_url = ''
   form.remove_attachment = false
@@ -676,6 +686,7 @@ const openEditDialog = async row => {
   resetForm()
   form.title = full.title
   form.content = full.content || ''
+  form.content_format = normalizeContentFormat(full.content_format)
   form.attachment_name = full.attachment_name || ''
   form.attachment_url = full.attachment_url || ''
   form.chapter_ids =
@@ -734,6 +745,7 @@ const submitForm = async () => {
     const base = {
       title: form.title,
       content: form.content,
+      content_format: normalizeContentFormat(form.content_format),
       chapter_ids: form.chapter_ids
     }
     if (editingMaterial.value) {

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access, get_student_profile_for_user, prepare_student_course_context
+from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Class, Notification, NotificationRead, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
@@ -82,6 +83,7 @@ def _serialize_notification(notification: Notification, current_user: User, db: 
         id=notification.id,
         title=notification.title,
         content=notification.content,
+        content_format=normalize_content_format(getattr(notification, "content_format", None)),
         attachment_name=notification.attachment_name,
         attachment_url=notification.attachment_url,
         priority=notification.priority,
@@ -233,6 +235,7 @@ def create_notification(
     notification = Notification(
         title=data.title,
         content=data.content,
+        content_format=normalize_content_format(getattr(data, "content_format", None)),
         attachment_name=data.attachment_name,
         attachment_url=data.attachment_url,
         priority=data.priority,
@@ -291,6 +294,8 @@ def update_notification(
         notification.title = data.title
     if data.content is not None:
         notification.content = data.content
+    if data.content_format is not None:
+        notification.content_format = normalize_content_format(data.content_format)
     if data.remove_attachment:
         notification.attachment_name = None
         notification.attachment_url = None

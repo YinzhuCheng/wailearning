@@ -44,7 +44,12 @@
           <el-descriptions-item label="自动评分">{{ homework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
-            <RichMarkdownDisplay :markdown="homework.content" variant="teacher" empty-text="暂无作业说明。" />
+            <PlainOrMarkdownBlock
+              :text="homework.content"
+              :format="homework.content_format"
+              variant="teacher"
+              empty-text="暂无作业说明。"
+            />
           </el-descriptions-item>
           <el-descriptions-item label="评分要点" :span="2">
             <RichMarkdownDisplay :markdown="homework.rubric_text" variant="teacher" empty-text="未设置" />
@@ -245,8 +250,13 @@
               标记已阅
             </el-button>
           </el-descriptions-item>
-          <el-descriptions-item label="提交说明">
-            <div class="detail-text">{{ detailRow.content || '无' }}</div>
+          <el-descriptions-item label="正文">
+            <PlainOrMarkdownBlock
+              :text="detailRow.content || ''"
+              :format="detailRow.content_format"
+              variant="teacher"
+              empty-text="无"
+            />
           </el-descriptions-item>
           <el-descriptions-item label="附件">
             <el-button
@@ -385,8 +395,8 @@
                 </div>
 
                 <div class="attempt-summary__preview" :data-testid="`homework-history-attempt-preview-${attempt.id}`">
-                  {{ attempt.content || '无提交说明' }}
-                </div>
+                {{ attemptPreviewLine(attempt) }}
+              </div>
               </div>
             </div>
 
@@ -395,7 +405,12 @@
               class="attempt-body"
               :data-testid="`homework-history-attempt-body-${attempt.id}`"
             >
-              <div>{{ attempt.content || '无提交说明' }}</div>
+              <PlainOrMarkdownBlock
+                :text="attempt.content || ''"
+                :format="attempt.content_format"
+                variant="teacher"
+                empty-text="无正文"
+              />
               <div v-if="attempt.attachment_url" class="attempt-link">
                 <el-button type="primary" link @click="openAttachment(attempt.attachment_url, attempt.attachment_name)">
                   {{ attempt.attachment_name || '下载附件' }}
@@ -452,9 +467,11 @@ import { Minus, Plus } from '@element-plus/icons-vue'
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
+import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
 import { downloadAttachment } from '@/utils/attachments'
+import { isMarkdownFormat } from '@/utils/contentFormat'
 
 const route = useRoute()
 const router = useRouter()
@@ -503,6 +520,19 @@ const buildAttemptHistoryRow = row => ({
   task_log: row.task_log || [],
   task_error_code: row.task_error_code || null
 })
+
+const attemptPreviewLine = attempt => {
+  const raw = (attempt?.content || '').trim()
+  if (!raw) {
+    return '无正文'
+  }
+  if (!isMarkdownFormat(attempt?.content_format)) {
+    const line = raw.split(/\r?\n/).find(Boolean) || raw
+    return line.length > 120 ? `${line.slice(0, 118)}…` : line
+  }
+  const flat = raw.replace(/\r?\n+/g, ' ').replace(/\s+/g, ' ').trim()
+  return flat.length > 120 ? `${flat.slice(0, 118)}…` : flat
+}
 
 const buildSubmissionRow = row => ({
   ...row,
