@@ -1006,7 +1006,7 @@ watch(notificationSyncParams, () => {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--wa-border-subtle);
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, #ffffff var(--wa-header-alpha), transparent);
   backdrop-filter: blur(10px);
 }
 
