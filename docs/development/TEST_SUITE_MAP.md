@@ -59,9 +59,9 @@ Subgroups:
 - `tests/backend/content_format/`
   - optional `content_format` / `body_format` persistence on homework, submissions, discussions, notifications
 
-### Notification UX (admin SPA)
+### HTTP client UX (admin SPA)
 
-See [Notification header badge and realtime sync](NOTIFICATION_HEADER_AND_REALTIME_SYNC.md) for avatar badge, dropdown entry, polling interval, and `emitNotificationRefresh` vs `BroadcastChannel` behavior.
+See [HTTP client slow-response busy hint](HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md) for the 3s “系统正忙，请等待。” message on `http` / `httpQuiet` / `httpPublic`.
 - `tests/backend/scores/`
   - score composition and derived grading behavior
 - `tests/backend/points/`

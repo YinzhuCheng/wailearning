@@ -12,6 +12,7 @@ This directory is the authoritative documentation home for the repository. The r
 - [Encoding And Mojibake Safety](development/ENCODING_AND_MOJIBAKE_SAFETY.md)
 - [Content format: Markdown vs plain text](development/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md)
 - [Notification header badge and realtime sync](development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md)
+- [HTTP client slow-response busy hint](development/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md)
 - [Test Suite Map](development/TEST_SUITE_MAP.md)
 - [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
 - [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
