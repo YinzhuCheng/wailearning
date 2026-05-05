@@ -231,7 +231,9 @@ def reset_e2e_scenario(
     db.add_all([u_plain, u_drop, u_b])
     db.flush()
 
-    st_plain.parent_code = f"P{suffix[:6].upper()}"
+    # Unique across persistent SQLite E2E DBs: never truncate suffix — overlapping prefixes
+    # caused UNIQUE(parent_code) under high-volume reset-scenario (full Playwright suite).
+    st_plain.parent_code = f"P{suffix.upper()}"
     st_plain.parent_code_expires = None
 
     db.flush()

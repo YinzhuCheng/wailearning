@@ -37,13 +37,18 @@
             }"
             @click="onBodyClick(row)"
           >
-            <PlainOrMarkdownBlock
-              v-if="isExpanded(row.id)"
-              :text="row.body"
-              :format="row.body_format"
-              variant="student"
-            />
-            <span v-else class="discussion-row__text">{{ collapsedBodyPreview(row) }}</span>
+            <div
+              class="discussion-row__text"
+              :class="{ 'discussion-row__text--expanded': isExpanded(row.id) }"
+            >
+              <PlainOrMarkdownBlock
+                v-if="isExpanded(row.id)"
+                :text="row.body"
+                :format="row.body_format"
+                variant="student"
+              />
+              <template v-else>{{ collapsedBodyPreview(row) }}</template>
+            </div>
             <button
               v-if="isTruncated(row.body) && isExpanded(row.id)"
               type="button"
@@ -296,7 +301,13 @@ function previewText(body) {
 
 function collapsedBodyPreview(row) {
   const body = row?.body ?? ''
-  if (normalizeContentFormat(row?.body_format) === 'plain') {
+  const fmt = normalizeContentFormat(row?.body_format)
+  if (fmt === 'plain') {
+    return previewText(body)
+  }
+  // Markdown / HTML-ish bodies: use the same logical-line ellipsis as plain text so
+  // collapsed previews hide beyond PREVIEW_LINE_LIMIT lines (see tier-3 Playwright specs).
+  if (isTruncated(body)) {
     return previewText(body)
   }
   const flat = String(body).replace(/\r?\n+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -557,13 +568,17 @@ loadList()
   cursor: pointer;
 }
 
-.discussion-row__body--clickable:hover .discussion-row__text {
+.discussion-row__body--clickable:hover .discussion-row__text:not(.discussion-row__text--expanded) {
   color: #2563eb;
 }
 
 .discussion-row__text {
   display: inline;
   vertical-align: baseline;
+}
+
+.discussion-row__text--expanded {
+  display: block;
 }
 
 .discussion-row__collapse-btn {

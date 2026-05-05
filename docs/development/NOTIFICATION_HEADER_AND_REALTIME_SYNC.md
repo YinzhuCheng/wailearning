@@ -108,6 +108,60 @@ const quotaBarColors = [
 
 - **Poll interval:** `DEFAULT_NOTIFICATION_POLL_INTERVAL_MS` in `notificationSync.js` (currently **12000 ms**). Lower = snappier UI + more `/sync-status` traffic; raise if an environment rate-limits.
 
+## Automated regression coverage (additive)
+
+This subsection records **machine-verified** suites that target the header badge + `/sync-status` contract. It is written primarily for LLM agents who need searchable pointers; humans may skim the file paths and commands.
+
+### Playwright (UI + API hybrid)
+
+- **File:** `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js` (**10** `test(...)` cases).
+- **What it proves beyond older notification E2E:**
+  - The DOM under `data-testid="header-notification-badge"` reflects **`sync-status.unread_count`** after **`window.focus`**-equivalent polling (`dispatchEvent('focus')`), not only after API-only assertions.
+  - **`header-menu-notifications`** label includes **未读** copy when unread exists (dropdown opened via **click**, not hover-only — hover-only proved flaky under Element Plus popper timing).
+  - **`header-course-switch`** changes which `subject_id` the layout passes into `syncStatus`, so the badge can drop to **hidden** when the elective scope has zero unread even if the required course still has unread rows server-side.
+  - Route transitions (`/courses` → `/course-home`) still execute `watch(route)` hooks that call `pollNotificationSync()` — the spec deep-links `/course-home` instead of clicking **进入课程** twice (second click can remain **disabled** while enrollment reconciliation catches up; same failure family as catalog flip-flop pitfalls).
+- **Run command** (always from `apps/web/admin`; never from `<REPO_ROOT>/tests/e2e/...` alone — Playwright project discovery requires `playwright.config.cjs`):
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
+  npx playwright test e2e-notification-header-sync-tier.spec.js --project=chromium
+```
+
+### Playwright deep tier (follow-up hazards)
+
+- **File:** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` (**15** `test(...)` cases).
+- **Why it exists:** The first tier proved baseline badge wiring; this module stresses **role-specific** aggregation (**admin** global `sync-status` vs **teacher/student** course-scoped params), **corrupt `selected_course` localStorage** healing, **concurrent** teacher `POST`s, **teacher-owned vs other-teacher** notification isolation, **403** on inaccessible `subject_id`, **mobile viewport**, **full page reload** (`onMounted` → `pollNotificationSync` without relying on manual focus), and **delete race** while the student notifications view loads.
+- **Lessons baked into the spec comments:**
+  - Teachers may land on **`/dashboard`** with **`ensureSelectedCourse`** picking a **non-required** course first (ranking by semester/id). Assertions against **`course_required_id`** must **explicitly switch** via **`header-course-switch`** → `.course-dropdown-menu .course-option` (click **switcher**, not hover-only).
+  - Overriding **`document.visibilityState`** in Playwright did **not** stop `pollNotificationSync` reliably in Chromium (the visibility descriptor is not consistently honored for interval timers). The **`visibility hidden`** scenario was replaced by **`page.reload()`** evidence for cold-start polling — document that **true background-tab** gating remains a **residual risk** not fully automated here.
+- **Run command:**
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
+  npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
+```
+
+### pytest behavior (HTTP contract stress)
+
+- **File:** `tests/behavior/test_notification_sync_api_edge_behavior.py` (**10** tests).
+- **What it proves:**
+  - `GET /api/notifications` **total** / **unread_count** match `GET /api/notifications/sync-status` for the same **subject_id** scope (student).
+  - Multi-course isolation: second enrollment + notifications pinned to **different** `subject_id` rows stay isolated in per-subject sync snapshots.
+  - **Concurrent** teacher publishes + student read storms settle without violating uniqueness expectations on `notification_reads`.
+  - Students receive **403** (not **500**) when requesting sync-status with a **subject_id** they cannot access (must use HTTP-layer course gate — see backend notes below).
+
+### Backend notes the tests forced into clarity (May 2026)
+
+These are not “optional commentary”; they are contract fixes discovered while turning the tests green:
+
+1. **`ensure_course_access` vs HTTP errors:** `_visible_notifications_query` previously called `ensure_course_access(...)`, which raises **`PermissionError`** when the subject is not in the user’s accessible set. Uncaught, Starlette turns that into a **500**. The notifications router now uses **`ensure_course_access_http`** anywhere the failure must map to **403** for API clients.
+
+2. **`updated_at` on notification updates:** SQLite + SQLAlchemy `onupdate=func.now()` on `Notification.updated_at` did **not** reliably advance within the same HTTP request when a teacher `PUT` changed only `title`. That left `latest_updated_at` in **`GET /api/notifications/sync-status`** unchanged across back-to-back polls — exactly the “sync signature never moves” failure mode for UI dedupe. `update_notification` now assigns **`notification.updated_at = datetime.now(timezone.utc)`** immediately before `commit()`.
+
+3. **Concurrent delete vs list serialization:** Under SQLite dev E2E load, `GET /api/notifications` could fetch rows then lose them to a concurrent **`DELETE`** before `_serialize_notification` touched `notification.id`, raising **`sqlalchemy.orm.exc.ObjectDeletedError`**. The list handler now **skips** expired instances instead of failing the whole response (short window; acceptable trade for dev/E2E stability).
+
 ## Related documentation
 
 - [Test Execution Pitfalls](TEST_EXECUTION_PITFALLS.md) — general CI / Playwright traps

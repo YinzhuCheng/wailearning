@@ -7,7 +7,14 @@
     }"
   >
     <div v-if="isMobile && !isCollapsed" class="mobile-sidebar-backdrop" @click="isCollapsed = true" />
-    <el-aside :width="sidebarWidth" class="sidebar" :class="{ 'sidebar--hidden': isSidebarHidden && !isMobile }">
+    <el-aside
+      :width="sidebarWidth"
+      class="sidebar"
+      :class="{
+        'sidebar--hidden': isSidebarHidden && !isMobile,
+        'sidebar--mobile-collapsed': isMobile && isCollapsed
+      }"
+    >
       <div class="logo">
         <div class="logo-main">
           <div class="logo-icon">
@@ -1254,6 +1261,23 @@ watch(notificationSyncParams, () => {
 }
 
 @media (max-width: 768px) {
+  .sidebar.sidebar--mobile-collapsed {
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    pointer-events: none;
+  }
+
+  .sidebar.sidebar--mobile-collapsed .sidebar-body,
+  .sidebar.sidebar--mobile-collapsed .logo {
+    visibility: hidden;
+  }
+
   .layout-container {
     position: relative;
   }

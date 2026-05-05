@@ -106,24 +106,60 @@ Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases
 
 They also have the highest dependence on the local execution environment.
 
-This directory also contains a future-coverage expansion file pair:
+This directory also contains the **`future-advanced-coverage`** pair — thirty higher-difficulty Playwright scenarios split across two files (not a separate “backlog” pipeline; they run with the rest of `npm run test:e2e`).
 
-- `tests/e2e/web-admin/future-advanced-coverage.spec.js`
-- `tests/e2e/web-admin/future-advanced-coverage-2.spec.js`
+Files:
 
-In this branch, those files are no longer placeholders. They contain real `test(...)` bodies and participate in normal `npm run test:e2e` runs.
+- `tests/e2e/web-admin/future-advanced-coverage.spec.js` — scenarios **1–15**
+- `tests/e2e/web-admin/future-advanced-coverage-2.spec.js` — scenarios **16–30**
 
-How to interpret them correctly:
+Helpers: `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
 
-- they still function as a bank of higher-difficulty scenarios
-- they are now part of actual runnable regression coverage, not a skipped queue
-- historical references to `E2E_ENABLE_BACKLOG_SPECS` apply only when reading older branches that still carried skipped placeholders
+Runtime contract: same `apps/web/admin/playwright.config.cjs`, `tests/e2e/web-admin/global-setup.cjs`, `POST /api/e2e/dev/reset-scenario`, and `E2E_DEV_SEED_TOKEN` as other admin E2E specs.
 
-Operational summary:
+Targeted run from `apps/web/admin`:
 
-- Helpers: `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
-- Runtime contract: same Playwright config, same `globalSetup`, and the same `/api/e2e/dev/reset-scenario` seed/reset flow as the other admin E2E specs
-- Historical workflow and old placeholder interpretation: [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md)
+```bash
+npx playwright test future-advanced-coverage.spec.js future-advanced-coverage-2.spec.js
+```
+
+#### Scenario index (`future-advanced-coverage*.spec.js`)
+
+**Part I (`future-advanced-coverage.spec.js`)**
+
+1. Student stale-tab homework resubmit after teacher hard review — one authoritative attempt history.
+2. Teacher concurrent material chapter reorder from two tabs — one final chapter sequence.
+3. Admin delete-class blocked while roster/course references exist.
+4. Teacher LLM endpoint failover during async grading — one completed task, no orphan queue rows.
+5. Student dual-tab score appeal — one pending appeal and one notification chain.
+6. Admin batch user activation with stale filters — final active state matches API.
+7. Student notification deep-link with corrupted `selected_course` — rebind to accessible course only.
+8. Teacher concurrent max-submission edit vs student submit — cap enforcement after race.
+9. Parent portal vs student web-admin notification read-state isolation (per policy).
+10. Teacher duplicate attendance save retries — one row per student/date.
+11. Admin semester switch plus stale score composition tab — one valid composition.
+12. Teacher points award vs student redemption race — consistent balance and ranking.
+13. Student attachment replace after flaky upload — one surviving attachment reference.
+14. Admin dual-tab system settings save — final branding consistent, no mixed fields.
+15. Teacher targeted notification — privacy across student, classmate, admin, parent.
+
+**Part II (`future-advanced-coverage-2.spec.js`)**
+
+16. Teacher dual-tab material publish vs delete — one surviving material record.
+17. Student stale homework detail after teacher unpublish — safe recovery.
+18. Admin class rename during teacher session — labels update, course identity stable.
+19. Per-course LLM policy change while worker processing — old vs new task config separation.
+20. Student plus parent concurrent visibility after appeal reopen — permissions consistent.
+21. Teacher rapid notification create/edit/delete — no duplicate unread counters on student dashboard.
+22. Admin orphan user plus roster sync race — no duplicate student rows after reconcile.
+23. Teacher score composition formula change while student scores open — one computed total everywhere.
+24. Teacher materials attachment replace under flaky network — one downloadable file, no stale section ref.
+25. Student stale elective selection after backend block — self-enroll affordance correct.
+26. Teacher bulk attendance plus notification from parallel tabs — one batch, correct fanout.
+27. Admin repeated demo-seed reset during session — safe re-login, no cross-scenario bleed.
+28. Student avatar replace plus logout/login across tabs — one final avatar URL.
+29. Teacher pinned notification reorder/unpin race — deterministic student list order.
+30. Teacher stale grade-candidate page after manual override — obsolete candidate not resurrected.
 
 ### `tests/scenarios/`
 
@@ -166,6 +202,44 @@ RAR attachment regression assets:
 Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — additive API/navigation checks (pagination boundaries, health, settings public, course entry). Run alone with `npx playwright test e2e-agent-followup-batch.spec.js` from `apps/web/admin`.
 
 Another additive hazard file: **`e2e-agent-hazard-tier-15.spec.js`** (15 cases) — API-only checks for authz edges, LLM admin vs student boundaries, parallel `mark-all-read`, and E2E dev seed header gates. Same globalSetup contract as `e2e-postgres-hazard-tier.spec.js`; run serially (Pitfall 41).
+
+### Coverage gap addressed in May 2026 (notification header badge + sync-status)
+
+Earlier Playwright suites exercised **`POST /api/notifications`** and list/mark-read flows extensively, but **did not systematically assert** the admin SPA header surfaces documented in [NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](NOTIFICATION_HEADER_AND_REALTIME_SYNC.md):
+
+- `data-testid="header-notification-badge"` (Element Plus badge content vs `sync-status.unread_count`),
+- course-scoped unread when **`header-course-switch`** changes `selectedCourse` (maps to `subject_id` on `syncStatus`),
+- convergence after **`window.dispatchEvent(new Event('focus'))`** (same hook as user returning to the tab — exercises `pollNotificationSync` without waiting `DEFAULT_NOTIFICATION_POLL_INTERVAL_MS`).
+
+**New Playwright module (10 cases):** `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js`
+
+**Deeper follow-up (15 cases):** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` — admin global totals vs list, teacher explicit course switch before badge asserts, corrupt `selected_course` healing, concurrent publishes, cross-teacher isolation, mobile viewport, reload-based cold poll, delete race on `/notifications`. Run alone:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
+  npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
+```
+
+- Run from `<REPO_ROOT>/apps/web/admin` (same `playwright.config.cjs` as other admin E2E):
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
+  npx playwright test e2e-notification-header-sync-tier.spec.js --project=chromium
+```
+
+**New behavior pytest module (10 cases):** `tests/behavior/test_notification_sync_api_edge_behavior.py`
+
+- Stresses **HTTP contract alignment** between `GET /api/notifications` aggregates and `GET /api/notifications/sync-status`, plus concurrent writers/readers and **403** when a student passes a **foreign** `subject_id`.
+- Uses the standard `tests/behavior/conftest.py` reset (SQLite by default); run:
+
+```bash
+cd <REPO_ROOT>
+python3 -m pytest tests/behavior/test_notification_sync_api_edge_behavior.py -q
+```
+
+Operational notes for agents authoring similar specs live under **“Pitfall 50”** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (secondary-browser-tab login, disabled course-card affordances after `/courses`, badge vs API race windows).
 
 ### `tests/postgres/`
 

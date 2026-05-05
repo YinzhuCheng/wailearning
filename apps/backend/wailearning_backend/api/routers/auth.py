@@ -217,11 +217,13 @@ async def upload_my_avatar(
             detail="Avatar must be a JPEG, PNG, GIF, or WebP image.",
         )
 
-    uploaded = await save_attachment(file, request)
-    size = int(uploaded.get("size") or 0)
-    if size > MAX_AVATAR_BYTES:
-        delete_attachment_file_if_unreferenced(db, str(uploaded.get("attachment_url")))
+    content = await file.read()
+    if len(content) > MAX_AVATAR_BYTES:
         raise HTTPException(status_code=400, detail="Avatar image must be 2 MB or smaller.")
+
+    uploaded = await save_attachment(file, request, preloaded=content)
+    size = int(uploaded.get("size") or 0)
+    assert size <= MAX_AVATAR_BYTES
 
     previous = current_user.avatar_url
     current_user.avatar_url = str(uploaded["attachment_url"])
