@@ -13,11 +13,13 @@ The audit distinguishes between:
 
 ## Protected Tests
 
-Protected test files matched by policy: **18**
+Protected test files matched by policy: **23**
 
 - `tests/backend/e2e_dev/test_demo_course_seed.py`
   Reason: Seed/bootstrap tests protect E2E reset and startup assumptions.
 - `tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py`
+  Reason: Seed/bootstrap tests protect E2E reset and startup assumptions.
+- `tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py`
   Reason: Seed/bootstrap tests protect E2E reset and startup assumptions.
 - `tests/backend/e2e_dev/test_e2e_dev_llm_mock.py`
   Reason: Seed/bootstrap tests protect E2E reset and startup assumptions.
@@ -37,6 +39,12 @@ Protected test files matched by policy: **18**
   Reason: Behavior suites cover multi-actor and cross-module regressions.
 - `tests/behavior/test_complex_regression_roundtrip_behavior.py`
   Reason: Behavior suites cover multi-actor and cross-module regressions.
+- `tests/behavior/test_course_roster_homework_edge_behavior.py`
+  Reason: Behavior suites cover multi-actor and cross-module regressions.
+- `tests/behavior/test_discussion_api_advanced_behavior.py`
+  Reason: Behavior suites cover multi-actor and cross-module regressions.
+- `tests/behavior/test_discussion_api_behavior.py`
+  Reason: Behavior suites cover multi-actor and cross-module regressions.
 - `tests/behavior/test_homework_lifecycle_llm_behavior.py`
   Reason: Behavior suites cover multi-actor and cross-module regressions.
 - `tests/behavior/test_material_chapters_notifications_homework_flow.py`
@@ -44,6 +52,8 @@ Protected test files matched by policy: **18**
 - `tests/behavior/test_multi_actor_timeline_behavior.py`
   Reason: Behavior suites cover multi-actor and cross-module regressions.
 - `tests/behavior/test_per_course_llm_quota_advanced_behavior.py`
+  Reason: Behavior suites cover multi-actor and cross-module regressions.
+- `tests/behavior/test_points_parent_semester_behavior.py`
   Reason: Behavior suites cover multi-actor and cross-module regressions.
 - `tests/behavior/test_regression_llm_quota_behavior.py`
   Reason: Behavior suites cover multi-actor and cross-module regressions.
@@ -56,8 +66,9 @@ Protected test files matched by policy: **18**
 
 | Category | Before | After safe deletes |
 | --- | ---: | ---: |
-| `backend-courses` | 5 | 5 |
-| `backend-e2e_dev` | 4 | 4 |
+| `backend-auth` | 1 | 1 |
+| `backend-courses` | 6 | 6 |
+| `backend-e2e_dev` | 5 | 5 |
 | `backend-files` | 1 | 1 |
 | `backend-homework` | 5 | 5 |
 | `backend-llm` | 10 | 10 |
@@ -66,16 +77,20 @@ Protected test files matched by policy: **18**
 | `backend-roster` | 5 | 5 |
 | `backend-scores` | 1 | 1 |
 | `backend-system` | 1 | 1 |
-| `backend-user_profile` | 1 | 1 |
-| `behavior` | 10 | 10 |
-| `e2e-web-admin` | 6 | 6 |
+| `backend-uncategorized` | 1 | 1 |
+| `backend-user_profile` | 2 | 2 |
+| `backend-users` | 1 | 1 |
+| `behavior` | 14 | 14 |
+| `e2e-web-admin` | 24 | 24 |
+| `uncategorized-python` | 4 | 2 |
 
 ### Test-case counts
 
 | Category | Before | After safe deletes |
 | --- | ---: | ---: |
-| `backend-courses` | 33 | 33 |
-| `backend-e2e_dev` | 12 | 12 |
+| `backend-auth` | 2 | 2 |
+| `backend-courses` | 34 | 34 |
+| `backend-e2e_dev` | 27 | 27 |
 | `backend-files` | 1 | 1 |
 | `backend-homework` | 28 | 28 |
 | `backend-llm` | 82 | 82 |
@@ -84,17 +99,70 @@ Protected test files matched by policy: **18**
 | `backend-roster` | 29 | 29 |
 | `backend-scores` | 4 | 4 |
 | `backend-system` | 4 | 4 |
-| `backend-user_profile` | 9 | 9 |
-| `behavior` | 85 | 85 |
-| `e2e-web-admin` | 6 | 6 |
+| `backend-uncategorized` | 4 | 4 |
+| `backend-user_profile` | 12 | 12 |
+| `backend-users` | 3 | 3 |
+| `behavior` | 127 | 127 |
+| `e2e-web-admin` | 24 | 24 |
+| `uncategorized-python` | 64 | 62 |
 
 ## Safe-Delete Candidates
 
-No exact duplicate non-protected test files were found.
+### Cluster 1
+
+- `tests/postgres/test_postgres_dialect_guards.py::test_pg03_information_schema_course_llm_configs_no_legacy_token_columns`
+- `tests/postgres/test_postgres_quota_api_and_constraints.py::test_pg_hz_03_course_llm_configs_has_no_legacy_quota_columns`
+
+### Cluster 2
+
+- `tests/postgres/test_postgres_dialect_guards.py::test_pg14_notifications_page_size_boundary_422`
+- `tests/postgres/test_postgres_dialect_guards.py::test_pg15_notifications_page_size_boundary_ok`
+- `tests/security/test_security_regression.py::test_sec02_student_list_users_forbidden`
+- `tests/security/test_security_regression.py::test_sec05_student_cannot_read_admin_quota_policy`
+- `tests/security/test_security_regression.py::test_sec08_student_logs_admin_only`
+- `tests/security/test_security_regression.py::test_sec13_download_nonexistent_stored_name_returns_404_not_stream`
+- `tests/security/test_security_regression.py::test_sec17_teacher_cannot_access_student_llm_quota_summary_endpoint`
+- `tests/security/test_security_regression.py::test_sec20_notification_subject_id_rejects_non_integer`
+
 
 ## Parameterization Candidates
 
-No same-file exact duplicate test bodies were found.
+### Cluster 1
+
+- `tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py::test_hz02_reset_scenario_rejects_wrong_seed_token`
+- `tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py::test_hz06_grading_state_requires_valid_seed`
+
+### Cluster 2
+
+- `tests/backend/test_settings_e2e_router_gate.py::test_expose_e2e_dev_api_true_in_development_when_enabled`
+- `tests/backend/test_settings_e2e_router_gate.py::test_expose_e2e_dev_api_false_when_seed_disabled`
+- `tests/backend/test_settings_e2e_router_gate.py::test_expose_e2e_dev_api_false_production_normal`
+
+### Cluster 3
+
+- `tests/behavior/test_course_roster_homework_edge_behavior.py::test_behavior_score_appeal_invalid_target_component_400`
+- `tests/behavior/test_course_roster_homework_edge_behavior.py::test_behavior_teacher_post_score_appeal_forbidden_403`
+
+### Cluster 4
+
+- `tests/behavior/test_discussion_api_behavior.py::test_behavior_discussion_student_cannot_delete_teacher_message_403`
+- `tests/behavior/test_discussion_api_behavior.py::test_behavior_discussion_teacher_can_delete_student_message_204`
+
+### Cluster 5
+
+- `tests/behavior/test_per_course_llm_quota_advanced_behavior.py::test_pcq5_non_student_cannot_read_student_quotas_summary`
+- `tests/postgres/test_postgres_quota_api_and_constraints.py::test_pg_hz_06_student_cannot_read_admin_quota_policy`
+
+### Cluster 6
+
+- `tests/behavior/test_points_parent_semester_behavior.py::test_behavior_parent_homework_list_requires_valid_code`
+- `tests/postgres/test_postgres_dialect_guards.py::test_pg12_dashboard_stats_requires_auth`
+- `tests/postgres/test_postgres_dialect_guards.py::test_pg17_settings_public_unauthenticated`
+- `tests/postgres/test_postgres_dialect_guards.py::test_pg18_health_endpoint`
+- `tests/security/test_security_regression.py::test_sec01_unauthenticated_users_list_returns_401`
+- `tests/security/test_security_regression.py::test_sec07_unauthenticated_logs_forbidden`
+- `tests/security/test_security_regression.py::test_sec14_e2e_seed_disabled_reset_returns_404`
+
 
 ## Merge-Only Candidates
 

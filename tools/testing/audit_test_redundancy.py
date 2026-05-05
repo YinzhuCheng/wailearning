@@ -83,8 +83,6 @@ def classify_test_file(rel_path: str) -> tuple[str, str]:
         return "scenario-support", "python"
     if path.startswith("tests/fixtures/"):
         return "fixtures", "other"
-    if path in {"tests/llm_scenario.py", "tests/llm_pressures.py", "tests/material_flow.py"}:
-        return "compatibility-support", "python"
     if path.endswith("conftest.py") or path.endswith("__init__.py"):
         return "test-support", "python"
     if path.endswith(".py"):

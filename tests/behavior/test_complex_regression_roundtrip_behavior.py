@@ -27,7 +27,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
-from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework, make_multi_student_scenario
+from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework, make_multi_student_scenario
 
 
 def _add_student_user(*, class_id: int, username: str, password: str, real_name: str) -> dict[str, int | str]:

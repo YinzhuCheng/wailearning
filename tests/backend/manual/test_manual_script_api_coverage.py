@@ -17,7 +17,7 @@ from apps.backend.wailearning_backend.db.database import Base, SessionLocal, eng
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.bootstrap import seed_default_system_settings
 from apps.backend.wailearning_backend.db.models import Class, SystemSetting, User, UserRole
-from tests.llm_scenario import ensure_admin, login_api
+from tests.scenarios.llm_scenario import ensure_admin, login_api
 
 
 @pytest.fixture(autouse=True)

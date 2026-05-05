@@ -23,8 +23,8 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
-from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
-from tests.material_flow import headers_for
+from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
+from tests.scenarios.material_flow import headers_for
 
 
 @pytest.fixture(autouse=True)

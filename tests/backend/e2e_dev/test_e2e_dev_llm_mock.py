@@ -15,7 +15,7 @@ from apps.backend.wailearning_backend.llm_grading import RetryableLLMError, work
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import HomeworkGradingTask, LLMEndpointPreset
 from apps.backend.wailearning_backend.bootstrap import _backfill_default_llm_groups_for_existing_configs
-from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
 def _tiny_png_bytes() -> bytes:

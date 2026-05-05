@@ -15,7 +15,7 @@ from apps.backend.wailearning_backend.domains.llm.token_quota import (
     resolve_max_parallel_grading_tasks,
 )
 from apps.backend.wailearning_backend.db.models import Homework, HomeworkGradingTask
-from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework, make_multi_student_scenario
+from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework, make_multi_student_scenario
 
 
 def test_m1_teacher_saves_config_before_both_grading_runs_use_new_prompt(client: TestClient) -> None:

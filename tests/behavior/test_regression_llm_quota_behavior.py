@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from apps.backend.wailearning_backend.db.database import SessionLocal, engine
-from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
 def test_r1_no_quota_exceeded_course_in_app_sources() -> None:

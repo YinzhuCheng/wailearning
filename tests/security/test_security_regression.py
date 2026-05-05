@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.llm_scenario import (
+from tests.scenarios.llm_scenario import (
     ensure_admin,
     login_api,
     make_grading_course_with_homework,

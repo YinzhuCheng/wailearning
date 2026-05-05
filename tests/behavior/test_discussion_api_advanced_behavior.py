@@ -17,8 +17,8 @@ from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import Subject, User, UserRole
-from tests.llm_scenario import login_api, make_grading_course_with_homework
-from tests.material_flow import headers_for
+from tests.scenarios.llm_scenario import login_api, make_grading_course_with_homework
+from tests.scenarios.material_flow import headers_for
 
 
 @pytest.fixture(autouse=True)

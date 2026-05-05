@@ -20,8 +20,8 @@ from apps.backend.wailearning_backend.db.database import Base, SessionLocal, eng
 from apps.backend.wailearning_backend.llm_grading import process_grading_task
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import HomeworkGradingTask, Subject
-from tests.llm_scenario import ensure_admin, json_llm_response, make_grading_course_with_homework, make_multi_student_scenario
-from tests.material_flow import (
+from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, make_grading_course_with_homework, make_multi_student_scenario
+from tests.scenarios.material_flow import (
     ensure_class_teacher_same_class,
     ensure_foreign_teacher,
     get_uncategorized_id,

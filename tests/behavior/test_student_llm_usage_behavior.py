@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from apps.backend.wailearning_backend.db.database import SessionLocal
 from apps.backend.wailearning_backend.llm_grading import process_grading_task
 from apps.backend.wailearning_backend.db.models import HomeworkGradingTask, LLMStudentTokenOverride, LLMTokenUsageLog
-from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
 def test_s0_student_quotas_summary_lists_enrolled_course(client: TestClient) -> None:
