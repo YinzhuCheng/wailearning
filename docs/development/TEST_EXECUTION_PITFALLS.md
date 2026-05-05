@@ -1137,6 +1137,27 @@ Interpretation:
 
 This is usually a **test harness bug**, not evidence that the database unique constraint is wrong.
 
+### Pitfall 44: Playwright CLI `-q` / unknown option failures in CI
+
+Symptom:
+
+```text
+error: unknown option '-q'
+```
+
+Context:
+
+Some automation snippets suggest `npx playwright test ... -q` for quieter logs.
+
+Cause:
+
+The installed `@playwright/test` major version may **not** support the `-q` flag on the `playwright test` CLI entrypoint.
+
+Fix:
+
+- Remove `-q` and rely on Playwright’s default reporter, or
+- Use supported reporter flags for your installed version (see upstream Playwright release notes for `<REPO_ROOT>/apps/web/admin/node_modules/@playwright/test`).
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

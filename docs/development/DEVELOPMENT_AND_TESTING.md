@@ -423,6 +423,55 @@ CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-postgres-ha
 
 Artifacts: Playwright may write `<REPO_ROOT>/apps/web/admin/test-results/` and `<REPO_ROOT>/apps/web/admin/playwright-report/`; these paths must remain **untracked** and must not be committed.
 
+#### 5. Full-suite regression runs (cloud agent, May 2026) and line-count inventory
+
+This subsection records **machine-verified** outcomes so future agents do not re-claim “green” without matching the same matrix.
+
+##### 5a. `python3 -m pytest tests/` — two engine configurations
+
+| Configuration | Command pattern | Outcome (representative) | Wall-clock order of magnitude |
+|---------------|-----------------|---------------------------|--------------------------------|
+| **Default SQLite** (no `TEST_DATABASE_URL`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | **367 passed**, **45 skipped**, remainder warnings only | ~8 minutes on a typical cloud CPU |
+| **PostgreSQL** (`TEST_DATABASE_URL` set to a **throwaway** database on `127.0.0.1:5432`) | `export TEST_DATABASE_URL='postgresql://<USER>:<PASSWORD>@127.0.0.1:5432/<DBNAME>'` then the same `pytest` command | **410 passed**, **2 skipped**, remainder warnings only | ~9.5 minutes on a typical cloud CPU |
+
+Interpretation for agents:
+
+- The **delta** (`410 - 367 = 43`) is dominated by **`tests/postgres/*`** modules that **skip entirely** when the dialect is not PostgreSQL. Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
+- The **two skips** on the PostgreSQL full run are environment-dependent (commonly **RAR CLI missing** for `tests/backend/llm/test_llm_attachment_formats.py` builders, or other explicitly `@pytest.mark.skip` guards). Inspect the pytest summary line in your CI log; do not assume zero skips means “no skips configured” — it means **no skips triggered in that environment**.
+
+**Not executed in the same session:** a full `npx playwright test` over **all** `tests/e2e/web-admin/*.spec.js` files (that run is hours-wide and belongs in a dedicated CI job). What **was** executed after the PostgreSQL pytest pass is the **additive** hazard file only:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-postgres-hazard-tier.spec.js --project=chromium
+```
+
+Outcome: **15 passed** (API + light UI checks for LLM global vs course boundaries).
+
+**Playwright CLI pitfall observed:** `npx playwright test ... -q` may fail with `error: unknown option '-q'` on some Playwright versions bundled with the repo. Prefer **no `-q`** flag, or use `PLAYWRIGHT_HTML_REPORT=0` / reporter flags documented upstream for your installed version.
+
+##### 5b. Repository line-count inventory (agent-oriented methodology)
+
+The following numbers were produced by a **repository-local Python walker** (not `cloc`, to avoid long `apt-get` installs in minimal cloud images). Treat them as **approximate physical line counts** (newline-delimited text lines; UTF-8 with replacement on decode errors; empty files dropped).
+
+**Excluded directory names** (substring match on path components): `.git`, `node_modules`, `dist`, `.venv`, `venv`, `__pycache__`, `.pytest_cache`, `coverage`, `test-results`, `playwright-report`, `.e2e-run`, `.pytest_tmp`, `.cursor`.
+
+**Document lines** (Markdown / RST / TXT / ADOC under `docs/`, `ops/**/*.md`, root README-style files; **excluding** `tests/**/*.md`):
+
+- **~7,467 lines** across **~20 files** (exact integers are in the agent’s last inventory run; re-run the script if you need bit-identical reproducibility after large merges).
+
+**Test code lines** (`tests/` only; extensions mapped as “code”: `.py`, `.js`, `.cjs`, `.mjs`, `.ts`, `.tsx`, `.vue`, `.json`, `.sql`, …):
+
+- **~25,743 lines** across **~111 files** (same caveat: re-run after major edits).
+
+**Product code lines** (everything not under `tests/` and not classified as “document” above):
+
+- **~51,386 lines** in the same inventory pass.
+
+**Grand total text lines** in that pass: **~85,222** (includes small “other” configuration files such as `.conf` under `ops/`).
+
+If you need **official `cloc` parity** (language breakdown with comment/code separation), install `cloc` in your runner image and exclude the same directories; the methodology above is optimized for **fast agent answers**, not ISO reporting.
+
 ### Agent triage notes (incremental, May 2026): pitfalls, sample hygiene, residual risk
 
 This subsection records lessons from a focused repair pass (pytest + Playwright + PostgreSQL smoke). It **adds** to earlier guidance; it does not replace [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) or [TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
