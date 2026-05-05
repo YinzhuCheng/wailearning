@@ -168,7 +168,7 @@ The repository includes an E2E-only reset API used by browser tests.
 
 - Route family: `/api/e2e/...`
 - Guarded by `E2E_DEV_SEED_ENABLED` and `E2E_DEV_SEED_TOKEN`
-- Never enable this in production
+- Never enable this in production; additionally, `APP_ENV=production` forces `expose_e2e_dev_api()` to **false** so the router is not mounted even if a misconfiguration sets the seed flags (see `tests/backend/test_settings_e2e_router_gate.py`)
 
 Playwright scenarios commonly use:
 
@@ -383,6 +383,12 @@ Symptom: `UniqueViolation` on `llm_student_token_overrides_student_id_key` when 
 Cause: `merge()` is not a generic substitute for “UPDATE if exists”; for tables with a **natural unique key** (`student_id`) and no application-level merge key loaded in the session, the second `merge()` can resolve to an INSERT that collides with the row created by the first `merge()` in the same transaction boundary.
 
 Fix for tests: prefer explicit `query(...).one()` then attribute mutation, or use the repository’s `apply_student_daily_token_overrides` API helpers instead of raw `merge()` in hazard tests. See **Pitfall 43** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+
+**2d. Round-1 hardening (P0/P1 follow-ups from security audit, code changes)**
+
+- **`/api/e2e/*` router mounting:** `main.py` only calls `app.include_router(e2e_dev.router)` when `settings.expose_e2e_dev_api()` is true (`apps/backend/wailearning_backend/core/config.py`). That helper returns **false** whenever `APP_ENV` is production (defense in depth; `Settings` still rejects `E2E_DEV_SEED_ENABLED` in production at parse time). Regression coverage: `tests/backend/test_settings_e2e_router_gate.py`.
+- **Attachment download by basename:** `apps/backend/wailearning_backend/api/routers/files.py::download_attachment_by_stored_name` resolves every **authorized** candidate URL to an on-disk path; if more than one **distinct** resolved path exists for the same basename, the handler returns **403** instead of picking an arbitrary row (mitigates basename collision widening access while still allowing multiple DB rows that reference the same physical file). Collisions are logged at warning level.
+- **LLM worker executor:** `apps/backend/wailearning_backend/llm_grading.py` `_WorkerManager._run` pairs each `Future` with its `task_id`; on `fut.result()` failure it calls `_mark_task_failed_from_worker_executor` so tasks do not stick in `processing` until stale reclaim. Exceptions use `logging` instead of bare `print`.
 
 #### 3. Agent “worries” and residual coverage gaps (explicit, not a bug list)
 

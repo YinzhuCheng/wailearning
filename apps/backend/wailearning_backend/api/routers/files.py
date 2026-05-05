@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Optional
 from urllib.parse import unquote
@@ -22,6 +23,7 @@ from apps.backend.wailearning_backend.api.schemas import AttachmentUploadRespons
 
 
 router = APIRouter(prefix="/api/files", tags=["文件上传"])
+_log = logging.getLogger(__name__)
 
 
 @router.post("/upload", response_model=AttachmentUploadResponse)
@@ -164,17 +166,33 @@ def download_attachment_by_stored_name(
     if not candidates:
         raise HTTPException(status_code=404, detail="Attachment file not found on server.")
     allowed = [u for u in candidates if _has_attachment_access(current_user, u, db)]
-    if len(allowed) == 1:
-        url = allowed[0]
-    elif not allowed:
+    if not allowed:
         raise HTTPException(status_code=403, detail="You do not have access to this attachment.")
-    else:
-        # Same on-disk file referenced by multiple rows; content is identical — serve one copy.
-        url = sorted(allowed)[0]
 
-    file_path = get_attachment_file_path(url)
-    if not file_path or not file_path.exists():
-        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+    paths: list[Path] = []
+    for u in allowed:
+        p = get_attachment_file_path(u)
+        if not p or not p.exists():
+            raise HTTPException(status_code=404, detail="Attachment file not found on server.")
+        try:
+            paths.append(p.resolve())
+        except OSError:
+            paths.append(p)
+    unique_paths = {str(p) for p in paths}
+    if len(unique_paths) != 1:
+        _log.warning(
+            "attachment basename collision with differing files: user=%s basename=%s paths=%s",
+            getattr(current_user, "id", None),
+            target_base,
+            sorted(unique_paths),
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Ambiguous attachment reference; use the full download URL from the application.",
+        )
+
+    url = sorted(allowed)[0]
+    file_path = paths[0]
 
     return FileResponse(
         path=file_path,

@@ -111,7 +111,8 @@ app.include_router(material_chapters.router)
 app.include_router(materials.router)
 app.include_router(notifications.router)
 app.include_router(parent.router)
-app.include_router(e2e_dev.router)
+if settings.expose_e2e_dev_api():
+    app.include_router(e2e_dev.router)
 
 ensure_upload_directories()
 

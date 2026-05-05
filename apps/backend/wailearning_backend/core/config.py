@@ -89,6 +89,17 @@ class Settings(BaseSettings):
     def TRUSTED_HOSTS(self) -> list[str]:
         return self._split_csv(self.TRUSTED_HOSTS_RAW)
 
+    def expose_e2e_dev_api(self) -> bool:
+        """
+        Whether FastAPI should mount ``/api/e2e/*`` routes.
+
+        Always false in production (defense in depth; ``model_validator`` also rejects
+        ``E2E_DEV_SEED_ENABLED`` with production ``APP_ENV`` at settings parse time).
+        """
+        if self._is_production_env(self.APP_ENV):
+            return False
+        return bool(self.E2E_DEV_SEED_ENABLED)
+
     @staticmethod
     def _is_production_env(app_env: str) -> bool:
         name = (app_env or "").strip().lower()
