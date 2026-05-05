@@ -1216,6 +1216,99 @@ Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TES
 
 This is **runner bootstrap debt**, not a failing test or a broken import path in `apps.backend.wailearning_backend`. Do not edit `tests/conftest.py` or `pytest.ini` to “fix” a missing `pytest` package on the system interpreter.
 
+### Pitfall 47: `GET /api/homework` is not the student homework list — the plural router is `/api/homeworks`
+
+### Symptom
+
+A hazard or E2E test expects **HTTP 422** (or a JSON list) from:
+
+```text
+GET /api/homework?page=1&page_size=200
+```
+
+but receives **404** or an HTML error page, so pagination validation never runs.
+
+### Context
+
+`apps/backend/wailearning_backend/api/routers/homework.py` registers `APIRouter(prefix="/api/homeworks", ...)`. There is no first-class list route at `/api/homework` in this branch.
+
+### Fix
+
+Use **`/api/homeworks`** for list queries. Re-run `rg "APIRouter\\(prefix=" apps/backend/wailearning_backend/api/routers/homework.py` before freezing URL literals in new tests.
+
+### Interpretation
+
+This is a **test contract bug** (wrong path), not evidence that FastAPI removed validation for oversized `page_size`.
+
+### Pitfall 48: `npm: command not found` blocks Playwright E2E even when pytest is green
+
+### Symptom
+
+```text
+npm: command not found
+```
+
+when attempting:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+npx playwright test e2e-agent-hazard-tier-2-15.spec.js
+```
+
+### Context
+
+Cloud CI images optimized for Python may omit Node.js entirely. The repository’s Playwright specs live under `<REPO_ROOT>/tests/e2e/web-admin/` but execute via **`apps/web/admin/playwright.config.cjs`**, which requires **`npm ci`** / **`npm install`** inside **`apps/web/admin`** before **`npx playwright`** exists.
+
+### Fix
+
+**Preferred (portable):** Install a supported **Node.js + npm** from your OS or from **https://nodejs.org** (LTS), then:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+npm ci
+npx playwright install chromium
+```
+
+**Debian/Ubuntu without `nvm` / upstream tarball:** Use distribution packages when the image is Python-first and blocks custom installers:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y nodejs npm
+cd <REPO_ROOT>/apps/web/admin
+npm ci
+npx playwright install chromium
+```
+
+On Ubuntu **24.04** this commonly provides **Node 18.x** and **npm 9.x**, which satisfies the admin `package.json` lockfile in this repository. If `npm ci` fails with an engine mismatch, upgrade Node via NodeSource or official binaries — document the failure in CI logs rather than pinning unsupported ranges in `package.json` without maintainer review.
+
+**Playwright backend process:** `playwright.config.cjs` defaults `E2E_PYTHON` to `<REPO_ROOT>/.venv/bin/python` when that path exists; otherwise **`python3`**. If **`uvicorn` is missing** from the system `python3`, either create `.venv` + `pip install -r requirements.txt` or set **`E2E_PYTHON=/path/to/python-with-deps`** explicitly (observed working: **`E2E_PYTHON=/usr/bin/python3`** after `pip install -r requirements.txt` on the same machine).
+
+### Interpretation
+
+**pytest-only CI** can stay green while **Playwright never runs** — track Node availability separately from Python bootstrap (**Pitfall 46**). **`npm: command not found`** is resolved by **any** compliant Node toolchain, including **`apt-get install nodejs npm`** on Debian-derived agents.
+
+### Pitfall 49: Student sidebar label rename broke brittle Playwright text assertions
+
+### Symptom
+
+Playwright fails with strict-mode or timeout when locating sidebar links:
+
+```text
+getByRole('link', { name: '我的课程' })
+```
+
+### Context
+
+The admin SPA (`apps/web/admin/src/views/Layout.vue`) grouped student navigation under **`课程学习`** and renamed the first child from **我的课程** to **选课与进度** (route `/courses` unchanged). Older specs that hard-coded the previous visible string will not find the control.
+
+### Fix
+
+Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/e2e/web-admin/fixtures.cjs`, or role selectors anchored on `.elective-catalog-card`. If you must click the sidebar, match **`选课与进度`** or use stable **`data-testid`** hooks if added later.
+
+### Interpretation
+
+This is usually a **test harness expectation drift**, not a routing regression — verify with `router.beforeEach` guards and direct navigation before rewriting product copy back to the old label.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

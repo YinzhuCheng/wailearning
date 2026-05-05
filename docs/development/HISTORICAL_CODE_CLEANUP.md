@@ -120,6 +120,46 @@ Several areas still look historical but were not deleted in this pass because th
 
 These are valid future cleanup targets only after their remaining data or deployment contracts are explicitly retired.
 
+### 5. Admin SPA sidebar density pass (`2026-05`)
+
+This pass targeted **navigation redundancy** in `<repo>/apps/web/admin/src/views/Layout.vue`, not backend contracts.
+
+**Removed / consolidated**
+
+- **Duplicate “个人设置” entry:** The sidebar footer `<el-menu>` duplicated the same destination already reachable from the **header user dropdown** (`handleCommand('personal-settings')`). The footer block (`sidebar-menu--footer`) was deleted so **个人设置** appears once (avatar menu only). Deep links to `/personal-settings` and Playwright `page.goto('/personal-settings')` remain valid.
+
+**Teacher / class-teacher grouping**
+
+- **班主任 (`classTeacherMenu`)** items are now under **`班级教学`** (`el-sub-menu` index `class-teaching`): dashboard, students, subjects, notifications. These four paths were previously a flat list — same destinations, fewer peer-level competitors.
+
+- **任课教师 (`teacherMenu`)** split into two groups:
+  - **`班级教学`** (`class-teaching`): dashboard, students, scores, attendance, notifications (formerly flat top-level items).
+  - **`作业与资料`** (`homework-and-materials`): `/homework`, `/homework/students`, `/materials`. Previously **课程资料** sat beside unrelated teaching tasks and **作业** was its own submenu (`homework-center`); merging **资料** under the homework umbrella reflects how teachers use them (same course context).
+
+**Student grouping**
+
+- Flat student links (**我的课程**, **课程主页**, homework, materials, scores, notifications) collapsed under **`课程学习`** (`student-learning`). First child label **`选课与进度`** replaces **我的课程** (same route `/courses`). **学习主页** replaces **课程主页** for `/course-home`. Routes unchanged — router guards and bookmarks keep working.
+
+**Administrator grouping**
+
+- **`学期与配置`** (`admin-academic-config`): semesters + system settings (replacing two adjacent flat entries).
+- **`消息与审计`** (`admin-ops`): notifications + logs (replacing two adjacent flat entries).
+- Students/classes/users/subjects remain top-level (different audiences).
+
+**Auto-open submenu indices**
+
+- `homeworkMenuOpenIndices` renamed conceptually to “which submenu should stay expanded”: extended for student/admin/teacher paths so nested menus open on deep links (e.g. student opens `/homework` → `student-learning` stays expanded).
+
+**What was intentionally not removed**
+
+- Header **切换课程** dropdown (needed when `availableCourses.length > 1`).
+- Header **用户头像** dropdown (profile card + LLM quota preview for students + **个人设置** + **退出登录**).
+- Sidebar **collapse** control and **mobile menu** button (accessibility / responsive behavior documented in `UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md`).
+
+**Regression expectation**
+
+- Playwright specs that navigate by **URL** (`/courses`, `/course-home`, …) are unaffected. Specs that assumed **visible sidebar text** “我的课程” may need selector updates to **选课与进度** or role-based navigation — grep `<repo>/tests/e2e/web-admin` after pulling this change.
+
 ## PowerShell Encoding Safety Rules
 
 This repository is frequently edited from Windows PowerShell sessions where console rendering can misrepresent UTF-8 text. That rendering issue must not be allowed to write mojibake back into the repo.

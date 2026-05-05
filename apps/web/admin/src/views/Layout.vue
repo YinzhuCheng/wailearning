@@ -54,17 +54,6 @@
           </template>
         </el-menu>
 
-        <el-menu
-          :default-active="route.path"
-          :collapse="isCollapsed"
-          router
-          class="sidebar-menu sidebar-menu--footer"
-        >
-          <el-menu-item index="/personal-settings">
-            <el-icon><Setting /></el-icon>
-            <template #title>个人设置</template>
-          </el-menu-item>
-        </el-menu>
       </div>
     </el-aside>
 
@@ -215,6 +204,7 @@ import {
   Bell,
   Collection,
   DataAnalysis,
+  Document,
   Expand,
   Fold,
   Reading,
@@ -430,8 +420,8 @@ const sidebarHandleIcon = computed(() => {
 const classContextText = computed(() => `班级课程 ${classTeacherCourses.value.length} 门`)
 
 const routeNameMap = {
-  '/courses': '我的课程',
-  '/course-home': '课程主页',
+  '/courses': '选课与进度',
+  '/course-home': '学习主页',
   '/dashboard': '课程仪表盘',
   '/classes': '班级管理',
   '/students': '学生信息',
@@ -463,48 +453,107 @@ const homeworkBreadcrumbParent = computed(() => {
 })
 
 const homeworkMenuOpenIndices = computed(() => {
-  if (userStore.isStudent || userStore.isAdmin || userStore.isClassTeacher) {
+  const p = route.path
+  if (userStore.isStudent) {
+    if (
+      p.startsWith('/courses') ||
+      p.startsWith('/course-home') ||
+      p.startsWith('/homework') ||
+      p.startsWith('/materials') ||
+      p.startsWith('/student-scores') ||
+      p.startsWith('/notifications')
+    ) {
+      return ['student-learning']
+    }
     return []
   }
-  if (route.path.startsWith('/homework')) {
-    return ['homework-center']
+  if (userStore.isAdmin) {
+    const open = []
+    if (p.startsWith('/semesters') || p.startsWith('/settings')) {
+      open.push('admin-academic-config')
+    }
+    if (p.startsWith('/notifications') || p.startsWith('/logs')) {
+      open.push('admin-ops')
+    }
+    return open
+  }
+  if (userStore.isClassTeacher) {
+    if (
+      p.startsWith('/dashboard') ||
+      p.startsWith('/students') ||
+      p.startsWith('/subjects') ||
+      p.startsWith('/notifications')
+    ) {
+      return ['class-teaching']
+    }
+    return []
+  }
+  if (p.startsWith('/homework') || p.startsWith('/materials')) {
+    return ['homework-and-materials']
+  }
+  if (p.startsWith('/dashboard') || p.startsWith('/students') || p.startsWith('/scores') || p.startsWith('/attendance') || p.startsWith('/notifications')) {
+    return ['class-teaching']
   }
   return []
 })
 
 const classTeacherMenu = [
-  { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
-  { path: '/students', label: '学生信息', icon: User },
-  { path: '/subjects', label: '课程信息', icon: Reading },
-  { path: '/notifications', label: '通知信息', icon: Bell }
+  {
+    type: 'submenu',
+    index: 'class-teaching',
+    label: '班级教学',
+    icon: School,
+    children: [
+      { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
+      { path: '/students', label: '学生信息', icon: User },
+      { path: '/subjects', label: '课程信息', icon: Reading },
+      { path: '/notifications', label: '通知信息', icon: Bell }
+    ]
+  }
 ]
 
 const teacherMenu = [
-  { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
-  { path: '/students', label: '学生管理', icon: User },
-  { path: '/scores', label: '成绩管理', icon: Collection },
-  { path: '/attendance', label: '考勤管理', icon: Collection },
-  { path: '/materials', label: '课程资料', icon: Collection },
   {
     type: 'submenu',
-    index: 'homework-center',
-    label: '作业',
+    index: 'class-teaching',
+    label: '班级教学',
+    icon: School,
+    children: [
+      { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
+      { path: '/students', label: '学生管理', icon: User },
+      { path: '/scores', label: '成绩管理', icon: Collection },
+      { path: '/attendance', label: '考勤管理', icon: Collection },
+      { path: '/notifications', label: '通知中心', icon: Bell }
+    ]
+  },
+  {
+    type: 'submenu',
+    index: 'homework-and-materials',
+    label: '作业与资料',
     icon: Reading,
     children: [
       { path: '/homework', label: '作业管理', icon: Reading },
-      { path: '/homework/students', label: '学生作业一览', icon: User }
+      { path: '/homework/students', label: '学生作业一览', icon: User },
+      { path: '/materials', label: '课程资料', icon: Collection }
     ]
-  },
-  { path: '/notifications', label: '通知中心', icon: Bell }
+  }
 ]
 
 const studentMenu = [
-  { path: '/courses', label: '我的课程', icon: Reading },
-  { path: '/course-home', label: '课程主页', icon: School },
-  { path: '/homework', label: '课程作业', icon: Reading },
-  { path: '/materials', label: '课程资料', icon: Collection },
-  { path: '/student-scores', label: '我的成绩', icon: Collection },
-  { path: '/notifications', label: '课程通知', icon: Bell }
+  {
+    type: 'submenu',
+    index: 'student-learning',
+    label: '课程学习',
+    icon: Reading,
+    children: [
+      { path: '/courses', label: '选课与进度', icon: School },
+      { path: '/course-home', label: '学习主页', icon: DataAnalysis },
+      { path: '/homework', label: '课程作业', icon: Document },
+      { path: '/materials', label: '课程资料', icon: Collection },
+      { path: '/student-scores', label: '我的成绩', icon: Collection },
+      { path: '/notifications', label: '课程通知', icon: Bell }
+    ]
+  }
 ]
 
 const adminMenu = [
@@ -512,10 +561,26 @@ const adminMenu = [
   { path: '/classes', label: '班级管理', icon: School },
   { path: '/users', label: '用户管理', icon: UserFilled },
   { path: '/subjects', label: '课程管理', icon: Reading },
-  { path: '/semesters', label: '学期管理', icon: Collection },
-  { path: '/notifications', label: '消息与通知', icon: Bell },
-  { path: '/logs', label: '操作日志', icon: Collection },
-  { path: '/settings', label: '系统设置', icon: Setting }
+  {
+    type: 'submenu',
+    index: 'admin-academic-config',
+    label: '学期与配置',
+    icon: Setting,
+    children: [
+      { path: '/semesters', label: '学期管理', icon: Collection },
+      { path: '/settings', label: '系统设置', icon: Setting }
+    ]
+  },
+  {
+    type: 'submenu',
+    index: 'admin-ops',
+    label: '消息与审计',
+    icon: Bell,
+    children: [
+      { path: '/notifications', label: '消息与通知', icon: Bell },
+      { path: '/logs', label: '操作日志', icon: Collection }
+    ]
+  }
 ]
 
 const menuItems = computed(() => {
@@ -814,13 +879,6 @@ watch(notificationSyncParams, () => {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-}
-
-.sidebar-menu--footer {
-  flex-shrink: 0;
-  margin-top: auto;
-  padding-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logo {
