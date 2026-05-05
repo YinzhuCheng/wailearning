@@ -337,6 +337,18 @@ That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the 
 
 **Skip counts (reference):** On **SQLite** with `rar`/`unrar` installed but **without** `TEST_DATABASE_URL` / auto-Postgres, expect **43 skipped** (PostgreSQL-only modules + `test_r3`). With **`rar` missing**, add **2** skips for the RAR builder tests (**45** total). With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, expect **432 passed, 0 skipped** in the current collection (same **432** tests collected as SQLite; Postgres runs the previously skipped `tests/postgres/*` and `test_r3`, May 2026).
 
+The **SQLite-only `passed` integer** (for example **389** in an earlier baseline when **43** tests skip) is not a permanent constant: as new tests are added to the default collection, the count of executed SQLite tests rises while Postgres-gated modules still skip. Use **skip count** (**43** vs **45**) and the **Postgres full-suite** target (**432 passed, 0 skipped** when the environment is complete) as the stable signals, not a memorized “389” alone.
+
+**Cloud-agent / disposable Linux runner bootstrap (observed failure, May 2026):** Ephemeral CI or Cursor cloud sandboxes may start with **no** repository `.venv` and a system `python3` that does **not** expose `pytest` as a module. Symptom:
+
+```text
+/usr/bin/python3: No module named pytest
+```
+
+Remediation at `<REPO_ROOT>`: install backend dependencies before invoking the test runner, for example `python3 -m pip install -r requirements.txt`, or create and use `.venv` as described under **Local Development Setup** above. After install, `python3 -m pytest tests/` should at least reach collection and test execution.
+
+Concrete evidence from one such run: **`387 passed, 45 skipped`** in ~8m14s on SQLite when **`rar` was not installed** (the **45** skips match **43** Postgres-gated items plus **2** RAR-builder cases). That outcome is **environment-complete for SQLite** except for `rar` and Postgres; it is **not** the zero-skip matrix.
+
 Default `pytest` without Postgres/`rar` remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
 
 **Authoring convention — database-backed tests:** When adding or reviewing tests that touch persistence, schema, transactions, concurrency, or dialect-specific behavior, **assume PostgreSQL as the production-aligned reference**: write assertions and fixtures compatible with Postgres first; use SQLite for speed locally where the suite allows, but **do not rely on SQLite-only semantics** as proof for shipping schema-sensitive changes. Re-validate meaningful DB changes against **`TEST_DATABASE_URL`** (Postgres).
