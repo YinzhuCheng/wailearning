@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.core.auth import get_password_hash, get_current_user_optional
 from apps.backend.wailearning_backend.core.config import settings
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.llm_grading import process_next_grading_task, start_grading_worker, worker_manager
@@ -131,15 +131,39 @@ def _require_seed_token(x_e2e_seed_token: str | None) -> None:
         raise HTTPException(status_code=403, detail="Invalid E2E seed token.")
 
 
+def _require_e2e_admin_when_configured(current_user: User | None, *, require_admin_jwt: bool) -> None:
+    """Optional second factor for powerful /api/e2e/dev/* routes when E2E_DEV_REQUIRE_ADMIN_JWT is true."""
+    if not require_admin_jwt:
+        return
+    if not getattr(settings, "E2E_DEV_REQUIRE_ADMIN_JWT", False):
+        return
+    if current_user is None or getattr(current_user, "role", None) != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=403,
+            detail="This E2E dev endpoint requires an administrator Bearer token when E2E_DEV_REQUIRE_ADMIN_JWT is enabled.",
+        )
+
+
+def _require_e2e_call_gates(
+    x_e2e_seed_token: str | None,
+    current_user: User | None,
+    *,
+    require_admin_jwt: bool,
+) -> None:
+    _require_seed_token(x_e2e_seed_token)
+    _require_e2e_admin_when_configured(current_user, require_admin_jwt=require_admin_jwt)
+
+
 @router.post("/dev/reset-scenario")
 def reset_e2e_scenario(
     x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Create isolated users/classes/courses for UI tests. Safe to call repeatedly (new suffix each time).
     """
-    _require_seed_token(x_e2e_seed_token)
+    _require_e2e_call_gates(x_e2e_seed_token, current_user, require_admin_jwt=False)
     _reset_mock_llm_state()
 
     suffix = uuid.uuid4().hex[:10]
@@ -414,8 +438,9 @@ def reset_e2e_scenario(
 def configure_mock_llm(
     payload: dict[str, Any] = Body(default_factory=dict),
     x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> dict[str, Any]:
-    _require_seed_token(x_e2e_seed_token)
+    _require_e2e_call_gates(x_e2e_seed_token, current_user, require_admin_jwt=True)
     profiles = payload.get("profiles")
     if not isinstance(profiles, dict):
         raise HTTPException(status_code=400, detail="profiles must be an object.")
@@ -435,8 +460,9 @@ def configure_mock_llm(
 @router.get("/dev/mock-llm/state")
 def mock_llm_state(
     x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> dict[str, Any]:
-    _require_seed_token(x_e2e_seed_token)
+    _require_e2e_call_gates(x_e2e_seed_token, current_user, require_admin_jwt=True)
     with _mock_llm_lock:
         return {
             "profiles": {
@@ -454,9 +480,10 @@ def mock_llm_state(
 @router.get("/dev/grading-state")
 def grading_state_for_e2e(
     x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    _require_seed_token(x_e2e_seed_token)
+    _require_e2e_call_gates(x_e2e_seed_token, current_user, require_admin_jwt=True)
     rows = (
         db.query(HomeworkGradingTask.status, func.count(HomeworkGradingTask.id))
         .group_by(HomeworkGradingTask.status)
@@ -484,8 +511,9 @@ def grading_state_for_e2e(
 def control_worker_for_e2e(
     payload: dict[str, Any] = Body(default_factory=dict),
     x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> dict[str, Any]:
-    _require_seed_token(x_e2e_seed_token)
+    _require_e2e_call_gates(x_e2e_seed_token, current_user, require_admin_jwt=True)
     action = str(payload.get("action") or "status").strip().lower()
     if action == "start":
         if not settings.ENABLE_LLM_GRADING_WORKER:
@@ -502,8 +530,9 @@ def control_worker_for_e2e(
 def process_grading_tasks_for_e2e(
     payload: dict[str, Any] = Body(default_factory=dict),
     x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> dict[str, Any]:
-    _require_seed_token(x_e2e_seed_token)
+    _require_e2e_call_gates(x_e2e_seed_token, current_user, require_admin_jwt=True)
     max_tasks = int(payload.get("max_tasks") or 1)
     max_tasks = max(0, min(max_tasks, 50))
     processed = 0
@@ -518,9 +547,10 @@ def process_grading_tasks_for_e2e(
 def mark_preset_validated_for_e2e(
     payload: dict[str, Any] = Body(default_factory=dict),
     x_e2e_seed_token: str | None = Header(None, alias="X-E2E-Seed-Token"),
+    current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    _require_seed_token(x_e2e_seed_token)
+    _require_e2e_call_gates(x_e2e_seed_token, current_user, require_admin_jwt=True)
     preset_id = payload.get("preset_id")
     try:
         preset_id = int(preset_id)

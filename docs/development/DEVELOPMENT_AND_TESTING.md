@@ -169,6 +169,23 @@ The repository includes an E2E-only reset API used by browser tests.
 - Guarded by `E2E_DEV_SEED_ENABLED` and `E2E_DEV_SEED_TOKEN`
 - Never enable this in production; additionally, `APP_ENV=production` forces `expose_e2e_dev_api()` to **false**, so every `/api/e2e/...` request returns **404** even if seed flags were mis-set (see `tests/backend/test_settings_e2e_router_gate.py`). The router remains registered for test-time toggles; access is blocked by a router-level dependency.
 
+**Dual gate for powerful dev routes (mock LLM, grading pump, preset shortcuts)**
+
+When `E2E_DEV_REQUIRE_ADMIN_JWT=true` (default in `apps/web/admin/playwright.config.cjs` for the managed API subprocess), the following endpoints require **both** header `X-E2E-Seed-Token` **and** a valid **administrator** `Authorization: Bearer <jwt>`:
+
+- `POST /api/e2e/dev/mock-llm/configure`
+- `GET /api/e2e/dev/mock-llm/state`
+- `GET /api/e2e/dev/grading-state`
+- `POST /api/e2e/dev/process-grading`
+- `POST /api/e2e/dev/worker`
+- `POST /api/e2e/dev/mark-preset-validated`
+
+`POST /api/e2e/dev/reset-scenario` remains **seed-token only** so automation can obtain credentials before any JWT exists.
+
+Playwright (`tests/e2e/web-admin/fixtures.cjs`, `global-setup.cjs`) calls `refreshE2eAdminBearer()` from `e2e-seed-headers.cjs` after each successful reset to store the seeded admin token in `process.env.E2E_DEV_ADMIN_BEARER` and merge it into shared `seedHeaders()` for specs that call powerful `/api/e2e/dev/*` routes.
+
+To disable the admin JWT requirement (legacy tooling that only passes the seed header): set `E2E_DEV_REQUIRE_ADMIN_JWT=0` in the backend environment.
+
 Playwright scenarios commonly use:
 
 - `POST /api/e2e/dev/reset-scenario`

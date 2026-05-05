@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # Ephemeral E2E seed API (/api/e2e/dev/reset-scenario). Never enable in production.
     E2E_DEV_SEED_ENABLED: bool = False
     E2E_DEV_SEED_TOKEN: str = ""
+    # When True, destructive / powerful /api/e2e/dev/* endpoints require an admin JWT in addition
+    # to X-E2E-Seed-Token (Bearer). Playwright sets E2E_DEV_ADMIN_* env vars so automation keeps working.
+    E2E_DEV_REQUIRE_ADMIN_JWT: bool = False
+    E2E_DEV_ADMIN_USERNAME: str = ""
+    E2E_DEV_ADMIN_PASSWORD: str = ""
 
     GUNICORN_WORKERS: int = 3
     LOG_LEVEL: str = "info"

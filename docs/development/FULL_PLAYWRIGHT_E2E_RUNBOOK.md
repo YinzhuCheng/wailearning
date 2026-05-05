@@ -74,6 +74,8 @@ export E2E_DEV_SEED_TOKEN=<same-value-as-backend>
 
 The backend must have **`E2E_DEV_SEED_ENABLED=true`** and matching **`E2E_DEV_SEED_TOKEN`** (Playwright `globalSetup` and `tests/e2e/web-admin/fixtures.cjs` call `POST /api/e2e/dev/reset-scenario` with header **`X-E2E-Seed-Token`**).
 
+When **`E2E_DEV_REQUIRE_ADMIN_JWT`** is enabled on the API (default **`true`** for the subprocess spawned by `apps/web/admin/playwright.config.cjs`), powerful `/api/e2e/dev/*` helpers (`mock-llm/configure`, `grading-state`, `process-grading`, `worker`, `mark-preset-validated`) also require an **admin Bearer**; **`fixtures.cjs`** refreshes it after each seed via **`e2e-seed-headers.cjs`**. See **Pitfall 55** in **`TEST_EXECUTION_PITFALLS.md`**.
+
 If the token is missing or mismatched, many tests **skip** or **`resetE2eScenario` throws** — do not assume the SPA regressed.
 
 ---

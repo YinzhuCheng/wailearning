@@ -1,5 +1,6 @@
 ﻿const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { seedHeaders } = require('./e2e-seed-headers.cjs')
 
 const scenario = () => loadE2eScenario()
 const TINY_PNG = Buffer.from(
@@ -13,10 +14,6 @@ function apiBase() {
 
 function escapeRegex(text) {
   return `${text || ''}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function seedHeaders() {
-  return { 'X-E2E-Seed-Token': process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed' }
 }
 
 async function login(page, username, password) {

@@ -1,11 +1,8 @@
 const { expect } = require('@playwright/test')
+const { seedHeaders } = require('./e2e-seed-headers.cjs')
 
 function apiBase() {
   return (process.env.E2E_API_URL || 'http://127.0.0.1:8012').replace(/\/$/, '')
-}
-
-function seedHeaders() {
-  return { 'X-E2E-Seed-Token': process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed' }
 }
 
 function escapeRegex(text) {

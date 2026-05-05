@@ -1421,6 +1421,72 @@ For markdown bodies, when **`isTruncated(body)`** is true, render **`previewText
 
 Full-suite runs surfaced this because discussion specs execute late and depend on DOM structure + ellipsis semantics staying aligned with **`PREVIEW_LINE_LIMIT`**.
 
+### Pitfall 55: Powerful `/api/e2e/dev/*` routes now expect admin Bearer when `E2E_DEV_REQUIRE_ADMIN_JWT` is true
+
+### Symptom
+
+Playwright or curl calls return **403** with detail mentioning **`administrator Bearer`** when hitting:
+
+- `/api/e2e/dev/mock-llm/configure`
+- `/api/e2e/dev/grading-state`
+- `/api/e2e/dev/process-grading`
+- `/api/e2e/dev/worker`
+- `/api/e2e/dev/mark-preset-validated`
+
+even though **`X-E2E-Seed-Token`** is correct.
+
+### Context
+
+The seed token alone proves possession of a shared CI secret; it does **not** prove an interactive admin session. When **`settings.E2E_DEV_REQUIRE_ADMIN_JWT`** is **true**, selected routes require **`Authorization: Bearer <admin JWT>`** in addition to the seed header. **`reset-scenario`** stays seed-only so **`globalSetup`** can run before any login.
+
+Playwright stores the post-reset admin token in **`process.env.E2E_DEV_ADMIN_BEARER`** via **`tests/e2e/web-admin/e2e-seed-headers.cjs`** (`refreshE2eAdminBearer`). Specs that duplicate **`seedHeaders()`** locally must either import **`seedHeaders`** from **`e2e-seed-headers.cjs`** or duplicate the merge logic.
+
+### Fix
+
+- Managed Playwright: rely on **`fixtures.cjs`** / **`global-setup.cjs`** (they refresh the bearer after each seed).
+- External API without Playwright env: login as seeded **`admin`** from **`scenario.json`** and pass **`Authorization`** with **`POST /api/e2e/dev/*`** calls.
+- Opt out only for intentional legacy scripts: **`E2E_DEV_REQUIRE_ADMIN_JWT=false`** on the backend process.
+
+### Interpretation
+
+This pitfall appeared while closing **P0 E2E exposure** findings: misconfigured non-production hosts previously allowed powerful actions with only a static seed header.
+
+### Pitfall 57: Default `SECRET_KEY` placeholder remains valid unless production or `REQUIRE_STRONG_SECRETS`
+
+### Symptom
+
+Operators expect **`SECRET_KEY=change-me-in-production`** to fail fast in **all** environments; instead the app starts when **`APP_ENV`** is not production-style **and** **`REQUIRE_STRONG_SECRETS`** is **false** (the default), because **`reject_weak_secrets_in_production`** only forces strong secrets when **`REQUIRE_STRONG_SECRETS` or production APP_ENV**.
+
+### Context
+
+Changing **`REQUIRE_STRONG_SECRETS`** default to **`true`** breaks **`from apps.backend.wailearning_backend.core.config import settings`** for processes that have **no** `.env` and rely on code defaults — pytest/conftest sets **`SECRET_KEY`** explicitly, but bare **`python -m uvicorn`** without env would crash unless operators create secrets first.
+
+### Fix
+
+Deployments must set **`APP_ENV=production`** (or **`REQUIRE_STRONG_SECRETS=true`**) **and** supply **`SECRET_KEY`** / **`DATABASE_URL`** per **`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`**. Treat **`change-me-in-production`** as invalid anywhere tokens matter.
+
+### Interpretation
+
+This documents **P0 weak-default-key** risk without silently breaking developer **`import settings`** ergonomics.
+
+### Pitfall 56: Attachment download by basename — ambiguous collision returns **400** (not 403)
+
+### Symptom
+
+`GET /api/files/download/<stored_basename>` returns **400** with text about passing **`attachment_url`**, where the same lesson previously returned **403** (“Ambiguous attachment reference…”).
+
+### Context
+
+Multiple logical **`attachment_url`** rows can reference the same on-disk name. Returning **403** misclassified “caller knows basename but DB has multiple logical URLs” as purely forbidden; **400** invites passing the canonical **`attachment_url`** query parameter to disambiguate after ACL checks.
+
+### Fix
+
+Clients that deep-link **`/api/files/download/{name}`** without a query parameter must tolerate **400** when collisions exist; prefer **`GET /api/files/download?attachment_url=...`** (already supported) or pass **`?attachment_url=`** on the basename route.
+
+### Interpretation
+
+**`tests/backend/files/test_files_attachment_download.py`** still expects **200** when the teacher has access and either there is a single matching URL or paths coincide.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
