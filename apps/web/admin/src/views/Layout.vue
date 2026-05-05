@@ -161,9 +161,9 @@
                       <small>{{ userStore.userInfo?.username }}</small>
                     </div>
                   </div>
-                  <div class="user-dropdown-token">
+                  <div v-if="userStore.isStudent" class="user-dropdown-token">
                     <div class="user-dropdown-token__row">
-                      <span>LLM token</span>
+                      <span>LLM 今日额度</span>
                       <strong>{{ tokenUsageLabel }}</strong>
                     </div>
                     <el-progress
@@ -175,8 +175,7 @@
                     <p>{{ tokenDetailText }}</p>
                   </div>
                 </el-dropdown-item>
-                <el-dropdown-item command="personal-settings">个人设置</el-dropdown-item>
-                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -462,15 +461,20 @@ const homeworkMenuOpenIndices = computed(() => {
       p.startsWith('/homework') ||
       p.startsWith('/materials') ||
       p.startsWith('/student-scores') ||
-      p.startsWith('/notifications') ||
-      p.startsWith('/personal-settings')
+      p.startsWith('/notifications')
     ) {
       return ['student-learning']
+    }
+    if (p.startsWith('/personal-settings')) {
+      return []
     }
     return []
   }
   if (userStore.isAdmin) {
     const open = []
+    if (p.startsWith('/students') || p.startsWith('/classes') || p.startsWith('/users') || p.startsWith('/subjects')) {
+      open.push('admin-core')
+    }
     if (p.startsWith('/semesters') || p.startsWith('/settings')) {
       open.push('admin-academic-config')
     }
@@ -484,10 +488,12 @@ const homeworkMenuOpenIndices = computed(() => {
       p.startsWith('/dashboard') ||
       p.startsWith('/students') ||
       p.startsWith('/subjects') ||
-      p.startsWith('/notifications') ||
-      p.startsWith('/personal-settings')
+      p.startsWith('/notifications')
     ) {
       return ['class-teaching']
+    }
+    if (p.startsWith('/personal-settings')) {
+      return []
     }
     return []
   }
@@ -499,10 +505,12 @@ const homeworkMenuOpenIndices = computed(() => {
     p.startsWith('/students') ||
     p.startsWith('/scores') ||
     p.startsWith('/attendance') ||
-    p.startsWith('/notifications') ||
-    p.startsWith('/personal-settings')
+    p.startsWith('/notifications')
   ) {
     return ['class-teaching']
+  }
+  if (p.startsWith('/personal-settings')) {
+    return []
   }
   return []
 })
@@ -517,10 +525,10 @@ const classTeacherMenu = [
       { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
       { path: '/students', label: '学生信息', icon: User },
       { path: '/subjects', label: '课程信息', icon: Reading },
-      { path: '/notifications', label: '通知信息', icon: Bell },
-      { path: '/personal-settings', label: '个人设置', icon: Brush }
+      { path: '/notifications', label: '通知信息', icon: Bell }
     ]
-  }
+  },
+  { path: '/personal-settings', label: '个人设置', icon: Brush }
 ]
 
 const teacherMenu = [
@@ -534,8 +542,7 @@ const teacherMenu = [
       { path: '/students', label: '学生管理', icon: User },
       { path: '/scores', label: '成绩管理', icon: Collection },
       { path: '/attendance', label: '考勤管理', icon: Collection },
-      { path: '/notifications', label: '通知中心', icon: Bell },
-      { path: '/personal-settings', label: '个人设置', icon: Brush }
+      { path: '/notifications', label: '通知中心', icon: Bell }
     ]
   },
   {
@@ -548,7 +555,8 @@ const teacherMenu = [
       { path: '/homework/students', label: '学生作业一览', icon: User },
       { path: '/materials', label: '课程资料', icon: Collection }
     ]
-  }
+  },
+  { path: '/personal-settings', label: '个人设置', icon: Brush }
 ]
 
 const studentMenu = [
@@ -563,18 +571,25 @@ const studentMenu = [
       { path: '/homework', label: '课程作业', icon: Document },
       { path: '/materials', label: '课程资料', icon: Collection },
       { path: '/student-scores', label: '我的成绩', icon: Collection },
-      { path: '/notifications', label: '课程通知', icon: Bell },
-      { path: '/personal-settings', label: '个人设置', icon: Brush }
+      { path: '/notifications', label: '课程通知', icon: Bell }
     ]
-  }
+  },
+  { path: '/personal-settings', label: '个人设置', icon: Brush }
 ]
 
 const adminMenu = [
-  { path: '/students', label: '学生管理', icon: User },
-  { path: '/classes', label: '班级管理', icon: School },
-  { path: '/users', label: '用户管理', icon: UserFilled },
-  { path: '/subjects', label: '课程管理', icon: Reading },
-  { path: '/personal-settings', label: '个人设置', icon: Brush },
+  {
+    type: 'submenu',
+    index: 'admin-core',
+    label: '用户与教学',
+    icon: User,
+    children: [
+      { path: '/students', label: '学生管理', icon: User },
+      { path: '/classes', label: '班级管理', icon: School },
+      { path: '/users', label: '用户管理', icon: UserFilled },
+      { path: '/subjects', label: '课程管理', icon: Reading }
+    ]
+  },
   {
     type: 'submenu',
     index: 'admin-academic-config',
@@ -594,7 +609,8 @@ const adminMenu = [
       { path: '/notifications', label: '消息与通知', icon: Bell },
       { path: '/logs', label: '操作日志', icon: Collection }
     ]
-  }
+  },
+  { path: '/personal-settings', label: '个人设置', icon: Brush }
 ]
 
 const menuItems = computed(() => {
@@ -742,11 +758,6 @@ const handleCourseSwitch = courseId => {
 }
 
 const handleCommand = command => {
-  if (command === 'personal-settings') {
-    router.push('/personal-settings')
-    return
-  }
-
   if (command === 'logout') {
     userStore.logout()
     router.push('/login')

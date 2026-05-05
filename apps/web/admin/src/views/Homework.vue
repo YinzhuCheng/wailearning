@@ -14,9 +14,6 @@
         >
           批量迟交策略
         </el-button>
-        <el-button v-if="!userStore.isStudent && selectedCourse" @click="router.push('/homework/students')">
-          学生作业一览
-        </el-button>
         <el-button
           v-if="!userStore.isStudent && selectedCourse"
           type="primary"
@@ -112,12 +109,8 @@
           <el-table-column label="操作" :width="userStore.isStudent ? 200 : 220">
             <template #default="{ row }">
               <template v-if="userStore.isStudent">
-                <el-dropdown split-button type="primary" size="small" @click="goToSubmitPage(row)">
-                  作业与提交
-                  <template #dropdown>
-                    <el-dropdown-item @click="viewHomework(row)">仅查看说明</el-dropdown-item>
-                  </template>
-                </el-dropdown>
+                <el-button type="primary" size="small" @click="goToSubmitPage(row)">作业与提交</el-button>
+                <el-button size="small" plain @click="viewHomework(row)">仅看说明</el-button>
               </template>
               <template v-else>
                 <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>

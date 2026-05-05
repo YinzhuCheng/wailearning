@@ -2128,3 +2128,12 @@ mock LLM endpoint is local:
 ```text
 /api/e2e/dev/mock-llm/<profile>/v1/
 ```
+
+## Follow-up: Admin navigation chrome consolidation (post-Round-3)
+
+After the responsive and appearance audit rounds, a separate pass reduced duplicate navigation affordances in the admin shell:
+
+- Administrator sidebar: flat entries for students, classes, users, and subjects were merged under a second-level group labelled **「用户与教学」**; **「个人设置」** remains a dedicated top-level item for all roles; the avatar dropdown no longer repeats **「个人设置」** because the sidebar entry is canonical.
+- Teacher homework page: removed the header duplicate **「学生作业一览」** (the sidebar entry under **「作业与资料」** remains); student homework rows use two explicit buttons instead of a split-button dropdown with a single secondary item.
+
+For full operational detail (pytest PostgreSQL skip pitfalls for `tests/postgres/*` when `DATABASE_URL` resolves to SQLite, RAR `unrar-free` prerequisites, and suggested verification commands), see `docs/development/ADMIN_UI_NAVIGATION_CLEANUP_AND_FULL_TEST_RUNBOOK.md`.
