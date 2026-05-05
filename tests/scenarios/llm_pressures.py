@@ -344,7 +344,7 @@ def test_second_group_succeeds_after_first_exhausts(client: TestClient):
         )
         db.add_all([fail_p, ok_p])
         db.flush()
-        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=True, quota_timezone="UTC", max_input_tokens=4000, max_output_tokens=500)
+        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=True, max_input_tokens=4000, max_output_tokens=500)
         db.add(cfg)
         db.flush()
         g1 = LLMGroup(config_id=cfg.id, priority=1, name="gfail")

@@ -42,9 +42,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
-from apps.backend.wailearning_backend.domains.llm.token_quota import (
-    quota_calendar_for_timezone,
-)
+from apps.backend.wailearning_backend.domains.llm.token_quota import resolve_global_quota_calendar
 from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
@@ -78,7 +76,6 @@ def test_precheck_quota_student_cap_only():
         cfg = CourseLLMConfig(
             subject_id=42,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
@@ -198,7 +195,6 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
         cfg = CourseLLMConfig(
             subject_id=course.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
@@ -246,7 +242,7 @@ def test_usage_log_billing_note_when_post_call_exceeds_student_cap():
         )
         db.add(old_task)
         db.flush()
-        usage_date, tz = quota_calendar_for_timezone(cfg.quota_timezone or "UTC")
+        usage_date, tz = resolve_global_quota_calendar(db)
         db.add(
             LLMTokenUsageLog(
                 task_id=old_task.id,
@@ -355,11 +351,8 @@ def test_estimate_request_tokens_grows_with_large_data_url_payload():
         cfg = CourseLLMConfig(
             subject_id=1,
             is_enabled=True,
-            estimated_chars_per_token=4.0,
-            estimated_image_tokens=850,
             max_input_tokens=16000,
             max_output_tokens=100,
-            quota_timezone="UTC",
         )
         small_url = "data:image/png;base64," + "a" * 40
         large_url = "data:image/png;base64," + "b" * 4000
@@ -405,7 +398,6 @@ def test_artifact_manifest_includes_block_metadata_after_material_build():
             is_enabled=True,
             max_input_tokens=16000,
             max_output_tokens=1200,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()
@@ -468,7 +460,6 @@ def test_scoring_messages_have_distinct_sections_for_instructor_and_submission()
             teacher_prompt="extra hint",
             max_input_tokens=16000,
             max_output_tokens=1200,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()
@@ -534,7 +525,6 @@ def test_zip_attachment_skipped_reason_propagates_to_notes_or_manifest():
             is_enabled=True,
             max_input_tokens=16000,
             max_output_tokens=1200,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()

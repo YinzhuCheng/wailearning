@@ -338,7 +338,6 @@ def reset_e2e_scenario(
         is_enabled=True,
         max_input_tokens=16000,
         max_output_tokens=800,
-        quota_timezone="UTC",
     )
     db.add(llm_cfg)
     db.flush()

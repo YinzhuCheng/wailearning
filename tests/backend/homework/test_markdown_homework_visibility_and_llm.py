@@ -155,8 +155,6 @@ def test_build_scoring_messages_splits_data_url_in_homework_content():
     )
     cfg = CourseLLMConfig(
         subject_id=1,
-        estimated_chars_per_token=4.0,
-        estimated_image_tokens=800,
         max_input_tokens=8000,
         max_output_tokens=500,
     )

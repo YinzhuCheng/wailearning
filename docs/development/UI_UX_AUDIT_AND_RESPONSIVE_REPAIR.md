@@ -1919,39 +1919,46 @@ estimation field names. It still exercises failed-save recovery by toggling the
 course LLM enable switch, failing the first save request, checking that the
 local form state remains visible, and then saving successfully.
 
+### Round 4: legacy `course_llm_configs` quota columns removed (May 2026)
+
+The SQLAlchemy model `CourseLLMConfig` and the `course_llm_configs` table no longer store
+`quota_timezone`, `estimated_chars_per_token`, or `estimated_image_tokens`. Those knobs live
+only on `LLMGlobalQuotaPolicy` (singleton row `id=1`). `course_id` / `subject_id` on usage logs
+and student quota snapshots remain **attribution only**; they do not define independent daily
+token pools.
+
+**Migration path:** `apps.backend.wailearning_backend.bootstrap.ensure_schema_updates()` runs at
+API startup (`main.py`). On PostgreSQL it executes `ALTER TABLE course_llm_configs DROP COLUMN IF
+EXISTS` for the legacy columns plus the older `daily_student_token_limit` /
+`daily_course_token_limit` names. On SQLite it attempts the same drops in a try/except loop
+(idempotent when the column is already absent). Fresh test databases are created from
+`Base.metadata.create_all` after `tests/db_reset.py`, so new installs never allocate the removed
+columns.
+
+**Operational note:** Treat column drops like any DDL change: back up production before deploying
+a release that includes this migration block, even though drops are guarded with `IF EXISTS`.
+Rollback requires restoring from backup or re-adding columns manually if you must revert.
+
+**Agent rule:** Do not reintroduce per-course quota pool semantics. If a future feature needs
+different calendars or estimation per tenant, extend **system policy** (or a new admin-owned
+entity), not `CourseLLMConfig`.
+
 ### Compatibility deliberately retained
 
-This pass did not drop database columns or remove all model constructor uses of
-legacy-looking fields. The following remain as compatibility and fixture noise
-until a dedicated schema cleanup pass proves they are no longer needed:
+Earlier rounds documented ignored extra JSON fields on course LLM PUT (for example
+`quota_timezone` in payloads with `extra="ignore"`). That API contract remains: **requests may
+still carry ignored legacy keys**, but **responses and the ORM model must not surface course-level
+quota timezone or estimation fields**.
+
+The following compatibility points remain important for client and test hygiene:
 
 ```text
-CourseLLMConfig.quota_timezone
-CourseLLMConfig.estimated_chars_per_token
-CourseLLMConfig.estimated_image_tokens
-course_llm_configs quota/estimation columns in bootstrap/model definitions
-tests that directly construct CourseLLMConfig rows with those fields
-historical pressure/scenario helpers that are not maintained browser UI helpers
+CourseLLMConfigUpdate uses extra="ignore" so stray legacy keys do not 422
+student quota snapshots still expose quota_timezone from LLMGlobalQuotaPolicy, not from course rows
 ```
 
-The reason is practical: deleting DB columns is a migration decision, not just
-a UI cleanup. Existing local or deployed databases may still contain those
-columns, and some old fixtures may still construct rows with them. The current
-runtime quota logic uses the global policy helpers for estimation and calendar
-math, so leaving the columns in place does not keep the product double-track
-alive as long as they are not exposed as course configuration controls.
-
-If a later database cleanup round happens, it should first verify:
-
-- no runtime logic reads course-level quota timezone for student quota
-  calendars;
-- no runtime logic reads course-level estimation fields for reservation or
-  grading prompt budget estimation;
-- no public course config schema exposes those fields;
-- no maintained frontend code renders course-level quota controls;
-- no tests depend on course config responses containing those fields;
-- bootstrap/migration handling is safe for SQLite and PostgreSQL installations
-  that may already have or not have the old columns.
+The previous "retained DB columns for compatibility" list is obsolete after round 4; the
+database columns themselves are gone once `ensure_schema_updates` has run.
 
 ### Header avatar and token dropdown boundary review
 

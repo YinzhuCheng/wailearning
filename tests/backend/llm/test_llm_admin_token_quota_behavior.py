@@ -76,7 +76,7 @@ def _seed_student_course_and_config(client: TestClient):
         db.add(
             CourseEnrollment(subject_id=course.id, student_id=st.id, class_id=k.id, enrollment_type="required")
         )
-        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=False, quota_timezone="UTC")
+        cfg = CourseLLMConfig(subject_id=course.id, is_enabled=False)
         db.add(cfg)
         db.commit()
         return {

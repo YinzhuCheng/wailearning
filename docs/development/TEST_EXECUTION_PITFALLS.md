@@ -1059,6 +1059,40 @@ makes the package visible to shared E2E helpers.
 
 ## What This Document Does Not Claim
 
+## Pitfall 41: Playwright `read ECONNRESET` / `TypeError: fetch failed` with default E2E ports
+
+Symptom:
+
+```text
+TypeError: fetch failed
+[cause]: Error: read ECONNRESET
+```
+
+Context:
+
+Admin Playwright defaults commonly bind the backend to `http://127.0.0.1:8012` and the SPA to
+`http://127.0.0.1:3012`. Mock LLM traffic stays on-loopback under paths such as
+`/api/e2e/dev/mock-llm/<profile>/v1/`. This is **not** an external provider outage.
+
+Cause:
+
+Two or more Playwright CLI processes (or stray `uvicorn` / `vite` processes) can race the same
+fixed ports. The browser then hits a half-dead server, a wrong process, or a torn-down connection,
+which surfaces as `ECONNRESET` rather than a clear HTTP error.
+
+Fix:
+
+- Run narrow E2E greps **serially** (one `npx playwright test ...` at a time).
+- Before blaming product code, check for duplicate listeners on `8012` / `3012` (or whatever
+  `E2E_API_PORT` / `PLAYWRIGHT_BASE_URL` you configured).
+- When you must parallelize automation, assign **distinct** backend and frontend ports per job and
+  isolate databases.
+
+Interpretation:
+
+This failure pattern is usually harness contention, not Codex rate limits and not remote LLM API
+instability.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

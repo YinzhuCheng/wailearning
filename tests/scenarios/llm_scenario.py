@@ -126,7 +126,6 @@ def make_grading_course_with_homework(
             is_enabled=course_llm_enabled,
             max_input_tokens=16000,
             max_output_tokens=1200,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()
@@ -209,7 +208,6 @@ def make_multi_student_scenario(
             is_enabled=True,
             max_input_tokens=16000,
             max_output_tokens=1200,
-            quota_timezone="UTC",
         )
         db.add(cfg)
         db.flush()

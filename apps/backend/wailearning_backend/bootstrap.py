@@ -268,11 +268,8 @@ def ensure_schema_updates() -> None:
             subject_id INTEGER NOT NULL UNIQUE REFERENCES subjects(id),
             is_enabled BOOLEAN DEFAULT FALSE,
             response_language VARCHAR,
-            estimated_chars_per_token FLOAT NOT NULL DEFAULT 4.0,
-            estimated_image_tokens INTEGER NOT NULL DEFAULT 850,
             max_input_tokens INTEGER NOT NULL DEFAULT 16000,
             max_output_tokens INTEGER NOT NULL DEFAULT 1000,
-            quota_timezone VARCHAR NOT NULL DEFAULT 'Asia/Shanghai',
             system_prompt TEXT,
             teacher_prompt TEXT,
             created_by INTEGER REFERENCES users(id),
@@ -480,15 +477,18 @@ def ensure_schema_updates() -> None:
                 """
             )
         )
+        _course_llm_legacy_quota_cols = (
+            "daily_student_token_limit",
+            "daily_course_token_limit",
+            "quota_timezone",
+            "estimated_chars_per_token",
+            "estimated_image_tokens",
+        )
         if engine.dialect.name == "postgresql":
-            connection.execute(
-                text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS daily_student_token_limit")
-            )
-            connection.execute(
-                text("ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS daily_course_token_limit")
-            )
+            for _col in _course_llm_legacy_quota_cols:
+                connection.execute(text(f"ALTER TABLE course_llm_configs DROP COLUMN IF EXISTS {_col}"))
         else:
-            for _col in ("daily_student_token_limit", "daily_course_token_limit"):
+            for _col in _course_llm_legacy_quota_cols:
                 try:
                     connection.execute(text(f"ALTER TABLE course_llm_configs DROP COLUMN {_col}"))
                 except OperationalError:

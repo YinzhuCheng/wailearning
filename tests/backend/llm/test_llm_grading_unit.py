@@ -76,20 +76,16 @@ def test_parse_scoring_json_out_of_range():
 def test_estimate_task_tokens():
     cfg = CourseLLMConfig(
         subject_id=1,
-        estimated_chars_per_token=4.0,
-        estimated_image_tokens=100,
         max_input_tokens=8000,
         max_output_tokens=500,
     )
-    t = estimate_task_tokens(cfg, text_length=400, image_count=1)
+    t = estimate_task_tokens(cfg, text_length=400, image_count=0)
     assert 150 < t < 400
 
 
 def test_estimate_request_tokens_from_material_uses_tiktoken_not_base64_payload():
     cfg = CourseLLMConfig(
         subject_id=1,
-        estimated_chars_per_token=4.0,
-        estimated_image_tokens=800,
         max_input_tokens=8000,
         max_output_tokens=500,
     )
@@ -143,7 +139,6 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
         cfg = CourseLLMConfig(
             subject_id=1,
             is_enabled=True,
-            quota_timezone="UTC",
         )
         with mock.patch(
             "apps.backend.wailearning_backend.domains.llm.quota.get_used_tokens_for_scope", return_value=95

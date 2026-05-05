@@ -85,7 +85,6 @@ def test_pcq1_two_courses_share_system_pool_but_keep_course_attribution(client: 
         cfg_b = CourseLLMConfig(
             subject_id=course_b.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
@@ -192,7 +191,7 @@ def test_pcq2_empty_course_clones_llm_from_latest_validated_peer(client: TestCli
                 enrollment_type="required",
             )
         )
-        cfg_c = CourseLLMConfig(subject_id=course_c.id, is_enabled=False, quota_timezone="Pacific/Honolulu")
+        cfg_c = CourseLLMConfig(subject_id=course_c.id, is_enabled=False)
         db.add(cfg_c)
         db.commit()
         subject_c_id = course_c.id
@@ -240,7 +239,6 @@ def test_pcq3_deactivate_primary_preset_then_peer_course_resyncs_from_survivor(c
         cfg_b = CourseLLMConfig(
             subject_id=course_b.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=8000,
             max_output_tokens=600,
         )
@@ -263,7 +261,6 @@ def test_pcq3_deactivate_primary_preset_then_peer_course_resyncs_from_survivor(c
         cfg_c = CourseLLMConfig(
             subject_id=course_c.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
@@ -359,7 +356,6 @@ def test_pcq4_student_quotas_summary_splits_usage_by_subject(client: TestClient)
         cfg_b = CourseLLMConfig(
             subject_id=course_b.id,
             is_enabled=True,
-            quota_timezone="UTC",
             max_input_tokens=16000,
             max_output_tokens=1200,
         )
