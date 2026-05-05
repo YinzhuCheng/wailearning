@@ -98,13 +98,24 @@
         </aside>
 
         <section class="materials-main">
-          <div class="materials-toolbar">
-            <span class="muted-text" data-testid="materials-current-chapter">
-              当前章节：<strong>{{ currentChapterTitle }}</strong>
-            </span>
-          </div>
+          <el-empty
+            v-if="!selectedChapterId"
+            class="materials-browse-placeholder"
+            description="请从左侧点击一个章节，再查看该章节下的资料列表。"
+            data-testid="materials-select-chapter-prompt"
+          />
 
-          <el-card shadow="never">
+          <el-card v-else shadow="never" class="materials-chapter-card" data-testid="materials-chapter-scope-panel">
+            <template #header>
+              <div class="materials-card-header">
+                <el-button text type="primary" class="materials-back-to-outline" @click="clearChapterSelection">
+                  返回章节目录
+                </el-button>
+                <span class="materials-card-header__title" data-testid="materials-chapter-materials-title">
+                  {{ currentChapterTitle }}
+                </span>
+              </div>
+            </template>
             <el-table
               :data="materials"
               v-loading="loading"
@@ -525,6 +536,14 @@ const handleChapterClick = data => {
   persistExpandedChapterKeys()
 }
 
+const clearChapterSelection = () => {
+  selectedChapterId.value = null
+  materials.value = []
+  nextTick(() => {
+    treeRef.value?.setCurrentKey?.(null)
+  })
+}
+
 const handleChapterExpand = data => {
   expandedChapterKeys.value = Array.from(new Set([...expandedChapterKeys.value, data.id]))
   persistExpandedChapterKeys()
@@ -550,21 +569,22 @@ const loadChapterTree = async () => {
   try {
     const res = await api.materialChapters.tree({ subject_id: selectedCourse.value.id })
     chapterTreeNodes.value = res?.nodes || []
-    if (!selectedChapterId.value) {
-      selectedChapterId.value =
-        findUncategorizedId(chapterTreeNodes.value) || chapterTreeNodes.value[0]?.id || null
-    }
     expandedChapterKeys.value = restoreExpandedChapterKeys(chapterTreeNodes.value)
     ensureSelectedChapterPathExpanded()
   } finally {
     treeLoading.value = false
     await nextTick()
     syncTreeExpandedState()
+    treeRef.value?.setCurrentKey?.(selectedChapterId.value ?? null)
   }
 }
 
 const loadMaterials = async () => {
   if (!selectedCourse.value) {
+    materials.value = []
+    return
+  }
+  if (!selectedChapterId.value) {
     materials.value = []
     return
   }
@@ -860,7 +880,8 @@ const confirmDeleteChapter = async data => {
     ElMessage.success('已删除')
     await loadChapterTree()
     if (selectedChapterId.value === deletedId) {
-      selectedChapterId.value = findUncategorizedId(chapterTreeNodes.value)
+      selectedChapterId.value = null
+      materials.value = []
     }
     expandedChapterKeys.value = expandedChapterKeys.value.filter(id => String(id) !== String(deletedId))
     persistExpandedChapterKeys()
@@ -904,9 +925,9 @@ onMounted(async () => {
 
 watch(selectedCourse, async () => {
   selectedChapterId.value = null
+  materials.value = []
   expandedChapterKeys.value = []
   await loadChapterTree()
-  selectedChapterId.value = findUncategorizedId(chapterTreeNodes.value)
   await loadMaterials()
 })
 
@@ -1082,8 +1103,38 @@ watch(selectedChapterId, () => {
   gap: 2px;
 }
 
-.materials-toolbar {
-  margin-bottom: 12px;
+.materials-main {
+  min-width: 0;
+}
+
+.materials-browse-placeholder {
+  padding: 48px 24px;
+  background: #fff;
+  border-radius: var(--wa-radius-lg);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.materials-chapter-card :deep(.el-card__header) {
+  padding: 12px 16px;
+}
+
+.materials-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.materials-back-to-outline {
+  flex-shrink: 0;
+}
+
+.materials-card-header__title {
+  font-weight: 600;
+  font-size: 15px;
+  color: #0f172a;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .materials-main :deep(.el-table__row) {

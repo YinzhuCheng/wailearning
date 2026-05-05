@@ -43,6 +43,7 @@ test.describe('materials outline expand/collapse guard rails', () => {
     await page.goto('/materials', { waitUntil: 'domcontentloaded', timeout: 60000 })
 
     await expect(page.locator('.chapter-tree')).toBeVisible({ timeout: 60000 })
+    await expect(page.getByTestId('materials-select-chapter-prompt')).toBeVisible({ timeout: 30000 })
     const chapterTree = page.locator('.chapter-tree')
     const parentNode = chapterTree.getByText(parentTitle, { exact: true })
     const childNode = chapterTree.getByText(childTitle, { exact: true })
@@ -66,12 +67,16 @@ test.describe('materials outline expand/collapse guard rails', () => {
     await expect(childNode).toBeVisible({ timeout: 30000 })
 
     await childNode.click()
-    await expect(page.getByTestId('materials-current-chapter')).toContainText(childTitle, { timeout: 30000 })
+    await expect(page.getByTestId('materials-chapter-materials-title')).toContainText(childTitle, { timeout: 30000 })
+    await expect(page.getByTestId('materials-select-chapter-prompt')).toBeHidden({ timeout: 30000 })
 
     await page.getByTestId('materials-expand-all-chapters').click()
     await expect(childNode).toBeVisible({ timeout: 30000 })
 
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
     await expect(page.locator('.chapter-tree').getByText(childTitle, { exact: true })).toBeVisible({ timeout: 60000 })
+    await expect(page.getByTestId('materials-select-chapter-prompt')).toBeVisible({ timeout: 30000 })
+    await page.locator('.chapter-tree').getByText(childTitle, { exact: true }).click()
+    await expect(page.getByTestId('materials-chapter-materials-title')).toContainText(childTitle, { timeout: 30000 })
   })
 })
