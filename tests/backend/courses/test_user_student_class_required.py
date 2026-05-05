@@ -10,7 +10,7 @@ from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import Class, Student, User, UserRole
-from tests.llm_scenario import login_api
+from tests.scenarios.llm_scenario import login_api
 
 
 @pytest.fixture(autouse=True)

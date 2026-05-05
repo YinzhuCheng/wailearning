@@ -13,8 +13,8 @@ from fastapi.testclient import TestClient
 from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.db.database import SessionLocal
 from apps.backend.wailearning_backend.db.models import CourseEnrollment, Homework, Student, Subject, User, UserRole
-from tests.llm_scenario import make_grading_course_with_homework
-from tests.material_flow import headers_for
+from tests.scenarios.llm_scenario import make_grading_course_with_homework
+from tests.scenarios.material_flow import headers_for
 
 
 def _post(client: TestClient, path: str, headers: dict, json: dict | None = None):

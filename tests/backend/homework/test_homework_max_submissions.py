@@ -9,7 +9,7 @@ from sqlalchemy import text
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import Homework
-from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
 @pytest.fixture(autouse=True)

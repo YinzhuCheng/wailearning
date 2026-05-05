@@ -41,7 +41,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
-from tests.llm_scenario import ensure_admin, json_llm_response, login_api
+from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, login_api
 
 
 @pytest.fixture(autouse=True)
@@ -333,7 +333,7 @@ def test_put_course_config_with_groups_payload(client: TestClient):
 
 def test_flat_legacy_routing_when_no_group_rows():
     """No LLMGroup rows: use flat priority list (legacy / empty-catalog mode)."""
-    from tests.llm_scenario import make_grading_course_with_homework
+    from tests.scenarios.llm_scenario import make_grading_course_with_homework
 
     _ = make_grading_course_with_homework()
     db = SessionLocal()
@@ -389,7 +389,7 @@ def test_backfill_assigns_group_id_to_endpoints():
     from apps.backend.wailearning_backend.db.models import CourseLLMConfig, CourseLLMConfigEndpoint, LLMGroup
 
     ensure_admin()
-    from tests.llm_scenario import make_grading_course_with_homework
+    from tests.scenarios.llm_scenario import make_grading_course_with_homework
 
     _ = make_grading_course_with_homework()
     db = SessionLocal()

@@ -23,7 +23,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
-from tests.llm_scenario import login_api
+from tests.scenarios.llm_scenario import login_api
 
 
 @pytest.fixture(autouse=True)

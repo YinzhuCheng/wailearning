@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import io
 import shutil
-import subprocess
 import zipfile
+from pathlib import Path
 
 import pytest
 from docx import Document
 
 from apps.backend.wailearning_backend.llm_grading import _classify_and_extract, _walk_rar_bytes, _walk_zip_bytes
+
+_FIXTURE_RAR_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "llm_rar"
+
+
+def _require_unrar() -> None:
+    """RAR walking matches production: needs ``unrar`` or ``unrar-free`` in PATH."""
+    if not (shutil.which("unrar") or shutil.which("unrar-free")):
+        pytest.skip("unrar or unrar-free required in PATH (install OS package `unrar`)")
 
 
 def _blocks_to_text(blocks: list) -> str:
@@ -84,52 +92,22 @@ def test_zip_nested_xlsx():
     assert "Z" in text
 
 
-def _rar_cli_available() -> bool:
-    return shutil.which("rar") is not None
-
-
-def test_rar_unencrypted_extracts_inner_txt(tmp_path):
-    if not _rar_cli_available():
-        pytest.skip("non-free `rar` CLI not installed (needed to build test .rar)")
-
-    inner_zip = tmp_path / "inner.zip"
-    with zipfile.ZipFile(inner_zip, "w") as zf:
-        zf.writestr("note.txt", b"RAR_INNER_UNIQUE_TEXT_12345\n")
-
-    rar_path = tmp_path / "t.rar"
-    subprocess.run(
-        ["rar", "a", "-ep", str(rar_path), str(inner_zip)],
-        check=True,
-        capture_output=True,
-        cwd=str(tmp_path),
-    )
-
-    content = rar_path.read_bytes()
+def test_rar_unencrypted_extracts_inner_txt():
+    _require_unrar()
+    fixture = _FIXTURE_RAR_DIR / "unencrypted_nested_zip.rar"
+    assert fixture.is_file(), f"missing committed fixture: {fixture}"
+    content = fixture.read_bytes()
     state: dict = {"file_count": 0, "total_bytes": 0, "skipped": []}
     blocks = _walk_rar_bytes(content, root_path="t.rar", depth=1, state=state)
     text = _blocks_to_text(blocks)
-    if not text and state.get("skipped"):
-        reasons = " ".join(s.get("reason", "") for s in state["skipped"])
-        if "unrar" in reasons.lower():
-            pytest.skip("RAR unpack needs unrar: " + reasons)
     assert "RAR_INNER_UNIQUE_TEXT_12345" in text
 
 
-def test_rar_password_rejected(tmp_path):
-    if not _rar_cli_available():
-        pytest.skip("non-free `rar` CLI not installed")
-
-    solo = tmp_path / "solo.txt"
-    solo.write_text("x", encoding="utf-8")
-    rar_path = tmp_path / "enc.rar"
-    subprocess.run(
-        ["rar", "a", "-pPASS", str(rar_path), str(solo)],
-        check=True,
-        capture_output=True,
-        cwd=str(tmp_path),
-    )
-
-    content = rar_path.read_bytes()
+def test_rar_password_rejected():
+    _require_unrar()
+    fixture = _FIXTURE_RAR_DIR / "password_protected.rar"
+    assert fixture.is_file(), f"missing committed fixture: {fixture}"
+    content = fixture.read_bytes()
     state: dict = {"file_count": 0, "total_bytes": 0, "skipped": []}
     blocks = _walk_rar_bytes(content, root_path="enc.rar", depth=1, state=state)
     assert not blocks

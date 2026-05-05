@@ -130,16 +130,31 @@ Current examples:
   - scenario factories reused by many backend and behavior tests
 - `material_flow.py`
   - helper setup for material, chapter, and notification flows
-- `llm_pressures.py`
-  - heavier stress-style scenarios and reusable workload patterns
 
-Compatibility re-export modules remain at:
+Historical note (cleanup `2026-05-05`):
 
-- `tests/llm_scenario.py`
-- `tests/material_flow.py`
-- `tests/llm_pressures.py`
+- `tests/scenarios/llm_pressures.py` was removed after verification that **nothing imported it**
+  (no test module, script, or documentation referenced its symbols). The repository already
+  exercises heavy LLM scenarios through `tests/backend/llm/test_llm_stress_scenarios.py`,
+  `test_llm_concurrency_scenarios.py`, and related behavior suites. If a future maintainer
+  needs a dedicated pressure harness again, reintroduce it as an imported module with at least
+  one pytest entrypoint or an explicit import from an existing test file so it cannot rot unseen.
 
-These stubs exist so older imports keep working while the actual helper code lives under `tests/scenarios/`.
+Import paths:
+
+- Prefer **`from tests.scenarios.llm_scenario import ...`** and
+  **`from tests.scenarios.material_flow import ...`** in new code.
+- Root-level compatibility stubs **`tests/llm_scenario.py`**, **`tests/material_flow.py`**,
+  and **`tests/llm_pressures.py`** were removed in the same cleanup; older branches that still
+  reference those paths must be updated when merged forward.
+
+RAR attachment regression assets:
+
+- Binary fixtures under **`tests/fixtures/llm_rar/`** (`unencrypted_nested_zip.rar`,
+  `password_protected.rar`) supply archives for `tests/backend/llm/test_llm_attachment_formats.py`
+  so those tests run **without** shelling out to the **`rar`** CLI at test time. Regeneration
+  requires **`rar`** on `PATH` (same commands historically embedded in the test body); keep
+  committed bytes UTF-8-clean and treat the directory as test assets, not runtime product data.
 
 Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — additive API/navigation checks (pagination boundaries, health, settings public, course entry). Run alone with `npx playwright test e2e-agent-followup-batch.spec.js` from `apps/web/admin`.
 
@@ -239,7 +254,6 @@ Representative files include:
 
 - `tests/backend/llm/test_llm_concurrency_scenarios.py`
 - `tests/backend/llm/test_llm_stress_scenarios.py`
-- `tests/scenarios/llm_pressures.py`
 
 These are harder because they depend on:
 

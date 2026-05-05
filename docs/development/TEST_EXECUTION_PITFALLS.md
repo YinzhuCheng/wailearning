@@ -1158,32 +1158,63 @@ Fix:
 - Remove `-q` and rely on Playwright’s default reporter, or
 - Use supported reporter flags for your installed version (see upstream Playwright release notes for `<REPO_ROOT>/apps/web/admin/node_modules/@playwright/test`).
 
-### Pitfall 45: Many pytest “skips” are environment gates (Postgres + `rar`), not optional quality
+### Pitfall 45: Many pytest “skips” are environment gates (PostgreSQL dialect), not optional quality
 
 Symptom:
 
 ```text
-43 skipped  (or 45 skipped)
+43 skipped
 ```
 
 Context:
 
 - **`tests/postgres/*`** and **`test_r3`** in `test_regression_llm_quota_behavior.py` require a **PostgreSQL** engine (`information_schema`, transactional semantics).
-- **`test_llm_attachment_formats.py`** RAR cases need the **`rar`** CLI to build fixtures; in-app unpack uses **`unrar`**.
 
 Cause:
 
-Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or auto-pick is enabled — see below).
+Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or **`WAILEARNING_AUTO_PG_TESTS=1`** auto-pick is enabled — see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)).
 
 Fix:
 
-1. Install **`rar`** and **`unrar`** (Debian/Ubuntu: packages `rar` and `unrar`, often in multiverse).
-2. Run **`bash ops/scripts/dev/provision_postgres_pytest.sh`** (creates `wailearning_pytest_all` + role `wailearning_test`; needs `sudo -u postgres`).
+1. Install **`unrar`** or **`unrar-free`** so `tests/backend/llm/test_llm_attachment_formats.py` can execute the RAR walks (same tooling the product uses in `domains/llm/attachments.py`). The **`rar`** compressor is **not** required at pytest runtime anymore because regression archives live under **`tests/fixtures/llm_rar/`** (generated offline by maintainers).
+2. Run **`bash ops/scripts/dev/provision_postgres_pytest.sh`** (creates `wailearning_pytest_all` + role `wailearning_test`; needs `sudo -u postgres` when the cluster exists).
 3. Either `export TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all'`, or set **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` probes that URL and switches `DATABASE_URL` before importing the app.
+4. Ensure PostgreSQL is **listening** (`pg_ctlcluster <ver> main start` or your distro equivalent). The provision script fails loudly when `sudo -u postgres` cannot connect.
 
 Interpretation:
 
-**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for **417 passed, 0 skipped** with the recipe above.
+**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for **432 passed, 0 skipped** with the recipe above (same collection count as SQLite; Postgres executes the previously skipped modules). Older notes that cite **417** or **45 skips tied to `rar`** describe pre-fixture layouts and should not be used when triaging current branches.
+
+### Pitfall 46: disposable Linux / cloud-agent runners may lack `pytest` until `requirements.txt` is installed
+
+### Symptom
+
+Running the backend suite from `<REPO_ROOT>` fails before any test body executes:
+
+```text
+/usr/bin/python3: No module named pytest
+```
+
+Or the shell reports that `pytest` is not found when invoked as a bare executable.
+
+### Context
+
+Cursor cloud agents, minimal CI images, and fresh clones often do **not** ship with the repository `.venv` pre-created. The canonical developer workflow assumes `pip install -r requirements.txt` (or an equivalent venv step) before `python -m pytest`.
+
+### Fix
+
+At `<REPO_ROOT>`:
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m pytest tests/ -q
+```
+
+Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) Local Development Setup); the important invariant is that the **same interpreter** that runs pytest has project dependencies installed.
+
+### Interpretation
+
+This is **runner bootstrap debt**, not a failing test or a broken import path in `apps.backend.wailearning_backend`. Do not edit `tests/conftest.py` or `pytest.ini` to “fix” a missing `pytest` package on the system interpreter.
 
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 

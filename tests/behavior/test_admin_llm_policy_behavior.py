@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from apps.backend.wailearning_backend.db.database import SessionLocal
 from apps.backend.wailearning_backend.db.models import LLMStudentTokenOverride
-from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
 def test_a1_quota_policy_get_matches_defaults(client: TestClient) -> None:

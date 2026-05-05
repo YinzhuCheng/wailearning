@@ -11,7 +11,7 @@ from apps.backend.wailearning_backend.core.auth import verify_password
 from apps.backend.wailearning_backend.db.database import SessionLocal
 from apps.backend.wailearning_backend.db.models import Class, User, UserRole
 from apps.backend.wailearning_backend.main import app
-from tests.llm_scenario import ensure_admin, login_api
+from tests.scenarios.llm_scenario import ensure_admin, login_api
 
 
 @pytest.fixture

@@ -26,7 +26,7 @@ from apps.backend.wailearning_backend.db.models import (
     UserRole,
 )
 from apps.backend.wailearning_backend.main import app
-from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 pytestmark = pytest.mark.skipif(
     engine.dialect.name != "postgresql",

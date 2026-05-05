@@ -12,7 +12,7 @@ from apps.backend.wailearning_backend.db.models import HomeworkScoreCandidate, H
 from apps.backend.wailearning_backend.domains.scores.composition import (
     OTHER_DAILY_EXAM_TYPE,
 )
-from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
 @pytest.fixture(autouse=True)

@@ -31,7 +31,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
-from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
 def _validated_preset_row(*, uid: str, name_suffix: str = "") -> LLMEndpointPreset:

@@ -8,7 +8,7 @@ from apps.backend.wailearning_backend.db.database import Base, SessionLocal, eng
 from fastapi.testclient import TestClient
 
 from apps.backend.wailearning_backend.main import app
-from tests.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
 def _reset_db():
@@ -53,7 +53,7 @@ def test_student_cannot_duplicate_appeal():
     from apps.backend.wailearning_backend.db.models import HomeworkGradingTask
     from unittest import mock
     import httpx
-    from tests.llm_scenario import json_llm_response
+    from tests.scenarios.llm_scenario import json_llm_response
 
     db = SessionLocal()
     try:

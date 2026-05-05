@@ -77,7 +77,38 @@ Current structure note:
 
 This class of cleanup is high-signal and low-risk because it reduces false search hits and makes real dependencies easier to inspect.
 
-### 3. Broad compatibility branches were intentionally not removed
+### 3. Dead scenario module and import indirection removed (`2026-05-05`)
+
+This pass removed **unused** test-support code and narrowed the supported import surface:
+
+- **`tests/scenarios/llm_pressures.py` deleted:** Static analysis (`rg`/import graph) showed **no** test module,
+  production module, or script importing this file. Heavy LLM scenarios remain covered by
+  `tests/backend/llm/test_llm_stress_scenarios.py`, `test_llm_concurrency_scenarios.py`, and several
+  behavior suites. If a future maintainer needs a dedicated pressure helper package again, add it
+  alongside at least one pytest-discovered test or an explicit import from an existing test so it
+  cannot silently rot.
+- **Root compatibility stubs deleted:** `tests/llm_scenario.py`, `tests/material_flow.py`, and
+  `tests/llm_pressures.py` were thin star-import re-exports. All in-repo imports were rewritten to
+  **`tests.scenarios.llm_scenario`** and **`tests.scenarios.material_flow`** (pattern replace across
+  `tests/**/*.py`). External forks that still used the old paths must update on merge.
+- **`tools/testing/audit_test_redundancy.py`:** Removed the special-case branch that classified the
+  deleted stub filenames; scenario helpers under `tests/scenarios/` already fall under the
+  `tests/scenarios/` category rule.
+
+Verification performed in the same change set:
+
+- Full **`python3 -m pytest tests/`** on **SQLite** (default `tests/conftest.py`): **389 passed,
+  43 skipped** (PostgreSQL-only modules + `test_r3`).
+- Full pytest with **`TEST_DATABASE_URL=postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all`**
+  after `pg_ctlcluster 16 main start` and `bash ops/scripts/dev/provision_postgres_pytest.sh`:
+  **432 passed, 0 skipped**.
+- **`tests/backend/llm/test_llm_attachment_formats.py`** RAR cases now read committed archives under
+  **`tests/fixtures/llm_rar/`** so they exercise **`unrar`** / **`unrar-free`** (production path)
+  without requiring the non-free **`rar`** compressor at **test runtime**. Archives were generated once
+  using **`rar`** with commands equivalent to the former inline test setup; regeneration belongs in
+  maintainer docs (`TEST_SUITE_MAP.md`), not in CI logs.
+
+### 4. Broad compatibility branches were intentionally not removed
 
 Several areas still look historical but were not deleted in this pass because they likely continue to serve existing data or operational compatibility:
 

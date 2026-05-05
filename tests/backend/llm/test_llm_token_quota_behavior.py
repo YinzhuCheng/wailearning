@@ -43,7 +43,7 @@ from apps.backend.wailearning_backend.db.models import (
     UserRole,
 )
 from apps.backend.wailearning_backend.domains.llm.token_quota import resolve_global_quota_calendar
-from tests.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
+from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework
 
 
 def _tiny_png_bytes() -> bytes:
