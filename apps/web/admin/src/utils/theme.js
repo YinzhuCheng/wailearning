@@ -494,11 +494,8 @@ function buildAppearanceCssVars(config) {
     vars['--wa-sidebar-active-bg'] = `linear-gradient(90deg, ${primary[700]} 0%, ${primary[500]} 100%)`
   }
 
-  vars['--el-border-radius-base'] = rt.control
-  vars['--el-border-radius-small'] = rt.xs
-  vars['--el-border-radius-round'] = rt.xl
-
   return vars
+}
 
 function applyCssVarsToElement(el, vars) {
   Object.entries(vars).forEach(([key, value]) => {
