@@ -1,3 +1,91 @@
+/** Local-only UI font preference (admin SPA). */
+export const UI_FONT_FAMILY_STORAGE_KEY = 'wailearning-admin-ui-font-family'
+
+export const uiFontFamilyOptions = [
+  { key: 'system', label: '系统默认', stack: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif" },
+  {
+    key: 'pingfang',
+    label: '苹方 / 冬青黑 / 雅黑',
+    stack: "'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+  },
+  {
+    key: 'microsoft',
+    label: '微软雅黑优先',
+    stack: "'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+  },
+  {
+    key: 'source-han',
+    label: '思源黑体 / Noto 黑体',
+    stack: "'Noto Sans SC', 'Source Han Sans SC', 'WenQuanYi Micro Hei', 'Microsoft YaHei', sans-serif"
+  },
+  {
+    key: 'sans-western',
+    label: '西文界面（Segoe / Roboto）',
+    stack: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  },
+  {
+    key: 'song',
+    label: '宋体 / 明体',
+    stack: "'Songti SC', 'SimSun', 'NSimSun', 'STSong', serif"
+  },
+  {
+    key: 'kai',
+    label: '楷体',
+    stack: "'KaiTi', 'Kaiti SC', 'STKaiti', serif"
+  }
+]
+
+const _uiFontKeySet = new Set(uiFontFamilyOptions.map(o => o.key))
+
+export function normalizeUiFontFamilyKey(raw) {
+  if (raw == null || raw === '') {
+    return 'system'
+  }
+  const key = String(raw).trim()
+  return _uiFontKeySet.has(key) ? key : 'system'
+}
+
+export function getUiFontFamilyStack(key) {
+  const k = normalizeUiFontFamilyKey(key)
+  return uiFontFamilyOptions.find(o => o.key === k)?.stack || uiFontFamilyOptions[0].stack
+}
+
+export function readStoredUiFontFamilyKey() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return 'system'
+  }
+  try {
+    return normalizeUiFontFamilyKey(window.localStorage.getItem(UI_FONT_FAMILY_STORAGE_KEY))
+  } catch {
+    return 'system'
+  }
+}
+
+export function persistUiFontFamily(key) {
+  const k = normalizeUiFontFamilyKey(key)
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(UI_FONT_FAMILY_STORAGE_KEY, k)
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }
+  applyUiFontFamily(k)
+  return k
+}
+
+export function applyUiFontFamily(key) {
+  const k = key != null ? normalizeUiFontFamilyKey(key) : readStoredUiFontFamilyKey()
+  const stack = getUiFontFamilyStack(k)
+  if (typeof document === 'undefined') {
+    return k
+  }
+  const root = document.documentElement
+  root.style.setProperty('--wa-ui-font-family', stack)
+  root.dataset.waUiFont = k
+  return k
+}
+
 const legacyThemeAliases = {
   default: 'professional-blue',
   primary: 'professional-blue',
@@ -362,6 +450,7 @@ export function applyAppearanceStyle(configValue) {
   applyShadow(root, config.shadow, primary)
   applyTransparency(root, config.transparency)
   applySidebar(root, primary, config)
+  applyUiFontFamily()
 
   return config
 }

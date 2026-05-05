@@ -126,6 +126,26 @@
     </el-card>
     </div>
 
+    <el-card class="block-card font-pref-card" shadow="never">
+      <template #header>
+        <span>界面字体</span>
+      </template>
+      <p class="hint font-pref-hint">选择管理端界面正文的字体族；设置保存在本浏览器，换设备需重新选择。</p>
+      <el-radio-group
+        v-model="selectedUiFontKey"
+        class="font-radio-group"
+        data-testid="personal-ui-font-group"
+        @change="onUiFontChange"
+      >
+        <el-radio v-for="opt in uiFontFamilyOptions" :key="opt.key" :label="opt.key" class="font-radio">
+          {{ opt.label }}
+        </el-radio>
+      </el-radio-group>
+      <p class="font-preview" :style="{ fontFamily: previewFontStack }">
+        预览：数据挖掘课程第 3 周——特征工程简介。The quick brown fox jumps over the lazy dog. 0123456789
+      </p>
+    </el-card>
+
     <AppearanceStylePanel />
   </div>
 </template>
@@ -137,9 +157,24 @@ import { ElMessage } from 'element-plus'
 import api from '@/api'
 import AppearanceStylePanel from '@/components/AppearanceStylePanel.vue'
 import { fetchAttachmentBlobUrl, validateAttachmentFile } from '@/utils/attachments'
+import {
+  getUiFontFamilyStack,
+  persistUiFontFamily,
+  readStoredUiFontFamilyKey,
+  uiFontFamilyOptions
+} from '@/utils/theme'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
+
+const selectedUiFontKey = ref(readStoredUiFontFamilyKey())
+const previewFontStack = computed(() => getUiFontFamilyStack(selectedUiFontKey.value))
+
+const onUiFontChange = val => {
+  const key = persistUiFontFamily(val)
+  selectedUiFontKey.value = key
+  ElMessage.success('界面字体已更新')
+}
 
 const profileForm = reactive({
   real_name: '',
@@ -305,6 +340,7 @@ const submitChangePassword = async () => {
 
 onMounted(() => {
   syncProfileForm()
+  selectedUiFontKey.value = readStoredUiFontFamilyKey()
 })
 
 onBeforeUnmount(() => {
@@ -389,6 +425,39 @@ onBeforeUnmount(() => {
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.font-pref-card {
+  max-width: 1080px;
+}
+
+.font-pref-hint {
+  margin: 0 0 14px;
+}
+
+.font-radio-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.font-radio {
+  margin-right: 0;
+  height: auto;
+  white-space: normal;
+  align-items: flex-start;
+}
+
+.font-preview {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border-radius: var(--wa-radius-md, 8px);
+  border: 1px solid var(--wa-border-subtle, #e2e8f0);
+  background: var(--wa-color-bg-soft, #f8fafc);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--wa-color-text, #0f172a);
 }
 
 @media (max-width: 900px) {

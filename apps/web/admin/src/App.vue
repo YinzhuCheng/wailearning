@@ -6,7 +6,7 @@
 import { onMounted, watch } from 'vue'
 
 import { useUserStore } from '@/stores/user'
-import { applyAppearanceStyle, resolveAppearanceFromState } from '@/utils/theme'
+import { applyAppearanceStyle, applyUiFontFamily, resolveAppearanceFromState } from '@/utils/theme'
 
 const userStore = useUserStore()
 
@@ -18,6 +18,7 @@ watch(() => userStore.systemSettings, syncAdminTheme, { deep: true })
 watch(() => userStore.appearanceState, syncAdminTheme, { deep: true })
 
 onMounted(async () => {
+  applyUiFontFamily()
   syncAdminTheme()
   if (userStore.isLoggedIn) {
     await userStore.fetchAppearanceState()
