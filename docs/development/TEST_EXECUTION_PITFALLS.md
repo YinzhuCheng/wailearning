@@ -1349,6 +1349,78 @@ Before comparing UI to API for **`course_required_id`**, open **`header-course-s
 
 Documented while authoring **`tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js`** case **02**.
 
+### Pitfall 52: Full Playwright suite + persistent SQLite — `students.parent_code` UNIQUE collisions on `reset-scenario`
+
+### Symptom
+
+Backend log:
+
+```text
+sqlite3.IntegrityError: UNIQUE constraint failed: students.parent_code
+```
+
+Playwright / `fixtures.cjs`:
+
+```text
+E2E seed failed (500): Internal Server Error
+```
+
+Follow-on failures: timeouts on `page.goto`, missing table rows, logins that succeed but show empty shells — **not obviously “notification UI broke”**.
+
+### Context
+
+- Admin Playwright uses a **file-backed SQLite** URL (see `apps/web/admin/playwright.config.cjs`; Unix placeholder pattern like `/tmp/playwright_e2e_<port>.sqlite`).
+- **`POST /api/e2e/dev/reset-scenario`** runs in many specs’ **`beforeEach`** hooks.
+- `Student.parent_code` is **`unique=True`** in `apps/backend/wailearning_backend/db/models.py`.
+- If seed assigns **`parent_code`** from a **small** derived space (historically a short prefix of `suffix`), repeated inserts into the **same** SQLite file across a long full-suite run increase collision probability (“birthday paradox” vs leftover rows).
+
+Short targeted runs often pass because the DB file is young or resets are fewer.
+
+### Fix
+
+- **Product / seed fix (preferred):** derive **`parent_code`** from the **full** unique run suffix (or another high-entropy string), not an aggressively truncated token. The E2E seed handler in `apps/backend/wailearning_backend/api/routers/e2e_dev.py` uses **`P{suffix.upper()}`** where **`suffix`** is **`uuid.uuid4().hex[:10]`**, keeping the code space large enough for persistent SQLite full-suite runs.
+- **Operator mitigation (diagnostic only):** delete the Playwright SQLite file at `<E2E_SQLITE>` or change **`E2E_API_PORT`** so a fresh file is used — confirms collision vs logic regression; **do not** rely on this instead of seed entropy in CI.
+
+### Interpretation
+
+See also **§ Key pitfall A** in [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+
+### Pitfall 53: Avatar oversized PNG body hits format validation before the 2 MB guard
+
+### Symptom
+
+`tests/backend/user_profile/test_profile_and_avatar.py::test_avatar_oversized_rejected_and_orphan_not_left_on_disk` expects HTTP **400** with **`Avatar image must be 2 MB or smaller`** (English substring **`2 MB`**). Instead the API returns generic attachment validation text such as **`图片文件无法通过校验…`** when the uploaded bytes are not a valid PNG image.
+
+### Context
+
+`/api/auth/me/avatar` ultimately calls **`save_attachment`**, which runs **`assert_attachment_format_compliant`** before persisting. A synthetic **`huge.png`** payload of **`0xFF` repeated bytes** fails PNG validation **before** `upload_my_avatar` can compare **`size > MAX_AVATAR_BYTES`**.
+
+### Fix
+
+In **`apps/backend/wailearning_backend/api/routers/auth.py`**, read the **`UploadFile`** bytes first and reject **`len(content) > MAX_AVATAR_BYTES`** immediately. Pass bytes into **`save_attachment(..., preloaded=content)`** so oversized rejects happen **without** writing to disk and **without** entering format validation for oversize junk payloads.
+
+### Interpretation
+
+This is a **route-ordering** regression guard: size limits for avatars must precede generic attachment sniffing when the upload route shares **`save_attachment`**.
+
+### Pitfall 54: Markdown discussion collapsed preview flattened newlines (tier-3 **`...`** ellipsis specs broke)
+
+### Symptom
+
+Playwright **`e2e-discussion-cover-llm-tier3.spec.js`** expects **`discussion-row__text`** to contain **`...`** when more than three logical lines exist. Instead the UI showed all lines separated by spaces with **no** ellipsis.
+
+### Context
+
+**`collapsedBodyPreview`** in **`CourseDiscussionPanel.vue`** treated non-plain bodies by replacing **`\n`** with spaces before applying only a **240-character** cap. That bypassed **`previewText()` / `lineSegmentsFromBody()`**, which implement the intended **three logical-line** preview model (including counting **`![](...)`** and **`<img>`** as lines).
+
+### Fix
+
+For markdown bodies, when **`isTruncated(body)`** is true, render **`previewText(body)`** (same helper chain as plain text). Keep expanded rows stable by wrapping both collapsed text and **`PlainOrMarkdownBlock`** inside a persistent **`.discussion-row__text`** container so Playwright locators survive expand/collapse.
+
+### Interpretation
+
+Full-suite runs surfaced this because discussion specs execute late and depend on DOM structure + ellipsis semantics staying aligned with **`PREVIEW_LINE_LIMIT`**.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

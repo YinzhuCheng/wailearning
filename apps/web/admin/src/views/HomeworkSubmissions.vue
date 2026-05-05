@@ -251,12 +251,14 @@
             </el-button>
           </el-descriptions-item>
           <el-descriptions-item label="正文">
-            <PlainOrMarkdownBlock
-              :text="detailRow.content || ''"
-              :format="detailRow.content_format"
-              variant="teacher"
-              empty-text="无"
-            />
+            <div data-testid="homework-submission-detail-body">
+              <PlainOrMarkdownBlock
+                :text="detailRow.content || ''"
+                :format="detailRow.content_format"
+                variant="teacher"
+                empty-text="无"
+              />
+            </div>
           </el-descriptions-item>
           <el-descriptions-item label="附件">
             <el-button

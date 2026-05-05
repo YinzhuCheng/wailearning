@@ -131,6 +131,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+For environment variables, persistent SQLite behavior during long serial runs, selector strategy, and triage order when many specs fail together, read [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+
 Key files:
 
 - `apps/web/admin/playwright.config.cjs`
