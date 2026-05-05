@@ -69,30 +69,32 @@
             @node-drop="handleChapterDrop"
           >
             <template #default="{ node, data }">
-              <button
-                v-if="isChapterExpandable(data)"
-                class="chapter-node-toggle"
-                type="button"
-                :aria-label="node.expanded ? '收起子章节' : '展开子章节'"
-                :title="node.expanded ? '收起子章节' : '展开子章节'"
-                :data-testid="`materials-chapter-toggle-${data.id}`"
-                @click.stop="toggleChapterExpansion(node, data)"
-              >
-                <el-icon>
-                  <Minus v-if="node.expanded" />
-                  <Plus v-else />
-                </el-icon>
-              </button>
-              <span v-else class="chapter-node-toggle-spacer" aria-hidden="true" />
-              <span class="tree-node-label">
-                {{ data.title }}
-                <el-tag v-if="data.is_uncategorized" size="small" type="info" class="tree-tag">默认</el-tag>
-              </span>
-              <span v-if="canManageChapters && !data.is_uncategorized" class="tree-node-actions" @click.stop>
-                <el-button link type="primary" size="small" @click="openRenameChapterDialog(data)">重命名</el-button>
-                <el-button link type="primary" size="small" @click="openAddChapterDialog(data.id)">子章节</el-button>
-                <el-button link type="danger" size="small" @click="confirmDeleteChapter(data)">删除</el-button>
-              </span>
+              <div class="chapter-tree-node">
+                <button
+                  v-if="isChapterExpandable(data)"
+                  class="chapter-node-toggle"
+                  type="button"
+                  :aria-label="node.expanded ? '收起子章节' : '展开子章节'"
+                  :title="node.expanded ? '收起子章节' : '展开子章节'"
+                  :data-testid="`materials-chapter-toggle-${data.id}`"
+                  @click.stop="toggleChapterExpansion(node, data)"
+                >
+                  <el-icon>
+                    <Minus v-if="node.expanded" />
+                    <Plus v-else />
+                  </el-icon>
+                </button>
+                <span v-else class="chapter-node-toggle-spacer" aria-hidden="true" />
+                <span class="tree-node-label">
+                  <span class="tree-node-title">{{ data.title }}</span>
+                  <el-tag v-if="data.is_uncategorized" size="small" type="info" class="tree-tag">默认</el-tag>
+                </span>
+                <span v-if="canManageChapters && !data.is_uncategorized" class="tree-node-actions" @click.stop>
+                  <el-button link type="primary" size="small" @click="openRenameChapterDialog(data)">重命名</el-button>
+                  <el-button link type="primary" size="small" @click="openAddChapterDialog(data.id)">子章节</el-button>
+                  <el-button link type="danger" size="small" @click="confirmDeleteChapter(data)">删除</el-button>
+                </span>
+              </div>
             </template>
           </el-tree>
         </aside>
@@ -1017,12 +1019,22 @@ watch(selectedChapterId, () => {
 
 .chapter-tree :deep(.el-tree-node__content) {
   height: auto;
-  min-height: 32px;
-  align-items: flex-start;
+  min-height: 36px;
+  align-items: center;
 }
 
 .chapter-tree :deep(.el-tree-node__expand-icon) {
   display: none;
+}
+
+.chapter-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0;
+  box-sizing: border-box;
 }
 
 .chapter-node-toggle,
@@ -1030,7 +1042,7 @@ watch(selectedChapterId, () => {
   width: 24px;
   height: 24px;
   flex: 0 0 24px;
-  margin: 4px 4px 4px 0;
+  margin: 0;
 }
 
 .chapter-node-toggle {
@@ -1063,23 +1075,39 @@ watch(selectedChapterId, () => {
 }
 
 .tree-node-label {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  min-height: 32px;
-  padding-right: 8px;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 24px;
+}
+
+.tree-node-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #0f172a;
+  font-size: 14px;
 }
 
 .tree-tag {
+  flex-shrink: 0;
   transform: scale(0.9);
 }
 
 .tree-node-actions {
-  margin-left: auto;
+  flex: 0 0 auto;
   display: inline-flex;
   flex-shrink: 0;
-  gap: 2px;
+  align-items: center;
+  gap: 0;
+  margin-left: 0;
+}
+
+.tree-node-actions :deep(.el-button) {
+  padding: 0 4px;
 }
 
 .materials-toolbar {
