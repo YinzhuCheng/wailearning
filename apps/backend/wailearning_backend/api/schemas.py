@@ -4,7 +4,7 @@ from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-
+ContentFormatLiteral = Literal["markdown", "plain"]
 class UserRole(str, Enum):
     ADMIN = "admin"
     CLASS_TEACHER = "class_teacher"
@@ -107,6 +107,7 @@ class CourseDiscussionEntryResponse(BaseModel):
     author_username: str
     author_role: str
     body: str
+    body_format: ContentFormatLiteral = "markdown"
     message_kind: str = "human"
     llm_invocation: bool = False
     created_at: datetime
@@ -128,7 +129,15 @@ class CourseDiscussionCreate(BaseModel):
     subject_id: int = Field(..., ge=1)
     class_id: int = Field(..., ge=1)
     body: str = Field(..., min_length=1, max_length=8000)
+    body_format: ContentFormatLiteral = "markdown"
     invoke_llm: bool = False
+
+    @field_validator("body_format", mode="before")
+    @classmethod
+    def normalize_body_format(cls, value):
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
 
 
 class StudentUserBatchCreateRequest(BaseModel):
@@ -1042,6 +1051,7 @@ class UserAppearanceStateResponse(BaseModel):
 class HomeworkBase(BaseModel):
     title: str
     content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     class_id: int
@@ -1083,6 +1093,13 @@ class HomeworkBase(BaseModel):
             raise ValueError("grade_precision must be integer or decimal_1.")
         return normalized
 
+    @field_validator("content_format", mode="before")
+    @classmethod
+    def validate_homework_content_format(cls, value):
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
+
 
 class HomeworkCreate(HomeworkBase):
     pass
@@ -1091,6 +1108,7 @@ class HomeworkCreate(HomeworkBase):
 class HomeworkUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    content_format: Optional[ContentFormatLiteral] = None
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     remove_attachment: bool = False
@@ -1127,6 +1145,15 @@ class HomeworkUpdate(BaseModel):
         if normalized not in {"integer", "decimal_1"}:
             raise ValueError("grade_precision must be integer or decimal_1.")
         return normalized
+
+    @field_validator("content_format", mode="before")
+    @classmethod
+    def validate_homework_update_content_format(cls, value):
+        if value is None:
+            return None
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
 
 
 class HomeworkResponse(HomeworkBase):
@@ -1193,6 +1220,7 @@ class HomeworkListResponse(BaseModel):
 
 class HomeworkSubmissionCreate(BaseModel):
     content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     remove_attachment: bool = False
@@ -1205,6 +1233,9 @@ class HomeworkSubmissionCreate(BaseModel):
         self.content = self.content.strip() if isinstance(self.content, str) else self.content
         if not self.content:
             self.content = None
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        self.content_format = normalize_content_format(self.content_format)
         if self.submission_mode == "feedback_followup":
             if self.prior_attempt_id is None:
                 raise ValueError("按反馈补充提交时必须提供 prior_attempt_id（上一轮提交 id）。")
@@ -1222,6 +1253,7 @@ class HomeworkSubmissionResponse(BaseModel):
     subject_id: Optional[int] = None
     class_id: int
     content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     used_llm_assist: bool = False
@@ -1253,6 +1285,7 @@ class HomeworkAttemptResponse(BaseModel):
     class_id: int
     submission_summary_id: Optional[int] = None
     content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     is_late: bool = False
@@ -1301,6 +1334,7 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     status: str
     submitted_at: Optional[datetime] = None
     content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
     content_preview: Optional[str] = None
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
@@ -1501,6 +1535,7 @@ class CourseLLMConfigResponse(BaseModel):
 class NotificationBase(BaseModel):
     title: str
     content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     priority: str = "normal"
@@ -1514,6 +1549,13 @@ class NotificationBase(BaseModel):
     target_user_id: Optional[int] = None
     notification_kind: str = "general"
 
+    @field_validator("content_format", mode="before")
+    @classmethod
+    def validate_notification_content_format(cls, value):
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
+
 
 class NotificationCreate(NotificationBase):
     pass
@@ -1522,6 +1564,7 @@ class NotificationCreate(NotificationBase):
 class NotificationUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    content_format: Optional[ContentFormatLiteral] = None
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     remove_attachment: bool = False
@@ -1535,6 +1578,15 @@ class NotificationUpdate(BaseModel):
     related_appeal_id: Optional[int] = None
     target_user_id: Optional[int] = None
     notification_kind: Optional[str] = None
+
+    @field_validator("content_format", mode="before")
+    @classmethod
+    def validate_notification_update_content_format(cls, value):
+        if value is None:
+            return None
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
 
 
 class NotificationResponse(NotificationBase):
@@ -1575,11 +1627,19 @@ class CourseMaterialPlacement(BaseModel):
 class CourseMaterialBase(BaseModel):
     title: str
     content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     class_id: int
     subject_id: Optional[int] = None
     chapter_ids: Optional[List[int]] = None
+
+    @field_validator("content_format", mode="before")
+    @classmethod
+    def validate_material_content_format(cls, value):
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
 
 
 class CourseMaterialCreate(CourseMaterialBase):
@@ -1589,10 +1649,20 @@ class CourseMaterialCreate(CourseMaterialBase):
 class CourseMaterialUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    content_format: Optional[ContentFormatLiteral] = None
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
     remove_attachment: bool = False
     chapter_ids: Optional[List[int]] = None
+
+    @field_validator("content_format", mode="before")
+    @classmethod
+    def validate_material_update_content_format(cls, value):
+        if value is None:
+            return None
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
 
 
 class CourseMaterialResponse(CourseMaterialBase):

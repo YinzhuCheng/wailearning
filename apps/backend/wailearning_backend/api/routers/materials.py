@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
 from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
+from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Class, CourseMaterial, CourseMaterialChapter, CourseMaterialSection, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
@@ -89,6 +90,7 @@ def _serialize_material(db: Session, material: CourseMaterial) -> CourseMaterial
         id=material.id,
         title=material.title,
         content=material.content,
+        content_format=normalize_content_format(getattr(material, "content_format", None)),
         attachment_name=material.attachment_name,
         attachment_url=material.attachment_url,
         class_id=material.class_id,
@@ -249,6 +251,7 @@ def create_material(
     material = CourseMaterial(
         title=data.title,
         content=data.content,
+        content_format=normalize_content_format(getattr(data, "content_format", None)),
         attachment_name=data.attachment_name,
         attachment_url=data.attachment_url,
         class_id=data.class_id,
@@ -314,6 +317,8 @@ def update_material(
         material.title = data.title
     if data.content is not None:
         material.content = data.content
+    if data.content_format is not None:
+        material.content_format = normalize_content_format(data.content_format)
     if data.remove_attachment:
         material.attachment_name = None
         material.attachment_url = None

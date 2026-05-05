@@ -55,6 +55,9 @@ Subgroups:
   - import behavior
 - `tests/backend/files/`
   - attachment serving and download authorization
+  - upload compliance allow-list and sniffing (`test_attachment_upload_compliance.py`)
+- `tests/backend/content_format/`
+  - optional `content_format` / `body_format` persistence on homework, submissions, discussions, notifications
 - `tests/backend/scores/`
   - score composition and derived grading behavior
 - `tests/backend/points/`

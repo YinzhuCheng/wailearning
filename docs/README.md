@@ -10,6 +10,7 @@ This directory is the authoritative documentation home for the repository. The r
 - [LLM and Homework Guide](product/LLM_HOMEWORK_GUIDE.md)
 - [Development and Testing](development/DEVELOPMENT_AND_TESTING.md)
 - [Encoding And Mojibake Safety](development/ENCODING_AND_MOJIBAKE_SAFETY.md)
+- [Content format: Markdown vs plain text](development/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md)
 - [Test Suite Map](development/TEST_SUITE_MAP.md)
 - [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
 - [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)

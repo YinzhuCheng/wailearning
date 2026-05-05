@@ -73,6 +73,15 @@ Quota day boundaries and estimation policy are deliberately not configured here.
 
 ## Homework Workflow
 
+### Optional text format (`content_format`)
+
+Homework instructions (`homeworks.content`) and student submission bodies (`homework_attempts.content`, mirrored on the submission summary) may be stored as either:
+
+- `markdown` (default): rendered in the admin SPA with the shared Markdown + KaTeX components.
+- `plain`: rendered as literal text (pre-wrapped) so characters like `#` are not interpreted as headings.
+
+When auto-grading is enabled, plain-text bodies are fenced for the LLM prompt builder so punctuation is not mis-parsed as Markdown structure. See [Content format: Markdown vs plain text](../development/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md).
+
 When homework auto-grading is enabled:
 
 - a student submission creates or updates a submission summary,

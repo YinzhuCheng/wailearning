@@ -128,7 +128,15 @@
           <el-switch v-model="form.is_pinned" />
         </el-form-item>
         <el-form-item label="通知内容" prop="content">
-          <el-input v-model="form.content" type="textarea" :rows="6" />
+          <MarkdownEditorPanel
+            v-model="form.content"
+            v-model:content-format="form.content_format"
+            :min-rows="6"
+            :max-rows="16"
+            placeholder="支持 Markdown；也可切换为纯文本"
+            :show-format-toggle="true"
+            :enable-image-upload="true"
+          />
         </el-form-item>
         <el-form-item label="附件">
           <el-upload
@@ -174,7 +182,13 @@
             class="notification-html"
             v-html="currentNotification.content"
           />
-          <template v-else>{{ currentNotification.content || '暂无内容' }}</template>
+          <PlainOrMarkdownBlock
+            v-else
+            :text="currentNotification.content || ''"
+            :format="currentNotification.content_format"
+            variant="student"
+            empty-text="暂无内容"
+          />
         </el-descriptions-item>
         <el-descriptions-item
           v-if="currentNotification.notification_kind === 'password_reset_request' && userStore.isAdmin"
@@ -203,8 +217,11 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
+import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
+import { normalizeContentFormat } from '@/utils/contentFormat'
 import {
   filterCoursesByClassId,
   filterImportantNotifications,
@@ -303,6 +320,7 @@ const goGradeAppeal = row => {
 const form = reactive({
   title: '',
   content: '',
+  content_format: 'markdown',
   priority: 'normal',
   is_pinned: false,
   attachment_name: '',
@@ -317,6 +335,7 @@ const rules = {
 const resetForm = () => {
   form.title = ''
   form.content = ''
+  form.content_format = 'markdown'
   form.priority = 'normal'
   form.is_pinned = false
   form.attachment_name = ''
@@ -391,6 +410,7 @@ const editNotification = async row => {
   Object.assign(form, {
     title: editingNotification.value.title,
     content: editingNotification.value.content,
+    content_format: normalizeContentFormat(editingNotification.value.content_format),
     priority: editingNotification.value.priority,
     is_pinned: editingNotification.value.is_pinned,
     attachment_name: editingNotification.value.attachment_name || '',
@@ -453,6 +473,7 @@ const submitForm = async () => {
     const payload = {
       title: form.title,
       content: form.content,
+      content_format: normalizeContentFormat(form.content_format),
       priority: form.priority,
       is_pinned: form.is_pinned,
       attachment_name: attachment.attachment_name,

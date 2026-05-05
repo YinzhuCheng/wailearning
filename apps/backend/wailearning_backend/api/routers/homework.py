@@ -27,6 +27,7 @@ from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.domains.homework.cleanup import purge_homework_row
 from apps.backend.wailearning_backend.domains.homework.appeals import mark_appeal_notifications_acknowledged, notify_teachers_grade_appeal
 from apps.backend.wailearning_backend.domains.homework.notifications import notify_student_homework_graded
+from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
 from apps.backend.wailearning_backend.llm_grading import normalize_score_for_homework, queue_grading_task, refresh_submission_summary
 from apps.backend.wailearning_backend.db.models import (
     Class,
@@ -343,6 +344,7 @@ def _serialize_submission(db: Session, submission: HomeworkSubmission) -> Homewo
         subject_id=submission.subject_id,
         class_id=submission.class_id,
         content=submission.content,
+        content_format=normalize_content_format(getattr(submission, "content_format", None)),
         attachment_name=submission.attachment_name,
         attachment_url=submission.attachment_url,
         used_llm_assist=bool(getattr(submission, "used_llm_assist", False)),
@@ -387,6 +389,7 @@ def _serialize_attempt(db: Session, attempt: HomeworkAttempt) -> HomeworkAttempt
         class_id=attempt.class_id,
         submission_summary_id=attempt.submission_summary_id,
         content=attempt.content,
+        content_format=normalize_content_format(getattr(attempt, "content_format", None)),
         attachment_name=attempt.attachment_name,
         attachment_url=attempt.attachment_url,
         is_late=bool(attempt.is_late),
@@ -445,6 +448,7 @@ def _serialize_submission_status(
         status="submitted" if submission else "pending",
         submitted_at=submission.submitted_at if submission else None,
         content=submission.content if submission else None,
+        content_format=normalize_content_format(getattr(submission, "content_format", None)) if submission else "markdown",
         content_preview=_preview_text(submission.content if submission else None),
         attachment_name=submission.attachment_name if submission else None,
         attachment_url=submission.attachment_url if submission else None,
@@ -490,6 +494,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         id=homework.id,
         title=homework.title,
         content=homework.content,
+        content_format=normalize_content_format(getattr(homework, "content_format", None)),
         attachment_name=homework.attachment_name,
         attachment_url=homework.attachment_url,
         class_id=homework.class_id,
@@ -776,6 +781,7 @@ def create_homework(
     homework = Homework(
         title=data.title,
         content=data.content,
+        content_format=normalize_content_format(getattr(data, "content_format", None)),
         attachment_name=data.attachment_name,
         attachment_url=data.attachment_url,
         class_id=data.class_id,
@@ -820,6 +826,8 @@ def update_homework(
         homework.title = data.title
     if data.content is not None:
         homework.content = data.content
+    if data.content_format is not None:
+        homework.content_format = normalize_content_format(data.content_format)
     if data.remove_attachment:
         previous_homework_attachment = homework.attachment_url
         homework.attachment_name = None
@@ -966,6 +974,7 @@ def submit_homework(
                 raise HTTPException(status_code=409, detail="Concurrent submission conflict; please retry.")
 
     next_content = data.content
+    next_content_format = normalize_content_format(getattr(data, "content_format", None))
     next_attachment_name = submission.attachment_name or None
     next_attachment_url = submission.attachment_url or None
 
@@ -1010,6 +1019,7 @@ def submit_homework(
     counts_toward = _counts_toward_final_score(homework, is_late)
 
     submission.content = next_content
+    submission.content_format = next_content_format
     submission.attachment_name = next_attachment_name
     submission.attachment_url = next_attachment_url
     submission.used_llm_assist = bool(data.used_llm_assist)
@@ -1022,6 +1032,7 @@ def submit_homework(
         class_id=homework.class_id,
         submission_summary_id=submission.id,
         content=next_content,
+        content_format=next_content_format,
         attachment_name=next_attachment_name,
         attachment_url=next_attachment_url,
         is_late=is_late,

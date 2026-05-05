@@ -14,6 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.orm.attributes import flag_modified
 
 from apps.backend.wailearning_backend.domains.homework.notifications import notify_student_homework_graded
+from apps.backend.wailearning_backend.domains.text_content_format import body_text_for_grading_llm, normalize_content_format
 from apps.backend.wailearning_backend.markdown_llm import append_markdown_with_dataurl_images_to_parts, expand_markdown_images_for_llm
 from apps.backend.wailearning_backend.domains.llm.attachments import (
     ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS,
@@ -259,6 +260,7 @@ def refresh_submission_summary(db: Session, summary: HomeworkSubmission) -> Home
         )
         if latest_attempt:
             summary.content = latest_attempt.content
+            summary.content_format = getattr(latest_attempt, "content_format", None) or "markdown"
             summary.attachment_name = latest_attempt.attachment_name
             summary.attachment_url = latest_attempt.attachment_url
             summary.submitted_at = latest_attempt.submitted_at
@@ -1731,6 +1733,13 @@ def _comment_format_system_suffix(system_prompt: str) -> str:
     )
 
 
+def _expand_homework_field_for_llm(homework: Homework, field: Optional[str], *, field_role: str) -> str:
+    raw = field or ""
+    if field_role == "content" and normalize_content_format(getattr(homework, "content_format", None)) == "plain":
+        raw = body_text_for_grading_llm(content=raw, content_format="plain")
+    return expand_markdown_images_for_llm(raw)
+
+
 def _build_scoring_messages(
     homework: Homework,
     attempt: HomeworkAttempt,
@@ -1748,12 +1757,9 @@ def _build_scoring_messages(
     response_language = homework.response_language or config.response_language or "zh-CN"
     teacher_prompt = config.teacher_prompt or ""
 
-    def _expand_hw_md(field: Optional[str]) -> str:
-        return expand_markdown_images_for_llm(field or "")
-
-    content_md = _expand_hw_md(homework.content)
-    ref_md = _expand_hw_md(homework.reference_answer)
-    rubric_md = _expand_hw_md(homework.rubric_text)
+    content_md = _expand_homework_field_for_llm(homework, homework.content, field_role="content")
+    ref_md = _expand_homework_field_for_llm(homework, homework.reference_answer, field_role="reference")
+    rubric_md = _expand_homework_field_for_llm(homework, homework.rubric_text, field_role="rubric")
 
     assignment_texts_plain = list(material["assignment_texts"])
     assignment_texts_plain[1] = (
@@ -1933,7 +1939,11 @@ def _collect_attempt_material_blocks(attempt: HomeworkAttempt) -> tuple[list[Mat
     student_blocks: list[MaterialBlock] = []
     skipped_all: list[dict[str, str]] = []
     if attempt.content:
-        text, truncated = _truncate_text(attempt.content)
+        body_for_llm = body_text_for_grading_llm(
+            content=attempt.content,
+            content_format=getattr(attempt, "content_format", None),
+        )
+        text, truncated = _truncate_text(body_for_llm)
         note = "\n\n[说明] 提交说明过长，已截断。" if truncated else ""
         student_blocks.append(
             MaterialBlock(
@@ -2012,12 +2022,9 @@ def _build_student_material(
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
 ) -> dict[str, Any]:
-    def _expand_hw_md(field: Optional[str]) -> str:
-        return expand_markdown_images_for_llm(field or "")
-
-    content_md = _expand_hw_md(homework.content)
-    ref_md = _expand_hw_md(homework.reference_answer)
-    rubric_md = _expand_hw_md(homework.rubric_text)
+    content_md = _expand_homework_field_for_llm(homework, homework.content, field_role="content")
+    ref_md = _expand_homework_field_for_llm(homework, homework.reference_answer, field_role="reference")
+    rubric_md = _expand_homework_field_for_llm(homework, homework.rubric_text, field_role="rubric")
 
     assignment_texts = [
         f"作业标题：{homework.title}",
