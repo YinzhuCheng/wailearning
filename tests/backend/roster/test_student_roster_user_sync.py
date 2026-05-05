@@ -60,6 +60,39 @@ def test_students_list_returns_empty_when_teacher_has_no_classes_not_500():
     assert st.json()["total"] == 0
 
 
+def test_admin_students_list_200_when_roster_gender_is_null():
+    """Demo seed / legacy rows may leave gender NULL; list must not 500."""
+    _reset_db()
+    db = SessionLocal()
+    try:
+        db.add(
+            User(
+                username="admin_gender_null",
+                hashed_password=get_password_hash("pass"),
+                real_name="Admin",
+                role=UserRole.ADMIN.value,
+                is_active=True,
+            )
+        )
+        c = Class(name="班级G", grade=2026)
+        db.add(c)
+        db.flush()
+        db.add(Student(name="无性别字段", student_no="nog", class_id=c.id, gender=None))
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    r = client.post("/api/auth/login", data={"username": "admin_gender_null", "password": "pass"})
+    assert r.status_code == 200, r.text
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    st = client.get("/api/students?page=1&page_size=20", headers=h)
+    assert st.status_code == 200, st.text
+    body = st.json()
+    assert body["total"] == 1
+    assert body["data"][0]["gender"] == "male"
+
+
 def test_reconcile_creates_user_from_roster_only():
     """Roster-first deployment: Student row gets matching User without manual load."""
     _reset_db()

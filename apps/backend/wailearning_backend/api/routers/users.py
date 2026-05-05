@@ -13,6 +13,7 @@ from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseMaterial,
+    Gender,
     Homework,
     HomeworkAttempt,
     HomeworkGradingTask,
@@ -124,11 +125,12 @@ def delete_user_materials(user_id: int, db: Session) -> None:
 
 
 def build_student_candidate_response(student: Student, class_name: Optional[str]) -> StudentResponse:
+    gender = student.gender if student.gender is not None else Gender.MALE
     return StudentResponse(
         id=student.id,
         name=student.name,
         student_no=student.student_no,
-        gender=student.gender,
+        gender=gender,
         phone=student.phone,
         parent_phone=student.parent_phone,
         address=student.address,

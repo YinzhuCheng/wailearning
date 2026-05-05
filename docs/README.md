@@ -14,6 +14,7 @@ This directory is the authoritative documentation home for the repository. The r
 - [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
 - [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 - [UI/UX Audit And Responsive Repair Notes](development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md)
+- [Admin UI Navigation Cleanup And Full Test Runbook](development/ADMIN_UI_NAVIGATION_CLEANUP_AND_FULL_TEST_RUNBOOK.md) — sidebar/header consolidation, pytest Postgres pitfalls, RAR `unrar-free` requirement for zero-skip attachment tests
 - [E2E advanced coverage specs and historical backlog note](development/E2E_BACKLOG_SCENARIOS.md)
 - [Deployment and Operations](operations/DEPLOYMENT_AND_OPERATIONS.md)
 - [Parent Portal](product/PARENT_PORTAL.md)
@@ -106,9 +107,10 @@ Why:
 3. [Test Suite Map](development/TEST_SUITE_MAP.md)
 4. [Test Redundancy Audit](development/TEST_REDUNDANCY_AUDIT.md)
 5. [UI/UX Audit And Responsive Repair Notes](development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md) when continuing admin SPA visual or responsive work
-6. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
-7. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
-8. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
+6. [Admin UI Navigation Cleanup And Full Test Runbook](development/ADMIN_UI_NAVIGATION_CLEANUP_AND_FULL_TEST_RUNBOOK.md) when changing admin navigation chrome or running full pytest with PostgreSQL (avoid accidental sqlite skips under `tests/postgres/`)
+7. [Repository Structure](architecture/REPOSITORY_STRUCTURE.md)
+8. [Admin Bootstrap and Demo Seed](operations/ADMIN_BOOTSTRAP.md)
+9. [Test Execution Pitfalls](development/TEST_EXECUTION_PITFALLS.md)
 
 ### Production deployment
 

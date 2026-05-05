@@ -103,31 +103,37 @@
         </div>
 
         <div class="preview-surface">
-          <div class="preview-shell" :style="previewStyle">
-            <div class="preview-sidebar">
-              <span />
-              <span />
-              <span class="is-active" />
-            </div>
-            <div class="preview-main">
-              <div class="preview-toolbar">
-                <strong>Dashboard</strong>
-                <button type="button">Action</button>
+          <div
+            class="wa-appearance-preview-host preview-host"
+            :style="previewHostStyle"
+            :data-wa-texture="draft.texture"
+          >
+            <div class="preview-shell">
+              <div class="preview-sidebar">
+                <span />
+                <span />
+                <span class="is-active" />
               </div>
-              <div class="preview-cards">
-                <article>
-                  <b>92%</b>
-                  <span>Completion</span>
-                </article>
-                <article>
-                  <b>18</b>
-                  <span>Courses</span>
-                </article>
-              </div>
-              <div class="preview-table">
-                <span />
-                <span />
-                <span />
+              <div class="preview-main">
+                <div class="preview-toolbar">
+                  <strong>仪表盘</strong>
+                  <button type="button">操作</button>
+                </div>
+                <div class="preview-cards">
+                  <article>
+                    <b>92%</b>
+                    <span>完成度</span>
+                  </article>
+                  <article>
+                    <b>18</b>
+                    <span>课程</span>
+                  </article>
+                </div>
+                <div class="preview-table">
+                  <span />
+                  <span />
+                  <span />
+                </div>
               </div>
             </div>
           </div>
@@ -177,7 +183,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
-import { applyAppearanceStyle, appearancePresets, normalizeAppearanceConfig } from '@/utils/theme'
+import { applyAppearanceStyle, appearancePresets, appearancePreviewStyleVars, normalizeAppearanceConfig } from '@/utils/theme'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
@@ -256,22 +262,18 @@ const assignDraft = config => {
   Object.assign(draft, normalizeAppearanceConfig(config))
 }
 
-const previewStyle = computed(() => ({
-  '--preview-primary': colorFor(draft.primary, 600),
-  '--preview-primary-soft': colorFor(draft.primary, 50),
-  '--preview-accent': colorFor(draft.accent, 600),
-  '--preview-accent-soft': colorFor(draft.accent, 50),
-  '--preview-radius': draft.radius === 'soft' ? '18px' : draft.radius === 'balanced' ? '12px' : draft.radius === 'subtle' ? '8px' : '3px',
-  '--preview-shadow':
-    draft.shadow === 'flat'
-      ? 'none'
-      : draft.shadow === 'strong'
-        ? '0 22px 48px rgba(15, 23, 42, 0.18)'
-        : draft.shadow === 'medium'
-          ? '0 18px 38px rgba(15, 23, 42, 0.13)'
-          : '0 12px 30px rgba(15, 23, 42, 0.09)',
-  '--preview-alpha': draft.transparency === 'glass' ? '0.72' : draft.transparency === 'balanced' ? '0.88' : '1'
-}))
+const previewHostStyle = computed(() => {
+  const base = appearancePreviewStyleVars(draft)
+  return {
+    ...base,
+    '--wa-color-bg': '#f5f7fa',
+    '--wa-color-bg-soft': '#f8fafc',
+    '--wa-color-surface': '#ffffff',
+    '--wa-color-text': '#0f172a',
+    '--wa-color-text-soft': '#334155',
+    '--wa-color-text-muted': '#64748b'
+  }
+})
 
 const describeConfig = config => {
   const c = normalizeAppearanceConfig(config)
@@ -493,9 +495,13 @@ onMounted(refresh)
 .preview-surface {
   overflow: hidden;
   border: 1px solid var(--wa-border-subtle);
-  border-radius: var(--wa-radius-lg);
+  border-radius: var(--wa-radius-md);
   background: var(--wa-color-bg-soft);
-  padding: 12px;
+  padding: var(--wa-space-sm);
+}
+
+.preview-host {
+  min-height: 220px;
 }
 
 .preview-shell {
@@ -503,89 +509,99 @@ onMounted(refresh)
   grid-template-columns: 72px 1fr;
   min-height: 220px;
   overflow: hidden;
-  border-radius: var(--preview-radius);
-  background: color-mix(in srgb, var(--preview-primary-soft) 65%, white);
-  box-shadow: var(--preview-shadow);
+  border-radius: var(--wa-radius-lg);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 55%, white);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .preview-sidebar {
   display: grid;
   align-content: start;
-  gap: 12px;
-  padding: 18px 14px;
-  background: linear-gradient(180deg, #0f172a, color-mix(in srgb, var(--preview-primary) 35%, #0f172a));
+  gap: var(--wa-space-sm);
+  padding: var(--wa-space-md) var(--wa-space-sm);
+  background: linear-gradient(180deg, #0f172a, color-mix(in srgb, var(--wa-color-primary-600) 35%, #0f172a));
 }
 
 .preview-sidebar span {
   height: 26px;
-  border-radius: 999px;
+  border-radius: var(--wa-radius-pill);
   background: rgba(255, 255, 255, 0.22);
 }
 
 .preview-sidebar .is-active {
-  background: var(--preview-primary);
+  background: var(--wa-color-primary-600);
 }
 
 .preview-main {
   display: grid;
   align-content: start;
-  gap: 14px;
-  padding: 18px;
+  gap: var(--wa-space-md);
+  padding: var(--wa-space-md);
 }
 
 .preview-toolbar,
 .preview-cards article,
 .preview-table {
   border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: calc(var(--preview-radius) * 0.75);
-  background: rgba(255, 255, 255, var(--preview-alpha));
+  border-radius: var(--wa-radius-card);
+  background: color-mix(in srgb, var(--wa-color-surface) var(--wa-surface-blend-pct), transparent);
+  box-shadow: var(--wa-shadow-object);
 }
 
 .preview-toolbar {
   display: flex;
   justify-content: space-between;
-  padding: 12px;
+  align-items: center;
+  padding: var(--wa-space-sm) var(--wa-space-md);
+  font-size: var(--wa-font-size-md);
+}
+
+.preview-toolbar strong {
+  color: var(--wa-color-text);
 }
 
 .preview-toolbar button {
   border: 0;
-  border-radius: 8px;
-  background: var(--preview-primary);
+  border-radius: var(--wa-radius-control);
+  background: var(--wa-color-primary-600);
   color: white;
-  padding: 7px 12px;
+  padding: var(--wa-control-padding-v) var(--wa-control-padding-h);
+  font-size: var(--wa-font-size-sm);
+  cursor: default;
 }
 
 .preview-cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--wa-space-sm);
 }
 
 .preview-cards article {
   display: grid;
   gap: 4px;
-  padding: 14px;
+  padding: var(--wa-space-md);
 }
 
 .preview-cards b {
-  color: var(--preview-primary);
-  font-size: 20px;
+  color: var(--wa-color-primary-600);
+  font-size: var(--wa-font-size-xl);
 }
 
 .preview-cards span {
-  color: #64748b;
+  color: var(--wa-color-text-muted);
+  font-size: var(--wa-font-size-sm);
 }
 
 .preview-table {
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--wa-space-sm);
+  padding: var(--wa-space-md);
 }
 
 .preview-table span {
   height: 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--preview-accent) 22%, #e2e8f0);
+  border-radius: var(--wa-radius-pill);
+  background: color-mix(in srgb, var(--wa-color-accent-600) 22%, #e2e8f0);
 }
 
 .style-actions {
@@ -603,7 +619,7 @@ onMounted(refresh)
   justify-content: space-between;
   gap: 12px;
   border: 1px solid var(--wa-border-subtle);
-  border-radius: var(--wa-radius-lg);
+  border-radius: var(--wa-radius-card);
   padding: 12px;
 }
 

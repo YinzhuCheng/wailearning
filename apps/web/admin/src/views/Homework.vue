@@ -14,9 +14,6 @@
         >
           批量迟交策略
         </el-button>
-        <el-button v-if="!userStore.isStudent && selectedCourse" @click="router.push('/homework/students')">
-          学生作业一览
-        </el-button>
         <el-button
           v-if="!userStore.isStudent && selectedCourse"
           type="primary"
@@ -63,14 +60,14 @@
             width="48"
             :reserve-selection="true"
           />
-          <el-table-column prop="title" label="作业标题" width="190" show-overflow-tooltip />
-          <el-table-column v-if="!userStore.isStudent" label="提交上限" width="100">
+          <el-table-column prop="title" label="作业标题" min-width="150" show-overflow-tooltip />
+          <el-table-column v-if="!userStore.isStudent" label="提交上限" width="72" align="center">
             <template #default="{ row }">
               {{ row.max_submissions != null ? `${row.max_submissions} 次` : '不限' }}
             </template>
           </el-table-column>
-          <el-table-column prop="subject_name" label="课程" width="160" />
-          <el-table-column label="评分规则" min-width="210">
+          <el-table-column prop="subject_name" label="课程" width="110" show-overflow-tooltip />
+          <el-table-column label="评分规则" min-width="158">
             <template #default="{ row }">
               <div class="rule-cell">
                 <el-tag size="small" :type="row.auto_grading_enabled ? 'success' : 'info'">
@@ -80,25 +77,26 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="附件" width="110">
+          <el-table-column label="附件" width="76" align="center">
             <template #default="{ row }">
               <el-button
                 v-if="row.attachment_url"
                 type="primary"
                 link
+                size="small"
                 @click.stop="openAttachment(row)"
               >
-                下载附件
+                下载
               </el-button>
               <span v-else class="muted-text">无</span>
             </template>
           </el-table-column>
-          <el-table-column prop="due_date" label="截止时间" width="180">
+          <el-table-column prop="due_date" label="截止时间" width="152">
             <template #default="{ row }">
               {{ formatDate(row.due_date) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="userStore.isStudent" label="评分任务" min-width="160">
+          <el-table-column v-if="userStore.isStudent" label="评分任务" min-width="148">
             <template #default="{ row }">
               <div v-if="resolveTaskStatus(row)" class="task-status-cell">
                 <el-tag :type="taskTagType(resolveTaskStatus(row))" size="small">
@@ -109,46 +107,31 @@
               <span v-else class="muted-text">{{ row.attempt_count ? '待教师评分' : '未提交' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" :width="userStore.isStudent ? 200 : 220">
+          <el-table-column label="操作" :width="userStore.isStudent ? 210 : 252" align="center" fixed="right">
             <template #default="{ row }">
-              <template v-if="userStore.isStudent">
-                <el-dropdown split-button type="primary" size="small" @click="goToSubmitPage(row)">
-                  作业与提交
-                  <template #dropdown>
-                    <el-dropdown-item @click="viewHomework(row)">仅查看说明</el-dropdown-item>
-                  </template>
-                </el-dropdown>
-              </template>
-              <template v-else>
-                <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
-              </template>
-              <el-button
-                v-if="!userStore.isStudent"
-                size="small"
-                @click="goToSubmissionStatus(row)"
-              >
-                学生提交
-              </el-button>
-              <el-button
-                v-if="!userStore.isStudent"
-                size="small"
-                plain
-                data-testid="homework-btn-edit"
-                @click="openEditDialog(row)"
-              >
-                编辑
-              </el-button>
-              <el-button
-                v-if="!userStore.isStudent"
-                size="small"
-                type="danger"
-                @click="deleteHomework(row)"
-              >
-                删除
-              </el-button>
+              <div class="homework-actions">
+                <template v-if="userStore.isStudent">
+                  <el-button type="primary" size="small" @click="goToSubmitPage(row)">作业与提交</el-button>
+                  <el-button size="small" plain @click="viewHomework(row)">仅看说明</el-button>
+                </template>
+                <template v-else>
+                  <el-button type="primary" link size="small" @click="viewHomework(row)">查看</el-button>
+                  <el-button link size="small" @click="goToSubmissionStatus(row)">学生提交</el-button>
+                  <el-button
+                    link
+                    type="primary"
+                    size="small"
+                    data-testid="homework-btn-edit"
+                    @click="openEditDialog(row)"
+                  >
+                    编辑
+                  </el-button>
+                  <el-button link type="danger" size="small" @click="deleteHomework(row)">删除</el-button>
+                </template>
+              </div>
             </template>
           </el-table-column>
-          <el-table-column v-if="userStore.isStudent" label="分数" min-width="220">
+          <el-table-column v-if="userStore.isStudent" label="分数" min-width="188">
             <template #default="{ row }">
               <div v-if="hasHomeworkReview(row)" class="review-summary">
                 <el-tag
@@ -167,8 +150,8 @@
               <span v-else class="muted-text">未评分</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="!userStore.isStudent" prop="creator_name" label="发布人" width="100" />
-          <el-table-column v-if="!userStore.isStudent" prop="created_at" label="发布时间" width="165">
+          <el-table-column v-if="!userStore.isStudent" prop="creator_name" label="发布人" width="76" show-overflow-tooltip />
+          <el-table-column v-if="!userStore.isStudent" prop="created_at" label="发布时间" width="150">
             <template #default="{ row }">
               {{ formatDate(row.created_at) }}
             </template>
@@ -880,7 +863,26 @@ watch(selectedCourse, () => {
 }
 
 .homework-list-card :deep(.el-table) {
-  min-width: 1060px;
+  min-width: 1020px;
+}
+
+.homework-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.homework-actions :deep(.el-button) {
+  margin-left: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.homework-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .homework-empty-state {

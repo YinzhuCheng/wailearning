@@ -29,6 +29,53 @@
       </div>
 
       <div class="sidebar-body">
+        <div v-if="showCourseSwitcher" class="sidebar-course-block">
+          <template v-if="!isCollapsed">
+            <div class="sidebar-course-block__label">当前课程</div>
+            <el-select
+              :model-value="selectedCourse?.id"
+              class="sidebar-course-select"
+              placeholder="选择课程"
+              filterable
+              data-testid="sidebar-course-select"
+              @update:model-value="handleCourseSwitch"
+            >
+              <el-option
+                v-for="course in availableCourses"
+                :key="course.id"
+                :label="course.name"
+                :value="course.id"
+              >
+                <div class="sidebar-course-option">
+                  <span class="sidebar-course-option__name">{{ course.name }}</span>
+                  <span class="sidebar-course-option__meta">{{ course.semester || '未设置学期' }}</span>
+                </div>
+              </el-option>
+            </el-select>
+          </template>
+          <div v-else class="sidebar-course-block--collapsed">
+            <el-dropdown trigger="click" placement="right-start" data-testid="sidebar-course-switch-collapsed" @command="handleCourseSwitch">
+              <el-button circle size="small" type="primary" plain :title="selectedCourse?.name || '切换课程'" aria-label="切换课程">
+                <el-icon><Switch /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu class="course-dropdown-menu">
+                  <el-dropdown-item
+                    v-for="course in availableCourses"
+                    :key="course.id"
+                    :command="course.id"
+                    :class="{ 'is-current-course': selectedCourse?.id === course.id }"
+                  >
+                    <div class="course-option">
+                      <strong>{{ course.name }}</strong>
+                      <span>{{ course.semester || '未设置学期' }}</span>
+                    </div>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </div>
         <el-menu
           :default-active="route.path"
           :default-openeds="homeworkMenuOpenIndices"
@@ -161,9 +208,9 @@
                       <small>{{ userStore.userInfo?.username }}</small>
                     </div>
                   </div>
-                  <div class="user-dropdown-token">
+                  <div v-if="userStore.isStudent" class="user-dropdown-token">
                     <div class="user-dropdown-token__row">
-                      <span>LLM token</span>
+                      <span>LLM 今日额度</span>
                       <strong>{{ tokenUsageLabel }}</strong>
                     </div>
                     <el-progress
@@ -175,8 +222,7 @@
                     <p>{{ tokenDetailText }}</p>
                   </div>
                 </el-dropdown-item>
-                <el-dropdown-item command="personal-settings">个人设置</el-dropdown-item>
-                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -202,13 +248,14 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  Brush,
   Collection,
   DataAnalysis,
   Document,
   Expand,
   Fold,
   Reading,
-  School,
+  Switch,
   Setting,
   User,
   UserFilled
@@ -465,10 +512,16 @@ const homeworkMenuOpenIndices = computed(() => {
     ) {
       return ['student-learning']
     }
+    if (p.startsWith('/personal-settings')) {
+      return []
+    }
     return []
   }
   if (userStore.isAdmin) {
     const open = []
+    if (p.startsWith('/students') || p.startsWith('/classes') || p.startsWith('/users') || p.startsWith('/subjects')) {
+      open.push('admin-core')
+    }
     if (p.startsWith('/semesters') || p.startsWith('/settings')) {
       open.push('admin-academic-config')
     }
@@ -486,13 +539,25 @@ const homeworkMenuOpenIndices = computed(() => {
     ) {
       return ['class-teaching']
     }
+    if (p.startsWith('/personal-settings')) {
+      return []
+    }
     return []
   }
   if (p.startsWith('/homework') || p.startsWith('/materials')) {
     return ['homework-and-materials']
   }
-  if (p.startsWith('/dashboard') || p.startsWith('/students') || p.startsWith('/scores') || p.startsWith('/attendance') || p.startsWith('/notifications')) {
+  if (
+    p.startsWith('/dashboard') ||
+    p.startsWith('/students') ||
+    p.startsWith('/scores') ||
+    p.startsWith('/attendance') ||
+    p.startsWith('/notifications')
+  ) {
     return ['class-teaching']
+  }
+  if (p.startsWith('/personal-settings')) {
+    return []
   }
   return []
 })
@@ -509,7 +574,8 @@ const classTeacherMenu = [
       { path: '/subjects', label: '课程信息', icon: Reading },
       { path: '/notifications', label: '通知信息', icon: Bell }
     ]
-  }
+  },
+  { path: '/personal-settings', label: '个人设置', icon: Brush }
 ]
 
 const teacherMenu = [
@@ -536,7 +602,8 @@ const teacherMenu = [
       { path: '/homework/students', label: '学生作业一览', icon: User },
       { path: '/materials', label: '课程资料', icon: Collection }
     ]
-  }
+  },
+  { path: '/personal-settings', label: '个人设置', icon: Brush }
 ]
 
 const studentMenu = [
@@ -553,14 +620,23 @@ const studentMenu = [
       { path: '/student-scores', label: '我的成绩', icon: Collection },
       { path: '/notifications', label: '课程通知', icon: Bell }
     ]
-  }
+  },
+  { path: '/personal-settings', label: '个人设置', icon: Brush }
 ]
 
 const adminMenu = [
-  { path: '/students', label: '学生管理', icon: User },
-  { path: '/classes', label: '班级管理', icon: School },
-  { path: '/users', label: '用户管理', icon: UserFilled },
-  { path: '/subjects', label: '课程管理', icon: Reading },
+  {
+    type: 'submenu',
+    index: 'admin-core',
+    label: '用户与教学',
+    icon: User,
+    children: [
+      { path: '/students', label: '学生管理', icon: User },
+      { path: '/classes', label: '班级管理', icon: School },
+      { path: '/users', label: '用户管理', icon: UserFilled },
+      { path: '/subjects', label: '课程管理', icon: Reading }
+    ]
+  },
   {
     type: 'submenu',
     index: 'admin-academic-config',
@@ -580,7 +656,8 @@ const adminMenu = [
       { path: '/notifications', label: '消息与通知', icon: Bell },
       { path: '/logs', label: '操作日志', icon: Collection }
     ]
-  }
+  },
+  { path: '/personal-settings', label: '个人设置', icon: Brush }
 ]
 
 const menuItems = computed(() => {
@@ -728,11 +805,6 @@ const handleCourseSwitch = courseId => {
 }
 
 const handleCommand = command => {
-  if (command === 'personal-settings') {
-    router.push('/personal-settings')
-    return
-  }
-
   if (command === 'logout') {
     userStore.logout()
     router.push('/login')
@@ -874,6 +946,75 @@ watch(notificationSyncParams, () => {
   flex-direction: column;
 }
 
+.sidebar-course-block {
+  flex-shrink: 0;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-course-block__label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sidebar-course-select {
+  width: 100%;
+}
+
+.sidebar-course-select :deep(.el-select__wrapper) {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  border-radius: var(--wa-radius-md);
+}
+
+.sidebar-course-select :deep(.el-select__placeholder),
+.sidebar-course-select :deep(.el-select__selected-item) {
+  color: #fff;
+}
+
+.sidebar-course-select :deep(.el-select__caret) {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sidebar-course-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+  padding: 2px 0;
+}
+
+.sidebar-course-option__name {
+  font-weight: 600;
+  color: var(--wa-color-text);
+}
+
+.sidebar-course-option__meta {
+  font-size: 12px;
+  color: var(--wa-color-text-muted);
+}
+
+.sidebar-course-block--collapsed {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 4px;
+}
+
+.sidebar-course-block--collapsed :deep(.el-button) {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.sidebar-course-block--collapsed :deep(.el-button:hover) {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
 .sidebar-menu--scroll {
   flex: 1;
   min-height: 0;
@@ -992,7 +1133,7 @@ watch(notificationSyncParams, () => {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--wa-border-subtle);
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, #ffffff var(--wa-header-alpha), transparent);
   backdrop-filter: blur(10px);
 }
 

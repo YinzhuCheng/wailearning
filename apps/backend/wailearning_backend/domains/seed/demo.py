@@ -1,11 +1,11 @@
 """Default demo data: teacher `teacher`, class 人工智能1班, students stu1–stu5.
 
-- **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业。
-- **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业，**不**自动写入全班选课。
+- **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节、若干带正文的课程资料与第一次作业；默认可有部分学生已提交且含教师评分（用于演示列表与成绩）。
+- **选修课**「大语言模型」：同班开设；默认种子会为全班写入选课记录（与必修课一致），便于首次部署后师生立即可用；含阅读材料与入门作业，默认可有部分学生已提交。
 
 若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（`ensure_schema_updates` 会写入内置默认预设），本种子会为演示必修课/选修课**幂等绑定**首个可用预设（必修课同时 `is_enabled=True` 以配合自动评分作业）；否则不写入端点，由管理员或教师在课程 LLM 配置中手动选择。
 
-演示必修课作业**不包含参考答案**（`reference_answer` 为空）。必修课资料区含三层演示章节。
+演示必修课作业**不包含参考答案**（`reference_answer` 为空）。必修课资料区含三层演示章节，并在最深层级挂载若干 Markdown 讲义。
 """
 
 from __future__ import annotations
@@ -16,9 +16,11 @@ from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.domains.courses.access import sync_course_enrollments
+from apps.backend.wailearning_backend.llm_grading import refresh_submission_summary
 from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
+    CourseEnrollmentBlock,
     CourseExamWeight,
     CourseGradeScheme,
     CourseLLMConfig,
@@ -26,7 +28,11 @@ from apps.backend.wailearning_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    Gender,
     Homework,
+    HomeworkAttempt,
+    HomeworkScoreCandidate,
+    HomeworkSubmission,
     LLMEndpointPreset,
     Semester,
     Student,
@@ -51,7 +57,7 @@ _LLM_WEEKLY = "每周四 15:00–17:00（选修，以教务通知为准）"
 _LLM_MATERIAL_TITLE = "【选修】大语言模型：课程说明与阅读材料"
 _LLM_MATERIAL_CONTENT = """## 欢迎选修「大语言模型」
 
-本课程为**选修课**，请在「我的课程」页面使用**选课**按钮加入后，方可查看作业与完整资料池。
+本课程为**选修课**。在默认演示数据中，系统已为全班预置选课记录，便于首次部署后直接进入作业与资料；生产环境可自行调整选课策略。
 
 ### 学习目标
 
@@ -59,10 +65,31 @@ _LLM_MATERIAL_CONTENT = """## 欢迎选修「大语言模型」
 - 掌握提示（Prompt）书写的基本结构；
 - 完成一次简短的实践作业。
 
+### 课堂纪律与学术诚信
+
+- 生成式内容须标注用途，禁止将模型输出冒充本人未理解的原创结论；
+- 涉及隐私、考试题目或未公开数据时，**不得**粘贴到外部模型；
+- 教师保留对异常相似提交进行核查的权利。
+
+### 什么是大语言模型（课堂版定义）
+
+大语言模型（LLM）是在海量文本上训练出的概率模型，给定前文（或指令）后预测下一个词元序列。它擅长**语言重组、摘要草稿、头脑风暴**，但可能出现事实幻觉、遗漏约束或与领域规范不符的输出，因此需要人在回路中审阅。
+
+### 提示工程速记：CRISP 结构
+
+在作业中你会被要求写「新闻摘要」提示模板，可先记住下列骨架（可自行增删）：
+
+1. **Context**：角色与受众（例如「你是新闻编辑，面向普通读者」）；
+2. **Request**：任务与输出形式（「用 5 条要点总结下文」）；
+3. **Input**：粘贴待处理文本的占位；
+4. **Style**：语气、长度、是否保留人名地名；
+5. **Safety**：拒绝编造数字、若原文缺失信息则明确写「原文未提及」。
+
 ### 推荐阅读
 
-1. 关注课程通知与 LLM 使用规范；
-2. 课前可预习「提示工程」基础概念。
+1. 课程通知中的 **API 与配额** 说明；
+2. 课前可预习「提示工程」基础概念与「幻觉」案例；
+3. 完成阅读后，可直接打开「提示工程小练习」作业，按条目提交即可。
 """
 _LLM_HOMEWORK_TITLE = "大语言模型入门作业：提示工程小练习"
 _LLM_HOMEWORK_CONTENT = """请完成以下任务（建议 300–800 字或等价条目）：
@@ -87,6 +114,142 @@ _COURSE_DESCRIPTION = (
 _DEMO_CHAPTER_ROOT = "【演示】第一单元：导论与数据概览"
 _DEMO_CHAPTER_L2 = "【演示】第一节：Python 环境与常用库"
 _DEMO_CHAPTER_L3 = "【演示】1.1 课程资料与拓展阅读"
+
+_DEMO_MATERIAL_INTRO_TITLE = "【讲义】数据挖掘绪论：问题类型与典型流程"
+_DEMO_MATERIAL_INTRO_CONTENT = """## 本讲定位
+
+本讲义配合「数据挖掘」演示课程第一单元，帮助你建立**问题类型—数据—方法—评估**的整体心智模型。阅读时间约 15–25 分钟。
+
+## 什么是数据挖掘
+
+数据挖掘（Data Mining）是从大量数据中**自动或半自动**发现有用模式、规律或异常的过程。它与统计分析、机器学习、数据库技术高度交叉，但更强调**面向业务或科研问题**的可操作产出。
+
+## 常见任务类型（按输出划分）
+
+| 类型 | 典型问题 | 常见算法/思路 |
+|------|----------|----------------|
+| 分类 | 给定特征，预测离散标签 | 逻辑回归、决策树、随机森林、梯度提升 |
+| 回归 | 预测连续数值 | 线性回归、岭回归、树模型回归 |
+| 聚类 | 无标签，发现群组结构 | K-Means、层次聚类、DBSCAN |
+| 关联规则 | 购物篮、共现模式 | Apriori、FP-Growth |
+| 异常检测 | 发现离群或欺诈 | 孤立森林、基于密度的方法 |
+
+## 典型流程（CRISP-DM 简化版）
+
+1. **业务理解**：明确目标、约束与成功标准。
+2. **数据理解**：数据来源、字段含义、缺失与噪声。
+3. **数据准备**：清洗、特征构造、训练/验证划分。
+4. **建模**：选择模型与基线，迭代对比。
+5. **评估**：用预留数据与业务指标检验，避免仅看训练误差。
+6. **部署与维护**：监控漂移、定期重训与文档化。
+
+## 与后续实验的关系
+
+后续讲义将用 **Python + Pandas + 可视化** 完成小型数据集的描述性统计；第一次作业要求你在本环境中跑通 **Wine** 数据集的基础探索。建议你在阅读本讲后，打开下一篇「Python 数据分析栈」对照自己的环境逐项自检。
+"""
+
+_DEMO_MATERIAL_PYTHON_TITLE = "【讲义】Python 数据分析栈与环境自检"
+_DEMO_MATERIAL_PYTHON_CONTENT = """## 目标
+
+确认本机或在线环境能稳定使用 **NumPy / Pandas / Matplotlib / Seaborn / scikit-learn**，并理解各库在分析流水线中的分工。
+
+## 各库在做什么
+
+- **NumPy**：同质数值数组、向量化运算、线性代数与随机数；是许多库的底层。
+- **Pandas**：带索引的表格（`DataFrame` / `Series`）、对齐、分组聚合、时间序列。
+- **Matplotlib**：底层绘图 API，可控性强。
+- **Seaborn**：在 Matplotlib 之上封装统计图形（分布、关系、分类图）。
+- **scikit-learn**：经典机器学习算法、预处理、管道与评估指标。
+
+## 最小自检代码（建议在 Notebook 或 `.py` 中运行）
+
+```python
+import sys
+import numpy as np
+import pandas as pd
+import matplotlib
+import seaborn as sns
+import sklearn
+
+print("python", sys.version.split()[0])
+print("numpy", np.__version__)
+print("pandas", pd.__version__)
+print("matplotlib", matplotlib.__version__)
+print("seaborn", sns.__version__)
+print("sklearn", sklearn.__version__)
+```
+
+若某行报错，请记录完整 traceback；第一次作业鼓励把**环境说明 + 排错过程**写进报告。
+
+## Pandas 三板斧（与作业直接相关）
+
+```python
+import pandas as pd
+
+df = pd.read_csv("example.csv")  # 或作业中的 DataFrame 构造方式
+df.head()
+df.info()
+df.describe()
+```
+
+- `head`：快速查看前几行与列名。
+- `info`：每列类型与非空数量。
+- `describe`：数值列的计数、均值、标准差、分位数等。
+
+## 阅读建议
+
+1. 先跑通自检代码，再进入 Wine 数据集探索；
+2. 养成「小步运行、即时打印形状 `df.shape`」的习惯；
+3. 可视化时注意坐标轴标签与图例，便于助教或自动评分系统理解你的结论。
+"""
+
+_DEMO_MATERIAL_WINE_TITLE = "【讲义】Wine 数据集：描述性统计与可视化入门"
+_DEMO_MATERIAL_WINE_CONTENT = """## 数据集简介
+
+**Wine** 是 scikit-learn 内置的多分类数据集，样本为葡萄酒化学成分测量值，标签为 cultivar 类别。适合练习 **加载 → DataFrame → 描述统计 → 简单可视化**。
+
+## 加载与整理
+
+```python
+from sklearn.datasets import load_wine
+import pandas as pd
+
+raw = load_wine(as_frame=True)
+df = raw.frame  # 已包含 target 名称的 DataFrame
+df.head()
+```
+
+若使用 `load_wine()` 返回的 `Bunch`，可手动组装：
+
+```python
+from sklearn.datasets import load_wine
+import pandas as pd
+
+bunch = load_wine()
+df = pd.DataFrame(bunch.data, columns=bunch.feature_names)
+df["target"] = bunch.target
+df["target_name"] = df["target"].map(dict(enumerate(bunch.target_names)))
+```
+
+## 建议的探索步骤
+
+1. `df.shape`、`df.columns`：确认维度与字段。
+2. `df["target_name"].value_counts()`：类别是否均衡。
+3. 对 `alcohol`、`malic_acid`、`color_intensity` 等列做 `describe()`。
+4. 任选两列画散点图，用颜色区分类别（Seaborn `scatterplot` 或 Matplotlib）。
+5. 用一两句话写出观察：哪些特征在不同类别间差异更明显。
+
+## 常见易错点
+
+- 把特征与标签混在一步里做标准化，导致信息泄漏；作业要求先理解「对哪些列做标准化」。
+- 只贴图不写结论；数据挖掘强调**证据与解释**配套。
+- 忽略 `random_state` 与可复现性；课堂演示建议固定种子。
+
+## 延伸阅读（选读）
+
+- scikit-learn User Guide 中关于预处理与模型评估的章节；
+- 第一次作业评分量表中的「宽松评分原则」——重视过程与可解释性。
+"""
 
 
 def _first_validated_preset_for_demo_course(db: Session) -> LLMEndpointPreset | None:
@@ -449,9 +612,9 @@ def _seed_demo_grade_weights(db: Session, *, course: Subject) -> None:
         db.add(CourseExamWeight(subject_id=course.id, exam_type="期末考试", weight=50.0))
 
 
-def _seed_demo_material_chapters(db: Session, *, subject_id: int) -> None:
-    """Three-level outline (root → child → grandchild) for course materials UI demo."""
-    exists = (
+def _ensure_demo_material_outline_leaf(db: Session, *, subject_id: int) -> CourseMaterialChapter:
+    """Return the deepest demo chapter (L3), creating the 3-level outline when missing."""
+    root = (
         db.query(CourseMaterialChapter)
         .filter(
             CourseMaterialChapter.subject_id == subject_id,
@@ -460,38 +623,331 @@ def _seed_demo_material_chapters(db: Session, *, subject_id: int) -> None:
         )
         .first()
     )
-    if exists:
-        return
+    if not root:
+        root = CourseMaterialChapter(
+            subject_id=subject_id,
+            parent_id=None,
+            title=_DEMO_CHAPTER_ROOT,
+            sort_order=10,
+            is_uncategorized=False,
+        )
+        db.add(root)
+        db.flush()
+        print("Created demo course material chapter outline (root).")
 
-    root = CourseMaterialChapter(
-        subject_id=subject_id,
-        parent_id=None,
-        title=_DEMO_CHAPTER_ROOT,
-        sort_order=10,
-        is_uncategorized=False,
+    level2 = (
+        db.query(CourseMaterialChapter)
+        .filter(
+            CourseMaterialChapter.subject_id == subject_id,
+            CourseMaterialChapter.parent_id == root.id,
+            CourseMaterialChapter.title == _DEMO_CHAPTER_L2,
+            CourseMaterialChapter.is_uncategorized.is_(False),
+        )
+        .first()
     )
-    db.add(root)
-    db.flush()
+    if not level2:
+        level2 = CourseMaterialChapter(
+            subject_id=subject_id,
+            parent_id=root.id,
+            title=_DEMO_CHAPTER_L2,
+            sort_order=0,
+            is_uncategorized=False,
+        )
+        db.add(level2)
+        db.flush()
+        print("Created demo course material chapter outline (level 2).")
 
-    level2 = CourseMaterialChapter(
-        subject_id=subject_id,
-        parent_id=root.id,
-        title=_DEMO_CHAPTER_L2,
+    level3 = (
+        db.query(CourseMaterialChapter)
+        .filter(
+            CourseMaterialChapter.subject_id == subject_id,
+            CourseMaterialChapter.parent_id == level2.id,
+            CourseMaterialChapter.title == _DEMO_CHAPTER_L3,
+            CourseMaterialChapter.is_uncategorized.is_(False),
+        )
+        .first()
+    )
+    if not level3:
+        level3 = CourseMaterialChapter(
+            subject_id=subject_id,
+            parent_id=level2.id,
+            title=_DEMO_CHAPTER_L3,
+            sort_order=0,
+            is_uncategorized=False,
+        )
+        db.add(level3)
+        db.flush()
+        print("Created demo course material chapter outline (level 3).")
+
+    return level3
+
+
+def _ensure_material_in_chapter(
+    db: Session,
+    *,
+    title: str,
+    content: str,
+    class_id: int,
+    subject_id: int,
+    created_by: int,
+    chapter: CourseMaterialChapter,
+    sort_order: int,
+) -> CourseMaterial:
+    """Upsert material body by title and ensure one section link under chapter."""
+    mat = db.query(CourseMaterial).filter(CourseMaterial.subject_id == subject_id, CourseMaterial.title == title).first()
+    if not mat:
+        mat = CourseMaterial(
+            title=title,
+            content=content,
+            class_id=class_id,
+            subject_id=subject_id,
+            created_by=created_by,
+        )
+        db.add(mat)
+        db.flush()
+    else:
+        mat.content = content
+        mat.class_id = class_id
+        mat.subject_id = subject_id
+        mat.created_by = created_by
+
+    link = (
+        db.query(CourseMaterialSection)
+        .filter(CourseMaterialSection.material_id == mat.id, CourseMaterialSection.chapter_id == chapter.id)
+        .first()
+    )
+    if not link:
+        db.add(CourseMaterialSection(material_id=mat.id, chapter_id=chapter.id, sort_order=sort_order))
+    else:
+        link.sort_order = sort_order
+    return mat
+
+
+def _ensure_demo_subject_materials(
+    db: Session,
+    *,
+    course: Subject,
+    teacher_id: int,
+    leaf_chapter: CourseMaterialChapter,
+) -> None:
+    """Idempotent Markdown materials under the demo leaf chapter."""
+    assert course.class_id is not None
+    _ensure_material_in_chapter(
+        db,
+        title=_DEMO_MATERIAL_INTRO_TITLE,
+        content=_DEMO_MATERIAL_INTRO_CONTENT,
+        class_id=course.class_id,
+        subject_id=course.id,
+        created_by=teacher_id,
+        chapter=leaf_chapter,
         sort_order=0,
-        is_uncategorized=False,
     )
-    db.add(level2)
-    db.flush()
+    _ensure_material_in_chapter(
+        db,
+        title=_DEMO_MATERIAL_PYTHON_TITLE,
+        content=_DEMO_MATERIAL_PYTHON_CONTENT,
+        class_id=course.class_id,
+        subject_id=course.id,
+        created_by=teacher_id,
+        chapter=leaf_chapter,
+        sort_order=1,
+    )
+    _ensure_material_in_chapter(
+        db,
+        title=_DEMO_MATERIAL_WINE_TITLE,
+        content=_DEMO_MATERIAL_WINE_CONTENT,
+        class_id=course.class_id,
+        subject_id=course.id,
+        created_by=teacher_id,
+        chapter=leaf_chapter,
+        sort_order=2,
+    )
 
-    level3 = CourseMaterialChapter(
-        subject_id=subject_id,
-        parent_id=level2.id,
-        title=_DEMO_CHAPTER_L3,
-        sort_order=0,
-        is_uncategorized=False,
-    )
-    db.add(level3)
-    print("Created demo course material chapter outline (3 levels).")
+
+def _seed_demo_homework_summaries(
+    db: Session,
+    *,
+    klass: Class,
+    teacher_id: int,
+    dm_homework: Homework,
+    llm_homework: Homework,
+) -> None:
+    """
+    Idempotent: a few students already submitted with varied quality and teacher scores.
+
+    Uses teacher score candidates so the UI shows grades without running auto-grading.
+    """
+    now = datetime.now(timezone.utc)
+    dm_specs: list[tuple[str, str, float, str, bool]] = [
+        (
+            "stu1",
+            "## 数据挖掘第一次作业（演示提交：较完整）\n\n"
+            "### 一、环境\n- Python 3.11，VS Code + venv。\n"
+            "### 二、概念简述\n"
+            "- NumPy：底层数值数组与向量化。\n- Pandas：表格与 groupby。\n"
+            "### 三、Wine 探索摘要\n"
+            "已用 `load_wine(as_frame=True)` 得到 DataFrame；`describe()` 显示 alcohol 等特征尺度差异大；"
+            "按 target_name 分组后 color_intensity 的均值在不同类别间差距明显。\n"
+            "### 四、标准化\n"
+            "对 alcohol 手写 z-score，标准化后均值约 0、标准差约 1。\n"
+            "### 五、思考题\n"
+            "KNN 对尺度敏感：未标准化时大数值特征会主导距离。\n",
+            91.0,
+            "结构清楚，Wine 探索与标准化到位；思考题简洁准确。",
+            False,
+        ),
+        (
+            "stu2",
+            "环境：Anaconda。导入了 numpy pandas matplotlib seaborn sklearn。\n"
+            "Wine：load_wine 放进 DataFrame，head 和 describe 看了。\n"
+            "画了一张 alcohol 的直方图。\n"
+            "标准化：用了 StandardScaler 对 alcohol 列。\n"
+            "思考题：SVM 会受特征大小影响。\n",
+            84.0,
+            "主要任务完成；分析略简但结论方向正确。",
+            False,
+        ),
+        (
+            "stu3",
+            "NumPy 是数组，Pandas 是表。Wine 数据看了前几行。\n"
+            "标准化公式写了一下但没给运行结果截图。\n"
+            "思考题没写完。\n",
+            68.0,
+            "基础部分有触及；Wine 与标准化证据不足，思考题未完成。",
+            False,
+        ),
+        (
+            "stu4",
+            "抱歉迟交了。环境配了很久，最后 Colab 跑通。\n"
+            "Wine：`df.groupby('target_name')['alcohol'].mean()` 做了。\n"
+            "图：seaborn pairplot 太大只截了部分。\n"
+            "标准化：用 sklearn 对多列做了 fit_transform。\n"
+            "迟交说明：家里网络不稳定。\n",
+            76.0,
+            "内容尚可；迟交按课程说明处理，表达与结构一般。",
+            True,
+        ),
+    ]
+    llm_specs: list[tuple[str, str, float, str, bool]] = [
+        (
+            "stu1",
+            "### 提示工程\n用自然语言指令约束模型输出；清晰指令能减少跑题。\n\n"
+            "### 新闻摘要模板\n"
+            "1) 角色：新闻编辑；2) 任务：5 条要点；3) 输入：{NEWS}；"
+            "4) 约束：不得编造；5) 风格：中文、客观。\n\n"
+            "### 风险\n"
+            "- 隐私泄露；- 不加核实当作事实来源。\n",
+            93.0,
+            "三部分完整，模板结构清楚，风险意识到位。",
+            False,
+        ),
+        (
+            "stu2",
+            "提示工程就是写 prompt。模板：把新闻贴进去让模型总结。\n"
+            "风险：不要太依赖 AI。\n",
+            72.0,
+            "要点有提到；模板与风险部分偏简略。",
+            False,
+        ),
+        (
+            "stu5",
+            "1) 提示工程：给例子和格式。2) 模板：随便写写。3) 风险：无。\n",
+            54.0,
+            "完成度低；风险与模板几乎未展开。",
+            False,
+        ),
+    ]
+
+    def _apply(
+        homework: Homework,
+        rows: list[tuple[str, str, float, str, bool]],
+    ) -> None:
+        for student_no, body, score, comment, is_late in rows:
+            st = db.query(Student).filter(Student.student_no == student_no, Student.class_id == klass.id).first()
+            if not st:
+                continue
+            sub = (
+                db.query(HomeworkSubmission)
+                .filter(HomeworkSubmission.homework_id == homework.id, HomeworkSubmission.student_id == st.id)
+                .first()
+            )
+            submitted_at = now - timedelta(days=2 if not is_late else 1)
+            if not sub:
+                sub = HomeworkSubmission(
+                    homework_id=homework.id,
+                    student_id=st.id,
+                    subject_id=homework.subject_id,
+                    class_id=homework.class_id,
+                    content=body,
+                    used_llm_assist=False,
+                    submitted_at=submitted_at,
+                )
+                db.add(sub)
+                db.flush()
+            else:
+                sub.subject_id = homework.subject_id
+                sub.class_id = homework.class_id
+
+            att = (
+                db.query(HomeworkAttempt)
+                .filter(
+                    HomeworkAttempt.homework_id == homework.id,
+                    HomeworkAttempt.student_id == st.id,
+                    HomeworkAttempt.submission_summary_id == sub.id,
+                )
+                .order_by(HomeworkAttempt.submitted_at.desc(), HomeworkAttempt.id.desc())
+                .first()
+            )
+            if not att:
+                att = HomeworkAttempt(
+                    homework_id=homework.id,
+                    student_id=st.id,
+                    subject_id=homework.subject_id,
+                    class_id=homework.class_id,
+                    submission_summary_id=sub.id,
+                    content=body,
+                    is_late=is_late,
+                    counts_toward_final_score=True,
+                    used_llm_assist=False,
+                    submission_mode="full",
+                    submitted_at=submitted_at,
+                )
+                db.add(att)
+                db.flush()
+            else:
+                att.content = body
+                att.is_late = is_late
+                att.submitted_at = submitted_at
+                att.counts_toward_final_score = True
+
+            sub.latest_attempt_id = att.id
+            refresh_submission_summary(db, sub)
+
+            has_teacher = (
+                db.query(HomeworkScoreCandidate)
+                .filter(
+                    HomeworkScoreCandidate.attempt_id == att.id,
+                    HomeworkScoreCandidate.source == "teacher",
+                )
+                .first()
+            )
+            if not has_teacher:
+                db.add(
+                    HomeworkScoreCandidate(
+                        attempt_id=att.id,
+                        homework_id=homework.id,
+                        student_id=st.id,
+                        source="teacher",
+                        score=float(score),
+                        comment=comment,
+                        created_by=teacher_id,
+                    )
+                )
+                db.flush()
+            refresh_submission_summary(db, sub)
+
+    _apply(dm_homework, dm_specs)
+    _apply(llm_homework, llm_specs)
 
 
 def _merge_legacy_demo_class_into_target(db: Session, *, target: Class) -> None:
@@ -542,14 +998,50 @@ def _get_or_create_uncategorized_chapter(db: Session, *, subject_id: int) -> Cou
     return unc
 
 
+def _sync_demo_elective_enrollments_for_class(db: Session, *, course: Subject, klass: Class) -> int:
+    """
+    Ensure every roster student in the demo class is enrolled in the demo elective.
+
+    Clears enrollment blocks for this course so login-time student sync cannot suppress the row.
+    """
+    if not course.class_id:
+        return 0
+    class_students = db.query(Student).filter(Student.class_id == klass.id).all()
+    existing = {
+        row.student_id
+        for row in db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).all()
+    }
+    created = 0
+    for st in class_students:
+        db.query(CourseEnrollmentBlock).filter(
+            CourseEnrollmentBlock.subject_id == course.id,
+            CourseEnrollmentBlock.student_id == st.id,
+        ).delete(synchronize_session=False)
+        if st.id in existing:
+            continue
+        db.add(
+            CourseEnrollment(
+                subject_id=course.id,
+                student_id=st.id,
+                class_id=course.class_id,
+                enrollment_type="elective",
+                can_remove=True,
+            )
+        )
+        created += 1
+    if created:
+        db.flush()
+    return created
+
+
 def _seed_llm_elective_course(
     db: Session,
     *,
     teacher: User,
     klass: Class,
     semester: Semester | None,
-) -> None:
-    """Elective on the same demo class; students self-enroll (no roster-wide auto enrollment)."""
+) -> Subject:
+    """Elective on the same demo class; seed also adds roster enrollments for the demo bundle."""
     course = (
         db.query(Subject)
         .filter(
@@ -650,11 +1142,13 @@ def _seed_llm_elective_course(
         hw.rubric_text = _LLM_RUBRIC_TEXT
         hw.due_date = hw.due_date or due
 
+    return course
+
 
 def seed_demo_course_bundle(db: Session) -> None:
     """
     Idempotent seed: teacher `teacher`, class 人工智能1班, students stu1–stu5,
-    必修课「数据挖掘」+ 选修课「大语言模型」。
+    必修课「数据挖掘」+ 选修课「大语言模型」（全班默认已选课）。
     Password for all demo accounts: 111111.
     """
     pwd_hash = get_password_hash(_DEMO_PASSWORD)
@@ -721,6 +1215,7 @@ def seed_demo_course_bundle(db: Session) -> None:
                 Student(
                     name=display,
                     student_no=uname,
+                    gender=Gender.MALE,
                     class_id=klass.id,
                     teacher_id=teacher.id,
                     phone=phone,
@@ -730,6 +1225,8 @@ def seed_demo_course_bundle(db: Session) -> None:
         else:
             st.teacher_id = teacher.id
             st.phone = phone
+            if st.gender is None:
+                st.gender = Gender.MALE
             if (st.name or "") != display:
                 st.name = display
 
@@ -782,7 +1279,8 @@ def seed_demo_course_bundle(db: Session) -> None:
     )
 
     _seed_demo_grade_weights(db, course=course)
-    _seed_demo_material_chapters(db, subject_id=course.id)
+    leaf = _ensure_demo_material_outline_leaf(db, subject_id=course.id)
+    _ensure_demo_subject_materials(db, course=course, teacher_id=teacher.id, leaf_chapter=leaf)
 
     enrolled = sync_course_enrollments(course, db)
     if enrolled:
@@ -795,25 +1293,24 @@ def seed_demo_course_bundle(db: Session) -> None:
     )
     due = datetime.now(timezone.utc) + timedelta(days=14)
     if not hw:
-        db.add(
-            Homework(
-                title=_HOMEWORK_TITLE,
-                content=_HOMEWORK_CONTENT,
-                class_id=klass.id,
-                subject_id=course.id,
-                due_date=due,
-                max_score=100,
-                grade_precision="integer",
-                auto_grading_enabled=True,
-                rubric_text=_RUBRIC_TEXT,
-                reference_answer=None,
-                response_language="zh-CN",
-                allow_late_submission=True,
-                late_submission_affects_score=False,
-                max_submissions=3,
-                created_by=teacher.id,
-            )
+        hw = Homework(
+            title=_HOMEWORK_TITLE,
+            content=_HOMEWORK_CONTENT,
+            class_id=klass.id,
+            subject_id=course.id,
+            due_date=due,
+            max_score=100,
+            grade_precision="integer",
+            auto_grading_enabled=True,
+            rubric_text=_RUBRIC_TEXT,
+            reference_answer=None,
+            response_language="zh-CN",
+            allow_late_submission=True,
+            late_submission_affects_score=False,
+            max_submissions=3,
+            created_by=teacher.id,
         )
+        db.add(hw)
         print("Created demo homework (first assignment).")
     else:
         hw.content = _HOMEWORK_CONTENT
@@ -826,8 +1323,26 @@ def seed_demo_course_bundle(db: Session) -> None:
         hw.due_date = hw.due_date or due
         hw.max_submissions = hw.max_submissions if hw.max_submissions is not None else 3
         print("Demo homework already exists; refreshed text fields.")
+    db.flush()
 
-    _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)
+    llm_course = _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)
+    llm_hw = (
+        db.query(Homework)
+        .filter(Homework.subject_id == llm_course.id, Homework.title == _LLM_HOMEWORK_TITLE)
+        .first()
+    )
+    if llm_hw:
+        _seed_demo_homework_summaries(
+            db,
+            klass=klass,
+            teacher_id=teacher.id,
+            dm_homework=hw,
+            llm_homework=llm_hw,
+        )
+    n_elective = _sync_demo_elective_enrollments_for_class(db, course=llm_course, klass=klass)
+    n_elective = _sync_demo_elective_enrollments_for_class(db, course=llm_course, klass=klass)
+    if n_elective:
+        print(f"Synced demo elective enrollments: +{n_elective}.")
 
     reconcile_student_users_and_roster(db)
     db.commit()

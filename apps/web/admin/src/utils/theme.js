@@ -225,18 +225,7 @@ export const appearancePresets = [
   }
 ]
 
-export const adminThemeNames = ['blue', 'green', 'warm', 'grayscale']
-export const appearancePresetKeys = appearancePresets.map(item => item.key)
-
 const defaultConfig = appearancePresets[0].config
-
-export function normalizeAdminTheme(value) {
-  const preset = resolveAppearancePreset(value)
-  if (preset?.key === 'fresh-green') return 'green'
-  if (preset?.key === 'warm-amber') return 'warm'
-  if (preset?.key === 'minimal-gray') return 'grayscale'
-  return 'blue'
-}
 
 export function resolveAppearancePreset(value) {
   if (typeof value !== 'string') {
@@ -272,82 +261,239 @@ export function resolveAppearanceFromState(settings = {}, appearanceState = null
 
   const presetKey =
     appearanceState?.system_default_preset ||
-    settings.appearance_default_preset ||
-    settings.admin_theme ||
-    settings.theme ||
-    settings.theme_color ||
-    settings.color_theme
+    settings.appearance_default_preset
 
   return normalizeAppearanceConfig(resolveAppearancePreset(presetKey).config)
 }
 
-export function resolveAdminTheme(settings = {}) {
-  return normalizeAdminTheme(settings.admin_theme || settings.theme || settings.theme_color || settings.color_theme)
+/** Radius: controls squarer than cards/dialogs for visual rhythm */
+function radiusTokenValues(mode) {
+  return {
+    square: {
+      xs: '1px',
+      sm: '2px',
+      md: '3px',
+      lg: '4px',
+      xl: '5px',
+      '2xl': '6px',
+      control: '3px',
+      card: '5px',
+      dialog: '6px',
+      pill: '999px'
+    },
+    subtle: {
+      xs: '3px',
+      sm: '4px',
+      md: '6px',
+      lg: '8px',
+      xl: '10px',
+      '2xl': '12px',
+      control: '5px',
+      card: '9px',
+      dialog: '11px',
+      pill: '999px'
+    },
+    balanced: {
+      xs: '4px',
+      sm: '6px',
+      md: '8px',
+      lg: '12px',
+      xl: '16px',
+      '2xl': '20px',
+      control: '7px',
+      card: '13px',
+      dialog: '17px',
+      pill: '999px'
+    },
+    soft: {
+      xs: '6px',
+      sm: '8px',
+      md: '12px',
+      lg: '16px',
+      xl: '20px',
+      '2xl': '24px',
+      control: '10px',
+      card: '17px',
+      dialog: '21px',
+      pill: '999px'
+    }
+  }[mode]
 }
 
-function applyScale(root, prefix, scale) {
-  Object.entries(scale).forEach(([step, value]) => {
-    root.style.setProperty(`--wa-color-${prefix}-${step}`, value)
+function shadowPair(mode, primaryHex) {
+  const tint = `${primaryHex}14`
+  const shadows = {
+    flat: ['none', '0 1px 2px rgba(15, 23, 42, 0.06)'],
+    soft: ['0 8px 24px rgba(15, 23, 42, 0.07)', `0 12px 30px rgba(15, 23, 42, 0.09), 0 1px 0 ${tint}`],
+    medium: ['0 12px 28px rgba(15, 23, 42, 0.1)', `0 18px 38px rgba(15, 23, 42, 0.13), 0 1px 0 ${tint}`],
+    strong: ['0 14px 34px rgba(15, 23, 42, 0.14)', `0 22px 48px rgba(15, 23, 42, 0.18), 0 2px 0 ${tint}`]
+  }[mode]
+  return shadows
+}
+
+function transparencyTokens(mode) {
+  const surface = { solid: '1', balanced: '0.88', glass: '0.72' }[mode]
+  const bodyBgMix = { solid: '0%', balanced: '8%', glass: '16%' }[mode]
+  const textureOpacity = { solid: '0.38', balanced: '0.58', glass: '0.78' }[mode]
+  const header = mode === 'solid' ? '0.96' : surface
+  return { surface, bodyBgMix, textureOpacity, header }
+}
+
+function densityTokens(mode) {
+  if (mode === 'compact') {
+    return {
+      fontXs: '11px',
+      fontSm: '12px',
+      fontMd: '13px',
+      fontLg: '16px',
+      fontXl: '18px',
+      font2xl: '22px',
+      fontStat: '24px',
+      spaceXs: '4px',
+      spaceSm: '8px',
+      spaceMd: '12px',
+      spaceLg: '16px',
+      spaceXl: '20px',
+      controlV: '6px',
+      controlH: '11px',
+      tableCellV: '6px',
+      tableCellH: '8px',
+      menuItemV: '6px',
+      menuItemH: '12px'
+    }
+  }
+  if (mode === 'spacious') {
+    return {
+      fontXs: '12px',
+      fontSm: '14px',
+      fontMd: '15px',
+      fontLg: '19px',
+      fontXl: '22px',
+      font2xl: '28px',
+      fontStat: '30px',
+      spaceXs: '8px',
+      spaceSm: '12px',
+      spaceMd: '16px',
+      spaceLg: '22px',
+      spaceXl: '28px',
+      controlV: '10px',
+      controlH: '16px',
+      tableCellV: '12px',
+      tableCellH: '12px',
+      menuItemV: '10px',
+      menuItemH: '16px'
+    }
+  }
+  return {
+    fontXs: '12px',
+    fontSm: '13px',
+    fontMd: '14px',
+    fontLg: '18px',
+    fontXl: '20px',
+    font2xl: '26px',
+    fontStat: '28px',
+    spaceXs: '6px',
+    spaceSm: '10px',
+    spaceMd: '14px',
+    spaceLg: '18px',
+    spaceXl: '24px',
+    controlV: '8px',
+    controlH: '14px',
+    tableCellV: '8px',
+    tableCellH: '10px',
+    menuItemV: '8px',
+    menuItemH: '14px'
+  }
+}
+
+function buildAppearanceCssVars(config) {
+  const primary = colorScales[config.primary]
+  const accent = colorScales[config.accent]
+  const vars = {}
+
+  Object.entries(primary).forEach(([step, value]) => {
+    vars[`--wa-color-primary-${step}`] = value
+  })
+  Object.entries(accent).forEach(([step, value]) => {
+    vars[`--wa-color-accent-${step}`] = value
+  })
+
+  const rt = radiusTokenValues(config.radius)
+  vars['--wa-radius-xs'] = rt.xs
+  vars['--wa-radius-sm'] = rt.sm
+  vars['--wa-radius-md'] = rt.md
+  vars['--wa-radius-lg'] = rt.lg
+  vars['--wa-radius-xl'] = rt.xl
+  vars['--wa-radius-2xl'] = rt['2xl']
+  vars['--wa-radius-control'] = rt.control
+  vars['--wa-radius-card'] = rt.card
+  vars['--wa-radius-dialog'] = rt.dialog
+  vars['--wa-radius-pill'] = rt.pill
+
+  vars['--el-border-radius-base'] = rt.control
+  vars['--el-border-radius-small'] = rt.xs
+  vars['--el-border-radius-round'] = rt.xl
+
+  const [s0, s1] = shadowPair(config.shadow, primary[600])
+  vars['--wa-shadow-surface'] = s0
+  vars['--wa-shadow-object'] = s1
+  vars['--wa-focus-ring'] = `0 0 0 3px ${primary[600]}2e`
+
+  const tr = transparencyTokens(config.transparency)
+  vars['--wa-surface-alpha'] = tr.surface
+  vars['--wa-body-bg-mix'] = tr.bodyBgMix
+  vars['--wa-texture-opacity'] = tr.textureOpacity
+  vars['--wa-header-alpha'] = tr.header
+  vars['--wa-surface-blend-pct'] = `${Math.round(parseFloat(tr.surface) * 100)}%`
+
+  const dn = densityTokens(config.density)
+  vars['--wa-font-size-xs'] = dn.fontXs
+  vars['--wa-font-size-sm'] = dn.fontSm
+  vars['--wa-font-size-md'] = dn.fontMd
+  vars['--wa-font-size-lg'] = dn.fontLg
+  vars['--wa-font-size-xl'] = dn.fontXl
+  vars['--wa-font-size-2xl'] = dn.font2xl
+  vars['--wa-font-size-stat'] = dn.fontStat
+  vars['--wa-space-xs'] = dn.spaceXs
+  vars['--wa-space-sm'] = dn.spaceSm
+  vars['--wa-space-md'] = dn.spaceMd
+  vars['--wa-space-lg'] = dn.spaceLg
+  vars['--wa-space-xl'] = dn.spaceXl
+  vars['--wa-control-padding-v'] = dn.controlV
+  vars['--wa-control-padding-h'] = dn.controlH
+  vars['--wa-table-cell-padding-v'] = dn.tableCellV
+  vars['--wa-table-cell-padding-h'] = dn.tableCellH
+  vars['--wa-menu-item-padding-v'] = dn.menuItemV
+  vars['--wa-menu-item-padding-h'] = dn.menuItemH
+
+  if (config.primary === 'amber') {
+    const acc = colorScales[config.accent] || colorScales.teal
+    vars['--wa-sidebar-bg'] = `linear-gradient(180deg, #111827 0%, ${acc[900]} 100%)`
+    vars['--wa-sidebar-active-bg'] = `linear-gradient(90deg, ${primary[600]} 0%, ${acc[600]} 100%)`
+  } else {
+    vars['--wa-sidebar-bg'] = `linear-gradient(180deg, ${primary[900]} 0%, ${primary[900]} 100%)`
+    vars['--wa-sidebar-active-bg'] = `linear-gradient(90deg, ${primary[700]} 0%, ${primary[500]} 100%)`
+  }
+
+  return vars
+}
+
+function applyCssVarsToElement(el, vars) {
+  Object.entries(vars).forEach(([key, value]) => {
+    el.style.setProperty(key, value)
   })
 }
 
-function applyRadius(root, mode) {
-  const values = {
-    square: ['2px', '3px', '4px', '6px', '8px', '10px'],
-    subtle: ['3px', '4px', '6px', '8px', '10px', '12px'],
-    balanced: ['4px', '6px', '8px', '12px', '16px', '20px'],
-    soft: ['6px', '8px', '12px', '16px', '20px', '24px']
-  }[mode]
-
-  root.style.setProperty('--wa-radius-xs', values[0])
-  root.style.setProperty('--wa-radius-sm', values[1])
-  root.style.setProperty('--wa-radius-md', values[2])
-  root.style.setProperty('--wa-radius-lg', values[3])
-  root.style.setProperty('--wa-radius-xl', values[4])
-  root.style.setProperty('--wa-radius-2xl', values[5])
-}
-
-function applyShadow(root, mode, primary) {
-  const shadows = {
-    flat: ['none', '0 1px 2px rgba(15, 23, 42, 0.06)'],
-    soft: ['0 8px 24px rgba(15, 23, 42, 0.07)', '0 12px 30px rgba(15, 23, 42, 0.09)'],
-    medium: ['0 12px 28px rgba(15, 23, 42, 0.1)', '0 18px 38px rgba(15, 23, 42, 0.13)'],
-    strong: ['0 14px 34px rgba(15, 23, 42, 0.14)', '0 22px 48px rgba(15, 23, 42, 0.18)']
-  }[mode]
-
-  root.style.setProperty('--wa-shadow-surface', shadows[0])
-  root.style.setProperty('--wa-shadow-object', shadows[1])
-  root.style.setProperty('--wa-focus-ring', `0 0 0 3px ${primary[600]}2e`)
-}
-
-function applyTransparency(root, mode) {
-  const surface = {
-    solid: '1',
-    balanced: '0.88',
-    glass: '0.76'
-  }[mode]
-
-  root.style.setProperty('--wa-surface-alpha', surface)
-  root.style.setProperty('--wa-header-alpha', mode === 'solid' ? '0.96' : surface)
-}
-
-function applySidebar(root, primary, config) {
-  if (config.primary === 'amber') {
-    const accent = colorScales[config.accent] || colorScales.teal
-    root.style.setProperty('--wa-sidebar-bg', `linear-gradient(180deg, #111827 0%, ${accent[900]} 100%)`)
-    root.style.setProperty('--wa-sidebar-active-bg', `linear-gradient(90deg, ${primary[600]} 0%, ${accent[600]} 100%)`)
-    return
-  }
-
-  root.style.setProperty('--wa-sidebar-bg', `linear-gradient(180deg, ${primary[900]} 0%, ${primary[900]} 100%)`)
-  root.style.setProperty('--wa-sidebar-active-bg', `linear-gradient(90deg, ${primary[700]} 0%, ${primary[500]} 100%)`)
+/**
+ * CSS variables for appearance (same map as :root; use on preview hosts).
+ */
+export function appearancePreviewStyleVars(configValue) {
+  return buildAppearanceCssVars(normalizeAppearanceConfig(configValue))
 }
 
 export function applyAppearanceStyle(configValue) {
   const config = normalizeAppearanceConfig(configValue)
   const root = document.documentElement
-  const primary = colorScales[config.primary]
-  const accent = colorScales[config.accent]
 
   root.dataset.waTheme = config.primary
   root.dataset.waTexture = config.texture
@@ -356,17 +502,7 @@ export function applyAppearanceStyle(configValue) {
   root.dataset.waRadius = config.radius
   root.dataset.waDensity = config.density
 
-  applyScale(root, 'primary', primary)
-  applyScale(root, 'accent', accent)
-  applyRadius(root, config.radius)
-  applyShadow(root, config.shadow, primary)
-  applyTransparency(root, config.transparency)
-  applySidebar(root, primary, config)
+  applyCssVarsToElement(root, buildAppearanceCssVars(config))
 
   return config
-}
-
-export function applyAdminTheme(theme) {
-  const preset = resolveAppearancePreset(theme)
-  return applyAppearanceStyle(preset.config).primary
 }

@@ -960,17 +960,13 @@ Files changed:
 - `apps/web/admin/src/views/Login.vue`;
 - `apps/web/admin/src/views/StudentCourseHome.vue`.
 
-Runtime behavior:
+Runtime behavior (current implementation; supersedes older audit bullets where they conflict):
 
-- `App.vue` applies the theme to `document.documentElement.dataset.waTheme`;
-- the accepted canonical theme names are `blue`, `green`, `warm`, and
-  `grayscale`;
-- aliases such as `default`, `primary`, `teal`, `emerald`, `orange`, `amber`,
-  `neutral`, `gray`, and `grey` are normalized before application;
-- system settings may provide `admin_theme`, `theme`, `theme_color`, or
-  `color_theme`;
-- `localStorage.wailearning-admin-theme` can temporarily override the system
-  setting for inspection or local audit work.
+- `App.vue` applies `applyAppearanceStyle(resolveAppearanceFromState(...))` on `document.documentElement`, writing CSS variables and `data-wa-*` attributes.
+- The `data-wa-theme` attribute stores the **palette family** key from the resolved preset (`blue`, `green`, `amber`, `gray`, `navy`, `slate`, …), not the historical four-token `green` / `warm` / `grayscale` shim set.
+- String aliases such as `default`, `primary`, `ocean`, `teal`, `orange`, `neutral`, `gray`, and `grey` are still normalized through `legacyThemeAliases` before preset resolution.
+- Public system settings expose **`appearance_default_preset`** (see `SystemSettingsResponse`); older client-only keys such as `admin_theme`, `theme`, `theme_color`, and `color_theme` are no longer read by the admin SPA theme resolver.
+- `localStorage.wailearning-admin-theme` may still exist on long-lived developer machines from historical experiments; it is **not** read by current `App.vue` and can be deleted manually if present.
 
 Important boundary:
 
@@ -2128,3 +2124,12 @@ mock LLM endpoint is local:
 ```text
 /api/e2e/dev/mock-llm/<profile>/v1/
 ```
+
+## Follow-up: Admin navigation chrome consolidation (post-Round-3)
+
+After the responsive and appearance audit rounds, a separate pass reduced duplicate navigation affordances in the admin shell:
+
+- Administrator sidebar: flat entries for students, classes, users, and subjects were merged under a second-level group labelled **「用户与教学」**; **「个人设置」** remains a dedicated top-level item for all roles; the avatar dropdown no longer repeats **「个人设置」** because the sidebar entry is canonical.
+- Teacher homework page: removed the header duplicate **「学生作业一览」** (the sidebar entry under **「作业与资料」** remains); student homework rows use two explicit buttons instead of a split-button dropdown with a single secondary item.
+
+For full operational detail (pytest PostgreSQL skip pitfalls for `tests/postgres/*` when `DATABASE_URL` resolves to SQLite, RAR `unrar-free` prerequisites, and suggested verification commands), see `docs/development/ADMIN_UI_NAVIGATION_CLEANUP_AND_FULL_TEST_RUNBOOK.md`.
