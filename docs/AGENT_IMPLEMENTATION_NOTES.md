@@ -127,6 +127,24 @@
 - **严重坑：不要对 `httpx.Client.post` 做全局 patch 来测 API**：Starlette/FastAPI 的 `TestClient` 底层同样使用 `httpx` 发请求；若 `unittest.mock.patch.object(httpx.Client, "post", ...)` 未区分 URL，**会把 TestClient 收到的 HTTP 响应替换成你伪造的 LLM JSON**，表现为接口「返回了 choices 而不是 `AssistantChatResponse`」的假阳性/假阴性。对策：对 **`app.routers.llm_settings.run_course_assistant_turn`**（或 `invoke_course_assistant_chat`）等业务入口打桩，或仅在 `fake_post` 内对 **chat completions URL** 分支，而对其余 URL 调用 `real_post`。
 - **capabilities 与数据残留**：同一 DB 内若已存在 `validation_status=validated` 且 `supports_vision=True` 的预设，则 `GET /api/llm-settings/capabilities` 恒为 true；要断言「系统无可用端点」，需在单测内显式 **降级或删除** 预设行，而不是仅新建「无业务数据」用户。
 
+### 4.5 Markdown / LaTeX 前端渲染与发布前预览
+
+- **依赖（`frontend/package.json`）**：`markdown-it`、`markdown-it-katex`、`katex`、`dompurify`。安装命令示意：`<仓库根>/frontend/` 下执行 `npm install`；若构建环境无 Node（例如极简 agent 容器出现 `npm: command not found`），需在 CI 或本地完整前端镜像中执行 `npm ci && npm run build` 做回归。
+- **渲染管道**：`frontend/src/utils/markdownRender.js` 导出 `renderMarkdownToSafeHtml(source)`。
+  - `MarkdownIt({ html: false, linkify: true, breaks: true })`：**关闭** Markdown 内嵌原生 HTML，降低 XSS 面；再由 `markdown-it-katex` 处理 `$...$`、`$$...$$`、`\(...\)`、`\[...\]`（与 `markdown-it-katex` 默认行为一致，细节以该包文档为准）。
+  - `katex` 选项 `throwOnError: false`：非法公式渲染为带颜色的错误占位，避免整页白屏。
+  - 输出经 **DOMPurify.sanitize**，并 `ADD_TAGS` / `ADD_ATTR` 放宽以保留 KaTeX 可能产生的结构（如部分 MathML 相关标签）；若未来升级 KaTeX 后公式被「洗没」，优先检查净化白名单。
+- **全局样式**：`frontend/src/styles/markdown-content.css`（标题、列表、代码块、表格、`.katex-display` 横向滚动）；`frontend/src/main.js` 引入之；KaTeX 自带 CSS 在 `markdownRender.js` 中 `import 'katex/dist/katex.min.css'`。
+- **组件**：
+  - `MarkdownPreview.vue`：接收 `source`、`compact`，`v-html` 展示 **已保存** 内容（学生/教师只读场景）。
+  - `MarkdownEditorWithPreview.vue`：`el-input` 多行 + 文案提示 + **「预览渲染效果」** → `el-dialog` 内嵌 `MarkdownPreview`，供发布者在 **提交表单前** 核对 Markdown 与公式。
+- **已接入的发布入口（含预览按钮）**：`frontend/src/views/Homework.vue`（作业正文、`rubric_text`、`rubric_teacher_text`、`reference_answer`）、`Materials.vue`（资料说明）、`Notifications.vue`（通知正文）、`MyCourses.vue`（新建课程简介）、`Subjects.vue`（课程简介编辑）。
+- **已接入的阅读端**：`Homework.vue` 作业详情对话框；`HomeworkSubmission.vue`（作业说明、学生可见评分要点、历次提交与评语、聚合评语）；`HomeworkSubmissions.vue`（作业说明与教师可见 rubric、列表「提交说明」单元格、历史时间轴、已保存评语）；`Materials.vue` 资料详情；`MyCourses.vue` 课程卡片内简介（紧凑渲染 + `max-height` 裁剪）。
+- **产品/解析坑**：
+  - **美元符号**：正文中单独使用 `$3$` 这类可能被当作行内公式；长文本中的货币若与 KaTeX 冲突，可改用 `\\( ... \\)` 写公式或调整文案避免孤立的 `$` 对。
+  - **bundle 体积**：生产构建会打入 KaTeX 字体与较大 JS chunk（Vite 可能拆出 `MarkdownPreview-*.js`）；若需极致首屏，可后续改为路由级或对话框级 **动态 import** `markdownRender` / `MarkdownPreview`（当前未做，以免过度工程化）。
+- **与作业总评 UI 的交叉修复**：`HomeworkSubmission.vue` 使用计算属性 `hasAggregateScoreOrComment`（有 **分数或评语** 即视为有总评展示），避免「仅有分数、无评语」时误显示「暂无计入总评的分数」——该问题在接入 `MarkdownPreview` 替换纯文本时一并修正。
+
 ---
 
 ## 5. `INIT_DEFAULT_DATA=true` 默认初始化数据总览（用户、课程、内涵与形式）
@@ -152,7 +170,7 @@
 | 学生（用户 + `students` 行） | `prob_stu_001` … `prob_stu_004`，密码分别为 `ProbStu001!` … `ProbStu004!` | 姓名：陈小威、林小朔、王小川、赵小岳；学号 `prob-2026-001` … `004`；均绑定上述班级。 |
 | 课程 | `Subject.name = 初等概率论（公共选修·2026春）`，`course_type = elective` | 绑定当前 **激活学期**（无则取第一条学期）；任课为 `teacher_pro`；含简介、上课时间字符串（杜撰）。 |
 | 选课 | **仅 2 人** 写入 `course_enrollments`：`prob_stu_001`、`prob_stu_002`，`enrollment_type=elective`，`can_remove=True` | **003、004 在同班但未选本课**，体现选修 opt-in。 |
-| 课程资料 | `course_materials` 一条，标题含「第1章」「Markdown」 | `content` 为 **Markdown + LaTeX 风格公式**（`$...$`、`$$...$$`）：样本空间、Kolmogorov 公理、加法公式、参考书名（Ross / Grimmett & Welsh / Durrett / 国内教材）等。 |
+| 课程资料 | `course_materials` 一条，标题含「第1章」「Markdown」 | `content` 为 **Markdown + LaTeX 风格公式**（`$...$`、`$$...$$`）：样本空间、Kolmogorov 公理、加法公式、参考书名（Ross / Grimmett & Welsh / Durrett / 国内教材）等。**前端** 在「课程资料」详情与（若重新编辑）预览对话框中按 §4.5 渲染。 |
 | 作业 | 一章习题，Markdown 题干；`rubric_text` / `rubric_teacher_text` / `reference_answer` 齐全 | **自动评分**：仅当库中已存在 **通过视觉校验的活跃 LLM 预设**（`get_latest_validated_vision_preset` 非空）时为 `True`，并 ` _wire_course_llm_from_preset`；否则为 `False` 并 **打印说明**。若开启自动评分，种子会为已插入的提交调用 `queue_grading_task`（依赖 worker 或手工 `process_grading_task`）。 |
 | 提交 | **两名已选课学生均有一条** `homework_submissions` + `homework_attempts` | 001 为较长 Markdown 作答，002 为较短作答；**未选课学生无提交**。 |
 

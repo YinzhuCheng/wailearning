@@ -118,7 +118,7 @@
       </el-card>
     </template>
 
-    <el-dialog v-model="dialogVisible" title="发布作业" width="620px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" title="发布作业" width="760px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="作业标题" prop="title">
           <el-input v-model="form.title" />
@@ -132,7 +132,12 @@
           />
         </el-form-item>
         <el-form-item label="作业内容" prop="content">
-          <el-input v-model="form.content" type="textarea" :rows="6" />
+          <MarkdownEditorWithPreview
+            v-model="form.content"
+            :rows="8"
+            field-label="作业内容"
+            placeholder="支持 Markdown 与 LaTeX 公式，发布前可点「预览渲染效果」。"
+          />
         </el-form-item>
         <el-form-item label="满分" prop="max_score">
           <el-input-number v-model="form.max_score" :min="1" :max="1000" :precision="1" style="width: 100%" />
@@ -167,26 +172,26 @@
           <el-input v-model="form.response_language" placeholder="例如 zh-CN / en-US，可为空" />
         </el-form-item>
         <el-form-item label="评分要点（对学生可见）">
-          <el-input
+          <MarkdownEditorWithPreview
             v-model="form.rubric_text"
-            type="textarea"
-            :rows="4"
-            placeholder="学生端始终可见；可写清得分维度、字数要求等，勿写保密细则。"
+            :rows="5"
+            field-label="评分要点（对学生可见）"
+            placeholder="学生端始终可见；可写清得分维度等。"
           />
         </el-form-item>
         <el-form-item label="评分要点（仅教师可见）">
-          <el-input
+          <MarkdownEditorWithPreview
             v-model="form.rubric_teacher_text"
-            type="textarea"
-            :rows="4"
-            placeholder="仅教师与自动评分可见；可写内部尺度、扣分敏感点等。"
+            :rows="5"
+            field-label="评分要点（仅教师可见）"
+            placeholder="仅教师与自动评分可见。"
           />
         </el-form-item>
         <el-form-item label="参考答案或思路（仅教师可见）">
-          <el-input
+          <MarkdownEditorWithPreview
             v-model="form.reference_answer"
-            type="textarea"
-            :rows="4"
+            :rows="5"
+            field-label="参考答案或思路（仅教师可见）"
             placeholder="供 LLM 与教师参考；不会展示给学生。"
           />
         </el-form-item>
@@ -225,7 +230,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="作业详情" width="620px" destroy-on-close>
+    <el-dialog v-model="detailVisible" title="作业详情" width="760px" destroy-on-close>
       <el-descriptions v-if="currentHomework" :column="2" border>
         <el-descriptions-item label="作业标题" :span="2">{{ currentHomework.title }}</el-descriptions-item>
         <el-descriptions-item label="课程">{{ currentHomework.subject_name || selectedCourse?.name }}</el-descriptions-item>
@@ -235,16 +240,22 @@
           <el-descriptions-item label="满分">{{ formatScore(currentHomework.max_score) }}</el-descriptions-item>
           <el-descriptions-item label="自动评分">{{ currentHomework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ currentHomework.grading_rule_hint }}</el-descriptions-item>
-        <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '暂无内容' }}</el-descriptions-item>
-          <el-descriptions-item label="评分要点（对学生可见）" :span="2">{{
-            currentHomework.rubric_text || '未设置'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">{{
-            currentHomework.rubric_teacher_text || '未设置'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">{{
-            currentHomework.reference_answer || '未设置'
-          }}</el-descriptions-item>
+        <el-descriptions-item label="作业内容" :span="2">
+          <MarkdownPreview v-if="currentHomework.content" :source="currentHomework.content" />
+          <span v-else class="muted-text">暂无内容</span>
+        </el-descriptions-item>
+          <el-descriptions-item label="评分要点（对学生可见）" :span="2">
+            <MarkdownPreview v-if="currentHomework.rubric_text" :source="currentHomework.rubric_text" />
+            <span v-else class="muted-text">未设置</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">
+            <MarkdownPreview v-if="currentHomework.rubric_teacher_text" :source="currentHomework.rubric_teacher_text" />
+            <span v-else class="muted-text">未设置</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">
+            <MarkdownPreview v-if="currentHomework.reference_answer" :source="currentHomework.reference_answer" />
+            <span v-else class="muted-text">未设置</span>
+          </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentHomework.attachment_url" type="primary" link @click="openAttachment(currentHomework)">
             {{ currentHomework.attachment_name || '下载附件' }}
@@ -262,6 +273,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import MarkdownEditorWithPreview from '@/components/MarkdownEditorWithPreview.vue'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 

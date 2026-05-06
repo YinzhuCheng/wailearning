@@ -235,7 +235,12 @@
           </el-form-item>
 
           <el-form-item label="课程简介" prop="description">
-            <el-input v-model="form.description" type="textarea" :rows="4" />
+            <MarkdownEditorWithPreview
+              v-model="form.description"
+              :rows="5"
+              field-label="课程简介"
+              placeholder="支持 Markdown 与 LaTeX；保存前可预览。"
+            />
           </el-form-item>
 
           <el-form-item label="课程封面">
@@ -413,6 +418,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import CourseSchedulePicker from '@/components/CourseSchedulePicker.vue'
+import MarkdownEditorWithPreview from '@/components/MarkdownEditorWithPreview.vue'
 import { useUserStore } from '@/stores/user'
 import { validateAttachmentFile } from '@/utils/attachments'
 import {

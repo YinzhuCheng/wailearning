@@ -24,10 +24,12 @@
           <el-descriptions-item label="自动评分">{{ homework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
-            {{ homework.content || '暂无作业说明。' }}
+            <MarkdownPreview v-if="homework.content" :source="homework.content" />
+            <span v-else>暂无作业说明。</span>
           </el-descriptions-item>
           <el-descriptions-item label="评分要点（对学生可见）" :span="2">
-            {{ homework.rubric_text || '未设置' }}
+            <MarkdownPreview v-if="homework.rubric_text" :source="homework.rubric_text" compact />
+            <span v-else>未设置</span>
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
             <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
@@ -37,7 +39,7 @@
           </el-descriptions-item>
           <el-descriptions-item label="计入成绩的分数与评语" :span="2">
             <div v-if="aggregateGradeHint" class="aggregate-hint">{{ aggregateGradeHint }}</div>
-            <div v-if="summaryReviewText" class="best-review">
+            <div v-if="hasAggregateScoreOrComment" class="best-review">
               <el-tag
                 v-if="historySummary?.review_score !== null && historySummary?.review_score !== undefined"
                 :type="scoreTag(historySummary.review_score)"
@@ -45,7 +47,9 @@
               >
                 {{ formatScore(historySummary.review_score) }}
               </el-tag>
-              <span>{{ summaryReviewText }}</span>
+              <div v-if="summaryReviewText" class="best-review__md">
+                <MarkdownPreview :source="historySummary.review_comment" compact />
+              </div>
             </div>
             <span v-else class="muted-text">暂无计入总评的分数</span>
           </el-descriptions-item>
@@ -180,14 +184,17 @@
                   {{ formatTaskStatus(attempt.task_status) }}
                 </el-tag>
               </div>
-              <div class="attempt-body">
-                <div>{{ attempt.content || '无提交说明' }}</div>
+                <div class="attempt-body">
+                  <MarkdownPreview v-if="attempt.content" :source="attempt.content" compact />
+                  <span v-else>无提交说明</span>
                 <div v-if="attempt.attachment_url" class="attempt-link">
                   <el-button type="primary" link @click="openAttachment(attempt.attachment_url, attempt.attachment_name)">
                     {{ attempt.attachment_name || '下载附件' }}
                   </el-button>
                 </div>
-                <div v-if="attempt.review_comment" class="attempt-comment">{{ attempt.review_comment }}</div>
+                <div v-if="attempt.review_comment" class="attempt-comment">
+                  <MarkdownPreview :source="attempt.review_comment" compact />
+                </div>
                 <div v-if="attempt.task_error" class="attempt-error">{{ attempt.task_error }}</div>
               </div>
             </div>
@@ -204,6 +211,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
@@ -225,6 +233,14 @@ const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
 const latestTaskStatus = computed(() => historySummary.value?.latest_task_status || '')
 const summaryReviewText = computed(() => historySummary.value?.review_comment || '')
+const hasAggregateScoreOrComment = computed(() => {
+  const s = historySummary.value
+  if (!s) {
+    return false
+  }
+  const hasScore = s.review_score !== null && s.review_score !== undefined
+  return hasScore || Boolean(s.review_comment)
+})
 const isPastDue = computed(() => {
   if (!homework.value?.due_date) {
     return false
@@ -524,9 +540,14 @@ watch(
 
 .best-review {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
-  align-items: center;
   flex-wrap: wrap;
+}
+
+.best-review__md {
+  width: 100%;
 }
 
 .aggregate-hint {

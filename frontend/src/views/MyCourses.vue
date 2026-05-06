@@ -54,7 +54,10 @@
                 <span>起止时间：{{ formatDateRange(course.course_start_at, course.course_end_at) }}</span>
                 <span>学生数：{{ course.student_count || 0 }}</span>
               </div>
-              <p class="course-description">{{ course.description || '暂无课程简介。' }}</p>
+              <div v-if="course.description" class="course-desc-md">
+                <MarkdownPreview :source="course.description" compact />
+              </div>
+              <p v-else class="course-description muted-text">暂无课程简介。</p>
               <div class="course-actions">
                 <el-button
                   :type="isCurrentCourse(course) ? 'info' : 'primary'"
@@ -117,7 +120,7 @@
     <el-dialog
       v-model="dialogVisible"
       title="新建课程"
-      width="720px"
+      width="800px"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
@@ -163,7 +166,12 @@
           />
         </el-form-item>
         <el-form-item label="课程简介">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="可选，简单说明课程内容" />
+          <MarkdownEditorWithPreview
+            v-model="form.description"
+            :rows="5"
+            field-label="课程简介"
+            placeholder="可选；支持 Markdown 与公式，创建前可预览。"
+          />
         </el-form-item>
         <el-form-item label="学生名单" prop="students">
           <div class="roster-tools">
@@ -201,6 +209,8 @@ import * as XLSX from 'xlsx'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import MarkdownEditorWithPreview from '@/components/MarkdownEditorWithPreview.vue'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useUserStore } from '@/stores/user'
 import { formatScheduleValue } from '@/utils/courseSchedule'
 
@@ -709,6 +719,20 @@ onMounted(() => {
   min-height: 42px;
   color: #64748b;
   line-height: 1.6;
+}
+
+.course-desc-md {
+  margin: 14px 0 0;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.muted-text {
+  color: #94a3b8;
 }
 
 .course-actions {
