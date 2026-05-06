@@ -18,7 +18,12 @@ from app.attachments import (
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access, get_enrolled_students
 from app.database import get_db
-from app.llm_grading import normalize_score_for_homework, queue_grading_task, refresh_submission_summary
+from app.llm_grading import (
+    normalize_score_for_homework,
+    queue_grading_task,
+    refresh_submission_summary,
+    validate_homework_auto_grading_prerequisites,
+)
 from app.models import (
     Class,
     CourseEnrollment,
@@ -485,6 +490,10 @@ def create_homework(
         if course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
+    validate_homework_auto_grading_prerequisites(
+        db, subject_id=data.subject_id, auto_grading=data.auto_grading_enabled
+    )
+
     homework = Homework(
         title=data.title,
         content=data.content,
@@ -563,6 +572,10 @@ def update_homework(
         homework.allow_late_submission = data.allow_late_submission
     if data.late_submission_affects_score is not None:
         homework.late_submission_affects_score = data.late_submission_affects_score
+
+    validate_homework_auto_grading_prerequisites(
+        db, subject_id=homework.subject_id, auto_grading=homework.auto_grading_enabled
+    )
 
     db.commit()
     db.refresh(homework)

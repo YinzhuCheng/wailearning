@@ -946,6 +946,25 @@ class CourseLLMConfigResponse(BaseModel):
     endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)
     groups: List[LLMGroupResponse] = Field(default_factory=list)
     visual_validation_notice: str
+    uses_course_endpoint_routing: bool = True
+
+
+class LLMCapabilitiesResponse(BaseModel):
+    has_validated_vision_preset: bool
+    latest_validated_preset_id: Optional[int] = None
+
+
+class CourseAssistantAvailabilityResponse(BaseModel):
+    can_chat: bool
+    reason_code: Optional[str] = None
+
+
+class AssistantChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=12000)
+
+
+class AssistantChatResponse(BaseModel):
+    reply: str
 
 
 class NotificationBase(BaseModel):

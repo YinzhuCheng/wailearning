@@ -316,35 +316,87 @@
             />
           </el-form-item>
 
-          <el-form-item label="端点顺序">
-            <div class="llm-endpoints">
-              <el-empty v-if="!llmPresets.length" description="暂无可用端点，请先由管理员创建并完成视觉校验。" />
-              <div
-                v-for="preset in llmPresets"
-                :key="preset.id"
-                class="llm-endpoint-row"
-              >
-                <el-checkbox
-                  :model-value="isPresetSelected(preset.id)"
-                  :disabled="preset.validation_status !== 'validated' || !preset.supports_vision"
-                  @change="checked => togglePresetSelection(preset, checked)"
-                >
-                  <div class="llm-endpoint-meta">
-                    <strong>{{ preset.name }}</strong>
-                    <span>{{ preset.model_name }}</span>
-                    <span>状态：{{ preset.validation_status === 'validated' ? '已通过视觉校验' : preset.validation_message || '未校验' }}</span>
-                  </div>
-                </el-checkbox>
-
-                <el-input-number
-                  v-if="isPresetSelected(preset.id)"
-                  :model-value="getPresetPriority(preset.id)"
-                  :min="1"
-                  @update:model-value="value => updatePresetPriority(preset.id, value)"
-                />
-              </div>
-            </div>
+          <el-form-item label="路由策略">
+            <el-radio-group v-model="llmRoutingMode">
+              <el-radio label="flat">单列表优先级（按顺序故障转移）</el-radio>
+              <el-radio label="groups">多组故障转移（整组失败后切换下一组）</el-radio>
+            </el-radio-group>
+            <div class="llm-route-hint">与课程绑定；任课教师与管理员均可修改。保存时以当前选项为准。</div>
           </el-form-item>
+
+          <template v-if="llmRoutingMode === 'flat'">
+            <el-form-item label="端点顺序">
+              <div class="llm-endpoints">
+                <el-empty v-if="!llmPresets.length" description="暂无可用端点，请先由管理员创建并完成视觉校验。" />
+                <div
+                  v-for="preset in llmPresets"
+                  :key="preset.id"
+                  class="llm-endpoint-row"
+                >
+                  <el-checkbox
+                    :model-value="isPresetSelected(preset.id)"
+                    :disabled="preset.validation_status !== 'validated' || !preset.supports_vision"
+                    @change="checked => togglePresetSelection(preset, checked)"
+                  >
+                    <div class="llm-endpoint-meta">
+                      <strong>{{ preset.name }}</strong>
+                      <span>{{ preset.model_name }}</span>
+                      <span>状态：{{ preset.validation_status === 'validated' ? '已通过视觉校验' : preset.validation_message || '未校验' }}</span>
+                    </div>
+                  </el-checkbox>
+
+                  <el-input-number
+                    v-if="isPresetSelected(preset.id)"
+                    :model-value="getPresetPriority(preset.id)"
+                    :min="1"
+                    @update:model-value="value => updatePresetPriority(preset.id, value)"
+                  />
+                </div>
+              </div>
+            </el-form-item>
+          </template>
+
+          <template v-else>
+            <el-form-item label="多组端点">
+              <div
+                v-for="(grp, gi) in llmGroupsUi"
+                :key="grp._key"
+                class="llm-group-panel"
+              >
+                <div class="llm-group-panel__head">
+                  <span class="llm-group-panel__title">故障转移组 {{ gi + 1 }}</span>
+                  <el-input v-model="grp.name" placeholder="组名称（可选）" style="width: 220px" clearable />
+                  <el-button v-if="llmGroupsUi.length > 1" text type="danger" @click="removeLlmGroup(gi)">删除组</el-button>
+                </div>
+                <div class="llm-endpoints">
+                  <div
+                    v-for="preset in llmPresets"
+                    :key="`${grp._key}-${preset.id}`"
+                    class="llm-endpoint-row"
+                  >
+                    <el-checkbox
+                      :model-value="isPresetInGroup(gi, preset.id)"
+                      :disabled="preset.validation_status !== 'validated' || !preset.supports_vision"
+                      @change="checked => togglePresetInGroup(gi, preset, checked)"
+                    >
+                      <div class="llm-endpoint-meta">
+                        <strong>{{ preset.name }}</strong>
+                        <span>{{ preset.model_name }}</span>
+                        <span>状态：{{ preset.validation_status === 'validated' ? '已通过视觉校验' : preset.validation_message || '未校验' }}</span>
+                      </div>
+                    </el-checkbox>
+                    <el-input-number
+                      v-if="isPresetInGroup(gi, preset.id)"
+                      :model-value="getGroupPresetPriority(gi, preset.id)"
+                      :min="1"
+                      @update:model-value="value => setGroupPresetPriority(gi, preset.id, value)"
+                    />
+                  </div>
+                </div>
+              </div>
+              <el-button type="primary" plain class="llm-add-group" @click="addLlmGroup">添加组</el-button>
+            </el-form-item>
+          </template>
         </el-form>
 
         <template #footer>
@@ -446,6 +498,15 @@ const llmForm = reactive({
   system_prompt: '',
   teacher_prompt: '',
   endpoints: []
+})
+
+const llmRoutingMode = ref('flat')
+const llmGroupsUi = ref([])
+
+const emptyLlmGroup = () => ({
+  _key: `g-${Date.now()}-${Math.random()}`,
+  name: '',
+  presetPriorities: {}
 })
 
 const isClassTeacherView = computed(() => userStore.isClassTeacher)
@@ -637,6 +698,8 @@ const submitForm = async () => {
 }
 
 const resetLlmForm = () => {
+  llmRoutingMode.value = 'flat'
+  llmGroupsUi.value = [emptyLlmGroup()]
   Object.assign(llmForm, {
     is_enabled: false,
     response_language: '',
@@ -670,10 +733,24 @@ const applyLlmConfig = config => {
   llmForm.quota_timezone = config.quota_timezone || 'UTC'
   llmForm.system_prompt = config.system_prompt || ''
   llmForm.teacher_prompt = config.teacher_prompt || ''
-  llmForm.endpoints = (config.endpoints || []).map(item => ({
-    preset_id: item.preset_id,
-    priority: item.priority
-  }))
+  const gr = config.groups || []
+  const hasGroupMembers = gr.some(g => (g.members || []).length > 0)
+  if (hasGroupMembers) {
+    llmRoutingMode.value = 'groups'
+    llmGroupsUi.value = gr.map(g => ({
+      _key: `g-${g.id}-${Math.random()}`,
+      name: g.name || '',
+      presetPriorities: Object.fromEntries((g.members || []).map(m => [m.preset_id, m.priority]))
+    }))
+    llmForm.endpoints = []
+  } else {
+    llmRoutingMode.value = 'flat'
+    llmForm.endpoints = (config.endpoints || []).map(item => ({
+      preset_id: item.preset_id,
+      priority: item.priority
+    }))
+    llmGroupsUi.value = [emptyLlmGroup()]
+  }
 }
 
 const openLlmConfigDialog = async course => {
@@ -720,13 +797,56 @@ const updatePresetPriority = (presetId, value) => {
   target.priority = value || 1
 }
 
+const addLlmGroup = () => {
+  llmGroupsUi.value.push(emptyLlmGroup())
+}
+
+const removeLlmGroup = index => {
+  if (llmGroupsUi.value.length <= 1) {
+    return
+  }
+  llmGroupsUi.value.splice(index, 1)
+}
+
+const isPresetInGroup = (groupIndex, presetId) => {
+  const g = llmGroupsUi.value[groupIndex]
+  if (!g) {
+    return false
+  }
+  return Object.prototype.hasOwnProperty.call(g.presetPriorities, presetId)
+}
+
+const togglePresetInGroup = (groupIndex, preset, checked) => {
+  const g = llmGroupsUi.value[groupIndex]
+  if (!g || preset.validation_status !== 'validated' || !preset.supports_vision) {
+    return
+  }
+  if (checked) {
+    const vals = Object.values(g.presetPriorities)
+    const maxP = vals.length ? Math.max(...vals) : 0
+    g.presetPriorities[preset.id] = maxP + 1
+  } else {
+    delete g.presetPriorities[preset.id]
+  }
+}
+
+const getGroupPresetPriority = (groupIndex, presetId) =>
+  llmGroupsUi.value[groupIndex]?.presetPriorities?.[presetId] ?? 1
+
+const setGroupPresetPriority = (groupIndex, presetId, value) => {
+  const g = llmGroupsUi.value[groupIndex]
+  if (g && Object.prototype.hasOwnProperty.call(g.presetPriorities, presetId)) {
+    g.presetPriorities[presetId] = value || 1
+  }
+}
+
 const saveLlmConfig = async () => {
   if (!llmDialogCourse.value) {
     return
   }
   llmSaving.value = true
   try {
-    await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
+    const base = {
       is_enabled: llmForm.is_enabled,
       response_language: llmForm.response_language?.trim() || null,
       daily_student_token_limit: normalizeNullableNumber(llmForm.daily_student_token_limit),
@@ -736,9 +856,38 @@ const saveLlmConfig = async () => {
       max_output_tokens: llmForm.max_output_tokens,
       quota_timezone: llmForm.quota_timezone?.trim() || 'UTC',
       system_prompt: llmForm.system_prompt?.trim() || null,
-      teacher_prompt: llmForm.teacher_prompt?.trim() || null,
-      endpoints: [...llmForm.endpoints].sort((left, right) => left.priority - right.priority)
-    })
+      teacher_prompt: llmForm.teacher_prompt?.trim() || null
+    }
+    if (llmRoutingMode.value === 'groups') {
+      const groupsPayload = llmGroupsUi.value
+        .map((g, gi) => {
+          const ids = Object.keys(g.presetPriorities).map(Number)
+          const members = ids
+            .sort((a, b) => (g.presetPriorities[a] || 99) - (g.presetPriorities[b] || 99))
+            .map((pid, idx) => ({ preset_id: pid, priority: idx + 1 }))
+          return {
+            priority: gi + 1,
+            name: (g.name || '').trim() || `group ${gi + 1}`,
+            members
+          }
+        })
+        .filter(g => g.members.length > 0)
+      if (!groupsPayload.length) {
+        ElMessage.warning('多组模式下请至少在一个组内勾选一个已校验端点')
+        return
+      }
+      await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
+        ...base,
+        groups: groupsPayload,
+        endpoints: []
+      })
+    } else {
+      await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
+        ...base,
+        endpoints: [...llmForm.endpoints].sort((left, right) => left.priority - right.priority),
+        groups: []
+      })
+    }
     ElMessage.success('LLM 配置已保存')
     llmDialogVisible.value = false
   } finally {
@@ -1072,5 +1221,33 @@ watch(
   margin-top: 8px;
   font-size: 13px;
   color: #64748b;
+}
+
+.llm-route-hint {
+  margin: 6px 0 14px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.llm-group-panel {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.llm-group-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.llm-group-panel__title {
+  font-weight: 600;
+  color: #0f172a;
 }
 </style>

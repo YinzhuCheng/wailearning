@@ -119,6 +119,25 @@
           </section>
         </el-col>
       </el-row>
+
+      <section v-if="userStore.isStudent && selectedCourse" class="assistant-panel">
+        <h2>智能助教</h2>
+        <p class="assistant-hint">与课程级 LLM 策略一致；若学校尚未配置可用端点或本课未启用 LLM，将无法对话。</p>
+        <el-alert v-if="assistantReason" type="warning" :closable="false" :title="assistantReason" class="assistant-blocked" />
+        <template v-else>
+          <el-input
+            v-model="assistantInput"
+            type="textarea"
+            :rows="3"
+            placeholder="输入问题后发送（实验性）"
+            :disabled="assistantSending"
+          />
+          <el-button type="primary" class="assistant-send" :loading="assistantSending" :disabled="!assistantInput.trim()" @click="sendAssistant">
+            发送
+          </el-button>
+          <div v-if="assistantReply" class="assistant-reply">{{ assistantReply }}</div>
+        </template>
+      </section>
     </template>
   </div>
 </template>
@@ -140,6 +159,49 @@ const loading = ref(false)
 const materials = ref([])
 const homeworks = ref([])
 const notifications = ref([])
+
+const assistantReason = ref('')
+const assistantInput = ref('')
+const assistantReply = ref('')
+const assistantSending = ref(false)
+
+const loadAssistantGate = async () => {
+  assistantReason.value = ''
+  assistantReply.value = ''
+  if (!userStore.isStudent || !selectedCourse.value) {
+    return
+  }
+  try {
+    const r = await api.llmSettings.getAssistantAvailability(selectedCourse.value.id)
+    if (!r?.can_chat) {
+      const map = {
+        NO_VALIDATED_LLM_IN_SYSTEM: '系统尚无已通过视觉校验的 LLM 端点，智能助教不可用。',
+        COURSE_LLM_NOT_ENABLED: '本课程未启用 LLM，请在教师端课程管理中开启。'
+      }
+      assistantReason.value = map[r?.reason_code] || '当前无法使用智能助教。'
+    }
+  } catch {
+    assistantReason.value = '无法获取智能助教状态。'
+  }
+}
+
+const sendAssistant = async () => {
+  if (!selectedCourse.value || !assistantInput.value.trim()) {
+    return
+  }
+  assistantSending.value = true
+  assistantReply.value = ''
+  try {
+    const res = await api.llmSettings.postAssistantChat(selectedCourse.value.id, {
+      message: assistantInput.value.trim()
+    })
+    assistantReply.value = res?.reply || ''
+  } catch (e) {
+    assistantReply.value = '请求失败，请稍后再试。'
+  } finally {
+    assistantSending.value = false
+  }
+}
 
 const formatCourseTimeTitle = courseTime =>
   [courseTime?.dateRange, courseTime?.weekday].filter(Boolean).join('，')
@@ -172,6 +234,8 @@ const loadWorkspace = async () => {
     materials.value = []
     homeworks.value = []
     notifications.value = []
+    assistantReason.value = ''
+    assistantReply.value = ''
     return
   }
 
@@ -206,12 +270,14 @@ const loadWorkspace = async () => {
   }
 }
 
-onMounted(() => {
-  loadWorkspace()
+onMounted(async () => {
+  await loadWorkspace()
+  await loadAssistantGate()
 })
 
-watch(selectedCourse, () => {
-  loadWorkspace()
+watch(selectedCourse, async () => {
+  await loadWorkspace()
+  await loadAssistantGate()
 })
 </script>
 
@@ -357,5 +423,45 @@ watch(selectedCourse, () => {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+.assistant-panel {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+}
+
+.assistant-panel h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: #0f172a;
+}
+
+.assistant-hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.assistant-blocked {
+  margin-top: 4px;
+}
+
+.assistant-send {
+  margin-top: 12px;
+}
+
+.assistant-reply {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #0f172a;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 </style>

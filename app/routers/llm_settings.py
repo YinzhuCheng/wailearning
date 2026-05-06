@@ -9,20 +9,32 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
-from app.llm_grading import ensure_course_llm_config, validate_text_connectivity, validate_vision_connectivity
+from app.llm_grading import (
+    ensure_course_llm_config,
+    get_latest_validated_vision_preset,
+    run_course_assistant_turn,
+    validate_text_connectivity,
+    validate_vision_connectivity,
+)
 from app.models import (
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
+    CourseEnrollment,
     LLMEndpointPreset,
     LLMGroup,
+    Student,
     User,
     UserRole,
 )
 from app.schemas import (
+    AssistantChatRequest,
+    AssistantChatResponse,
+    CourseAssistantAvailabilityResponse,
     CourseLLMConfigResponse,
     CourseLLMConfigUpdate,
     CourseLLMConfigEndpointResponse,
     LLMGroupResponse,
+    LLMCapabilitiesResponse,
     LLMEndpointPresetCreate,
     LLMEndpointPresetResponse,
     LLMEndpointPresetUpdate,
@@ -112,16 +124,19 @@ def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse
         [g for g in (config.groups or []) if g is not None],
         key=lambda row: (row.priority, row.id),
     )
+    link_count = 0
     if group_rows and any((g.members or []) for g in group_rows):
         flat: list[CourseLLMConfigEndpoint] = []
         for g in group_rows:
             for m in sorted(g.members or [], key=lambda row: (row.priority, row.id)):
                 flat.append(m)
+        link_count = len(flat)
     else:
         flat = sorted(
             (config.endpoints or []),
             key=lambda row: (row.priority, row.id),
         )
+        link_count = len(flat)
 
     return CourseLLMConfigResponse(
         id=config.id,
@@ -147,7 +162,83 @@ def _serialize_course_config(config: CourseLLMConfig) -> CourseLLMConfigResponse
             for g in group_rows
         ],
         visual_validation_notice=VISION_NOTICE,
+        uses_course_endpoint_routing=link_count > 0,
     )
+
+
+def _ensure_user_may_access_course_assistant(subject_id: int, user: User, db: Session) -> None:
+    if user.role == UserRole.STUDENT.value:
+        student = db.query(Student).filter(Student.student_no == user.username).first()
+        if not student:
+            raise HTTPException(status_code=403, detail="Student profile not found.")
+        enrollment = (
+            db.query(CourseEnrollment)
+            .filter(
+                CourseEnrollment.subject_id == subject_id,
+                CourseEnrollment.student_id == student.id,
+            )
+            .first()
+        )
+        if not enrollment:
+            raise HTTPException(status_code=403, detail="You are not enrolled in this course.")
+        return
+    try:
+        ensure_course_access(subject_id, user, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.get("/capabilities", response_model=LLMCapabilitiesResponse)
+def get_global_llm_capabilities(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    latest = get_latest_validated_vision_preset(db)
+    return LLMCapabilitiesResponse(
+        has_validated_vision_preset=latest is not None,
+        latest_validated_preset_id=latest.id if latest else None,
+    )
+
+
+@router.get("/courses/{subject_id}/assistant/availability", response_model=CourseAssistantAvailabilityResponse)
+def get_assistant_availability(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    _ensure_user_may_access_course_assistant(subject_id, current_user, db)
+    latest = get_latest_validated_vision_preset(db)
+    if not latest:
+        return CourseAssistantAvailabilityResponse(can_chat=False, reason_code="NO_VALIDATED_LLM_IN_SYSTEM")
+    cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+    if not cfg or not cfg.is_enabled:
+        return CourseAssistantAvailabilityResponse(can_chat=False, reason_code="COURSE_LLM_NOT_ENABLED")
+    return CourseAssistantAvailabilityResponse(can_chat=True)
+
+
+@router.post("/courses/{subject_id}/assistant/chat", response_model=AssistantChatResponse)
+def post_assistant_chat(
+    subject_id: int,
+    payload: AssistantChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    _ensure_user_may_access_course_assistant(subject_id, current_user, db)
+    if not get_latest_validated_vision_preset(db):
+        raise HTTPException(status_code=503, detail="NO_VALIDATED_LLM_IN_SYSTEM")
+    cfg = ensure_course_llm_config(db, subject_id, current_user.id)
+    if not cfg.is_enabled:
+        raise HTTPException(status_code=503, detail="COURSE_LLM_NOT_ENABLED")
+    try:
+        text = run_course_assistant_turn(db, cfg, payload.message)
+    except ValueError as exc:
+        if str(exc) == "NO_USABLE_PRESET":
+            raise HTTPException(status_code=503, detail="NO_USABLE_PRESET") from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    db.commit()
+    return AssistantChatResponse(reply=text or "")
 
 
 @router.get("/presets", response_model=list[LLMEndpointPresetResponse])

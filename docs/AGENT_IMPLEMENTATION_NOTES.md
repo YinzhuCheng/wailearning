@@ -89,6 +89,13 @@
 - 中文常量：在 `bootstrap.py` 中大量使用 `\uXXXX` 转义，避免在某些环境写入 UTF-8 源码时出现 **mojibake**。
 - 文档与 UI 文案：编辑时请确认编辑器为 **UTF-8**，勿混用 Latin-1 粘贴。
 
+### 4.4 专项 E2E 风格 API 用例（`tests/test_llm_course_e2e_scenarios.py`）
+
+- **定位**：共 **15** 条用例，使用 `fastapi.testclient.TestClient` + 本仓库 `tests/conftest.py` 的 SQLite 配置，覆盖「部署期 INIT_LLM 种子、评分要点可见性、课程封面与末次写入、全局 capabilities、自动评分前置条件、课程 LLM 多组 payload 往返、智能助教门禁与聊天、无课程端点时走全局 fallback 评分、班主任布置自动评分作业、课程 LLM 关闭后再开启后允许打开自动评分」等与近期需求相关的交叉场景。
+- **`INIT_LLM` 单测技巧**：直接 `monkeypatch` 修改 `app.config.settings` 的 `INIT_LLM_*` 与 `INIT_ADMIN_USERNAME`，在库中先插入对应管理员与 `semesters` 行，再对 `app.bootstrap.validate_text_connectivity` / `validate_vision_connectivity` 打桩，调用 `seed_initial_llm_deployment_bundle(db)`，避免依赖外网与完整 `bootstrap()` 副作用。
+- **严重坑：不要对 `httpx.Client.post` 做全局 patch 来测 API**：Starlette/FastAPI 的 `TestClient` 底层同样使用 `httpx` 发请求；若 `unittest.mock.patch.object(httpx.Client, "post", ...)` 未区分 URL，**会把 TestClient 收到的 HTTP 响应替换成你伪造的 LLM JSON**，表现为接口「返回了 choices 而不是 `AssistantChatResponse`」的假阳性/假阴性。对策：对 **`app.routers.llm_settings.run_course_assistant_turn`**（或 `invoke_course_assistant_chat`）等业务入口打桩，或仅在 `fake_post` 内对 **chat completions URL** 分支，而对其余 URL 调用 `real_post`。
+- **capabilities 与数据残留**：同一 DB 内若已存在 `validation_status=validated` 且 `supports_vision=True` 的预设，则 `GET /api/llm-settings/capabilities` 恒为 true；要断言「系统无可用端点」，需在单测内显式 **降级或删除** 预设行，而不是仅新建「无业务数据」用户。
+
 ---
 
 ## 5. 与产品文档的交叉引用
@@ -103,5 +110,6 @@
 
 1. `pytest tests/test_llm_settings_api.py -q` 通过。
 2. `pytest tests/test_homework_llm_grading.py -q`（若存在对 `HomeworkResponse` 字段数的假设，需更新）。
-3. 前端：`npm run build`（在 `frontend/`）无语法错误。
-4. 手动：学生账号打开作业详情页，只能看到 **评分要点（对学生可见）**，看不到教师框与参考答案。
+3. `pytest tests/test_llm_course_e2e_scenarios.py -q` 通过（15 条 LLM/课程/作业交叉场景）。
+4. 前端：`npm run build`（在 `frontend/`）无语法错误。
+5. 手动：学生账号打开作业详情页，只能看到 **评分要点（对学生可见）**，看不到教师框与参考答案。

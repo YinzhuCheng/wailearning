@@ -254,6 +254,67 @@ def ensure_course_llm_config(db: Session, subject_id: int, user_id: Optional[int
     return config
 
 
+def get_latest_validated_vision_preset(db: Session) -> Optional[LLMEndpointPreset]:
+    """Site-wide fallback: most recently validated (vision-capable) active preset."""
+    rows = (
+        db.query(LLMEndpointPreset)
+        .filter(
+            LLMEndpointPreset.is_active.is_(True),
+            LLMEndpointPreset.validation_status == "validated",
+            LLMEndpointPreset.supports_vision.is_(True),
+        )
+        .all()
+    )
+    if not rows:
+        return None
+
+    return max(rows, key=lambda p: (_preset_sort_key(p), p.id))
+
+
+def _preset_sort_key(p: LLMEndpointPreset) -> float:
+    t = p.validated_at or p.updated_at or p.created_at
+    if not t:
+        return 0.0
+    try:
+        return float(t.timestamp())
+    except Exception:
+        return 0.0
+
+
+def validate_homework_auto_grading_prerequisites(
+    db: Session, *, subject_id: Optional[int], auto_grading: bool
+) -> None:
+    """Raise HTTPException when auto-grading cannot be enabled for this homework."""
+    from fastapi import HTTPException
+
+    if not auto_grading:
+        return
+    if not subject_id:
+        raise HTTPException(status_code=400, detail="AUTO_GRADING_REQUIRES_SUBJECT")
+    if not get_latest_validated_vision_preset(db):
+        raise HTTPException(status_code=400, detail="NO_VALIDATED_LLM_IN_SYSTEM")
+    cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+    if not cfg or not cfg.is_enabled:
+        raise HTTPException(status_code=400, detail="COURSE_LLM_NOT_ENABLED")
+
+
+def preset_is_grading_usable(p: Optional[LLMEndpointPreset]) -> bool:
+    return bool(
+        p and p.is_active and p.validation_status == "validated" and p.supports_vision
+    )
+
+
+class _SyntheticEndpointLink:
+    """In-memory stand-in when the course has no rows but a global fallback preset exists."""
+
+    __slots__ = ("preset", "id", "priority")
+
+    def __init__(self, preset: LLMEndpointPreset) -> None:
+        self.preset = preset
+        self.id = 0
+        self.priority = 1
+
+
 def build_task_summary(task: HomeworkGradingTask) -> str:
     status_map = {
         "queued": "排队中",
@@ -694,10 +755,6 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         _mark_task_failed(db, task, "llm_config_disabled", "当前课程未启用 LLM 配置。")
         return
 
-    if not (config.groups or []) and not (config.endpoints or []):
-        _mark_task_failed(db, task, "endpoint_missing", "当前课程未配置可用端点。")
-        return
-
     material = _build_student_material(homework, attempt, config)
     base_manifest = material["artifact_manifest"] or {}
     if not isinstance(base_manifest, dict):
@@ -750,6 +807,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         return
 
     response = _grade_with_endpoint_group(
+        db=db,
         task=task,
         homework=homework,
         attempt=attempt,
@@ -839,8 +897,22 @@ def _collect_grading_endpoints_for_config(
     return [], flat
 
 
+def resolve_first_usable_preset_for_course(db: Session, config: CourseLLMConfig) -> Optional[LLMEndpointPreset]:
+    """Course routing first; if nothing usable on the course, fall back to latest global validated preset."""
+    group_rows, flat_endpoints = _collect_grading_endpoints_for_config(config)
+    for g in group_rows:
+        for m in sorted(g.members or [], key=lambda x: (x.priority, x.id)):
+            if preset_is_grading_usable(getattr(m, "preset", None)):
+                return m.preset
+    for link in flat_endpoints:
+        if preset_is_grading_usable(getattr(link, "preset", None)):
+            return link.preset
+    return get_latest_validated_vision_preset(db)
+
+
 def _grade_with_endpoint_group(
     *,
+    db: Session,
     task: HomeworkGradingTask,
     homework: Homework,
     attempt: HomeworkAttempt,
@@ -848,6 +920,10 @@ def _grade_with_endpoint_group(
     material: dict[str, Any],
 ) -> dict[str, Any]:
     group_rows, flat_endpoints = _collect_grading_endpoints_for_config(config)
+    if not group_rows and not flat_endpoints:
+        fb = get_latest_validated_vision_preset(db)
+        if fb:
+            flat_endpoints = [_SyntheticEndpointLink(fb)]
     if group_rows:
         routing = GroupRoutingContext.from_config(group_rows, task_id=task.id)
 
@@ -1049,6 +1125,74 @@ def _request_grade_from_endpoint(
         },
         "raw_response": raw_content,
     }
+
+
+def invoke_course_assistant_chat(
+    *,
+    preset: LLMEndpointPreset,
+    system_prompt: Optional[str],
+    teacher_prompt: Optional[str],
+    user_message: str,
+    max_output_tokens: int,
+) -> str:
+    """Single-turn assistant reply (OpenAI-compatible chat)."""
+    timeout = httpx.Timeout(
+        connect=preset.connect_timeout_seconds or 10,
+        read=preset.read_timeout_seconds or 120,
+        write=preset.read_timeout_seconds or 120,
+        pool=preset.connect_timeout_seconds or 10,
+    )
+    sys_parts = [s.strip() for s in ((system_prompt or ""), (teacher_prompt or "")) if (s or "").strip()]
+    combined = "\n\n".join(sys_parts) if sys_parts else "\u4f60\u662f\u672c\u8bfe\u7a0b\u667a\u80fd\u52a9\u6559\uff0c\u7528\u7b80\u6d01\u4e2d\u6587\u56de\u7b54\u5b66\u751f\u3002"
+    payload = {
+        "model": preset.model_name,
+        "messages": [
+            {"role": "system", "content": combined},
+            {"role": "user", "content": (user_message or "").strip()},
+        ],
+        "temperature": 0.4,
+        "max_tokens": max(128, min(2000, int(max_output_tokens or 800))),
+    }
+    endpoint_url = _build_chat_completion_url(preset.base_url)
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(
+                endpoint_url,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {preset.api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+    except httpx.TimeoutException as exc:
+        raise RetryableLLMError(f"\u8bf7\u6c42\u8d85\u65f6\uff1a{exc}") from exc
+    except httpx.HTTPError as exc:
+        raise RetryableLLMError(f"\u7f51\u7edc\u8bf7\u6c42\u5931\u8d25\uff1a{exc}") from exc
+
+    if response.status_code in NON_RETRYABLE_STATUS_CODES:
+        raise NonRetryableLLMError(f"\u9274\u6743\u5931\u8d25\uff1aHTTP {response.status_code}")
+    if response.status_code >= 400:
+        raise NonRetryableLLMError(f"HTTP {response.status_code} {response.text[:300]}")
+
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise RetryableLLMError("\u8fd4\u56de\u4e0d\u662f JSON") from exc
+
+    return _extract_message_content(data).strip()
+
+
+def run_course_assistant_turn(db: Session, config: CourseLLMConfig, user_message: str) -> str:
+    preset = resolve_first_usable_preset_for_course(db, config)
+    if not preset:
+        raise ValueError("NO_USABLE_PRESET")
+    return invoke_course_assistant_chat(
+        preset=preset,
+        system_prompt=config.system_prompt,
+        teacher_prompt=config.teacher_prompt,
+        user_message=user_message,
+        max_output_tokens=int(config.max_output_tokens or 800),
+    )
 
 
 def _extract_message_content(response_json: dict[str, Any]) -> str:
