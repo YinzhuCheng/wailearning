@@ -1274,6 +1274,8 @@ class HomeworkSubmissionResponse(BaseModel):
     latest_task_error_code: Optional[str] = None
     latest_task_log: Optional[list[dict[str, Any]]] = None
     appeal_status: Optional[str] = None
+    effective_score_attempt_seq: Optional[int] = None
+    effective_score_note_zh: str = ""
 
     class Config:
         from_attributes = True
@@ -1352,6 +1354,8 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     latest_task_log: Optional[list[dict[str, Any]]] = None
     attempt_count: int = 0
     appeal_status: Optional[str] = None
+    effective_score_attempt_seq: Optional[int] = None
+    effective_score_note_zh: str = ""
 
 
 class HomeworkSubmissionStatusListResponse(BaseModel):

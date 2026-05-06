@@ -125,6 +125,10 @@ When homework auto-grading is enabled:
 - the worker calls the selected endpoint,
 - the system stores score candidates and updates the submission summary.
 
+**Displayed homework score vs latest attempt**
+
+`HomeworkSubmission.review_score` / `review_comment` shown in student and teacher lists represent **「有效成绩」**: across attempts tied to the submission, take attempts submitted **on/before due** **or** marked **`counts_toward_final_score`** (late attempts excluded when “迟交影响评分” applies), compute each attempt’s winning candidate (teacher beats auto), then pick the **maximum** score. Summaries still mirror the **latest** attempt’s body and LLM task diagnostics so users see their most recent upload while the numeric grade reflects the aggregate rule. See `resolve_effective_submission_score` / `effective_score_display_zh` in `llm_grading.py` and API fields `effective_score_attempt_seq` / `effective_score_note_zh` on submission payloads.
+
 Teachers can still:
 
 - manually review,

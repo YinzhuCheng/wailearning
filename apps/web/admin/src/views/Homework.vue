@@ -76,7 +76,7 @@
                 <el-tag size="small" :type="row.auto_grading_enabled ? 'success' : 'info'">
                   {{ row.auto_grading_enabled ? '自动评分已启用' : '仅教师评分' }}
                 </el-tag>
-                <div class="rule-text">{{ row.grading_rule_hint || '多次提交取最高分' }}</div>
+                <div class="rule-text">{{ row.grading_rule_hint || '「有效成绩」取截止时间前或计入总评的多次提交最高分；详见评分规则。' }}</div>
               </div>
             </template>
           </el-table-column>

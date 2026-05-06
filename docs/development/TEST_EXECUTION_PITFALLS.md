@@ -1931,3 +1931,21 @@ When running integration tests that **do** set `DEFAULT_LLM_API_KEY` against a r
 ### Secondary pitfall observed during the same change set
 
 While validating `tests/backend/homework/test_markdown_homework_visibility_and_llm.py`, the environment initially lacked project dependencies (`ModuleNotFoundError: pydantic_settings`). Resolution path: install from `<repository-root>/requirements.txt` using the repository virtualenv interpreter, not the bare system `python3`.
+
+## Homework effective-score aggregates + intentional clock surgery (pytest, 2026-05)
+
+### Symptom
+
+While authoring `tests/backend/homework/test_effective_homework_score_aggregate.py`, an integration scenario needed one attempt visibly on-time and another late with ``counts_toward_final_score=false``, yet both submissions originate through `POST /api/homeworks/{id}/submission`, which timestamps attempts at request handling time.
+
+### Cause
+
+HTTP submission logic derives lateness from wall-clock `submitted_at` compared to `homework.due_date`. Pure API sequencing cannot fabricate a chronology where attempt two is materially late while keeping deterministic grading mocks unless ORM rows are adjusted after inserts.
+
+### Fix pattern used in tests
+
+The scenario commits explicit SQLAlchemy updates on `HomeworkAttempt.submitted_at`, `HomeworkAttempt.is_late`, and `HomeworkAttempt.counts_toward_final_score` after each mocked grading cycle so eligibility mirrors classroom expectations without a time-traveling HTTP client.
+
+### Interpretation for agents
+
+When extending homework lifecycle tests, prefer surgical row mutation over rewriting routers; altering `_is_late_attempt` solely for tests would poison production semantics.
