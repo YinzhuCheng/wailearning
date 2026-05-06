@@ -15,7 +15,7 @@ The database stores the flag on the row so API consumers and LLM pipelines can b
 
 | Table | Column | Applies to |
 |-------|--------|------------|
-| `homeworks` | `content_format` | Teacher-authored **作业内容** (not rubric/reference_answer in v1) |
+| `homeworks` | `content_format` | Teacher-authored **作业内容**（评分要点 / 教师私有要点 / 参考答案或思路另见独立列，格式同上均为 Markdown 管线渲染） |
 | `homework_submissions` | `content_format` | Latest summary text mirrored from the latest attempt |
 | `homework_attempts` | `content_format` | Each attempt body |
 | `course_materials` | `content_format` | Material description body |

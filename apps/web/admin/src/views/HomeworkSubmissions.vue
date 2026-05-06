@@ -51,10 +51,13 @@
               empty-text="暂无作业说明。"
             />
           </el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">
+          <el-descriptions-item label="评分要点（学生可见）" :span="2">
             <RichMarkdownDisplay :markdown="homework.rubric_text" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">
+            <RichMarkdownDisplay :markdown="homework.rubric_staff_only" variant="teacher" empty-text="未设置" />
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">
             <RichMarkdownDisplay :markdown="homework.reference_answer" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">

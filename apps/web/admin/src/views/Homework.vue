@@ -281,22 +281,31 @@
         <el-form-item label="响应语言">
           <el-input v-model="form.response_language" placeholder="例如 zh-CN / en-US，可为空" />
         </el-form-item>
-        <el-form-item label="评分要点">
+        <el-form-item label="评分要点（学生可见）">
           <MarkdownEditorPanel
             v-model="form.rubric_text"
             :min-rows="4"
             :max-rows="18"
-            placeholder="评分量规、要点（Markdown / LaTeX / 图）"
-            hint="学生端始终可见，与作业说明使用相同渲染。"
+            placeholder="学生端作业页始终可见；可与下方「教师私有」要点配合使用。"
+            hint="面向学生的评分导向或公开量规；请勿在此处写入仅教师掌握的细则。"
           />
         </el-form-item>
-        <el-form-item label="参考答案">
+        <el-form-item label="评分要点（仅教师可见）">
+          <MarkdownEditorPanel
+            v-model="form.rubric_staff_only"
+            :min-rows="4"
+            :max-rows="18"
+            placeholder="内部分项、加减分细则等（学生端与智能助教讨论上下文均不可见）"
+            hint="仅供教师端与 LLM 自动评分提示使用；不得要求学生复述本节原文。"
+          />
+        </el-form-item>
+        <el-form-item label="参考答案或思路（仅教师可见）">
           <MarkdownEditorPanel
             v-model="form.reference_answer"
             :min-rows="4"
             :max-rows="18"
-            placeholder="参考答案或提示（可选；学生端始终可见）"
-            hint="供学生对照与 LLM 评分参考。"
+            placeholder="参考答案、提纲或评分对齐思路（学生端不可见）"
+            hint="自动评分与教师批改可参考；智能助教讨论（学生发起）不会附带本节。"
           />
         </el-form-item>
         <el-form-item label="迟交规则">
@@ -367,11 +376,14 @@
               empty-text="暂无内容"
             />
           </el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">
-            <RichMarkdownDisplay :markdown="currentHomework.rubric_text" variant="student" empty-text="未设置" />
+          <el-descriptions-item label="评分要点（学生可见）" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.rubric_text" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">
-            <RichMarkdownDisplay :markdown="currentHomework.reference_answer" variant="student" empty-text="未设置" />
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.rubric_staff_only" variant="teacher" empty-text="未设置" />
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.reference_answer" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentHomework.attachment_url" type="primary" link @click="openAttachment(currentHomework)">
@@ -437,6 +449,7 @@ const form = reactive({
   grade_precision: 'integer',
   auto_grading_enabled: false,
   rubric_text: '',
+  rubric_staff_only: '',
   reference_answer: '',
   response_language: '',
   allow_late_submission: true,
@@ -581,6 +594,7 @@ const resetHomeworkForm = () => {
   form.grade_precision = 'integer'
   form.auto_grading_enabled = false
   form.rubric_text = ''
+  form.rubric_staff_only = ''
   form.reference_answer = ''
   form.response_language = ''
   form.allow_late_submission = true
@@ -613,6 +627,7 @@ const openEditDialog = row => {
   form.grade_precision = row.grade_precision || 'integer'
   form.auto_grading_enabled = Boolean(row.auto_grading_enabled)
   form.rubric_text = row.rubric_text || ''
+  form.rubric_staff_only = row.rubric_staff_only || ''
   form.reference_answer = row.reference_answer || ''
   form.response_language = row.response_language || ''
   form.allow_late_submission = row.allow_late_submission !== false
@@ -690,6 +705,7 @@ const submitForm = async () => {
       grade_precision: form.grade_precision,
       auto_grading_enabled: form.auto_grading_enabled,
       rubric_text: form.rubric_text?.trim() || null,
+      rubric_staff_only: form.rubric_staff_only?.trim() || null,
       reference_answer: form.reference_answer?.trim() || null,
       response_language: form.response_language?.trim() || null,
       allow_late_submission: form.allow_late_submission,

@@ -1909,3 +1909,25 @@ contention rather than product behavior.
 - It does not claim Linux agents exhibit only the Linux-specific pitfalls above; many Windows pitfalls (ports, readiness, flake in long suites) still apply cross-platform.
 
 It records what actually happened during validation sessions (starting with the May 1, 2026 Windows-focused pass, extended by later Linux/CI observations) so the next operator can start from firmer ground.
+
+## Demo seed and `DEFAULT_LLM_API_KEY` bootstrap (pytest / cloud agents, 2026-05)
+
+### Symptom
+
+After tightening `_ensure_default_llm_endpoint_preset()` so empty `DEFAULT_LLM_API_KEY` installs create a **pending** preset instead of a falsely `validated` row, `tests/backend/e2e_dev/test_demo_course_seed.py::test_demo_seed_creates_teacher_students_course_homework` initially failed with `CourseLLMConfigEndpoint` count `0` for the demo required course.
+
+### Cause
+
+`domains/seed/demo.py::_first_validated_preset_for_demo_course` originally returned only presets that were already **validated and active**. Local pytest databases produced via `ensure_schema_updates()` therefore had **no** eligible preset whenever outbound LLM validation was impossible (no API key, sandbox network blocked), so `_ensure_demo_subject_llm_binding` skipped inserting endpoints even though a bootstrap preset row existed.
+
+### Fix pattern (implemented in product code)
+
+The demo helper now **falls back** to the bootstrap preset named `"gpt-5.4"` even when it is still `pending`, documenting that automatic grading remains unreliable until an operator validates or supplies credentials. This restores deterministic pytest expectations while preserving honest validation semantics for keyed deployments.
+
+### Operational note
+
+When running integration tests that **do** set `DEFAULT_LLM_API_KEY` against a real vendor, expect startup latency and possible failures if the remote API blocks the runner egress (`<repository-root>/.venv/bin/python` path placeholder). Prefer mocking vendor HTTP for CI instead of live keys.
+
+### Secondary pitfall observed during the same change set
+
+While validating `tests/backend/homework/test_markdown_homework_visibility_and_llm.py`, the environment initially lacked project dependencies (`ModuleNotFoundError: pydantic_settings`). Resolution path: install from `<repository-root>/requirements.txt` using the repository virtualenv interpreter, not the bare system `python3`.

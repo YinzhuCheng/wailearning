@@ -474,7 +474,12 @@ def _serialize_submission_status(
     )
 
 
-def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmission] = None) -> HomeworkResponse:
+def _serialize_homework(
+    homework: Homework,
+    submission: Optional[HomeworkSubmission] = None,
+    *,
+    viewer: Optional[User] = None,
+) -> HomeworkResponse:
     if submission:
         review_score = submission.review_score
         review_comment = submission.review_comment
@@ -497,6 +502,11 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
     if cap is not None:
         remaining = max(0, int(cap) - int(attempt_count))
 
+    student_view = bool(viewer and viewer.role == UserRole.STUDENT)
+    rubric_out = homework.rubric_text
+    rubric_staff_out = None if student_view else homework.rubric_staff_only
+    reference_out = None if student_view else homework.reference_answer
+
     return HomeworkResponse(
         id=homework.id,
         title=homework.title,
@@ -510,8 +520,9 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         max_score=homework.max_score,
         grade_precision=homework.grade_precision,
         auto_grading_enabled=homework.auto_grading_enabled,
-        rubric_text=homework.rubric_text,
-        reference_answer=homework.reference_answer,
+        rubric_text=rubric_out,
+        rubric_staff_only=rubric_staff_out,
+        reference_answer=reference_out,
         response_language=homework.response_language,
         allow_late_submission=homework.allow_late_submission,
         late_submission_affects_score=homework.late_submission_affects_score,
@@ -541,7 +552,7 @@ def _serialize_homework_for_user(
     current_user: User,
     submission: Optional[HomeworkSubmission] = None,
 ) -> HomeworkResponse:
-    return _serialize_homework(homework, submission)
+    return _serialize_homework(homework, submission, viewer=current_user)
 
 
 def _resolve_target_attempt(db: Session, submission: HomeworkSubmission, attempt_id: Optional[int]) -> HomeworkAttempt:
@@ -798,6 +809,7 @@ def create_homework(
         grade_precision=data.grade_precision,
         auto_grading_enabled=data.auto_grading_enabled,
         rubric_text=data.rubric_text,
+        rubric_staff_only=data.rubric_staff_only,
         reference_answer=data.reference_answer,
         response_language=data.response_language,
         allow_late_submission=data.allow_late_submission,
@@ -809,7 +821,7 @@ def create_homework(
     db.add(homework)
     db.commit()
     db.refresh(homework)
-    return _serialize_homework(homework)
+    return _serialize_homework(homework, viewer=current_user)
 
 
 @router.put("/{homework_id}", response_model=HomeworkResponse)
@@ -858,6 +870,8 @@ def update_homework(
         homework.auto_grading_enabled = data.auto_grading_enabled
     if data.rubric_text is not None:
         homework.rubric_text = data.rubric_text
+    if data.rubric_staff_only is not None:
+        homework.rubric_staff_only = data.rubric_staff_only
     if data.reference_answer is not None:
         homework.reference_answer = data.reference_answer
     if data.response_language is not None:
@@ -891,7 +905,7 @@ def update_homework(
 
     db.commit()
     db.refresh(homework)
-    return _serialize_homework(homework)
+    return _serialize_homework(homework, viewer=current_user)
 
 
 @router.delete("/{homework_id}")
