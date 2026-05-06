@@ -1,4 +1,4 @@
-"""API + LLM prompt behavior for Markdown fields, student-visible rubric/reference, embedded attachment URLs."""
+"""API + LLM prompt behavior for Markdown fields; student-visible rubric vs teacher-only fields."""
 
 from __future__ import annotations
 
@@ -34,11 +34,12 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def test_student_homework_list_and_detail_include_rubric_and_reference(client: TestClient):
+def test_student_homework_list_and_detail_hide_teacher_only_fields(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
     hid = ctx["homework_id"]
     rubric = "## 评分\n- 完整性\n- $x^2$ 公式"
+    rubric_staff = "## 内部细则\n- 抄袭扣分"
     ref = "参考答案：`OK`"
     db = SessionLocal()
     try:
@@ -46,6 +47,7 @@ def test_student_homework_list_and_detail_include_rubric_and_reference(client: T
         assert hw is not None
         class_id = hw.class_id
         hw.rubric_text = rubric
+        hw.rubric_staff_only = rubric_staff
         hw.reference_answer = ref
         hw.content = "说明见 **附件**"
         db.commit()
@@ -63,13 +65,23 @@ def test_student_homework_list_and_detail_include_rubric_and_reference(client: T
     match = next((x for x in rows if x["id"] == hid), None)
     assert match is not None
     assert match.get("rubric_text") == rubric
-    assert match.get("reference_answer") == ref
+    assert match.get("rubric_staff_only") is None
+    assert match.get("reference_answer") is None
 
     r_one = client.get(f"/api/homeworks/{hid}", headers=sh)
     assert r_one.status_code == 200, r_one.text
     body = r_one.json()
     assert body.get("rubric_text") == rubric
-    assert body.get("reference_answer") == ref
+    assert body.get("rubric_staff_only") is None
+    assert body.get("reference_answer") is None
+
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r_t = client.get(f"/api/homeworks/{hid}", headers=th)
+    assert r_t.status_code == 200, r_t.text
+    tb = r_t.json()
+    assert tb.get("rubric_text") == rubric
+    assert tb.get("rubric_staff_only") == rubric_staff
+    assert tb.get("reference_answer") == ref
 
 
 def test_attachment_url_only_in_homework_markdown_counts_as_reference(client: TestClient):

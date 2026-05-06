@@ -96,6 +96,20 @@ Dual gate for `/api/e2e/dev/*` — see [E2E Seed and Environment](#e2e-seed-and-
 
 ## Test Layers
 
+### CI reference (cloud pipelines)
+
+This repository snapshot stores example pipeline YAML under [`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml) (branch pipeline siblings in the same directory). It runs:
+
+```bash
+python3 -m pip install --upgrade pip
+pip3 install -r requirements.txt
+python3 -m pytest -q
+```
+
+There is **no** `.github/workflows/` directory here — do not assume GitHub Actions unless it is added to the tree later.
+
+Agents on Linux should prefer **`python3`** invocations to match CI even when local README examples historically showed `python` for Windows-oriented quick starts.
+
 ### Backend `pytest`
 
 Use backend tests for API logic, permission checks, grading behavior, and state-convergence rules.

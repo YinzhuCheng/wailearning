@@ -37,11 +37,8 @@
               variant="student"
             />
           </el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">
+          <el-descriptions-item label="评分要点（学生可见）" :span="2">
             <RichMarkdownDisplay :markdown="homework.rubric_text" variant="student" empty-text="未设置" />
-          </el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">
-            <RichMarkdownDisplay :markdown="homework.reference_answer" variant="student" empty-text="未设置" />
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
             <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
@@ -49,7 +46,7 @@
             </el-button>
             <span v-else class="muted-text">暂无附件</span>
           </el-descriptions-item>
-          <el-descriptions-item label="最高分评语" :span="2">
+          <el-descriptions-item label="有效成绩与评语（截止前/计入总评取最高）" :span="2">
             <div v-if="summaryReviewText" class="feedback-panel feedback-panel--hero">
               <div class="feedback-panel__head">
                 <el-tag
@@ -76,6 +73,15 @@
             <span v-else class="muted-text">—</span>
           </el-descriptions-item>
         </el-descriptions>
+        <el-alert
+          v-if="historySummary?.effective_score_note_zh"
+          type="info"
+          :closable="false"
+          show-icon
+          class="effective-score-banner"
+        >
+          {{ historySummary.effective_score_note_zh }}
+        </el-alert>
       </el-card>
 
       <CourseDiscussionPanel
@@ -685,6 +691,10 @@ watch(
 
 .info-card {
   margin-bottom: 20px;
+}
+
+.effective-score-banner {
+  margin-top: 12px;
 }
 
 .card-header {

@@ -15,7 +15,7 @@ The database stores the flag on the row so API consumers and LLM pipelines can b
 
 | Table | Column | Applies to |
 |-------|--------|------------|
-| `homeworks` | `content_format` | Teacher-authored **作业内容** (not rubric/reference_answer in v1) |
+| `homeworks` | `content_format` | Teacher-authored **作业内容**（评分要点 / 教师私有要点 / 参考答案或思路另见独立列，格式同上均为 Markdown 管线渲染） |
 | `homework_submissions` | `content_format` | Latest summary text mirrored from the latest attempt |
 | `homework_attempts` | `content_format` | Each attempt body |
 | `course_materials` | `content_format` | Material description body |
@@ -47,7 +47,7 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 
 ### Shared components
 
-- `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar and live preview are hidden; the textarea remains monospace for editing.
+- `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar, KaTeX usage hint, and live preview are hidden; the textarea remains monospace for editing. In Markdown mode the toolbar includes **行内公式** / **独立公式** snippets (`\(…\)`, `$$…$$`) and a short reminder that **preview** uses the same KaTeX auto-render pass as `RichMarkdownDisplay` (so publishers validate formulas before publish).
 - `PlainOrMarkdownBlock.vue`: read-only display; delegates Markdown mode to `RichMarkdownDisplay` and uses `white-space: pre-wrap` for plain mode.
 - `apps/web/admin/src/utils/contentFormat.js`: mirrors backend normalization for client defaults.
 

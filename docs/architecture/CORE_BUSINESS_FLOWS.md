@@ -79,7 +79,7 @@ This is the highest-traffic “vertical slice” for the product.
    - Upserts `HomeworkSubmission` summary row.
    - Inserts immutable `HomeworkAttempt` for each submission.
 6. **Auto grade enqueue**: if `homework.auto_grading_enabled`, calls `queue_grading_task(db, attempt, "new_submission")` — defined in `apps/backend/wailearning_backend/llm_grading.py`.
-7. **Summary refresh**: `refresh_submission_summary` updates denormalized fields on `HomeworkSubmission` used by list endpoints.
+7. **Summary refresh**: `refresh_submission_summary` recomputes denormalized fields on `HomeworkSubmission`. The displayed **「有效成绩」** (`review_score` / `review_comment`) is **not** necessarily tied only to `latest_attempt_id`: among attempts linked to the submission summary, only rows that are **on/before the homework due time** or have **`counts_toward_final_score == true`** participate; the winner is the maximum score after resolving teacher-vs-auto precedence **per attempt**, then taking the global max across those attempts. Tie-break favors higher score, then teacher source, then newer candidate timestamps. Implementation lives in `apps/backend/wailearning_backend/llm_grading.py` (`resolve_effective_submission_score`, `refresh_submission_summary`). The summary row still mirrors **latest** attempt body/attachments/`latest_task_*` fields for UX continuity while the score reflects the aggregate rule.
 8. **Commit** and response serialized via `_serialize_submission`.
 
 Code anchor for enqueue:
@@ -106,6 +106,7 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 
 - Lists and batch actions — still `api/routers/homework.py` (e.g. submissions list, batch regrade).
 - Regrade paths enqueue new tasks or reuse queue logic depending on operation — follow call sites of `queue_grading_task` and teacher-triggered helpers in the same module.
+- **Serialization rule**: `_serialize_homework(..., viewer=current_user)` strips `reference_answer` and `rubric_staff_only` when `viewer.role == student`, while retaining both fields for teachers/admins/creators. Agents altering homework visibility must update serializers and LLM/discussion prompt builders together — see [LLM homework guide](../product/LLM_HOMEWORK_GUIDE.md) «Rubric visibility» section.
 
 ### 3.5 Parent portal read path
 

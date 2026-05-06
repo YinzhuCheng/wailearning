@@ -6,7 +6,7 @@ BIMSA-CLASS is a multi-role school and classroom management platform: FastAPI ba
 
 - **Deployers / ops**: production layout under `ops/`, nginx + systemd — start at [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md).
 - **Backend / frontend developers**: explicit Python package root `apps.backend.wailearning_backend`, Vue apps under `apps/web/` — start at [`docs/architecture/MAINTAINER_AGENT_GUIDE.md`](docs/architecture/MAINTAINER_AGENT_GUIDE.md).
-- **LLM coding agents and automation**: treat [`docs/README.md`](docs/README.md) as the documentation hub; follow the “read before work” list below.
+- **LLM coding agents and automation**: treat [`docs/README.md`](docs/README.md) as the documentation hub; follow the “read before work” list below. **Start with [`AGENTS.md`](AGENTS.md)** for a condensed agent-oriented gate (maps, risky modules, verification expectations).
 
 ## Read before work
 
@@ -81,11 +81,13 @@ Paths below assume a POSIX shell from the **repository root** (`cd` to this repo
 
 ### Backend
 
+Use `python3` on environments where `python` is not aliased (common on Linux servers and some CI images). The reference CI snippet in [`ops/ci/pr-pipeline.yml`](ops/ci/pr-pipeline.yml) invokes `python3` explicitly.
+
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port 8001 --reload
+python3 -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 Windows convenience launcher:

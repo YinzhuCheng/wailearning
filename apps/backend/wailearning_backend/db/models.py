@@ -419,6 +419,7 @@ class Homework(Base):
     grade_precision = Column(String, nullable=False, default="integer")
     auto_grading_enabled = Column(Boolean, default=False)
     rubric_text = Column(Text, nullable=True)
+    rubric_staff_only = Column(Text, nullable=True)
     reference_answer = Column(Text, nullable=True)
     response_language = Column(String, nullable=True)
     allow_late_submission = Column(Boolean, default=True)
