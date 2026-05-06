@@ -91,7 +91,7 @@ This pass removed **unused** test-support code and narrowed the supported import
   `tests/llm_pressures.py` were thin star-import re-exports. All in-repo imports were rewritten to
   **`tests.scenarios.llm_scenario`** and **`tests.scenarios.material_flow`** (pattern replace across
   `tests/**/*.py`). External forks that still used the old paths must update on merge.
-- **`tools/testing/audit_test_redundancy.py`:** Removed the special-case branch that classified the
+- **`tests/devtools/audit_test_redundancy.py`:** Removed the special-case branch that classified the
   deleted stub filenames; scenario helpers under `tests/scenarios/` already fall under the
   `tests/scenarios/` category rule.
 

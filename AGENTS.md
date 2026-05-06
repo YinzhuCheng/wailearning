@@ -22,6 +22,7 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 | Topic | Document |
 |-------|----------|
 | Directory truth vs local artifacts | [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md) |
+| Bounded repo-tree moves (devtools consolidation) | [`docs/architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](docs/architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) |
 | Layering inside backend package | [`docs/architecture/BACKEND_PACKAGE_STRUCTURE.md`](docs/architecture/BACKEND_PACKAGE_STRUCTURE.md) |
 | Endpoints & surface areas | [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md) |
 | Vertical slices (homework, LLM, notifications) | [`docs/architecture/CORE_BUSINESS_FLOWS.md`](docs/architecture/CORE_BUSINESS_FLOWS.md) |

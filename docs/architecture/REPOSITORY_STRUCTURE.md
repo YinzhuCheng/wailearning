@@ -36,7 +36,7 @@ repo/
       parent/                      parent-facing SPA
   docs/                            authoritative documentation tree
   ops/                             deployment, CI, nginx, systemd, helper scripts
-  tests/                           pytest suites and Playwright specs
+  tests/                           pytest suites, Playwright specs, and optional devtools (see Test Boundaries)
   README.md                        public repository entrypoint
   LICENSE                          license text
   requirements.txt                 Python dependency surface for the backend
@@ -237,6 +237,7 @@ Tests live under `tests/` and are grouped by style and purpose:
 - `tests/e2e/web-admin/` for browser E2E coverage,
 - `tests/fixtures/` for test assets,
 - `tests/scenarios/` for reusable scenario builders and stress helpers,
+- `tests/devtools/` for **non-pytest** Python utilities that operate on the test tree itself (for example, regenerating redundancy audit markdown). Files here must **not** match `test_*.py` so `pytest` discovery ignores them.
 - `tests/conftest.py` for repository test defaults beneath the root bootstrap.
 
 The root `conftest.py` remains repository-scoped on purpose. It stabilizes Windows temp-path behavior before test discovery becomes fragile.
@@ -292,7 +293,7 @@ When adding or moving files, use these rules:
 1. If a file applies to the whole repository, keep it at the root only if it is truly repository-scoped.
 2. If a file belongs to one application, keep it under that app's subtree.
 3. If a file is deployment-only, keep it under `ops/`.
-4. If a file is test-only, keep it under `tests/` unless pytest itself requires a repository-level location.
+4. If a file is test-only, keep it under `tests/` unless pytest itself requires a repository-level location. **Test-corpus maintenance scripts** (not pytest modules) belong in `tests/devtools/` — do not recreate a generic top-level `tools/` directory for them.
 5. If a file defines HTTP contracts or route registration, prefer `apps/backend/wailearning_backend/api/`.
 6. If a file defines shared backend configuration, auth, or permission logic, prefer `apps/backend/wailearning_backend/core/`.
 7. If a file defines engine, session, Base, or SQLAlchemy models, prefer `apps/backend/wailearning_backend/db/`.

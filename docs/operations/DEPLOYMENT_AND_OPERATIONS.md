@@ -24,6 +24,8 @@ Typical filesystem layout:
 - `/var/www/wailearning.xyz/admin`
 - `/var/www/wailearning.xyz/parent`
 
+**Repository source tree note (not production-critical):** the Git checkout is a multi-app monorepo (`apps/`, `docs/`, `ops/`, `tests/`). Test hygiene utilities such as the redundancy auditor live under `tests/devtools/` in source control. Production servers do not need those files unless you intentionally run repository QA on the host — deployment automation remains under `ops/scripts/`. Structural truth vs local artifacts: [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md).
+
 ## Server Bootstrap
 
 Use the repository scripts rather than hand-building the environment:

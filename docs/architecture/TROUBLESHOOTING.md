@@ -67,6 +67,16 @@ Full risk notes: [../known-issues-and-risks.md](../known-issues-and-risks.md).
 
 ---
 
+## “Missing” `tools/testing/` paths after a documentation refresh
+
+| Symptom | Likely cause | Where to read |
+|---------|----------------|---------------|
+| Docs or bookmarks reference `tools/testing/audit_test_redundancy.py` but the path does not exist | The repository consolidated test maintenance scripts under `tests/devtools/` (2026-05 layout pass) | [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](REPOSITORY_RESTRUCTURE_REPORT_2026-05.md), [`tests/devtools/README.md`](../../tests/devtools/README.md) |
+
+Executable surfaces (`*.py`, CI YAML, shell) should not reference the legacy path — use `rg 'tools/testing' -g '*.{py,yml,yaml,sh,bat,cjs,js,json}'` from the repo root when verifying migrations.
+
+---
+
 ## Uploads / attachments 403 or wrong file
 
 - Attachment authorization is centralized in `api/routers/files.py` with `_has_attachment_access` — duplicate filenames may require `attachment_url` query disambiguation (see pitfalls).

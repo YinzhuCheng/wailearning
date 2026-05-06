@@ -2026,3 +2026,21 @@ Always distinguish **“installed”** from **“listening”**. Full-suite veri
 ## Full-suite dependency: `unrar` for LLM attachment extraction tests
 
 `tests/backend/llm/test_llm_attachment_formats.py` calls `_require_unrar()` which skips when neither `unrar` nor `unrar-free` exists on `PATH`. Installing `unrar` via apt removes the skip without weakening assertions.
+
+## Stale documentation paths after removing root `tools/` (2026-05)
+
+### Symptom
+
+Agents or humans follow bookmarks pointing at `tools/testing/audit_test_redundancy.py` and conclude the file vanished or the clone is incomplete.
+
+### Actual location
+
+The test redundancy auditor now lives at `tests/devtools/audit_test_redundancy.py` (see [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](../architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md)).
+
+### Verification
+
+Run `rg 'tools/testing' -g '*.{py,yml,yaml,sh,bat,cjs,js,json}'` from the repository root after any structural pass; it should return **no** matches for executable/config surfaces once migrations are complete. Markdown narrative (including this section) may still cite the legacy path when teaching the pitfall.
+
+### Pitfall during validation
+
+If you only move the script but forget to skip `tests/devtools/` inside the auditor’s inventory walk, the generated `TEST_REDUNDANCY_AUDIT.md` may include spurious “uncategorized-python” rows for the utility itself. This pass adds an explicit `rel_path.startswith("tests/devtools/")` guard.
