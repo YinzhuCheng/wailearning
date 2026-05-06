@@ -76,7 +76,9 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
     expect(sync.unread_count).toBeGreaterThanOrEqual(1)
   })
 
-  test('02 avatar dropdown notification label includes unread suffix when count > 0', async ({ page }) => {
+  test('02 unread surfaces on header badge after publish (sidebar is primary nav to notifications)', async ({
+    page
+  }) => {
     const s = scenario()
     const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
 
@@ -91,10 +93,11 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
     })
 
     await triggerHeaderPoll(page)
-    await page.getByTestId('header-user-menu').click()
-    const item = page.getByTestId('header-menu-notifications')
-    await expect(item).toBeVisible({ timeout: 15000 })
-    await expect(item).toContainText(/未读/)
+    const badge = await badgeContentLocator(page)
+    await expect(badge).toBeVisible({ timeout: 20000 })
+    await expect(badge).toHaveText(/\d+/)
+    await page.getByRole('menuitem', { name: /课程通知/ }).click()
+    await expect(page).toHaveURL(/\/notifications$/, { timeout: 20000 })
   })
 
   test('03 course switcher scopes badge to selected course unread (required vs elective)', async ({ page }) => {
@@ -297,14 +300,13 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
     await ctx.close()
   })
 
-  test('09 notifications dropdown navigates to /notifications', async ({ page }) => {
+  test('09 sidebar course notification entry navigates to /notifications', async ({ page }) => {
     const s = scenario()
 
     await login(page, s.student_plain.username, s.password_teacher_student)
     await enterSeededRequiredCourse(page, s.suffix)
 
-    await page.getByTestId('header-user-menu').hover()
-    await page.getByTestId('header-menu-notifications').click()
+    await page.getByRole('menuitem', { name: /课程通知/ }).click()
     await expect(page).toHaveURL(/\/notifications$/, { timeout: 20000 })
   })
 

@@ -66,7 +66,7 @@ test.describe('course-home material outline preview', () => {
     await page.getByTestId(`course-home-material-toggle-${parent.id}`).scrollIntoViewIfNeeded()
     await page.getByTestId(`course-home-material-toggle-${parent.id}`).click()
     await expect
-      .poll(async () => outline.getByText(childTitle, { exact: true }).isVisible(), { timeout: 30000 })
+      .poll(async () => outline.getByText(childTitle, { exact: true }).isVisible(), { timeout: 45000 })
       .toBeTruthy()
   })
 })

@@ -338,6 +338,24 @@ def reset_e2e_scenario(
         db.add(unc)
         db.flush()
 
+    # Two named root chapters so reorder E2E has sibling IDs under parent_id=None (uncategorized excluded from reorder API).
+    ch_extra_a = CourseMaterialChapter(
+        subject_id=course_req.id,
+        parent_id=None,
+        title=f"E2E章节A_{suffix}",
+        sort_order=1,
+        is_uncategorized=False,
+    )
+    ch_extra_b = CourseMaterialChapter(
+        subject_id=course_req.id,
+        parent_id=None,
+        title=f"E2E章节B_{suffix}",
+        sort_order=2,
+        is_uncategorized=False,
+    )
+    db.add_all([ch_extra_a, ch_extra_b])
+    db.flush()
+
     mat_disc = CourseMaterial(
         title=f"E2E讨论资料_{suffix}",
         content="用于讨论区 E2E 的资料正文。",

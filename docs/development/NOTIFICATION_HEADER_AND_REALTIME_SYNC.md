@@ -5,7 +5,7 @@
 Course notifications are stored server-side (`notifications` + `notification_reads`). The admin SPA must:
 
 1. Show **unread count on the header avatar** (badge) so users notice new items without opening the sidebar.
-2. Expose **「查看通知」** from the **avatar dropdown** (same place as personal settings / logout), with optional unread count in the label.
+2. Primary navigation to the inbox remains the **sidebar** (`课程学习` → **课程通知** for students). The avatar menu keeps **个人设置** / **退出登录** only so notification discovery is not duplicated in two places.
 3. **Refresh quickly** when someone publishes a notification (including the **publisher’s own tab** on `/notifications`).
 4. Optionally **surface a desktop toast** (`ElNotification`) when the unread count increases or the inbox grows while unread exists.
 
@@ -45,10 +45,10 @@ This document ties together the Vue layout, the lightweight sync API, the `notif
 - Uses Element Plus `el-badge` around the existing `.user-box` (avatar + optional name).
 - CSS: `.header-user-badge :deep(.el-badge__content)` nudges the dot so it sits on the avatar corner with a light border for contrast on varied themes.
 
-### Dropdown label
+### Sidebar vs avatar menu
 
-- Computed `notificationsMenuLabel`: `查看通知` or `查看通知（N 条未读）` when `N > 0`.
-- Command `notifications` routes to `/notifications`.
+- **Unread count** still appears on the avatar badge; route to **`/notifications`** is via **sidebar** for students/teachers (see `Layout.vue` menu definitions).
+- **Historical note:** an older iteration duplicated **「查看通知」** inside the avatar dropdown (`data-testid="header-menu-notifications"`). That duplicate entry was removed to reduce redundant navigation paths; regression specs now click **`课程通知`** under **`课程学习`** where applicable.
 
 ### Toast (`ElNotification`)
 
@@ -117,7 +117,7 @@ This subsection records **machine-verified** suites that target the header badge
 - **File:** `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js` (**10** `test(...)` cases).
 - **What it proves beyond older notification E2E:**
   - The DOM under `data-testid="header-notification-badge"` reflects **`sync-status.unread_count`** after **`window.focus`**-equivalent polling (`dispatchEvent('focus')`), not only after API-only assertions.
-  - **`header-menu-notifications`** label includes **未读** copy when unread exists (dropdown opened via **click**, not hover-only — hover-only proved flaky under Element Plus popper timing).
+  - Case **02** asserts unread appears on the **badge** and that **sidebar `课程通知`** reaches **`/notifications`** (replaces the former duplicate-dropdown label check).
   - **`header-course-switch`** changes which `subject_id` the layout passes into `syncStatus`, so the badge can drop to **hidden** when the elective scope has zero unread even if the required course still has unread rows server-side.
   - Route transitions (`/courses` → `/course-home`) still execute `watch(route)` hooks that call `pollNotificationSync()` — the spec deep-links `/course-home` instead of clicking **进入课程** twice (second click can remain **disabled** while enrollment reconciliation catches up; same failure family as catalog flip-flop pitfalls).
 - **Run command** (always from `apps/web/admin`; never from `<REPO_ROOT>/tests/e2e/...` alone — Playwright project discovery requires `playwright.config.cjs`):
