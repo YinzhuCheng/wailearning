@@ -1061,6 +1061,7 @@ class HomeworkBase(BaseModel):
     grade_precision: str = "integer"
     auto_grading_enabled: bool = False
     rubric_text: Optional[str] = None
+    rubric_staff_only: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: bool = True
@@ -1118,6 +1119,7 @@ class HomeworkUpdate(BaseModel):
     grade_precision: Optional[str] = None
     auto_grading_enabled: Optional[bool] = None
     rubric_text: Optional[str] = None
+    rubric_staff_only: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: Optional[bool] = None
@@ -1272,6 +1274,8 @@ class HomeworkSubmissionResponse(BaseModel):
     latest_task_error_code: Optional[str] = None
     latest_task_log: Optional[list[dict[str, Any]]] = None
     appeal_status: Optional[str] = None
+    effective_score_attempt_seq: Optional[int] = None
+    effective_score_note_zh: str = ""
 
     class Config:
         from_attributes = True
@@ -1350,6 +1354,8 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     latest_task_log: Optional[list[dict[str, Any]]] = None
     attempt_count: int = 0
     appeal_status: Optional[str] = None
+    effective_score_attempt_seq: Optional[int] = None
+    effective_score_note_zh: str = ""
 
 
 class HomeworkSubmissionStatusListResponse(BaseModel):

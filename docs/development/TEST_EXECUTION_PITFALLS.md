@@ -1909,3 +1909,62 @@ contention rather than product behavior.
 - It does not claim Linux agents exhibit only the Linux-specific pitfalls above; many Windows pitfalls (ports, readiness, flake in long suites) still apply cross-platform.
 
 It records what actually happened during validation sessions (starting with the May 1, 2026 Windows-focused pass, extended by later Linux/CI observations) so the next operator can start from firmer ground.
+
+## Demo seed and `DEFAULT_LLM_API_KEY` bootstrap (pytest / cloud agents, 2026-05)
+
+### Symptom
+
+After tightening `_ensure_default_llm_endpoint_preset()` so empty `DEFAULT_LLM_API_KEY` installs create a **pending** preset instead of a falsely `validated` row, `tests/backend/e2e_dev/test_demo_course_seed.py::test_demo_seed_creates_teacher_students_course_homework` initially failed with `CourseLLMConfigEndpoint` count `0` for the demo required course.
+
+### Cause
+
+`domains/seed/demo.py::_first_validated_preset_for_demo_course` originally returned only presets that were already **validated and active**. Local pytest databases produced via `ensure_schema_updates()` therefore had **no** eligible preset whenever outbound LLM validation was impossible (no API key, sandbox network blocked), so `_ensure_demo_subject_llm_binding` skipped inserting endpoints even though a bootstrap preset row existed.
+
+### Fix pattern (implemented in product code)
+
+The demo helper now **falls back** to the bootstrap preset named `"gpt-5.4"` even when it is still `pending`, documenting that automatic grading remains unreliable until an operator validates or supplies credentials. This restores deterministic pytest expectations while preserving honest validation semantics for keyed deployments.
+
+### Operational note
+
+When running integration tests that **do** set `DEFAULT_LLM_API_KEY` against a real vendor, expect startup latency and possible failures if the remote API blocks the runner egress (`<repository-root>/.venv/bin/python` path placeholder). Prefer mocking vendor HTTP for CI instead of live keys.
+
+### Secondary pitfall observed during the same change set
+
+While validating `tests/backend/homework/test_markdown_homework_visibility_and_llm.py`, the environment initially lacked project dependencies (`ModuleNotFoundError: pydantic_settings`). Resolution path: install from `<repository-root>/requirements.txt` using the repository virtualenv interpreter, not the bare system `python3`.
+
+## Homework effective-score aggregates + intentional clock surgery (pytest, 2026-05)
+
+### Symptom
+
+While authoring `tests/backend/homework/test_effective_homework_score_aggregate.py`, an integration scenario needed one attempt visibly on-time and another late with ``counts_toward_final_score=false``, yet both submissions originate through `POST /api/homeworks/{id}/submission`, which timestamps attempts at request handling time.
+
+### Cause
+
+HTTP submission logic derives lateness from wall-clock `submitted_at` compared to `homework.due_date`. Pure API sequencing cannot fabricate a chronology where attempt two is materially late while keeping deterministic grading mocks unless ORM rows are adjusted after inserts.
+
+### Fix pattern used in tests
+
+The scenario commits explicit SQLAlchemy updates on `HomeworkAttempt.submitted_at`, `HomeworkAttempt.is_late`, and `HomeworkAttempt.counts_toward_final_score` after each mocked grading cycle so eligibility mirrors classroom expectations without a time-traveling HTTP client.
+
+### Interpretation for agents
+
+When extending homework lifecycle tests, prefer surgical row mutation over rewriting routers; altering `_is_late_attempt` solely for tests would poison production semantics.
+
+## Demo seed strings containing LaTeX (`domains/seed/demo.py`, pytest / agents, 2026-05)
+
+### Symptom
+
+While adding the **初等概率论** elective bundle, early drafts stored teacher-only rubrics or reference answers in plain triple-quoted Python strings containing fragments like `\frac{...}{...}` or `\times`. Runtime strings showed corrupted LaTeX (missing backslashes, unexpected tabs) or `SyntaxError` / deprecation warnings depending on Python version.
+
+### Cause
+
+Standard Python string literals treat `\f` as a form-feed escape, `\t` as tab, and similar sequences eat backslashes needed for LaTeX. Multiline **non-raw** strings also mishandle `\Omega`-style sequences when authors forget to double-escape.
+
+### Fix pattern
+
+- Prefer **`r"""..."""` raw triple-quoted strings** for any demo copy meant to include LaTeX backslashes handed to Markdown/KaTeX clients.
+- For prefilled student markdown bodies that need real paragraph breaks, use multiline raw triple quotes in the source file instead of embedding the two-character sequence `\` + `n` inside a one-line `r"..."` literal (those store a literal backslash-n, not a newline).
+
+### Interpretation for agents
+
+Treat `domains/seed/demo.py` as **data-heavy**: run `python3 -m py_compile apps/backend/wailearning_backend/domains/seed/demo.py` after edits and inspect a seeded row in SQLite/Postgres if unsure whether content round-tripped correctly.

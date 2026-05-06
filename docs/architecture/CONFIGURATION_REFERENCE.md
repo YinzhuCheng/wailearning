@@ -78,7 +78,7 @@ If code adds a field to `Settings`, update this document in the same change set.
 | `LLM_GRADING_WORKER_LEADER` | `true` | If true, only leader process runs worker (safe for gunicorn multi-worker). If false, **every** process with worker enabled drains the DB queue — acceptable for single-uvicorn dev, risky if duplicated accidentally in production. |
 | `LLM_GRADING_WORKER_POLL_SECONDS` | `2` | Poll interval for queued tasks. |
 | `LLM_GRADING_TASK_STALE_SECONDS` | `600` | Reclaim stuck `processing` tasks. |
-| `DEFAULT_LLM_API_KEY` | `""` | Optional seed for default preset in bootstrap. |
+| `DEFAULT_LLM_API_KEY` | `""` | When non-empty, bootstrap inserts (once) the built-in `"gpt-5.4"` preset row and immediately runs **live** text + vision connectivity checks against the vendor URL using a **bundled PNG probe** (equivalent to validating with a small logo image). On success the preset is marked validated and active. When empty, the preset row is still inserted but stays `pending` / inactive until an administrator validates through the UI or sets this variable and restarts. Never commit real keys. |
 | `DEFAULT_ESTIMATED_IMAGE_TOKENS` | `850` | Estimation knob (see LLM domain). |
 
 ---
