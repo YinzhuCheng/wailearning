@@ -120,13 +120,12 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await expect(page.getByTestId('students-trigger-file-import')).toBeVisible()
   })
 
-  test('admin: users file-import-students dialog opens', async ({ page }) => {
+  test('admin: users page has no duplicate roster import (roster is authoritative)', async ({ page }) => {
     const s = scenario()
     await login(page, s.admin.username, s.admin.password)
     await page.goto('/users')
-
-    await page.getByTestId('users-open-student-import').click()
-    await expect(page.getByTestId('dialog-users-import-students')).toBeVisible()
+    await expect(page.getByRole('button', { name: '文件导入学生用户' })).toHaveCount(0)
+    await expect(page.getByTestId('users-open-create')).toBeVisible()
   })
 
   test('orphan course: roster dialog shows empty state', async ({ page }) => {

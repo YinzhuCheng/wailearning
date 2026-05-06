@@ -300,7 +300,7 @@ Read and run in this order:
 1. `tests/backend/courses/`
 2. `tests/backend/roster/`
 3. `tests/behavior/test_multi_actor_timeline_behavior.py`
-4. `tests/e2e/web-admin/roster-and-users.spec.js`
+4. `tests/e2e/web-admin/roster-and-users.spec.js` — roster enroll + paste/file import dialogs + admin batch class + assertion that **用户管理** does **not** show 「文件导入学生用户」 (removed; roster import lives under **学生管理** only).
 
 ### If you are changing homework, notifications, or materials
 

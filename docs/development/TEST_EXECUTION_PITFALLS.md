@@ -410,6 +410,15 @@ The admin SPA `router.beforeEach` redirects **admin users** away from many paths
 
 For student flows that depend on a seeded course, call the same **`enterSeededRequiredCourse`** helper used by other specs **before** asserting pages that assume teaching/student course context.
 
+### Extension (May 2026): read-only list routes may mutate roster/user linkage
+
+`GET /api/students`, `GET /api/students/{id}`, and admin `GET /api/users` invoke `reconcile_student_users_and_roster()` followed by `Session.commit()` before returning JSON. This intentionally heals drift between roster rows and student login accounts when staff merely **open** the Students or Users admin pages.
+
+Implications for tests:
+
+- Specs that relied on “no `User` exists yet for this `Student` until an explicit POST” can become flaky after navigation triggers reconciliation.
+- Prefer asserting **final product state** after navigation (or seed fixtures that already satisfy reconciliation) rather than assuming stale orphan roster rows persist across GETs.
+
 ## Pitfall 18: Playwright strict mode with multiple tables (`getByRole('table')`)
 
 ### Symptom

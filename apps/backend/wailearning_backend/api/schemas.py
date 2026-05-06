@@ -140,25 +140,6 @@ class CourseDiscussionCreate(BaseModel):
         return normalize_content_format(value if isinstance(value, str) else None)
 
 
-class StudentUserBatchCreateRequest(BaseModel):
-    student_ids: List[int]
-
-
-class StudentUserBatchCreateError(BaseModel):
-    student_id: Optional[int] = None
-    student_name: Optional[str] = None
-    student_no: Optional[str] = None
-    reason: str
-
-
-class StudentUserBatchCreateResponse(BaseModel):
-    total: int
-    success: int
-    failed: int
-    created_users: List[str]
-    errors: List[StudentUserBatchCreateError]
-
-
 class StudentRosterUpsertFromUsersRequest(BaseModel):
     user_ids: List[int]
 
@@ -283,8 +264,22 @@ class StudentUpdate(BaseModel):
     class_id: Optional[int] = None
 
 
-class StudentResponse(StudentBase):
+class StudentResponse(BaseModel):
+    """
+    Roster row exposed by read/list APIs.
+
+    Unlike `StudentCreate`, this tolerates legacy ORM rows where `gender` or `class_id`
+    were unset; serializers coerce defaults (see `students.router.build_student_response`).
+    """
+
     id: int
+    name: str
+    student_no: str
+    gender: Gender = Gender.MALE
+    phone: Optional[str] = None
+    parent_phone: Optional[str] = None
+    address: Optional[str] = None
+    class_id: Optional[int] = None
     teacher_id: Optional[int] = None
     created_at: datetime
     class_name: Optional[str] = None

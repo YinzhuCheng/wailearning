@@ -18,7 +18,32 @@
 | `CourseEnrollment` | `course_enrollments` | Unique `(subject_id, student_id)` |
 | `CourseEnrollmentBlock` | `course_enrollment_blocks` | Blocks auto re-sync |
 
----
+### 1.1 Student roster ↔ student `User` alignment (implementation truth)
+
+The repository maintains **two persisted representations** of a learner:
+
+1. **`students`** — administrative / teaching roster (`Student`), including gender and contact fields.
+2. **`users`** where `role=student` — login account (`User.username` **must equal** `Student.student_no` for the same class context).
+
+**Authoritative source for “who is in the class”:** the **`students` table** (plus `course_enrollments` for per-course views). Login accounts are **not** created through a separate CSV import on the Users screen; instead the backend **`reconcile_student_users_and_roster`** (`domains/roster/sync.py`) runs at application startup and is invoked again on **read/list admin surfaces** so transient drift self-heals:
+
+- `GET /api/students` (list) and `GET /api/students/{id}` call `reconcile_student_users_and_roster` then `commit` before querying/serializing.
+- `GET /api/users` (admin list) does the same **before** returning rows.
+
+Effects for agents:
+
+- Do **not** expect `GET /api/users/student-candidates` or `POST /api/users/student-candidates/load` — those endpoints were removed when the admin UI dropped 「文件导入学生用户」; roster import remains on **学生管理** (`Students.vue`: 文件 / 粘贴导入).
+- `StudentResponse` (`api/schemas.py`) intentionally allows **`gender` default `MALE`** and **`class_id: Optional[int]`** so legacy rows with NULL ORM fields still serialize; `build_student_response` fills display placeholders (`无` / `—`) for empty names or student numbers.
+- Permission checks on `GET/PUT/DELETE /api/students/{id}` treat **`class_id is None`** as “not yet assigned to a class shell” and **do not** 403 solely because `None not in class_ids` (that Python expression was a bug source).
+
+### 1.2 Pitfall catalog (student admin UX)
+
+| Symptom | Likely cause | Mitigation |
+|---------|----------------|------------|
+| Element Plus **student form** shows two red fields immediately (性别 + 班级) | `StudentForm.vue` used `el-radio value="..."` instead of `label="..."`, so `v-model` never matched an option; combined with NULL `class_id` from API | Fixed radios; `clearValidate()` after `loadStudent()`; reconcile fills class when a matching user exists |
+| Playwright / strict tests fail looking for `users-open-student-import` | UI removed | Assert absence of 「文件导入学生用户」 or use `users-open-create` |
+| Slow admin **学生管理** list on huge DB | Full `reconcile_student_users_and_roster` scans all roster + student users each request | Acceptable for demo/small schools; for very large tenants consider moving reconcile to a background job + lighter incremental sync (not implemented here) |
+
 
 ## 2. Courses & materials
 

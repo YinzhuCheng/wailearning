@@ -1,9 +1,9 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from apps.backend.wailearning_backend.domains.roster.sync import reconcile_student_users_and_roster
 from apps.backend.wailearning_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
@@ -32,12 +32,8 @@ from apps.backend.wailearning_backend.db.models import (
 from apps.backend.wailearning_backend.api.schemas import (
     AdminResetUserPasswordRequest,
     MessageResponse,
-    StudentResponse,
     StudentRosterUpsertFromUsersRequest,
     StudentRosterUpsertFromUsersResponse,
-    StudentUserBatchCreateError,
-    StudentUserBatchCreateRequest,
-    StudentUserBatchCreateResponse,
     UserBatchSetClassError,
     UserBatchSetClassRequest,
     UserBatchSetClassResponse,
@@ -123,24 +119,6 @@ def delete_user_materials(user_id: int, db: Session) -> None:
         db.delete(material)
 
 
-def build_student_candidate_response(student: Student, class_name: Optional[str]) -> StudentResponse:
-    return StudentResponse(
-        id=student.id,
-        name=student.name,
-        student_no=student.student_no,
-        gender=student.gender,
-        phone=student.phone,
-        parent_phone=student.parent_phone,
-        address=student.address,
-        class_id=student.class_id,
-        teacher_id=student.teacher_id,
-        created_at=student.created_at,
-        class_name=class_name,
-        parent_code=student.parent_code,
-        has_user=False,
-    )
-
-
 @router.get("", response_model=List[UserResponse])
 def get_users(
     role: Optional[str] = None,
@@ -151,6 +129,9 @@ def get_users(
     if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="只有管理员可以查看用户列表")
 
+    reconcile_student_users_and_roster(db)
+    db.commit()
+
     query = db.query(User)
 
     if role:
@@ -159,26 +140,6 @@ def get_users(
         query = query.filter(User.class_id == class_id)
 
     return query.all()
-
-
-@router.get("/student-candidates", response_model=List[StudentResponse])
-def get_student_user_candidates(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    if not is_admin(current_user):
-        raise HTTPException(status_code=403, detail="只有管理员可以载入学生用户")
-
-    rows = (
-        db.query(Student, Class.name.label("class_name"))
-        .join(Class, Class.id == Student.class_id)
-        .outerjoin(User, User.username == Student.student_no)
-        .filter(User.id.is_(None))
-        .order_by(Class.grade.asc(), Class.name.asc(), Student.student_no.asc(), Student.id.asc())
-        .all()
-    )
-
-    return [build_student_candidate_response(student, class_name) for student, class_name in rows]
 
 
 @router.post("/batch-set-class", response_model=UserBatchSetClassResponse)
@@ -250,162 +211,6 @@ def upsert_student_roster_from_student_users(
     result = sync_student_roster_from_user_accounts(db, user_ids)
     db.commit()
     return result
-
-
-@router.post("/student-candidates/load", response_model=StudentUserBatchCreateResponse)
-def load_student_users(
-    payload: StudentUserBatchCreateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    if not is_admin(current_user):
-        raise HTTPException(status_code=403, detail="只有管理员可以载入学生用户")
-
-    student_ids = list(dict.fromkeys(payload.student_ids))
-    if not student_ids:
-        raise HTTPException(status_code=400, detail="请至少选择一名学生")
-
-    students = db.query(Student).filter(Student.id.in_(student_ids)).all()
-    student_map = {student.id: student for student in students}
-
-    selected_student_nos = {}
-    for student in students:
-        student_no = (student.student_no or "").strip()
-        if student_no:
-            selected_student_nos[student_no] = selected_student_nos.get(student_no, 0) + 1
-
-    existing_usernames = set()
-    if selected_student_nos:
-        existing_usernames = {
-            username
-            for (username,) in db.query(User.username).filter(User.username.in_(list(selected_student_nos.keys()))).all()
-        }
-
-    created_users: List[str] = []
-    errors: List[StudentUserBatchCreateError] = []
-
-    try:
-        for student_id in student_ids:
-            student = student_map.get(student_id)
-            if not student:
-                errors.append(StudentUserBatchCreateError(student_id=student_id, reason="学生不存在或已被删除"))
-                continue
-
-            student_name = (student.name or "").strip()
-            student_no = (student.student_no or "").strip()
-
-            if not student_name:
-                errors.append(
-                    StudentUserBatchCreateError(
-                        student_id=student.id,
-                        student_no=student_no or None,
-                        reason="学生姓名为空，无法生成账号",
-                    )
-                )
-                continue
-
-            if not student_no:
-                errors.append(
-                    StudentUserBatchCreateError(
-                        student_id=student.id,
-                        student_name=student_name,
-                        reason="学生学号为空，无法生成账号",
-                    )
-                )
-                continue
-
-            if student.class_id is None:
-                errors.append(
-                    StudentUserBatchCreateError(
-                        student_id=student.id,
-                        student_name=student_name,
-                        student_no=student_no,
-                        reason="学生未绑定班级，无法生成账号",
-                    )
-                )
-                continue
-
-            if selected_student_nos.get(student_no, 0) > 1:
-                errors.append(
-                    StudentUserBatchCreateError(
-                        student_id=student.id,
-                        student_name=student_name,
-                        student_no=student_no,
-                        reason="该学号在所选学生中重复，无法生成唯一用户名",
-                    )
-                )
-                continue
-
-            if student_no in existing_usernames:
-                errors.append(
-                    StudentUserBatchCreateError(
-                        student_id=student.id,
-                        student_name=student_name,
-                        student_no=student_no,
-                        reason="该学生账号已存在",
-                    )
-                )
-                continue
-
-            try:
-                with db.begin_nested():
-                    user = User(
-                        username=student_no,
-                        hashed_password=get_password_hash(student_no),
-                        real_name=student_name,
-                        role=UserRole.STUDENT.value,
-                        class_id=student.class_id,
-                    )
-                    db.add(user)
-                    db.flush()
-                    sync_student_course_enrollments(student, db)
-                existing_usernames.add(student_no)
-                created_users.append(f"{student_name}（{student_no}）")
-            except IntegrityError:
-                errors.append(
-                    StudentUserBatchCreateError(
-                        student_id=student.id,
-                        student_name=student_name,
-                        student_no=student_no,
-                        reason="该学生账号已存在或被其他操作占用",
-                    )
-                )
-            except Exception:
-                errors.append(
-                    StudentUserBatchCreateError(
-                        student_id=student.id,
-                        student_name=student_name,
-                        student_no=student_no,
-                        reason="创建失败，请稍后重试",
-                    )
-                )
-
-        db.commit()
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"批量载入学生用户失败：{exc}") from exc
-
-    if created_users:
-        preview = "、".join(created_users[:20])
-        if len(created_users) > 20:
-            preview += f" 等 {len(created_users)} 个账号"
-        LogService.log(
-            db=db,
-            action="批量创建",
-            target_type="用户",
-            user_id=current_user.id,
-            username=current_user.username,
-            target_name=f"学生用户 {len(created_users)} 个",
-            details=f"批量载入学生用户：{preview}",
-        )
-
-    return StudentUserBatchCreateResponse(
-        total=len(student_ids),
-        success=len(created_users),
-        failed=len(errors),
-        created_users=created_users,
-        errors=errors,
-    )
 
 
 @router.post("", response_model=UserResponse)
