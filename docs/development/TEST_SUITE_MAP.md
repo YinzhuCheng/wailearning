@@ -108,6 +108,8 @@ Additional targeted suite: **`e2e-discussion-cover-llm-tier3.spec.js`** — disc
 
 Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases) — homework submission table **content/comment preview** truncation, **LLM grading** long comments + regrade + 429 recovery, **multi-role** API guards, and **course cover** flows (teacher/admin UI + API). Run alone with `npx playwright test e2e-homework-comment-cover-tier4.spec.js` from `apps/web/admin`.
 
+Additive API-heavy tier after documentation alignment: **`e2e-docs-gap-tier15.spec.js`** — **`/api/discussions`** validation (`page_size`, scope mismatch, **`invoke_llm`** teacher denial), cross-class homework submission guards, orphan-course homework list for **class_teacher**, **`page_size`** discipline (**students** list **`le=1000`**), dual-gate mock LLM + **`process-grading`**, end-to-end mock grading drain, **`sync-status`** shape. Run alone with `npx playwright test e2e-docs-gap-tier15.spec.js` from `apps/web/admin`.
+
 They also have the highest dependence on the local execution environment.
 
 This directory also contains the **`future-advanced-coverage`** pair — thirty higher-difficulty Playwright scenarios split across two files (not a separate “backlog” pipeline; they run with the rest of `npm run test:e2e`).

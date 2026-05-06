@@ -318,6 +318,7 @@ The exhaustive narrative lives in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PI
 | Material chapter reorder contract (`ordered_chapter_ids`, POST vs PUT) | **66**, `material-chapters` API | Align tests with router verb + payload; seed needs ≥2 movable chapters. |
 | Responsive layout regression timeouts (`boundingBox` sampling) | **67**, large `el-table` / many cards | Cap locator iteration for viewport proofs. |
 | Large `users` table + Element Plus forms (`el-select`, batch move) | **68**, API-first setup | Prefer `page.request` / shared API helpers over flaky UI for bulk actions in long suites. |
+| Enrollment / cross-class homework expectations vs `prepare_student_course_context`, unknown `page_size` query keys | **69** | See pitfalls doc — do not assume `student_b` lacks required enrollment; validate `Query(le=...)` on the actual router. |
 | `SECRET_KEY` / `REQUIRE_STRONG_SECRETS` startup failures | **57** | Weak secrets rejected when strong validation is on — see [CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md). |
 
 When adding a **new** recurring failure mode, append it to `TEST_EXECUTION_PITFALLS.md` first, then add one row here so agents discover it without rereading the entire pitfalls file every time.

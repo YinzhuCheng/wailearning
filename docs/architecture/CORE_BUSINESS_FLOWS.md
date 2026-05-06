@@ -73,12 +73,14 @@ This is the highest-traffic “vertical slice” for the product.
 1. **Frontend**: student homework UI calls `POST /api/homeworks/{homework_id}/submission` with body validated by `HomeworkSubmissionCreate` — see `api/schemas.py`.
 2. **Router**: `submit_homework` in `api/routers/homework.py`.
 3. **Access**: `_ensure_homework_access` / `_resolve_student_for_user` ensure the caller is the roster-linked student for that homework’s class/course.
-4. **Persistence**:
+4. **Roster + enrollment side effects (student logins)**: `prepare_student_course_context` in `domains/courses/access.py` runs on many student requests and can **synchronize** `CourseEnrollment` rows for **required** courses from class roster — so a student user may gain enrollment implicitly without an explicit seed row. **`_resolve_student_for_user`** still checks enrollment when `homework.subject_id` is set; cross-class cases may hit **`ensure_course_access_http`** first (**403**) before roster mismatch (**404**).
+
+5. **Persistence**:
    - Upserts `HomeworkSubmission` summary row.
    - Inserts immutable `HomeworkAttempt` for each submission.
-5. **Auto grade enqueue**: if `homework.auto_grading_enabled`, calls `queue_grading_task(db, attempt, "new_submission")` — defined in `apps/backend/wailearning_backend/llm_grading.py`.
-6. **Summary refresh**: `refresh_submission_summary` updates denormalized fields on `HomeworkSubmission` used by list endpoints.
-7. **Commit** and response serialized via `_serialize_submission`.
+6. **Auto grade enqueue**: if `homework.auto_grading_enabled`, calls `queue_grading_task(db, attempt, "new_submission")` — defined in `apps/backend/wailearning_backend/llm_grading.py`.
+7. **Summary refresh**: `refresh_submission_summary` updates denormalized fields on `HomeworkSubmission` used by list endpoints.
+8. **Commit** and response serialized via `_serialize_submission`.
 
 Code anchor for enqueue:
 

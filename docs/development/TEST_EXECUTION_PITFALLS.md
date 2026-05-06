@@ -1679,6 +1679,30 @@ Cap sampled rows (**first `maxItems`**) and rely on **`expectNoPageHorizontalOve
 - When asserting presence on **`Users.vue`**, use **`locator('tbody tr').filter({ hasText: username })`** instead of **`getByRole('row', { name: regex })`**.
 - **`boundary: admin creates a new student`** now creates via **`POST /api/users`** then verifies the **table row** — avoids **`el-select`** teleport edge cases under heavy lists.
 
+### Pitfall 69: E2E assertions vs **`prepare_student_course_context`** and inconsistent **`page_size`** caps across routers
+
+### Symptom
+
+Authoring **`tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js`** (or similar API-heavy specs):
+
+1. **`student_b`** “not enrolled in required course” — **`GET /api/homeworks/{id}/submission/me`** unexpectedly returns **200** because **`prepare_student_course_context`** + **`sync_student_course_enrollments`** auto-create **`CourseEnrollment`** for **all** students in the class when the required-course sync runs — **待人工确认** whether treating every roster student as implicitly enrolled is intended product-wise.
+
+2. Cross-class homework submission expectation **`404`** from **`_resolve_student_for_user`** sometimes yields **`403`** instead because **`_ensure_homework_access`** runs **`ensure_course_access_http`** first; students enrolled only elsewhere hit **`PermissionError`** (**403**) before roster mismatch (**404**).
+
+3. **`GET /api/scores/appeals`** has **no `page_size` query parameter** — FastAPI ignores unknown query keys; **`page_size=5000`** returns **200** with the router's fixed **`limit(200)`** behavior. Tests that expect **422** from oversized **`page_size`** must target a route that actually declares **`Query(..., le=...)`** (for example **`GET /api/students`** uses **`le=1000`**).
+
+4. Same-class students may **`GET /api/points/students/{other_student_id}`** without **403** when both share a **`class_id`** — privacy expectations must not assume “student cannot read peer points” unless product explicitly forbids it (**待人工确认**).
+
+### Fix
+
+- Prefer **explicit cross-class homework rows** (admin-created **`Homework`** with **`class_id`** / **`subject_id`** pointing at **`course_other_teacher_id`** + **`class_id_2`**) when testing “wrong class” submission denial.
+- Accept **`[403, 404]`** where course-access vs roster-order differs.
+- Validate pagination bounds only against routers that validate **`page_size`** in **`Query`** — grep **`apps/backend/wailearning_backend/api/routers/*.py`** before writing **`422`** expectations.
+
+### Interpretation
+
+Documentation that says “enrollment must exist” should mention **class-wide required-course sync** on student requests, or new readers (and agents) will mis-design tests and false-positive “bugs”.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
