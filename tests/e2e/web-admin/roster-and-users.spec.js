@@ -1,5 +1,6 @@
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { obtainAccessToken, apiDelete } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -22,6 +23,12 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
 
   test('admin: roster enroll adds student_b to required course', async ({ page }) => {
     const s = scenario()
+    const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
+    // Bootstrap sync may already enroll all class students in required courses; remove so the UI can prove roster-enroll.
+    await apiDelete(`/api/subjects/${s.course_required_id}/students/${s.student_b.student_row_id}`, adminTok).catch(
+      () => {}
+    )
+
     await login(page, s.admin.username, s.admin.password)
 
     await page.goto('/subjects')
@@ -87,11 +94,17 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await page.goto('/users')
 
     const rowA = page.locator(`tr:has-text("${s.student_plain.username}")`)
+    await rowA.scrollIntoViewIfNeeded()
+    await expect(rowA).toBeVisible({ timeout: 30000 })
     await rowA.locator('.el-checkbox').first().click({ force: true })
+    await expect(page.getByTestId('users-open-batch-class')).toBeEnabled({ timeout: 30000 })
     await page.getByTestId('users-open-batch-class').click()
-    await expect(page.getByTestId('dialog-batch-class')).toBeVisible()
-    await page.getByTestId('batch-class-target-select').click({ force: true })
-    await page.getByRole('option', { name: s.class_name_1 }).click()
+    await expect(page.getByTestId('dialog-batch-class')).toBeVisible({ timeout: 30000 })
+    const dlg = page.getByTestId('dialog-batch-class')
+    await dlg.getByTestId('batch-class-target-select').click({ force: true })
+    const dropdown = page.locator('.el-select-dropdown').filter({ visible: true }).last()
+    await dropdown.waitFor({ state: 'visible', timeout: 20000 })
+    await page.getByRole('option', { name: s.class_name_1 }).first().click({ timeout: 30000 })
     await expect(page.getByTestId('batch-class-confirm')).toBeEnabled()
   })
 

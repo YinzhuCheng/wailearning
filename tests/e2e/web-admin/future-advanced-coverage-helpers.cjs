@@ -403,6 +403,16 @@ async function apiPostForm(pathname, token, formData) {
   return res.json()
 }
 
+/**
+ * Element Plus ElMessageBox.confirm — teleported, NOT `el-dialog` course forms.
+ * Using generic `getByRole('dialog')` often matches the wrong overlay after long SQLite runs.
+ */
+async function confirmElMessageBoxPrimary(page) {
+  const box = page.locator('.el-message-box').filter({ visible: true }).last()
+  await box.waitFor({ state: 'visible', timeout: 30000 })
+  await box.locator('.el-message-box__btns .el-button--primary').click({ timeout: 60000 })
+}
+
 module.exports = {
   apiBase,
   seedHeaders,
@@ -436,5 +446,6 @@ module.exports = {
   flattenChapterTree,
   getChapterTree,
   currentSelectedCourseId,
-  apiPostForm
+  apiPostForm,
+  confirmElMessageBoxPrimary
 }

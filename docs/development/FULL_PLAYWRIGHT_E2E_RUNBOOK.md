@@ -200,6 +200,14 @@ In-memory mock profiles in **`e2e_dev.py`** advance on **every** **`POST .../moc
 
 **Spec pattern:** after asserting the **first** grading outcome, call **`configureMockLlm`** again with **only** the step(s) needed for the **next** grading wave (see **`e2e-homework-comment-cover-tier4.spec.js`** case **08**).
 
+### `ElMessageBox` vs `el-dialog`, `el-select` visibility, roster, batch-class (Pitfalls 70–73)
+
+Full-suite passes (May 2026) reinforced that **`ElMessageBox.confirm`** must not be driven by the same locators as large **`el-dialog`** course editors. The shared harness uses **`confirmElMessageBoxPrimary`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`**.
+
+Roster table selection for **从花名册进课** may require a prior admin **`DELETE /api/subjects/{id}/students/{studentId}`** so **`student_b`** is not already **已在课** after **`sync_course_enrollments`**.
+
+**Batch调班** on **`/users`** with a large SQLite user count: scroll the target **`tr`**, assert **`users-open-batch-class`** is **enabled** before opening the dialog, then select the target class from a **visible** **`el-select-dropdown`**.
+
 ---
 
 ## Command reference

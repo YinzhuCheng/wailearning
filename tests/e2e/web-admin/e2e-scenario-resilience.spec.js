@@ -1,5 +1,6 @@
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { confirmElMessageBoxPrimary } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -198,19 +199,20 @@ async function apiFindUserIdByUsername(token, username) {
 }
 
 async function confirmPrimaryDialog(page) {
-  const dialog = page.locator('.el-overlay .el-dialog').last()
-  await expect(dialog).toBeVisible({ timeout: 15000 })
-  const buttons = [
-    page.getByRole('button', { name: /^(OK|确定|确认|保存|是)$/ }),
-    dialog.getByRole('button', { name: /^(OK|确定|确认|保存|是)$/ })
-  ]
-  for (const button of buttons) {
-    if (await button.count()) {
-      await button.first().click()
-      return
-    }
+  await confirmElMessageBoxPrimary(page)
+}
+
+async function pickBatchClassOption(page, className) {
+  const dlg = page.getByTestId('dialog-batch-class')
+  await dlg.getByTestId('batch-class-target-select').click({ force: true })
+  const dropdown = page.locator('.el-select-dropdown').filter({ visible: true }).last()
+  await dropdown.waitFor({ state: 'visible', timeout: 20000 })
+  try {
+    await dropdown.locator('input').first().fill(className, { timeout: 5000 })
+  } catch {
+    /* optional filter input depending on Element Plus build */
   }
-  throw new Error('No confirmation button found in active dialog')
+  await page.getByRole('option', { name: className }).first().click({ timeout: 30000 })
 }
 
 async function currentSelectedCourseId(page) {
@@ -246,6 +248,7 @@ function electiveCatalogRow(page, courseName) {
     .locator('.elective-catalog-card')
     .locator('.el-table__body tbody tr')
     .filter({ hasText: courseName })
+    .filter({ visible: true })
     .first()
 }
 
@@ -1118,6 +1121,14 @@ test.describe('E2E resilience scenarios', () => {
 
     await apiPostJson(`/api/subjects/${s.course_elective_id}/student-self-enroll`, studentToken, {}).catch(() => {})
 
+    await expect
+      .poll(async () => {
+        const catalog = await apiStudentCourseCatalog(studentToken)
+        const row = catalog.find(r => Number(r.id) === Number(s.course_elective_id))
+        return Boolean(row?.is_enrolled)
+      }, { timeout: 45000 })
+      .toBe(true)
+
     const ctxA = await browser.newContext()
     const ctxB = await browser.newContext()
     const pageA = await ctxA.newPage()
@@ -1183,8 +1194,8 @@ test.describe('E2E resilience scenarios', () => {
       await expect(studentRow).toBeVisible({ timeout: 15000 })
       await studentRow.locator('.el-checkbox').first().click()
       await adminPage.getByTestId('users-open-batch-class').click()
-      await adminPage.getByTestId('batch-class-target-select').click({ force: true })
-      await adminPage.getByRole('option', { name: class2.name }).click()
+      await expect(adminPage.getByTestId('dialog-batch-class')).toBeVisible({ timeout: 30000 })
+      await pickBatchClassOption(adminPage, class2.name)
       await adminPage.getByTestId('batch-class-confirm').click()
       await confirmPrimaryDialog(adminPage)
 
@@ -1536,12 +1547,15 @@ test.describe('E2E resilience scenarios', () => {
       const rowB = pageB.locator(`tr:has-text("${s.student_plain.username}")`)
       await expect(rowA).toBeVisible({ timeout: 15000 })
       await expect(rowB).toBeVisible({ timeout: 15000 })
+      await rowA.scrollIntoViewIfNeeded()
+      await rowB.scrollIntoViewIfNeeded()
       await rowA.locator('.el-checkbox').first().click({ force: true })
       await rowB.locator('.el-checkbox').first().click({ force: true })
+      await expect(pageA.getByTestId('users-open-batch-class')).toBeEnabled({ timeout: 30000 })
 
       await pageA.getByTestId('users-open-batch-class').click()
-      await pageA.getByTestId('batch-class-target-select').click({ force: true })
-      await pageA.getByRole('option', { name: class2.name }).click()
+      await expect(pageA.getByTestId('dialog-batch-class')).toBeVisible({ timeout: 30000 })
+      await pickBatchClassOption(pageA, class2.name)
       await pageA.getByTestId('batch-class-confirm').click()
       await confirmPrimaryDialog(pageA)
 

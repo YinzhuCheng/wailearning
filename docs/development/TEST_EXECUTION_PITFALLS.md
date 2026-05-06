@@ -1703,6 +1703,64 @@ Authoring **`tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js`** (or similar API-
 
 Documentation that says “enrollment must exist” should mention **class-wide required-course sync** on student requests, or new readers (and agents) will mis-design tests and false-positive “bugs”.
 
+### Pitfall 70: **`ElMessageBox.confirm`** vs **`el-dialog`** — wrong overlay target after long SQLite runs
+
+### Symptom
+
+**`tests/e2e/web-admin/e2e-pitfall-guard-rails.spec.js`** case **01**, **`e2e-scenario-boundary-dynamic-complex.spec.js`** delete path, **`future-advanced-coverage.spec.js`** case **3**, **`e2e-scenario-resilience.spec.js`** batch-class paths:
+
+- `waitForResponse` on **`DELETE /api/subjects/:id`** times out,
+- or `getByRole('dialog').filter({ has: button OK })` clicks the **wrong** overlay,
+- or Playwright waits until **test timeout** (~300s) while the **MessageBox** never receives the intended click.
+
+### Context
+
+Element Plus **`ElMessageBox.confirm`** renders a **teleported** small modal with class **`el-message-box`**, not the same accessibility tree as large **`el-dialog`** course forms. After hundreds of seeds, **multiple** hidden `.el-select-dropdown` nodes and **stacked** overlays can exist; targeting **“last dialog”** is ambiguous.
+
+### Fix
+
+Use a **MessageBox-scoped** primary button:
+
+- helper **`confirmElMessageBoxPrimary`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`** — waits for **`.el-message-box`** then clicks **`.el-message-box__btns .el-button--primary`**.
+
+### Interpretation
+
+Do not assert delete flows by title **`删除课程`** alone — pair **network** assertions with the **MessageBox** button actually wired to **`ElMessageBox.confirm`**.
+
+### Pitfall 71: **`el-select-dropdown`** — many nodes stay **`hidden`** in DOM; prefer **visible** scoping
+
+### Symptom
+
+**`e2e-scenario-boundary-dynamic-complex.spec.js`** — `clickSelectOptionByLabel` waits forever on **`.el-select-dropdown.last()`** where the last node is **always hidden** (teleported popper retain).
+
+### Fix
+
+Use **`.filter({ visible: true })`**, wait for **visible** popper after opening the trigger, or **avoid UI selects entirely** for setup — e.g. **`POST /api/subjects`** with **`SubjectCreate`** for course rows when the test goal is **delete / list consistency**, not **form layout**.
+
+### Pitfall 72: Roster-enroll UI assumes **`student_b`** is **not** already in the required course
+
+### Symptom
+
+**`roster-and-users.spec.js`** — checkbox stays disabled / no **`POST .../roster-enroll`**.
+
+### Context
+
+**`sync_course_enrollments`** (bootstrap + course writes) can enroll **all** class roster students into **required** courses. **`student_b`** is often already **`已在课`**, and **`el-table`** selection is **`selectable: row => !row._enrolled`**.
+
+### Fix
+
+Before opening **从花名册进课**, **`DELETE /api/subjects/{course_required_id}/students/{student_row_id}`** as admin (ignore **404**) so the row returns to **未在课** for the UI assertion.
+
+### Pitfall 73: **Batch调班** — enable **`users-open-batch-class`** before open; optional filter on **`filterable`** `el-select`
+
+### Symptom
+
+**`dialog-batch-class`** never appears — **`users-open-batch-class`** stays disabled because **no row selected** in a huge **`/users`** table.
+
+### Fix
+
+**`scrollIntoViewIfNeeded`** on the **`tr`**, then **`expect(users-open-batch-class).toBeEnabled`**, then open dialog; pick target class via **visible** dropdown + **`getByRole('option')`** (filter input is **optional** — may not exist in all EP builds).
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
