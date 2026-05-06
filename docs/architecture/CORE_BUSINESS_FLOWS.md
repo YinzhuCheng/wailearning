@@ -56,7 +56,9 @@ If you change router signatures, queue semantics, or worker startup, update this
   - **Admin**: all subjects.
   - **Student**: subjects linked through `CourseEnrollment` after `prepare_student_course_context` reconciles roster vs account class when applicable.
   - **Teacher**: subjects where `Subject.teacher_id == user.id`.
-  - **Class teacher**: union of subjects in `user.class_id` and subjects where the user is the assigned teacher.
+  - **Class teacher**: subjects whose legacy anchor `Subject.class_id == user.class_id`, **plus** any subject that has a `subject_class_links` row for that class, union subjects where the user is the assigned teacher (`Subject.teacher_id`).
+
+- **Multi-class required offerings** — `subject_class_links` (`SubjectClassLink` ORM) stores `(subject_id, class_id, enrollment_mode)`. Whole-class auto sync only applies to links with `enrollment_mode == all_in_class`. Electives intentionally have **no** links and `Subject.class_id IS NULL`; student self-enroll writes `CourseEnrollment.class_id` from the student's roster class, not from the course.
 
 ### Student roster coupling
 
@@ -73,7 +75,7 @@ This is the highest-traffic “vertical slice” for the product.
 1. **Frontend**: student homework UI calls `POST /api/homeworks/{homework_id}/submission` with body validated by `HomeworkSubmissionCreate` — see `api/schemas.py`.
 2. **Router**: `submit_homework` in `api/routers/homework.py`.
 3. **Access**: `_ensure_homework_access` / `_resolve_student_for_user` ensure the caller is the roster-linked student for that homework’s class/course.
-4. **Roster + enrollment side effects (student logins)**: `prepare_student_course_context` in `domains/courses/access.py` runs on many student requests and can **synchronize** `CourseEnrollment` rows for **required** courses from class roster — so a student user may gain enrollment implicitly without an explicit seed row. **`_resolve_student_for_user`** still checks enrollment when `homework.subject_id` is set; cross-class cases may hit **`ensure_course_access_http`** first (**403**) before roster mismatch (**404**).
+4. **Roster + enrollment side effects (student logins)**: `prepare_student_course_context` in `domains/courses/access.py` runs on many student requests and can **synchronize** `CourseEnrollment` rows for **required** courses by inspecting `subject_class_links` where `enrollment_mode == all_in_class` (with a legacy fallback to `Subject.class_id == student.class_id` until every historical row has been backfilled). Students may therefore gain enrollment implicitly without an explicit teacher click. **`_resolve_student_for_user`** still checks enrollment when `homework.subject_id` is set; cross-class cases may hit **`ensure_course_access_http`** first (**403**) before roster mismatch (**404**).
 
 5. **Persistence**:
    - Upserts `HomeworkSubmission` summary row.

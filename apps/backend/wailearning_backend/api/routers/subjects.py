@@ -15,7 +15,9 @@ from apps.backend.wailearning_backend.domains.courses.access import (
     get_student_elective_catalog_query,
     get_student_profile_for_user,
     prepare_student_course_context,
+    refresh_subject_primary_class_id,
     remove_course_enrollment,
+    subject_linked_class_ids,
     sync_course_enrollments,
 )
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
@@ -42,6 +44,7 @@ from apps.backend.wailearning_backend.db.models import (
     Semester,
     Student,
     Subject,
+    SubjectClassLink,
     User,
     UserRole,
 )
@@ -56,6 +59,7 @@ from apps.backend.wailearning_backend.api.schemas import (
     StudentCourseCatalogItem,
     StudentElectiveSelfDropResult,
     StudentElectiveSelfEnrollResult,
+    SubjectClassLinkResponse,
     SubjectCreate,
     SubjectResponse,
     SubjectUpdate,
@@ -200,6 +204,56 @@ def _resolve_semester(
     raise HTTPException(status_code=400, detail="Semester not found.")
 
 
+def _replace_subject_class_links(db: Session, course: Subject, link_items: list[tuple[int, str]]) -> None:
+    if not link_items:
+        raise HTTPException(status_code=400, detail="必修课至少需要绑定一个行政班级。")
+    db.query(SubjectClassLink).filter(SubjectClassLink.subject_id == course.id).delete(synchronize_session=False)
+    seen: set[int] = set()
+    for cid, mode in link_items:
+        cid_int = int(cid)
+        if cid_int in seen:
+            continue
+        seen.add(cid_int)
+        m = (mode or "all_in_class").strip().lower()
+        if m not in ("all_in_class", "roster_subset"):
+            m = "all_in_class"
+        class_row = db.query(Class).filter(Class.id == cid_int).first()
+        if not class_row:
+            raise HTTPException(status_code=400, detail="班级不存在。")
+        db.add(SubjectClassLink(subject_id=course.id, class_id=cid_int, enrollment_mode=m))
+    db.flush()
+    refresh_subject_primary_class_id(course, db)
+
+
+def _required_course_duplicate(
+    db: Session,
+    *,
+    name: str,
+    semester_id: Optional[int],
+    sorted_class_ids: tuple[int, ...],
+    exclude_subject_id: Optional[int] = None,
+) -> Optional[Subject]:
+    q = db.query(Subject).filter(Subject.name == name, Subject.semester_id == semester_id)
+    if exclude_subject_id is not None:
+        q = q.filter(Subject.id != exclude_subject_id)
+    for candidate in q.all():
+        if (candidate.course_type or "required").strip().lower() == "elective":
+            continue
+        existing_ids = tuple(sorted(subject_linked_class_ids(db, candidate.id)))
+        if not existing_ids and candidate.class_id:
+            existing_ids = tuple(sorted([int(candidate.class_id)]))
+        if existing_ids == sorted_class_ids:
+            return candidate
+    return None
+
+
+def _roster_class_ids_for_course(db: Session, course: Subject) -> set[int]:
+    ids = set(subject_linked_class_ids(db, course.id))
+    if not ids and course.class_id:
+        ids.add(int(course.class_id))
+    return ids
+
+
 def _serialize_course(course: Subject, db: Session, *, student_count: Optional[int] = None) -> SubjectResponse:
     if student_count is None:
         student_count = db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).count()
@@ -210,11 +264,37 @@ def _serialize_course(course: Subject, db: Session, *, student_count: Optional[i
     )
     course_times = _deserialize_course_times(course)
     primary_course_time = course_times[0] if course_times else None
+
+    ct = (course.course_type or "required").strip().lower()
+    link_rows = (
+        db.query(SubjectClassLink, Class.name)
+        .join(Class, Class.id == SubjectClassLink.class_id)
+        .filter(SubjectClassLink.subject_id == course.id)
+        .order_by(SubjectClassLink.id.asc())
+        .all()
+    )
+    class_links = [
+        SubjectClassLinkResponse(
+            class_id=link.class_id,
+            class_name=name,
+            enrollment_mode=(link.enrollment_mode or "all_in_class"),
+        )
+        for link, name in link_rows
+    ]
+
+    if ct == "elective":
+        display_class_name = "-"
+        display_class_id = None
+    else:
+        names = [ln.class_name for ln in class_links if ln.class_name]
+        display_class_name = "、".join(names) if names else (course.class_obj.name if course.class_obj else None)
+        display_class_id = course.class_id
+
     return SubjectResponse(
         id=course.id,
         name=course.name,
         teacher_id=course.teacher_id,
-        class_id=course.class_id,
+        class_id=display_class_id,
         semester_id=course.semester_id,
         course_type=course.course_type or "required",
         status=course.status or "active",
@@ -226,7 +306,8 @@ def _serialize_course(course: Subject, db: Session, *, student_count: Optional[i
         description=course.description,
         cover_image_url=course.cover_image_url,
         teacher_name=course.teacher.real_name if course.teacher else None,
-        class_name=course.class_obj.name if course.class_obj else None,
+        class_name=display_class_name,
+        class_links=class_links,
         student_count=student_count,
         created_at=course.created_at,
     )
@@ -242,21 +323,12 @@ def _serialize_student_course_catalog_item(
     base = _serialize_course(course, db)
     ct = (course.course_type or "required").strip().lower()
     is_enrolled = course.id in enrolled_subject_ids
-    same_class = (
-        course.class_id is not None
-        and student.class_id is not None
-        and int(course.class_id) == int(student.class_id)
-    )
     if ct == "elective":
         if is_enrolled:
             hint = "已选修，可退选。"
-        elif not course.class_id:
-            hint = "课程未绑定班级，暂不可选课。"
-        elif not same_class:
-            hint = "仅可选修本班开设的课程；其他班级课程可浏览，选课按钮不可用。"
         else:
-            hint = "本班开设的选修课，可自行选课。"
-        can_self = bool(same_class and course.class_id and not is_enrolled)
+            hint = "选修课不按行政班绑定；可直接选课。"
+        can_self = bool(not is_enrolled)
     else:
         if is_enrolled:
             hint = "已在花名册中（通常由教师按班级统一添加）。"
@@ -271,8 +343,13 @@ def _serialize_student_course_catalog_item(
     )
 
 
-def _serialize_enrollment(enrollment: CourseEnrollment) -> CourseEnrollmentResponse:
+def _serialize_enrollment(enrollment: CourseEnrollment, db: Session) -> CourseEnrollmentResponse:
     enrollment_type = enrollment.enrollment_type or ("elective" if enrollment.can_remove else "required")
+    subj = enrollment.course or db.query(Subject).filter(Subject.id == enrollment.subject_id).first()
+    subj_ct = (subj.course_type if subj else "required").strip().lower()
+    class_name = enrollment.class_obj.name if enrollment.class_obj else None
+    if subj_ct == "elective" or enrollment_type == "elective":
+        class_name = "-"
     return CourseEnrollmentResponse(
         id=enrollment.id,
         subject_id=enrollment.subject_id,
@@ -283,7 +360,7 @@ def _serialize_enrollment(enrollment: CourseEnrollment) -> CourseEnrollmentRespo
         created_at=enrollment.created_at,
         student_name=enrollment.student.name if enrollment.student else None,
         student_no=enrollment.student.student_no if enrollment.student else None,
-        class_name=enrollment.class_obj.name if enrollment.class_obj else None,
+        class_name=class_name,
     )
 
 
@@ -368,7 +445,7 @@ def list_student_course_catalog(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Active courses schoolwide for students: 必修/选修 labels + enrollment conditions; electives self-enroll only same class."""
+    """Active courses for students: 必修/选修 labels; electives are school-wide self-enroll (not class-bound)."""
     if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Only students can browse the course catalog.")
 
@@ -429,6 +506,8 @@ def student_self_enroll_elective(
     student = get_student_profile_for_user(current_user, db)
     if not student:
         raise HTTPException(status_code=400, detail="未找到与账号匹配的花名册，无法选课。")
+    if not student.class_id:
+        raise HTTPException(status_code=400, detail="账号未绑定行政班，无法选课（选课记录需归档班级）。")
 
     course = db.query(Subject).filter(Subject.id == subject_id).first()
     if not course:
@@ -437,14 +516,6 @@ def student_self_enroll_elective(
         raise HTTPException(status_code=400, detail="课程未开放选课。")
     if (course.course_type or "").strip() != "elective":
         raise HTTPException(status_code=400, detail="仅选修课支持学生自主选课。")
-    if not course.class_id:
-        raise HTTPException(status_code=400, detail="课程未绑定班级，无法选课。")
-
-    if student.class_id != course.class_id:
-        raise HTTPException(
-            status_code=400,
-            detail="只能选修所属行政班开设的选修课；如需调整班级请联系管理员。",
-        )
 
     existing = (
         db.query(CourseEnrollment)
@@ -463,7 +534,7 @@ def student_self_enroll_elective(
             CourseEnrollment(
                 subject_id=course.id,
                 student_id=student.id,
-                class_id=course.class_id,
+                class_id=student.class_id,
                 enrollment_type="elective",
                 can_remove=True,
             )
@@ -562,18 +633,7 @@ def create_subject(
     if current_user.role != UserRole.ADMIN:
         target_teacher_id = current_user.id
 
-    class_obj = None
-    if subject_data.class_id is not None:
-        class_obj = db.query(Class).filter(Class.id == subject_data.class_id).first()
-        if not class_obj:
-            raise HTTPException(status_code=400, detail="Class not found.")
-
-    if class_obj is None:
-        if not subject_data.students:
-            raise HTTPException(status_code=400, detail="Please upload a student roster or choose an existing class.")
-        class_obj = Class(name=_normalize_course_class_name(subject_data), grade=1)
-        db.add(class_obj)
-        db.flush()
+    course_type = (subject_data.course_type or "required").strip().lower()
 
     semester_obj = _resolve_semester(
         db,
@@ -589,24 +649,80 @@ def create_subject(
     )
     primary_course_time = course_times[0] if course_times else None
 
-    existing = (
-        db.query(Subject)
-        .filter(
-            Subject.name == subject_data.name,
-            Subject.class_id == class_obj.id,
-            Subject.semester_id == (semester_obj.id if semester_obj else None),
-        )
-        .first()
-    )
-    if existing:
-        raise HTTPException(status_code=400, detail="A course with the same name already exists for this class and semester.")
+    if course_type == "elective":
+        if subject_data.students:
+            raise HTTPException(status_code=400, detail="选修课不支持随课程创建花名册或导入学生。")
+        if subject_data.class_links:
+            raise HTTPException(status_code=400, detail="选修课不需要配置行政班级关联。")
+        if subject_data.class_id is not None:
+            raise HTTPException(status_code=400, detail="选修课不应绑定行政班级，请将所属班级留空。")
 
+        dupe = (
+            db.query(Subject)
+            .filter(
+                Subject.name == subject_data.name,
+                Subject.semester_id == (semester_obj.id if semester_obj else None),
+                Subject.course_type == "elective",
+            )
+            .first()
+        )
+        if dupe:
+            raise HTTPException(status_code=400, detail="同学期已存在同名的选修课程。")
+
+        course = Subject(
+            name=subject_data.name,
+            teacher_id=target_teacher_id,
+            class_id=None,
+            semester_id=semester_obj.id if semester_obj else None,
+            course_type="elective",
+            status=subject_data.status,
+            semester=semester_label,
+            weekly_schedule=primary_course_time.weekly_schedule if primary_course_time else subject_data.weekly_schedule,
+            course_start_at=primary_course_time.course_start_at if primary_course_time else subject_data.course_start_at,
+            course_end_at=primary_course_time.course_end_at if primary_course_time else subject_data.course_end_at,
+            course_times=_serialize_course_times_for_storage(course_times),
+            description=subject_data.description,
+        )
+        db.add(course)
+        db.commit()
+        db.refresh(course)
+        return _serialize_course(course, db)
+
+    link_plan: list[tuple[int, str]] = []
+    if subject_data.class_links:
+        link_plan = [(int(item.class_id), item.enrollment_mode) for item in subject_data.class_links]
+
+    class_obj: Optional[Class] = None
+    if subject_data.class_id is not None and not link_plan:
+        class_obj = db.query(Class).filter(Class.id == subject_data.class_id).first()
+        if not class_obj:
+            raise HTTPException(status_code=400, detail="Class not found.")
+        link_plan = [(class_obj.id, "all_in_class")]
+
+    if not link_plan:
+        if not subject_data.students:
+            raise HTTPException(status_code=400, detail="必修课请选择班级（或多班级），或上传花名册创建班级。")
+        class_obj = Class(name=_normalize_course_class_name(subject_data), grade=1)
+        db.add(class_obj)
+        db.flush()
+        link_plan = [(class_obj.id, "all_in_class")]
+
+    sorted_ids = tuple(sorted({int(cid) for cid, _ in link_plan}))
+    if _required_course_duplicate(
+        db,
+        name=subject_data.name,
+        semester_id=semester_obj.id if semester_obj else None,
+        sorted_class_ids=sorted_ids,
+    ):
+        raise HTTPException(status_code=400, detail="同学期已存在绑定相同班级集合的同名必修课程。")
+
+    primary_cid = link_plan[0][0]
     course = Subject(
         name=subject_data.name,
         teacher_id=target_teacher_id,
-        class_id=class_obj.id,
+        class_id=primary_cid,
         semester_id=semester_obj.id if semester_obj else None,
-        course_type=subject_data.course_type,
+        course_type="required",
         status=subject_data.status,
         semester=semester_label,
         weekly_schedule=primary_course_time.weekly_schedule if primary_course_time else subject_data.weekly_schedule,
@@ -617,6 +733,8 @@ def create_subject(
     )
     db.add(course)
     db.flush()
+
+    _replace_subject_class_links(db, course, link_plan)
 
     enrollment_overrides: list[tuple[Student, str]] = []
     if subject_data.students:
@@ -667,7 +785,9 @@ def update_subject(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
 
-    original_class_id = course.class_id
+    original_link_ids = set(subject_linked_class_ids(db, course.id))
+    if not original_link_ids and course.class_id:
+        original_link_ids = {int(course.class_id)}
 
     if subject_data.course_end_at and subject_data.course_start_at and subject_data.course_end_at < subject_data.course_start_at:
         raise HTTPException(status_code=400, detail="Course end time must be later than start time.")
@@ -678,10 +798,13 @@ def update_subject(
     if current_user.role != UserRole.ADMIN:
         subject_data.teacher_id = current_user.id
 
-    for field in ["name", "teacher_id", "class_id", "course_type", "status", "description"]:
+    for field in ["name", "teacher_id", "status", "description"]:
         value = getattr(subject_data, field)
         if value is not None:
             setattr(course, field, value)
+
+    if subject_data.course_type is not None:
+        course.course_type = subject_data.course_type
 
     if subject_data.remove_cover_image:
         prev = course.cover_image_url
@@ -722,11 +845,30 @@ def update_subject(
         course.semester_id = semester_obj.id if semester_obj else None
         course.semester = semester_obj.name if semester_obj else None
 
-    if course.class_id is None:
-        raise HTTPException(status_code=400, detail="Course must belong to a class.")
+    ct = (course.course_type or "required").strip().lower()
 
-    if course.class_id != original_class_id:
-        db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).delete()
+    if ct == "elective":
+        db.query(SubjectClassLink).filter(SubjectClassLink.subject_id == course.id).delete(synchronize_session=False)
+        course.class_id = None
+        if subject_data.class_links is not None:
+            raise HTTPException(status_code=400, detail="选修课不能配置行政班级关联。")
+        if subject_data.class_id is not None:
+            raise HTTPException(status_code=400, detail="选修课不能绑定行政班级。")
+    else:
+        if subject_data.class_links is not None:
+            pairs = [(int(x.class_id), x.enrollment_mode) for x in subject_data.class_links]
+            _replace_subject_class_links(db, course, pairs)
+        elif subject_data.class_id is not None:
+            _replace_subject_class_links(db, course, [(int(subject_data.class_id), "all_in_class")])
+        else:
+            refresh_subject_primary_class_id(course, db)
+
+        if not subject_linked_class_ids(db, course.id):
+            raise HTTPException(status_code=400, detail="必修课至少需要绑定一个行政班级。")
+
+        new_link_ids = set(subject_linked_class_ids(db, course.id))
+        if tuple(sorted(new_link_ids)) != tuple(sorted(original_link_ids)):
+            db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).delete(synchronize_session=False)
 
     sync_course_enrollments(course, db)
     db.commit()
@@ -884,7 +1026,7 @@ def get_subject_students(
         raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
     enrollments = get_enrolled_students(subject_id, db)
-    return [_serialize_enrollment(enrollment) for enrollment in enrollments]
+    return [_serialize_enrollment(enrollment, db) for enrollment in enrollments]
 
 
 @router.post("/{subject_id}/sync-enrollments")
@@ -935,8 +1077,10 @@ def enroll_roster_students_on_subject(
     except PermissionError:
         raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
-    if not course.class_id:
-        raise HTTPException(status_code=400, detail="Course has no class; cannot roster-enroll.")
+    ct_course = (course.course_type or "required").strip().lower()
+    allowed_classes = _roster_class_ids_for_course(db, course)
+    if ct_course != "elective" and not allowed_classes:
+        raise HTTPException(status_code=400, detail="该必修课未绑定任何行政班，无法从花名册进课。")
 
     student_ids = list(dict.fromkeys(payload.student_ids))
     if not student_ids:
@@ -964,7 +1108,11 @@ def enroll_roster_students_on_subject(
             skipped_missing += 1
             continue
 
-        if student.class_id != course.class_id:
+        if ct_course == "elective":
+            if not student.class_id:
+                skipped_wrong_class += 1
+                continue
+        elif not student.class_id or int(student.class_id) not in allowed_classes:
             skipped_wrong_class += 1
             continue
 
@@ -978,7 +1126,7 @@ def enroll_roster_students_on_subject(
                     CourseEnrollment(
                         subject_id=course.id,
                         student_id=student.id,
-                        class_id=course.class_id,
+                        class_id=student.class_id,
                         enrollment_type=enrollment_type,
                         can_remove=can_remove,
                     )
@@ -1046,7 +1194,7 @@ def update_subject_student_enrollment_type(
     enrollment.can_remove = enrollment_type == "elective"
     db.commit()
     db.refresh(enrollment)
-    return _serialize_enrollment(enrollment)
+    return _serialize_enrollment(enrollment, db)
 
 
 @router.delete("/{subject_id}/students/{student_id}")

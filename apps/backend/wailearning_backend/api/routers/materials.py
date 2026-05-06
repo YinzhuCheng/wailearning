@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http, subject_linked_class_ids
 from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Class, CourseMaterial, CourseMaterialChapter, CourseMaterialSection, User, UserRole
@@ -244,8 +244,13 @@ def create_material(
 
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
-        if course.class_id and course.class_id != data.class_id:
+        linked = set(subject_linked_class_ids(db, course.id))
+        if linked:
+            if data.class_id not in linked:
+                raise HTTPException(status_code=400, detail="课程资料的所属班级必须是该必修课已绑定的行政班之一。")
+        elif course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
+
         _validate_chapter_ids_exist(db, data.subject_id, data.chapter_ids)
 
     material = CourseMaterial(

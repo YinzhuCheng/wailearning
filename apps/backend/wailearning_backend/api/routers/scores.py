@@ -7,7 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http, get_enrolled_students, get_student_profile_for_user
+from apps.backend.wailearning_backend.domains.courses.access import (
+    ensure_course_access_http,
+    get_enrolled_students,
+    get_student_profile_for_user,
+    subject_linked_class_ids,
+)
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseExamWeight, CourseGradeScheme, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
 from apps.backend.wailearning_backend.core.permissions import is_student
@@ -31,6 +36,15 @@ from apps.backend.wailearning_backend.api.schemas import (
 
 
 router = APIRouter(prefix="/api/scores", tags=["成绩管理"])
+
+
+def _score_subject_allows_class(db: Session, subject: Subject, class_id: int) -> bool:
+    linked = set(subject_linked_class_ids(db, subject.id))
+    if linked:
+        return int(class_id) in linked
+    if subject.class_id:
+        return int(subject.class_id) == int(class_id)
+    return True
 
 
 def _ensure_score_write_access(current_user: User):
@@ -156,7 +170,7 @@ def create_score(
     subject = db.query(Subject).filter(Subject.id == score_data.subject_id).first()
     if not subject:
         raise HTTPException(status_code=400, detail="Course not found.")
-    if subject.class_id and subject.class_id != score_data.class_id:
+    if not _score_subject_allows_class(db, subject, score_data.class_id):
         raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
     _validate_score_uniqueness(
@@ -633,7 +647,7 @@ async def create_scores_batch(
         if not subject:
             errors.append(f"Row {index}: course not found.")
             continue
-        if subject.class_id and subject.class_id != class_id:
+        if not _score_subject_allows_class(db, subject, class_id):
             errors.append(f"Row {index}: selected course does not belong to this class.")
             continue
 

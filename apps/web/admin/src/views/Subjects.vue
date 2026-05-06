@@ -90,7 +90,7 @@
           <el-table-column prop="final_score_text" label="最终成绩" width="140" />
         </el-table>
 
-        <template v-if="detailCourse?.class_id" #footer>
+        <template v-if="detailCourse?.class_id || (detailCourse?.class_links && detailCourse.class_links.length)" #footer>
           <div class="course-detail-footer">
             <el-button @click="courseDetailVisible = false">关闭</el-button>
             <el-button type="warning" plain @click="openRosterEnrollFromDetail">从花名册进课…</el-button>
@@ -165,11 +165,6 @@
           <el-form-item label="课程名称" prop="name">
             <el-input v-model="form.name" data-testid="subjects-form-name" />
           </el-form-item>
-          <el-form-item label="所属班级" prop="class_id">
-            <el-select v-model="form.class_id" placeholder="请选择班级" style="width: 100%">
-              <el-option v-for="item in classes" :key="item.id" :label="item.name" :value="item.id" />
-            </el-select>
-          </el-form-item>
           <el-form-item label="任课老师" prop="teacher_id">
             <el-select v-model="form.teacher_id" placeholder="请选择任课老师" style="width: 100%" clearable>
               <el-option v-for="item in teachers" :key="item.id" :label="item.real_name" :value="item.id" />
@@ -181,6 +176,41 @@
               <el-radio label="elective">选修课</el-radio>
             </el-radio-group>
           </el-form-item>
+
+          <template v-if="form.course_type === 'elective'">
+            <el-alert type="info" :closable="false" show-icon class="subject-elective-hint">
+              选修课不按行政班绑定；课程列表「班级」列显示为「-」。学生可在选课目录中自愿选课。
+            </el-alert>
+          </template>
+
+          <el-form-item v-else label="行政班级" prop="class_links">
+            <div class="class-links-editor">
+              <div v-for="(row, idx) in form.class_links" :key="`cl-${idx}`" class="class-link-row">
+                <el-select v-model="row.class_id" placeholder="选择班级" filterable style="width: 220px">
+                  <el-option v-for="item in classes" :key="item.id" :label="item.name" :value="item.id" />
+                </el-select>
+                <el-radio-group v-model="row.enrollment_mode" class="class-link-mode">
+                  <el-radio label="all_in_class">全班自动进课</el-radio>
+                  <el-radio label="roster_subset">按花名册选部分进课</el-radio>
+                </el-radio-group>
+                <el-button
+                  v-if="form.class_links.length > 1"
+                  text
+                  type="danger"
+                  @click="removeClassLinkRow(idx)"
+                >
+                  移除
+                </el-button>
+              </div>
+              <el-button plain size="small" class="class-links-editor__add" @click="addClassLinkRow">
+                添加班级
+              </el-button>
+              <p class="hint muted">
+                必修课可对应多个行政班；「全班自动」会与各班花名册对齐；「按花名册选部分」仅通过「从花名册进课」手动勾选。
+              </p>
+            </div>
+          </el-form-item>
+
           <el-form-item label="课程状态" prop="status">
             <el-radio-group v-model="form.status">
               <el-radio label="active">进行中</el-radio>
@@ -305,17 +335,23 @@
         <el-alert type="warning" :closable="false" class="roster-enroll-alert">
           <template #title>与花名册一致</template>
           <p class="roster-enroll-alert-body">
-            仅允许将<strong>本课程所属行政班花名册</strong>中的学生加入选课；不会把外班学生写入本课。
-            若某生尚未出现在下列名单中，请先在「学生信息」中维护该班花名册（或粘贴批量导入），再返回此处勾选。
-            需要<strong>全班</strong>与花名册对齐时，请点下方「全班加入选课」；部分进课请勾选后点「加入选课」。
+            仅允许将<strong>本课程已绑定行政班花名册</strong>中的学生加入选课。
+            必修课若绑定多个班级，请先选择要操作的班级再勾选学生。
+            需要<strong>全班</strong>与花名册对齐时，请点「全班加入选课」（仅对标记为「全班自动进课」的班级生效）；部分进课请勾选后点「加入选课」。
           </p>
         </el-alert>
 
-        <el-empty v-if="rosterEnrollCourse && !rosterEnrollCourse.class_id" description="当前课程未绑定班级，无法从花名册进课。" />
+        <el-empty v-if="rosterEnrollCourse && !rosterLinkOptions.length" description="当前课程未绑定行政班，无法从花名册进课。" />
 
         <template v-else>
+          <div v-if="rosterEnrollCourse && rosterLinkOptions.length > 1" class="roster-enroll-pick-class">
+            <span class="muted">花名册班级：</span>
+            <el-select v-model="rosterPickClassId" placeholder="选择班级" style="width: 260px">
+              <el-option v-for="opt in rosterLinkOptions" :key="opt.id" :label="opt.name" :value="opt.id" />
+            </el-select>
+          </div>
           <div v-if="rosterEnrollCourse" class="roster-enroll-meta">
-            <span>班级：{{ rosterEnrollCourse.class_name || '—' }}</span>
+            <span>当前班级：{{ rosterSelectedClassLabel }}</span>
           </div>
 
           <el-table
@@ -342,7 +378,7 @@
         <template #footer>
           <el-button @click="rosterEnrollVisible = false">取消</el-button>
           <el-button
-            v-if="userStore.isAdmin && rosterEnrollCourse?.class_id"
+            v-if="userStore.isAdmin && rosterLinkOptions.length"
             type="warning"
             plain
             data-testid="btn-roster-enroll-all-class"
@@ -493,7 +529,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
@@ -546,6 +582,34 @@ const rosterEnrollSubmitting = ref(false)
 const rosterEnrollRows = ref([])
 const rosterEnrollSelection = ref([])
 const rosterEnrollTableRef = ref(null)
+const rosterPickClassId = ref(null)
+
+const rosterLinkOptions = computed(() => {
+  const c = rosterEnrollCourse.value
+  if (!c) return []
+  if (c.course_type === 'elective') {
+    return (classes.value || []).map(cl => ({
+      id: cl.id,
+      name: cl.name || `班级 #${cl.id}`
+    }))
+  }
+  if (Array.isArray(c.class_links) && c.class_links.length) {
+    return c.class_links.map(l => ({
+      id: l.class_id,
+      name: l.class_name || `班级 #${l.class_id}`
+    }))
+  }
+  if (c.class_id) {
+    return [{ id: c.class_id, name: c.class_name || `班级 #${c.class_id}` }]
+  }
+  return []
+})
+
+const rosterSelectedClassLabel = computed(() => {
+  const id = rosterPickClassId.value
+  const hit = rosterLinkOptions.value.find(o => Number(o.id) === Number(id))
+  return hit?.name || '—'
+})
 
 const llmForm = reactive({
   is_enabled: false,
@@ -600,9 +664,14 @@ const pageSubtitle = computed(() => {
   return '管理员可统一查看、编辑课程信息与课程时间安排。'
 })
 
+const createEmptyClassLink = () => ({
+  class_id: null,
+  enrollment_mode: 'all_in_class'
+})
+
 const form = reactive({
   name: '',
-  class_id: null,
+  class_links: [createEmptyClassLink()],
   teacher_id: null,
   semester_id: null,
   course_type: 'required',
@@ -659,9 +728,38 @@ const validateCourseTimes = (_rule, value, callback) => {
   callback()
 }
 
+const addClassLinkRow = () => {
+  form.class_links.push(createEmptyClassLink())
+}
+
+const removeClassLinkRow = index => {
+  if (form.class_links.length <= 1) {
+    return
+  }
+  form.class_links.splice(index, 1)
+}
+
+const validateClassLinks = (_rule, value, callback) => {
+  if (form.course_type !== 'required') {
+    callback()
+    return
+  }
+  if (!Array.isArray(value) || !value.length) {
+    callback(new Error('请至少绑定一个行政班级'))
+    return
+  }
+  for (const row of value) {
+    if (!row.class_id) {
+      callback(new Error('请为每一行选择班级'))
+      return
+    }
+  }
+  callback()
+}
+
 const rules = {
   name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
-  class_id: [{ required: true, message: '请选择所属班级', trigger: 'change' }],
+  class_links: [{ validator: validateClassLinks, trigger: 'change' }],
   course_type: [{ required: true, message: '请选择课程类型', trigger: 'change' }],
   status: [{ required: true, message: '请选择课程状态', trigger: 'change' }],
   course_times: [{ validator: validateCourseTimes, trigger: 'change' }]
@@ -676,7 +774,7 @@ const resetForm = () => {
   }
   Object.assign(form, {
     name: '',
-    class_id: null,
+    class_links: [createEmptyClassLink()],
     teacher_id: null,
     semester_id: null,
     course_type: 'required',
@@ -704,28 +802,18 @@ const resetRosterEnrollDialog = () => {
   rosterEnrollCourse.value = null
   rosterEnrollRows.value = []
   rosterEnrollSelection.value = []
+  rosterPickClassId.value = null
   rosterEnrollTableRef.value?.clearSelection?.()
 }
 
-const onRosterEnrollSelectionChange = rows => {
-  rosterEnrollSelection.value = rows
-}
-
-const openRosterEnrollFromDetail = () => {
-  const course = detailCourse.value
-  courseDetailVisible.value = false
-  if (course?.id) {
-    openRosterEnrollDialog(course)
-  }
-}
-
-const openRosterEnrollDialog = async course => {
-  rosterEnrollCourse.value = course
-  rosterEnrollVisible.value = true
+const loadRosterRowsForPick = async () => {
+  const course = rosterEnrollCourse.value
+  const cid = rosterPickClassId.value
   rosterEnrollRows.value = []
   rosterEnrollSelection.value = []
+  rosterEnrollTableRef.value?.clearSelection?.()
 
-  if (!course?.class_id) {
+  if (!course?.id || !cid) {
     return
   }
 
@@ -735,7 +823,7 @@ const openRosterEnrollDialog = async course => {
       loadAllPages(params =>
         api.students.list({
           ...params,
-          class_id: course.class_id,
+          class_id: cid,
           page_size: 500
         })
       ),
@@ -753,9 +841,33 @@ const openRosterEnrollDialog = async course => {
   }
 }
 
+const openRosterEnrollDialog = async course => {
+  rosterEnrollCourse.value = course
+  rosterEnrollVisible.value = true
+  rosterEnrollRows.value = []
+  rosterEnrollSelection.value = []
+
+  await nextTick()
+  const opts = rosterLinkOptions.value
+  rosterPickClassId.value = opts[0]?.id ?? null
+  await loadRosterRowsForPick()
+}
+
+const onRosterEnrollSelectionChange = rows => {
+  rosterEnrollSelection.value = rows
+}
+
+const openRosterEnrollFromDetail = () => {
+  const course = detailCourse.value
+  courseDetailVisible.value = false
+  if (course?.id) {
+    openRosterEnrollDialog(course)
+  }
+}
+
 const submitRosterEnrollAllFromClass = async () => {
   const course = rosterEnrollCourse.value
-  if (!course?.id || !course.class_id) {
+  if (!course?.id || !rosterLinkOptions.value.length) {
     return
   }
   rosterEnrollSubmitting.value = true
@@ -856,10 +968,19 @@ const openEditDialog = course => {
     coverFileInputRef.value.value = ''
   }
   const normalizedCourseTimes = normalizeEditableCourseTimes(course)
+  const links =
+    Array.isArray(course.class_links) && course.class_links.length
+      ? course.class_links.map(l => ({
+          class_id: l.class_id,
+          enrollment_mode: l.enrollment_mode || 'all_in_class'
+        }))
+      : course.class_id
+        ? [{ class_id: course.class_id, enrollment_mode: 'all_in_class' }]
+        : [createEmptyClassLink()]
 
   Object.assign(form, {
     name: course.name,
-    class_id: course.class_id,
+    class_links: links,
     teacher_id: course.teacher_id,
     semester_id: course.semester_id ?? null,
     course_type: course.course_type || 'required',
@@ -946,13 +1067,20 @@ const submitForm = async () => {
   try {
     const payload = {
       name: form.name,
-      class_id: form.class_id,
       teacher_id: form.teacher_id,
       semester_id: form.semester_id || null,
       course_type: form.course_type,
       status: form.status,
       course_times: serializeCourseTimesPayload(form.course_times),
       description: form.description
+    }
+    if (form.course_type === 'required') {
+      payload.class_links = form.class_links.map(r => ({
+        class_id: r.class_id,
+        enrollment_mode: r.enrollment_mode || 'all_in_class'
+      }))
+    } else {
+      payload.class_id = null
     }
 
     if (editingCourse.value) {
@@ -1191,27 +1319,32 @@ const openCourseDetail = async course => {
   courseDetailVisible.value = true
   courseDetailLoading.value = true
 
+  const ctxClassId =
+    course.class_id || (Array.isArray(course.class_links) && course.class_links[0]?.class_id) || null
+
   try {
     const [studentsResult, attendanceResult, scoresResult, weightResult, homeworkRows] = await Promise.all([
       api.courses.getStudents(course.id),
       api.attendance.list({
-        class_id: course.class_id,
+        class_id: ctxClassId,
         subject_id: course.id,
         page: 1,
         page_size: 1000
       }),
       api.scores.list({
-        class_id: course.class_id,
+        class_id: ctxClassId,
         subject_id: course.id,
         page: 1,
         page_size: 1000
       }),
       api.scores.getWeights(course.id).catch(() => []),
-      loadAllPages(params => api.homework.list({
-        ...params,
-        class_id: course.class_id,
-        subject_id: course.id
-      }))
+      loadAllPages(params =>
+        api.homework.list({
+          ...params,
+          class_id: ctxClassId,
+          subject_id: course.id
+        })
+      )
     ])
 
     const submissionResults = await Promise.all(
@@ -1253,6 +1386,13 @@ const openCourseDetail = async course => {
 
 onMounted(async () => {
   await Promise.all([loadCourses(), loadOptions()])
+})
+
+watch(rosterPickClassId, async () => {
+  if (!rosterEnrollVisible.value) {
+    return
+  }
+  await loadRosterRowsForPick()
 })
 
 watch(
@@ -1508,5 +1648,39 @@ watch(
   font-size: 12px;
   color: #64748b;
   line-height: 1.5;
+}
+
+.subject-elective-hint {
+  margin-bottom: 12px;
+}
+
+.class-links-editor {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.class-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.class-link-mode {
+  flex: 1;
+  min-width: 240px;
+}
+
+.class-links-editor__add {
+  justify-self: start;
+}
+
+.roster-enroll-pick-class {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 </style>

@@ -49,12 +49,23 @@ Effects for agents:
 
 | Model | Table | Notes |
 |-------|-------|------|
-| `Subject` | `subjects` | **Course** entity; `teacher_id`, `class_id`, `course_type` (`required`/`elective`), scheduling fields |
+| `Subject` | `subjects` | Course entity; `teacher_id`; legacy `class_id` keeps a **primary** anchor class for FK-heavy rows (first linked class for multi-class required offerings); `course_type` (`required`/`elective`) |
+| `SubjectClassLink` | `subject_class_links` | **Required-course multi-class binding**: `(subject_id, class_id)` unique; `enrollment_mode` = `all_in_class` (auto roster sync) or `roster_subset` (manual roster picks only). Electives must have **zero** rows and `subjects.class_id` cleared to `NULL`. |
 | `CourseMaterial` | `course_materials` | `content_format` default `markdown` |
 | `CourseMaterialChapter` | `course_material_chapters` | Hierarchy + uncategorized bucket |
 | `CourseMaterialSection` | `course_material_sections` | Placement linking materials to chapters |
 | `CourseGradeScheme` | `course_grade_schemes` | Weights |
 | `CourseExamWeight` | `course_exam_weights` | Exam composition |
+
+### 2.1 Required vs elective class binding (implementation truth, May 2026)
+
+- **必修课**：通过 `subject_class_links` 绑定 **多个** 行政班；每个绑定均有独立的 `enrollment_mode`。
+  - `all_in_class`：`sync_course_enrollments` / `sync_student_course_enrollments` 会把对应班级的花名册学生批量写入 `course_enrollments`（仍尊重 `course_enrollment_blocks`）。
+  - `roster_subset`：**不会**自动全班入课；教师需在 UI 「从花名册进课」勾选学生（后端 `/api/subjects/{id}/roster-enroll` 校验学生的行政班必须在任一绑定班级内）。
+- **选修课**：**不按行政班绑定**。`subjects.class_id` 必须为 `NULL`，也不应有 `subject_class_links` 行；`SubjectResponse.class_name` 对外固定为 `"-"`（ASCII hyphen）。学生自主选课会把 **学生本人** 的 `students.class_id` 写入 `course_enrollments.class_id`（成绩/资料归档仍可有班级字段），但不再要求「课程绑定某一行政班」。
+- **花名册进课与选修课**：`POST /api/subjects/{id}/roster-enroll` 对选修课 **不再** 要求课程侧存在行政班绑定；仅要求被勾选学生本身具有 `students.class_id`（与 E2E 风暴用例、管理员人工补录场景一致）。必修课仍要求绑定集合非空，且学生行政班必须属于绑定集合。
+- **兼容锚点**：`Subject.class_id` 仍用于 Homework/Materials 部分筛选路径；`refresh_subject_primary_class_id`（`domains/courses/access.py`）在多班级必修课场景将其设为「排序后的首个绑定班级」。管理员 SPA `Subjects.vue`「课程详细」弹窗里考勤/成绩 API 仍按 **primary** 班级过滤——若某作业发布在另一绑定班的 `class_id` 下，汇总可能与「全班聚合视图」不完全一致；深度修复需要调用链传入班级上下文（当前未做）。
+- **Bootstrap**：`bootstrap._backfill_subject_class_links()` 负责历史库兼容（选修清空班级列；必修课从旧的单列 `subjects.class_id` 回填链接）。
 
 ---
 

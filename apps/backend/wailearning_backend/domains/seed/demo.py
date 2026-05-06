@@ -1,9 +1,9 @@
 """Default demo data: teacher `teacher`, class 人工智能1班, students stu1–stu5.
 
-- **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业。
+- **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments` / `subject_class_links`），含演示章节与第一次作业。
   演示作业区分「学生可见评分要点」与「仅教师可见评分细则」，并包含「参考答案或思路」字段（教师侧与 LLM 评分可见；学生 API 不返回）。
   演示会为前 3 名示例学生（stu1–stu3）幂等写入**已提交但未打分**的作业正文，便于查看提交列表。
-- **选修课**「大语言模型」：由 `teacher` 授课；学生需自主选课；演示种子**不为全班自动入课**。
+- **选修课**「大语言模型」：由 `teacher` 授课；学生需自主选课；演示种子**不为全班自动入课**；**课程行不再绑定行政班**（`subjects.class_id = NULL`，列表班级列显示 `-`）。
 - **选修课**「初等概率论」：由独立演示账号 `teacher_pro`（口令 `teacher_pro`）授课；资料与作业正文大量使用 Markdown + LaTeX；演示种子仅为 **stu1、stu2、stu4** 写入 `CourseEnrollment`，**stu3、stu5 不入课**以展示「有人选了有人没选」；并为 stu1、stu2 幂等写入未打分的提交样例。
 
 若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（见 `bootstrap._ensure_default_llm_endpoint_preset`，可在配置 `DEFAULT_LLM_API_KEY` 时于首次启动尝试文本+图像自检），本种子会为演示必修课/各选修课**幂等绑定**首个可用预设（或在无校验端点时退回到内置 `gpt-5.4` 行）并启用课程 LLM。
@@ -36,6 +36,7 @@ from apps.backend.wailearning_backend.db.models import (
     Semester,
     Student,
     Subject,
+    SubjectClassLink,
     User,
     UserRole,
 )
@@ -728,7 +729,7 @@ def _seed_llm_elective_course(
         .filter(
             Subject.name == _LLM_COURSE_NAME,
             Subject.teacher_id == teacher.id,
-            Subject.class_id == klass.id,
+            Subject.course_type == "elective",
         )
         .first()
     )
@@ -736,7 +737,7 @@ def _seed_llm_elective_course(
         course = Subject(
             name=_LLM_COURSE_NAME,
             teacher_id=teacher.id,
-            class_id=klass.id,
+            class_id=None,
             semester_id=semester.id if semester else None,
             semester=semester.name if semester else None,
             course_type="elective",
@@ -750,6 +751,7 @@ def _seed_llm_elective_course(
         print(f"Created demo elective course '{_LLM_COURSE_NAME}'.")
     else:
         course.course_type = "elective"
+        course.class_id = None
         course.status = "active"
         course.weekly_schedule = _LLM_WEEKLY
         course.description = _LLM_COURSE_DESCRIPTION
@@ -838,7 +840,7 @@ def _seed_probability_elective_course(
         .filter(
             Subject.name == _PROB_COURSE_NAME,
             Subject.teacher_id == teacher_pro.id,
-            Subject.class_id == klass.id,
+            Subject.course_type == "elective",
         )
         .first()
     )
@@ -846,7 +848,7 @@ def _seed_probability_elective_course(
         course = Subject(
             name=_PROB_COURSE_NAME,
             teacher_id=teacher_pro.id,
-            class_id=klass.id,
+            class_id=None,
             semester_id=semester.id if semester else None,
             semester=semester.name if semester else None,
             course_type="elective",
@@ -863,6 +865,7 @@ def _seed_probability_elective_course(
         print(f"Created demo elective course '{_PROB_COURSE_NAME}'.")
     else:
         course.course_type = "elective"
+        course.class_id = None
         course.status = "active"
         course.weekly_schedule = _PROB_WEEKLY
         course.description = _PROB_COURSE_DESCRIPTION
@@ -1203,6 +1206,15 @@ def seed_demo_course_bundle(db: Session) -> None:
         course.course_times = _COURSE_TIMES
         course.description = _COURSE_DESCRIPTION
         print(f"Demo course '{_COURSE_NAME}' already exists.")
+
+    link_row = (
+        db.query(SubjectClassLink)
+        .filter(SubjectClassLink.subject_id == course.id, SubjectClassLink.class_id == klass.id)
+        .first()
+    )
+    if not link_row:
+        db.add(SubjectClassLink(subject_id=course.id, class_id=klass.id, enrollment_mode="all_in_class"))
+        db.flush()
 
     _ensure_demo_subject_llm_binding(
         db,

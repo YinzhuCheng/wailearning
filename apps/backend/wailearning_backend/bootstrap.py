@@ -29,6 +29,7 @@ from apps.backend.wailearning_backend.db.models import (
     Score,
     Semester,
     Subject,
+    SubjectClassLink,
     SystemSetting,
     User,
     UserAppearanceStyle,
@@ -81,6 +82,17 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_times TEXT",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description VARCHAR",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS cover_image_url VARCHAR",
+        """
+        CREATE TABLE IF NOT EXISTS subject_class_links (
+            id INTEGER PRIMARY KEY,
+            subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+            enrollment_mode VARCHAR NOT NULL DEFAULT 'all_in_class',
+            CONSTRAINT uq_subject_class_link UNIQUE(subject_id, class_id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_subject_class_links_subject_id ON subject_class_links(subject_id)",
+        "CREATE INDEX IF NOT EXISTS ix_subject_class_links_class_id ON subject_class_links(class_id)",
         "ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR NOT NULL DEFAULT 'required'",
         """
         CREATE TABLE IF NOT EXISTS course_enrollment_blocks (
@@ -515,6 +527,55 @@ def ensure_schema_updates() -> None:
     _ensure_default_llm_endpoint_preset()
     _ensure_llm_assistant_system_user()
     _backfill_course_material_chapters()
+    _backfill_subject_class_links()
+
+
+def _backfill_subject_class_links() -> None:
+    """
+    - Introduces rows in ``subject_class_links`` from legacy ``subjects.class_id`` for non-electives.
+    - Clears ``subjects.class_id`` for elective offerings so they are not tied to an administrative class.
+    - Refreshes ``subjects.class_id`` as the first linked class id for required courses (compat anchor).
+    """
+    db = SessionLocal()
+    try:
+        for subj in db.query(Subject).all():
+            ct = (subj.course_type or "required").strip().lower()
+            if ct == "elective":
+                db.query(SubjectClassLink).filter(SubjectClassLink.subject_id == subj.id).delete(synchronize_session=False)
+                subj.class_id = None
+                continue
+
+            existing = db.query(SubjectClassLink).filter(SubjectClassLink.subject_id == subj.id).first()
+            if not existing and subj.class_id:
+                db.add(
+                    SubjectClassLink(
+                        subject_id=subj.id,
+                        class_id=subj.class_id,
+                        enrollment_mode="all_in_class",
+                    )
+                )
+
+        db.flush()
+
+        for subj in db.query(Subject).all():
+            ct = (subj.course_type or "required").strip().lower()
+            if ct == "elective":
+                continue
+            links = (
+                db.query(SubjectClassLink)
+                .filter(SubjectClassLink.subject_id == subj.id)
+                .order_by(SubjectClassLink.id.asc())
+                .all()
+            )
+            if links:
+                subj.class_id = links[0].class_id
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _backfill_course_material_chapters() -> None:

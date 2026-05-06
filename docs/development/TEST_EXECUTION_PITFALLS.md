@@ -419,6 +419,18 @@ Implications for tests:
 - Specs that relied on “no `User` exists yet for this `Student` until an explicit POST” can become flaky after navigation triggers reconciliation.
 - Prefer asserting **final product state** after navigation (or seed fixtures that already satisfy reconciliation) rather than assuming stale orphan roster rows persist across GETs.
 
+### Extension (May 2026): elective courses no longer mirror `Subject.class_id`
+
+Product change: electives clear `subjects.class_id` and remove `Subject.class_id == klass` predicates from demo seeds / student enrollment guards.
+
+Playwright / API tests that assumed:
+
+- `GET /subjects/elective-catalog` filters `WHERE subject.class_id IS NOT NULL`, or
+- self-enroll endpoints rejected courses without `class_id`, or
+- demo elective lookup queried `(name, teacher_id, class_id)`
+
+need updating to match `domains/courses/access.py` + `api/routers/subjects.py`. Backend regression coverage lives in `tests/backend/courses/test_subject_multi_class_links.py`.
+
 ## Pitfall 18: Playwright strict mode with multiple tables (`getByRole('table')`)
 
 ### Symptom

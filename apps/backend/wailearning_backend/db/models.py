@@ -131,6 +131,35 @@ class Subject(Base):
     material_chapters = relationship("CourseMaterialChapter", back_populates="subject")
     enrollments = relationship("CourseEnrollment", back_populates="course")
     llm_config = relationship("CourseLLMConfig", back_populates="subject", uselist=False)
+    class_links = relationship(
+        "SubjectClassLink",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class SubjectClassLink(Base):
+    """
+    Required courses may span multiple administrative classes.
+
+    - ``all_in_class``: roster-wide auto enrollment via ``sync_course_enrollments`` /
+      ``sync_student_course_enrollments`` for every student in that class.
+    - ``roster_subset``: no automatic whole-class sync; teachers add students explicitly
+      (花名册进课) from that class roster.
+    """
+
+    __tablename__ = "subject_class_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    enrollment_mode = Column(String, nullable=False, default="all_in_class")
+
+    __table_args__ = (UniqueConstraint("subject_id", "class_id", name="uq_subject_class_link"),)
+
+    course = relationship("Subject", back_populates="class_links")
+    class_obj = relationship("Class", backref="subject_class_links")
 
 
 class CourseEnrollment(Base):

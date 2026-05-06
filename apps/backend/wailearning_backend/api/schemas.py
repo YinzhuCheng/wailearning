@@ -307,10 +307,22 @@ class CourseTimeItem(BaseModel):
         return self
 
 
+class SubjectClassLinkInput(BaseModel):
+    class_id: int = Field(..., ge=1)
+    enrollment_mode: Literal["all_in_class", "roster_subset"] = "all_in_class"
+
+
+class SubjectClassLinkResponse(BaseModel):
+    class_id: int
+    class_name: Optional[str] = None
+    enrollment_mode: str = "all_in_class"
+
+
 class SubjectCreate(BaseModel):
     name: str
     teacher_id: Optional[int] = None
     class_id: Optional[int] = None
+    class_links: Optional[List[SubjectClassLinkInput]] = None
     class_name: Optional[str] = None
     semester_id: Optional[int] = None
     course_type: str = "required"
@@ -328,6 +340,7 @@ class SubjectUpdate(BaseModel):
     name: Optional[str] = None
     teacher_id: Optional[int] = None
     class_id: Optional[int] = None
+    class_links: Optional[List[SubjectClassLinkInput]] = None
     semester_id: Optional[int] = None
     course_type: Optional[str] = None
     status: Optional[str] = None
@@ -358,6 +371,7 @@ class SubjectResponse(BaseModel):
     cover_image_url: Optional[str] = None
     teacher_name: Optional[str] = None
     class_name: Optional[str] = None
+    class_links: List[SubjectClassLinkResponse] = Field(default_factory=list)
     student_count: int = 0
     created_at: datetime
 
