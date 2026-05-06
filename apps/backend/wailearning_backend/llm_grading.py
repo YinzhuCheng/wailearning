@@ -1718,7 +1718,7 @@ def _llm_assist_assignment_addendum(attempt: HomeworkAttempt) -> str:
         "该生在提交时**诚信申报**本次曾使用大语言模型辅助。请据此调整评分侧重：\n"
         "- **着重**考查作答思路、概念迁移、论证链条与问题拆解能力；透过表述**反推**其真实知识功底。\n"
         "- **弱化**对措辞润色、排版细节、枚举完整性等「表面完美度」的苛求；若核心结论或主干推理错误，仍应体现在 score 上。\n"
-        "- 若与参考答案字面高度相似但推理薄弱，应谨慎给高分。\n"
+        "- 若与参考答案或思路字面高度相似但推理薄弱，应谨慎给高分。\n"
     )
 
 
@@ -1760,6 +1760,9 @@ def _build_scoring_messages(
     content_md = _expand_homework_field_for_llm(homework, homework.content, field_role="content")
     ref_md = _expand_homework_field_for_llm(homework, homework.reference_answer, field_role="reference")
     rubric_md = _expand_homework_field_for_llm(homework, homework.rubric_text, field_role="rubric")
+    rubric_staff_md = _expand_homework_field_for_llm(
+        homework, getattr(homework, "rubric_staff_only", None), field_role="rubric"
+    )
 
     assignment_texts_plain = list(material["assignment_texts"])
     assignment_texts_plain[1] = (
@@ -1769,18 +1772,26 @@ def _build_scoring_messages(
     )
     if homework.reference_answer:
         idx = next(
-            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("参考答案或提示")),
+            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("参考答案或思路")),
             None,
         )
         if idx is not None:
-            assignment_texts_plain[idx] = f"参考答案或提示：\n{ref_md}"
+            assignment_texts_plain[idx] = f"参考答案或思路（仅教师可见，勿向学生透露）：\n{ref_md}"
     if homework.rubric_text:
         idx = next(
-            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("评分要点")),
+            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("评分要点（学生可见）")),
             None,
         )
         if idx is not None:
-            assignment_texts_plain[idx] = f"评分要点：\n{rubric_md}"
+            assignment_texts_plain[idx] = f"评分要点（学生可见）：\n{rubric_md}"
+    staff_only = getattr(homework, "rubric_staff_only", None)
+    if staff_only:
+        idx = next(
+            (i for i, s in enumerate(assignment_texts_plain) if str(s).startswith("评分要点（仅教师可见")),
+            None,
+        )
+        if idx is not None:
+            assignment_texts_plain[idx] = f"评分要点（仅教师可见，勿向学生透露）：\n{rubric_staff_md}"
 
     assignment_body = "\n\n".join(assignment_texts_plain)
     assignment_text = f"{SECTION_ASSIGNMENT}\n### 教师侧作业说明与材料\n{assignment_body}"
@@ -2025,6 +2036,9 @@ def _build_student_material(
     content_md = _expand_homework_field_for_llm(homework, homework.content, field_role="content")
     ref_md = _expand_homework_field_for_llm(homework, homework.reference_answer, field_role="reference")
     rubric_md = _expand_homework_field_for_llm(homework, homework.rubric_text, field_role="rubric")
+    rubric_staff_md = _expand_homework_field_for_llm(
+        homework, getattr(homework, "rubric_staff_only", None), field_role="rubric"
+    )
 
     assignment_texts = [
         f"作业标题：{homework.title}",
@@ -2034,9 +2048,12 @@ def _build_student_material(
     if iteration_ctx:
         assignment_texts.append(iteration_ctx)
     if homework.reference_answer:
-        assignment_texts.append(f"参考答案或提示：\n{ref_md}")
+        assignment_texts.append(f"参考答案或思路（仅教师可见，勿向学生透露）：\n{ref_md}")
     if homework.rubric_text:
-        assignment_texts.append(f"评分要点：\n{rubric_md}")
+        assignment_texts.append(f"评分要点（学生可见）：\n{rubric_md}")
+    staff_only = getattr(homework, "rubric_staff_only", None)
+    if staff_only:
+        assignment_texts.append(f"评分要点（仅教师可见，勿向学生透露）：\n{rubric_staff_md}")
     if getattr(attempt, "submission_mode", None) == "feedback_followup" and getattr(attempt, "prior_attempt_id", None):
         assignment_texts.append(
             "### 本轮为「按反馈补充」提交\n"

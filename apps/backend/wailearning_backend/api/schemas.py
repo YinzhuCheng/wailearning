@@ -1061,6 +1061,7 @@ class HomeworkBase(BaseModel):
     grade_precision: str = "integer"
     auto_grading_enabled: bool = False
     rubric_text: Optional[str] = None
+    rubric_staff_only: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: bool = True
@@ -1118,6 +1119,7 @@ class HomeworkUpdate(BaseModel):
     grade_precision: Optional[str] = None
     auto_grading_enabled: Optional[bool] = None
     rubric_text: Optional[str] = None
+    rubric_staff_only: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: Optional[bool] = None

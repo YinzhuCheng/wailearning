@@ -106,6 +106,7 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 
 - Lists and batch actions — still `api/routers/homework.py` (e.g. submissions list, batch regrade).
 - Regrade paths enqueue new tasks or reuse queue logic depending on operation — follow call sites of `queue_grading_task` and teacher-triggered helpers in the same module.
+- **Serialization rule**: `_serialize_homework(..., viewer=current_user)` strips `reference_answer` and `rubric_staff_only` when `viewer.role == student`, while retaining both fields for teachers/admins/creators. Agents altering homework visibility must update serializers and LLM/discussion prompt builders together — see [LLM homework guide](../product/LLM_HOMEWORK_GUIDE.md) «Rubric visibility» section.
 
 ### 3.5 Parent portal read path
 

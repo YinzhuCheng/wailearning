@@ -37,11 +37,8 @@
               variant="student"
             />
           </el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">
+          <el-descriptions-item label="评分要点（学生可见）" :span="2">
             <RichMarkdownDisplay :markdown="homework.rubric_text" variant="student" empty-text="未设置" />
-          </el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">
-            <RichMarkdownDisplay :markdown="homework.reference_answer" variant="student" empty-text="未设置" />
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
             <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
