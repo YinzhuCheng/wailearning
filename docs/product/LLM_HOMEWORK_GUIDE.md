@@ -104,7 +104,7 @@ During `ensure_schema_updates()`, `_ensure_default_llm_endpoint_preset()` may in
 
 ### Demo bundle alignment (`INIT_DEFAULT_DATA`)
 
-Demo seeding binds LLM presets for both required and elective showcase courses when possible, enables matching automatic grading on the elective homework, splits demo rubrics across student vs staff fields, fills「参考答案或思路」, and inserts three sample submissions without scores for roster realism.
+Demo seeding binds LLM presets for required and **each** elective showcase course when possible, enables matching automatic grading on elective homework (including **初等概率论**), splits demo rubrics across student vs staff fields, fills「参考答案或思路」, inserts three sample submissions without scores on the required homework, and two Markdown/LaTeX-rich submissions on the probability elective for enrolled students **stu1** and **stu2**. Elective **初等概率论** deliberately enrolls only **stu1, stu2, stu4** so **stu3**/**stu5** remain unenrolled until they self-enroll from the catalog—agents validating enrollment counts must not assume whole-class rows for electives.
 
 ### Optional text format (`content_format`)
 

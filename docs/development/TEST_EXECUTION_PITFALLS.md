@@ -1949,3 +1949,22 @@ The scenario commits explicit SQLAlchemy updates on `HomeworkAttempt.submitted_a
 ### Interpretation for agents
 
 When extending homework lifecycle tests, prefer surgical row mutation over rewriting routers; altering `_is_late_attempt` solely for tests would poison production semantics.
+
+## Demo seed strings containing LaTeX (`domains/seed/demo.py`, pytest / agents, 2026-05)
+
+### Symptom
+
+While adding the **初等概率论** elective bundle, early drafts stored teacher-only rubrics or reference answers in plain triple-quoted Python strings containing fragments like `\frac{...}{...}` or `\times`. Runtime strings showed corrupted LaTeX (missing backslashes, unexpected tabs) or `SyntaxError` / deprecation warnings depending on Python version.
+
+### Cause
+
+Standard Python string literals treat `\f` as a form-feed escape, `\t` as tab, and similar sequences eat backslashes needed for LaTeX. Multiline **non-raw** strings also mishandle `\Omega`-style sequences when authors forget to double-escape.
+
+### Fix pattern
+
+- Prefer **`r"""..."""` raw triple-quoted strings** for any demo copy meant to include LaTeX backslashes handed to Markdown/KaTeX clients.
+- For prefilled student markdown bodies that need real paragraph breaks, use multiline raw triple quotes in the source file instead of embedding the two-character sequence `\` + `n` inside a one-line `r"..."` literal (those store a literal backslash-n, not a newline).
+
+### Interpretation for agents
+
+Treat `domains/seed/demo.py` as **data-heavy**: run `python3 -m py_compile apps/backend/wailearning_backend/domains/seed/demo.py` after edits and inspect a seeded row in SQLite/Postgres if unsure whether content round-tripped correctly.

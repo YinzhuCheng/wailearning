@@ -71,7 +71,7 @@ watch(
     await nextTick()
     applyMath()
   },
-  { immediate: true }
+  { flush: 'post' }
 )
 </script>
 

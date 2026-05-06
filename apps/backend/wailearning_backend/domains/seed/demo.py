@@ -3,9 +3,10 @@
 - **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业。
   演示作业区分「学生可见评分要点」与「仅教师可见评分细则」，并包含「参考答案或思路」字段（教师侧与 LLM 评分可见；学生 API 不返回）。
   演示会为前 3 名示例学生（stu1–stu3）幂等写入**已提交但未打分**的作业正文，便于查看提交列表。
-- **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业；当全局存在已校验 LLM 端点时，演示种子会为选修课绑定端点并启用课程 LLM（自动评分 + 智能助教路由与必修课一致）。
+- **选修课**「大语言模型」：由 `teacher` 授课；学生需自主选课；演示种子**不为全班自动入课**。
+- **选修课**「初等概率论」：由独立演示账号 `teacher_pro`（口令 `teacher_pro`）授课；资料与作业正文大量使用 Markdown + LaTeX；演示种子仅为 **stu1、stu2、stu4** 写入 `CourseEnrollment`，**stu3、stu5 不入课**以展示「有人选了有人没选」；并为 stu1、stu2 幂等写入未打分的提交样例。
 
-若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（见 `bootstrap._ensure_default_llm_endpoint_preset`，可在配置 `DEFAULT_LLM_API_KEY` 时于首次启动尝试文本+图像自检），本种子会为演示必修课/选修课**幂等绑定**首个可用预设并启用课程 LLM。
+若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（见 `bootstrap._ensure_default_llm_endpoint_preset`，可在配置 `DEFAULT_LLM_API_KEY` 时于首次启动尝试文本+图像自检），本种子会为演示必修课/各选修课**幂等绑定**首个可用预设（或在无校验端点时退回到内置 `gpt-5.4` 行）并启用课程 LLM。
 
 必修课资料区含三层演示章节。
 """
@@ -79,6 +80,126 @@ _LLM_HOMEWORK_CONTENT = """请完成以下任务（建议 300–800 字或等价
 提交形式：纯文本或 Markdown 均可。"""
 _LLM_RUBRIC_TEXT = """总分 100。关注是否理解提示工程、模板结构是否清楚、风险意识是否到位；表达清晰即可，不必长篇。
 """
+
+_TEACHER_PRO_USERNAME = "teacher_pro"
+_TEACHER_PRO_PASSWORD = "teacher_pro"
+_TEACHER_PRO_DISPLAY_NAME = "王概率（演示）"
+
+_PROB_COURSE_NAME = "初等概率论"
+_PROB_COURSE_DESCRIPTION = (
+    "面向理工科低年级同学的初等概率论选修示例：从样本空间与 Kolmogorov 公理出发，介绍条件概率、"
+    "Bayes 公式与常见离散分布，强调计算与直觉并重。课堂鼓励使用 Markdown + LaTeX 书写推导。"
+    "【演示】本课由独立教师账号 teacher_pro 授课，资料与作业含大量公式排版示例。"
+)
+_PROB_WEEKLY = "每周三 10:00–11:40（选修；教室与调课以教务系统为准）"
+_PROB_MATERIAL_TITLE = "【选修】初等概率论：导读、记号与核心公式"
+_PROB_MATERIAL_CONTENT = r"""## 课程说明（选修）
+
+本资料为「初等概率论」演示课程的**阅读材料**，正文使用 **Markdown**，数学公式使用 **LaTeX**（前端以 KaTeX 渲染）。约定：
+
+- **行内公式**：`\(a+b\)` 或 `$P(A)$`
+- **独立公式**：`$$...$$` 或 `\[...\]`
+
+### 样本空间与事件
+
+随机试验所有可能结果构成样本空间 \(\Omega\)。（入门课常用有限或可数 \(\Omega\)。）事件 \(A\) 为 \(\Omega\) 的子集；本书写采用经典集合记号。
+
+### Kolmogorov 公理（重温）
+
+概率测度 \(P\) 满足：对任意事件 \(A\)，\(P(A)\ge 0\)；\(P(\Omega)=1\)；对两两不交的可列事件列 \(\{A_i\}\)，有可数可加性
+$$
+P\Bigl(\bigcup_{i=1}^{\infty} A_i\Bigr)=\sum_{i=1}^{\infty} P(A_i).
+$$
+
+### 条件概率与 Bayes
+
+若 \(P(B)>0\)，定义
+$$
+P(A\mid B)=\frac{P(AB)}{P(B)}.
+$$
+
+设 \(\{B_i\}\) 为 \(\Omega\) 的划分且 \(P(B_i)>0\)，则 **全概率公式**
+$$
+P(A)=\sum_i P(B_i)\,P(A\mid B_i),
+$$
+以及 **Bayes 公式**
+$$
+P(B_j\mid A)=\frac{P(B_j)\,P(A\mid B_j)}{\sum_i P(B_i)\,P(A\mid B_i)}.
+$$
+
+### 离散分布速查
+
+- **Bernoulli(\(p\))**：\(P(X=1)=p,\ P(X=0)=1-p\)。
+- **Binomial(\(n,p\))**：\(P(X=k)=\binom{n}{k}p^k(1-p)^{n-k}\)，\(k=0,\ldots,n\)。
+- **Poisson(\(\lambda\))**：\(P(X=k)=\mathrm{e}^{-\lambda}\lambda^k/k!\)。
+
+### 推荐阅读（杜撰书目条目，仅供 UI 演示）
+
+1. 《概率论基础教程》风格读物（离散概率与极限定理导引）。
+2. 任意一本工科「概率论与数理统计」教材的第 1–2 章作为对照阅读。
+"""
+
+_PROB_HOMEWORK_TITLE = "初等概率论第一次作业：古典概型与 Bayes 计算"
+_PROB_HOMEWORK_CONTENT = r"""本次作业练习集合运算、古典概率、条件概率与 Bayes 公式，请在答题区使用 Markdown；涉及公式时请用 LaTeX（例如 `\(P(A)\)`、`$$...$$`）。
+
+---
+
+### 题 1（古典概率）
+
+一枚公平骰子掷两次，记录有序对 \((i,j)\)。
+
+1. 写出样本空间 \(\Omega\) 的元素个数。
+2. 求两次点数之和为 \(7\) 的概率。
+3. 求最大点数不超过 \(4\) 的概率。
+
+### 题 2（条件概率）
+
+某班级学生参加两次模拟测验。已知随机抽一名学生，其第一次及格的概率为 \(0.7\)；在第一次及格的条件下第二次及格的概率为 \(0.85\)；在第一次不及格的条件下第二次及格的概率为 \(0.4\)。
+
+1. 若已知该生第二次及格，求其第一次也及格的后验概率（化为最简分数或保留三位小数均可，但需给出推导）。
+2. 指出你在哪一步使用了 Bayes 公式。
+
+### 题 3（概念简述）
+
+用自己的话解释：**统计独立性**与**条件概率**之间的关系（无需长篇，3–6 句即可）。
+
+---
+
+**提交说明**：字数不限，但必须按题号作答；推导清晰即可，数值可与参考答案不完全一致但需自洽。
+"""
+
+_PROB_RUBRIC_STUDENT = """满分 100。学生可见导向：是否在三题中分别给出可检查的样本空间/计数或方程推导；Bayes 题是否体现「由结果反推原因」的结构；概念题是否区分独立与条件概率。细则与配分表仅供教师与自动评分模型内部参照。"""
+
+_PROB_RUBRIC_STAFF_ONLY = r"""内部评分细则（总分 100；宽松鼓励型演示）
+
+1. 古典概率（35 分）：正确样本空间规模与计数思路 15 分；和为 7 的概率 10 分；最大值约束题 10 分。
+2. Bayes（45 分）：正确设定事件记号（如 A=第一次及格，B=第二次及格）10 分；全概率求 P(B) 15 分；Bayes 反推 P(A|B) 15 分；指出 Bayes 步骤 5 分。
+3. 概念简述（20 分）：提到 P(AB)=P(A)P(B) 与独立时 P(A|B)=P(A) 等关键结论即可满分区间；泛泛而谈酌情扣分。
+
+常见可接受答案提示：题 1 中 |\Omega|=36；和为 7 的有利结果数为 6；最大点数 ≤4 可利用对立或逐计数得到 4/9（需与学生推导一致）。"""
+
+_PROB_REFERENCE_OR_APPROACH = r"""（教师侧核对）题1：|\Omega|=36；P(和为7)=6/36=1/6；P(\max\le 4)=16/36=4/9。题2：记 A 第一次及格，B 第二次及格；P(B)=P(A)P(B|A)+P(A^c)P(B|A^c)=0.7\times0.85+0.3\times0.4=0.715；Bayes 得 P(A|B)=\frac{0.7\times0.85}{0.715}=\frac{119}{143}\approx0.832。题3：独立则条件概率等于边际概率；一般不独立时 P(AB)=P(A)P(B|A)。"""
+
+_PROB_ELECTIVE_ENROLLED_STUDENT_NOS = ("stu1", "stu2", "stu4")
+_PROB_PREFILL_STUDENT_NOS = ("stu1", "stu2")
+_PROB_PREFILL_BODIES = (
+    r"""### 解答草稿（stu1）
+
+**题1** \(|\Omega|=36\)，和为 7 的有序对有 6 种，故概率 \(6/36=1/6\)。最大点数 \(\le 4\)：有利 \(4\times4=16\)，概率 \(16/36=4/9\)。
+
+**题2** 设 \(A\) 第一次及格，\(B\) 第二次及格；先用全概率算 \(P(B)\)，再用 Bayes 得 \(P(A\mid B)=\dfrac{P(A)P(B\mid A)}{P(B)}\approx 0.832\)（中间步骤略）。
+
+**题3** 独立意味着条件概率退化；不独立时需要用 \(P(AB)=P(A)P(B\mid A)\)。
+""",
+    r"""### 解答（stu2）
+
+题1：两次掷骰有序，样本点总数 \(36\)。和为 \(7\)：\((1,6)\cdots(6,1)\) 共 \(6\) 种 \(\Rightarrow 1/6\)。
+
+题2：写了事件定义并用 Bayes，数值与老师讲义例题略有不同但公式写得清楚。
+
+题3：独立性即 \(P(A\cap B)=P(A)P(B)\)。
+""",
+)
 
 _TEACHER_DISPLAY_NAME = "李演示"
 _COURSE_WEEKLY_SCHEDULE = "每周二 14:00–16:00（教室以教务通知为准）"
@@ -562,6 +683,38 @@ def _get_or_create_uncategorized_chapter(db: Session, *, subject_id: int) -> Cou
     return unc
 
 
+def _ensure_elective_enrollments_for_student_nos(
+    db: Session,
+    *,
+    subject_id: int,
+    class_id: int,
+    student_nos: tuple[str, ...],
+) -> None:
+    """Idempotent: insert `CourseEnrollment` rows for named roster students (elective picks)."""
+    roster = {row.student_no: row for row in db.query(Student).filter(Student.class_id == class_id).all() if row.student_no}
+    for no in student_nos:
+        st = roster.get(no)
+        if not st:
+            continue
+        exists = (
+            db.query(CourseEnrollment)
+            .filter(CourseEnrollment.subject_id == subject_id, CourseEnrollment.student_id == st.id)
+            .first()
+        )
+        if exists:
+            continue
+        db.add(
+            CourseEnrollment(
+                subject_id=subject_id,
+                student_id=st.id,
+                class_id=class_id,
+                enrollment_type="elective",
+                can_remove=True,
+            )
+        )
+    db.flush()
+
+
 def _seed_llm_elective_course(
     db: Session,
     *,
@@ -672,6 +825,151 @@ def _seed_llm_elective_course(
         hw.due_date = hw.due_date or due
 
 
+def _seed_probability_elective_course(
+    db: Session,
+    *,
+    teacher_pro: User,
+    klass: Class,
+    semester: Semester | None,
+) -> None:
+    """Elective probability theory demo: partial enrollments + Markdown/LaTeX-rich material and homework."""
+    course = (
+        db.query(Subject)
+        .filter(
+            Subject.name == _PROB_COURSE_NAME,
+            Subject.teacher_id == teacher_pro.id,
+            Subject.class_id == klass.id,
+        )
+        .first()
+    )
+    if not course:
+        course = Subject(
+            name=_PROB_COURSE_NAME,
+            teacher_id=teacher_pro.id,
+            class_id=klass.id,
+            semester_id=semester.id if semester else None,
+            semester=semester.name if semester else None,
+            course_type="elective",
+            status="active",
+            weekly_schedule=_PROB_WEEKLY,
+            course_times=(
+                "选修课：演示种子已为部分同学写入选课记录；其余同学需在「我的课程」自主选课。"
+                "平时作业与线上 LLM 批改演示相结合。"
+            ),
+            description=_PROB_COURSE_DESCRIPTION,
+        )
+        db.add(course)
+        db.flush()
+        print(f"Created demo elective course '{_PROB_COURSE_NAME}'.")
+    else:
+        course.course_type = "elective"
+        course.status = "active"
+        course.weekly_schedule = _PROB_WEEKLY
+        course.description = _PROB_COURSE_DESCRIPTION
+        course.course_times = (
+            "选修课：演示种子已为部分同学写入选课记录；其余同学需在「我的课程」自主选课。"
+            "平时作业与线上 LLM 批改演示相结合。"
+        )
+        print(f"Demo elective '{_PROB_COURSE_NAME}' already exists; refreshed fields.")
+
+    _ensure_demo_subject_llm_binding(
+        db,
+        subject_id=course.id,
+        teacher_id=teacher_pro.id,
+        enable_auto_grading=True,
+    )
+
+    _seed_demo_grade_weights(db, course=course)
+    unc = _get_or_create_uncategorized_chapter(db, subject_id=course.id)
+
+    mat = (
+        db.query(CourseMaterial)
+        .filter(CourseMaterial.subject_id == course.id, CourseMaterial.title == _PROB_MATERIAL_TITLE)
+        .first()
+    )
+    if not mat:
+        mat = CourseMaterial(
+            title=_PROB_MATERIAL_TITLE,
+            content=_PROB_MATERIAL_CONTENT,
+            content_format="markdown",
+            class_id=klass.id,
+            subject_id=course.id,
+            created_by=teacher_pro.id,
+        )
+        db.add(mat)
+        db.flush()
+        exists_sec = (
+            db.query(CourseMaterialSection)
+            .filter(CourseMaterialSection.material_id == mat.id, CourseMaterialSection.chapter_id == unc.id)
+            .first()
+        )
+        if not exists_sec:
+            db.add(CourseMaterialSection(material_id=mat.id, chapter_id=unc.id, sort_order=0))
+        print("Created demo probability course material.")
+    else:
+        mat.content = _PROB_MATERIAL_CONTENT
+        mat.content_format = "markdown"
+
+    _ensure_elective_enrollments_for_student_nos(
+        db,
+        subject_id=course.id,
+        class_id=klass.id,
+        student_nos=_PROB_ELECTIVE_ENROLLED_STUDENT_NOS,
+    )
+
+    due = datetime.now(timezone.utc) + timedelta(days=18)
+    hw = (
+        db.query(Homework)
+        .filter(Homework.subject_id == course.id, Homework.title == _PROB_HOMEWORK_TITLE)
+        .first()
+    )
+    if not hw:
+        db.add(
+            Homework(
+                title=_PROB_HOMEWORK_TITLE,
+                content=_PROB_HOMEWORK_CONTENT,
+                content_format="markdown",
+                class_id=klass.id,
+                subject_id=course.id,
+                due_date=due,
+                max_score=100,
+                grade_precision="integer",
+                auto_grading_enabled=True,
+                rubric_text=_PROB_RUBRIC_STUDENT,
+                rubric_staff_only=_PROB_RUBRIC_STAFF_ONLY,
+                reference_answer=_PROB_REFERENCE_OR_APPROACH,
+                response_language="zh-CN",
+                allow_late_submission=True,
+                late_submission_affects_score=False,
+                max_submissions=3,
+                created_by=teacher_pro.id,
+            )
+        )
+        print("Created demo probability homework.")
+    else:
+        hw.content = _PROB_HOMEWORK_CONTENT
+        hw.content_format = "markdown"
+        hw.rubric_text = _PROB_RUBRIC_STUDENT
+        hw.rubric_staff_only = _PROB_RUBRIC_STAFF_ONLY
+        hw.reference_answer = _PROB_REFERENCE_OR_APPROACH
+        hw.auto_grading_enabled = True
+        hw.due_date = hw.due_date or due
+
+    hw_row = (
+        db.query(Homework)
+        .filter(Homework.subject_id == course.id, Homework.title == _PROB_HOMEWORK_TITLE)
+        .first()
+    )
+    _seed_prefilled_submissions_for_homework(
+        db,
+        homework_row=hw_row,
+        klass=klass,
+        student_nos=_PROB_PREFILL_STUDENT_NOS,
+        bodies=_PROB_PREFILL_BODIES,
+        log_label="demo probability prefilled submissions (stu1–stu2)",
+    )
+
+
 _DEMO_PREFILL_STUDENT_NOS = ("stu1", "stu2", "stu3")
 _DEMO_PREFILL_BODIES = (
     "我使用 Anaconda 中的 Jupyter 完成环境配置，已能 import numpy、pandas 并运行 Hello Python。"
@@ -684,13 +982,21 @@ _DEMO_PREFILL_BODIES = (
 )
 
 
-def _seed_demo_prefilled_homework_submissions(db: Session, *, homework_row: Homework | None, klass: Class) -> None:
+def _seed_prefilled_submissions_for_homework(
+    db: Session,
+    *,
+    homework_row: Homework | None,
+    klass: Class,
+    student_nos: tuple[str, ...],
+    bodies: tuple[str, ...],
+    log_label: str = "demo prefilled homework submissions",
+) -> None:
     """幂等写入少量「已提交但未打分」记录，便于演示提交列表与教师批改界面。"""
     if not homework_row:
         return
     roster = {row.student_no: row for row in db.query(Student).filter(Student.class_id == klass.id).all() if row.student_no}
     touched = False
-    for idx, uname in enumerate(_DEMO_PREFILL_STUDENT_NOS):
+    for idx, uname in enumerate(student_nos):
         st = roster.get(uname)
         if not st:
             continue
@@ -701,7 +1007,7 @@ def _seed_demo_prefilled_homework_submissions(db: Session, *, homework_row: Home
         )
         if exists:
             continue
-        body = _DEMO_PREFILL_BODIES[idx] if idx < len(_DEMO_PREFILL_BODIES) else _DEMO_PREFILL_BODIES[0]
+        body = bodies[idx] if idx < len(bodies) else bodies[0]
         submitted_at = datetime.now(timezone.utc) - timedelta(days=2)
         summary = HomeworkSubmission(
             homework_id=homework_row.id,
@@ -734,14 +1040,29 @@ def _seed_demo_prefilled_homework_submissions(db: Session, *, homework_row: Home
         refresh_submission_summary(db, summary)
         touched = True
     if touched:
-        print("Inserted demo prefilled homework submissions (first three roster students) without scores.")
+        print(f"Inserted {log_label} without scores.")
+
+
+def _seed_demo_prefilled_homework_submissions(db: Session, *, homework_row: Homework | None, klass: Class) -> None:
+    _seed_prefilled_submissions_for_homework(
+        db,
+        homework_row=homework_row,
+        klass=klass,
+        student_nos=_DEMO_PREFILL_STUDENT_NOS,
+        bodies=_DEMO_PREFILL_BODIES,
+        log_label="demo prefilled homework submissions (first three roster students)",
+    )
 
 
 def seed_demo_course_bundle(db: Session) -> None:
     """
-    Idempotent seed: teacher `teacher`, class 人工智能1班, students stu1–stu5,
-    必修课「数据挖掘」+ 选修课「大语言模型」。
-    Password for all demo accounts: 111111.
+    Idempotent seed: teacher `teacher`, teacher `teacher_pro`, class 人工智能1班, students stu1–stu5,
+    必修课「数据挖掘」+ 选修课「大语言模型」+ 选修课「初等概率论」。
+
+    Passwords:
+
+    - students and teacher `teacher`: demo password defined by module constant `_DEMO_PASSWORD` (six repeated ``1`` digits).
+    - teacher `teacher_pro`: password equals username (`teacher_pro`), via `_TEACHER_PRO_PASSWORD`.
     """
     pwd_hash = get_password_hash(_DEMO_PASSWORD)
 
@@ -761,6 +1082,29 @@ def seed_demo_course_bundle(db: Session) -> None:
     else:
         print("Demo teacher 'teacher' already exists.")
     teacher.real_name = _TEACHER_DISPLAY_NAME
+
+    teacher_pro_hash = get_password_hash(_TEACHER_PRO_PASSWORD)
+    teacher_pro = db.query(User).filter(User.username == _TEACHER_PRO_USERNAME).first()
+    if not teacher_pro:
+        teacher_pro = User(
+            username=_TEACHER_PRO_USERNAME,
+            hashed_password=teacher_pro_hash,
+            real_name=_TEACHER_PRO_DISPLAY_NAME,
+            role=UserRole.TEACHER.value,
+            class_id=None,
+            is_active=True,
+        )
+        db.add(teacher_pro)
+        db.flush()
+        print(f"Created demo teacher '{_TEACHER_PRO_USERNAME}'.")
+    else:
+        if teacher_pro.role != UserRole.TEACHER.value:
+            teacher_pro.role = UserRole.TEACHER.value
+        teacher_pro.hashed_password = teacher_pro_hash
+        teacher_pro.real_name = _TEACHER_PRO_DISPLAY_NAME
+        teacher_pro.class_id = None
+        teacher_pro.is_active = True
+        print(f"Demo teacher '{_TEACHER_PRO_USERNAME}' already exists; refreshed password/display fields.")
 
     klass = db.query(Class).filter(Class.name == _CLASS_NAME).first()
     if not klass:
@@ -924,6 +1268,8 @@ def seed_demo_course_bundle(db: Session) -> None:
     _seed_demo_prefilled_homework_submissions(db, homework_row=hw, klass=klass)
 
     _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)
+
+    _seed_probability_elective_course(db, teacher_pro=teacher_pro, klass=klass, semester=semester)
 
     reconcile_student_users_and_roster(db)
     db.commit()

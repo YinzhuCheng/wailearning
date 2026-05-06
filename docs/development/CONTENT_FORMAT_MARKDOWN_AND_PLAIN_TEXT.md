@@ -47,7 +47,7 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 
 ### Shared components
 
-- `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar and live preview are hidden; the textarea remains monospace for editing.
+- `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar, KaTeX usage hint, and live preview are hidden; the textarea remains monospace for editing. In Markdown mode the toolbar includes **行内公式** / **独立公式** snippets (`\(…\)`, `$$…$$`) and a short reminder that **preview** uses the same KaTeX auto-render pass as `RichMarkdownDisplay` (so publishers validate formulas before publish).
 - `PlainOrMarkdownBlock.vue`: read-only display; delegates Markdown mode to `RichMarkdownDisplay` and uses `white-space: pre-wrap` for plain mode.
 - `apps/web/admin/src/utils/contentFormat.js`: mirrors backend normalization for client defaults.
 

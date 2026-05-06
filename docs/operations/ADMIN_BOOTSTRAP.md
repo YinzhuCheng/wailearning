@@ -33,10 +33,11 @@ When `INIT_DEFAULT_DATA=true`, startup can also seed a demo teaching bundle.
 
 That bundle includes:
 
-- a demo teacher account,
+- demo teacher account `teacher` (shared demo password via module constant),
+- additional demo teacher `teacher_pro` (password equals username `teacher_pro`) teaching the elective **初等概率论** showcase course,
 - several demo student accounts,
 - a demo class,
-- required and elective courses,
+- required and elective courses (including Markdown/LaTeX-heavy probability materials),
 - demo materials and homework,
 - related roster synchronization behavior.
 
