@@ -1950,6 +1950,31 @@ The scenario commits explicit SQLAlchemy updates on `HomeworkAttempt.submitted_a
 
 When extending homework lifecycle tests, prefer surgical row mutation over rewriting routers; altering `_is_late_attempt` solely for tests would poison production semantics.
 
+## Persistent pytest SQLite file + metadata registration (`tests/conftest.py`, 2026-05)
+
+### Symptom
+
+Pytest runs fail early inside `apps.backend.wailearning_backend.bootstrap.ensure_schema_updates()` with `sqlite3.OperationalError: no such table: course_llm_configs` (or other core tables) immediately after `tests.db_reset.reset_test_database_schema()` reports success.
+
+Alternatively, mass `UNIQUE constraint failed: users.username` errors appear when executing many tests sequentially against the default file-backed SQLite URL.
+
+### Contributing factors (non-exhaustive)
+
+1. **Shared database file:** `tests/conftest.py` defaults to `sqlite:///<repo>/.pytest_tmp/test.sqlite` when Postgres test URLs are not configured. Interrupted runs can leave the file half-migrated.
+2. **SQLAlchemy metadata registration timing:** `Base.metadata.create_all()` only creates tables for mapped classes that were **imported** before `create_all` runs. Most tests import `main` or models early, but exotic collection orders or utility-only imports can theoretically skip mappings — **待人工确认** how often this happens in practice.
+3. **Parallel pytest without isolated `TEST_DATABASE_URL`:** multiple processes writing one sqlite file guarantees corruption-like failures.
+
+### Mitigation playbook
+
+1. Stop all pytest processes touching the repo.
+2. Delete `<repository-root>/.pytest_tmp/test.sqlite` (path placeholder: adjust if `PYTEST_DEBUG_TEMPROOT` overrides temp behavior on Windows).
+3. Re-run a **single** failing test file with `python3 -m pytest path/to/test.py -q`.
+4. If failures persist, force Postgres throwaway DB via `TEST_DATABASE_URL` (see `ops/scripts/dev/provision_postgres_pytest.sh` mention in `tests/conftest.py`).
+
+### Evidence note
+
+A minimal control script that imports `apps.backend.wailearning_backend.db.models` before `create_all` succeeded on a fresh sqlite path — see [`../DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](../DOCUMENTATION_UPGRADE_REPORT_2026-05.md).
+
 ## Demo seed strings containing LaTeX (`domains/seed/demo.py`, pytest / agents, 2026-05)
 
 ### Symptom
