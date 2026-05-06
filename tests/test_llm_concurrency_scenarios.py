@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import threading
 import uuid
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 import httpx
@@ -18,6 +19,7 @@ from app.database import Base, SessionLocal, engine
 from app.llm_grading import get_best_score_candidate, process_grading_task, process_next_grading_task
 from app.main import app
 from app.models import (
+    Homework,
     HomeworkAttempt,
     HomeworkGradingTask,
     HomeworkSubmission,
@@ -387,3 +389,58 @@ def test_non_retryable_401_failed_task_teacher_still_reviews(client: TestClient)
     )
     assert r.status_code == 200, r.text
     assert r.json()["review_score"] == 72.0
+
+
+def test_aggregate_score_keeps_best_counting_attempt_after_late_resubmit(client: TestClient):
+    """迟交且「影响评分」时，总评应保留计入批次中的较高自动分，而非仅看最新一次。"""
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    h = ctx["homework_id"]
+    sth = login_api(client, ctx["student_username"], ctx["student_password"])
+
+    db = SessionLocal()
+    try:
+        hw = db.query(Homework).filter(Homework.id == h).first()
+        hw.due_date = datetime.now(timezone.utc) + timedelta(hours=3)
+        hw.late_submission_affects_score = True
+        hw.allow_late_submission = True
+        db.commit()
+    finally:
+        db.close()
+
+    sub_id = _submit(client, h, sth, "on-time body")
+    db = SessionLocal()
+    try:
+        t1 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first()
+        tid1 = t1.id
+        att1 = t1.attempt_id
+    finally:
+        db.close()
+
+    with patch_httpx_post(lambda self, u, **k: httpx.Response(200, json=json_llm_response(88.0, "first"))):
+        process_grading_task(tid1)
+
+    db = SessionLocal()
+    try:
+        hw = db.query(Homework).filter(Homework.id == h).first()
+        hw.due_date = datetime.now(timezone.utc) - timedelta(hours=1)
+        db.commit()
+    finally:
+        db.close()
+
+    _submit(client, h, sth, "late body")
+    db = SessionLocal()
+    try:
+        t2 = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first()
+        tid2 = t2.id
+    finally:
+        db.close()
+
+    with patch_httpx_post(lambda self, u, **k: httpx.Response(200, json=json_llm_response(33.0, "late"))):
+        process_grading_task(tid2)
+
+    r = client.get(f"/api/homeworks/{h}/submission/me", headers=sth)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["review_score"] == 88.0
+    assert body.get("graded_attempt_id") == att1

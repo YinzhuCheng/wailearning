@@ -26,13 +26,17 @@
           <el-descriptions-item label="作业内容" :span="2">
             {{ homework.content || '暂无作业说明。' }}
           </el-descriptions-item>
+          <el-descriptions-item label="评分要点（对学生可见）" :span="2">
+            {{ homework.rubric_text || '未设置' }}
+          </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
             <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
               {{ homework.attachment_name || '下载附件' }}
             </el-button>
             <span v-else class="muted-text">暂无附件</span>
           </el-descriptions-item>
-          <el-descriptions-item label="最高分评语" :span="2">
+          <el-descriptions-item label="计入成绩的分数与评语" :span="2">
+            <div v-if="aggregateGradeHint" class="aggregate-hint">{{ aggregateGradeHint }}</div>
             <div v-if="summaryReviewText" class="best-review">
               <el-tag
                 v-if="historySummary?.review_score !== null && historySummary?.review_score !== undefined"
@@ -43,7 +47,7 @@
               </el-tag>
               <span>{{ summaryReviewText }}</span>
             </div>
-            <span v-else class="muted-text">暂无评分</span>
+            <span v-else class="muted-text">暂无计入总评的分数</span>
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -74,10 +78,17 @@
             :title="`自动评分任务状态：${formatTaskStatus(latestTaskStatus)}`"
           />
           <el-alert
+            v-if="aggregateVsLatestAlert"
+            type="info"
+            :closable="false"
+            class="submission-alerts__item"
+            :title="aggregateVsLatestAlert"
+          />
+          <el-alert
             v-if="isPastDue && homework.allow_late_submission"
             type="warning"
             :closable="false"
-            title="当前提交将被标记为迟交。默认是否影响评分由作业规则决定。"
+            title="当前提交将被标记为迟交。若开启「迟交影响评分」，本次自动分可能不参与总评，总评仍可取此前按时提交中的较高分（见上方说明）。"
           />
           <el-alert
             v-if="isSubmissionLocked"
@@ -134,7 +145,7 @@
         <template #header>
           <div class="card-header">
             <span>提交历史</span>
-            <span class="muted-text">点击可下载历史附件，主界面始终显示最高分对应评语。</span>
+            <span class="muted-text">时间轴展示每次提交；「计入总评」标签标出当前总评分数来源批次（可能与最新一次不同）。</span>
           </div>
         </template>
 
@@ -150,6 +161,13 @@
             <div class="attempt-card">
               <div class="attempt-tags">
                 <el-tag size="small" type="primary">第 {{ getAttemptLabel(attempt) }} 次提交</el-tag>
+                <el-tag
+                  v-if="isGradedAggregateAttempt(attempt)"
+                  size="small"
+                  type="success"
+                >
+                  计入总评
+                </el-tag>
                 <el-tag v-if="attempt.is_late" size="small" type="warning">迟交</el-tag>
                 <el-tag
                   v-if="attempt.review_score !== null && attempt.review_score !== undefined"
@@ -217,6 +235,31 @@ const isPastDue = computed(() => {
 const isSubmissionLocked = computed(() => {
   return isPastDue.value && !homework.value?.allow_late_submission
 })
+
+const aggregateGradeHint = computed(() => {
+  const s = historySummary.value
+  if (!s?.graded_attempt_id || !attempts.value.length) {
+    return ''
+  }
+  const ga = attempts.value.find(a => a.id === s.graded_attempt_id)
+  const label = ga ? `第 ${getAttemptLabel(ga)} 次提交` : '某一历史批次'
+  return `当前总评分数与评语来自：${label}（在规则允许参与比较的各批次中取最高分；同一次提交内教师分优先于自动分）。`
+})
+
+const aggregateVsLatestAlert = computed(() => {
+  const h = homework.value
+  const s = historySummary.value
+  if (!h?.late_submission_affects_score || !s?.graded_attempt_id || !s?.latest_attempt_id) {
+    return ''
+  }
+  if (Number(s.graded_attempt_id) === Number(s.latest_attempt_id)) {
+    return ''
+  }
+  return '最近一次提交与「计入总评」的批次不同：若最新一次为迟交且自动分被排除，总评可保留较早按时提交的高分。请对照时间轴上的「计入总评」标签。'
+})
+
+const isGradedAggregateAttempt = attempt =>
+  Boolean(historySummary.value?.graded_attempt_id && attempt?.id === historySummary.value.graded_attempt_id)
 
 const form = reactive({
   content: '',
@@ -484,6 +527,13 @@ watch(
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.aggregate-hint {
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #64748b;
 }
 
 .attempt-card {

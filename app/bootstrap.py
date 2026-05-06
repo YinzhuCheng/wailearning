@@ -1,4 +1,6 @@
 import re
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
@@ -8,18 +10,21 @@ from app.auth import get_password_hash
 from app.config import settings
 from app.course_access import sync_course_enrollments
 from app.database import Base, SessionLocal, engine
+from app.llm_grading import validate_text_connectivity, validate_vision_connectivity
 from app.models import (
+    Class,
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
-    LLMGroup,
     Homework,
     HomeworkAttempt,
     HomeworkScoreCandidate,
     HomeworkSubmission,
     LLMEndpointPreset,
+    LLMGroup,
     LLMTokenUsageLog,
     Score,
     Semester,
+    Student,
     Subject,
     SystemSetting,
     User,
@@ -50,6 +55,20 @@ LEGACY_SYSTEM_SETTING_VALUES = {
     "copyright": {"(c) 2026 DD-CLASS", "漏 2024 DD-CLASS"},
 }
 
+DEMO_SEED_CLASS_NAME = "\u6f14\u793a\u73ed\u7ea7"
+DEMO_SEED_COURSE_NAME = "\u6f14\u793a\u8bfe\u7a0b\uff08\u7cfb\u7edf\u793a\u4f8b\uff09"
+DEMO_SEED_HOMEWORK_TITLE = "\u793a\u4f8b\u4f5c\u4e1a\uff08\u7b2c\u4e00\u5468\uff09"
+
+DEFAULT_COURSE_LLM_SYSTEM_PROMPT = (
+    "\u4f60\u662f\u672c\u8bfe\u7a0b\u7684\u667a\u80fd\u6559\u5b66\u52a9\u6559\uff0c\u56de\u7b54\u5b66\u751f\u95ee\u9898\u65f6\u7b80\u6d01\u3001\u51c6\u786e\uff0c"
+    "\u5f15\u7528\u8bfe\u7a0b\u5927\u7eb2\u4e0e\u4f5c\u4e1a\u8981\u6c42\uff0c\u4e0d\u6cc4\u9732\u4ec5\u6559\u5e08\u53ef\u89c1\u7684\u8bc4\u5206\u7ec6\u5219\u6216\u53c2\u8003\u7b54\u6848\u3002"
+)
+
+DEFAULT_COURSE_LLM_TEACHER_PROMPT = (
+    "\u81ea\u52a8\u8bc4\u5206\u65f6\uff1a\u4e25\u683c\u9075\u5faa\u300c\u5bf9\u5b66\u751f\u53ef\u89c1\u7684\u8bc4\u5206\u8981\u70b9\u300d\uff0c\u5e76\u7efc\u5408\u300c\u4ec5\u6559\u5e08\u53ef\u89c1\u7684\u8bc4\u5206\u8981\u70b9\u300d"
+    "\u4e0e\u300c\u53c2\u8003\u7b54\u6848\u6216\u601d\u8def\u300d\u8fdb\u884c\u5224\u5206\uff1b\u8f93\u51fa\u5206\u6570\u4e0e\u7b80\u77ed\u8bc4\u8bed\uff0c\u4e0d\u8981\u6cc4\u9732\u672a\u516c\u5f00\u8981\u70b9\u7684\u539f\u6587\u7ed9\u5b66\u751f\u3002"
+)
+
 
 def normalize_legacy_branding(value: str) -> str:
     if not value:
@@ -70,6 +89,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_end_at TIMESTAMP",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_times TEXT",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description VARCHAR",
+        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS cover_image_url VARCHAR",
         "ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR NOT NULL DEFAULT 'required'",
         """
         CREATE TABLE IF NOT EXISTS course_exam_weights (
@@ -90,6 +110,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS grade_precision VARCHAR NOT NULL DEFAULT 'integer'",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS auto_grading_enabled BOOLEAN DEFAULT FALSE",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS rubric_text TEXT",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS rubric_teacher_text TEXT",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS reference_answer TEXT",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS response_language VARCHAR",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS allow_late_submission BOOLEAN DEFAULT TRUE",
@@ -97,6 +118,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_score FLOAT",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_comment VARCHAR",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_attempt_id INTEGER",
+        "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS graded_best_attempt_id INTEGER",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_task_status VARCHAR",
         "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS latest_task_error TEXT",
         """
@@ -579,6 +601,242 @@ def sync_existing_courses(db) -> None:
     print(f"Ensured course enrollments. Added {synced} item(s).")
 
 
+def _wire_course_llm_from_preset(db, subject_id: int, preset: LLMEndpointPreset, acting_user_id: Optional[int]) -> None:
+    """Enable course LLM, attach validated vision preset, set default assistant + grading hints."""
+    config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+    if not config:
+        config = CourseLLMConfig(subject_id=subject_id, created_by=acting_user_id, updated_by=acting_user_id)
+        db.add(config)
+        db.flush()
+    config.is_enabled = True
+    if not (config.response_language or "").strip():
+        config.response_language = "zh-CN"
+    if not (config.system_prompt or "").strip():
+        config.system_prompt = DEFAULT_COURSE_LLM_SYSTEM_PROMPT
+    if not (config.teacher_prompt or "").strip():
+        config.teacher_prompt = DEFAULT_COURSE_LLM_TEACHER_PROMPT
+    config.updated_by = acting_user_id
+    db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == config.id).delete()
+    db.query(LLMGroup).filter(LLMGroup.config_id == config.id).delete()
+    db.flush()
+    group = LLMGroup(config_id=config.id, priority=1, name="default")
+    db.add(group)
+    db.flush()
+    db.add(
+        CourseLLMConfigEndpoint(
+            config_id=config.id,
+            group_id=group.id,
+            preset_id=preset.id,
+            priority=1,
+        )
+    )
+
+
+def _seed_demo_homework_submissions(db, homework: Homework, students: list[Student]) -> None:
+    if db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == homework.id).count() > 0:
+        return
+    now = datetime.now(timezone.utc)
+    samples = [
+        "\u672c\u5468\u5b66\u4e60\u4e86\u8bfe\u7a0b\u5bfc\u8bba\uff0c\u4e86\u89e3\u4e86\u8003\u6838\u65b9\u5f0f\u4e0e\u4f5c\u4e1a\u63d0\u4ea4\u89c4\u5219\uff0c\u5c06\u6309\u65f6\u5b8c\u6210\u540e\u7eed\u7ec3\u4e60\u3002",
+        "\u7b2c\u4e00\u5468\u5185\u5bb9\u5305\u62ec\u5b66\u4e60\u76ee\u6807\u3001\u8bfe\u7a0b\u5927\u7eb2\u4e0e\u5148\u4fee\u8981\u6c42\uff0c\u6211\u5df2\u6839\u636e\u6559\u5e08\u63d0\u793a\u6574\u7406\u7b14\u8bb0\u5e76\u9884\u4e60\u4e0b\u4e00\u8282\u3002",
+    ]
+    for idx, st in enumerate(students[:2]):
+        content = samples[idx % len(samples)]
+        sub = HomeworkSubmission(
+            homework_id=homework.id,
+            student_id=st.id,
+            subject_id=homework.subject_id,
+            class_id=homework.class_id,
+            content=content,
+            submitted_at=now - timedelta(hours=3 - idx),
+            updated_at=now - timedelta(hours=3 - idx),
+        )
+        db.add(sub)
+        db.flush()
+        attempt = HomeworkAttempt(
+            homework_id=homework.id,
+            student_id=st.id,
+            subject_id=homework.subject_id,
+            class_id=homework.class_id,
+            submission_summary_id=sub.id,
+            content=content,
+            is_late=False,
+            counts_toward_final_score=True,
+            submitted_at=sub.submitted_at,
+            updated_at=sub.updated_at,
+        )
+        db.add(attempt)
+        db.flush()
+        sub.latest_attempt_id = attempt.id
+
+
+def seed_initial_llm_deployment_bundle(db) -> None:
+    """When INIT_LLM_* env is set, upsert a preset, run text+vision probe (image), wire demo course LLM + homework."""
+    api_key = (settings.INIT_LLM_API_KEY or "").strip()
+    base_url = (settings.INIT_LLM_BASE_URL or "").strip()
+    model_name = (settings.INIT_LLM_MODEL_NAME or "").strip()
+    if not (api_key and base_url and model_name):
+        return
+
+    preset_name = (settings.INIT_LLM_PRESET_NAME or "deployment-primary").strip() or "deployment-primary"
+    ct = int(settings.INIT_LLM_CONNECT_TIMEOUT_SECONDS or 10)
+    rt = int(settings.INIT_LLM_READ_TIMEOUT_SECONDS or 120)
+
+    preset = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.name == preset_name).first()
+    if preset:
+        preset.base_url = base_url
+        preset.api_key = api_key
+        preset.model_name = model_name
+        preset.connect_timeout_seconds = ct
+        preset.read_timeout_seconds = rt
+        preset.is_active = True
+    else:
+        preset = LLMEndpointPreset(
+            name=preset_name,
+            base_url=base_url,
+            api_key=api_key,
+            model_name=model_name,
+            connect_timeout_seconds=ct,
+            read_timeout_seconds=rt,
+            is_active=True,
+        )
+        db.add(preset)
+    db.flush()
+
+    ok_t, msg_t = validate_text_connectivity(
+        base_url=preset.base_url,
+        api_key=preset.api_key,
+        model_name=preset.model_name,
+        connect_timeout_seconds=preset.connect_timeout_seconds,
+        read_timeout_seconds=preset.read_timeout_seconds,
+    )
+    if not ok_t:
+        preset.validation_status = "failed"
+        preset.validation_message = msg_t
+        preset.supports_vision = False
+    else:
+        ok_v, msg_v = validate_vision_connectivity(
+            base_url=preset.base_url,
+            api_key=preset.api_key,
+            model_name=preset.model_name,
+            connect_timeout_seconds=preset.connect_timeout_seconds,
+            read_timeout_seconds=preset.read_timeout_seconds,
+        )
+        ok = ok_v
+        message = f"{msg_t} {msg_v}" if ok_v else msg_v
+        preset.validation_status = "validated" if ok else "failed"
+        preset.validation_message = message
+        preset.supports_vision = bool(ok_v)
+    preset.validated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(preset)
+
+    if preset.validation_status != "validated" or not preset.supports_vision:
+        print(
+            f"INIT_LLM: endpoint '{preset_name}' did not pass vision validation; "
+            f"demo course wiring skipped. Message: {preset.validation_message}"
+        )
+        return
+
+    admin = db.query(User).filter(User.username == settings.INIT_ADMIN_USERNAME).first()
+    if not admin:
+        print("INIT_LLM: bootstrap admin user not found; skipping demo course seed.")
+        return
+    acting_id = admin.id
+
+    demo_course = db.query(Subject).filter(Subject.name == DEMO_SEED_COURSE_NAME).first()
+    if not demo_course:
+        semester = (
+            db.query(Semester)
+            .filter(Semester.is_active.is_(True))
+            .order_by(Semester.year.desc(), Semester.id.desc())
+            .first()
+        )
+        if not semester:
+            semester = db.query(Semester).order_by(Semester.id.asc()).first()
+        if not semester:
+            print("INIT_LLM: no semester row found; cannot seed demo course.")
+            return
+
+        demo_class = db.query(Class).filter(Class.name == DEMO_SEED_CLASS_NAME).first()
+        if not demo_class:
+            demo_class = Class(name=DEMO_SEED_CLASS_NAME, grade=1)
+            db.add(demo_class)
+            db.flush()
+
+        demo_students_spec = [
+            ("\u5f20\u4e09", "demo-2026-001"),
+            ("\u674e\u56db", "demo-2026-002"),
+            ("\u738b\u4e94", "demo-2026-003"),
+            ("\u8d75\u516d", "demo-2026-004"),
+        ]
+        students: list[Student] = []
+        for st_name, st_no in demo_students_spec:
+            existing = (
+                db.query(Student)
+                .filter(Student.class_id == demo_class.id, Student.student_no == st_no)
+                .first()
+            )
+            if existing:
+                students.append(existing)
+                continue
+            st = Student(name=st_name, student_no=st_no, class_id=demo_class.id, teacher_id=acting_id)
+            db.add(st)
+            db.flush()
+            students.append(st)
+
+        demo_course = Subject(
+            name=DEMO_SEED_COURSE_NAME,
+            teacher_id=acting_id,
+            class_id=demo_class.id,
+            semester_id=semester.id,
+            course_type="required",
+            status="active",
+            semester=semester.name,
+            description="\u7cfb\u7edf\u521d\u59cb\u5316\u6f14\u793a\u8bfe\u7a0b\uff08\u53ef\u5220\u9664\u6216\u6539\u7f16\uff09\u3002",
+        )
+        db.add(demo_course)
+        db.flush()
+        sync_course_enrollments(demo_course, db)
+
+        hw = Homework(
+            title=DEMO_SEED_HOMEWORK_TITLE,
+            content="\u8bf7\u6839\u636e\u7b2c\u4e00\u5468\u8bfe\u5802\u5185\u5bb9\uff0c\u7528\u81ea\u5df1\u7684\u8bdd\u7b80\u8981\u8bf4\u660e\u672c\u5468\u5b66\u4e60\u6536\u83b7\uff08\u7eaf\u6587\u672c\u63d0\u4ea4\u5373\u53ef\uff09\u3002",
+            class_id=demo_class.id,
+            subject_id=demo_course.id,
+            due_date=datetime.now(timezone.utc) + timedelta(days=14),
+            max_score=100,
+            grade_precision="integer",
+            auto_grading_enabled=True,
+            rubric_text=(
+                "\uff08\u5bf9\u5b66\u751f\u53ef\u89c1\uff09\u8bc4\u5206\u8981\u70b9\uff1a\u662f\u5426\u6db5\u76d6\u672c\u5468\u5b66\u4e60\u76ee\u6807\u4e0e\u81ea\u6211\u68c0\u89c6\uff1b"
+                "\u8868\u8ff0\u6e05\u6670\u3001\u903b\u8f91\u5b8c\u6574\u5373\u53ef\u3002"
+            ),
+            rubric_teacher_text=(
+                "\uff08\u4ec5\u6559\u5e08\u53ef\u89c1\uff09\u5185\u90e8\u8bc4\u5206\u7ec6\u5219\uff1a\u5173\u6ce8\u662f\u5426\u63d0\u5230\u8bfe\u7a0b\u5bfc\u8bba\u4e2d\u7684\u5173\u952e\u6982\u5ff5\uff1b\u4e0d\u8981\u56e0\u7528\u8bcd\u7ec6\u5fae\u5dee\u5f02\u8fc7\u5ea6\u6263\u5206\u3002"
+            ),
+            reference_answer=(
+                "\uff08\u4ec5\u6559\u5e08\u53ef\u89c1\uff09\u53c2\u8003\u7b54\u6848\u6216\u601d\u8def\uff1a\u53ef\u4ece\u5b66\u4e60\u76ee\u6807\u3001\u8003\u6838\u65b9\u5f0f\u3001\u5148\u4fee/\u51c6\u5907\u5efa\u8bae\u4e09\u65b9\u9762\u62df\u5199\uff1b\u65e0\u552f\u4e00\u6807\u51c6\u7b54\u6848\u3002"
+            ),
+            response_language="zh-CN",
+            allow_late_submission=True,
+            late_submission_affects_score=False,
+            created_by=acting_id,
+        )
+        db.add(hw)
+        db.flush()
+        _seed_demo_homework_submissions(db, hw, students)
+    else:
+        sync_course_enrollments(demo_course, db)
+
+    _wire_course_llm_from_preset(db, demo_course.id, preset, acting_id)
+    db.commit()
+    print(
+        f"INIT_LLM: preset '{preset_name}' validated (incl. vision image probe); "
+        f"demo course '{DEMO_SEED_COURSE_NAME}' LLM enabled and linked."
+    )
+
+
 def bootstrap() -> None:
     ensure_upload_directories()
     Base.metadata.create_all(bind=engine)
@@ -598,6 +856,10 @@ def bootstrap() -> None:
             sync_subject_semester_links(db)
             seed_default_system_settings(db)
             sync_existing_courses(db)
+            seed_initial_llm_deployment_bundle(db)
+            from app.seed_default_probability import seed_elementary_probability_elective_course
+
+            seed_elementary_probability_elective_course(db)
             backfill_homework_grading_data(db)
         else:
             print("INIT_DEFAULT_DATA is false. Table creation completed without seed data.")

@@ -98,7 +98,12 @@
                   {{ formatScore(row.review_score) }}
                 </el-tag>
                 <div v-if="row.review_comment" class="review-comment">{{ row.review_comment }}</div>
-                <div class="review-meta">共 {{ row.attempt_count || 0 }} 次提交，展示最高分对应评语</div>
+                <div class="review-meta">
+                  共 {{ row.attempt_count || 0 }} 次提交；总评取规则允许批次中的最高分
+                  <template v-if="row.graded_attempt_id && row.latest_submission_attempt_id && row.graded_attempt_id !== row.latest_submission_attempt_id">
+                    （当前总评来源与最新一次提交不同，见提交详情页）
+                  </template>
+                </div>
               </div>
               <span v-else class="muted-text">未评分</span>
             </template>
@@ -139,17 +144,51 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="自动评分">
-          <el-switch v-model="form.auto_grading_enabled" />
-          <div class="attachment-help">启用后，学生新提交会进入异步评分队列；展示分数始终按最高分规则计算。</div>
+          <el-switch v-model="form.auto_grading_enabled" :disabled="!canUseAutoGrading" />
+          <div class="attachment-help">
+            启用后学生新提交会进入异步评分队列；路由与端点仅使用课程级 LLM 配置（或系统在缺省时的全局最新已校验端点）。
+          </div>
+          <el-alert
+            v-if="!userStore.isStudent && !llmGloballyOk"
+            type="warning"
+            :closable="false"
+            class="llm-guard-alert"
+            title="系统中尚无可用的已校验视觉 LLM 端点，无法启用自动评分或智能助教。"
+          />
+          <el-alert
+            v-else-if="!userStore.isStudent && llmGloballyOk && !courseLlmEnabled"
+            type="warning"
+            :closable="false"
+            class="llm-guard-alert"
+            title="请先在「课程管理 → LLM 配置」中启用本课程的 LLM，再开启自动评分。"
+          />
         </el-form-item>
         <el-form-item label="响应语言">
           <el-input v-model="form.response_language" placeholder="例如 zh-CN / en-US，可为空" />
         </el-form-item>
-        <el-form-item label="评分要点">
-          <el-input v-model="form.rubric_text" type="textarea" :rows="4" placeholder="可填写评分量规、评分要点或教师说明" />
+        <el-form-item label="评分要点（对学生可见）">
+          <el-input
+            v-model="form.rubric_text"
+            type="textarea"
+            :rows="4"
+            placeholder="学生端始终可见；可写清得分维度、字数要求等，勿写保密细则。"
+          />
         </el-form-item>
-        <el-form-item label="参考答案">
-          <el-input v-model="form.reference_answer" type="textarea" :rows="4" placeholder="可选，供 LLM 评分参考" />
+        <el-form-item label="评分要点（仅教师可见）">
+          <el-input
+            v-model="form.rubric_teacher_text"
+            type="textarea"
+            :rows="4"
+            placeholder="仅教师与自动评分可见；可写内部尺度、扣分敏感点等。"
+          />
+        </el-form-item>
+        <el-form-item label="参考答案或思路（仅教师可见）">
+          <el-input
+            v-model="form.reference_answer"
+            type="textarea"
+            :rows="4"
+            placeholder="供 LLM 与教师参考；不会展示给学生。"
+          />
         </el-form-item>
         <el-form-item label="迟交规则">
           <div class="late-rules">
@@ -160,6 +199,9 @@
               inactive-text="迟交默认不影响评分"
             />
           </div>
+          <p class="late-rules-hint">
+            开启「迟交影响评分」时：迟交批次的<strong>自动分</strong>不参与总评；总评取各允许批次中的<strong>最高分</strong>（教师仍可在迟交批次上给分并参与比较）。学生端会标注总评分数来自哪一次提交。
+          </p>
         </el-form-item>
         <el-form-item label="附件">
           <el-upload
@@ -194,8 +236,15 @@
           <el-descriptions-item label="自动评分">{{ currentHomework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ currentHomework.grading_rule_hint }}</el-descriptions-item>
         <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '暂无内容' }}</el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">{{ currentHomework.rubric_text || '未设置' }}</el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">{{ currentHomework.reference_answer || '未设置' }}</el-descriptions-item>
+          <el-descriptions-item label="评分要点（对学生可见）" :span="2">{{
+            currentHomework.rubric_text || '未设置'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">{{
+            currentHomework.rubric_teacher_text || '未设置'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">{{
+            currentHomework.reference_answer || '未设置'
+          }}</el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentHomework.attachment_url" type="primary" link @click="openAttachment(currentHomework)">
             {{ currentHomework.attachment_name || '下载附件' }}
@@ -231,6 +280,31 @@ const attachmentFile = ref(null)
 const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
 
+const llmGloballyOk = ref(true)
+const courseLlmEnabled = ref(false)
+
+const canUseAutoGrading = computed(
+  () => !userStore.isStudent && llmGloballyOk.value && courseLlmEnabled.value
+)
+
+const loadCourseLlmGuards = async () => {
+  if (!selectedCourse.value || userStore.isStudent) {
+    courseLlmEnabled.value = false
+    return
+  }
+  try {
+    const [cap, cfg] = await Promise.all([
+      api.llmSettings.getCapabilities(),
+      api.llmSettings.getCourseConfig(selectedCourse.value.id)
+    ])
+    llmGloballyOk.value = !!cap?.has_validated_vision_preset
+    courseLlmEnabled.value = !!cfg?.is_enabled
+  } catch {
+    llmGloballyOk.value = false
+    courseLlmEnabled.value = false
+  }
+}
+
 const form = reactive({
   title: '',
   content: '',
@@ -239,8 +313,9 @@ const form = reactive({
   attachment_url: '',
   max_score: 100,
   grade_precision: 'integer',
-  auto_grading_enabled: false,
+  auto_grading_enabled: true,
   rubric_text: '',
+  rubric_teacher_text: '',
   reference_answer: '',
   response_language: '',
   allow_late_submission: true,
@@ -286,8 +361,9 @@ const openCreateDialog = () => {
   form.attachment_url = ''
   form.max_score = 100
   form.grade_precision = 'integer'
-  form.auto_grading_enabled = false
+  form.auto_grading_enabled = canUseAutoGrading.value
   form.rubric_text = ''
+  form.rubric_teacher_text = ''
   form.reference_answer = ''
   form.response_language = ''
   form.allow_late_submission = true
@@ -350,6 +426,7 @@ const submitForm = async () => {
       grade_precision: form.grade_precision,
       auto_grading_enabled: form.auto_grading_enabled,
       rubric_text: form.rubric_text?.trim() || null,
+      rubric_teacher_text: form.rubric_teacher_text?.trim() || null,
       reference_answer: form.reference_answer?.trim() || null,
       response_language: form.response_language?.trim() || null,
       allow_late_submission: form.allow_late_submission,
@@ -439,14 +516,20 @@ const formatDate = value => {
 
 onMounted(() => {
   loadHomeworks()
+  loadCourseLlmGuards()
 })
 
 watch(selectedCourse, () => {
   loadHomeworks()
+  loadCourseLlmGuards()
 })
 </script>
 
 <style scoped>
+.llm-guard-alert {
+  margin-top: 10px;
+}
+
 .homework-page {
   padding: 24px;
 }
@@ -524,6 +607,13 @@ watch(selectedCourse, () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.late-rules-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #64748b;
 }
 
 @media (max-width: 768px) {

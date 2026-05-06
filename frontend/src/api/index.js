@@ -190,8 +190,11 @@ const api = {
     createPreset: data => http.post('/llm-settings/presets', data),
     updatePreset: (id, data) => http.put(`/llm-settings/presets/${id}`, data),
     validatePreset: id => http.post(`/llm-settings/presets/${id}/validate`),
+    getCapabilities: () => http.get('/llm-settings/capabilities'),
     getCourseConfig: subjectId => http.get(`/llm-settings/courses/${subjectId}`),
-    updateCourseConfig: (subjectId, data) => http.put(`/llm-settings/courses/${subjectId}`, data)
+    updateCourseConfig: (subjectId, data) => http.put(`/llm-settings/courses/${subjectId}`, data),
+    getAssistantAvailability: subjectId => http.get(`/llm-settings/courses/${subjectId}/assistant/availability`),
+    postAssistantChat: (subjectId, data) => http.post(`/llm-settings/courses/${subjectId}/assistant/chat`, data)
   },
   notifications: {
     list: params => http.get('/notifications', { params }),

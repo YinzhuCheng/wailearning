@@ -216,6 +216,7 @@ class SubjectCreate(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
     students: Optional[List["CourseRosterStudentInput"]] = None
 
 
@@ -232,6 +233,7 @@ class SubjectUpdate(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
 
 
 class SubjectResponse(BaseModel):
@@ -248,6 +250,7 @@ class SubjectResponse(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: List[CourseTimeItem] = Field(default_factory=list)
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
     teacher_name: Optional[str] = None
     class_name: Optional[str] = None
     student_count: int = 0
@@ -641,6 +644,7 @@ class HomeworkBase(BaseModel):
     grade_precision: str = "integer"
     auto_grading_enabled: bool = False
     rubric_text: Optional[str] = None
+    rubric_teacher_text: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: bool = True
@@ -671,6 +675,7 @@ class HomeworkUpdate(BaseModel):
     grade_precision: Optional[str] = None
     auto_grading_enabled: Optional[bool] = None
     rubric_text: Optional[str] = None
+    rubric_teacher_text: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: Optional[bool] = None
@@ -701,6 +706,8 @@ class HomeworkResponse(HomeworkBase):
     task_error: Optional[str] = None
     attempt_count: int = 0
     latest_submission_is_late: Optional[bool] = None
+    graded_attempt_id: Optional[int] = None
+    latest_submission_attempt_id: Optional[int] = None
     grading_rule_hint: Optional[str] = None
 
     class Config:
@@ -744,6 +751,7 @@ class HomeworkSubmissionResponse(BaseModel):
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
     latest_attempt_id: Optional[int] = None
+    graded_attempt_id: Optional[int] = None
     latest_task_status: Optional[str] = None
     latest_task_error: Optional[str] = None
 
@@ -806,6 +814,7 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
     latest_attempt_id: Optional[int] = None
+    graded_attempt_id: Optional[int] = None
     latest_attempt_is_late: Optional[bool] = None
     latest_task_status: Optional[str] = None
     latest_task_error: Optional[str] = None
@@ -941,6 +950,25 @@ class CourseLLMConfigResponse(BaseModel):
     endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)
     groups: List[LLMGroupResponse] = Field(default_factory=list)
     visual_validation_notice: str
+    uses_course_endpoint_routing: bool = True
+
+
+class LLMCapabilitiesResponse(BaseModel):
+    has_validated_vision_preset: bool
+    latest_validated_preset_id: Optional[int] = None
+
+
+class CourseAssistantAvailabilityResponse(BaseModel):
+    can_chat: bool
+    reason_code: Optional[str] = None
+
+
+class AssistantChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=12000)
+
+
+class AssistantChatResponse(BaseModel):
+    reply: str
 
 
 class NotificationBase(BaseModel):
