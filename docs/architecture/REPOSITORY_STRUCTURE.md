@@ -293,7 +293,7 @@ When adding or moving files, use these rules:
 1. If a file applies to the whole repository, keep it at the root only if it is truly repository-scoped.
 2. If a file belongs to one application, keep it under that app's subtree.
 3. If a file is deployment-only, keep it under `ops/`.
-4. If a file is test-only, keep it under `tests/` unless pytest itself requires a repository-level location.
+4. If a file is test-only, keep it under `tests/` unless pytest itself requires a repository-level location. **Test-corpus maintenance scripts** (not pytest modules) belong in `tests/devtools/` — do not recreate a generic top-level `tools/` directory for them.
 5. If a file defines HTTP contracts or route registration, prefer `apps/backend/wailearning_backend/api/`.
 6. If a file defines shared backend configuration, auth, or permission logic, prefer `apps/backend/wailearning_backend/core/`.
 7. If a file defines engine, session, Base, or SQLAlchemy models, prefer `apps/backend/wailearning_backend/db/`.

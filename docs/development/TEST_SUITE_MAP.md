@@ -39,6 +39,7 @@ Rules agents should follow:
 Current utilities:
 
 - [`tests/devtools/audit_test_redundancy.py`](../../tests/devtools/audit_test_redundancy.py) — regenerates [`TEST_REDUNDANCY_AUDIT.md`](TEST_REDUNDANCY_AUDIT.md).
+- [`tests/devtools/README.md`](../../tests/devtools/README.md) — short rules, commands, and cross-links for agents.
 
 ## Category Overview
 

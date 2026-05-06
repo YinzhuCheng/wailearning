@@ -185,7 +185,7 @@ During unrelated May 2026 remediation, failures traced to:
 |------|----------|------------|
 | External wiki / onboarding decks still show `tools/` | Low | Search non-repo docs manually — **待人工确认** |
 | Future scripts recreate root-level `tools/` out of habit | Medium | Enforce via PR review + link to this report |
-| `tests/devtools/` grows without README | Low | `TEST_SUITE_MAP.md` now acts as the index; add `tests/devtools/README.md` only if file count exceeds ~3 |
+| `tests/devtools/` grows without onboarding text | Low | Added [`tests/devtools/README.md`](../../tests/devtools/README.md) during round closure so agents have a first-hop index even with a single utility script. [`TEST_SUITE_MAP.md`](../development/TEST_SUITE_MAP.md) remains the authoritative detailed map. |
 
 ---
 
@@ -215,3 +215,25 @@ python3 -m pytest tests/backend/integration/test_core_api_surface.py -q
 ## Document history
 
 - **2026-05:** Initial consolidation removing root `tools/` and introducing `tests/devtools/` as the home for test-tree maintenance scripts.
+
+---
+
+## 11. Round closure statement (repository-level structure pass)
+
+This subsection exists so agents do not reopen finished work by accident.
+
+**Marked complete for the scope “Git 仓库顶层与测试树边界整理”:**
+
+- redundant root-level `tools/` removal,
+- `audit_test_redundancy.py` relocation under `tests/devtools/`,
+- reference repairs across Markdown contracts,
+- regenerated `TEST_REDUNDANCY_AUDIT.md`,
+- validation commands recorded in §6 and §10.
+
+**Explicitly out of scope for this same pass (defer to dedicated backend refactors):**
+
+- splitting `llm_grading.py`, `llm_discussion.py`, or `bootstrap.py` (high coupling; see [STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) §“Immediate recommendation after this pass”),
+- any change to the canonical import root `apps.backend.wailearning_backend`,
+- HTTP routes, environment variable names, and database columns.
+
+If you need to resume structural work, start a **new** task label rather than extending this closure section — it prevents ambiguous “half-done repo refactor” states for automation.

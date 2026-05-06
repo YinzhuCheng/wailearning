@@ -19,6 +19,7 @@ See [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WOR
 | Issue | Detail |
 |-------|--------|
 | Legacy npm identifiers | Admin `package.json` may still show historical package names (`ddclass-frontend`) while README branding is BIMSA-CLASS — cosmetic unless publishing packages. |
+| External bookmarks to removed `tools/testing/` | Narrative docs may still **mention** the old path when explaining migrations; actionable code/config must not reference it. Canonical utility location: `tests/devtools/audit_test_redundancy.py`. See [architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md). |
 
 ---
 

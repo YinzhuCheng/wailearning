@@ -17,7 +17,7 @@
 | [`conftest.py`](../../conftest.py) | Repo-root pytest hooks (Windows temp dir hardening) |
 | [`tests/conftest.py`](../../tests/conftest.py) | **Critical:** sets `DATABASE_URL`, disables demo seed during pytest, worker defaults |
 | [`ops/`](../../ops/) | nginx, systemd, CI YAML (`ops/ci/*.yml`), deploy shell scripts |
-| [`tests/devtools/`](../../tests/devtools/) | Test-tree maintenance scripts (not collected by pytest) |
+| [`tests/devtools/`](../../tests/devtools/) | Test-tree maintenance scripts (not collected by pytest); start at [`tests/devtools/README.md`](../../tests/devtools/README.md) |
 | [`apps/backend/wailearning_backend/`](../../apps/backend/wailearning_backend/) | Canonical FastAPI package |
 | [`apps/web/admin/`](../../apps/web/admin/) | Admin SPA + Playwright |
 | [`apps/web/parent/`](../../apps/web/parent/) | Parent SPA |

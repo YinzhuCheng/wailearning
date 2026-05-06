@@ -373,9 +373,15 @@ The repository should be treated as:
 - **import root: stable contract, do not reopen casually**
 - **root directory discipline: already close to target, keep it strict**
 
-The next useful work is therefore not another broad move. It is:
+### Repository-level follow-up that is now applied (2026-05)
+
+The former single-file top-level `tools/testing/audit_test_redundancy.py` bucket has been **removed**. Test-tree maintenance utilities live under `tests/devtools/` instead. Full mapping and pitfalls: [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](REPOSITORY_RESTRUCTURE_REPORT_2026-05.md).
+
+### What still deserves attention next
+
+The next useful work is therefore not another broad **repository-root** move. It is:
 
 1. maintain the explicit boundary docs,
-2. prevent new root or package-root sprawl,
-3. continue breaking down `llm_grading.py`, `llm_discussion.py`, and `bootstrap.py`,
+2. prevent new root or package-root sprawl (**do not** recreate a generic top-level `tools/` directory — prefer `tests/devtools/` for test-corpus utilities and `ops/scripts/` for deploy/maintenance),
+3. continue breaking down `llm_grading.py`, `llm_discussion.py`, and `bootstrap.py` **inside** the backend package when a dedicated refactor task justifies the import churn,
 4. postpone any import-contract change until there is a proven need.

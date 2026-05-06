@@ -145,5 +145,6 @@ The **repository-structure optimization** pass relocated the test redundancy aud
 Agent notes:
 
 - Regenerate [`TEST_REDUNDANCY_AUDIT.md`](TEST_REDUNDANCY_AUDIT.md) via `python3 tests/devtools/audit_test_redundancy.py` after editing protection rules or performing large test-file churn.
+- First-hop rules for this directory: [`tests/devtools/README.md`](../../tests/devtools/README.md).
 - Full narrative mapping + pitfalls live in [`architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](../architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md).
 - This relocation **does not** change pytest discovery rules (`pytest.ini` still selects `test_*.py` only); devtools filenames must remain outside that pattern.
