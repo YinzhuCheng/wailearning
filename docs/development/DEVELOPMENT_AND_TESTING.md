@@ -78,30 +78,21 @@ ops\scripts\windows\start-parent-frontend.bat
 
 ## Key Development Settings
 
-Defined in [`../../apps/backend/wailearning_backend/core/config.py`](../../apps/backend/wailearning_backend/core/config.py):
+The canonical list of **all** `Settings` fields, defaults, and related Vite variables is in [../architecture/CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md) (kept in sync with [`apps/backend/wailearning_backend/core/config.py`](../../apps/backend/wailearning_backend/core/config.py)).
 
-- `APP_ENV`
-- `DEBUG`
-- `DATABASE_URL`
-- `SECRET_KEY`
-- `BACKEND_CORS_ORIGINS`
-- `TRUSTED_HOSTS`
-- `INIT_ADMIN_USERNAME`
-- `INIT_ADMIN_PASSWORD`
-- `INIT_ADMIN_REAL_NAME`
-- `ALLOW_PUBLIC_REGISTRATION`
-- `INIT_DEFAULT_DATA`
-- `E2E_DEV_SEED_ENABLED`
-- `E2E_DEV_SEED_TOKEN`
-- `ENABLE_LLM_GRADING_WORKER`
-- `LLM_GRADING_WORKER_LEADER`
-- `LLM_GRADING_WORKER_POLL_SECONDS`
-- `LLM_GRADING_TASK_STALE_SECONDS`
-- `DEFAULT_LLM_API_KEY`
-- `REQUIRE_STRONG_SECRETS`
-- `FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS` — minimum seconds between admin notifications for the same username on forgot-password (set `0` to disable per-user cooldown).
-- `FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR` — rolling hourly cap on forgot-password attempts recorded per client IP in `operation_logs` (set `0` to disable the IP gate).
-- `PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS` — when true alongside `ALLOW_PUBLIC_REGISTRATION`, `POST /api/auth/register` rejects unknown `class_id` with HTTP 400.
+Quick reminders for developers running locally:
+
+- Prefer `.env` at the repo root for backend variables (`Settings` reads `.env` with UTF-8 encoding).
+- Never commit real secrets; placeholder defaults exist for local ergonomics but fail validation when `APP_ENV` is production or `REQUIRE_STRONG_SECRETS=true`.
+- Frontend dev servers read `VITE_*` from `apps/web/admin/` or `apps/web/parent/` — see CONFIGURATION_REFERENCE **Frontend dev** section.
+
+Playwright-specific additions (not part of `Settings`):
+
+- `PLAYWRIGHT_USE_EXTERNAL_SERVERS` — skip spawning managed uvicorn/vite when pointing at already-running servers.
+- `E2E_API_PORT`, `E2E_UI_PORT` — defaults **8012** / **3012** inside `apps/web/admin/playwright.config.cjs`.
+- `E2E_PYTHON` — Python executable for the managed API subprocess.
+
+Dual gate for `/api/e2e/dev/*` — see [E2E Seed and Environment](#e2e-seed-and-environment) below and CONFIGURATION_REFERENCE (`E2E_DEV_REQUIRE_ADMIN_JWT`).
 
 ## Test Layers
 
@@ -314,6 +305,22 @@ These notes **add** to the bullets above; they do not replace the redundancy aud
   - `npx playwright test e2e-pitfall-guard-rails-batch2.spec.js`
 - When adding more list-endpoint tests, **parameterize `(path, max_page_size)`** from code or a tiny shared table in the spec; avoid magic `200` unless you confirmed `le` for that router.
 - **`e2e-pitfall-guard-rails.spec.js`** (15 cases) and **batch2** (10 cases) overlap conceptually with **`e2e-cross-cutting-tier3.spec.js`** HTTP-edge tests; new edges should **extend** batch2 or tier3, not fork a third file, unless the invariant is genuinely new.
+
+## Pitfalls index (fast lookup)
+
+The exhaustive narrative lives in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md). Use this table to jump when triaging failures.
+
+| Topic | Pitfall ids / keywords | Notes |
+|-------|-------------------------|-------|
+| Ports already bound (`3012`, `8012`, `8001`) | **63**, stale `node`/`uvicorn` | Kill stray listeners before full Playwright runs. |
+| Course switcher / Element Plus dropdown flakiness | **64**, `clickCourseSwitcherOption`, hover-trigger menus | Prefer helpers over raw `.hover()` when CI is unstable. |
+| Mock LLM profile cursor drift across scenarios | **65**, `configureMockLlm` after setup steps | Reset mock steps before multi-phase grading assertions. |
+| Material chapter reorder contract (`ordered_chapter_ids`, POST vs PUT) | **66**, `material-chapters` API | Align tests with router verb + payload; seed needs ≥2 movable chapters. |
+| Responsive layout regression timeouts (`boundingBox` sampling) | **67**, large `el-table` / many cards | Cap locator iteration for viewport proofs. |
+| Large `users` table + Element Plus forms (`el-select`, batch move) | **68**, API-first setup | Prefer `page.request` / shared API helpers over flaky UI for bulk actions in long suites. |
+| `SECRET_KEY` / `REQUIRE_STRONG_SECRETS` startup failures | **57** | Weak secrets rejected when strong validation is on — see [CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md). |
+
+When adding a **new** recurring failure mode, append it to `TEST_EXECUTION_PITFALLS.md` first, then add one row here so agents discover it without rereading the entire pitfalls file every time.
 
 ## After Documentation Updates
 
