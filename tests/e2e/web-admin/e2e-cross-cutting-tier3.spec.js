@@ -181,12 +181,12 @@ test.describe('E2E tier-3 cross-cutting scenarios', () => {
         login(pages[6], s.student_plain.username, s.password_teacher_student)
       ])
       await Promise.all([
-        pages[0].goto('/dashboard'),
-        pages[1].goto('/dashboard'),
-        pages[2].goto('/dashboard'),
-        pages[3].goto('/dashboard'),
-        pages[4].goto('/dashboard'),
-        pages[5].goto('/dashboard'),
+        pages[0].goto('/students'),
+        pages[1].goto('/students'),
+        pages[2].goto('/students'),
+        pages[3].goto('/students'),
+        pages[4].goto('/students'),
+        pages[5].goto('/students'),
         pages[6].goto('/courses')
       ])
       for (const p of pages) {

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
 from apps.backend.wailearning_backend.db.database import get_db
-from apps.backend.wailearning_backend.db.models import Attendance, Class, Score, Student, Subject, User
+from apps.backend.wailearning_backend.db.models import Attendance, Class, CourseEnrollment, Score, Student, Subject, User
 from apps.backend.wailearning_backend.api.schemas import ClassRanking, DashboardStats, ScoreResponse, StudentRanking
 from apps.backend.wailearning_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
 
@@ -34,8 +34,16 @@ def get_dashboard_stats(
     if selected_course and selected_course.class_id:
         class_ids = [selected_course.class_id]
 
-    total_students_query = apply_class_id_filter(db.query(Student), Student.class_id, class_ids)
-    total_students = total_students_query.count()
+    # When a course is selected, "students" means enrolled learners for that subject — especially for
+    # electives where the class roster can be larger than `course_enrollments`. Without subject scope,
+    # keep the legacy class-wide Student count for admin-wide dashboards.
+    if selected_course:
+        total_students = (
+            db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == selected_course.id).count()
+        )
+    else:
+        total_students_query = apply_class_id_filter(db.query(Student), Student.class_id, class_ids)
+        total_students = total_students_query.count()
     total_classes = len(class_ids)
 
     score_query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)

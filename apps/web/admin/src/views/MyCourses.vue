@@ -594,7 +594,7 @@ const selectCourse = course => {
     router.push('/course-home')
     return
   }
-  router.push('/dashboard')
+  router.push('/students')
 }
 
 const formatDate = value => {
@@ -850,7 +850,7 @@ const submitForm = async () => {
     userStore.setSelectedCourse(createdCourse)
     dialogVisible.value = false
     ElMessage.success('课程已创建')
-    router.push('/dashboard')
+    router.push('/students')
   } finally {
     submitting.value = false
   }

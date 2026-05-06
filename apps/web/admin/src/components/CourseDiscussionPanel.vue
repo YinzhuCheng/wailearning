@@ -95,6 +95,16 @@
             <el-radio-button label="plain">纯文本</el-radio-button>
           </el-radio-group>
         </div>
+        <div v-if="draftFormat === 'markdown'" class="discussion-md-demo-wrap">
+          <MarkdownLatexLiveDemo
+            compact
+            :show-insert="true"
+            :show-source-collapse="false"
+            title="Markdown + LaTeX 示例"
+            subtitle="回复格式为 Markdown 时显示：以下为固定演示渲染效果，可复制或插入后再撰写正文。"
+            @insert="appendDraftSnippet"
+          />
+        </div>
         <el-input
           v-model="draft"
           type="textarea"
@@ -123,6 +133,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import MarkdownLatexLiveDemo from '@/components/MarkdownLatexLiveDemo.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
 import { normalizeContentFormat } from '@/utils/contentFormat'
@@ -197,6 +208,11 @@ const inputPlaceholder = computed(() => {
   }
   return '输入讨论内容（需登录，不支持匿名）'
 })
+
+const appendDraftSnippet = snippet => {
+  const cur = (draft.value || '').trim()
+  draft.value = cur ? `${cur}\n\n${snippet}` : snippet
+}
 
 const roleLabel = role =>
   ({ admin: '管理员', class_teacher: '班主任', teacher: '教师', student: '学生' }[role] || role || '—')
@@ -620,6 +636,10 @@ loadList()
   align-items: center;
   gap: 10px;
   margin-top: 8px;
+}
+
+.discussion-md-demo-wrap {
+  margin-top: 10px;
 }
 
 .discussion-format-bar__label {

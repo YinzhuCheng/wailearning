@@ -311,6 +311,30 @@ Prefer `.first()` only when intentionally accepting ambiguity, or better:
 - scoped locators (table body vs header),
 - or `data-testid` hooks.
 
+### Extension (May 2026): duplicate `data-testid` values inside one overlay
+
+The homework publish dialog mounts **multiple** `MarkdownEditorPanel` instances (assignment body + rubric blocks). Each embeds `MarkdownLatexLiveDemo` with the same `data-testid="markdown-latex-demo-render"`. Playwright strict mode then rejects `page.getByTestId('markdown-latex-demo-render')` even though each node is visible.
+
+**Fix pattern:** scope under the intended panel, for example `dialog.locator('.md-panel').first()` for the **assignment body** panel, then chain `.getByTestId('markdown-latex-demo-render')`.
+
+### Extension (May 2026): Element Plus `el-radio-button` intercepts clicks on the native `<input type="radio">`
+
+Symptom: `getByRole('radio', { name: '纯文本' }).click()` retries until timeout because **`<span class="el-radio-button__inner">` intercepts pointer events**.
+
+**Fix pattern:** click the visible button chrome instead, for example `panel.locator('.md-panel__format .el-radio-button').filter({ hasText: '纯文本' })`.
+
+### Extension (May 2026): `MaterialRead` title vs chapter navigation ordering
+
+If `material` is assigned only **after** `buildSequence()` finishes (DFS over chapters × list calls), the reader toolbar can appear while `.material-read-title` is still absent for multiple seconds. Assertions that require the title should either wait longer or (preferably) rely on product behavior that assigns `material` immediately after `GET /materials/{id}` and treats chapter DFS failures as non-fatal for the article body.
+
+### Extension (May 2026): sidebar `default-active` vs nested routes (`/materials/read/:id`)
+
+`Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift.
+
+### Extension (May 2026): teacher 「课程仪表盘」 deleted — update Playwright landing URLs
+
+The SPA **`Dashboard.vue`** page and **`/dashboard`** metrics UI were removed; **`/dashboard` permanently redirects to `/students`** via `router/index.js`. Historical specs that did `page.goto('/dashboard')` to warm teacher shells must migrate to **`/students`** (or another stable teacher route). Waiting for `/course-home|/dashboard` after a student course switch should instead allow **`/course-home|/courses`** (students never land on `/students` for normal flows). Symptom before migration: strict URL assertions time out because teachers now remain on `/students`, not `/dashboard`.
+
 ## Pitfall 14: `textarea:first()` on the homework submit page is often the wrong control
 
 ### Symptom
@@ -1335,7 +1359,7 @@ These failures showed up while authoring **`tests/e2e/web-admin/e2e-notification
 
 ### Symptom
 
-Playwright asserts **`badge digit === sync-status(...?subject_id=<course_required_id>)`** after **`page.goto('/dashboard')`** but the badge stays **0** or matches a **different** subject.
+Playwright asserts **`badge digit === sync-status(...?subject_id=<course_required_id>)`** after **`page.goto('/students')`** (historically **`/dashboard`** before the SPA dashboard removal) but the badge stays **0** or matches a **different** subject.
 
 ### Context
 

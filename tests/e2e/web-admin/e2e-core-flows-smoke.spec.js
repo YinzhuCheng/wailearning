@@ -93,10 +93,10 @@ test.describe('E2E core user journeys (seeded DB)', () => {
     await expect(page.locator(`text=${s.admin.username}`).first()).toBeVisible({ timeout: 15000 })
   })
 
-  test('class teacher reaches dashboard without error overlay', async ({ page }) => {
+  test('class teacher reaches staff home without error overlay', async ({ page }) => {
     const s = scenario()
     await login(page, s.class_teacher.username, s.class_teacher.password)
-    await expect(page).toHaveURL(/\/dashboard/)
+    await expect(page).toHaveURL(/\/students/)
     await expect(page.locator('.el-message--error')).toHaveCount(0)
   })
 
