@@ -4,6 +4,8 @@
 
 Fast orientation for humans and LLM agents editing this repository: **where to change behavior**, **what to grep**, and **what breaks easily**. This is not a substitute for reading feature-specific docs (LLM, parent portal, notifications); it prevents blind edits.
 
+**Newer deep maps:** see [`AGENTS.md`](../../AGENTS.md) (repo root), [`../agent-playbook.md`](../agent-playbook.md), [`../reference/CODE_MAP_AND_ENTRYPOINTS.md`](../reference/CODE_MAP_AND_ENTRYPOINTS.md), [`../known-issues-and-risks.md`](../known-issues-and-risks.md), plus [`ASYNC_TASKS_AND_WORKERS.md`](ASYNC_TASKS_AND_WORKERS.md) for the grading worker thread model.
+
 ---
 
 ## First reads (minimum)

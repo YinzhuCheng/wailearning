@@ -176,11 +176,11 @@ test.describe('E2E cross-cutting edge scenarios', () => {
         login(pages[4], s.student_b.username, s.password_teacher_student)
       ])
       await Promise.all([
-        pages[0].goto('/dashboard'),
-        pages[1].goto('/dashboard'),
-        pages[2].goto('/dashboard'),
-        pages[3].goto('/dashboard'),
-        pages[4].goto('/dashboard')
+        pages[0].goto('/students'),
+        pages[1].goto('/students'),
+        pages[2].goto('/students'),
+        pages[3].goto('/students'),
+        pages[4].goto('/students')
       ])
       for (const p of pages) {
         await expect(p.locator('.layout-container')).toBeVisible({ timeout: 25000 })

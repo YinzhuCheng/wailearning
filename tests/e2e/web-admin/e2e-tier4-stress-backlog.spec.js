@@ -76,7 +76,7 @@ test.describe('E2E tier-4 stress backlog', () => {
       await Promise.all([
         (async () => {
           await login(adminP, s.admin.username, s.admin.password)
-          await adminP.goto('/dashboard', { waitUntil: 'load', timeout: 120000 })
+          await adminP.goto('/students', { waitUntil: 'load', timeout: 120000 })
           await adminP.reload({ waitUntil: 'load', timeout: 120000 })
           await expect(adminP.locator('.layout-container, .page-title, h1').first()).toBeVisible({ timeout: 60000 })
         })(),

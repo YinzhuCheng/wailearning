@@ -33,10 +33,11 @@ When `INIT_DEFAULT_DATA=true`, startup can also seed a demo teaching bundle.
 
 That bundle includes:
 
-- a demo teacher account,
+- demo teacher account `teacher` (shared demo password via module constant),
+- additional demo teacher `teacher_pro` (password equals username `teacher_pro`) teaching the elective **初等概率论** showcase course,
 - several demo student accounts,
 - a demo class,
-- required and elective courses,
+- required and elective courses (including Markdown/LaTeX-heavy probability materials),
 - demo materials and homework,
 - related roster synchronization behavior.
 
@@ -69,6 +70,15 @@ Use these instead of keeping plaintext credentials in repository-side note files
 ## Why The Old Plaintext Admin Note Was Removed
 
 The repository should not rely on a stray text file containing credentials. The source of truth is the environment-backed bootstrap configuration plus the database state.
+
+## LLM default preset bootstrap (`DEFAULT_LLM_API_KEY`)
+
+Schema repair (`ensure_schema_updates()` in `apps/backend/wailearning_backend/bootstrap.py`) ensures the built-in `"gpt-5.4"` LLM endpoint preset row exists once per database.
+
+- **Without `DEFAULT_LLM_API_KEY`**: the row is created with `validation_status=pending`, validation steps marked skipped, and `is_active=false`. This avoids claiming remote connectivity was proven offline.
+- **With `DEFAULT_LLM_API_KEY` set during first insert**: the bootstrap issues live HTTP checks for **text and vision** paths. Vision validation uploads the same conceptual payload as an administrator validating with a logo image: a **bundled minimal PNG** bytes payload encoded as a `data:image/png;base64,...` URL. Only an all-green check run marks the preset validated and active.
+
+For the relationship between this bootstrap, demo data seeding, and local pytest (where outbound LLM calls are typically absent), see the「Demo seed and `DEFAULT_LLM_API_KEY`」section in [Test execution pitfalls](../development/TEST_EXECUTION_PITFALLS.md).
 
 ## Related Docs
 

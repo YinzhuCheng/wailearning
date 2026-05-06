@@ -20,6 +20,34 @@ def _reset_db():
     ensure_schema_updates()
 
 
+def test_submission_status_single_endpoint_matches_list_row():
+    """GET /submissions/{id}/status returns same shape as list rows for deep-link review UI."""
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    client = TestClient(app)
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "status-row-body"})
+    assert sub.status_code == 200, sub.text
+    sid = sub.json()["id"]
+
+    one = client.get(f"/api/homeworks/{hid}/submissions/{sid}/status", headers=teacher_h)
+    assert one.status_code == 200, one.text
+    body = one.json()
+    assert body.get("submission_id") == sid
+    assert body.get("content") == "status-row-body"
+
+    paginated = client.get(f"/api/homeworks/{hid}/submissions?page=1&page_size=50", headers=teacher_h)
+    assert paginated.status_code == 200, paginated.text
+    rows = paginated.json().get("data") or []
+    match = next((r for r in rows if r.get("submission_id") == sid), None)
+    assert match is not None
+    assert match.get("content") == body.get("content")
+
+
 def test_submissions_endpoint_supports_pagination():
     _reset_db()
     ensure_admin()

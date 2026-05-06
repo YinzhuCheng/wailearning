@@ -84,11 +84,12 @@ def test_user_can_save_select_and_clear_personal_appearance_style(client: TestCl
             "config": {
                 "primary": "green",
                 "accent": "blue",
-                "texture": "soft-paper",
                 "shadow": "medium",
                 "transparency": "glass",
                 "radius": "soft",
                 "density": "comfortable",
+                "font_family": "system",
+                "font_scale": "medium",
             },
             "select_after_save": True,
         },
@@ -124,11 +125,12 @@ def test_personal_appearance_style_names_are_user_scoped(client: TestClient):
         "config": {
             "primary": "blue",
             "accent": "cyan",
-            "texture": "none",
             "shadow": "soft",
             "transparency": "balanced",
             "radius": "balanced",
             "density": "comfortable",
+            "font_family": "system",
+            "font_scale": "medium",
         },
         "select_after_save": True,
     }

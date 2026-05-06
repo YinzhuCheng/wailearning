@@ -282,8 +282,6 @@ const api = {
   },
   users: {
     list: params => http.get('/users', { params, timeout: rosterHeavyTimeout }),
-    listStudentCandidates: () => http.get('/users/student-candidates'),
-    loadStudentCandidates: data => http.post('/users/student-candidates/load', data),
     batchSetClass: data => http.post('/users/batch-set-class', data),
     upsertStudentRosterFromUsers: data => http.post('/users/student-roster/from-users', data),
     get: id => http.get(`/users/${id}`),
@@ -378,6 +376,9 @@ const api = {
     getMySubmissionHistory: id => http.get(`/homeworks/${id}/submission/me/history`),
     submit: (id, data) => http.post(`/homeworks/${id}/submission`, data),
     getSubmissions: (id, params) => http.get(`/homeworks/${id}/submissions`, { params }),
+    /** Teacher-only status row for one submission (deep-link review page). */
+    getSubmissionStatusRow: (homeworkId, submissionId) =>
+      http.get(`/homeworks/${homeworkId}/submissions/${submissionId}/status`),
     listCourseStudents: subjectId => http.get(`/homeworks/courses/${subjectId}/students`),
     listStudentHomeworks: (subjectId, studentId, params) =>
       http.get(`/homeworks/courses/${subjectId}/students/${studentId}/homeworks`, { params }),

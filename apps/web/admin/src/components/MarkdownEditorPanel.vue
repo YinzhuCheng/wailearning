@@ -5,6 +5,8 @@
       <el-button size="small" :disabled="disabled" @click="insertBold">加粗</el-button>
       <el-button size="small" :disabled="disabled" @click="insertList">列表</el-button>
       <el-button size="small" :disabled="disabled" @click="insertCode">代码</el-button>
+      <el-button size="small" :disabled="disabled" @click="insertInlineMath">行内公式</el-button>
+      <el-button size="small" :disabled="disabled" @click="insertDisplayMath">独立公式</el-button>
       <el-upload
         v-if="enableImageUpload"
         class="md-panel__upload"
@@ -18,6 +20,25 @@
       </el-upload>
       <el-button size="small" :disabled="disabled" @click="promptImageUrl">图片链接</el-button>
     </div>
+    <p v-if="isMarkdown" class="md-panel__katex-hint">
+      公式与预览：行内可写
+      <code>\\( ... \\)</code>
+      、
+      <code>$...$</code>
+      ；独立一行可写
+      <code>$$ ... $$</code>
+      或
+      <code>\\[ ... \\]</code>
+      。下方先展示固定示例渲染，再展示您在编辑区输入的内容；保存后与资料/作业阅读页一致。
+    </p>
+    <MarkdownLatexLiveDemo
+      v-if="isMarkdown"
+      :show-insert="true"
+      :show-source-collapse="!compactDemo"
+      :compact="compactDemo"
+      class="md-panel__demo"
+      @insert="insertExampleBlock"
+    />
     <el-input
       ref="inputRef"
       :model-value="modelValue"
@@ -46,7 +67,7 @@
       </span>
     </div>
     <template v-if="isMarkdown">
-      <div class="md-panel__preview-label">预览</div>
+      <div class="md-panel__preview-label">您的内容预览</div>
       <div class="md-panel__preview">
         <RichMarkdownDisplay :markdown="modelValue" variant="student" empty-text="（空）" />
       </div>
@@ -59,6 +80,7 @@ import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import MarkdownLatexLiveDemo from '@/components/MarkdownLatexLiveDemo.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { validateAttachmentFile } from '@/utils/attachments'
 
@@ -74,7 +96,9 @@ const props = defineProps({
   showFormatToggle: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
   /** Optional for E2E / automation */
-  dataTestid: { type: String, default: '' }
+  dataTestid: { type: String, default: '' },
+  /** Tighter demo panel (dialogs with multiple Markdown fields). */
+  compactDemo: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:modelValue', 'update:contentFormat'])
@@ -116,10 +140,18 @@ const insertAtCursor = snippet => {
   })
 }
 
+const insertExampleBlock = snippet => {
+  const cur = props.modelValue || ''
+  const sep = cur.trim() ? '\n\n' : ''
+  emitUpdate(`${cur}${sep}${snippet}`)
+}
+
 const insertHeading = prefix => insertAtCursor(`\n${prefix}`)
 const insertBold = () => insertAtCursor('**加粗**')
 const insertList = () => insertAtCursor('\n- 条目\n')
 const insertCode = () => insertAtCursor('\n```\n代码\n```\n')
+const insertInlineMath = () => insertAtCursor('\\( x \\)')
+const insertDisplayMath = () => insertAtCursor('\n$$\n\n$$\n')
 
 const onImagePick = async uploadFile => {
   const file = uploadFile.raw
@@ -193,6 +225,26 @@ const onContentFormatChange = v => {
 
 .md-panel__upload {
   display: inline-block;
+}
+
+.md-panel__katex-hint {
+  margin: 0;
+  padding: 6px 10px 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.md-panel__demo {
+  margin: 8px 10px 0;
+}
+
+.md-panel__katex-hint code {
+  font-size: 11px;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .md-panel__input :deep(.el-textarea__inner) {

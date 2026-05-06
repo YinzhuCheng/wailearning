@@ -84,7 +84,7 @@
                 </el-icon>
               </button>
               <span v-else class="chapter-node-toggle-spacer" aria-hidden="true" />
-              <span class="tree-node-label">
+              <span class="tree-node-label" @dblclick.stop="onChapterLabelDblClick(data)">
                 {{ data.title }}
                 <el-tag v-if="data.is_uncategorized" size="small" type="info" class="tree-tag">默认</el-tag>
               </span>
@@ -102,6 +102,9 @@
             <span class="muted-text" data-testid="materials-current-chapter">
               当前章节：<strong>{{ currentChapterTitle }}</strong>
             </span>
+            <el-button type="primary" text size="small" @click="openFirstMaterialReadInChapter">
+              打开本章首篇阅读
+            </el-button>
           </div>
 
           <el-card shadow="never">
@@ -111,13 +114,13 @@
               row-key="id"
               @row-click="viewMaterial"
             >
-              <el-table-column prop="title" label="资料标题" min-width="200" />
-              <el-table-column v-if="showPlacementColumn" label="所在章节" min-width="180">
+              <el-table-column prop="title" label="资料标题" min-width="200" align="center" header-align="center" />
+              <el-table-column v-if="showPlacementColumn" label="所在章节" min-width="180" align="center" header-align="center">
                 <template #default="{ row }">
                   {{ placementSummary(row) }}
                 </template>
               </el-table-column>
-              <el-table-column label="附件" width="120">
+              <el-table-column label="附件" width="120" align="center" header-align="center">
                 <template #default="{ row }">
                   <el-button v-if="row.attachment_url" type="primary" link @click.stop="openAttachment(row)">
                     下载
@@ -125,13 +128,26 @@
                   <span v-else class="muted-text">无</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="creator_name" label="发布人" width="100" />
-              <el-table-column prop="created_at" label="发布时间" width="170">
+              <el-table-column prop="creator_name" label="发布人" width="100" align="center" header-align="center" />
+              <el-table-column prop="created_at" label="发布时间" width="170" align="center" header-align="center">
                 <template #default="{ row }">
                   {{ formatDate(row.created_at) }}
                 </template>
               </el-table-column>
-              <el-table-column v-if="canManageChapters" label="排序" width="100">
+              <el-table-column label="阅读" width="96" align="center" header-align="center">
+                <template #default="{ row }">
+                  <el-button
+                    type="primary"
+                    link
+                    size="small"
+                    data-testid="materials-open-read-page"
+                    @click.stop="openMaterialRead(row)"
+                  >
+                    阅读页
+                  </el-button>
+                </template>
+              </el-table-column>
+              <el-table-column v-if="canManageChapters" label="排序" width="100" align="center" header-align="center">
                 <template #default="{ row, $index }">
                   <el-button
                     link
@@ -153,35 +169,37 @@
                   </el-button>
                 </template>
               </el-table-column>
-              <el-table-column v-if="!userStore.isStudent" label="操作" width="220">
+              <el-table-column v-if="!userStore.isStudent" label="操作" width="240" align="center" header-align="center">
                 <template #default="{ row }">
-                  <el-button
-                    v-if="canEditMaterial(row)"
-                    type="primary"
-                    link
-                    size="small"
-                    @click.stop="openEditDialog(row)"
-                  >
-                    编辑
-                  </el-button>
-                  <el-button
-                    v-if="canManageChapters"
-                    type="primary"
-                    link
-                    size="small"
-                    @click.stop="openPlacementDialog(row)"
-                  >
-                    引用
-                  </el-button>
-                  <el-button
-                    v-if="canDeleteMaterial(row)"
-                    type="danger"
-                    link
-                    size="small"
-                    @click.stop="deleteMaterial(row)"
-                  >
-                    删除
-                  </el-button>
+                  <div class="wa-table-actions">
+                    <el-button
+                      v-if="canEditMaterial(row)"
+                      type="primary"
+                      link
+                      size="small"
+                      @click.stop="openEditDialog(row)"
+                    >
+                      编辑
+                    </el-button>
+                    <el-button
+                      v-if="canManageChapters"
+                      type="primary"
+                      link
+                      size="small"
+                      @click.stop="openPlacementDialog(row)"
+                    >
+                      引用
+                    </el-button>
+                    <el-button
+                      v-if="canDeleteMaterial(row)"
+                      type="danger"
+                      link
+                      size="small"
+                      @click.stop="deleteMaterial(row)"
+                    >
+                      删除
+                    </el-button>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -272,6 +290,10 @@
         :discussion-requires-context="currentMaterial.discussion_requires_context"
         :is-student="userStore.isStudent"
       />
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button type="primary" @click="openMaterialReadFromDetail">阅读页</el-button>
+      </template>
     </el-dialog>
 
     <!-- 重命名章节 -->
@@ -311,6 +333,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Expand, Fold, Minus, Plus } from '@element-plus/icons-vue'
 
@@ -323,6 +346,7 @@ import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '
 import { normalizeContentFormat } from '@/utils/contentFormat'
 
 const userStore = useUserStore()
+const router = useRouter()
 
 const loading = ref(false)
 const treeLoading = ref(false)
@@ -779,6 +803,47 @@ const viewMaterial = async row => {
   detailVisible.value = true
 }
 
+const openMaterialRead = row => {
+  router.push({ name: 'MaterialRead', params: { id: row.id } })
+}
+
+const openMaterialReadFromDetail = () => {
+  if (!currentMaterial.value) return
+  detailVisible.value = false
+  openMaterialRead(currentMaterial.value)
+}
+
+const openFirstMaterialReadInChapter = async () => {
+  if (!selectedCourse.value) return
+  if (!materials.value.length) {
+    ElMessage.info('当前章节暂无资料')
+    return
+  }
+  openMaterialRead(materials.value[0])
+}
+
+const onChapterLabelDblClick = async data => {
+  if (!selectedCourse.value) return
+  try {
+    const res = await api.materials.list({
+      class_id: selectedCourse.value.class_id,
+      subject_id: selectedCourse.value.id,
+      chapter_id: data.id,
+      page: 1,
+      page_size: 20
+    })
+    const rows = res?.data || []
+    if (!rows.length) {
+      ElMessage.info('该章节下暂无资料')
+      return
+    }
+    openMaterialRead(rows[0])
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('无法加载章节资料')
+  }
+}
+
 const openAttachment = async row => {
   if (!row?.attachment_url) return
   await downloadAttachment(row.attachment_url, row.attachment_name)
@@ -978,10 +1043,10 @@ watch(selectedChapterId, () => {
 }
 
 .materials-layout {
-  display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .chapter-sidebar {
@@ -989,6 +1054,8 @@ watch(selectedChapterId, () => {
   background: #fff;
   padding: 12px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  width: 100%;
+  max-width: none;
 }
 
 .chapter-sidebar--narrow {
@@ -1096,6 +1163,20 @@ watch(selectedChapterId, () => {
 
 .materials-toolbar {
   margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wa-table-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
 }
 
 .materials-main :deep(.el-table__row) {
@@ -1120,8 +1201,8 @@ watch(selectedChapterId, () => {
 }
 
 @media (max-width: 960px) {
-  .materials-layout {
-    grid-template-columns: 1fr;
+  .materials-page {
+    padding: 16px;
   }
 
   .chapter-sidebar__head {

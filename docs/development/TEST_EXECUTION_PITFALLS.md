@@ -311,6 +311,34 @@ Prefer `.first()` only when intentionally accepting ambiguity, or better:
 - scoped locators (table body vs header),
 - or `data-testid` hooks.
 
+### Extension (May 2026): duplicate `data-testid` values inside one overlay
+
+The homework publish dialog mounts **multiple** `MarkdownEditorPanel` instances (assignment body + rubric blocks). Each embeds `MarkdownLatexLiveDemo` with the same `data-testid="markdown-latex-demo-render"`. Playwright strict mode then rejects `page.getByTestId('markdown-latex-demo-render')` even though each node is visible.
+
+**Fix pattern:** scope under the intended panel, for example `dialog.locator('.md-panel').first()` for the **assignment body** panel, then chain `.getByTestId('markdown-latex-demo-render')`.
+
+### Extension (May 2026): Element Plus `el-radio-button` intercepts clicks on the native `<input type="radio">`
+
+Symptom: `getByRole('radio', { name: '纯文本' }).click()` retries until timeout because **`<span class="el-radio-button__inner">` intercepts pointer events**.
+
+**Fix pattern:** click the visible button chrome instead, for example `panel.locator('.md-panel__format .el-radio-button').filter({ hasText: '纯文本' })`.
+
+### Extension (May 2026): `MaterialRead` title vs chapter navigation ordering
+
+If `material` is assigned only **after** `buildSequence()` finishes (DFS over chapters × list calls), the reader toolbar can appear while `.material-read-title` is still absent for multiple seconds. Assertions that require the title should either wait longer or (preferably) rely on product behavior that assigns `material` immediately after `GET /materials/{id}` and treats chapter DFS failures as non-fatal for the article body.
+
+### Extension (May 2026): sidebar `default-active` vs nested routes (`/materials/read/:id`)
+
+`Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift. **As of the full-page submission review change,** paths like `/homework/<id>/submissions/<submissionId>` also resolve to the **`/homework`** menu highlight (same rule: any prefix under `/homework/<id>/` that is not `students` maps to `/homework`). **Student rail (May 2026):** the 「课程学习」 `el-sub-menu` shell was removed — student sidebar entries (**选课与进度**, **课程作业**, **课程通知**, …) are **top-level** `menuitem` nodes; specs must not `click()` an expand row labeled 「课程学习」 before reaching **课程通知**.
+
+### Extension (May 2026): homework 「详情」 is a full route, not a dialog
+
+`HomeworkSubmissions.vue` used to open an `el-dialog` titled **提交详情与评分**; it now `router.push`es to **`/homework/:id/submissions/:submissionId`** (query preserved, e.g. `student_id`, for the **返回提交列表** back button). Specs that waited for `getByRole('dialog')` and nested locators should instead assert a URL like `toHaveURL(/\/homework\/\d+\/submissions\/\d+/)` and use `page.getByTestId('homework-submission-detail-body')` on the **page** (the test id still marks the latest summary body container).
+
+### Extension (May 2026): teacher 「课程仪表盘」 deleted — update Playwright landing URLs
+
+The SPA **`Dashboard.vue`** page and **`/dashboard`** metrics UI were removed; **`/dashboard` permanently redirects to `/students`** via `router/index.js`. Historical specs that did `page.goto('/dashboard')` to warm teacher shells must migrate to **`/students`** (or another stable teacher route). Waiting for `/course-home|/dashboard` after a student course switch should instead allow **`/course-home|/courses`** (students never land on `/students` for normal flows). Symptom before migration: strict URL assertions time out because teachers now remain on `/students`, not `/dashboard`.
+
 ## Pitfall 14: `textarea:first()` on the homework submit page is often the wrong control
 
 ### Symptom
@@ -381,6 +409,27 @@ The admin SPA `router.beforeEach` redirects **admin users** away from many paths
 ### Recommendation
 
 For student flows that depend on a seeded course, call the same **`enterSeededRequiredCourse`** helper used by other specs **before** asserting pages that assume teaching/student course context.
+
+### Extension (May 2026): read-only list routes may mutate roster/user linkage
+
+`GET /api/students`, `GET /api/students/{id}`, and admin `GET /api/users` invoke `reconcile_student_users_and_roster()` followed by `Session.commit()` before returning JSON. This intentionally heals drift between roster rows and student login accounts when staff merely **open** the Students or Users admin pages.
+
+Implications for tests:
+
+- Specs that relied on “no `User` exists yet for this `Student` until an explicit POST” can become flaky after navigation triggers reconciliation.
+- Prefer asserting **final product state** after navigation (or seed fixtures that already satisfy reconciliation) rather than assuming stale orphan roster rows persist across GETs.
+
+### Extension (May 2026): elective courses no longer mirror `Subject.class_id`
+
+Product change: electives clear `subjects.class_id` and remove `Subject.class_id == klass` predicates from demo seeds / student enrollment guards.
+
+Playwright / API tests that assumed:
+
+- `GET /subjects/elective-catalog` filters `WHERE subject.class_id IS NOT NULL`, or
+- self-enroll endpoints rejected courses without `class_id`, or
+- demo elective lookup queried `(name, teacher_id, class_id)`
+
+need updating to match `domains/courses/access.py` + `api/routers/subjects.py`. Backend regression coverage lives in `tests/backend/courses/test_subject_multi_class_links.py`.
 
 ## Pitfall 18: Playwright strict mode with multiple tables (`getByRole('table')`)
 
@@ -1299,11 +1348,11 @@ getByRole('link', { name: '我的课程' })
 
 ### Context
 
-The admin SPA (`apps/web/admin/src/views/Layout.vue`) grouped student navigation under **`课程学习`** and renamed the first child from **我的课程** to **选课与进度** (route `/courses` unchanged). Older specs that hard-coded the previous visible string will not find the control.
+The admin SPA (`apps/web/admin/src/views/Layout.vue`) grouped student navigation under **`课程学习`** until May 2026; the first child was renamed from **我的课程** to **选课与进度** (route `/courses` unchanged). **Current behavior:** the 「课程学习」 shell was **removed** — student links are **flat** top-level `el-menu-item` rows (same labels/paths as before). Older specs that hard-coded **我的课程** or assumed a parent expand step before **课程通知** will fail.
 
 ### Fix
 
-Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/e2e/web-admin/fixtures.cjs`, or role selectors anchored on `.elective-catalog-card`. If you must click the sidebar, match **`选课与进度`** or use stable **`data-testid`** hooks if added later.
+Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/e2e/web-admin/fixtures.cjs`, or role selectors anchored on `.elective-catalog-card`. If you must click the sidebar, match **`选课与进度`** / **`课程通知`** as **top-level** `menuitem` names or use stable **`data-testid`** hooks if added later.
 
 ### Interpretation
 
@@ -1335,7 +1384,7 @@ These failures showed up while authoring **`tests/e2e/web-admin/e2e-notification
 
 ### Symptom
 
-Playwright asserts **`badge digit === sync-status(...?subject_id=<course_required_id>)`** after **`page.goto('/dashboard')`** but the badge stays **0** or matches a **different** subject.
+Playwright asserts **`badge digit === sync-status(...?subject_id=<course_required_id>)`** after **`page.goto('/students')`** (historically **`/dashboard`** before the SPA dashboard removal) but the badge stays **0** or matches a **different** subject.
 
 ### Context
 
@@ -1909,3 +1958,138 @@ contention rather than product behavior.
 - It does not claim Linux agents exhibit only the Linux-specific pitfalls above; many Windows pitfalls (ports, readiness, flake in long suites) still apply cross-platform.
 
 It records what actually happened during validation sessions (starting with the May 1, 2026 Windows-focused pass, extended by later Linux/CI observations) so the next operator can start from firmer ground.
+
+## Demo seed and `DEFAULT_LLM_API_KEY` bootstrap (pytest / cloud agents, 2026-05)
+
+### Symptom
+
+After tightening `_ensure_default_llm_endpoint_preset()` so empty `DEFAULT_LLM_API_KEY` installs create a **pending** preset instead of a falsely `validated` row, `tests/backend/e2e_dev/test_demo_course_seed.py::test_demo_seed_creates_teacher_students_course_homework` initially failed with `CourseLLMConfigEndpoint` count `0` for the demo required course.
+
+### Cause
+
+`domains/seed/demo.py::_first_validated_preset_for_demo_course` originally returned only presets that were already **validated and active**. Local pytest databases produced via `ensure_schema_updates()` therefore had **no** eligible preset whenever outbound LLM validation was impossible (no API key, sandbox network blocked), so `_ensure_demo_subject_llm_binding` skipped inserting endpoints even though a bootstrap preset row existed.
+
+### Fix pattern (implemented in product code)
+
+The demo helper now **falls back** to the bootstrap preset named `"gpt-5.4"` even when it is still `pending`, documenting that automatic grading remains unreliable until an operator validates or supplies credentials. This restores deterministic pytest expectations while preserving honest validation semantics for keyed deployments.
+
+### Operational note
+
+When running integration tests that **do** set `DEFAULT_LLM_API_KEY` against a real vendor, expect startup latency and possible failures if the remote API blocks the runner egress (`<repository-root>/.venv/bin/python` path placeholder). Prefer mocking vendor HTTP for CI instead of live keys.
+
+### Secondary pitfall observed during the same change set
+
+While validating `tests/backend/homework/test_markdown_homework_visibility_and_llm.py`, the environment initially lacked project dependencies (`ModuleNotFoundError: pydantic_settings`). Resolution path: install from `<repository-root>/requirements.txt` using the repository virtualenv interpreter, not the bare system `python3`.
+
+## Homework effective-score aggregates + intentional clock surgery (pytest, 2026-05)
+
+### Symptom
+
+While authoring `tests/backend/homework/test_effective_homework_score_aggregate.py`, an integration scenario needed one attempt visibly on-time and another late with ``counts_toward_final_score=false``, yet both submissions originate through `POST /api/homeworks/{id}/submission`, which timestamps attempts at request handling time.
+
+### Cause
+
+HTTP submission logic derives lateness from wall-clock `submitted_at` compared to `homework.due_date`. Pure API sequencing cannot fabricate a chronology where attempt two is materially late while keeping deterministic grading mocks unless ORM rows are adjusted after inserts.
+
+### Fix pattern used in tests
+
+The scenario commits explicit SQLAlchemy updates on `HomeworkAttempt.submitted_at`, `HomeworkAttempt.is_late`, and `HomeworkAttempt.counts_toward_final_score` after each mocked grading cycle so eligibility mirrors classroom expectations without a time-traveling HTTP client.
+
+### Interpretation for agents
+
+When extending homework lifecycle tests, prefer surgical row mutation over rewriting routers; altering `_is_late_attempt` solely for tests would poison production semantics.
+
+## Persistent pytest SQLite file + metadata registration (`tests/conftest.py`, 2026-05)
+
+### Symptom
+
+Pytest runs fail early inside `apps.backend.wailearning_backend.bootstrap.ensure_schema_updates()` with `sqlite3.OperationalError: no such table: course_llm_configs` (or other core tables) immediately after `tests.db_reset.reset_test_database_schema()` reports success.
+
+Alternatively, mass `UNIQUE constraint failed: users.username` errors appear when executing many tests sequentially against the default file-backed SQLite URL.
+
+### Contributing factors (non-exhaustive)
+
+1. **Shared database file:** `tests/conftest.py` defaults to `sqlite:///<repo>/.pytest_tmp/test.sqlite` when Postgres test URLs are not configured. Interrupted runs can leave the file half-migrated.
+2. **SQLAlchemy metadata registration timing:** `Base.metadata.create_all()` only creates tables for mapped classes that were **imported** before `create_all` runs. Most tests import `main` or models early, but exotic collection orders or utility-only imports could historically skip mappings.
+3. **Parallel pytest without isolated `TEST_DATABASE_URL`:** multiple processes writing one sqlite file guarantees corruption-like failures.
+
+### Product-side mitigation (implemented in `tests/db_reset.py`, 2026-05)
+
+`reset_test_database_schema()` now imports `apps.backend.wailearning_backend.db.models` **before** `metadata.drop_all` / `create_all`, guaranteeing mapper registration even when a test file only imported `db.database` + `main` without touching ORM classes directly. This removes the systematic `no such table: course_llm_configs` failure mode during `ensure_schema_updates()` on cold SQLite schemas.
+
+Corrupted shared sqlite files and parallel writers remain hazards — keep the deletion playbook below.
+
+### Mitigation playbook
+
+1. Stop all pytest processes touching the repo.
+2. Delete `<repository-root>/.pytest_tmp/test.sqlite` (path placeholder: adjust if `PYTEST_DEBUG_TEMPROOT` overrides temp behavior on Windows).
+3. Re-run a **single** failing test file with `python3 -m pytest path/to/test.py -q`.
+4. If failures persist, force Postgres throwaway DB via `TEST_DATABASE_URL` (see `ops/scripts/dev/provision_postgres_pytest.sh` mention in `tests/conftest.py`).
+
+### Evidence note
+
+A minimal control script that imports `apps.backend.wailearning_backend.db.models` before `create_all` succeeded on a fresh sqlite path — see [`../DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](../DOCUMENTATION_UPGRADE_REPORT_2026-05.md).
+
+## Demo seed strings containing LaTeX (`domains/seed/demo.py`, pytest / agents, 2026-05)
+
+### Symptom
+
+While adding the **初等概率论** elective bundle, early drafts stored teacher-only rubrics or reference answers in plain triple-quoted Python strings containing fragments like `\frac{...}{...}` or `\times`. Runtime strings showed corrupted LaTeX (missing backslashes, unexpected tabs) or `SyntaxError` / deprecation warnings depending on Python version.
+
+### Cause
+
+Standard Python string literals treat `\f` as a form-feed escape, `\t` as tab, and similar sequences eat backslashes needed for LaTeX. Multiline **non-raw** strings also mishandle `\Omega`-style sequences when authors forget to double-escape.
+
+### Fix pattern
+
+- Prefer **`r"""..."""` raw triple-quoted strings** for any demo copy meant to include LaTeX backslashes handed to Markdown/KaTeX clients.
+- For prefilled student markdown bodies that need real paragraph breaks, use multiline raw triple quotes in the source file instead of embedding the two-character sequence `\` + `n` inside a one-line `r"..."` literal (those store a literal backslash-n, not a newline).
+
+### Interpretation for agents
+
+Treat `domains/seed/demo.py` as **data-heavy**: run `python3 -m py_compile apps/backend/wailearning_backend/domains/seed/demo.py` after edits and inspect a seeded row in SQLite/Postgres if unsure whether content round-tripped correctly.
+
+## Linux agent: PostgreSQL apt install vs systemd-less containers (`policy-rc.d`, 2026-05)
+
+### Symptom
+
+After `apt-get install postgresql`, `pg_isready` still fails and `tests/postgres/*` remain skipped even when `provision_postgres_pytest.sh` succeeds at SQL provisioning time — or apt prints `invoke-rc.d: policy-rc.d denied execution of start`.
+
+### Cause
+
+Minimal CI/agent images ship `policy-rc.d` hooks that **block** maintainer scripts from auto-starting services. PostgreSQL files exist but the daemon never listens on `5432`.
+
+### Fix pattern
+
+```bash
+sudo pg_ctlcluster 16 main start   # substitute cluster version from `pg_lsclusters`
+pg_isready -h 127.0.0.1 -p 5432
+```
+
+Then run `bash ops/scripts/dev/provision_postgres_pytest.sh` (requires `sudo -u postgres psql`).
+
+### Interpretation
+
+Always distinguish **“installed”** from **“listening”**. Full-suite verification that removes Postgres skips must export `TEST_DATABASE_URL` **before** importing `tests.conftest` side effects (pytest handles this automatically when the env var is set in the shell wrapping pytest).
+
+## Full-suite dependency: `unrar` for LLM attachment extraction tests
+
+`tests/backend/llm/test_llm_attachment_formats.py` calls `_require_unrar()` which skips when neither `unrar` nor `unrar-free` exists on `PATH`. Installing `unrar` via apt removes the skip without weakening assertions.
+
+## Stale documentation paths after removing root `tools/` (2026-05)
+
+### Symptom
+
+Agents or humans follow bookmarks pointing at `tools/testing/audit_test_redundancy.py` and conclude the file vanished or the clone is incomplete.
+
+### Actual location
+
+The test redundancy auditor now lives at `tests/devtools/audit_test_redundancy.py` (see [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](../architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md)).
+
+### Verification
+
+Run `rg 'tools/testing' -g '*.{py,yml,yaml,sh,bat,cjs,js,json}'` from the repository root after any structural pass; it should return **no** matches for executable/config surfaces once migrations are complete. Markdown narrative (including this section) may still cite the legacy path when teaching the pitfall.
+
+### Pitfall during validation
+
+If you only move the script but forget to skip `tests/devtools/` inside the auditor’s inventory walk, the generated `TEST_REDUNDANCY_AUDIT.md` may include spurious “uncategorized-python” rows for the utility itself. This pass adds an explicit `rel_path.startswith("tests/devtools/")` guard.

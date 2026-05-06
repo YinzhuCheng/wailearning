@@ -14,7 +14,7 @@
       :closable="false"
       class="roster-tip"
       title="花名册说明"
-      description="此处维护的是班级花名册（学号须与学生登录用户名一致才能交作业）。登录账号仍由管理员在用户管理中创建。"
+      description="维护班级花名册；保存后系统按学号与学生账号自动对齐（详见用户管理列表加载时的同步）。班主任/管理员可在用户管理中重置密码或调班。"
     />
 
     <el-card shadow="never" v-loading="loading">
@@ -25,8 +25,8 @@
 
         <el-form-item label="性别" prop="gender">
           <el-radio-group v-model="form.gender">
-            <el-radio value="male">男</el-radio>
-            <el-radio value="female">女</el-radio>
+            <el-radio label="male">男</el-radio>
+            <el-radio label="female">女</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -74,7 +74,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
@@ -222,6 +222,8 @@ onMounted(async () => {
     await loadClasses()
     await applyRosterDefaults()
     await loadStudent()
+    await nextTick()
+    formRef.value?.clearValidate?.()
   } finally {
     loading.value = false
   }

@@ -33,6 +33,7 @@ from apps.backend.wailearning_backend.db.models import (
     LLMEndpointPreset,
     Student,
     Subject,
+    SubjectClassLink,
     User,
     UserRole,
 )
@@ -271,7 +272,7 @@ def reset_e2e_scenario(
     course_el = Subject(
         name=f"E2E选修课_{suffix}",
         teacher_id=t_own.id,
-        class_id=c1.id,
+        class_id=None,
         course_type="elective",
         status="active",
     )
@@ -290,6 +291,10 @@ def reset_e2e_scenario(
         status="active",
     )
     db.add_all([course_req, course_el, course_other, course_orphan])
+    db.flush()
+
+    db.add(SubjectClassLink(subject_id=course_req.id, class_id=c1.id, enrollment_mode="all_in_class"))
+    db.add(SubjectClassLink(subject_id=course_other.id, class_id=c2.id, enrollment_mode="all_in_class"))
     db.flush()
 
     # st_plain / st_drop 已在必修课；st_b 仅在花名册，用于「从花名册进课」勾选

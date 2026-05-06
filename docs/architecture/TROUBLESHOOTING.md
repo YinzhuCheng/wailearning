@@ -56,6 +56,27 @@ Full runbook: [../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../development/FUL
 
 ---
 
+## pytest `no such table` / `FOREIGN KEY` failures on default SQLite file
+
+| Symptom | Likely cause | Mitigation |
+|---------|----------------|------------|
+| `sqlite3.OperationalError: no such table: ...` inside `ensure_schema_updates()` right after `reset_test_database_schema()` | Stale or corrupted `<repo-root>/.pytest_tmp/test.sqlite`, import/metadata ordering edge, or concurrent pytest processes sharing the same file | Delete `.pytest_tmp/test.sqlite` and rerun a **single** pytest process; read [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md) § “Persistent pytest SQLite file”. |
+| `UNIQUE constraint failed: users.username` across many tests | Shared sqlite state + tests expecting empty DB | Same as above; avoid parallel pytest without isolated `TEST_DATABASE_URL`. |
+
+Full risk notes: [../known-issues-and-risks.md](../known-issues-and-risks.md).
+
+---
+
+## “Missing” `tools/testing/` paths after a documentation refresh
+
+| Symptom | Likely cause | Where to read |
+|---------|----------------|---------------|
+| Docs or bookmarks reference `tools/testing/audit_test_redundancy.py` but the path does not exist | The repository consolidated test maintenance scripts under `tests/devtools/` (2026-05 layout pass) | [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](REPOSITORY_RESTRUCTURE_REPORT_2026-05.md), [`tests/devtools/README.md`](../../tests/devtools/README.md) |
+
+Executable surfaces (`*.py`, CI YAML, shell) should not reference the legacy path — use `rg 'tools/testing' -g '*.{py,yml,yaml,sh,bat,cjs,js,json}'` from the repo root when verifying migrations.
+
+---
+
 ## Uploads / attachments 403 or wrong file
 
 - Attachment authorization is centralized in `api/routers/files.py` with `_has_attachment_access` — duplicate filenames may require `attachment_url` query disambiguation (see pitfalls).

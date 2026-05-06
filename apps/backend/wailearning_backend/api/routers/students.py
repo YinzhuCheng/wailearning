@@ -30,7 +30,10 @@ from apps.backend.wailearning_backend.db.models import (
 )
 from apps.backend.wailearning_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.wailearning_backend.api.schemas import StudentCreate, StudentListResponse, StudentResponse, StudentUpdate
-from apps.backend.wailearning_backend.domains.roster.sync import sync_student_user_from_roster_row
+from apps.backend.wailearning_backend.domains.roster.sync import (
+    reconcile_student_users_and_roster,
+    sync_student_user_from_roster_row,
+)
 
 
 router = APIRouter(prefix="/api/students", tags=["学生管理"])
@@ -72,11 +75,14 @@ def build_student_response(
     class_name: Optional[str] = None,
     has_user: bool = False,
 ) -> StudentResponse:
+    display_name = (student.name or "").strip() or "无"
+    display_no = (student.student_no or "").strip() or "—"
+    gender_val = student.gender if student.gender is not None else Gender.MALE
     return StudentResponse(
         id=student.id,
-        name=student.name,
-        student_no=student.student_no,
-        gender=student.gender,
+        name=display_name,
+        student_no=display_no,
+        gender=gender_val,
         phone=student.phone,
         parent_phone=student.parent_phone,
         address=student.address,
@@ -271,6 +277,9 @@ def get_students(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
+    reconcile_student_users_and_roster(db)
+    db.commit()
+
     class_ids = get_accessible_class_ids(current_user, db)
     query = apply_class_id_filter(db.query(Student), Student.class_id, class_ids)
 
@@ -487,8 +496,12 @@ def get_student(
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
 
+    reconcile_student_users_and_roster(db)
+    db.commit()
+    db.refresh(student)
+
     class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id not in class_ids:
+    if student.class_id is not None and student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权访问该学生")
 
     return serialize_students([student], db)[0]
@@ -506,7 +519,7 @@ def update_student(
         raise HTTPException(status_code=404, detail="学生不存在")
 
     class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id not in class_ids:
+    if student.class_id is not None and student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权修改该学生")
 
     if student_data.name is not None:
@@ -563,7 +576,7 @@ def delete_student(
         raise HTTPException(status_code=404, detail="学生不存在")
 
     class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id not in class_ids:
+    if student.class_id is not None and student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权删除该学生")
 
     try:

@@ -123,7 +123,7 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
 
     const electiveLabel = `E2E选修课_${s.suffix}`
     await clickCourseSwitcherOption(page, electiveLabel)
-    await page.waitForURL(/\/course-home|\/dashboard/)
+    await page.waitForURL(/\/course-home|\/courses/)
     await triggerHeaderPoll(page)
 
     await expect(page.locator('[data-testid="header-notification-badge"] .el-badge__content')).toHaveCount(0)

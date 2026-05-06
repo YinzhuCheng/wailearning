@@ -14,7 +14,7 @@ const routes = [
     children: [
       {
         path: '',
-        redirect: '/dashboard'
+        redirect: '/students'
       },
       {
         path: 'courses',
@@ -28,8 +28,13 @@ const routes = [
       },
       {
         path: 'dashboard',
-        name: 'Dashboard',
-        component: () => import('@/views/Dashboard.vue')
+        redirect: '/students'
+      },
+      {
+        path: 'teaching-calendar',
+        name: 'TeachingCalendarPage',
+        component: () => import('@/views/TeachingCalendarPage.vue'),
+        meta: { title: '教学日历' }
       },
       {
         path: 'classes',
@@ -158,12 +163,24 @@ const routes = [
             meta: { title: '提交作业' }
           },
           {
+            path: ':id/submissions/:submissionId',
+            name: 'HomeworkSubmissionReview',
+            component: () => import('@/views/HomeworkSubmissionReview.vue'),
+            meta: { title: '提交详情与评分', requiresTeacher: true }
+          },
+          {
             path: ':id/submissions',
             name: 'HomeworkSubmissions',
             component: () => import('@/views/HomeworkSubmissions.vue'),
             meta: { title: '学生提交', requiresTeacher: true }
           }
         ]
+      },
+      {
+        path: 'materials/read/:id',
+        name: 'MaterialRead',
+        component: () => import('@/views/MaterialRead.vue'),
+        meta: { title: '资料阅读' }
       },
       {
         path: 'materials',
@@ -193,9 +210,9 @@ const router = createRouter({
 const adminHomePath = '/students'
 const adminHiddenPaths = [
   '/courses',
-  '/dashboard',
   '/scores',
   '/attendance',
+  '/teaching-calendar',
   '/rankings',
   '/analysis',
   '/points',
@@ -213,12 +230,12 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.path === '/login' && userStore.isLoggedIn) {
-    next(userStore.isAdmin ? adminHomePath : userStore.isStudent ? '/courses' : '/dashboard')
+    next(userStore.isAdmin ? adminHomePath : userStore.isStudent ? '/courses' : '/students')
     return
   }
 
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
-    next(userStore.isStudent ? '/courses' : '/dashboard')
+    next(userStore.isStudent ? '/courses' : '/students')
     return
   }
 
@@ -228,7 +245,7 @@ router.beforeEach(async (to, from, next) => {
     !userStore.isTeacher &&
     !userStore.isClassTeacher
   ) {
-    next(userStore.isStudent ? '/courses' : '/dashboard')
+    next(userStore.isStudent ? '/courses' : '/students')
     return
   }
 
@@ -244,7 +261,7 @@ router.beforeEach(async (to, from, next) => {
 
   if (
     userStore.isStudent &&
-    ['/dashboard', '/students', '/scores', '/attendance', '/rankings', '/analysis', '/points'].includes(to.path)
+    ['/students', '/scores', '/attendance', '/teaching-calendar', '/rankings', '/analysis', '/points'].includes(to.path)
   ) {
     next('/courses')
     return

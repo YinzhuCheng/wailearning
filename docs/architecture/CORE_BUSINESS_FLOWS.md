@@ -56,7 +56,9 @@ If you change router signatures, queue semantics, or worker startup, update this
   - **Admin**: all subjects.
   - **Student**: subjects linked through `CourseEnrollment` after `prepare_student_course_context` reconciles roster vs account class when applicable.
   - **Teacher**: subjects where `Subject.teacher_id == user.id`.
-  - **Class teacher**: union of subjects in `user.class_id` and subjects where the user is the assigned teacher.
+  - **Class teacher**: subjects whose legacy anchor `Subject.class_id == user.class_id`, **plus** any subject that has a `subject_class_links` row for that class, union subjects where the user is the assigned teacher (`Subject.teacher_id`).
+
+- **Multi-class required offerings** — `subject_class_links` (`SubjectClassLink` ORM) stores `(subject_id, class_id, enrollment_mode)`. Whole-class auto sync only applies to links with `enrollment_mode == all_in_class`. Electives intentionally have **no** links and `Subject.class_id IS NULL`; student self-enroll writes `CourseEnrollment.class_id` from the student's roster class, not from the course.
 
 ### Student roster coupling
 
@@ -73,13 +75,13 @@ This is the highest-traffic “vertical slice” for the product.
 1. **Frontend**: student homework UI calls `POST /api/homeworks/{homework_id}/submission` with body validated by `HomeworkSubmissionCreate` — see `api/schemas.py`.
 2. **Router**: `submit_homework` in `api/routers/homework.py`.
 3. **Access**: `_ensure_homework_access` / `_resolve_student_for_user` ensure the caller is the roster-linked student for that homework’s class/course.
-4. **Roster + enrollment side effects (student logins)**: `prepare_student_course_context` in `domains/courses/access.py` runs on many student requests and can **synchronize** `CourseEnrollment` rows for **required** courses from class roster — so a student user may gain enrollment implicitly without an explicit seed row. **`_resolve_student_for_user`** still checks enrollment when `homework.subject_id` is set; cross-class cases may hit **`ensure_course_access_http`** first (**403**) before roster mismatch (**404**).
+4. **Roster + enrollment side effects (student logins)**: `prepare_student_course_context` in `domains/courses/access.py` runs on many student requests and can **synchronize** `CourseEnrollment` rows for **required** courses by inspecting `subject_class_links` where `enrollment_mode == all_in_class` (with a legacy fallback to `Subject.class_id == student.class_id` until every historical row has been backfilled). Students may therefore gain enrollment implicitly without an explicit teacher click. **`_resolve_student_for_user`** still checks enrollment when `homework.subject_id` is set; cross-class cases may hit **`ensure_course_access_http`** first (**403**) before roster mismatch (**404**).
 
 5. **Persistence**:
    - Upserts `HomeworkSubmission` summary row.
    - Inserts immutable `HomeworkAttempt` for each submission.
 6. **Auto grade enqueue**: if `homework.auto_grading_enabled`, calls `queue_grading_task(db, attempt, "new_submission")` — defined in `apps/backend/wailearning_backend/llm_grading.py`.
-7. **Summary refresh**: `refresh_submission_summary` updates denormalized fields on `HomeworkSubmission` used by list endpoints.
+7. **Summary refresh**: `refresh_submission_summary` recomputes denormalized fields on `HomeworkSubmission`. The displayed **「有效成绩」** (`review_score` / `review_comment`) is **not** necessarily tied only to `latest_attempt_id`: among attempts linked to the submission summary, only rows that are **on/before the homework due time** or have **`counts_toward_final_score == true`** participate; the winner is the maximum score after resolving teacher-vs-auto precedence **per attempt**, then taking the global max across those attempts. Tie-break favors higher score, then teacher source, then newer candidate timestamps. Implementation lives in `apps/backend/wailearning_backend/llm_grading.py` (`resolve_effective_submission_score`, `refresh_submission_summary`). The summary row still mirrors **latest** attempt body/attachments/`latest_task_*` fields for UX continuity while the score reflects the aggregate rule.
 8. **Commit** and response serialized via `_serialize_submission`.
 
 Code anchor for enqueue:
@@ -106,6 +108,7 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 
 - Lists and batch actions — still `api/routers/homework.py` (e.g. submissions list, batch regrade).
 - Regrade paths enqueue new tasks or reuse queue logic depending on operation — follow call sites of `queue_grading_task` and teacher-triggered helpers in the same module.
+- **Serialization rule**: `_serialize_homework(..., viewer=current_user)` strips `reference_answer` and `rubric_staff_only` when `viewer.role == student`, while retaining both fields for teachers/admins/creators. Agents altering homework visibility must update serializers and LLM/discussion prompt builders together — see [LLM homework guide](../product/LLM_HOMEWORK_GUIDE.md) «Rubric visibility» section.
 
 ### 3.5 Parent portal read path
 

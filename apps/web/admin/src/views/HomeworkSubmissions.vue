@@ -43,6 +43,11 @@
           <el-descriptions-item label="满分">{{ formatScore(homework.max_score) }}</el-descriptions-item>
           <el-descriptions-item label="自动评分">{{ homework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
+          <el-descriptions-item label="成绩汇总说明" :span="2">
+            <span class="muted-text">
+              表格「有效成绩」为每名学生在截止时间之前的提交，以及仍计入总评的迟交提交（关闭「迟交影响评分」时）之中的最高分；评语对应该最高分来源。任务状态列仍反映每名学生的<strong>最近一次</strong>尝试。
+            </span>
+          </el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
             <PlainOrMarkdownBlock
               :text="homework.content"
@@ -51,10 +56,13 @@
               empty-text="暂无作业说明。"
             />
           </el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">
+          <el-descriptions-item label="评分要点（学生可见）" :span="2">
             <RichMarkdownDisplay :markdown="homework.rubric_text" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">
+            <RichMarkdownDisplay :markdown="homework.rubric_staff_only" variant="teacher" empty-text="未设置" />
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">
             <RichMarkdownDisplay :markdown="homework.reference_answer" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
@@ -80,7 +88,7 @@
           <div class="card-header">
             <span>提交情况</span>
             <el-text type="info">
-              列表分页展示概要；点击「详情」查看完整说明与评语并评分。勾选行可用于批量下载或批量 LLM 重评。
+              列表分页展示概要；点击「详情」进入<strong>全页阅卷</strong>查看完整作答（Markdown/LaTeX 渲染）、评语与评分表单。勾选行可用于批量下载或批量 LLM 重评。
             </el-text>
           </div>
         </template>
@@ -181,7 +189,7 @@
                 <span v-else class="muted-text">—</span>
               </template>
             </el-table-column>
-            <el-table-column label="分数" width="100">
+            <el-table-column label="有效成绩（截止前/计入总评取最高）" width="120">
               <template #default="{ row }">
                 <template v-if="row.review_score !== null && row.review_score !== undefined">
                   <el-tag :type="scoreTag(row.review_score)" size="small">{{ formatScore(row.review_score) }}</el-tag>
@@ -228,98 +236,6 @@
         </div>
       </el-card>
     </template>
-
-    <el-dialog v-model="detailVisible" title="提交详情与评分" width="720px" destroy-on-close @closed="detailRow = null">
-      <template v-if="detailRow">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="学生">{{ detailRow.student_name }}（{{ detailRow.student_no || '无学号' }}）</el-descriptions-item>
-          <el-descriptions-item label="申诉状态">
-            <el-tag v-if="detailRow.appeal_status === 'pending'" type="warning" size="small">待处理</el-tag>
-            <el-tag v-else-if="detailRow.appeal_status === 'acknowledged'" type="info" size="small">已阅</el-tag>
-            <el-tag v-else-if="detailRow.appeal_status === 'resolved'" type="success" size="small">已处理</el-tag>
-            <span v-else class="muted-text">—</span>
-            <el-button
-              v-if="detailRow.appeal_status === 'pending'"
-              size="small"
-              type="primary"
-              link
-              style="margin-left: 8px"
-              :loading="detailAckLoading"
-              @click="acknowledgeAppealForDetail"
-            >
-              标记已阅
-            </el-button>
-          </el-descriptions-item>
-          <el-descriptions-item label="正文">
-            <div data-testid="homework-submission-detail-body">
-              <PlainOrMarkdownBlock
-                :text="detailRow.content || ''"
-                :format="detailRow.content_format"
-                variant="teacher"
-                empty-text="无"
-              />
-            </div>
-          </el-descriptions-item>
-          <el-descriptions-item label="附件">
-            <el-button
-              v-if="detailRow.attachment_url"
-              type="primary"
-              link
-              @click="openAttachment(detailRow.attachment_url, detailRow.attachment_name)"
-            >
-              {{ detailRow.attachment_name || '下载附件' }}
-            </el-button>
-            <span v-else class="muted-text">无附件</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="任务状态">
-            <span v-if="detailRow.latest_task_status">{{ formatTaskStatus(detailRow.latest_task_status) }}</span>
-            <span v-else class="muted-text">—</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="LLM 日志">
-            <el-button
-              v-if="detailRow.latest_task_log?.length"
-              type="primary"
-              link
-              size="small"
-              data-testid="btn-open-llm-log"
-              @click="openTaskLog(detailRow)"
-            >
-              查看日志
-            </el-button>
-            <span v-else class="muted-text">无</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="当前展示分">
-            {{
-              detailRow.review_score !== null && detailRow.review_score !== undefined
-                ? formatScore(detailRow.review_score)
-                : '—'
-            }}
-          </el-descriptions-item>
-          <el-descriptions-item label="评语">
-            <div v-if="detailRow.review_comment" class="feedback-inline">
-              <FeedbackRichText :text="detailRow.review_comment" variant="teacher" />
-            </div>
-            <span v-else class="muted-text">暂无</span>
-          </el-descriptions-item>
-        </el-descriptions>
-        <div class="detail-review-block">
-          <div class="muted-text" style="margin-bottom: 8px">调整分数（作用于所选提交轮次，默认最新一轮）</div>
-          <el-input
-            v-model="detailRow.review_score_input"
-            :placeholder="`分数 0-${formatScore(homework?.max_score)}`"
-            class="review-score-input"
-          />
-          <el-input
-            v-model="detailRow.review_comment_input"
-            type="textarea"
-            :rows="4"
-            placeholder="评语（支持 Markdown）"
-            class="review-comment-input"
-          />
-          <el-button type="primary" :loading="detailRow.saving_review" @click="saveReviewFromDetail">保存评分</el-button>
-        </div>
-      </template>
-    </el-dialog>
 
     <el-dialog v-model="historyVisible" title="提交与评分历史" width="860px" destroy-on-close>
       <div v-if="historyVisible && currentHistoryRow" class="history-header">
@@ -500,10 +416,6 @@ const filterStudentId = ref(
   route.query.student_id ? Number(route.query.student_id) : null
 )
 
-const detailVisible = ref(false)
-const detailRow = ref(null)
-const detailAckLoading = ref(false)
-
 const selectedCourse = computed(() => userStore.selectedCourse)
 const downloadableSelection = computed(() =>
   selectedRows.value.filter(row => row.submission_id && row.attachment_url)
@@ -546,19 +458,6 @@ const buildSubmissionRow = row => ({
   latest_task_error_code: row.latest_task_error_code || null
 })
 
-const syncDetailFromList = () => {
-  if (!detailVisible.value || !detailRow.value?.submission_id) {
-    return
-  }
-  const sid = detailRow.value.submission_id
-  const found = submissions.value.find(r => r.submission_id === sid)
-  if (found) {
-    const saving = detailRow.value.saving_review
-    Object.assign(detailRow.value, buildSubmissionRow(found))
-    detailRow.value.saving_review = saving
-  }
-}
-
 const loadPage = async () => {
   loading.value = true
   try {
@@ -573,7 +472,6 @@ const loadPage = async () => {
     submissionTotal.value = Number(submissionResult?.total || 0)
     submissions.value = (submissionResult?.data || []).map(buildSubmissionRow)
     selectedRows.value = []
-    syncDetailFromList()
     scrollToHighlight()
   } finally {
     loading.value = false
@@ -596,27 +494,14 @@ const scrollToHighlight = () => {
 }
 
 const openDetail = row => {
-  detailRow.value = buildSubmissionRow({ ...row })
-  detailVisible.value = true
-}
-
-const acknowledgeAppealForDetail = async () => {
-  if (!detailRow.value?.submission_id) return
-  detailAckLoading.value = true
-  try {
-    await api.homework.acknowledgeAppeal(route.params.id, detailRow.value.submission_id)
-    ElMessage.success('已标记已阅')
-    await loadPage()
-  } finally {
-    detailAckLoading.value = false
-  }
-}
-
-const saveReviewFromDetail = async () => {
-  if (!detailRow.value?.submission_id) {
+  if (!row?.submission_id) {
+    ElMessage.warning('该学生尚未提交，无法查看详情')
     return
   }
-  await saveReview(detailRow.value, null)
+  router.push({
+    path: `/homework/${route.params.id}/submissions/${row.submission_id}`,
+    query: { ...route.query }
+  })
 }
 
 const handleSelectionChange = rows => {
@@ -786,7 +671,6 @@ const saveReview = async (row, attempt = null) => {
     })
     ElMessage.success('评分已保存')
     await loadPage()
-    syncDetailFromList()
     if (historyVisible.value && currentHistoryRow.value?.submission_id === row.submission_id) {
       await openHistory(row)
     }
@@ -853,8 +737,6 @@ watch(
     expandedHistoryAttemptIds.value = new Set()
     submissionPage.value = 1
     filterStudentId.value = route.query.student_id ? Number(route.query.student_id) : null
-    detailVisible.value = false
-    detailRow.value = null
     loadPage()
   }
 )

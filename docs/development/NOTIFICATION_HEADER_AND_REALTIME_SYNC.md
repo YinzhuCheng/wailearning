@@ -5,7 +5,7 @@
 Course notifications are stored server-side (`notifications` + `notification_reads`). The admin SPA must:
 
 1. Show **unread count on the header avatar** (badge) so users notice new items without opening the sidebar.
-2. Primary navigation to the inbox remains the **sidebar** (`课程学习` → **课程通知** for students). The avatar menu keeps **个人设置** / **退出登录** only so notification discovery is not duplicated in two places.
+2. Primary navigation to the inbox remains the **sidebar** (**课程通知** menu item at the student sidebar root for students — same route `/notifications`). The avatar menu keeps **个人设置** / **退出登录** only so notification discovery is not duplicated in two places.
 3. **Refresh quickly** when someone publishes a notification (including the **publisher’s own tab** on `/notifications`).
 4. Optionally **surface a desktop toast** (`ElNotification`) when the unread count increases or the inbox grows while unread exists.
 
@@ -48,7 +48,7 @@ This document ties together the Vue layout, the lightweight sync API, the `notif
 ### Sidebar vs avatar menu
 
 - **Unread count** still appears on the avatar badge; route to **`/notifications`** is via **sidebar** for students/teachers (see `Layout.vue` menu definitions).
-- **Historical note:** an older iteration duplicated **「查看通知」** inside the avatar dropdown (`data-testid="header-menu-notifications"`). That duplicate entry was removed to reduce redundant navigation paths; regression specs now click **`课程通知`** under **`课程学习`** where applicable.
+- **Historical note:** an older iteration duplicated **「查看通知」** inside the avatar dropdown (`data-testid="header-menu-notifications"`). That duplicate entry was removed to reduce redundant navigation paths; regression specs click the sidebar **`课程通知`** item (student rail: **top-level** menu item after the May 2026 flattening of 「课程学习」).
 
 ### Toast (`ElNotification`)
 
@@ -133,7 +133,7 @@ CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
 - **File:** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` (**15** `test(...)` cases).
 - **Why it exists:** The first tier proved baseline badge wiring; this module stresses **role-specific** aggregation (**admin** global `sync-status` vs **teacher/student** course-scoped params), **corrupt `selected_course` localStorage** healing, **concurrent** teacher `POST`s, **teacher-owned vs other-teacher** notification isolation, **403** on inaccessible `subject_id`, **mobile viewport**, **full page reload** (`onMounted` → `pollNotificationSync` without relying on manual focus), and **delete race** while the student notifications view loads.
 - **Lessons baked into the spec comments:**
-  - Teachers may land on **`/dashboard`** with **`ensureSelectedCourse`** picking a **non-required** course first (ranking by semester/id). Assertions against **`course_required_id`** must **explicitly switch** via **`header-course-switch`** → `.course-dropdown-menu .course-option` (click **switcher**, not hover-only).
+  - Teachers may land on **`/students`** (post-login default after **`Dashboard.vue` removal**; historically **`/dashboard`**) with **`ensureSelectedCourse`** picking a **non-required** course first (ranking by semester/id). Assertions against **`course_required_id`** must **explicitly switch** via **`header-course-switch`** → `.course-dropdown-menu .course-option` (click **switcher**, not hover-only).
   - Overriding **`document.visibilityState`** in Playwright did **not** stop `pollNotificationSync` reliably in Chromium (the visibility descriptor is not consistently honored for interval timers). The **`visibility hidden`** scenario was replaced by **`page.reload()`** evidence for cold-start polling — document that **true background-tab** gating remains a **residual risk** not fully automated here.
 - **Run command:**
 

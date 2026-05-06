@@ -140,25 +140,6 @@ class CourseDiscussionCreate(BaseModel):
         return normalize_content_format(value if isinstance(value, str) else None)
 
 
-class StudentUserBatchCreateRequest(BaseModel):
-    student_ids: List[int]
-
-
-class StudentUserBatchCreateError(BaseModel):
-    student_id: Optional[int] = None
-    student_name: Optional[str] = None
-    student_no: Optional[str] = None
-    reason: str
-
-
-class StudentUserBatchCreateResponse(BaseModel):
-    total: int
-    success: int
-    failed: int
-    created_users: List[str]
-    errors: List[StudentUserBatchCreateError]
-
-
 class StudentRosterUpsertFromUsersRequest(BaseModel):
     user_ids: List[int]
 
@@ -283,8 +264,22 @@ class StudentUpdate(BaseModel):
     class_id: Optional[int] = None
 
 
-class StudentResponse(StudentBase):
+class StudentResponse(BaseModel):
+    """
+    Roster row exposed by read/list APIs.
+
+    Unlike `StudentCreate`, this tolerates legacy ORM rows where `gender` or `class_id`
+    were unset; serializers coerce defaults (see `students.router.build_student_response`).
+    """
+
     id: int
+    name: str
+    student_no: str
+    gender: Gender = Gender.MALE
+    phone: Optional[str] = None
+    parent_phone: Optional[str] = None
+    address: Optional[str] = None
+    class_id: Optional[int] = None
     teacher_id: Optional[int] = None
     created_at: datetime
     class_name: Optional[str] = None
@@ -312,10 +307,22 @@ class CourseTimeItem(BaseModel):
         return self
 
 
+class SubjectClassLinkInput(BaseModel):
+    class_id: int = Field(..., ge=1)
+    enrollment_mode: Literal["all_in_class", "roster_subset"] = "all_in_class"
+
+
+class SubjectClassLinkResponse(BaseModel):
+    class_id: int
+    class_name: Optional[str] = None
+    enrollment_mode: str = "all_in_class"
+
+
 class SubjectCreate(BaseModel):
     name: str
     teacher_id: Optional[int] = None
     class_id: Optional[int] = None
+    class_links: Optional[List[SubjectClassLinkInput]] = None
     class_name: Optional[str] = None
     semester_id: Optional[int] = None
     course_type: str = "required"
@@ -333,6 +340,7 @@ class SubjectUpdate(BaseModel):
     name: Optional[str] = None
     teacher_id: Optional[int] = None
     class_id: Optional[int] = None
+    class_links: Optional[List[SubjectClassLinkInput]] = None
     semester_id: Optional[int] = None
     course_type: Optional[str] = None
     status: Optional[str] = None
@@ -363,6 +371,7 @@ class SubjectResponse(BaseModel):
     cover_image_url: Optional[str] = None
     teacher_name: Optional[str] = None
     class_name: Optional[str] = None
+    class_links: List[SubjectClassLinkResponse] = Field(default_factory=list)
     student_count: int = 0
     created_at: datetime
 
@@ -980,11 +989,12 @@ class AppearanceStyleConfig(BaseModel):
 
     primary: str = "blue"
     accent: str = "cyan"
-    texture: str = "none"
     shadow: str = "soft"
     transparency: str = "balanced"
     radius: str = "balanced"
     density: str = "comfortable"
+    font_family: Literal["system", "song", "hei", "kai", "mono"] = "system"
+    font_scale: Literal["small", "medium", "large"] = "medium"
 
 
 class AppearancePresetResponse(BaseModel):
@@ -1061,6 +1071,7 @@ class HomeworkBase(BaseModel):
     grade_precision: str = "integer"
     auto_grading_enabled: bool = False
     rubric_text: Optional[str] = None
+    rubric_staff_only: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: bool = True
@@ -1118,6 +1129,7 @@ class HomeworkUpdate(BaseModel):
     grade_precision: Optional[str] = None
     auto_grading_enabled: Optional[bool] = None
     rubric_text: Optional[str] = None
+    rubric_staff_only: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: Optional[bool] = None
@@ -1272,6 +1284,8 @@ class HomeworkSubmissionResponse(BaseModel):
     latest_task_error_code: Optional[str] = None
     latest_task_log: Optional[list[dict[str, Any]]] = None
     appeal_status: Optional[str] = None
+    effective_score_attempt_seq: Optional[int] = None
+    effective_score_note_zh: str = ""
 
     class Config:
         from_attributes = True
@@ -1350,6 +1364,8 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     latest_task_log: Optional[list[dict[str, Any]]] = None
     attempt_count: int = 0
     appeal_status: Optional[str] = None
+    effective_score_attempt_seq: Optional[int] = None
+    effective_score_note_zh: str = ""
 
 
 class HomeworkSubmissionStatusListResponse(BaseModel):

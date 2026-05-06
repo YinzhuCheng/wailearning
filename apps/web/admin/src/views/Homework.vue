@@ -63,24 +63,24 @@
             width="48"
             :reserve-selection="true"
           />
-          <el-table-column prop="title" label="作业标题" width="190" show-overflow-tooltip />
-          <el-table-column v-if="!userStore.isStudent" label="提交上限" width="100">
+          <el-table-column prop="title" label="作业标题" width="190" align="center" header-align="center" show-overflow-tooltip />
+          <el-table-column v-if="!userStore.isStudent" label="提交上限" width="100" align="center" header-align="center">
             <template #default="{ row }">
               {{ row.max_submissions != null ? `${row.max_submissions} 次` : '不限' }}
             </template>
           </el-table-column>
-          <el-table-column prop="subject_name" label="课程" width="160" />
-          <el-table-column label="评分规则" min-width="210">
+          <el-table-column prop="subject_name" label="课程" width="160" align="center" header-align="center" />
+          <el-table-column label="评分规则" min-width="210" align="center" header-align="center">
             <template #default="{ row }">
               <div class="rule-cell">
                 <el-tag size="small" :type="row.auto_grading_enabled ? 'success' : 'info'">
                   {{ row.auto_grading_enabled ? '自动评分已启用' : '仅教师评分' }}
                 </el-tag>
-                <div class="rule-text">{{ row.grading_rule_hint || '多次提交取最高分' }}</div>
+                <div class="rule-text">{{ row.grading_rule_hint || '「有效成绩」取截止时间前或计入总评的多次提交最高分；详见评分规则。' }}</div>
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="附件" width="110">
+          <el-table-column label="附件" width="110" align="center" header-align="center">
             <template #default="{ row }">
               <el-button
                 v-if="row.attachment_url"
@@ -93,12 +93,12 @@
               <span v-else class="muted-text">无</span>
             </template>
           </el-table-column>
-          <el-table-column prop="due_date" label="截止时间" width="180">
+          <el-table-column prop="due_date" label="截止时间" width="180" align="center" header-align="center">
             <template #default="{ row }">
               {{ formatDate(row.due_date) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="userStore.isStudent" label="评分任务" min-width="160">
+          <el-table-column v-if="userStore.isStudent" label="评分任务" min-width="160" align="center" header-align="center">
             <template #default="{ row }">
               <div v-if="resolveTaskStatus(row)" class="task-status-cell">
                 <el-tag :type="taskTagType(resolveTaskStatus(row))" size="small">
@@ -109,46 +109,31 @@
               <span v-else class="muted-text">{{ row.attempt_count ? '待教师评分' : '未提交' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" :width="userStore.isStudent ? 200 : 220">
+          <el-table-column label="操作" :width="userStore.isStudent ? 200 : 280" align="center" header-align="center">
             <template #default="{ row }">
               <template v-if="userStore.isStudent">
-                <el-dropdown split-button type="primary" size="small" @click="goToSubmitPage(row)">
-                  作业与提交
-                  <template #dropdown>
-                    <el-dropdown-item @click="viewHomework(row)">仅查看说明</el-dropdown-item>
-                  </template>
-                </el-dropdown>
+                <div class="wa-table-actions">
+                  <el-dropdown split-button type="primary" size="small" @click="goToSubmitPage(row)">
+                    作业与提交
+                    <template #dropdown>
+                      <el-dropdown-item @click="viewHomework(row)">仅查看说明</el-dropdown-item>
+                    </template>
+                  </el-dropdown>
+                </div>
               </template>
               <template v-else>
-                <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
+                <div class="wa-table-actions">
+                  <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
+                  <el-button size="small" @click="goToSubmissionStatus(row)">学生提交</el-button>
+                  <el-button size="small" plain data-testid="homework-btn-edit" @click="openEditDialog(row)">
+                    编辑
+                  </el-button>
+                  <el-button size="small" type="danger" @click="deleteHomework(row)">删除</el-button>
+                </div>
               </template>
-              <el-button
-                v-if="!userStore.isStudent"
-                size="small"
-                @click="goToSubmissionStatus(row)"
-              >
-                学生提交
-              </el-button>
-              <el-button
-                v-if="!userStore.isStudent"
-                size="small"
-                plain
-                data-testid="homework-btn-edit"
-                @click="openEditDialog(row)"
-              >
-                编辑
-              </el-button>
-              <el-button
-                v-if="!userStore.isStudent"
-                size="small"
-                type="danger"
-                @click="deleteHomework(row)"
-              >
-                删除
-              </el-button>
             </template>
           </el-table-column>
-          <el-table-column v-if="userStore.isStudent" label="分数" min-width="220">
+          <el-table-column v-if="userStore.isStudent" label="分数" min-width="220" align="center" header-align="center">
             <template #default="{ row }">
               <div v-if="hasHomeworkReview(row)" class="review-summary">
                 <el-tag
@@ -167,8 +152,8 @@
               <span v-else class="muted-text">未评分</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="!userStore.isStudent" prop="creator_name" label="发布人" width="100" />
-          <el-table-column v-if="!userStore.isStudent" prop="created_at" label="发布时间" width="165">
+          <el-table-column v-if="!userStore.isStudent" prop="creator_name" label="发布人" width="100" align="center" header-align="center" />
+          <el-table-column v-if="!userStore.isStudent" prop="created_at" label="发布时间" width="165" align="center" header-align="center">
             <template #default="{ row }">
               {{ formatDate(row.created_at) }}
             </template>
@@ -281,22 +266,34 @@
         <el-form-item label="响应语言">
           <el-input v-model="form.response_language" placeholder="例如 zh-CN / en-US，可为空" />
         </el-form-item>
-        <el-form-item label="评分要点">
+        <el-form-item label="评分要点（学生可见）">
           <MarkdownEditorPanel
             v-model="form.rubric_text"
             :min-rows="4"
             :max-rows="18"
-            placeholder="评分量规、要点（Markdown / LaTeX / 图）"
-            hint="学生端始终可见，与作业说明使用相同渲染。"
+            placeholder="学生端作业页始终可见；可与下方「教师私有」要点配合使用。"
+            hint="面向学生的评分导向或公开量规；请勿在此处写入仅教师掌握的细则。"
+            :compact-demo="true"
           />
         </el-form-item>
-        <el-form-item label="参考答案">
+        <el-form-item label="评分要点（仅教师可见）">
+          <MarkdownEditorPanel
+            v-model="form.rubric_staff_only"
+            :min-rows="4"
+            :max-rows="18"
+            placeholder="内部分项、加减分细则等（学生端与智能助教讨论上下文均不可见）"
+            hint="仅供教师端与 LLM 自动评分提示使用；不得要求学生复述本节原文。"
+            :compact-demo="true"
+          />
+        </el-form-item>
+        <el-form-item label="参考答案或思路（仅教师可见）">
           <MarkdownEditorPanel
             v-model="form.reference_answer"
             :min-rows="4"
             :max-rows="18"
-            placeholder="参考答案或提示（可选；学生端始终可见）"
-            hint="供学生对照与 LLM 评分参考。"
+            placeholder="参考答案、提纲或评分对齐思路（学生端不可见）"
+            hint="自动评分与教师批改可参考；智能助教讨论（学生发起）不会附带本节。"
+            :compact-demo="true"
           />
         </el-form-item>
         <el-form-item label="迟交规则">
@@ -367,11 +364,14 @@
               empty-text="暂无内容"
             />
           </el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">
-            <RichMarkdownDisplay :markdown="currentHomework.rubric_text" variant="student" empty-text="未设置" />
+          <el-descriptions-item label="评分要点（学生可见）" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.rubric_text" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">
-            <RichMarkdownDisplay :markdown="currentHomework.reference_answer" variant="student" empty-text="未设置" />
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.rubric_staff_only" variant="teacher" empty-text="未设置" />
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">
+            <RichMarkdownDisplay :markdown="currentHomework.reference_answer" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentHomework.attachment_url" type="primary" link @click="openAttachment(currentHomework)">
@@ -437,6 +437,7 @@ const form = reactive({
   grade_precision: 'integer',
   auto_grading_enabled: false,
   rubric_text: '',
+  rubric_staff_only: '',
   reference_answer: '',
   response_language: '',
   allow_late_submission: true,
@@ -581,6 +582,7 @@ const resetHomeworkForm = () => {
   form.grade_precision = 'integer'
   form.auto_grading_enabled = false
   form.rubric_text = ''
+  form.rubric_staff_only = ''
   form.reference_answer = ''
   form.response_language = ''
   form.allow_late_submission = true
@@ -613,6 +615,7 @@ const openEditDialog = row => {
   form.grade_precision = row.grade_precision || 'integer'
   form.auto_grading_enabled = Boolean(row.auto_grading_enabled)
   form.rubric_text = row.rubric_text || ''
+  form.rubric_staff_only = row.rubric_staff_only || ''
   form.reference_answer = row.reference_answer || ''
   form.response_language = row.response_language || ''
   form.allow_late_submission = row.allow_late_submission !== false
@@ -690,6 +693,7 @@ const submitForm = async () => {
       grade_precision: form.grade_precision,
       auto_grading_enabled: form.auto_grading_enabled,
       rubric_text: form.rubric_text?.trim() || null,
+      rubric_staff_only: form.rubric_staff_only?.trim() || null,
       reference_answer: form.reference_answer?.trim() || null,
       response_language: form.response_language?.trim() || null,
       allow_late_submission: form.allow_late_submission,
@@ -894,6 +898,19 @@ watch(selectedCourse, () => {
 
 .homework-list-card :deep(.el-table) {
   min-width: 1060px;
+}
+
+.wa-table-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.wa-table-actions :deep(.el-dropdown) {
+  flex: 0 0 auto;
 }
 
 .homework-empty-state {

@@ -149,7 +149,7 @@ def test_parallel_get_submissions_list_consistent(client: TestClient):
     assert results[0] == results[1]
 
 
-# --- 5) Teacher sets score before LLM finishes: auto runs but summary keeps teacher (latest attempt) ---
+# --- 5) Teacher sets score before LLM finishes: auto runs but summary keeps teacher on that attempt ---
 
 def test_teacher_score_before_auto_summary_shows_teacher(client: TestClient):
     ensure_admin()
@@ -174,7 +174,7 @@ def test_teacher_score_before_auto_summary_shows_teacher(client: TestClient):
     assert r.json()["review_score"] == 95.0
 
 
-# --- 6) After auto gives high score, lower teacher still wins on summary (latest attempt) ---
+# --- 6) After auto gives high score, lower teacher still wins on same attempt's summary ---
 
 def test_lower_teacher_beats_higher_auto_on_summary(client: TestClient):
     ensure_admin()
@@ -221,7 +221,7 @@ def test_lower_teacher_beats_higher_auto_on_summary(client: TestClient):
         db.close()
 
 
-# --- 6b) If teacher was on OLD attempt, new auto on NEW attempt is summary (no teacher on latest) ---
+# --- 6b) Effective summary score may come from an earlier attempt when it beats a later auto grade ---
 
 def test_new_attempt_auto_visible_when_teacher_scored_only_previous_attempt(client: TestClient):
     ensure_admin()

@@ -272,6 +272,7 @@ async function createHomework(token, ctx, title, extra = {}) {
       grade_precision: 'integer',
       auto_grading_enabled: extra.auto_grading_enabled ?? true,
       rubric_text: extra.rubric_text || null,
+      rubric_staff_only: extra.rubric_staff_only || null,
       reference_answer: extra.reference_answer || null,
       response_language: extra.response_language || 'zh-CN',
       allow_late_submission: true,

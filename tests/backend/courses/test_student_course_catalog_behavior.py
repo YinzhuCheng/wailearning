@@ -2,11 +2,11 @@
 学生端「全校课程目录」与必修/选修入课策略的集成测试。
 
 难度设计：
-- 多班级、多课程交叉：验证目录在「全校可见」与「本班可操作」上的矩阵是否一致；
+- 多班级、多课程交叉：目录对在读「进行中」课程全校可见；选修课 **不按行政班绑定**，未选课学生均可自主选课（前提：学生账号有对应花名册与 class_id）；
 - 教师 sync-enrollments 与选修隔离：选修不得被全班同步批量写入；
 - 花名册点名进选修：与自主选课 UI 字段（can_self_enroll / is_enrolled）的交互；
 - CourseEnrollmentBlock：被挡的必修课不会自动补选，目录与「我的课程」一致；
-- 边界：无班级选修、已结束课程不出现在目录。
+- 边界：已结束课程不出现在目录。
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ def _seed_catalog_matrix(client: TestClient) -> dict:
 
 
 def test_course_catalog_matrix_visibility_and_elective_flags(client: TestClient):
-    """目录应含外班与无班选修；必修/选修提示与 can_self_enroll 矩阵正确；已结束课程不出现。"""
+    """目录应含外班与无班选修；选修未修均可自主选课；必修提示与 can_self_enroll 矩阵正确；已结束课程不出现。"""
     ctx = _seed_catalog_matrix(client)
     r = client.get("/api/subjects/course-catalog", headers=ctx["headers"])
     assert r.status_code == 200, r.text
@@ -174,15 +174,16 @@ def test_course_catalog_matrix_visibility_and_elective_flags(client: TestClient)
     assert row_same["course_type"] == "elective"
     assert row_same["is_enrolled"] is False
     assert row_same["can_self_enroll_elective"] is True
-    assert "本班" in (row_same.get("enrollment_hint") or "")
+    assert "选修" in (row_same.get("enrollment_hint") or "") or "选课" in (row_same.get("enrollment_hint") or "")
 
     row_other = by_id[ctx["el_other_id"]]
-    assert row_other["can_self_enroll_elective"] is False
-    assert "其他班级" in (row_other.get("enrollment_hint") or "") or "本班开设" in (row_other.get("enrollment_hint") or "")
+    assert row_other["course_type"] == "elective"
+    assert row_other["can_self_enroll_elective"] is True
+    assert "选修" in (row_other.get("enrollment_hint") or "") or "选课" in (row_other.get("enrollment_hint") or "")
 
     row_nc = by_id[ctx["el_noclass_id"]]
-    assert row_nc["can_self_enroll_elective"] is False
-    assert "未绑定班级" in (row_nc.get("enrollment_hint") or "")
+    assert row_nc["course_type"] == "elective"
+    assert row_nc["can_self_enroll_elective"] is True
 
 
 def test_course_catalog_updates_after_self_enroll_and_drop(client: TestClient):
@@ -397,11 +398,14 @@ def test_course_catalog_forbidden_for_non_student(client: TestClient):
     assert client.get("/api/subjects/course-catalog", headers=_admin_headers(client)).status_code == 403
 
 
-def test_cross_class_elective_self_enroll_rejected_despite_catalog_visibility(client: TestClient):
-    """目录可见外班选修，但 API 层仍拒绝跨班选课（双断言防回归）。"""
+def test_cross_class_elective_self_enroll_allowed_under_schoolwide_policy(client: TestClient):
+    """选修课不按行政班绑定：目录可见「乙班名义」开设的选修，甲班学生仍可成功自主选课。"""
     ctx = _seed_catalog_matrix(client)
     oid = ctx["el_other_id"]
     assert oid in {row["id"] for row in client.get("/api/subjects/course-catalog", headers=ctx["headers"]).json()}
     r = client.post(f"/api/subjects/{oid}/student-self-enroll", headers=ctx["headers"])
-    assert r.status_code == 400
-    assert "本班" in (r.json().get("detail") or "") or "班级" in (r.json().get("detail") or "")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("subject_id") == oid
+    assert body.get("already_enrolled") is False
+    assert body.get("created") is True

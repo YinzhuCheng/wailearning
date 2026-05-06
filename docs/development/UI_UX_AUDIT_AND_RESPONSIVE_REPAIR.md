@@ -1022,11 +1022,18 @@ cover practical combinations of:
 
 - `primary` color;
 - `accent` color;
-- `texture`;
 - `shadow`;
 - `transparency`;
 - `radius`;
-- `density`.
+- `density`;
+- `font_family` (stack presets such as system UI, 宋体, 黑体/雅黑, 楷体, 等宽);
+- `font_scale` (`small` / `medium` / `large`, scaling the shared `--wa-font-size-*` tokens).
+
+Legacy deployments may still have JSON blobs in `user_appearance_styles.config`
+that include a removed `texture` field; Pydantic ignores unknown keys
+(`AppearanceStyleConfig.extra = "ignore"`). The SPA no longer applies background
+texture overlays: `data-wa-texture` is forced to `none` at runtime so older rows
+cannot resurrect grid/paper/noise overlays.
 
 The custom model deliberately does not allow arbitrary CSS injection. It exposes
 controlled tokens only, so user configuration can remain flexible without
@@ -1122,24 +1129,29 @@ Files:
 - legacy theme alias compatibility (`blue`, `green`, `warm`, `grayscale`);
 - appearance config normalization;
 - effective style resolution from system settings plus user state;
-- writing color, radius, shadow, transparency, texture, and density tokens to
-  `document.documentElement`.
+- writing color, radius, shadow, transparency, density, font stack, and scaled
+  font-size tokens to `document.documentElement`.
 
 The root element receives data attributes:
 
 ```text
 data-wa-theme
-data-wa-texture
+data-wa-texture   # always `none` (CSS hooks retained for compatibility)
 data-wa-shadow
 data-wa-transparency
 data-wa-radius
 data-wa-density
+data-wa-font-scale
 ```
+
+Inline CSS variables on `:root` include `--wa-font-family-ui` and refreshed
+`--wa-font-size-*` values derived from the baseline sizes in `style.css` multiplied
+by the selected font scale.
 
 The global stylesheet uses those attributes for:
 
-- background texture overlays;
-- density font-size adjustments;
+- (legacy) unused texture selectors kept harmless because `data-wa-texture` is pinned to `none`;
+- density font-size adjustments (compact/spacious still tweak a subset of tokens);
 - Element Plus primary-color variables;
 - shared surface/object shadows;
 - radius scale changes.
@@ -1147,12 +1159,18 @@ The global stylesheet uses those attributes for:
 The Personal Settings page now contains:
 
 - official preset cards with swatches;
-- custom controls for color, texture, shadow, transparency, radius, and density;
+- custom controls for color, font family, font size tier, shadow, transparency, radius, and density;
 - a preview surface that shows sidebar, toolbar, cards, and table-like rows;
 - save-and-use behavior for named styles;
 - one-session preview behavior that does not persist;
 - saved style list with use, load, and delete actions;
 - follow-system-default action.
+
+`Layout.vue` exposes **个人设置** and **退出登录** at the bottom of the left
+rail (above the fold on desktop; scrolls with the menu stack). These duplicate
+the header user-dropdown entries so agents testing Playwright flows can target
+`data-testid="sidebar-personal-settings"` / `data-testid="sidebar-logout"` when
+the dropdown is awkward to open.
 
 The Settings page contains only the global default selector. Do not move personal
 style management into admin system settings; that would mix system policy and
@@ -1172,16 +1190,14 @@ Current official preset keys:
 The visual intent of each preset:
 
 - `professional-blue`: default operational school-management look, blue primary
-  plus cyan secondary signal, no texture, restrained shadow, balanced radius.
-- `fresh-green`: green primary, blue accent, soft-paper texture, and softer
-  radius. This should feel fresher without turning the whole app into one green
-  surface.
-- `warm-amber`: amber primary, teal accent, subtle grid texture, medium shadow,
-  solid surfaces. This is intentionally warmer but must remain table-readable.
+  plus cyan secondary signal, restrained shadow, balanced radius.
+- `fresh-green`: green primary, blue accent, soft shadow, and softer radius.
+  This should feel fresher without turning the whole app into one green surface.
+- `warm-amber`: amber primary, teal accent, medium shadow, solid surfaces.
+  This is intentionally warmer but must remain table-readable.
 - `minimal-gray`: gray primary, violet accent, flat shadow, compact density, and
   smaller radii. This is the most utilitarian preset.
-- `academic-navy`: navy primary with amber accent and fine texture. This is a
-  formal academic variant.
+- `academic-navy`: navy primary with amber accent for a formal academic variant.
 - `high-contrast`: slate primary, red accent, solid surfaces, stronger shadows,
   and subtle radii. This is not a full dark mode; main content remains readable
   on light operational surfaces.
@@ -1192,8 +1208,8 @@ Maintenance guidance:
 - keep presets as configuration objects, not hand-coded CSS branches;
 - avoid one-hue presets where primary, accent, background, and preview all sit
   in the same hue family;
-- keep textures subtle enough that table rows, form fields, and long Chinese
-  labels remain readable;
+- typography choices (`font_family`, `font_scale`) must remain readable for long
+  Chinese paragraphs and dense tables; monospace is for niche technical views only;
 - do not make all cards very rounded just because a preset is soft. Dense admin
   surfaces still need table/form discipline.
 

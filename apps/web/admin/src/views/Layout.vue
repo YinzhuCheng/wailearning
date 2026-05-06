@@ -25,19 +25,11 @@
             <p>大学教学管理系统</p>
           </div>
         </div>
-        <el-button
-          class="collapse-btn"
-          :icon="isCollapsed ? Expand : Fold"
-          circle
-          size="small"
-          :aria-label="isCollapsed ? '展开侧边栏' : '收起侧边栏'"
-          @click="toggleSidebarCollapse"
-        />
       </div>
 
       <div class="sidebar-body">
         <el-menu
-          :default-active="route.path"
+          :default-active="sidebarMenuActivePath"
           :default-openeds="homeworkMenuOpenIndices"
           :collapse="isCollapsed"
           router
@@ -61,6 +53,26 @@
           </template>
         </el-menu>
 
+        <div class="sidebar-footer">
+          <el-tooltip content="个人设置" placement="right" :disabled="!isCollapsed || isMobile">
+            <button
+              type="button"
+              class="sidebar-footer__btn"
+              :class="{ 'sidebar-footer__btn--active': route.path === '/personal-settings' }"
+              data-testid="sidebar-personal-settings"
+              @click="goPersonalSettings"
+            >
+              <el-icon :size="18"><Setting /></el-icon>
+              <span v-show="!isCollapsed" class="sidebar-footer__label">个人设置</span>
+            </button>
+          </el-tooltip>
+          <el-tooltip content="退出登录" placement="right" :disabled="!isCollapsed || isMobile">
+            <button type="button" class="sidebar-footer__btn sidebar-footer__btn--danger" data-testid="sidebar-logout" @click="sidebarLogout">
+              <el-icon :size="18"><SwitchButton /></el-icon>
+              <span v-show="!isCollapsed" class="sidebar-footer__label">退出登录</span>
+            </button>
+          </el-tooltip>
+        </div>
       </div>
     </el-aside>
 
@@ -218,6 +230,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  Calendar,
   Collection,
   DataAnalysis,
   Document,
@@ -226,6 +239,7 @@ import {
   Reading,
   School,
   Setting,
+  SwitchButton,
   User,
   UserFilled
 } from '@element-plus/icons-vue'
@@ -431,7 +445,7 @@ const homePath = computed(() => {
     return adminHomePath
   }
 
-  return userStore.isStudent ? '/courses' : '/dashboard'
+  return userStore.isStudent ? '/courses' : '/students'
 })
 
 const showClassContext = computed(() => userStore.isClassTeacher && Boolean(currentClassId.value))
@@ -472,12 +486,12 @@ const classContextText = computed(() => `班级课程 ${classTeacherCourses.valu
 const routeNameMap = {
   '/courses': '选课与进度',
   '/course-home': '学习主页',
-  '/dashboard': '课程仪表盘',
   '/classes': '班级管理',
   '/students': '学生信息',
   '/scores': '成绩管理',
   '/student-scores': '我的成绩',
   '/attendance': '考勤管理',
+  '/teaching-calendar': '教学日历',
   '/rankings': '班级排名',
   '/analysis': '数据分析',
   '/users': '用户管理',
@@ -502,19 +516,28 @@ const homeworkBreadcrumbParent = computed(() => {
   return p === '/homework/students' || /^\/homework\/\d+\//.test(p)
 })
 
+/**
+ * Element Plus menu `index` matches top-level routes like `/materials`, but nested routes
+ * such as `/materials/read/:id` must highlight the parent item so teachers/students see where they are.
+ */
+const sidebarMenuActivePath = computed(() => {
+  const p = route.path
+  if (p.startsWith('/materials/read/')) {
+    return '/materials'
+  }
+  if (p.startsWith('/homework/') && p !== '/homework') {
+    if (p.startsWith('/homework/students')) {
+      return '/homework/students'
+    }
+    return '/homework'
+  }
+  return p
+})
+
 const homeworkMenuOpenIndices = computed(() => {
   const p = route.path
   if (userStore.isStudent) {
-    if (
-      p.startsWith('/courses') ||
-      p.startsWith('/course-home') ||
-      p.startsWith('/homework') ||
-      p.startsWith('/materials') ||
-      p.startsWith('/student-scores') ||
-      p.startsWith('/notifications')
-    ) {
-      return ['student-learning']
-    }
+    // Student rail is flat (no `student-learning` submenu); nothing to pre-open.
     return []
   }
   if (userStore.isAdmin) {
@@ -529,7 +552,7 @@ const homeworkMenuOpenIndices = computed(() => {
   }
   if (userStore.isClassTeacher) {
     if (
-      p.startsWith('/dashboard') ||
+      p.startsWith('/teaching-calendar') ||
       p.startsWith('/students') ||
       p.startsWith('/subjects') ||
       p.startsWith('/notifications')
@@ -538,17 +561,7 @@ const homeworkMenuOpenIndices = computed(() => {
     }
     return []
   }
-  if (
-    p.startsWith('/dashboard') ||
-    p.startsWith('/students') ||
-    p.startsWith('/scores') ||
-    p.startsWith('/attendance') ||
-    p.startsWith('/notifications') ||
-    p.startsWith('/homework') ||
-    p.startsWith('/materials')
-  ) {
-    return ['teacher-daily']
-  }
+  // Teacher accounts use a flat sidebar (no `teacher-daily` submenu); nothing to pre-open here.
   return []
 })
 
@@ -559,7 +572,7 @@ const classTeacherMenu = [
     label: '班级教学',
     icon: School,
     children: [
-      { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
+      { path: '/teaching-calendar', label: '教学日历', icon: Calendar },
       { path: '/students', label: '学生信息', icon: User },
       { path: '/subjects', label: '课程信息', icon: Reading },
       { path: '/notifications', label: '通知信息', icon: Bell }
@@ -567,40 +580,26 @@ const classTeacherMenu = [
   }
 ]
 
+/** Flat menu: all entries used to live under a single 「日常教学」 submenu — removed for fewer clicks. */
 const teacherMenu = [
-  {
-    type: 'submenu',
-    index: 'teacher-daily',
-    label: '日常教学',
-    icon: School,
-    children: [
-      { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
-      { path: '/students', label: '学生管理', icon: User },
-      { path: '/scores', label: '成绩管理', icon: Collection },
-      { path: '/attendance', label: '考勤管理', icon: Collection },
-      { path: '/notifications', label: '通知中心', icon: Bell },
-      { path: '/homework', label: '作业管理', icon: Reading },
-      { path: '/homework/students', label: '学生作业一览', icon: User },
-      { path: '/materials', label: '课程资料', icon: Collection }
-    ]
-  }
+  { path: '/students', label: '学生管理', icon: User },
+  { path: '/scores', label: '成绩管理', icon: Collection },
+  { path: '/attendance', label: '考勤管理', icon: Collection },
+  { path: '/teaching-calendar', label: '教学日历', icon: Calendar },
+  { path: '/notifications', label: '通知中心', icon: Bell },
+  { path: '/homework', label: '作业管理', icon: Reading },
+  { path: '/homework/students', label: '学生作业一览', icon: User },
+  { path: '/materials', label: '课程资料', icon: Collection }
 ]
 
+/** Flat menu: all entries used to live under one 「课程学习」 submenu — removed for fewer clicks (parity with teacher rail). */
 const studentMenu = [
-  {
-    type: 'submenu',
-    index: 'student-learning',
-    label: '课程学习',
-    icon: Reading,
-    children: [
-      { path: '/courses', label: '选课与进度', icon: School },
-      { path: '/course-home', label: '学习主页', icon: DataAnalysis },
-      { path: '/homework', label: '课程作业', icon: Document },
-      { path: '/materials', label: '课程资料', icon: Collection },
-      { path: '/student-scores', label: '我的成绩', icon: Collection },
-      { path: '/notifications', label: '课程通知', icon: Bell }
-    ]
-  }
+  { path: '/courses', label: '选课与进度', icon: School },
+  { path: '/course-home', label: '学习主页', icon: DataAnalysis },
+  { path: '/homework', label: '课程作业', icon: Document },
+  { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/student-scores', label: '我的成绩', icon: Collection },
+  { path: '/notifications', label: '课程通知', icon: Bell }
 ]
 
 const adminMenu = [
@@ -658,7 +657,8 @@ const persistDesktopSidebarState = () => {
     return
   }
 
-  const state = isSidebarHidden.value ? 'hidden' : isCollapsed.value ? 'collapsed' : 'expanded'
+  // Desktop UX: only distinguish hidden vs expanded (icon-only rail removed — edge handle is canonical).
+  const state = isSidebarHidden.value ? 'hidden' : 'expanded'
   window.localStorage.setItem(desktopSidebarStorageKey, state)
 }
 
@@ -673,25 +673,9 @@ const restoreDesktopSidebarState = () => {
     isCollapsed.value = false
     return
   }
-  if (state === 'collapsed') {
-    isSidebarHidden.value = false
-    isCollapsed.value = true
-    return
-  }
+  // Migrate legacy "collapsed" rail preference to fully expanded menu (sidebar rail toggle removed).
   isSidebarHidden.value = false
   isCollapsed.value = false
-}
-
-const toggleSidebarCollapse = () => {
-  if (isSidebarHidden.value) {
-    isSidebarHidden.value = false
-    isCollapsed.value = false
-    persistDesktopSidebarState()
-    return
-  }
-
-  isCollapsed.value = !isCollapsed.value
-  persistDesktopSidebarState()
 }
 
 const toggleMobileSidebar = () => {
@@ -770,7 +754,7 @@ const handleCourseSwitch = courseId => {
   }
 
   if (route.path === '/courses') {
-    router.push(userStore.isStudent ? '/course-home' : '/dashboard')
+    router.push(userStore.isStudent ? '/course-home' : '/students')
   }
 }
 
@@ -784,6 +768,18 @@ const handleCommand = command => {
     userStore.logout()
     router.push('/login')
   }
+}
+
+const goPersonalSettings = () => {
+  router.push('/personal-settings')
+  if (isMobile.value) {
+    isCollapsed.value = true
+  }
+}
+
+const sidebarLogout = () => {
+  userStore.logout()
+  router.push('/login')
 }
 
 onMounted(async () => {
@@ -935,6 +931,58 @@ watch(notificationSyncParams, () => {
   overflow-x: hidden;
 }
 
+.sidebar-footer {
+  flex-shrink: 0;
+  padding: 8px 10px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-footer__btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--wa-radius-lg);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.sidebar-footer__btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sidebar-footer__btn--active {
+  background: var(--wa-sidebar-active-bg);
+  color: #fff;
+}
+
+.sidebar-footer__btn--danger:hover {
+  background: rgba(248, 113, 113, 0.22);
+  color: #fecaca;
+}
+
+.sidebar-body:has(.el-menu--collapse) .sidebar-footer__btn {
+  justify-content: center;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.sidebar-footer__label {
+  white-space: nowrap;
+}
+
 .logo {
   display: flex;
   align-items: center;
@@ -970,12 +1018,6 @@ watch(notificationSyncParams, () => {
   margin: 4px 0 0;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.65);
-}
-
-.collapse-btn {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: #fff;
 }
 
 .sidebar-menu {

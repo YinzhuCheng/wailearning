@@ -42,7 +42,7 @@
         <div class="style-section__head">
           <div>
             <h3>自定义组合</h3>
-            <p>颜色、纹理、透明度、阴影和圆角会立即预览；保存后可命名并再次选择。</p>
+            <p>颜色、字体、字号、透明度、阴影和圆角会立即预览；保存后可命名并再次选择。</p>
           </div>
           <el-input
             v-model="styleName"
@@ -75,10 +75,15 @@
           </label>
 
           <label class="control-field">
-            <span>纹理</span>
-            <el-select v-model="draft.texture" data-testid="appearance-texture">
-              <el-option v-for="item in textureOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <span>字体</span>
+            <el-select v-model="draft.font_family" data-testid="appearance-font-family">
+              <el-option v-for="item in fontFamilyOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
+          </label>
+
+          <label class="control-field">
+            <span>字号</span>
+            <el-segmented v-model="draft.font_scale" :options="fontScaleOptions" data-testid="appearance-font-scale" />
           </label>
 
           <label class="control-field">
@@ -208,11 +213,17 @@ const colorMap = {
   red: { 600: '#dc2626', 50: '#fef2f2' }
 }
 
-const textureOptions = [
-  { value: 'none', label: 'None' },
-  { value: 'subtle-grid', label: 'Subtle grid' },
-  { value: 'soft-paper', label: 'Soft paper' },
-  { value: 'fine-noise', label: 'Fine noise' }
+const fontFamilyOptions = [
+  { value: 'system', label: '系统默认' },
+  { value: 'song', label: '宋体' },
+  { value: 'hei', label: '黑体 / 雅黑' },
+  { value: 'kai', label: '楷体' },
+  { value: 'mono', label: '等宽' }
+]
+const fontScaleOptions = [
+  { label: '小', value: 'small' },
+  { label: '中', value: 'medium' },
+  { label: '大', value: 'large' }
 ]
 const shadowOptions = [
   { label: 'Flat', value: 'flat' },
@@ -275,7 +286,7 @@ const previewStyle = computed(() => ({
 
 const describeConfig = config => {
   const c = normalizeAppearanceConfig(config)
-  return `${c.primary} / ${c.accent} / ${c.texture} / ${c.shadow} / ${c.radius}`
+  return `${c.primary} / ${c.accent} / ${c.font_family} / ${c.font_scale} / ${c.shadow} / ${c.radius}`
 }
 
 const refresh = async () => {

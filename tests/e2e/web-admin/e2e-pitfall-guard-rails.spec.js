@@ -285,7 +285,7 @@ test.describe('E2E pitfall guard rails (15 cases)', () => {
   test('14 shared login helper survives back-to-back navigations', async ({ page }) => {
     const s = scenario()
     await login(page, s.admin.username, s.admin.password)
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await page.goto('/students', { waitUntil: 'domcontentloaded', timeout: 60000 })
     await login(page, s.teacher_own.username, s.password_teacher_student)
     await expect(page.locator('.layout-container')).toBeVisible({ timeout: 30000 })
   })

@@ -1,0 +1,243 @@
+<template>
+  <div class="material-read-page" v-loading="loading">
+    <div class="material-read-toolbar">
+      <el-button @click="goBack">返回章节目录</el-button>
+      <el-button :disabled="!prevEntry" @click="goPrev">上一篇</el-button>
+      <el-button :disabled="!nextEntry" @click="goNext">下一篇</el-button>
+    </div>
+
+    <el-alert
+      v-if="breadcrumb"
+      class="material-read-breadcrumb"
+      type="info"
+      :closable="false"
+      show-icon
+      :title="breadcrumb"
+    />
+
+    <article v-if="material" class="material-read-body">
+      <h1 class="material-read-title">{{ material.title }}</h1>
+      <PlainOrMarkdownBlock
+        :text="material.content"
+        :format="material.content_format"
+        variant="student"
+        empty-text="暂无正文"
+      />
+      <div v-if="material.attachment_url" class="material-read-attach">
+        <el-button type="primary" link @click="downloadAttach">
+          {{ material.attachment_name || '下载附件' }}
+        </el-button>
+      </div>
+    </article>
+
+    <section v-if="material" class="material-read-discussion" aria-label="资料讨论区">
+      <CourseDiscussionPanel
+        target-type="material"
+        :target-id="material.id"
+        :subject-id="material.subject_id"
+        :class-id="material.class_id"
+        :discussion-requires-context="material.discussion_requires_context"
+        :is-student="userStore.isStudent"
+      />
+    </section>
+  </div>
+</template>
+
+<script setup>
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+
+import api from '@/api'
+import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
+import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
+import { useUserStore } from '@/stores/user'
+import { downloadAttachment } from '@/utils/attachments'
+import { normalizeContentFormat } from '@/utils/contentFormat'
+
+const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
+
+const loading = ref(false)
+const material = ref(null)
+/** Flat navigation entries for this course: chapter DFS × materials sort order */
+const sequence = ref([])
+
+const flattenChaptersDfs = nodes => {
+  const out = []
+  const walk = list => {
+    for (const n of list || []) {
+      out.push({ id: n.id, title: n.title })
+      if (n.children?.length) walk(n.children)
+    }
+  }
+  walk(nodes || [])
+  return out
+}
+
+const buildSequence = async () => {
+  const course = userStore.selectedCourse
+  if (!course?.id || !course.class_id) {
+    sequence.value = []
+    return
+  }
+  const treeRes = await api.materialChapters.tree({ subject_id: course.id })
+  const chapters = flattenChaptersDfs(treeRes?.nodes || [])
+  const seq = []
+  for (const ch of chapters) {
+    const res = await api.materials.list({
+      class_id: course.class_id,
+      subject_id: course.id,
+      chapter_id: ch.id,
+      page: 1,
+      page_size: 200
+    })
+    for (const row of res?.data || []) {
+      seq.push({
+        id: row.id,
+        title: row.title,
+        chapterTitle: ch.title
+      })
+    }
+  }
+  sequence.value = seq
+}
+
+const currentIndex = computed(() => sequence.value.findIndex(x => String(x.id) === String(route.params.id)))
+
+const prevEntry = computed(() => {
+  const i = currentIndex.value
+  return i > 0 ? sequence.value[i - 1] : null
+})
+
+const nextEntry = computed(() => {
+  const i = currentIndex.value
+  return i >= 0 && i < sequence.value.length - 1 ? sequence.value[i + 1] : null
+})
+
+const breadcrumb = computed(() => {
+  if (!material.value) return ''
+  const cur = sequence.value.find(x => String(x.id) === String(material.value.id))
+  const ch = cur?.chapterTitle || '—'
+  const pos = currentIndex.value >= 0 ? `${currentIndex.value + 1} / ${sequence.value.length}` : ''
+  return `当前章节：${ch}${pos ? ` · 阅读顺序 ${pos}` : ''}`
+})
+
+const loadMaterial = async () => {
+  const id = Number(route.params.id)
+  if (!Number.isFinite(id)) {
+    ElMessage.error('无效的资料 ID')
+    router.push('/materials')
+    return
+  }
+  loading.value = true
+  try {
+    const row = await api.materials.get(id)
+    const subjectId = row.subject_id != null ? Number(row.subject_id) : null
+    // Deep links (and Playwright flows that clear localStorage) may not have selected_course
+    // matching this material; sync from teaching/enrollment list when possible.
+    if (subjectId && Number(userStore.selectedCourse?.id) !== subjectId) {
+      await userStore.fetchTeachingCourses(true)
+      const match = userStore.teachingCourses.find(c => Number(c.id) === subjectId)
+      if (!match) {
+        ElMessage.warning('无法在您的可选课程列表中找到该资料所属课程，请从课程入口打开。')
+        router.push('/materials')
+        return
+      }
+      userStore.setSelectedCourse(match)
+    }
+    material.value = {
+      ...row,
+      content_format: normalizeContentFormat(row.content_format)
+    }
+    try {
+      await buildSequence()
+    } catch (seqErr) {
+      console.error(seqErr)
+      ElMessage.warning('章节导航加载失败，仍可阅读正文')
+      sequence.value = []
+    }
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('加载资料失败')
+    router.push('/materials')
+  } finally {
+    loading.value = false
+  }
+}
+
+const goBack = () => {
+  router.push('/materials')
+}
+
+const goPrev = () => {
+  if (!prevEntry.value) return
+  router.replace({ name: 'MaterialRead', params: { id: prevEntry.value.id } })
+}
+
+const goNext = () => {
+  if (!nextEntry.value) return
+  router.replace({ name: 'MaterialRead', params: { id: nextEntry.value.id } })
+}
+
+const downloadAttach = () => {
+  if (!material.value?.attachment_url) return
+  downloadAttachment(material.value.attachment_url, material.value.attachment_name)
+}
+
+watch(
+  () => route.params.id,
+  () => {
+    loadMaterial()
+  },
+  { immediate: true }
+)
+</script>
+
+<style scoped>
+.material-read-page {
+  padding: 24px;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.material-read-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.material-read-breadcrumb {
+  margin-bottom: 16px;
+}
+
+.material-read-body {
+  padding: 24px 28px;
+  border-radius: var(--wa-radius-lg);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.material-read-title {
+  margin: 0 0 16px;
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.material-read-attach {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.material-read-discussion {
+  margin-top: 28px;
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>

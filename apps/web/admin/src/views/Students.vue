@@ -103,7 +103,7 @@
             <el-table-column prop="student_no" label="学号" min-width="180" />
             <el-table-column label="所属班级" min-width="180">
               <template #default="{ row }">
-                {{ row.class_name || '未分配班级' }}
+                {{ row.class_name || '无' }}
               </template>
             </el-table-column>
             <el-table-column label="账号状态" width="120">
@@ -133,16 +133,26 @@
               </template>
             </el-table-column>
             <el-table-column prop="student_no" label="学号" min-width="160" />
-            <el-table-column prop="class_name" label="班级" min-width="160" />
-            <el-table-column prop="phone" label="联系电话" min-width="150" />
-            <el-table-column prop="parent_phone" label="家长电话" min-width="150" />
-            <el-table-column prop="address" label="家庭住址" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="class_name" label="班级" min-width="160">
+              <template #default="{ row }">{{ emptyCell(row.class_name) }}</template>
+            </el-table-column>
+            <el-table-column label="联系电话" min-width="150">
+              <template #default="{ row }">{{ emptyCell(row.phone) }}</template>
+            </el-table-column>
+            <el-table-column label="家长电话" min-width="150">
+              <template #default="{ row }">{{ emptyCell(row.parent_phone) }}</template>
+            </el-table-column>
+            <el-table-column label="家庭住址" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">{{ emptyCell(row.address) }}</template>
+            </el-table-column>
           </template>
 
           <template v-else>
             <el-table-column prop="student_name" label="学生姓名" min-width="160" />
             <el-table-column prop="student_no" label="学号" width="160" />
-            <el-table-column prop="class_name" label="所属班级" width="180" />
+            <el-table-column prop="class_name" label="所属班级" width="180">
+              <template #default="{ row }">{{ emptyCell(row.class_name) }}</template>
+            </el-table-column>
             <el-table-column label="选课方式" width="120">
               <template #default="{ row }">
                 <el-select
@@ -399,7 +409,16 @@ const genderText = gender => {
   if (gender === 'female') {
     return '女'
   }
-  return '-'
+  return '无'
+}
+
+/** Display placeholder for optional roster / contact fields (aligned with 用户管理表格用语). */
+const emptyCell = value => {
+  if (value === undefined || value === null) {
+    return '无'
+  }
+  const s = String(value).trim()
+  return s || '无'
 }
 
 const normalizeCellValue = value => {

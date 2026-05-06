@@ -20,10 +20,26 @@ It is intended for contributors and LLM coding agents who need to answer questio
     postgres/                 PostgreSQL-only guards (skip unless Postgres: TEST_DATABASE_URL or WAILEARNING_AUTO_PG_TESTS=1 after provision script)
     security/                 API authorization / abuse-edge regression (roles, tokens)
     e2e/web-admin/            Playwright browser coverage for the admin SPA
-  fixtures/                 static files used by tests
-  scenarios/                shared scenario builders and stress helpers
-  conftest.py               repository test environment defaults
-```
+    devtools/                 maintenance scripts that scan or rewrite test artifacts (not pytest-discovered; filenames must not start with `test_`)
+    fixtures/                 static files used by tests
+    scenarios/                shared scenario builders and stress helpers
+    conftest.py               repository test environment defaults
+  ```
+
+### `tests/devtools/` (maintenance, not pytest discovery)
+
+This subdirectory holds **repository-maintained utilities** that operate on files under `tests/` but are **not** pytest test modules.
+
+Rules agents should follow:
+
+- Filenames **must not** match `python_files = test_*.py` from [`pytest.ini`](../../pytest.ini), otherwise pytest will try to import them as tests.
+- The redundancy auditor explicitly skips everything under `tests/devtools/` when classifying test inventory so the script does not count itself as coverage inventory noise.
+- Prefer placing **deployment-facing** shell scripts in [`ops/scripts/`](../../ops/scripts/) instead of here; `tests/devtools/` is for analyzers, generators, and other tooling tightly coupled to the test corpus.
+
+Current utilities:
+
+- [`tests/devtools/audit_test_redundancy.py`](../../tests/devtools/audit_test_redundancy.py) — regenerates [`TEST_REDUNDANCY_AUDIT.md`](TEST_REDUNDANCY_AUDIT.md).
+- [`tests/devtools/README.md`](../../tests/devtools/README.md) — short rules, commands, and cross-links for agents.
 
 ## Category Overview
 
@@ -49,6 +65,8 @@ Subgroups:
   - course access
   - roster versus course enrollment behavior
   - required versus elective rules
+  - **`subject_class_links` regression:** `test_subject_multi_class_links.py`
+  - **student course-catalog / elective self-enroll** must track **schoolwide elective** policy (`test_student_course_catalog_behavior.py`, `test_student_elective_catalog_and_quota.py`; updated 2026-05 when electives stopped mirroring `Subject.class_id`)
 - `tests/backend/roster/`
   - roster enroll operations
   - batch class changes
@@ -73,8 +91,8 @@ See [HTTP client slow-response busy hint](HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md
   - E2E seed helpers
   - demo course bootstrap behavior
   - LLM mock/reset support used by browser flows
-- `tests/backend/manual/`
-  - smoke-style API coverage that preserves behavior previously exercised by manual scripts
+- `tests/backend/integration/`
+  - Cross-cutting API smoke tests that lock generic HTTP contracts (health, auth envelope, homework ACL, rubric redaction) — see `test_core_api_surface.py` and [TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md)
 - `tests/backend/user_profile/`
   - profile and avatar flows
 - `tests/backend/auth/`
@@ -106,7 +124,11 @@ These tests are the closest to a user-visible workflow because they exercise:
 
 Additional targeted suite: **`e2e-discussion-cover-llm-tier3.spec.js`** — discussion LLM (`invoke_llm`), long reply preview (3 logical lines + expand), and course cover (API + UI). Run only that file with `npx playwright test e2e-discussion-cover-llm-tier3.spec.js` from `apps/web/admin` when iterating on those features.
 
-Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases) — homework submission table **content/comment preview** truncation, **LLM grading** long comments + regrade + 429 recovery, **multi-role** API guards, and **course cover** flows (teacher/admin UI + API). Run alone with `npx playwright test e2e-homework-comment-cover-tier4.spec.js` from `apps/web/admin`.
+Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases) — homework submission table **content/comment preview** truncation, **LLM grading** long comments + regrade + 429 recovery, **multi-role** API guards, and **course cover** flows (teacher/admin UI + API). **Case 01** now expects **「详情」** to open the full-page review route (`/homework/:id/submissions/:submissionId`) and asserts the long teacher comment in `.review-comment-card` instead of a dialog. Run alone with `npx playwright test e2e-homework-comment-cover-tier4.spec.js` from `apps/web/admin`.
+
+Another targeted suite: **`e2e-core-flows-smoke.spec.js`** — ten stability-focused journeys (invalid login stays on `/login`, student homework grid contains seeded title, teacher materials/notifications routes, admin user grid). Run alone with `npx playwright test e2e-core-flows-smoke.spec.js` from `apps/web/admin`.
+
+Another targeted suite: **`e2e-course-ui-markdown-reader.spec.js`** (12 cases) — **`subject_id` enrollment counts** surfaced via **学生管理** header (dashboard UI removed), **Markdown LaTeX demo** (scoped `MarkdownEditorPanel`), **sidebar** controls, **materials** layout + **MaterialRead** + discussion card, **`/teaching-calendar`** route (calendar component parity vs removed **`Dashboard.vue`**), **flat teacher sidebar** items including **教学日历** placement after **考勤管理**, **flat student sidebar** (no 「课程学习」 parent — items match former children; regression: submenu title count `0`). Run alone with `npx playwright test e2e-course-ui-markdown-reader.spec.js` from `apps/web/admin`.
 
 Additive API-heavy tier after documentation alignment: **`e2e-docs-gap-tier15.spec.js`** — **`/api/discussions`** validation (`page_size`, scope mismatch, **`invoke_llm`** teacher denial), cross-class homework submission guards, orphan-course homework list for **class_teacher**, **`page_size`** discipline (**students** list **`le=1000`**), dual-gate mock LLM + **`process-grading`**, end-to-end mock grading drain, **`sync-status`** shape. Run alone with `npx playwright test e2e-docs-gap-tier15.spec.js` from `apps/web/admin`.
 
@@ -280,7 +302,7 @@ Read and run in this order:
 1. `tests/backend/courses/`
 2. `tests/backend/roster/`
 3. `tests/behavior/test_multi_actor_timeline_behavior.py`
-4. `tests/e2e/web-admin/roster-and-users.spec.js`
+4. `tests/e2e/web-admin/roster-and-users.spec.js` — roster enroll + paste/file import dialogs + admin batch class + assertion that **用户管理** does **not** show 「文件导入学生用户」 (removed; roster import lives under **学生管理** only).
 
 ### If you are changing homework, notifications, or materials
 

@@ -91,7 +91,7 @@ This pass removed **unused** test-support code and narrowed the supported import
   `tests/llm_pressures.py` were thin star-import re-exports. All in-repo imports were rewritten to
   **`tests.scenarios.llm_scenario`** and **`tests.scenarios.material_flow`** (pattern replace across
   `tests/**/*.py`). External forks that still used the old paths must update on merge.
-- **`tools/testing/audit_test_redundancy.py`:** Removed the special-case branch that classified the
+- **`tests/devtools/audit_test_redundancy.py`:** Removed the special-case branch that classified the
   deleted stub filenames; scenario helpers under `tests/scenarios/` already fall under the
   `tests/scenarios/` category rule.
 
@@ -136,9 +136,13 @@ This pass targeted **navigation redundancy** in `<repo>/apps/web/admin/src/views
   - **`班级教学`** (`class-teaching`): dashboard, students, scores, attendance, notifications (formerly flat top-level items).
   - **`作业与资料`** (`homework-and-materials`): `/homework`, `/homework/students`, `/materials`. Previously **课程资料** sat beside unrelated teaching tasks and **作业** was its own submenu (`homework-center`); merging **资料** under the homework umbrella reflects how teachers use them (same course context).
 
-**Student grouping**
+**Student grouping (current)**
 
-- Flat student links (**我的课程**, **课程主页**, homework, materials, scores, notifications) collapsed under **`课程学习`** (`student-learning`). First child label **`选课与进度`** replaces **我的课程** (same route `/courses`). **学习主页** replaces **课程主页** for `/course-home`. Routes unchanged — router guards and bookmarks keep working.
+- Student links (**选课与进度**, **学习主页**, **课程作业**, **课程资料**, **我的成绩**, **课程通知**) are **flat** top-level sidebar items in `Layout.vue` (`studentMenu`). Historically they lived under **`课程学习`** (`student-learning`); that submenu was removed (May 2026) for parity with the flattened teacher rail — routes unchanged.
+
+**Student grouping (historical)**
+
+- ~~Flat student links collapsed under **`课程学习`** (`student-learning`).~~ Superseded by flat rail above.
 
 **Administrator grouping**
 
@@ -148,7 +152,7 @@ This pass targeted **navigation redundancy** in `<repo>/apps/web/admin/src/views
 
 **Auto-open submenu indices**
 
-- `homeworkMenuOpenIndices` renamed conceptually to “which submenu should stay expanded”: extended for student/admin/teacher paths so nested menus open on deep links (e.g. student opens `/homework` → `student-learning` stays expanded).
+- `homeworkMenuOpenIndices` (computed `default-openeds` for `el-menu`) controls which **`el-sub-menu`** stays expanded on deep links. **Students:** always `[]` (flat rail — no `student-learning`). **Admin:** `admin-academic-config` / `admin-ops` when paths match. **Class teacher:** `class-teaching` when paths match. **Subject teachers:** `[]` (flat rail — no `teacher-daily`).
 
 **What was intentionally not removed**
 
@@ -158,7 +162,7 @@ This pass targeted **navigation redundancy** in `<repo>/apps/web/admin/src/views
 
 **Regression expectation**
 
-- Playwright specs that navigate by **URL** (`/courses`, `/course-home`, …) are unaffected. Specs that assumed **visible sidebar text** “我的课程” may need selector updates to **选课与进度** or role-based navigation — grep `<repo>/tests/e2e/web-admin` after pulling this change.
+- Playwright specs that navigate by **URL** (`/courses`, `/course-home`, …) are unaffected. Specs that assumed **visible sidebar text** “我的课程” may need selector updates to **选课与进度** or role-based navigation — grep `<repo>/tests/e2e/web-admin` after pulling this change. Specs that first expanded **`课程学习`** before clicking a child must click the **top-level** **`menuitem`** directly (student rail is flat).
 
 ### 6. Obsolete E2E backlog documentation removed (`2026-05-05`)
 

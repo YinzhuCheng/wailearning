@@ -23,7 +23,14 @@ export const filterCoursesByClassId = (courses = [], classId) => {
     return []
   }
 
-  return (courses || []).filter(course => Number(course?.class_id) === Number(classId))
+  const cid = Number(classId)
+  return (courses || []).filter(course => {
+    if (Number(course?.class_id) === cid) {
+      return true
+    }
+    const links = course?.class_links || []
+    return links.some(l => Number(l.class_id) === cid)
+  })
 }
 
 export const filterNotificationsForClass = (notifications = [], classId, courseIds = new Set()) => {

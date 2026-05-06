@@ -40,7 +40,7 @@ For **permission-style helpers** in routers (e.g. `is_teacher`, instructor check
 
 - Subject management for required and elective courses.
 - Teacher-to-course ownership.
-- Required-course enrollment repair and elective self-enrollment flows.
+- Required-course enrollment repair and elective self-enrollment flows (multi-class required bindings via `subject_class_links`; electives do not mirror an administrative class).
 - Roster-driven enrollment, enrollment blocking, and class-bound access checks.
 
 ### Homework and grading

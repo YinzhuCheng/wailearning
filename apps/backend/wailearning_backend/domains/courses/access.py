@@ -3,25 +3,51 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from apps.backend.wailearning_backend.db.models import Class, CourseEnrollment, CourseEnrollmentBlock, Student, Subject, User, UserRole
+from apps.backend.wailearning_backend.db.models import (
+    Class,
+    CourseEnrollment,
+    CourseEnrollmentBlock,
+    Student,
+    Subject,
+    SubjectClassLink,
+    User,
+    UserRole,
+)
+
+
+def subject_linked_class_ids(db: Session, subject_id: int) -> list[int]:
+    rows = db.query(SubjectClassLink.class_id).filter(SubjectClassLink.subject_id == subject_id).order_by(SubjectClassLink.id.asc()).all()
+    return [int(r[0]) for r in rows]
+
+
+def refresh_subject_primary_class_id(course: Subject, db: Session) -> None:
+    """Keep legacy ``Subject.class_id`` aligned for FK/UI anchors."""
+    ct = (course.course_type or "required").strip().lower()
+    if ct == "elective":
+        course.class_id = None
+        return
+    linked = subject_linked_class_ids(db, course.id)
+    course.class_id = linked[0] if linked else course.class_id
 
 
 def subject_teacher_user_ids(db: Session, subject_id: int) -> list[int]:
-    """Notify course teacher plus class teachers for the subject's class."""
+    """Notify course teacher plus class teachers for every linked administrative class."""
     course = db.query(Subject).filter(Subject.id == subject_id).first()
     if not course:
         return []
     ids: list[int] = []
     if course.teacher_id:
         ids.append(int(course.teacher_id))
-    if course.class_id:
+    class_ids = subject_linked_class_ids(db, subject_id)
+    if not class_ids and course.class_id:
+        class_ids = [int(course.class_id)]
+    for cid in class_ids:
         class_teachers = (
-            db.query(User.id)
-            .filter(User.role == UserRole.CLASS_TEACHER.value, User.class_id == course.class_id)
-            .all()
+            db.query(User.id).filter(User.role == UserRole.CLASS_TEACHER.value, User.class_id == cid).all()
         )
         ids.extend(int(r[0]) for r in class_teachers)
     return sorted(set(ids))
@@ -99,11 +125,20 @@ def get_accessible_courses_query(user: User, db: Session):
         return query.filter(Subject.teacher_id == user.id)
 
     if user.role == UserRole.CLASS_TEACHER:
-        class_course_query = query
-        if user.class_id:
-            class_course_query = query.filter(Subject.class_id == user.class_id)
-        else:
-            class_course_query = query.filter(False)
+        if not user.class_id:
+            return query.filter(Subject.teacher_id == user.id)
+
+        link_ids = [
+            row[0]
+            for row in db.query(SubjectClassLink.subject_id)
+            .filter(SubjectClassLink.class_id == user.class_id)
+            .distinct()
+            .all()
+        ]
+        visibility = [Subject.class_id == user.class_id]
+        if link_ids:
+            visibility.append(Subject.id.in_(link_ids))
+        class_course_query = query.filter(or_(*visibility))
         return class_course_query.union(query.filter(Subject.teacher_id == user.id))
 
     return query.filter(False)
@@ -125,14 +160,13 @@ def get_student_elective_catalog_query(user: User, db: Session):
     return query.filter(
         Subject.status == "active",
         Subject.course_type == "elective",
-        Subject.class_id.isnot(None),
     )
 
 
 def get_student_course_catalog_query(user: User, db: Session):
     """
     All active courses for browse + enrollment hints.
-    Electives: self-enroll only when course.class_id matches student's roster class.
+    Electives: voluntary school-wide self enrollment (no administrative class binding on the course).
     """
     query = db.query(Subject)
     if user.role != UserRole.STUDENT:
@@ -160,6 +194,7 @@ def get_accessible_class_ids_from_courses(user: User, db: Session) -> list[int]:
         class_ids.add(user.class_id)
 
     for course in get_accessible_courses_query(user, db).all():
+        class_ids.update(subject_linked_class_ids(db, course.id))
         if course.class_id:
             class_ids.add(course.class_id)
 
@@ -201,52 +236,58 @@ def is_course_instructor(user: User, course: Subject) -> bool:
 
 
 def sync_course_enrollments(course: Subject, db: Session) -> int:
-    if not course.class_id:
-        return 0
     if (course.course_type or "required").strip().lower() == "elective":
-        # Electives are joined by student self-enrollment (or explicit roster picks), not whole-class auto sync.
         return 0
 
-    class_students = db.query(Student).filter(Student.class_id == course.class_id).all()
+    links = db.query(SubjectClassLink).filter(SubjectClassLink.subject_id == course.id).all()
+    if not links and course.class_id:
+        links = [
+            SubjectClassLink(subject_id=course.id, class_id=course.class_id, enrollment_mode="all_in_class"),
+        ]
+
     existing_student_ids = {
         enrollment.student_id
         for enrollment in db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).all()
     }
 
     created = 0
-    for student in class_students:
-        if student.id in existing_student_ids:
+    for link in links:
+        if (link.enrollment_mode or "all_in_class").strip().lower() != "all_in_class":
             continue
-        try:
-            with db.begin_nested():
-                db.query(CourseEnrollmentBlock).filter(
-                    CourseEnrollmentBlock.subject_id == course.id,
-                    CourseEnrollmentBlock.student_id == student.id,
-                ).delete(synchronize_session=False)
-                db.add(
-                    CourseEnrollment(
-                        subject_id=course.id,
-                        student_id=student.id,
-                        class_id=course.class_id,
-                        enrollment_type=course.course_type or "required",
-                        can_remove=(course.course_type or "required") == "elective",
+        class_students = db.query(Student).filter(Student.class_id == link.class_id).all()
+        for student in class_students:
+            if student.id in existing_student_ids:
+                continue
+            try:
+                with db.begin_nested():
+                    db.query(CourseEnrollmentBlock).filter(
+                        CourseEnrollmentBlock.subject_id == course.id,
+                        CourseEnrollmentBlock.student_id == student.id,
+                    ).delete(synchronize_session=False)
+                    db.add(
+                        CourseEnrollment(
+                            subject_id=course.id,
+                            student_id=student.id,
+                            class_id=link.class_id,
+                            enrollment_type=course.course_type or "required",
+                            can_remove=(course.course_type or "required") == "elective",
+                        )
                     )
+                    db.flush()
+            except IntegrityError:
+                enrollment_row = (
+                    db.query(CourseEnrollment)
+                    .filter(
+                        CourseEnrollment.subject_id == course.id,
+                        CourseEnrollment.student_id == student.id,
+                    )
+                    .first()
                 )
-                db.flush()
-        except IntegrityError:
-            enrollment_row = (
-                db.query(CourseEnrollment)
-                .filter(
-                    CourseEnrollment.subject_id == course.id,
-                    CourseEnrollment.student_id == student.id,
-                )
-                .first()
-            )
-            if enrollment_row:
-                existing_student_ids.add(student.id)
-            continue
-        existing_student_ids.add(student.id)
-        created += 1
+                if enrollment_row:
+                    existing_student_ids.add(student.id)
+                continue
+            existing_student_ids.add(student.id)
+            created += 1
 
     return created
 
@@ -257,7 +298,19 @@ def sync_student_course_enrollments(
     if not student.class_id:
         return 0
 
-    courses = db.query(Subject).filter(Subject.class_id == student.class_id).all()
+    auto_subject_ids = {
+        row[0]
+        for row in db.query(SubjectClassLink.subject_id).filter(
+            SubjectClassLink.class_id == student.class_id,
+            SubjectClassLink.enrollment_mode == "all_in_class",
+        )
+    }
+    legacy_subject_ids = {
+        row[0]
+        for row in db.query(Subject.id).filter(Subject.class_id == student.class_id).all()
+    }
+    merged_ids = auto_subject_ids | legacy_subject_ids
+    courses = db.query(Subject).filter(Subject.id.in_(merged_ids)).all() if merged_ids else []
     existing_course_ids = {
         enrollment.subject_id
         for enrollment in db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student.id).all()
