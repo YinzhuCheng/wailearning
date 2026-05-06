@@ -1961,8 +1961,14 @@ Alternatively, mass `UNIQUE constraint failed: users.username` errors appear whe
 ### Contributing factors (non-exhaustive)
 
 1. **Shared database file:** `tests/conftest.py` defaults to `sqlite:///<repo>/.pytest_tmp/test.sqlite` when Postgres test URLs are not configured. Interrupted runs can leave the file half-migrated.
-2. **SQLAlchemy metadata registration timing:** `Base.metadata.create_all()` only creates tables for mapped classes that were **imported** before `create_all` runs. Most tests import `main` or models early, but exotic collection orders or utility-only imports can theoretically skip mappings — **待人工确认** how often this happens in practice.
+2. **SQLAlchemy metadata registration timing:** `Base.metadata.create_all()` only creates tables for mapped classes that were **imported** before `create_all` runs. Most tests import `main` or models early, but exotic collection orders or utility-only imports could historically skip mappings.
 3. **Parallel pytest without isolated `TEST_DATABASE_URL`:** multiple processes writing one sqlite file guarantees corruption-like failures.
+
+### Product-side mitigation (implemented in `tests/db_reset.py`, 2026-05)
+
+`reset_test_database_schema()` now imports `apps.backend.wailearning_backend.db.models` **before** `metadata.drop_all` / `create_all`, guaranteeing mapper registration even when a test file only imported `db.database` + `main` without touching ORM classes directly. This removes the systematic `no such table: course_llm_configs` failure mode during `ensure_schema_updates()` on cold SQLite schemas.
+
+Corrupted shared sqlite files and parallel writers remain hazards — keep the deletion playbook below.
 
 ### Mitigation playbook
 

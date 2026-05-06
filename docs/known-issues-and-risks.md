@@ -32,19 +32,15 @@ See [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WOR
 
 **Mitigation documented:** delete `<repo-root>/.pytest_tmp/test.sqlite` when bizarre `no such table` errors appear after supposedly resetting schema.
 
-### 3.2 `ensure_schema_updates()` vs empty/partial metadata — **待人工确认**
+### 3.2 `ensure_schema_updates()` vs empty/partial metadata — mitigated (2026-05)
 
-**Observation (2026-05 automation):** Running `pytest tests/backend/e2e_dev/test_demo_course_seed.py` sometimes failed at `ensure_schema_updates()` with `sqlite3.OperationalError: no such table: course_llm_configs` immediately after `tests/db_reset.reset_test_database_schema()`.
+**Historical symptom:** `pytest` occasionally failed at `ensure_schema_updates()` with `sqlite3.OperationalError: no such table: course_llm_configs` immediately after `tests.db_reset.reset_test_database_schema()`.
 
-**Hypothesis candidates (not ranked):**
+**Root cause:** `reset_test_database_schema()` invoked `Base.metadata.create_all()` before guaranteed ORM mapper registration when test modules imported only `db.database` + `main` without pulling `db.models`.
 
-1. SQLAlchemy `Base.metadata` incomplete at `create_all` time because **not all models were imported** before `reset_test_database_schema()` in a particular collection order.
-2. Corrupted/stale sqlite file on persistent runner disk.
-3. Concurrent pytest processes fighting over the same sqlite path.
+**Fix:** `tests/db_reset.py` now imports `apps.backend.wailearning_backend.db.models` at the beginning of `reset_test_database_schema()`.
 
-**Control experiment:** Importing `apps.backend.wailearning_backend.db.models` explicitly before `create_all` on a fresh sqlite file produced `course_llm_configs` and allowed `ensure_schema_updates()` to succeed.
-
-**Action:** Human owners should confirm whether `tests/db_reset.py` should import models module eagerly (documentation-only round intentionally avoided code changes).
+**Residual risks:** corrupted `.pytest_tmp/test.sqlite` files or concurrent pytest processes sharing that path — still require deletion / isolation when suspected.
 
 ---
 

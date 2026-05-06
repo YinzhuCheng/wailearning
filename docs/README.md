@@ -51,6 +51,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 
 | Document | Purpose |
 |----------|---------|
+| [development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md](development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) | Matrix + command log for the 2026-05 full-stack test remediation pass |
 | [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md) | Local workflow, pytest/Playwright layers, E2E dual gate |
 | [development/TEST_SUITE_MAP.md](development/TEST_SUITE_MAP.md) | What lives where in `tests/` |
 | [development/TEST_EXECUTION_PITFALLS.md](development/TEST_EXECUTION_PITFALLS.md) | **Large** — Windows/PowerShell, ports, Element Plus, SQLite vs PG |
