@@ -130,7 +130,16 @@ html[data-wa-theme='grayscale'] {
 }
 
 body {
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  font-family: var(
+    --wa-font-family-ui,
+    'Helvetica Neue',
+    Helvetica,
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    Arial,
+    sans-serif
+  );
   background-color: var(--wa-color-bg);
   color: var(--wa-color-text);
 }

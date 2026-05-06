@@ -53,6 +53,26 @@
           </template>
         </el-menu>
 
+        <div class="sidebar-footer">
+          <el-tooltip content="个人设置" placement="right" :disabled="!isCollapsed || isMobile">
+            <button
+              type="button"
+              class="sidebar-footer__btn"
+              :class="{ 'sidebar-footer__btn--active': route.path === '/personal-settings' }"
+              data-testid="sidebar-personal-settings"
+              @click="goPersonalSettings"
+            >
+              <el-icon :size="18"><Setting /></el-icon>
+              <span v-show="!isCollapsed" class="sidebar-footer__label">个人设置</span>
+            </button>
+          </el-tooltip>
+          <el-tooltip content="退出登录" placement="right" :disabled="!isCollapsed || isMobile">
+            <button type="button" class="sidebar-footer__btn sidebar-footer__btn--danger" data-testid="sidebar-logout" @click="sidebarLogout">
+              <el-icon :size="18"><SwitchButton /></el-icon>
+              <span v-show="!isCollapsed" class="sidebar-footer__label">退出登录</span>
+            </button>
+          </el-tooltip>
+        </div>
       </div>
     </el-aside>
 
@@ -219,6 +239,7 @@ import {
   Reading,
   School,
   Setting,
+  SwitchButton,
   User,
   UserFilled
 } from '@element-plus/icons-vue'
@@ -749,6 +770,18 @@ const handleCommand = command => {
   }
 }
 
+const goPersonalSettings = () => {
+  router.push('/personal-settings')
+  if (isMobile.value) {
+    isCollapsed.value = true
+  }
+}
+
+const sidebarLogout = () => {
+  userStore.logout()
+  router.push('/login')
+}
+
 onMounted(async () => {
   restoreDesktopSidebarState()
   syncResponsiveSidebar()
@@ -896,6 +929,58 @@ watch(notificationSyncParams, () => {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.sidebar-footer {
+  flex-shrink: 0;
+  padding: 8px 10px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-footer__btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--wa-radius-lg);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.sidebar-footer__btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sidebar-footer__btn--active {
+  background: var(--wa-sidebar-active-bg);
+  color: #fff;
+}
+
+.sidebar-footer__btn--danger:hover {
+  background: rgba(248, 113, 113, 0.22);
+  color: #fecaca;
+}
+
+.sidebar-body:has(.el-menu--collapse) .sidebar-footer__btn {
+  justify-content: center;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.sidebar-footer__label {
+  white-space: nowrap;
 }
 
 .logo {

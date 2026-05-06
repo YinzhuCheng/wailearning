@@ -975,11 +975,12 @@ class AppearanceStyleConfig(BaseModel):
 
     primary: str = "blue"
     accent: str = "cyan"
-    texture: str = "none"
     shadow: str = "soft"
     transparency: str = "balanced"
     radius: str = "balanced"
     density: str = "comfortable"
+    font_family: Literal["system", "song", "hei", "kai", "mono"] = "system"
+    font_scale: Literal["small", "medium", "large"] = "medium"
 
 
 class AppearancePresetResponse(BaseModel):

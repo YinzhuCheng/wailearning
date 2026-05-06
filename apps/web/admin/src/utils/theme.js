@@ -146,39 +146,42 @@ export const appearancePresets = [
     config: {
       primary: 'blue',
       accent: 'cyan',
-      texture: 'none',
       shadow: 'soft',
       transparency: 'balanced',
       radius: 'balanced',
-      density: 'comfortable'
+      density: 'comfortable',
+      font_family: 'system',
+      font_scale: 'medium'
     }
   },
   {
     key: 'fresh-green',
     name: 'Fresh Green',
-    description: 'Green primary actions with blue accents and a light paper texture.',
+    description: 'Green primary actions with blue accents, soft shadows, and softer corners.',
     config: {
       primary: 'green',
       accent: 'blue',
-      texture: 'soft-paper',
       shadow: 'soft',
       transparency: 'balanced',
       radius: 'soft',
-      density: 'comfortable'
+      density: 'comfortable',
+      font_family: 'system',
+      font_scale: 'medium'
     }
   },
   {
     key: 'warm-amber',
     name: 'Warm Amber',
-    description: 'Amber action color, teal accents, subtle grid texture, and crisp surfaces.',
+    description: 'Amber action color, teal accents, medium shadow, and crisp surfaces.',
     config: {
       primary: 'amber',
       accent: 'teal',
-      texture: 'subtle-grid',
       shadow: 'medium',
       transparency: 'solid',
       radius: 'balanced',
-      density: 'comfortable'
+      density: 'comfortable',
+      font_family: 'system',
+      font_scale: 'medium'
     }
   },
   {
@@ -188,25 +191,27 @@ export const appearancePresets = [
     config: {
       primary: 'gray',
       accent: 'violet',
-      texture: 'none',
       shadow: 'flat',
       transparency: 'solid',
       radius: 'subtle',
-      density: 'compact'
+      density: 'compact',
+      font_family: 'system',
+      font_scale: 'medium'
     }
   },
   {
     key: 'academic-navy',
     name: 'Academic Navy',
-    description: 'Navy primary palette with amber accents and fine texture for a formal academic feel.',
+    description: 'Navy primary palette with amber accents for a formal academic feel.',
     config: {
       primary: 'navy',
       accent: 'amber',
-      texture: 'fine-noise',
       shadow: 'medium',
       transparency: 'balanced',
       radius: 'subtle',
-      density: 'comfortable'
+      density: 'comfortable',
+      font_family: 'system',
+      font_scale: 'medium'
     }
   },
   {
@@ -216,11 +221,12 @@ export const appearancePresets = [
     config: {
       primary: 'slate',
       accent: 'red',
-      texture: 'none',
       shadow: 'strong',
       transparency: 'solid',
       radius: 'subtle',
-      density: 'comfortable'
+      density: 'comfortable',
+      font_family: 'system',
+      font_scale: 'medium'
     }
   }
 ]
@@ -229,6 +235,45 @@ export const adminThemeNames = ['blue', 'green', 'warm', 'grayscale']
 export const appearancePresetKeys = appearancePresets.map(item => item.key)
 
 const defaultConfig = appearancePresets[0].config
+
+const FONT_STACK_KEYS = ['system', 'song', 'hei', 'kai', 'mono']
+
+const FONT_STACKS = {
+  system:
+    "'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif",
+  song: "SimSun, 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC', serif",
+  hei: "'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif",
+  kai: "KaiTi, 'Kaiti SC', STKaiti, 'Songti SC', serif",
+  mono: "ui-monospace, 'SFMono-Regular', 'Menlo', Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+}
+
+const BASE_FONT_SIZES = {
+  xs: 12,
+  sm: 13,
+  md: 14,
+  lg: 18,
+  xl: 20,
+  '2xl': 26,
+  stat: 28
+}
+
+const FONT_SCALE_FACTORS = {
+  small: 0.92,
+  medium: 1,
+  large: 1.12
+}
+
+function applyTypography(root, config) {
+  const familyKey = FONT_STACK_KEYS.includes(config.font_family) ? config.font_family : defaultConfig.font_family
+  root.style.setProperty('--wa-font-family-ui', FONT_STACKS[familyKey])
+  root.dataset.waFontScale = config.font_scale
+
+  const factor = FONT_SCALE_FACTORS[config.font_scale] ?? FONT_SCALE_FACTORS.medium
+  Object.entries(BASE_FONT_SIZES).forEach(([key, basePx]) => {
+    const px = Math.round(basePx * factor * 100) / 100
+    root.style.setProperty(`--wa-font-size-${key}`, `${px}px`)
+  })
+}
 
 export function normalizeAdminTheme(value) {
   const preset = resolveAppearancePreset(value)
@@ -253,15 +298,14 @@ export function normalizeAppearanceConfig(value = {}) {
   return {
     primary: colorScales[config.primary] ? config.primary : defaultConfig.primary,
     accent: colorScales[config.accent] ? config.accent : defaultConfig.accent,
-    texture: ['none', 'subtle-grid', 'soft-paper', 'fine-noise'].includes(config.texture)
-      ? config.texture
-      : defaultConfig.texture,
     shadow: ['flat', 'soft', 'medium', 'strong'].includes(config.shadow) ? config.shadow : defaultConfig.shadow,
     transparency: ['solid', 'balanced', 'glass'].includes(config.transparency)
       ? config.transparency
       : defaultConfig.transparency,
     radius: ['square', 'subtle', 'balanced', 'soft'].includes(config.radius) ? config.radius : defaultConfig.radius,
-    density: ['compact', 'comfortable', 'spacious'].includes(config.density) ? config.density : defaultConfig.density
+    density: ['compact', 'comfortable', 'spacious'].includes(config.density) ? config.density : defaultConfig.density,
+    font_family: FONT_STACK_KEYS.includes(config.font_family) ? config.font_family : defaultConfig.font_family,
+    font_scale: ['small', 'medium', 'large'].includes(config.font_scale) ? config.font_scale : defaultConfig.font_scale
   }
 }
 
@@ -350,7 +394,7 @@ export function applyAppearanceStyle(configValue) {
   const accent = colorScales[config.accent]
 
   root.dataset.waTheme = config.primary
-  root.dataset.waTexture = config.texture
+  root.dataset.waTexture = 'none'
   root.dataset.waShadow = config.shadow
   root.dataset.waTransparency = config.transparency
   root.dataset.waRadius = config.radius
@@ -362,6 +406,7 @@ export function applyAppearanceStyle(configValue) {
   applyShadow(root, config.shadow, primary)
   applyTransparency(root, config.transparency)
   applySidebar(root, primary, config)
+  applyTypography(root, config)
 
   return config
 }
