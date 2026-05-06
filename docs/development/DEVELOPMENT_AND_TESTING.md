@@ -125,6 +125,8 @@ Important directories:
 - `tests/behavior/`
 - `tests/scenarios/`
 
+**Full regression parity:** SQLite-default pytest skips modules guarded for PostgreSQL dialect differences (`tests/postgres/*`). To eliminate those skips and exercise FK/schema paths closest to production, provision Postgres using `ops/scripts/dev/provision_postgres_pytest.sh`, export `TEST_DATABASE_URL` as printed by the script, then run `python3 -m pytest tests/`. See [TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) Part I for the combined SQLite + Postgres + Playwright recipe and [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) for container PostgreSQL start pitfalls (`pg_ctlcluster`, `policy-rc.d`).
+
 Before concluding that a backend test failure is a product regression, review the temp-path, Windows, and environment notes in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
 
 For a domain-by-domain map of the backend suites, read [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md).
@@ -138,6 +140,8 @@ cd apps/web/admin
 npx playwright install chromium
 npm run test:e2e
 ```
+
+The default config runs **all** spec files under `tests/e2e/web-admin/` sequentially (`workers: 1`). A complete green run is ~300+ tests / ~15 minutes on a warm agent — budget wall-clock accordingly when iterating.
 
 For environment variables, persistent SQLite behavior during long serial runs, selector strategy, and triage order when many specs fail together, read [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 

@@ -1999,3 +1999,30 @@ Standard Python string literals treat `\f` as a form-feed escape, `\t` as tab, a
 ### Interpretation for agents
 
 Treat `domains/seed/demo.py` as **data-heavy**: run `python3 -m py_compile apps/backend/wailearning_backend/domains/seed/demo.py` after edits and inspect a seeded row in SQLite/Postgres if unsure whether content round-tripped correctly.
+
+## Linux agent: PostgreSQL apt install vs systemd-less containers (`policy-rc.d`, 2026-05)
+
+### Symptom
+
+After `apt-get install postgresql`, `pg_isready` still fails and `tests/postgres/*` remain skipped even when `provision_postgres_pytest.sh` succeeds at SQL provisioning time — or apt prints `invoke-rc.d: policy-rc.d denied execution of start`.
+
+### Cause
+
+Minimal CI/agent images ship `policy-rc.d` hooks that **block** maintainer scripts from auto-starting services. PostgreSQL files exist but the daemon never listens on `5432`.
+
+### Fix pattern
+
+```bash
+sudo pg_ctlcluster 16 main start   # substitute cluster version from `pg_lsclusters`
+pg_isready -h 127.0.0.1 -p 5432
+```
+
+Then run `bash ops/scripts/dev/provision_postgres_pytest.sh` (requires `sudo -u postgres psql`).
+
+### Interpretation
+
+Always distinguish **“installed”** from **“listening”**. Full-suite verification that removes Postgres skips must export `TEST_DATABASE_URL` **before** importing `tests.conftest` side effects (pytest handles this automatically when the env var is set in the shell wrapping pytest).
+
+## Full-suite dependency: `unrar` for LLM attachment extraction tests
+
+`tests/backend/llm/test_llm_attachment_formats.py` calls `_require_unrar()` which skips when neither `unrar` nor `unrar-free` exists on `PATH`. Installing `unrar` via apt removes the skip without weakening assertions.

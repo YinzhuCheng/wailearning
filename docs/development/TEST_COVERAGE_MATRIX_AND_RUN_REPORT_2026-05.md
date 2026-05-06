@@ -46,15 +46,15 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 
 ---
 
-## Part D — Commands executed (this environment)
+## Part D — Commands executed (baseline pass — see Part I for full verification)
 
 | Command | Purpose | Result |
 |---------|---------|--------|
 | `python3 -m pytest tests/backend/integration/test_core_api_surface.py -q` | Validate new API suite | PASS |
-| `python3 -m pytest tests/backend -q` | Backend regression | **263 passed**, **2 skipped** (missing OS `unrar` for archive extraction tests — pre-existing guard) |
+| `python3 -m pytest tests/backend -q` | Backend regression | **263 passed**, **2 skipped** (missing OS `unrar` **before** follow-up env install) |
 | `python3 -m pytest tests/behavior tests/security -q` | Higher-level flows | **158 passed**, **1 skipped** |
 | `npm install` + `npx playwright install chromium` (under `apps/web/admin`) | Browser deps | Success |
-| `npx playwright test e2e-core-flows-smoke.spec.js` | New E2E suite | **10 passed** |
+| `npx playwright test e2e-core-flows-smoke.spec.js` | Targeted E2E tier | **10 passed** |
 | `npm run build` (`apps/web/admin`) | SPA compile check | Success |
 
 ---
@@ -69,25 +69,29 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 
 ---
 
-## Part F — Remaining gaps (not addressed this round)
+## Part F — Follow-up completion (2026-05 second pass — **no intentional tails**)
 
-| Gap | Reason deferred |
-|-----|-----------------|
-| Full Playwright repo-wide suite (`npm run test:e2e` all files) | Runtime budget >30min; targeted new tier + build gate executed |
-| Postgres-only suites (`tests/postgres`) | No dockerized Postgres started in this session |
-| Vitest/Jest unit tests | Admin package declares none beyond Playwright |
-| Removal of `unrar` skips | Requires OS package approval in CI image |
+The items previously listed as “deferred for runtime” were executed in an agent Linux container after provisioning dependencies:
+
+| Former gap | Outcome |
+|------------|---------|
+| Full Playwright `npm run test:e2e` | **303 tests passed** (~14 minutes, managed uvicorn + Vite + Chromium). Log artifact pattern: `/tmp/playwright-full.log` (example path). |
+| Postgres-only suites (`tests/postgres/*`) | PostgreSQL server installed (`postgresql` apt package), cluster started via `pg_ctlcluster 16 main start` when `invoke-rc.d` blocked automatic start during package configure (**policy-rc.d** pattern in minimal containers). Database + role created using `bash ops/scripts/dev/provision_postgres_pytest.sh`. Full tree: `TEST_DATABASE_URL=postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all python3 -m pytest tests/ -q` → **466 passed, 0 skipped**. |
+| `unrar` skips | `apt-get install unrar` — `tests/backend/llm/test_llm_attachment_formats.py` RAR walkers execute on both SQLite and Postgres passes. |
+| Vitest/Jest unit tests | Still **not declared** for admin SPA beyond Playwright — no change. |
+
+**Dual-database note:** Running `python3 -m pytest tests/` **without** `TEST_DATABASE_URL` still yields **43 skips** — these are **expected** `skipif` gates inside `tests/postgres/*` when `engine.dialect.name != postgresql`. This is not a failure; CI without Postgres mirrors that economy profile. A **complete** verification cycle runs **both** profiles (SQLite-default **and** Postgres-forced).
 
 ---
 
-## Part G — Skip / xfail / focus ethics audit
+## Part G — Skip / xfail / focus ethics audit (after follow-up)
 
 | Item | Status |
 |------|--------|
-| New `pytest.mark.skip` | **None added** |
-| New `pytest.mark.xfail` | **None added** |
-| `test.only` / `describe.only` | **None** |
-| Pre-existing skips | `tests/backend/llm/test_llm_attachment_formats.py` — requires `unrar` binary (2 tests) |
+| New `pytest.mark.skip` / `xfail` / `test.only` | **None introduced** |
+| Postgres-forced full pytest | **466 passed, 0 skipped** |
+| SQLite-default full pytest | **423 passed, 43 skipped** (Postgres-only modules) |
+| Full Playwright | **303 passed** |
 
 ---
 
@@ -96,3 +100,38 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 1. Always prefer `python3 -m pytest` on Linux CI images.
 2. When debugging sqlite chaos, delete `.pytest_tmp/test.sqlite` **after** confirming no concurrent pytest.
 3. Playwright specs that need seeded IDs **must** call `resetE2eScenario()` — cache lives at `tests/e2e/web-admin/.cache/scenario.json`.
+4. Container PostgreSQL often requires **manual** `pg_ctlcluster <version> main start` after `apt-get install postgresql` when init scripts are blocked — verify with `pg_isready -h 127.0.0.1 -p 5432`.
+
+---
+
+## Part I — Reproducible “green wall” command block (copy/paste)
+
+```bash
+# OS tooling (Debian/Ubuntu-derived agents)
+sudo apt-get update
+sudo apt-get install -y unrar postgresql postgresql-contrib
+
+# Start DB even when maintainer scripts cannot invoke systemd
+sudo pg_ctlcluster 16 main start || true
+pg_isready -h 127.0.0.1 -p 5432
+
+# Idempotent throwaway pytest database (see ops/scripts/dev/provision_postgres_pytest.sh)
+bash ops/scripts/dev/provision_postgres_pytest.sh
+
+export TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all'
+python3 -m pytest tests/ -q
+
+unset TEST_DATABASE_URL
+python3 -m pytest tests/ -q
+
+cd apps/web/admin
+npm ci
+npx playwright install chromium
+npm run test:e2e
+
+cd ../parent
+npm ci
+npm run build
+```
+
+**Observed durations (single agent VM, indicative):** Postgres pytest ~10.5 min; SQLite pytest ~8.9 min; Playwright full ~14 min.
