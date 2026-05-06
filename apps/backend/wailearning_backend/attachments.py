@@ -194,6 +194,7 @@ def attachment_is_referenced(db: Session, attachment_url: Optional[str]) -> bool
                     Homework.content.contains(needle),
                     Homework.reference_answer.contains(needle),
                     Homework.rubric_text.contains(needle),
+                    Homework.rubric_staff_only.contains(needle),
                 )
             )
             .first()
@@ -209,6 +210,7 @@ def attachment_is_referenced(db: Session, attachment_url: Optional[str]) -> bool
                     Homework.content.contains(stored),
                     Homework.reference_answer.contains(stored),
                     Homework.rubric_text.contains(stored),
+                    Homework.rubric_staff_only.contains(stored),
                 )
             )
             .first()

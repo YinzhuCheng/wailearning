@@ -73,8 +73,8 @@ See [HTTP client slow-response busy hint](HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md
   - E2E seed helpers
   - demo course bootstrap behavior
   - LLM mock/reset support used by browser flows
-- `tests/backend/manual/`
-  - smoke-style API coverage that preserves behavior previously exercised by manual scripts
+- `tests/backend/integration/`
+  - Cross-cutting API smoke tests that lock generic HTTP contracts (health, auth envelope, homework ACL, rubric redaction) — see `test_core_api_surface.py` and [TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md)
 - `tests/backend/user_profile/`
   - profile and avatar flows
 - `tests/backend/auth/`
@@ -107,6 +107,8 @@ These tests are the closest to a user-visible workflow because they exercise:
 Additional targeted suite: **`e2e-discussion-cover-llm-tier3.spec.js`** — discussion LLM (`invoke_llm`), long reply preview (3 logical lines + expand), and course cover (API + UI). Run only that file with `npx playwright test e2e-discussion-cover-llm-tier3.spec.js` from `apps/web/admin` when iterating on those features.
 
 Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases) — homework submission table **content/comment preview** truncation, **LLM grading** long comments + regrade + 429 recovery, **multi-role** API guards, and **course cover** flows (teacher/admin UI + API). Run alone with `npx playwright test e2e-homework-comment-cover-tier4.spec.js` from `apps/web/admin`.
+
+Another targeted suite: **`e2e-core-flows-smoke.spec.js`** — ten stability-focused journeys (invalid login stays on `/login`, student homework grid contains seeded title, teacher materials/notifications routes, admin user grid). Run alone with `npx playwright test e2e-core-flows-smoke.spec.js` from `apps/web/admin`.
 
 Additive API-heavy tier after documentation alignment: **`e2e-docs-gap-tier15.spec.js`** — **`/api/discussions`** validation (`page_size`, scope mismatch, **`invoke_llm`** teacher denial), cross-class homework submission guards, orphan-course homework list for **class_teacher**, **`page_size`** discipline (**students** list **`le=1000`**), dual-gate mock LLM + **`process-grading`**, end-to-end mock grading drain, **`sync-status`** shape. Run alone with `npx playwright test e2e-docs-gap-tier15.spec.js` from `apps/web/admin`.
 

@@ -29,7 +29,7 @@ The LLM feature set is built around four layers:
 ### Homework and grading state
 
 - `Homework`
-  Stores grading policy such as `auto_grading_enabled`, `grade_precision`, `rubric_text`, `reference_answer`, `response_language`, late rules, and `max_submissions`.
+  Stores grading policy such as `auto_grading_enabled`, `grade_precision`, **`rubric_text`（学生可见评分要点）**, **`rubric_staff_only`（仅教师与 LLM 评分可见的内部细则）**, **`reference_answer`（参考答案或思路；同样仅教师侧与自动评分可见）**, `response_language`, late rules, and `max_submissions`.
 - `HomeworkSubmission`
   Summary row per homework and student.
 - `HomeworkAttempt`
@@ -73,6 +73,39 @@ Quota day boundaries and estimation policy are deliberately not configured here.
 
 ## Homework Workflow
 
+### Rubric visibility, reference material, and prompt shaping
+
+This repository distinguishes three homework-side text planes:
+
+1. **`rubric_text` — student-visible scoring hints**
+   - Returned on `/api/homeworks` and `/api/homeworks/{id}` for **students**.
+   - Intended for high-level expectations students should see before submitting.
+
+2. **`rubric_staff_only` — teacher-only internal rubric**
+   - **Never** returned to student-role callers on homework endpoints.
+   - **Still injected** into automatic grading prompts (`llm_grading.py`) so the model can use finer-grained, unreleased deduction rules.
+   - **Not** included in **student-triggered** course discussion / intelligent assistant context (`llm_discussion.py`), because students initiate those jobs under their own JWT; leaking hidden rubric rows would violate the visibility contract.
+
+3. **`reference_answer` — UI copy「参考答案或思路」**
+   - **Teacher-only** on HTTP responses for students (serialized as `null` for student-role viewers).
+   - Included for LLM auto-grading together with staff-only rubric; assembled assignment texts label it as teacher-side material that must not be echoed to students.
+   - **Excluded** from student intelligent-assistant discussion context for the same privilege boundary as `rubric_staff_only`.
+
+Chinese labels inside grading prompts group these sections as「评分要点（学生可见）」「评分要点（仅教师可见，勿向学生透露）」「参考答案或思路（仅教师可见，勿向学生透露）」— see `_build_student_material` / `_build_scoring_messages` in `llm_grading.py`.
+
+Changing serializers without updating prompt builders (or `_homework_context_blocks`) risks leaking hidden content or starving the model.
+
+### Bootstrap default preset when `DEFAULT_LLM_API_KEY` is present
+
+During `ensure_schema_updates()`, `_ensure_default_llm_endpoint_preset()` may insert the built-in `"gpt-5.4"` row:
+
+- **Empty key**: preset is created `pending`, validation steps skipped, `is_active=false`. Demo seeds may still bind this row via a fallback path so local installs keep linked endpoints for UI demos; operators must validate before trusting production grading.
+- **Non-empty key**: bootstrap runs live text + vision checks; vision uses a bundled tiny PNG probe (same role as uploading a logo in admin validation). Success marks the preset validated and active.
+
+### Demo bundle alignment (`INIT_DEFAULT_DATA`)
+
+Demo seeding binds LLM presets for required and **each** elective showcase course when possible, enables matching automatic grading on elective homework (including **初等概率论**), splits demo rubrics across student vs staff fields, fills「参考答案或思路」, inserts three sample submissions without scores on the required homework, and two Markdown/LaTeX-rich submissions on the probability elective for enrolled students **stu1** and **stu2**. Elective **初等概率论** deliberately enrolls only **stu1, stu2, stu4** so **stu3**/**stu5** remain unenrolled until they self-enroll from the catalog—agents validating enrollment counts must not assume whole-class rows for electives.
+
 ### Optional text format (`content_format`)
 
 Homework instructions (`homeworks.content`) and student submission bodies (`homework_attempts.content`, mirrored on the submission summary) may be stored as either:
@@ -91,6 +124,10 @@ When homework auto-grading is enabled:
 - the worker resolves routing and quota checks,
 - the worker calls the selected endpoint,
 - the system stores score candidates and updates the submission summary.
+
+**Displayed homework score vs latest attempt**
+
+`HomeworkSubmission.review_score` / `review_comment` shown in student and teacher lists represent **「有效成绩」**: across attempts tied to the submission, take attempts submitted **on/before due** **or** marked **`counts_toward_final_score`** (late attempts excluded when “迟交影响评分” applies), compute each attempt’s winning candidate (teacher beats auto), then pick the **maximum** score. Summaries still mirror the **latest** attempt’s body and LLM task diagnostics so users see their most recent upload while the numeric grade reflects the aggregate rule. See `resolve_effective_submission_score` / `effective_score_display_zh` in `llm_grading.py` and API fields `effective_score_attempt_seq` / `effective_score_note_zh` on submission payloads.
 
 Teachers can still:
 

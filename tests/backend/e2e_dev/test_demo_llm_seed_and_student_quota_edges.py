@@ -62,7 +62,11 @@ def test_demo_seed_binds_llm_to_required_course_when_validated_preset_exists():
         assert len(links) >= 1
         pr = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.id == links[0].preset_id).first()
         assert pr is not None
-        assert pr.validation_status == "validated"
+        # With DEFAULT_LLM_API_KEY unset, bootstrap creates the built-in preset as pending; demo seed
+        # still links it so local installs have endpoints for UI (see domains/seed/demo.py).
+        assert pr.validation_status in ("validated", "pending")
+        if pr.validation_status == "pending":
+            assert pr.name == "gpt-5.4"
     finally:
         db.close()
 

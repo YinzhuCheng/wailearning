@@ -1,3 +1,4 @@
+import base64
 import os
 import re
 from datetime import datetime, timezone
@@ -46,6 +47,11 @@ DEFAULT_SYSTEM_SETTINGS = [
 ]
 
 DEFAULT_LLM_PRESET_NAME = "gpt-5.4"
+
+# 内置极小 PNG（可作连通性探针图；与管理员 UI 上传 Logo 的语义等价：验证图像输入链路）。
+_DEFAULT_LLM_CONNECTIVITY_LOGO_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/w8AAusB9Y9nKXUAAAAASUVORK5CYII="
+)
 
 LEGACY_SYSTEM_SETTING_VALUES = {
     "system_name": {"DD-CLASS", "DD-CLASS 班级管理系统"},
@@ -173,6 +179,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS grade_precision VARCHAR NOT NULL DEFAULT 'integer'",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS auto_grading_enabled BOOLEAN DEFAULT FALSE",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS rubric_text TEXT",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS rubric_staff_only TEXT",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS reference_answer TEXT",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS response_language VARCHAR",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS allow_late_submission BOOLEAN DEFAULT TRUE",
@@ -570,9 +577,17 @@ def _ensure_default_llm_endpoint_preset() -> None:
     Seed the built-in LLM preset (name = DEFAULT_LLM_PRESET_NAME) when missing so new installs
     match admin UI defaults. Does not overwrite an existing preset of the same name.
 
-    Set DEFAULT_LLM_API_KEY in the environment to supply the API key on first insert (never
-    committed to the repository).
+    When DEFAULT_LLM_API_KEY is set in the environment, first-boot seed performs live **text + vision**
+    connectivity checks against `base_url` / `model_name` using a small bundled PNG as the image probe
+    (same role as uploading a logo in the admin validate UI). On success the preset is marked validated
+    with vision capability usable for grading routes.
+
+    Without an API key, the preset is inserted as inactive validation (`pending` / skipped checks) so
+    operators are not misled into thinking remote connectivity was proven offline.
     """
+    from apps.backend.wailearning_backend.domains.llm.attachments import build_png_data_url_from_image_bytes
+    from apps.backend.wailearning_backend.llm_grading import validate_text_connectivity, validate_vision_connectivity
+
     db = SessionLocal()
     try:
         row = db.query(LLMEndpointPreset).filter(LLMEndpointPreset.name == DEFAULT_LLM_PRESET_NAME).first()
@@ -580,25 +595,82 @@ def _ensure_default_llm_endpoint_preset() -> None:
             return
         api_key = (settings.DEFAULT_LLM_API_KEY or "").strip()
         now = datetime.now(timezone.utc)
+        base_url = "https://yunwu.ai/v1"
+        model_name = "gpt-5.4"
+        connect_s = 30
+        read_s = 180
+
+        if not api_key:
+            db.add(
+                LLMEndpointPreset(
+                    name=DEFAULT_LLM_PRESET_NAME,
+                    base_url=base_url,
+                    api_key="",
+                    model_name=model_name,
+                    connect_timeout_seconds=connect_s,
+                    read_timeout_seconds=read_s,
+                    max_retries=3,
+                    initial_backoff_seconds=5,
+                    is_active=False,
+                    supports_vision=True,
+                    validation_status="pending",
+                    validation_message="未配置 DEFAULT_LLM_API_KEY：默认端点处于待命状态，请在环境中设置密钥并重启或于管理员界面完成校验后再启用。",
+                    text_validation_status="skipped",
+                    text_validation_message=None,
+                    vision_validation_status="skipped",
+                    vision_validation_message=None,
+                    validated_at=None,
+                )
+            )
+            db.commit()
+            return
+
+        ok_text, msg_text = validate_text_connectivity(
+            base_url, api_key, model_name, connect_s, read_s
+        )
+        ok_vis = False
+        msg_vis = "跳过视觉校验：文本连通性未通过。"
+        probe_url: str | None = None
+        if ok_text:
+            try:
+                probe_url = build_png_data_url_from_image_bytes(_DEFAULT_LLM_CONNECTIVITY_LOGO_PNG_BYTES)
+            except Exception as exc:  # pragma: no cover - malformed asset guard
+                ok_vis = False
+                msg_vis = f"内置连通性 Logo 图编码失败：{exc}"
+            else:
+                ok_vis, msg_vis = validate_vision_connectivity(
+                    base_url,
+                    api_key,
+                    model_name,
+                    connect_s,
+                    read_s,
+                    image_data_url=probe_url,
+                )
+
+        fully_ok = bool(ok_text and ok_vis)
         db.add(
             LLMEndpointPreset(
                 name=DEFAULT_LLM_PRESET_NAME,
-                base_url="https://yunwu.ai/v1",
+                base_url=base_url,
                 api_key=api_key,
-                model_name="gpt-5.4",
-                connect_timeout_seconds=30,
-                read_timeout_seconds=180,
+                model_name=model_name,
+                connect_timeout_seconds=connect_s,
+                read_timeout_seconds=read_s,
                 max_retries=3,
                 initial_backoff_seconds=5,
-                is_active=True,
+                is_active=fully_ok,
                 supports_vision=True,
-                validation_status="validated",
-                validation_message="系统默认端点（首次安装种子）。请在设置中运行连通性校验以刷新状态。",
-                text_validation_status="passed",
-                text_validation_message=None,
-                vision_validation_status="skipped",
-                vision_validation_message=None,
-                validated_at=now,
+                validation_status="validated" if fully_ok else "failed",
+                validation_message=(
+                    "首次启动已完成文本与图像连通性自检（使用内置探针图，等效于管理员上传 Logo 做视觉校验）。"
+                    if fully_ok
+                    else "首次启动连通性自检未全部通过；请检查密钥、网络或供应商可用性后在「系统设置 → LLM」中重新校验。"
+                ),
+                text_validation_status="passed" if ok_text else "failed",
+                text_validation_message=msg_text,
+                vision_validation_status="passed" if ok_vis else ("skipped" if not ok_text else "failed"),
+                vision_validation_message=msg_vis if ok_vis or ok_text else msg_vis,
+                validated_at=now if fully_ok else None,
             )
         )
         db.commit()

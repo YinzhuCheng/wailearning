@@ -5,6 +5,8 @@
       <el-button size="small" :disabled="disabled" @click="insertBold">加粗</el-button>
       <el-button size="small" :disabled="disabled" @click="insertList">列表</el-button>
       <el-button size="small" :disabled="disabled" @click="insertCode">代码</el-button>
+      <el-button size="small" :disabled="disabled" @click="insertInlineMath">行内公式</el-button>
+      <el-button size="small" :disabled="disabled" @click="insertDisplayMath">独立公式</el-button>
       <el-upload
         v-if="enableImageUpload"
         class="md-panel__upload"
@@ -18,6 +20,17 @@
       </el-upload>
       <el-button size="small" :disabled="disabled" @click="promptImageUrl">图片链接</el-button>
     </div>
+    <p v-if="isMarkdown" class="md-panel__katex-hint">
+      公式与预览：行内可写
+      <code>\\( ... \\)</code>
+      、
+      <code>$...$</code>
+      ；独立一行可写
+      <code>$$ ... $$</code>
+      或
+      <code>\\[ ... \\]</code>
+      。下方「预览」与发布后的阅读态均经同一套 Markdown + KaTeX 渲染。
+    </p>
     <el-input
       ref="inputRef"
       :model-value="modelValue"
@@ -120,6 +133,8 @@ const insertHeading = prefix => insertAtCursor(`\n${prefix}`)
 const insertBold = () => insertAtCursor('**加粗**')
 const insertList = () => insertAtCursor('\n- 条目\n')
 const insertCode = () => insertAtCursor('\n```\n代码\n```\n')
+const insertInlineMath = () => insertAtCursor('\\( x \\)')
+const insertDisplayMath = () => insertAtCursor('\n$$\n\n$$\n')
 
 const onImagePick = async uploadFile => {
   const file = uploadFile.raw
@@ -193,6 +208,22 @@ const onContentFormatChange = v => {
 
 .md-panel__upload {
   display: inline-block;
+}
+
+.md-panel__katex-hint {
+  margin: 0;
+  padding: 6px 10px 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.md-panel__katex-hint code {
+  font-size: 11px;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .md-panel__input :deep(.el-textarea__inner) {

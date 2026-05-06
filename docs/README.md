@@ -4,6 +4,23 @@ This directory is the authoritative documentation home for the repository. The r
 
 ---
 
+## 0. LLM agent bundle (read before autonomous edits)
+
+These files intentionally overlap with human-oriented docs — **verbosity is a feature** for coding agents.
+
+| Document | Role |
+|----------|------|
+| [`AGENTS.md`](../AGENTS.md) (repository root) | Primary agent gate: boundaries, grep keywords, risky modules |
+| [`agent-playbook.md`](agent-playbook.md) | Procedural workflows: tracing features, bootstrap order, verification |
+| [`reference/CODE_MAP_AND_ENTRYPOINTS.md`](reference/CODE_MAP_AND_ENTRYPOINTS.md) | File-level map of routers, SPAs, tests, CI YAML |
+| [`reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) | Roles, course access helpers, JWT vs parent-code |
+| [`reference/DATA_MODEL_ESSENTIALS.md`](reference/DATA_MODEL_ESSENTIALS.md) | ORM tables grouped by domain |
+| [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WORKERS.md) | LLM grading worker (DB queue + thread pool) |
+| [`known-issues-and-risks.md`](known-issues-and-risks.md) | Open risks, “待人工确认”, CI location honesty |
+| [`DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
+
+---
+
 ## 1. Start here (architecture + operations)
 
 | Document | Purpose |
@@ -34,6 +51,7 @@ This directory is the authoritative documentation home for the repository. The r
 
 | Document | Purpose |
 |----------|---------|
+| [development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md](development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) | Matrix + command log for the 2026-05 full-stack test remediation pass |
 | [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md) | Local workflow, pytest/Playwright layers, E2E dual gate |
 | [development/TEST_SUITE_MAP.md](development/TEST_SUITE_MAP.md) | What lives where in `tests/` |
 | [development/TEST_EXECUTION_PITFALLS.md](development/TEST_EXECUTION_PITFALLS.md) | **Large** — Windows/PowerShell, ports, Element Plus, SQLite vs PG |
@@ -140,6 +158,14 @@ Why:
 4. [development/TEST_REDUNDANCY_AUDIT.md](development/TEST_REDUNDANCY_AUDIT.md)
 5. [development/TEST_EXECUTION_PITFALLS.md](development/TEST_EXECUTION_PITFALLS.md)
 6. [architecture/MAINTAINER_AGENT_GUIDE.md](architecture/MAINTAINER_AGENT_GUIDE.md)
+
+### Autonomous agent onboarding (Codex / Cursor / cloud agents)
+
+1. [AGENTS.md](../AGENTS.md)
+2. [agent-playbook.md](agent-playbook.md)
+3. [reference/CODE_MAP_AND_ENTRYPOINTS.md](reference/CODE_MAP_AND_ENTRYPOINTS.md)
+4. [known-issues-and-risks.md](known-issues-and-risks.md)
+5. [architecture/CORE_BUSINESS_FLOWS.md](architecture/CORE_BUSINESS_FLOWS.md)
 
 ### Production deployment
 

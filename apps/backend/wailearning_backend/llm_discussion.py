@@ -73,9 +73,7 @@ def _homework_context_blocks(db: Session, hw: Homework, *, student_id: int) -> l
         ctx_hw = _strip_for_context(body_text_for_grading_llm(content=hw.content or "", content_format="plain"), 12000)
     parts.append(f"【作业说明】\n{ctx_hw}")
     if (hw.rubric_text or "").strip():
-        parts.append(f"【评分要点】\n{_strip_for_context(hw.rubric_text, 8000)}")
-    if (hw.reference_answer or "").strip():
-        parts.append(f"【参考答案】\n{_strip_for_context(hw.reference_answer, 8000)}")
+        parts.append(f"【评分要点（学生可见）】\n{_strip_for_context(hw.rubric_text, 8000)}")
     sub = (
         db.query(HomeworkSubmission)
         .filter(HomeworkSubmission.homework_id == hw.id, HomeworkSubmission.student_id == student_id)

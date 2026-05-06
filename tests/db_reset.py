@@ -13,6 +13,18 @@ from apps.backend.wailearning_backend.db.database import Base, engine
 
 
 def reset_test_database_schema() -> None:
+    """
+    Drop and recreate all ORM-mapped tables.
+
+    Import the models package **before** ``metadata.drop_all/create_all`` so every
+    ``Base``-mapped table (including LLM and homework satellite tables) is
+    registered regardless of which test module happened to import first. Without
+    this, isolated imports (e.g. only ``db.database`` + ``main``) can leave
+    ``Base.metadata`` incomplete and cause ``ensure_schema_updates()`` to fail
+    with ``no such table: course_llm_configs`` on SQLite.
+    """
+    import apps.backend.wailearning_backend.db.models  # noqa: F401 — register mappers
+
     if engine.dialect.name == "sqlite":
         with engine.begin() as conn:
             conn.execute(text("PRAGMA foreign_keys=OFF"))
