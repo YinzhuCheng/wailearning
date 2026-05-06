@@ -41,18 +41,32 @@ test.describe('course-home material outline preview', () => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await login(page, s.student_plain.username, s.student_plain.password || s.password_teacher_student)
     await enterSeededRequiredCourse(page, s.suffix)
+    const treeRespPromise = page.waitForResponse(
+      r =>
+        r.request().method() === 'GET' &&
+        r.url().includes('/api/material-chapters/tree') &&
+        r.url().includes(`subject_id=${s.course_required_id}`),
+      { timeout: 60000 }
+    )
     await page.goto('/course-home', { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await treeRespPromise
 
     const outline = page.getByTestId('course-home-material-outline')
     await expect(outline).toBeVisible({ timeout: 60000 })
     await expect(outline.getByText(parentTitle, { exact: true })).toBeVisible({ timeout: 60000 })
-    await expect(outline.getByText(childTitle, { exact: true })).toBeVisible({ timeout: 60000 })
+    await expect
+      .poll(async () => outline.getByText(childTitle, { exact: true }).isVisible())
+      .toBeTruthy()
 
+    await page.getByTestId(`course-home-material-toggle-${parent.id}`).scrollIntoViewIfNeeded()
     await page.getByTestId(`course-home-material-toggle-${parent.id}`).click()
     await expect(outline.getByText(parentTitle, { exact: true })).toBeVisible({ timeout: 30000 })
     await expect(outline.getByText(childTitle, { exact: true })).toBeHidden({ timeout: 30000 })
 
+    await page.getByTestId(`course-home-material-toggle-${parent.id}`).scrollIntoViewIfNeeded()
     await page.getByTestId(`course-home-material-toggle-${parent.id}`).click()
-    await expect(outline.getByText(childTitle, { exact: true })).toBeVisible({ timeout: 30000 })
+    await expect
+      .poll(async () => outline.getByText(childTitle, { exact: true }).isVisible(), { timeout: 45000 })
+      .toBeTruthy()
   })
 })

@@ -18,7 +18,7 @@ from apps.backend.wailearning_backend.attachments import (
 )
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.domains.courses.access import (
-    ensure_course_access,
+    ensure_course_access_http,
     get_enrolled_students,
     get_student_profile_for_user,
     prepare_student_course_context,
@@ -39,6 +39,7 @@ from apps.backend.wailearning_backend.db.models import (
     HomeworkScoreCandidate,
     HomeworkSubmission,
     Student,
+    Subject,
     User,
     UserRole,
 )
@@ -92,14 +93,20 @@ def _ensure_homework_access(homework: Homework, current_user: User, db: Session)
         raise HTTPException(status_code=403, detail="You do not have access to this homework.")
 
     if homework.subject_id:
+        course_row = db.query(Subject).filter(Subject.id == homework.subject_id).first()
+        if (
+            course_row
+            and course_row.class_id is not None
+            and homework.class_id is not None
+            and int(course_row.class_id) != int(homework.class_id)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Homework class does not match its course class (data integrity issue).",
+            )
         if current_user.role == UserRole.STUDENT:
             _resolve_student_for_user(homework, current_user, db)
-        try:
-            ensure_course_access(homework.subject_id, current_user, db)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        ensure_course_access_http(homework.subject_id, current_user, db)
 
     return homework
 
@@ -577,7 +584,7 @@ def get_homeworks(
         query = query.filter(Homework.class_id == class_id)
 
     if subject_id:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Homework.subject_id == subject_id)
 
     total = query.count()
@@ -635,7 +642,7 @@ def batch_update_late_submission_policy(
             continue
         if hw.subject_id:
             try:
-                ensure_course_access(hw.subject_id, current_user, db)
+                ensure_course_access_http(hw.subject_id, current_user, db)
             except ValueError:
                 forbidden.append(hid)
                 continue
@@ -671,7 +678,7 @@ def list_student_homeworks_for_course(
     if not is_teacher(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can view this list.")
 
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
@@ -727,7 +734,7 @@ def list_enrolled_students_for_course_teacher(
 ):
     if not is_teacher(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can view this list.")
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
     enrollments = get_enrolled_students(subject_id, db)
     return [
         {
@@ -774,7 +781,7 @@ def create_homework(
         raise HTTPException(status_code=404, detail="Class not found.")
 
     if data.subject_id:
-        course = ensure_course_access(data.subject_id, current_user, db)
+        course = ensure_course_access_http(data.subject_id, current_user, db)
         if course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
@@ -818,7 +825,7 @@ def update_homework(
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
 
     if data.subject_id is not None:
-        course = ensure_course_access(data.subject_id, current_user, db)
+        course = ensure_course_access_http(data.subject_id, current_user, db)
         if course.class_id and course.class_id != homework.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 

@@ -348,7 +348,7 @@ const loadWorkspace = async () => {
 
     materials.value = materialsResult?.data || []
     materialChapterTree.value = chapterTreeResult?.nodes || []
-    materialOutlineExpandedIds.value = (materialChapterTree.value || []).map(node => node.id)
+    materialOutlineExpandedIds.value = collectMaterialChapterIds(materialChapterTree.value)
     homeworks.value = homeworksResult?.data || []
     notifications.value = notificationsResult?.data || []
   } finally {

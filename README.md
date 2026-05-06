@@ -240,7 +240,7 @@ npm run test:e2e
 
 Read [docs/development/TEST_EXECUTION_PITFALLS.md](docs/development/TEST_EXECUTION_PITFALLS.md) before assuming test failures are product regressions, especially on Windows + PowerShell or when running Playwright.
 
-The historical "backlog" Playwright pair, `tests/e2e/web-admin/future-advanced-coverage*.spec.js`, is now implemented as normal runnable coverage in this branch. The old `E2E_ENABLE_BACKLOG_SPECS` gate survives only as a historical note for older branches; see [docs/development/E2E_BACKLOG_SCENARIOS.md](docs/development/E2E_BACKLOG_SCENARIOS.md).
+The **`future-advanced-coverage*.spec.js`** Playwright files (`tests/e2e/web-admin/`) are normal runnable regression specs (30 scenarios across two files); index and run commands are in [docs/development/TEST_SUITE_MAP.md](docs/development/TEST_SUITE_MAP.md).
 
 See [docs/development/DEVELOPMENT_AND_TESTING.md](docs/development/DEVELOPMENT_AND_TESTING.md) for the full local workflow, Windows notes, reading order, and current regression strategy. For encoding-safe editing policy and the current mojibake audit record, also read [docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
 

@@ -18,6 +18,16 @@ from apps.backend.wailearning_backend.bootstrap import _backfill_default_llm_gro
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
+def _e2e_admin_headers(client: TestClient, seed_token: str) -> dict[str, str]:
+    lr = client.post(
+        "/api/auth/login",
+        data={"username": "pytest_admin", "password": "pytest_admin_pass"},
+    )
+    assert lr.status_code == 200, lr.text
+    tok = lr.json()["access_token"]
+    return {"X-E2E-Seed-Token": seed_token, "Authorization": f"Bearer {tok}"}
+
+
 def _tiny_png_bytes() -> bytes:
     return (
         b"\x89PNG\r\n\x1a\n"
@@ -32,11 +42,14 @@ def test_mock_llm_configure_state_and_manual_process():
     ensure_admin()
     settings.E2E_DEV_SEED_ENABLED = True
     settings.E2E_DEV_SEED_TOKEN = "tok-e2e-mock"
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     client = TestClient(app)
+
+    hdr = _e2e_admin_headers(client, "tok-e2e-mock")
 
     cfg = client.post(
         "/api/e2e/dev/mock-llm/configure",
-        headers={"X-E2E-Seed-Token": "tok-e2e-mock"},
+        headers=hdr,
         json={
             "profiles": {
                 "grade_ok": {
@@ -50,7 +63,7 @@ def test_mock_llm_configure_state_and_manual_process():
 
     state = client.get(
         "/api/e2e/dev/mock-llm/state",
-        headers={"X-E2E-Seed-Token": "tok-e2e-mock"},
+        headers=hdr,
     )
     assert state.status_code == 200, state.text
     assert "grade_ok" in state.json()["profiles"]
@@ -107,7 +120,7 @@ def test_mock_llm_configure_state_and_manual_process():
     with mock.patch.object(httpx.Client, "post", _relay_mock_llm):
         drain = client.post(
             "/api/e2e/dev/process-grading",
-            headers={"X-E2E-Seed-Token": "tok-e2e-mock"},
+            headers=hdr,
             json={"max_tasks": 3},
         )
     assert drain.status_code == 200, drain.text
@@ -120,24 +133,28 @@ def test_mock_llm_configure_state_and_manual_process():
 
     state2 = client.get(
         "/api/e2e/dev/mock-llm/state",
-        headers={"X-E2E-Seed-Token": "tok-e2e-mock"},
+        headers=hdr,
     )
     assert state2.status_code == 200, state2.text
     assert len(state2.json()["profiles"]["grade_ok"]["requests"]) >= 1
 
     settings.E2E_DEV_SEED_ENABLED = False
     settings.E2E_DEV_SEED_TOKEN = ""
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = False
 
 
 def test_mock_llm_empty_body_and_malformed_json_state():
     ensure_admin()
     settings.E2E_DEV_SEED_ENABLED = True
     settings.E2E_DEV_SEED_TOKEN = "tok-e2e-mock"
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     client = TestClient(app)
+
+    hdr = _e2e_admin_headers(client, "tok-e2e-mock")
 
     cfg = client.post(
         "/api/e2e/dev/mock-llm/configure",
-        headers={"X-E2E-Seed-Token": "tok-e2e-mock"},
+        headers=hdr,
         json={
             "profiles": {
                 "empty_body": {"steps": [{"kind": "empty_body"}], "repeat_last": True},
@@ -157,7 +174,7 @@ def test_mock_llm_empty_body_and_malformed_json_state():
 
     state = client.get(
         "/api/e2e/dev/mock-llm/state",
-        headers={"X-E2E-Seed-Token": "tok-e2e-mock"},
+        headers=hdr,
     )
     assert state.status_code == 200, state.text
     assert state.json()["profiles"]["empty_body"]["requests"][0]["request_index"] == 1
@@ -165,28 +182,32 @@ def test_mock_llm_empty_body_and_malformed_json_state():
 
     settings.E2E_DEV_SEED_ENABLED = False
     settings.E2E_DEV_SEED_TOKEN = ""
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = False
 
 
 def test_e2e_worker_status_and_control():
     ensure_admin()
     settings.E2E_DEV_SEED_ENABLED = True
     settings.E2E_DEV_SEED_TOKEN = "tok-e2e-worker"
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     settings.ENABLE_LLM_GRADING_WORKER = True
     settings.LLM_GRADING_WORKER_LEADER = True
     settings.LLM_GRADING_WORKER_POLL_SECONDS = 0
     worker_manager.stop()
     client = TestClient(app)
 
+    wh = _e2e_admin_headers(client, "tok-e2e-worker")
+
     status_before = client.get(
         "/api/e2e/dev/grading-state",
-        headers={"X-E2E-Seed-Token": "tok-e2e-worker"},
+        headers=wh,
     )
     assert status_before.status_code == 200, status_before.text
     assert status_before.json()["worker"]["running"] is False
 
     started = client.post(
         "/api/e2e/dev/worker",
-        headers={"X-E2E-Seed-Token": "tok-e2e-worker"},
+        headers=wh,
         json={"action": "start"},
     )
     assert started.status_code == 200, started.text
@@ -217,7 +238,7 @@ def test_e2e_worker_status_and_control():
 
     state = client.get(
         "/api/e2e/dev/grading-state",
-        headers={"X-E2E-Seed-Token": "tok-e2e-worker"},
+        headers=wh,
     )
     assert state.status_code == 200, state.text
     task_counts = state.json()["tasks"]
@@ -226,7 +247,7 @@ def test_e2e_worker_status_and_control():
 
     stopped = client.post(
         "/api/e2e/dev/worker",
-        headers={"X-E2E-Seed-Token": "tok-e2e-worker"},
+        headers=wh,
         json={"action": "stop"},
     )
     assert stopped.status_code == 200, stopped.text
@@ -234,6 +255,7 @@ def test_e2e_worker_status_and_control():
 
     settings.E2E_DEV_SEED_ENABLED = False
     settings.E2E_DEV_SEED_TOKEN = ""
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = False
     settings.ENABLE_LLM_GRADING_WORKER = False
     settings.LLM_GRADING_WORKER_LEADER = False
     settings.LLM_GRADING_WORKER_POLL_SECONDS = 2

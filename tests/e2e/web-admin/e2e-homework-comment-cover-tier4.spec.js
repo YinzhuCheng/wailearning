@@ -307,6 +307,15 @@ test.describe('E2E homework comment preview + LLM + covers (tier-4)', () => {
       }, { timeout: 60000 })
       .toContain('初')
 
+    // Full-suite flake fix: other concurrent specs hit /mock-llm/{profile}/chat/completions and advance the
+    // mock cursor. After first-grade confirmation, reset steps so regrade always consumes the intended payload.
+    await configureMockLlm({
+      [p]: {
+        steps: [{ kind: 'ok', score: 92, comment: `${repeatChar('复', 100)}Y` }],
+        repeat_last: true
+      }
+    })
+
     await login(page, s.teacher_own.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submissions`, { waitUntil: 'load', timeout: 60000 })
     await page.getByTestId(`homework-submission-regrade-${s.student_plain.username}`).click()

@@ -39,9 +39,21 @@ class Settings(BaseSettings):
     # If empty, password-reset notifications use a relative /users?... path.
     FRONTEND_ADMIN_BASE_URL: str = ""
 
+    # Optional throttle for POST /api/auth/forgot-password (reduces admin-notification spam and brute-force noise).
+    FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS: int = 600
+    FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR: int = 40
+
+    # Public registration: require class_id to reference an existing Class row (prevents orphan student accounts).
+    PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS: bool = True
+
     # Ephemeral E2E seed API (/api/e2e/dev/reset-scenario). Never enable in production.
     E2E_DEV_SEED_ENABLED: bool = False
     E2E_DEV_SEED_TOKEN: str = ""
+    # When True, destructive / powerful /api/e2e/dev/* endpoints require an admin JWT in addition
+    # to X-E2E-Seed-Token (Bearer). Playwright sets E2E_DEV_ADMIN_* env vars so automation keeps working.
+    E2E_DEV_REQUIRE_ADMIN_JWT: bool = False
+    E2E_DEV_ADMIN_USERNAME: str = ""
+    E2E_DEV_ADMIN_PASSWORD: str = ""
 
     GUNICORN_WORKERS: int = 3
     LOG_LEVEL: str = "info"

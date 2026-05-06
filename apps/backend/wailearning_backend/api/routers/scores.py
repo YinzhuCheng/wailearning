@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access, get_enrolled_students, get_student_profile_for_user
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http, get_enrolled_students, get_student_profile_for_user
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseExamWeight, CourseGradeScheme, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
 from apps.backend.wailearning_backend.core.permissions import is_student
@@ -126,7 +126,7 @@ def get_scores(
     if student_id:
         query = query.filter(Score.student_id == student_id)
     if subject_id:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Score.subject_id == subject_id)
     if semester:
         query = query.filter(Score.semester == semester)
@@ -188,7 +188,7 @@ def get_course_exam_weights(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
     items = (
         db.query(CourseExamWeight)
         .filter(CourseExamWeight.subject_id == subject_id)
@@ -206,7 +206,7 @@ def update_course_exam_weights(
     current_user: User = Depends(get_current_active_user),
 ):
     _ensure_score_write_access(current_user)
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
 
     if not payload.items:
         db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).delete()
@@ -262,7 +262,7 @@ def get_course_grade_scheme(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
     row = db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == subject_id).first()
     hw = float(row.homework_weight) if row else 30.0
     ex = float(row.extra_daily_weight) if row else 20.0
@@ -277,7 +277,7 @@ def update_course_grade_scheme(
     current_user: User = Depends(get_current_active_user),
 ):
     _ensure_score_write_access(current_user)
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
     hw = float(payload.homework_weight)
     ex = float(payload.extra_daily_weight)
     if hw < 0 or ex < 0 or hw + ex > 100:
@@ -304,7 +304,7 @@ def list_class_score_compositions(
 ):
     if is_student(current_user):
         raise HTTPException(status_code=403, detail="仅教师可查看全班成绩构成。")
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
 
     enrollments = get_enrolled_students(subject_id, db)
     out: list[ScoreCompositionResponse] = []
@@ -333,7 +333,7 @@ def get_my_score_composition(
     student = get_student_profile_for_user(current_user, db)
     if not student:
         raise HTTPException(status_code=400, detail="未找到与账号绑定的学生档案。")
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
     return ScoreCompositionResponse(
         **build_composition_for_student(
             db, student_id=student.id, subject_id=subject_id, semester=semester, student_name=student.name
@@ -357,7 +357,7 @@ def get_student_score_composition(
     class_ids = get_accessible_class_ids(current_user, db)
     if student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="You do not have access to this student.")
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
     return ScoreCompositionResponse(
         **build_composition_for_student(
             db, student_id=student_id, subject_id=subject_id, semester=semester, student_name=student.name
@@ -377,7 +377,7 @@ def create_score_grade_appeal(
     student = get_student_profile_for_user(current_user, db)
     if not student:
         raise HTTPException(status_code=400, detail="未找到与账号绑定的学生档案。")
-    ensure_course_access(subject_id, current_user, db)
+    ensure_course_access_http(subject_id, current_user, db)
 
     allowed = {"total", "homework_avg", OTHER_DAILY_EXAM_TYPE}
     exam_types = {r.exam_type for r in db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).all()}
@@ -448,7 +448,7 @@ def list_score_grade_appeals(
         return []
     q = q.filter(Subject.class_id.in_(class_ids))
     if subject_id is not None:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
         q = q.filter(ScoreGradeAppeal.subject_id == subject_id)
     if status:
         q = q.filter(ScoreGradeAppeal.status == status)
@@ -468,7 +468,7 @@ def respond_score_grade_appeal(
     appeal = db.query(ScoreGradeAppeal).filter(ScoreGradeAppeal.id == appeal_id).first()
     if not appeal:
         raise HTTPException(status_code=404, detail="申诉不存在。")
-    ensure_course_access(appeal.subject_id, current_user, db)
+    ensure_course_access_http(appeal.subject_id, current_user, db)
     next_status = (payload.status or "resolved").strip()
     if next_status not in ("pending", "resolved", "rejected"):
         raise HTTPException(status_code=400, detail="无效的处理状态。")
@@ -562,7 +562,7 @@ def get_student_scores(
     if semester:
         query = query.filter(Score.semester == semester)
     if subject_id:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Score.subject_id == subject_id)
 
     scores = query.all()

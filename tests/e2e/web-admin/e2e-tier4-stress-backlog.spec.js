@@ -143,9 +143,7 @@ test.describe('E2E tier-4 stress backlog', () => {
 
   test('03 parent notifications + teacher post + student single-row read converge', async ({ browser }) => {
     const s = scenario()
-    if (!s.parent_code) {
-      test.skip(true, 'seed missing parent_code')
-    }
+    expect(s.parent_code).toBeTruthy()
     const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
     const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
     const title = `E2E家长交织_${s.suffix}_${Date.now()}`
@@ -430,15 +428,15 @@ test.describe('E2E tier-4 stress backlog', () => {
     const tree = await getChapterTree(teacherTok, s.course_required_id)
     const nodes = tree.nodes || []
     const movable = nodes.filter(n => !n.is_uncategorized && n.id)
-    if (movable.length < 2) {
-      test.skip(true, 'need 2+ chapters for reorder test')
-    }
+    expect(movable.length).toBeGreaterThanOrEqual(2)
     const ids = movable.slice(0, 2).map(n => n.id)
-    await apiPutJson(`/api/material-chapters/reorder?subject_id=${s.course_required_id}`, teacherTok, {
-      chapter_ids: ids
+    await apiPostJson(`/api/material-chapters/reorder?subject_id=${s.course_required_id}`, teacherTok, {
+      parent_id: null,
+      ordered_chapter_ids: ids
     })
-    await apiPutJson(`/api/material-chapters/reorder?subject_id=${s.course_required_id}`, teacherTok, {
-      chapter_ids: [...ids].reverse()
+    await apiPostJson(`/api/material-chapters/reorder?subject_id=${s.course_required_id}`, teacherTok, {
+      parent_id: null,
+      ordered_chapter_ids: [...ids].reverse()
     })
     const t2 = await getChapterTree(teacherTok, s.course_required_id)
     expect((t2.nodes || []).length).toBeGreaterThan(0)
@@ -499,9 +497,7 @@ test.describe('E2E tier-4 stress backlog', () => {
 
   test('16 class-teacher cannot delete other teacher course', async () => {
     const s = scenario()
-    if (!s.class_teacher) {
-      test.skip(true, 'seed missing class_teacher')
-    }
+    expect(s.class_teacher?.username).toBeTruthy()
     const ctTok = await obtainAccessToken(s.class_teacher.username, s.password_teacher_student)
     const del = await fetchRaw('DELETE', `/api/subjects/${s.course_other_teacher_id}`, { token: ctTok })
     expect(del.status).toBe(403)
