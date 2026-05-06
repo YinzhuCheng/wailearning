@@ -70,6 +70,10 @@ def sync_course_enrollments(course: Subject, db: Session) -> int:
     if not course.class_id:
         return 0
 
+    # Elective courses: enrollments are opt-in (roster API / seed), not whole-class auto-sync.
+    if (course.course_type or "required") == "elective":
+        return 0
+
     class_students = db.query(Student).filter(Student.class_id == course.class_id).all()
     existing_student_ids = {
         enrollment.student_id
@@ -106,6 +110,8 @@ def sync_student_course_enrollments(student: Student, db: Session) -> int:
 
     created = 0
     for course in courses:
+        if (course.course_type or "required") == "elective":
+            continue
         if course.id in existing_course_ids:
             continue
         db.add(

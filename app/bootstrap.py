@@ -857,6 +857,9 @@ def bootstrap() -> None:
             seed_default_system_settings(db)
             sync_existing_courses(db)
             seed_initial_llm_deployment_bundle(db)
+            from app.seed_default_probability import seed_elementary_probability_elective_course
+
+            seed_elementary_probability_elective_course(db)
             backfill_homework_grading_data(db)
         else:
             print("INIT_DEFAULT_DATA is false. Table creation completed without seed data.")

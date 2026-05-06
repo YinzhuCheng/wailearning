@@ -129,7 +129,47 @@
 
 ---
 
-## 5. 与产品文档的交叉引用
+## 5. `INIT_DEFAULT_DATA=true` 默认初始化数据总览（用户、课程、内涵与形式）
+
+本节描述 **仅设置 `INIT_DEFAULT_DATA=true`（默认）** 且 **未配置或未通过校验 `INIT_LLM_*`** 时，`app.bootstrap.bootstrap()` 写入数据库的 **可登录用户与教学对象**；若同时配置 `INIT_LLM_*` 且视觉校验通过，还会在 **本节数据之后** 追加「演示班级 / 演示课程 / 演示作业与提交」等（见 §1 与 `seed_initial_llm_deployment_bundle`）。
+
+### 5.1 全局非教学数据
+
+| 类型 | 内容 | 说明 |
+|------|------|------|
+| 管理员 | 用户名 `settings.INIT_ADMIN_USERNAME`（默认 `admin`），密码 `INIT_ADMIN_PASSWORD` | 角色 `admin`，由 `seed_default_admin` 创建。 |
+| 学期 | `DEFAULT_SEMESTERS` 中 2024–2026 共 6 个中文季标学期 | `seed_default_semesters`，`is_active=True`。 |
+| 系统设置 | `system_name`、`system_intro`、`copyright` 等键 | `seed_default_system_settings`。 |
+
+### 5.2 初等概率论选修种子（`app/seed_default_probability.py`）
+
+**入口**：`bootstrap()` 在 `seed_initial_llm_deployment_bundle` **之后** 调用 `seed_elementary_probability_elective_course(db)`；**幂等**：若已存在同名课程 `初等概率论（公共选修·2026春）` 则跳过。
+
+| 类型 | 标识 / 形式 | 内涵 |
+|------|-------------|------|
+| 任课教师（用户） | 用户名 `teacher_pro`，密码 **`teacher_pro`**（与用户名相同，仅演示） | 角色 `teacher`，`class_id` 为空；显示名「概率论专业教师（示例）」。 |
+| 班级 | 名称 `2026级理工选修试点班`，`grade=2026` | 容纳 4 名演示学生；与「演示班级」（INIT_LLM）**不同**，二者可并存。 |
+| 学生（用户 + `students` 行） | `prob_stu_001` … `prob_stu_004`，密码分别为 `ProbStu001!` … `ProbStu004!` | 姓名：陈小威、林小朔、王小川、赵小岳；学号 `prob-2026-001` … `004`；均绑定上述班级。 |
+| 课程 | `Subject.name = 初等概率论（公共选修·2026春）`，`course_type = elective` | 绑定当前 **激活学期**（无则取第一条学期）；任课为 `teacher_pro`；含简介、上课时间字符串（杜撰）。 |
+| 选课 | **仅 2 人** 写入 `course_enrollments`：`prob_stu_001`、`prob_stu_002`，`enrollment_type=elective`，`can_remove=True` | **003、004 在同班但未选本课**，体现选修 opt-in。 |
+| 课程资料 | `course_materials` 一条，标题含「第1章」「Markdown」 | `content` 为 **Markdown + LaTeX 风格公式**（`$...$`、`$$...$$`）：样本空间、Kolmogorov 公理、加法公式、参考书名（Ross / Grimmett & Welsh / Durrett / 国内教材）等。 |
+| 作业 | 一章习题，Markdown 题干；`rubric_text` / `rubric_teacher_text` / `reference_answer` 齐全 | **自动评分**：仅当库中已存在 **通过视觉校验的活跃 LLM 预设**（`get_latest_validated_vision_preset` 非空）时为 `True`，并 ` _wire_course_llm_from_preset`；否则为 `False` 并 **打印说明**。若开启自动评分，种子会为已插入的提交调用 `queue_grading_task`（依赖 worker 或手工 `process_grading_task`）。 |
+| 提交 | **两名已选课学生均有一条** `homework_submissions` + `homework_attempts` | 001 为较长 Markdown 作答，002 为较短作答；**未选课学生无提交**。 |
+
+### 5.3 与「全班同步选课」相关的代码约定（agent 修改时注意）
+
+- `sync_course_enrollments`（`app/course_access.py`）：对 **`course_type == "elective"`** 的课程 **返回 0**，不再把全班学生批量写入选课表。
+- `sync_student_course_enrollments`：新建学生时 **不会** 自动为其加入班上 **选修** 课程，仅同步必修课等；选修须由管理员/学生端显式选课（或种子手写 `CourseEnrollment`）。
+
+### 5.4 合并 `INIT_LLM_*` 通过时的额外数据（摘要）
+
+- 演示班级名、演示课程名、演示作业名等常量见 `app/bootstrap.py` 中 `DEMO_SEED_*`。
+- 演示学生学号 `demo-2026-001` …（与 `prob-*` **不同**）。
+- 概率论种子仍独立存在；**LLM 演示课** 与 **概率论选修课** 可同时出现在学期列表中。
+
+---
+
+## 6. 与产品文档的交叉引用
 
 - 生产部署总览：`DEPLOY.md`、`docs/FRESH_SERVER_DEPLOY_CN.md`
 - 运维与安全：`docs/SECURITY-AND-OPERATIONS.md`
@@ -137,7 +177,7 @@
 
 ---
 
-## 6. 回归检查清单（agent 自测）
+## 7. 回归检查清单（agent 自测）
 
 1. `pytest tests/test_llm_settings_api.py -q` 通过。
 2. `pytest tests/test_homework_llm_grading.py -q`（若存在对 `HomeworkResponse` 字段数的假设，需更新）。
