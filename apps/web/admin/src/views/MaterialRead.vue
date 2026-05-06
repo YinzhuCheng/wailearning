@@ -121,17 +121,30 @@ const loadMaterial = async () => {
   }
   loading.value = true
   try {
-    await buildSequence()
     const row = await api.materials.get(id)
     const subjectId = row.subject_id != null ? Number(row.subject_id) : null
-    if (subjectId && userStore.selectedCourse?.id !== subjectId) {
-      ElMessage.warning('请先在顶部切换课程后再阅读该资料')
-      router.push('/materials')
-      return
+    // Deep links (and Playwright flows that clear localStorage) may not have selected_course
+    // matching this material; sync from teaching/enrollment list when possible.
+    if (subjectId && Number(userStore.selectedCourse?.id) !== subjectId) {
+      await userStore.fetchTeachingCourses(true)
+      const match = userStore.teachingCourses.find(c => Number(c.id) === subjectId)
+      if (!match) {
+        ElMessage.warning('无法在您的可选课程列表中找到该资料所属课程，请从课程入口打开。')
+        router.push('/materials')
+        return
+      }
+      userStore.setSelectedCourse(match)
     }
     material.value = {
       ...row,
       content_format: normalizeContentFormat(row.content_format)
+    }
+    try {
+      await buildSequence()
+    } catch (seqErr) {
+      console.error(seqErr)
+      ElMessage.warning('章节导航加载失败，仍可阅读正文')
+      sequence.value = []
     }
   } catch (e) {
     console.error(e)

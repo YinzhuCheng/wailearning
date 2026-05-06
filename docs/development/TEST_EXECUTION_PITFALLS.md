@@ -311,6 +311,22 @@ Prefer `.first()` only when intentionally accepting ambiguity, or better:
 - scoped locators (table body vs header),
 - or `data-testid` hooks.
 
+### Extension (May 2026): duplicate `data-testid` values inside one overlay
+
+The homework publish dialog mounts **multiple** `MarkdownEditorPanel` instances (assignment body + rubric blocks). Each embeds `MarkdownLatexLiveDemo` with the same `data-testid="markdown-latex-demo-render"`. Playwright strict mode then rejects `page.getByTestId('markdown-latex-demo-render')` even though each node is visible.
+
+**Fix pattern:** scope under the intended panel, for example `dialog.locator('.md-panel').first()` for the **assignment body** panel, then chain `.getByTestId('markdown-latex-demo-render')`.
+
+### Extension (May 2026): Element Plus `el-radio-button` intercepts clicks on the native `<input type="radio">`
+
+Symptom: `getByRole('radio', { name: '纯文本' }).click()` retries until timeout because **`<span class="el-radio-button__inner">` intercepts pointer events**.
+
+**Fix pattern:** click the visible button chrome instead, for example `panel.locator('.md-panel__format .el-radio-button').filter({ hasText: '纯文本' })`.
+
+### Extension (May 2026): `MaterialRead` title vs chapter navigation ordering
+
+If `material` is assigned only **after** `buildSequence()` finishes (DFS over chapters × list calls), the reader toolbar can appear while `.material-read-title` is still absent for multiple seconds. Assertions that require the title should either wait longer or (preferably) rely on product behavior that assigns `material` immediately after `GET /materials/{id}` and treats chapter DFS failures as non-fatal for the article body.
+
 ## Pitfall 14: `textarea:first()` on the homework submit page is often the wrong control
 
 ### Symptom

@@ -95,7 +95,7 @@ They assert round-trip persistence for homework update + student submission, dis
    Authors sometimes paste math wrapped only in `[ ... ]`. `RichMarkdownDisplay` uses KaTeX `renderMathInElement` with `\(…\)`, `$…$`, `$$…$$`, `\[…\]` only—the demo block shipped with `MarkdownEditorPanel` / discussions spells this out and renders a live counter-example.
 
 8. **Course materials reading navigation**  
-   Full-page reader lives at `<admin-base>/materials/read/:id` (`MaterialRead.vue`). Prev/next order is **DFS chapter tree × API sort order per chapter** (same sequencing logic as the list endpoint). Deep-linking without selecting the matching course in the header guard-redirects back to `/materials`.
+   Full-page reader lives at `<admin-base>/materials/read/:id` (`MaterialRead.vue`). Prev/next order is **DFS chapter tree × API sort order per chapter** (same sequencing logic as the list endpoint). After `GET /materials/{id}`, the reader **attempts to align `selected_course`** with `material.subject_id` using `fetchTeachingCourses` so deep links work even when `localStorage.selected_course` was cleared (Playwright `login()` clears storage). If the material’s subject is not in the teacher/student course list, the UI still redirects back to `/materials`. The article (`material.title` / body) is bound **before** chapter DFS completes so readers see the heading immediately; DFS failures downgrade to “导航不完整” rather than blocking the article.
 
 ## Related documentation
 

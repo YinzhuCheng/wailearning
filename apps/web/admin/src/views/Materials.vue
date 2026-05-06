@@ -136,7 +136,15 @@
               </el-table-column>
               <el-table-column label="阅读" width="96" align="center" header-align="center">
                 <template #default="{ row }">
-                  <el-button type="primary" link size="small" @click.stop="openMaterialRead(row)">阅读页</el-button>
+                  <el-button
+                    type="primary"
+                    link
+                    size="small"
+                    data-testid="materials-open-read-page"
+                    @click.stop="openMaterialRead(row)"
+                  >
+                    阅读页
+                  </el-button>
                 </template>
               </el-table-column>
               <el-table-column v-if="canManageChapters" label="排序" width="100" align="center" header-align="center">
