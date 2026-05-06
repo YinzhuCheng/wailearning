@@ -216,6 +216,7 @@ class SubjectCreate(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
     students: Optional[List["CourseRosterStudentInput"]] = None
 
 
@@ -232,6 +233,7 @@ class SubjectUpdate(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
 
 
 class SubjectResponse(BaseModel):
@@ -248,6 +250,7 @@ class SubjectResponse(BaseModel):
     course_end_at: Optional[datetime] = None
     course_times: List[CourseTimeItem] = Field(default_factory=list)
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
     teacher_name: Optional[str] = None
     class_name: Optional[str] = None
     student_count: int = 0
@@ -641,6 +644,7 @@ class HomeworkBase(BaseModel):
     grade_precision: str = "integer"
     auto_grading_enabled: bool = False
     rubric_text: Optional[str] = None
+    rubric_teacher_text: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: bool = True
@@ -671,6 +675,7 @@ class HomeworkUpdate(BaseModel):
     grade_precision: Optional[str] = None
     auto_grading_enabled: Optional[bool] = None
     rubric_text: Optional[str] = None
+    rubric_teacher_text: Optional[str] = None
     reference_answer: Optional[str] = None
     response_language: Optional[str] = None
     allow_late_submission: Optional[bool] = None

@@ -26,6 +26,9 @@
           <el-descriptions-item label="作业内容" :span="2">
             {{ homework.content || '暂无作业说明。' }}
           </el-descriptions-item>
+          <el-descriptions-item label="评分要点（对学生可见）" :span="2">
+            {{ homework.rubric_text || '未设置' }}
+          </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
             <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
               {{ homework.attachment_name || '下载附件' }}

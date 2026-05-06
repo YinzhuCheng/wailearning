@@ -327,6 +327,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         grade_precision=homework.grade_precision,
         auto_grading_enabled=homework.auto_grading_enabled,
         rubric_text=homework.rubric_text,
+        rubric_teacher_text=homework.rubric_teacher_text,
         reference_answer=homework.reference_answer,
         response_language=homework.response_language,
         allow_late_submission=homework.allow_late_submission,
@@ -355,7 +356,7 @@ def _serialize_homework_for_user(
     response = _serialize_homework(homework, submission)
     if current_user.role == UserRole.STUDENT:
         response.reference_answer = None
-        response.rubric_text = None
+        response.rubric_teacher_text = None
     return response
 
 
@@ -496,6 +497,7 @@ def create_homework(
         grade_precision=data.grade_precision,
         auto_grading_enabled=data.auto_grading_enabled,
         rubric_text=data.rubric_text,
+        rubric_teacher_text=data.rubric_teacher_text,
         reference_answer=data.reference_answer,
         response_language=data.response_language,
         allow_late_submission=data.allow_late_submission,
@@ -551,6 +553,8 @@ def update_homework(
         homework.auto_grading_enabled = data.auto_grading_enabled
     if data.rubric_text is not None:
         homework.rubric_text = data.rubric_text
+    if data.rubric_teacher_text is not None:
+        homework.rubric_teacher_text = data.rubric_teacher_text
     if data.reference_answer is not None:
         homework.reference_answer = data.reference_answer
     if data.response_language is not None:

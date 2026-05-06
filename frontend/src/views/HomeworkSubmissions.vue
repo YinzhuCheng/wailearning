@@ -39,6 +39,15 @@
             </el-button>
             <span v-else class="muted-text">暂无附件</span>
           </el-descriptions-item>
+          <el-descriptions-item label="评分要点（对学生可见）" :span="2">
+            {{ homework.rubric_text || '未设置' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">
+            {{ homework.rubric_teacher_text || '未设置' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">
+            {{ homework.reference_answer || '未设置' }}
+          </el-descriptions-item>
         </el-descriptions>
       </el-card>
 

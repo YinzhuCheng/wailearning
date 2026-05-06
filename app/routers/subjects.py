@@ -194,6 +194,7 @@ def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
         course_end_at=primary_course_time.course_end_at if primary_course_time else course.course_end_at,
         course_times=course_times,
         description=course.description,
+        cover_image_url=course.cover_image_url,
         teacher_name=course.teacher.real_name if course.teacher else None,
         class_name=course.class_obj.name if course.class_obj else None,
         student_count=student_count,
@@ -367,6 +368,7 @@ def create_subject(
         course_end_at=primary_course_time.course_end_at if primary_course_time else subject_data.course_end_at,
         course_times=_serialize_course_times_for_storage(course_times),
         description=subject_data.description,
+        cover_image_url=subject_data.cover_image_url,
     )
     db.add(course)
     db.flush()
@@ -431,7 +433,7 @@ def update_subject(
     if current_user.role != UserRole.ADMIN:
         subject_data.teacher_id = current_user.id
 
-    for field in ["name", "teacher_id", "class_id", "course_type", "status", "description"]:
+    for field in ["name", "teacher_id", "class_id", "course_type", "status", "description", "cover_image_url"]:
         value = getattr(subject_data, field)
         if value is not None:
             setattr(course, field, value)

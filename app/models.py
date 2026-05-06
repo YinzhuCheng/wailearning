@@ -114,6 +114,7 @@ class Subject(Base):
     course_end_at = Column(DateTime(timezone=True), nullable=True)
     course_times = Column(Text, nullable=True)
     description = Column(String, nullable=True)
+    cover_image_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     teacher = relationship("User", back_populates="courses")
@@ -335,6 +336,7 @@ class Homework(Base):
     grade_precision = Column(String, nullable=False, default="integer")
     auto_grading_enabled = Column(Boolean, default=False)
     rubric_text = Column(Text, nullable=True)
+    rubric_teacher_text = Column(Text, nullable=True)
     reference_answer = Column(Text, nullable=True)
     response_language = Column(String, nullable=True)
     allow_late_submission = Column(Boolean, default=True)

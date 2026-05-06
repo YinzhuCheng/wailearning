@@ -1394,10 +1394,21 @@ def _build_student_material(
         f"作业标题：{homework.title}",
         f"作业要求：\n{homework.content or '无'}",
     ]
-    if homework.reference_answer:
-        assignment_texts.append(f"参考答案或提示：\n{homework.reference_answer}")
     if homework.rubric_text:
-        assignment_texts.append(f"评分要点：\n{homework.rubric_text}")
+        assignment_texts.append(
+            "【对学生可见的评分要点】（可引用其原则评分，但不要在评语中泄露下方仅教师可见内容）\n"
+            f"{homework.rubric_text}"
+        )
+    if getattr(homework, "rubric_teacher_text", None):
+        assignment_texts.append(
+            "【仅教师可见的评分要点】（学生端不可见；用于校准打分尺度）\n"
+            f"{homework.rubric_teacher_text}"
+        )
+    if homework.reference_answer:
+        assignment_texts.append(
+            "【参考答案或思路】（仅教师可见；用于判断学生作答方向，勿逐字泄露给学生）\n"
+            f"{homework.reference_answer}"
+        )
 
     student_blocks: list[MaterialBlock] = []
     skipped: list[dict[str, str]] = []
