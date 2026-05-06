@@ -222,7 +222,7 @@ const handleLogin = async () => {
       }
 
       if (userData?.role === 'teacher' || userData?.role === 'class_teacher') {
-        router.push('/dashboard')
+        router.push('/students')
         return
       }
 

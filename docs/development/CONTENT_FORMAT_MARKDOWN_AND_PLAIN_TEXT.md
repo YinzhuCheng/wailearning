@@ -89,8 +89,9 @@ They assert round-trip persistence for homework update + student submission, dis
    **Material read + discussion:** after embedding `CourseDiscussionPanel` on `/materials/read/:id`, specs can scope assertions to `.material-read-page .discussion-card` (card header text 「讨论区」). Duplicate `data-testid="markdown-latex-demo-render"` remains limited to editor surfaces; the discussion list uses `PlainOrMarkdownBlock` per row without that test id.
 
 6. **Dashboard `total_students` vs elective enrollment**  
-   Earlier implementations counted every `Student` in the course class even when `subject_id` targeted an elective with partial `course_enrollments`. Symptoms: **课程仪表盘** showed “学生总数 = 班级人数” while **学生管理** listed fewer选课学生（演示种子「初等概率论」即如此）。  
-   **Mitigated:** `GET /api/dashboard/stats?subject_id=…` now counts `course_enrollments` rows for that subject. Regression guard: `tests/backend/integration/test_core_api_surface.py::test_dashboard_stats_subject_id_counts_enrollments_not_class_roster`.
+   Earlier implementations counted every `Student` in the course class even when `subject_id` targeted an elective with partial `course_enrollments`. Symptoms: the **removed** teacher 「课程仪表盘」page showed “学生总数 = 班级人数” while **学生管理** listed fewer选课学生（演示种子「初等概率论」即如此）。  
+   **Mitigated (API):** `GET /api/dashboard/stats?subject_id=…` counts `course_enrollments` rows for that subject. Regression guard: `tests/backend/integration/test_core_api_surface.py::test_dashboard_stats_subject_id_counts_enrollments_not_class_roster`.  
+   **UI note (May 2026):** The **`Dashboard.vue` SPA page was deleted**; agents must not expect `/dashboard` metrics cards — bookmark `/dashboard` redirects to **`/students`**. Teacher-facing enrollment parity is asserted in Playwright via **学生管理 · 课程学生名单** header counts (`tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js`).
 
 7. **KaTeX delimiter literacy**  
    Authors sometimes paste math wrapped only in `[ ... ]`. `RichMarkdownDisplay` uses KaTeX `renderMathInElement` with `\(…\)`, `$…$`, `$$…$$`, `\[…\]` only—the demo block shipped with `MarkdownEditorPanel` / discussions spells this out and renders a live counter-example.
@@ -102,6 +103,15 @@ They assert round-trip persistence for homework update + student submission, dis
 9. **Teacher sidebar: removal of the 「日常教学」 submenu shell**  
    Historically `Layout.vue` wrapped every teacher route under one `el-sub-menu` labeled 「日常教学」, forcing an extra expand click despite there being only one group. The teacher menu is now **flat `el-menu-item` rows** (same paths and labels as before). **`default-openeds` no longer references `teacher-daily`.** Student 「课程学习」 and admin 「学期与配置」 / 「消息与审计」 groupings are unchanged.  
    **Menu active highlight:** `el-menu` `default-active` is driven by `sidebarMenuActivePath`, mapping nested routes (e.g. `/materials/read/123` → `/materials`, `/homework/9/submit` → `/homework`) so the correct rail item stays selected; without this mapping, Element Plus leaves no item highlighted when `route.path` does not exactly equal a menu `index`.
+
+10. **Removal of teacher 「课程仪表盘」 (`Dashboard.vue`) + `/teaching-calendar` extraction**  
+   Product decision: delete the aggregated dashboard view as low-value/noisy. **Teaching calendar** (`TeachingCalendar.vue`, titled 「教学日历」 inside the widget) and **class semester grid** (`ClassSemesterCalendar.vue`, titled 「学期日历」) previously lived inside `Dashboard.vue`; they now render from **`TeachingCalendarPage.vue`** at **`/teaching-calendar`**.  
+   - **任课教师** sidebar order: … **考勤管理** → **教学日历** → … (`Layout.vue` `teacherMenu`).  
+   - **班主任** submenu replaces the old 「课程仪表盘」 child with **教学日历** linking to the same route (`classTeacherMenu`).  
+   - **Login / root redirect:** teachers and class teachers default to **`/students`** (see `Login.vue`, empty-path redirect in `router/index.js`). **`/dashboard` → `/students` redirect** preserves stale bookmarks without resurrecting the Vue page.  
+   - **Admin visibility:** `/teaching-calendar` is listed in `adminHiddenPaths` like other teacher tools — admins hitting it bounce to **`/students`** (admin home).  
+   - **Students:** `/teaching-calendar` is blocked (student redirect list in `router.beforeEach`), same spirit as `/scores`.  
+   **Backend:** `dashboard.router` APIs (`/api/dashboard/stats`, rankings, analysis) remain for **排行榜 / 数据分析** pages — only the dedicated SPA aggregate page was removed.
 
 ## Related documentation
 

@@ -331,6 +331,10 @@ If `material` is assigned only **after** `buildSequence()` finishes (DFS over ch
 
 `Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift.
 
+### Extension (May 2026): teacher 「课程仪表盘」 deleted — update Playwright landing URLs
+
+The SPA **`Dashboard.vue`** page and **`/dashboard`** metrics UI were removed; **`/dashboard` permanently redirects to `/students`** via `router/index.js`. Historical specs that did `page.goto('/dashboard')` to warm teacher shells must migrate to **`/students`** (or another stable teacher route). Waiting for `/course-home|/dashboard` after a student course switch should instead allow **`/course-home|/courses`** (students never land on `/students` for normal flows). Symptom before migration: strict URL assertions time out because teachers now remain on `/students`, not `/dashboard`.
+
 ## Pitfall 14: `textarea:first()` on the homework submit page is often the wrong control
 
 ### Symptom
@@ -1355,7 +1359,7 @@ These failures showed up while authoring **`tests/e2e/web-admin/e2e-notification
 
 ### Symptom
 
-Playwright asserts **`badge digit === sync-status(...?subject_id=<course_required_id>)`** after **`page.goto('/dashboard')`** but the badge stays **0** or matches a **different** subject.
+Playwright asserts **`badge digit === sync-status(...?subject_id=<course_required_id>)`** after **`page.goto('/students')`** (historically **`/dashboard`** before the SPA dashboard removal) but the badge stays **0** or matches a **different** subject.
 
 ### Context
 

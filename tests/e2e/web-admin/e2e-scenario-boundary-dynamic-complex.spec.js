@@ -103,10 +103,10 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
     }
   })
 
-  test('boundary: first dashboard load after login shows seeded teaching context', async ({ page }) => {
+  test('boundary: first staff home load after login shows seeded teaching context', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
-    await page.goto('/dashboard')
+    await page.goto('/students')
     await expect(page.locator('.layout-container')).toBeVisible({ timeout: 15000 })
     await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/homework')

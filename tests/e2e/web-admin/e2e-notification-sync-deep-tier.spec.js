@@ -77,17 +77,17 @@ test.describe('E2E notification sync deep tier (15 cases)', () => {
     expect(Number(sync.unread_count)).toBe(Number(list.unread_count))
   })
 
-  test('02 teacher header badge aligns with course-scoped sync after dashboard entry', async ({ page }) => {
+  test('02 teacher header badge aligns with course-scoped sync after staff home entry', async ({ page }) => {
     const s = scenario()
     const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
 
     await login(page, s.teacher_own.username, s.password_teacher_student)
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await page.goto('/students', { waitUntil: 'domcontentloaded', timeout: 60000 })
     await expect(page.getByTestId('header-course-switch')).toBeVisible({ timeout: 20000 })
 
     const reqLabel = `E2E必修课_${s.suffix}`
     await clickCourseSwitcherOption(page, reqLabel)
-    await page.waitForURL(/\/course-home|\/dashboard/)
+    await page.waitForURL(/\/students/)
 
     await apiPostJson('/api/notifications', teacherTok, {
       title: `E2E_TCH_HDR_${s.suffix}_${Date.now()}`,
@@ -411,7 +411,7 @@ test.describe('E2E notification sync deep tier (15 cases)', () => {
 
     const flip = async courseLabel => {
       await clickCourseSwitcherOption(page, courseLabel)
-      await page.waitForURL(/\/course-home|\/dashboard/)
+      await page.waitForURL(/\/course-home|\/courses/)
       await triggerHeaderPoll(page)
     }
 

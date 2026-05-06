@@ -1,7 +1,11 @@
 /**
- * Targeted E2E for course UI fixes: dashboard enrollment vs roster, Markdown LaTeX demo,
- * sidebar collapse control, materials layout + reader route (including discussion on reader),
- * flat teacher sidebar without 「日常教学」 submenu.
+ * Targeted E2E for course UI: Markdown LaTeX demo, sidebar collapse control,
+ * materials layout + reader route (including discussion on reader),
+ * flat teacher sidebar without 「日常教学」 submenu, teaching calendar route.
+ *
+ * Dashboard (`/dashboard`) was removed from the product UI (May 2026); enrollment
+ * count regressions for `GET /api/dashboard/stats` remain covered in pytest
+ * (`tests/backend/integration/test_core_api_surface.py`).
  *
  * Depends on Playwright globalSetup + fixtures reset scenario (same contract as e2e-core-flows-smoke).
  */
@@ -23,17 +27,6 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     }
   })
 
-  test('dashboard student total uses enrollment count for required course', async ({ page }) => {
-    const s = scenario()
-    await login(page, s.teacher_own.username, s.teacher_own.password)
-    await page.goto('/dashboard')
-    await clickCourseSwitcherOption(page, `E2E必修课_${s.suffix}`)
-    const card = page.locator('button.metric-card').filter({ hasText: '学生总数' })
-    await expect(card).toBeVisible({ timeout: 20000 })
-    // Class roster has 3 students; required course enrolls only st_plain + st_drop (see e2e_dev reset-scenario).
-    await expect(card.locator('.metric-value')).toHaveText('2', { timeout: 15000 })
-  })
-
   test('students screen header matches course enrollment count', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
@@ -41,15 +34,6 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await page.goto('/students')
     await expect(page.getByText(/课程学生名单/)).toBeVisible({ timeout: 20000 })
     await expect(page.locator('.header-count')).toContainText('共 2 人', { timeout: 15000 })
-  })
-
-  test('dashboard shows zero students for elective with no enrollments', async ({ page }) => {
-    const s = scenario()
-    await login(page, s.teacher_own.username, s.teacher_own.password)
-    await page.goto('/dashboard')
-    await clickCourseSwitcherOption(page, `E2E选修课_${s.suffix}`)
-    const card = page.locator('button.metric-card').filter({ hasText: '学生总数' })
-    await expect(card.locator('.metric-value')).toHaveText('0', { timeout: 15000 })
   })
 
   test('homework publish dialog shows rendered Markdown LaTeX demo', async ({ page }) => {
@@ -86,7 +70,7 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
   test('desktop sidebar logo area has no redundant collapse button', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
-    await page.goto('/dashboard')
+    await page.goto('/students')
     await expect(page.locator('aside.sidebar .logo > button.el-button')).toHaveCount(0)
     await expect(page.getByTestId('sidebar-edge-handle')).toBeVisible({ timeout: 15000 })
   })
@@ -130,15 +114,27 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.locator('.material-read-title')).toBeVisible({ timeout: 15000 })
   })
 
-  test('teacher sidebar lists daily routes without a 日常教学 submenu title', async ({ page }) => {
+  test('teacher sidebar exposes 教学日历 and hides removed 课程仪表盘', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
-    await page.goto('/dashboard')
+    await page.goto('/students')
     await expect(page.locator('.sidebar-menu .el-sub-menu__title').filter({ hasText: '日常教学' })).toHaveCount(0)
-    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程仪表盘' })).toBeVisible({
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '教学日历' })).toBeVisible({
       timeout: 15000
     })
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程资料' })).toBeVisible()
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程仪表盘' })).toHaveCount(0)
+  })
+
+  test('teaching calendar page mounts TeachingCalendar for selected course', async ({ page }) => {
+    const s = scenario()
+    await login(page, s.teacher_own.username, s.teacher_own.password)
+    await clickCourseSwitcherOption(page, `E2E必修课_${s.suffix}`)
+    await page.goto('/teaching-calendar')
+    await expect(page.locator('.teaching-calendar-page .page-title')).toHaveText('教学日历', { timeout: 15000 })
+    await expect(page.locator('.teaching-calendar-page .teaching-calendar h3')).toHaveText('教学日历', {
+      timeout: 15000
+    })
   })
 
   test('material reader highlights 课程资料 in sidebar via active path mapping', async ({ page }) => {

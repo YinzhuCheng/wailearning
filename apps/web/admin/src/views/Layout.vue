@@ -210,6 +210,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  Calendar,
   Collection,
   DataAnalysis,
   Document,
@@ -423,7 +424,7 @@ const homePath = computed(() => {
     return adminHomePath
   }
 
-  return userStore.isStudent ? '/courses' : '/dashboard'
+  return userStore.isStudent ? '/courses' : '/students'
 })
 
 const showClassContext = computed(() => userStore.isClassTeacher && Boolean(currentClassId.value))
@@ -464,12 +465,12 @@ const classContextText = computed(() => `班级课程 ${classTeacherCourses.valu
 const routeNameMap = {
   '/courses': '选课与进度',
   '/course-home': '学习主页',
-  '/dashboard': '课程仪表盘',
   '/classes': '班级管理',
   '/students': '学生信息',
   '/scores': '成绩管理',
   '/student-scores': '我的成绩',
   '/attendance': '考勤管理',
+  '/teaching-calendar': '教学日历',
   '/rankings': '班级排名',
   '/analysis': '数据分析',
   '/users': '用户管理',
@@ -539,7 +540,7 @@ const homeworkMenuOpenIndices = computed(() => {
   }
   if (userStore.isClassTeacher) {
     if (
-      p.startsWith('/dashboard') ||
+      p.startsWith('/teaching-calendar') ||
       p.startsWith('/students') ||
       p.startsWith('/subjects') ||
       p.startsWith('/notifications')
@@ -559,7 +560,7 @@ const classTeacherMenu = [
     label: '班级教学',
     icon: School,
     children: [
-      { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
+      { path: '/teaching-calendar', label: '教学日历', icon: Calendar },
       { path: '/students', label: '学生信息', icon: User },
       { path: '/subjects', label: '课程信息', icon: Reading },
       { path: '/notifications', label: '通知信息', icon: Bell }
@@ -569,10 +570,10 @@ const classTeacherMenu = [
 
 /** Flat menu: all entries used to live under a single 「日常教学」 submenu — removed for fewer clicks. */
 const teacherMenu = [
-  { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
   { path: '/students', label: '学生管理', icon: User },
   { path: '/scores', label: '成绩管理', icon: Collection },
   { path: '/attendance', label: '考勤管理', icon: Collection },
+  { path: '/teaching-calendar', label: '教学日历', icon: Calendar },
   { path: '/notifications', label: '通知中心', icon: Bell },
   { path: '/homework', label: '作业管理', icon: Reading },
   { path: '/homework/students', label: '学生作业一览', icon: User },
@@ -748,7 +749,7 @@ const handleCourseSwitch = courseId => {
   }
 
   if (route.path === '/courses') {
-    router.push(userStore.isStudent ? '/course-home' : '/dashboard')
+    router.push(userStore.isStudent ? '/course-home' : '/students')
   }
 }
 

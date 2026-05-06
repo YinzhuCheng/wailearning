@@ -390,7 +390,7 @@ test.describe('Future advanced E2E coverage expansion II', () => {
   }) => {
     const s0 = scenario()
     await login(page, s0.admin.username, s0.admin.password)
-    await page.goto('/dashboard')
+    await page.goto('/students')
 
     const token = process.env.E2E_DEV_SEED_TOKEN || ''
     const res = await fetch(`${apiBase()}/api/e2e/dev/reset-scenario`, {
