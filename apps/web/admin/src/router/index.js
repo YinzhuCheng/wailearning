@@ -163,6 +163,12 @@ const routes = [
             meta: { title: '提交作业' }
           },
           {
+            path: ':id/submissions/:submissionId',
+            name: 'HomeworkSubmissionReview',
+            component: () => import('@/views/HomeworkSubmissionReview.vue'),
+            meta: { title: '提交详情与评分', requiresTeacher: true }
+          },
+          {
             path: ':id/submissions',
             name: 'HomeworkSubmissions',
             component: () => import('@/views/HomeworkSubmissions.vue'),

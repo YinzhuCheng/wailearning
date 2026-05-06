@@ -91,6 +91,7 @@ Routers live under `apps/backend/wailearning_backend/api/routers/`.
 | [`apps/web/admin/src/api/index.js`](../../apps/web/admin/src/api/index.js) | Axios client, interceptors, validation error formatting |
 | [`apps/web/admin/src/stores/user.js`](../../apps/web/admin/src/stores/user.js) | Pinia user session |
 | [`apps/web/admin/src/views/TeachingCalendarPage.vue`](../../apps/web/admin/src/views/TeachingCalendarPage.vue) | **教学日历** route (`/teaching-calendar`): wraps `TeachingCalendar.vue` for subject teachers (requires `selected_course`) and `ClassSemesterCalendar.vue` for class teachers; replaced aggregate `Dashboard.vue` (removed). |
+| [`apps/web/admin/src/views/HomeworkSubmissionReview.vue`](../../apps/web/admin/src/views/HomeworkSubmissionReview.vue) | Teacher **全页阅卷**：`/homework/:homeworkId/submissions/:submissionId` — renders latest submission body via `PlainOrMarkdownBlock`, score/comment editor, collapsible attempt history, LLM log dialog; backed by `GET /api/homeworks/{id}/submissions/{submission_id}/status`. |
 | [`apps/web/admin/src/views/*.vue`](../../apps/web/admin/src/views/) | Pages |
 | [`apps/web/admin/src/components/*.vue`](../../apps/web/admin/src/components/) | Shared UI (e.g. `MarkdownEditorPanel.vue`, `RichMarkdownDisplay.vue`) |
 

@@ -113,7 +113,7 @@ test.describe('E2E homework comment preview + LLM + covers (tier-4)', () => {
     }
   })
 
-  test('01 teacher review long markdown: list shows ellipsis preview; detail dialog shows full rich text', async ({
+  test('01 teacher review long markdown: list shows ellipsis preview; detail page shows full rich comment', async ({
     page
   }) => {
     const s = scenario()
@@ -137,8 +137,9 @@ test.describe('E2E homework comment preview + LLM + covers (tier-4)', () => {
     await expect(preview).not.toContainText('尾巴MARK')
 
     await page.getByTestId(`homework-submission-detail-${s.student_plain.username}`).click()
-    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15000 })
-    await expect(page.getByRole('dialog').locator('.feedback-inline')).toContainText('尾巴MARK', {
+    await expect(page).toHaveURL(new RegExp(`/homework/${s.homework_id}/submissions/\\d+`))
+    await expect(page.getByTestId('homework-submission-detail-body')).toContainText('short submit body')
+    await expect(page.locator('.review-comment-card.feedback-inline')).toContainText('尾巴MARK', {
       timeout: 10000
     })
   })

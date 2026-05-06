@@ -1155,6 +1155,52 @@ def get_homework_submissions(
     )
 
 
+@router.get("/{homework_id}/submissions/{submission_id}/status", response_model=HomeworkSubmissionStatusResponse)
+def get_homework_submission_status_single(
+    homework_id: int,
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Teacher-only: returns one row shaped like `HomeworkSubmissionStatusResponse` for deep-links to the
+    submission review page without paging through `GET /submissions`.
+    """
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can view homework submissions.")
+
+    homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    submission = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.id == submission_id,
+            HomeworkSubmission.homework_id == homework.id,
+        )
+        .first()
+    )
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found.")
+
+    refresh_submission_summary(db, submission)
+
+    enrollment = None
+    if homework.subject_id:
+        enrollment = (
+            db.query(CourseEnrollment)
+            .filter(
+                CourseEnrollment.subject_id == homework.subject_id,
+                CourseEnrollment.student_id == submission.student_id,
+            )
+            .first()
+        )
+
+    fallback_student = db.query(Student).filter(Student.id == submission.student_id).first()
+    if not enrollment and not fallback_student:
+        raise HTTPException(status_code=404, detail="Student record missing for submission.")
+
+    return _serialize_submission_status(db, enrollment, submission, fallback_student)
+
+
 @router.post("/{homework_id}/submissions/batch-regrade", response_model=HomeworkBatchRegradeResponse)
 def batch_regrade_homework_submissions(
     homework_id: int,
