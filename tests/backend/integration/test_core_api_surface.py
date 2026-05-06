@@ -10,7 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.db.models import Homework, Subject, UserRole
+from apps.backend.wailearning_backend.core.auth import get_password_hash
+from apps.backend.wailearning_backend.db.models import Homework, Student, Subject, User, UserRole
 from apps.backend.wailearning_backend.main import app
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
@@ -159,7 +160,30 @@ def test_teacher_sees_staff_only_rubric_fields(client: TestClient):
     assert student_view.json().get("reference_answer") is None
 
 
-def test_admin_can_page_users_when_authenticated(client: TestClient):
+def test_dashboard_stats_subject_id_counts_enrollments_not_class_roster(client: TestClient):
+    """Electives (and course-scoped stats) must use CourseEnrollment, not class-wide Student rows."""
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    db = SessionLocal()
+    try:
+        u2 = User(
+            username=f"pytest_roster_only_{ctx['class_id']}",
+            hashed_password=get_password_hash("p2"),
+            real_name="Roster Only",
+            role=UserRole.STUDENT.value,
+            class_id=ctx["class_id"],
+        )
+        db.add(u2)
+        db.flush()
+        db.add(Student(name="Roster Only", student_no=u2.username, class_id=ctx["class_id"]))
+        db.commit()
+    finally:
+        db.close()
+
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.get("/api/dashboard/stats", headers=th, params={"subject_id": ctx["subject_id"]})
+    assert r.status_code == 200, r.text
+    assert r.json()["total_students"] == 1
     ensure_admin()
     headers = login_api(client, "pytest_admin", "pytest_admin_pass")
     resp = client.get("/api/users", params={"page": 1, "page_size": 5}, headers=headers)

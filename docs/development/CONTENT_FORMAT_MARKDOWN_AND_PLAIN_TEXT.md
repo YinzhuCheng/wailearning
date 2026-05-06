@@ -47,7 +47,8 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 
 ### Shared components
 
-- `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar, KaTeX usage hint, and live preview are hidden; the textarea remains monospace for editing. In Markdown mode the toolbar includes **行内公式** / **独立公式** snippets (`\(…\)`, `$$…$$`) and a short reminder that **preview** uses the same KaTeX auto-render pass as `RichMarkdownDisplay` (so publishers validate formulas before publish).
+- `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar, KaTeX usage hint, fixed **LaTeX live demo** (`MarkdownLatexLiveDemo.vue`), and live preview are hidden; the textarea remains monospace for editing. In Markdown mode the toolbar includes **行内公式** / **独立公式** snippets (`\(…\)`, `$$…$$`). Above the textarea, a **non-editable canonical example** (`apps/web/admin/src/utils/markdownLatexDemo.js`) is always rendered via `RichMarkdownDisplay` so authors see correct delimiter behavior before typing; below that, **您的内容预览** mirrors the editable textarea. Props `compact-demo` reduces padding / hides the collapsible raw-markdown panel when multiple Markdown fields stack in one dialog (homework rubric blocks still show the **same rendered** demo).
+- `MarkdownLatexLiveDemo.vue`: reusable demo card + copy / insert actions; imported by `MarkdownEditorPanel` and by `CourseDiscussionPanel` whenever `draftFormat === 'markdown'`.
 - `PlainOrMarkdownBlock.vue`: read-only display; delegates Markdown mode to `RichMarkdownDisplay` and uses `white-space: pre-wrap` for plain mode.
 - `apps/web/admin/src/utils/contentFormat.js`: mirrors backend normalization for client defaults.
 
@@ -55,10 +56,10 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 
 - **Homework submission** (`HomeworkSubmission.vue`): label renamed to **正文**; editor supports Markdown/plain; history timeline uses `PlainOrMarkdownBlock`.
 - **Homework authoring** (`Homework.vue`): assignment body editor toggles format; homework detail uses `PlainOrMarkdownBlock` for instructions.
-- **Materials** (`Materials.vue`): same pattern for资料说明.
+- **Materials** (`Materials.vue` + `MaterialRead.vue`): authoring uses the same Markdown panel; table rows expose **阅读页** linking to `/materials/read/:id` with prev/next navigation while the modal detail dialog keeps quick preview + discussion threading.
 - **Notifications** (`Notifications.vue`): compose + detail (non-password-reset) respect `content_format`.
 - **Teacher submissions** (`HomeworkSubmissions.vue`): detail + history expanded bodies use `PlainOrMarkdownBlock`; collapsed preview flattens Markdown to one line for readability.
-- **Discussions** (`CourseDiscussionPanel.vue`): radio group **回复格式** before posting; `POST /api/discussions` sends `body_format`.
+- **Discussions** (`CourseDiscussionPanel.vue`): radio group **回复格式** before posting; choosing **Markdown** reveals the same live KaTeX demo (`MarkdownLatexLiveDemo`) plus copy/insert helpers; `POST /api/discussions` sends `body_format`.
 
 ## Testing
 
@@ -85,6 +86,16 @@ They assert round-trip persistence for homework update + student submission, dis
 
 5. **Playwright / E2E**  
    This change set does not automatically update every Playwright selector. If a spec asserted raw textarea DOM for homework submission content, it may need to target the inner `.md-panel__input` textarea or use `data-testid="homework-submit-content"` on the panel root.
+
+6. **Dashboard `total_students` vs elective enrollment**  
+   Earlier implementations counted every `Student` in the course class even when `subject_id` targeted an elective with partial `course_enrollments`. Symptoms: **课程仪表盘** showed “学生总数 = 班级人数” while **学生管理** listed fewer选课学生（演示种子「初等概率论」即如此）。  
+   **Mitigated:** `GET /api/dashboard/stats?subject_id=…` now counts `course_enrollments` rows for that subject. Regression guard: `tests/backend/integration/test_core_api_surface.py::test_dashboard_stats_subject_id_counts_enrollments_not_class_roster`.
+
+7. **KaTeX delimiter literacy**  
+   Authors sometimes paste math wrapped only in `[ ... ]`. `RichMarkdownDisplay` uses KaTeX `renderMathInElement` with `\(…\)`, `$…$`, `$$…$$`, `\[…\]` only—the demo block shipped with `MarkdownEditorPanel` / discussions spells this out and renders a live counter-example.
+
+8. **Course materials reading navigation**  
+   Full-page reader lives at `<admin-base>/materials/read/:id` (`MaterialRead.vue`). Prev/next order is **DFS chapter tree × API sort order per chapter** (same sequencing logic as the list endpoint). Deep-linking without selecting the matching course in the header guard-redirects back to `/materials`.
 
 ## Related documentation
 

@@ -25,14 +25,6 @@
             <p>大学教学管理系统</p>
           </div>
         </div>
-        <el-button
-          class="collapse-btn"
-          :icon="isCollapsed ? Expand : Fold"
-          circle
-          size="small"
-          :aria-label="isCollapsed ? '展开侧边栏' : '收起侧边栏'"
-          @click="toggleSidebarCollapse"
-        />
       </div>
 
       <div class="sidebar-body">
@@ -658,7 +650,8 @@ const persistDesktopSidebarState = () => {
     return
   }
 
-  const state = isSidebarHidden.value ? 'hidden' : isCollapsed.value ? 'collapsed' : 'expanded'
+  // Desktop UX: only distinguish hidden vs expanded (icon-only rail removed — edge handle is canonical).
+  const state = isSidebarHidden.value ? 'hidden' : 'expanded'
   window.localStorage.setItem(desktopSidebarStorageKey, state)
 }
 
@@ -673,25 +666,9 @@ const restoreDesktopSidebarState = () => {
     isCollapsed.value = false
     return
   }
-  if (state === 'collapsed') {
-    isSidebarHidden.value = false
-    isCollapsed.value = true
-    return
-  }
+  // Migrate legacy "collapsed" rail preference to fully expanded menu (sidebar rail toggle removed).
   isSidebarHidden.value = false
   isCollapsed.value = false
-}
-
-const toggleSidebarCollapse = () => {
-  if (isSidebarHidden.value) {
-    isSidebarHidden.value = false
-    isCollapsed.value = false
-    persistDesktopSidebarState()
-    return
-  }
-
-  isCollapsed.value = !isCollapsed.value
-  persistDesktopSidebarState()
 }
 
 const toggleMobileSidebar = () => {
@@ -970,12 +947,6 @@ watch(notificationSyncParams, () => {
   margin: 4px 0 0;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.65);
-}
-
-.collapse-btn {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: #fff;
 }
 
 .sidebar-menu {

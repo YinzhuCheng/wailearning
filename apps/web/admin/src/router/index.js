@@ -166,6 +166,12 @@ const routes = [
         ]
       },
       {
+        path: 'materials/read/:id',
+        name: 'MaterialRead',
+        component: () => import('@/views/MaterialRead.vue'),
+        meta: { title: '资料阅读' }
+      },
+      {
         path: 'materials',
         name: 'Materials',
         component: () => import('@/views/Materials.vue')
