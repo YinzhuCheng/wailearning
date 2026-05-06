@@ -29,6 +29,17 @@
         </el-button>
       </div>
     </article>
+
+    <section v-if="material" class="material-read-discussion" aria-label="资料讨论区">
+      <CourseDiscussionPanel
+        target-type="material"
+        :target-id="material.id"
+        :subject-id="material.subject_id"
+        :class-id="material.class_id"
+        :discussion-requires-context="material.discussion_requires_context"
+        :is-student="userStore.isStudent"
+      />
+    </section>
   </div>
 </template>
 
@@ -38,6 +49,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
 import { downloadAttachment } from '@/utils/attachments'
@@ -220,5 +232,12 @@ watch(
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px dashed #e2e8f0;
+}
+
+.material-read-discussion {
+  margin-top: 28px;
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
 }
 </style>

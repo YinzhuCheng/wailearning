@@ -29,7 +29,7 @@
 
       <div class="sidebar-body">
         <el-menu
-          :default-active="route.path"
+          :default-active="sidebarMenuActivePath"
           :default-openeds="homeworkMenuOpenIndices"
           :collapse="isCollapsed"
           router
@@ -494,6 +494,24 @@ const homeworkBreadcrumbParent = computed(() => {
   return p === '/homework/students' || /^\/homework\/\d+\//.test(p)
 })
 
+/**
+ * Element Plus menu `index` matches top-level routes like `/materials`, but nested routes
+ * such as `/materials/read/:id` must highlight the parent item so teachers/students see where they are.
+ */
+const sidebarMenuActivePath = computed(() => {
+  const p = route.path
+  if (p.startsWith('/materials/read/')) {
+    return '/materials'
+  }
+  if (p.startsWith('/homework/') && p !== '/homework') {
+    if (p.startsWith('/homework/students')) {
+      return '/homework/students'
+    }
+    return '/homework'
+  }
+  return p
+})
+
 const homeworkMenuOpenIndices = computed(() => {
   const p = route.path
   if (userStore.isStudent) {
@@ -530,17 +548,7 @@ const homeworkMenuOpenIndices = computed(() => {
     }
     return []
   }
-  if (
-    p.startsWith('/dashboard') ||
-    p.startsWith('/students') ||
-    p.startsWith('/scores') ||
-    p.startsWith('/attendance') ||
-    p.startsWith('/notifications') ||
-    p.startsWith('/homework') ||
-    p.startsWith('/materials')
-  ) {
-    return ['teacher-daily']
-  }
+  // Teacher accounts use a flat sidebar (no `teacher-daily` submenu); nothing to pre-open here.
   return []
 })
 
@@ -559,23 +567,16 @@ const classTeacherMenu = [
   }
 ]
 
+/** Flat menu: all entries used to live under a single 「日常教学」 submenu — removed for fewer clicks. */
 const teacherMenu = [
-  {
-    type: 'submenu',
-    index: 'teacher-daily',
-    label: '日常教学',
-    icon: School,
-    children: [
-      { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
-      { path: '/students', label: '学生管理', icon: User },
-      { path: '/scores', label: '成绩管理', icon: Collection },
-      { path: '/attendance', label: '考勤管理', icon: Collection },
-      { path: '/notifications', label: '通知中心', icon: Bell },
-      { path: '/homework', label: '作业管理', icon: Reading },
-      { path: '/homework/students', label: '学生作业一览', icon: User },
-      { path: '/materials', label: '课程资料', icon: Collection }
-    ]
-  }
+  { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
+  { path: '/students', label: '学生管理', icon: User },
+  { path: '/scores', label: '成绩管理', icon: Collection },
+  { path: '/attendance', label: '考勤管理', icon: Collection },
+  { path: '/notifications', label: '通知中心', icon: Bell },
+  { path: '/homework', label: '作业管理', icon: Reading },
+  { path: '/homework/students', label: '学生作业一览', icon: User },
+  { path: '/materials', label: '课程资料', icon: Collection }
 ]
 
 const studentMenu = [

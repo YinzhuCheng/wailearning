@@ -56,7 +56,7 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 
 - **Homework submission** (`HomeworkSubmission.vue`): label renamed to **正文**; editor supports Markdown/plain; history timeline uses `PlainOrMarkdownBlock`.
 - **Homework authoring** (`Homework.vue`): assignment body editor toggles format; homework detail uses `PlainOrMarkdownBlock` for instructions.
-- **Materials** (`Materials.vue` + `MaterialRead.vue`): authoring uses the same Markdown panel; table rows expose **阅读页** linking to `/materials/read/:id` with prev/next navigation while the modal detail dialog keeps quick preview + discussion threading.
+- **Materials** (`Materials.vue` + `MaterialRead.vue`): authoring uses the same Markdown panel; table rows expose **阅读页** linking to `/materials/read/:id` with prev/next navigation while the modal detail dialog keeps quick preview + discussion threading. **Full-page reader (`MaterialRead.vue`) also mounts `CourseDiscussionPanel` below the article** so behavior matches the modal: thread bodies render via `PlainOrMarkdownBlock` (Markdown + KaTeX vs plain); composer shows the same Markdown/LaTeX live demo when reply format is Markdown. Orphan materials (`discussion_requires_context=true`) show the existing warning card instead of the thread composer.
 - **Notifications** (`Notifications.vue`): compose + detail (non-password-reset) respect `content_format`.
 - **Teacher submissions** (`HomeworkSubmissions.vue`): detail + history expanded bodies use `PlainOrMarkdownBlock`; collapsed preview flattens Markdown to one line for readability.
 - **Discussions** (`CourseDiscussionPanel.vue`): radio group **回复格式** before posting; choosing **Markdown** reveals the same live KaTeX demo (`MarkdownLatexLiveDemo`) plus copy/insert helpers; `POST /api/discussions` sends `body_format`.
@@ -85,7 +85,8 @@ They assert round-trip persistence for homework update + student submission, dis
    If only attempts store `content_format` but the summary row is refreshed from the latest attempt, the summary column must be updated too or teacher APIs will return stale `markdown` for plain attempts.
 
 5. **Playwright / E2E**  
-   This change set does not automatically update every Playwright selector. If a spec asserted raw textarea DOM for homework submission content, it may need to target the inner `.md-panel__input` textarea or use `data-testid="homework-submit-content"` on the panel root.
+   This change set does not automatically update every Playwright selector. If a spec asserted raw textarea DOM for homework submission content, it may need to target the inner `.md-panel__input` textarea or use `data-testid="homework-submit-content"` on the panel root.  
+   **Material read + discussion:** after embedding `CourseDiscussionPanel` on `/materials/read/:id`, specs can scope assertions to `.material-read-page .discussion-card` (card header text 「讨论区」). Duplicate `data-testid="markdown-latex-demo-render"` remains limited to editor surfaces; the discussion list uses `PlainOrMarkdownBlock` per row without that test id.
 
 6. **Dashboard `total_students` vs elective enrollment**  
    Earlier implementations counted every `Student` in the course class even when `subject_id` targeted an elective with partial `course_enrollments`. Symptoms: **课程仪表盘** showed “学生总数 = 班级人数” while **学生管理** listed fewer选课学生（演示种子「初等概率论」即如此）。  
@@ -95,7 +96,12 @@ They assert round-trip persistence for homework update + student submission, dis
    Authors sometimes paste math wrapped only in `[ ... ]`. `RichMarkdownDisplay` uses KaTeX `renderMathInElement` with `\(…\)`, `$…$`, `$$…$$`, `\[…\]` only—the demo block shipped with `MarkdownEditorPanel` / discussions spells this out and renders a live counter-example.
 
 8. **Course materials reading navigation**  
-   Full-page reader lives at `<admin-base>/materials/read/:id` (`MaterialRead.vue`). Prev/next order is **DFS chapter tree × API sort order per chapter** (same sequencing logic as the list endpoint). After `GET /materials/{id}`, the reader **attempts to align `selected_course`** with `material.subject_id` using `fetchTeachingCourses` so deep links work even when `localStorage.selected_course` was cleared (Playwright `login()` clears storage). If the material’s subject is not in the teacher/student course list, the UI still redirects back to `/materials`. The article (`material.title` / body) is bound **before** chapter DFS completes so readers see the heading immediately; DFS failures downgrade to “导航不完整” rather than blocking the article.
+   Full-page reader lives at `<admin-base>/materials/read/:id` (`MaterialRead.vue`). Prev/next order is **DFS chapter tree × API sort order per chapter** (same sequencing logic as the list endpoint). After `GET /materials/{id}`, the reader **attempts to align `selected_course`** with `material.subject_id` using `fetchTeachingCourses` so deep links work even when `localStorage.selected_course` was cleared (Playwright `login()` clears storage). If the material’s subject is not in the teacher/student course list, the UI still redirects back to `/materials`. The article (`material.title` / body) is bound **before** chapter DFS completes so readers see the heading immediately; DFS failures downgrade to “导航不完整” rather than blocking the article.  
+   **Discussion parity:** the reader intentionally includes **`CourseDiscussionPanel`** (same props contract as `Materials.vue` detail dialog: `target-type="material"`, `subject_id`, `class_id`, `discussion_requires_context`, `is-student`). Agents must not assume “reading mode” is article-only; regression tests should assert the discussion card is present on `/materials/read/:id` when the material is course-scoped.
+
+9. **Teacher sidebar: removal of the 「日常教学」 submenu shell**  
+   Historically `Layout.vue` wrapped every teacher route under one `el-sub-menu` labeled 「日常教学」, forcing an extra expand click despite there being only one group. The teacher menu is now **flat `el-menu-item` rows** (same paths and labels as before). **`default-openeds` no longer references `teacher-daily`.** Student 「课程学习」 and admin 「学期与配置」 / 「消息与审计」 groupings are unchanged.  
+   **Menu active highlight:** `el-menu` `default-active` is driven by `sidebarMenuActivePath`, mapping nested routes (e.g. `/materials/read/123` → `/materials`, `/homework/9/submit` → `/homework`) so the correct rail item stays selected; without this mapping, Element Plus leaves no item highlighted when `route.path` does not exactly equal a menu `index`.
 
 ## Related documentation
 

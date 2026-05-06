@@ -1,6 +1,7 @@
 /**
  * Targeted E2E for course UI fixes: dashboard enrollment vs roster, Markdown LaTeX demo,
- * sidebar collapse control, materials layout + reader route.
+ * sidebar collapse control, materials layout + reader route (including discussion on reader),
+ * flat teacher sidebar without 「日常教学」 submenu.
  *
  * Depends on Playwright globalSetup + fixtures reset scenario (same contract as e2e-core-flows-smoke).
  */
@@ -110,6 +111,10 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.locator('.material-read-title')).toContainText(`E2E讨论资料_${s.suffix}`, {
       timeout: 15000
     })
+    const discuss = page.locator('.material-read-page .discussion-card')
+    await expect(discuss).toBeVisible({ timeout: 15000 })
+    await expect(discuss.getByText('讨论区', { exact: true })).toBeVisible()
+    await expect(discuss.getByText(/暂无讨论，发表第一条回复吧。/)).toBeVisible({ timeout: 10000 })
   })
 
   test('materials table read link opens reader route', async ({ page }) => {
@@ -123,6 +128,26 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
       timeout: 15000
     })
     await expect(page.locator('.material-read-title')).toBeVisible({ timeout: 15000 })
+  })
+
+  test('teacher sidebar lists daily routes without a 日常教学 submenu title', async ({ page }) => {
+    const s = scenario()
+    await login(page, s.teacher_own.username, s.teacher_own.password)
+    await page.goto('/dashboard')
+    await expect(page.locator('.sidebar-menu .el-sub-menu__title').filter({ hasText: '日常教学' })).toHaveCount(0)
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程仪表盘' })).toBeVisible({
+      timeout: 15000
+    })
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程资料' })).toBeVisible()
+  })
+
+  test('material reader highlights 课程资料 in sidebar via active path mapping', async ({ page }) => {
+    const s = scenario()
+    await login(page, s.teacher_own.username, s.teacher_own.password)
+    await page.goto(`/materials/read/${s.material_discussion_id}`)
+    await expect(page.locator('.material-read-title')).toContainText(`E2E讨论资料_${s.suffix}`, { timeout: 15000 })
+    const materialsItem = page.locator('.sidebar-menu .el-menu-item').filter({ hasText: '课程资料' })
+    await expect(materialsItem).toHaveClass(/is-active/, { timeout: 10000 })
   })
 
   test('material detail discussion shows Markdown LaTeX demo', async ({ page }) => {

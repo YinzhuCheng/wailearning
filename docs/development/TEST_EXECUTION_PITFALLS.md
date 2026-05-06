@@ -327,6 +327,10 @@ Symptom: `getByRole('radio', { name: '纯文本' }).click()` retries until timeo
 
 If `material` is assigned only **after** `buildSequence()` finishes (DFS over chapters × list calls), the reader toolbar can appear while `.material-read-title` is still absent for multiple seconds. Assertions that require the title should either wait longer or (preferably) rely on product behavior that assigns `material` immediately after `GET /materials/{id}` and treats chapter DFS failures as non-fatal for the article body.
 
+### Extension (May 2026): sidebar `default-active` vs nested routes (`/materials/read/:id`)
+
+`Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift.
+
 ## Pitfall 14: `textarea:first()` on the homework submit page is often the wrong control
 
 ### Symptom
