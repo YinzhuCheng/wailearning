@@ -18,6 +18,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WORKERS.md) | LLM grading worker (DB queue + thread pool) |
 | [`known-issues-and-risks.md`](known-issues-and-risks.md) | Open risks, “待人工确认”, CI location honesty |
 | [`DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
+| [`architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), mapping, pitfalls |
 
 ---
 
@@ -33,6 +34,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md) | Source vs artifact; import namespace contract |
 | [architecture/BACKEND_PACKAGE_STRUCTURE.md](architecture/BACKEND_PACKAGE_STRUCTURE.md) | Layer model inside `wailearning_backend` |
 | [architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) | Structural migration rationale |
+| [architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), movement mapping, validation notes |
 | [operations/DEPLOYMENT_AND_OPERATIONS.md](operations/DEPLOYMENT_AND_OPERATIONS.md) | Production layout, nginx, systemd, env templates |
 | [operations/ADMIN_BOOTSTRAP.md](operations/ADMIN_BOOTSTRAP.md) | Startup ordering, seed behavior |
 
@@ -89,6 +91,7 @@ Read:
 1. [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md)
 2. [architecture/SYSTEM_OVERVIEW.md](architecture/SYSTEM_OVERVIEW.md)
 3. [architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
+4. [architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) (most recent file-tree consolidation notes; read when touching `tests/devtools/` or top-level layout)
 
 Why:
 

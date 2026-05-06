@@ -135,3 +135,15 @@ npm run build
 ```
 
 **Observed durations (single agent VM, indicative):** Postgres pytest ~10.5 min; SQLite pytest ~8.9 min; Playwright full ~14 min.
+
+---
+
+## Part F — Follow-up: repository tree hygiene (2026-05)
+
+The **repository-structure optimization** pass relocated the test redundancy auditor from `tools/testing/audit_test_redundancy.py` to `tests/devtools/audit_test_redundancy.py` and removed the redundant top-level `tools/` directory.
+
+Agent notes:
+
+- Regenerate [`TEST_REDUNDANCY_AUDIT.md`](TEST_REDUNDANCY_AUDIT.md) via `python3 tests/devtools/audit_test_redundancy.py` after editing protection rules or performing large test-file churn.
+- Full narrative mapping + pitfalls live in [`architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](../architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md).
+- This relocation **does not** change pytest discovery rules (`pytest.ini` still selects `test_*.py` only); devtools filenames must remain outside that pattern.

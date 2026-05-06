@@ -25,7 +25,8 @@ The current tree is best described by the following labels.
 ### Repository-level pattern labels
 
 - **Good / explicit multi-app monorepo shape**
-  - `apps/`, `docs/`, `ops/`, `tests/`, and `tools/` are clearly separated.
+  - `apps/`, `docs/`, `ops/`, and `tests/` are clearly separated at the repository root.
+  - Test-tree maintenance utilities live **inside** `tests/devtools/` so they do not compete with deployment scripts under `ops/scripts/` or inflate the root directory.
   - The root does not currently contain ad hoc launchers, legacy compatibility packages, copied frontend output, or app-local scripts.
   - The two frontends are separated by deployment surface and user journey rather than being mixed into one UI tree.
 
@@ -63,7 +64,7 @@ Mostly yes.
   - one FastAPI backend,
   - one admin SPA,
   - one parent SPA.
-- `docs/`, `ops/`, `tests/`, and `tools/` are appropriate at this size and keep non-runtime concerns out of app code.
+- `docs/`, `ops/`, and `tests/` are appropriate at this size and keep non-runtime concerns out of app code.
 - `apps/web/admin` and `apps/web/parent` are correctly separate because the deployment base path, runtime role model, and UX surface are different.
 
 Where naming and scale still drift:
@@ -236,7 +237,6 @@ repo/
       STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md
   ops/
   tests/
-  tools/
   README.md
   requirements.txt
   pytest.ini
@@ -277,7 +277,7 @@ Result:
 Done second:
 
 - keep the root limited to repository-scoped files
-- move any future one-off scripts under `ops/scripts/` or `tools/` immediately instead of letting root sprawl return
+- move any future one-off scripts under `ops/scripts/` (deployment/maintenance) or `tests/devtools/` (test-tree analyzers and generators) immediately instead of letting root sprawl return
 - keep local runtime outputs out of source trees via `.gitignore`
 - make sure CI, Playwright config, Windows launchers, and systemd continue to point at the same canonical entrypoints while domain extraction happens internally
 

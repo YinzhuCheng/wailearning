@@ -36,7 +36,7 @@ repo/
       parent/                      parent-facing SPA
   docs/                            authoritative documentation tree
   ops/                             deployment, CI, nginx, systemd, helper scripts
-  tests/                           pytest suites and Playwright specs
+  tests/                           pytest suites, Playwright specs, and optional devtools (see Test Boundaries)
   README.md                        public repository entrypoint
   LICENSE                          license text
   requirements.txt                 Python dependency surface for the backend
@@ -237,6 +237,7 @@ Tests live under `tests/` and are grouped by style and purpose:
 - `tests/e2e/web-admin/` for browser E2E coverage,
 - `tests/fixtures/` for test assets,
 - `tests/scenarios/` for reusable scenario builders and stress helpers,
+- `tests/devtools/` for **non-pytest** Python utilities that operate on the test tree itself (for example, regenerating redundancy audit markdown). Files here must **not** match `test_*.py` so `pytest` discovery ignores them.
 - `tests/conftest.py` for repository test defaults beneath the root bootstrap.
 
 The root `conftest.py` remains repository-scoped on purpose. It stabilizes Windows temp-path behavior before test discovery becomes fragile.

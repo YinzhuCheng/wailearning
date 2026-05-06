@@ -20,10 +20,25 @@ It is intended for contributors and LLM coding agents who need to answer questio
     postgres/                 PostgreSQL-only guards (skip unless Postgres: TEST_DATABASE_URL or WAILEARNING_AUTO_PG_TESTS=1 after provision script)
     security/                 API authorization / abuse-edge regression (roles, tokens)
     e2e/web-admin/            Playwright browser coverage for the admin SPA
-  fixtures/                 static files used by tests
-  scenarios/                shared scenario builders and stress helpers
-  conftest.py               repository test environment defaults
-```
+    devtools/                 maintenance scripts that scan or rewrite test artifacts (not pytest-discovered; filenames must not start with `test_`)
+    fixtures/                 static files used by tests
+    scenarios/                shared scenario builders and stress helpers
+    conftest.py               repository test environment defaults
+  ```
+
+### `tests/devtools/` (maintenance, not pytest discovery)
+
+This subdirectory holds **repository-maintained utilities** that operate on files under `tests/` but are **not** pytest test modules.
+
+Rules agents should follow:
+
+- Filenames **must not** match `python_files = test_*.py` from [`pytest.ini`](../../pytest.ini), otherwise pytest will try to import them as tests.
+- The redundancy auditor explicitly skips everything under `tests/devtools/` when classifying test inventory so the script does not count itself as coverage inventory noise.
+- Prefer placing **deployment-facing** shell scripts in [`ops/scripts/`](../../ops/scripts/) instead of here; `tests/devtools/` is for analyzers, generators, and other tooling tightly coupled to the test corpus.
+
+Current utilities:
+
+- [`tests/devtools/audit_test_redundancy.py`](../../tests/devtools/audit_test_redundancy.py) — regenerates [`TEST_REDUNDANCY_AUDIT.md`](TEST_REDUNDANCY_AUDIT.md).
 
 ## Category Overview
 

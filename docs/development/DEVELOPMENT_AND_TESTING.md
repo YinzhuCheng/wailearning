@@ -657,7 +657,7 @@ If you are considering deleting or consolidating tests, do not start from ad hoc
 Read and use:
 
 - [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md)
-- `tools/testing/audit_test_redundancy.py`
+- `tests/devtools/audit_test_redundancy.py`
 - `tests/TEST_PROTECTION_RULES.json`
 
 Policy:
