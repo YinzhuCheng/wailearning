@@ -1,11 +1,13 @@
 """Default demo data: teacher `teacher`, class 人工智能1班, students stu1–stu5.
 
 - **必修课**「数据挖掘」：教师按班级花名册统一入课（`sync_course_enrollments`），含演示章节与第一次作业。
-- **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业，**不**自动写入全班选课。
+  演示作业区分「学生可见评分要点」与「仅教师可见评分细则」，并包含「参考答案或思路」字段（教师侧与 LLM 评分可见；学生 API 不返回）。
+  演示会为前 3 名示例学生（stu1–stu3）幂等写入**已提交但未打分**的作业正文，便于查看提交列表。
+- **选修课**「大语言模型」：同班开设，学生需自主选课；预置简要资料与入门作业；当全局存在已校验 LLM 端点时，演示种子会为选修课绑定端点并启用课程 LLM（自动评分 + 智能助教路由与必修课一致）。
 
-若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（`ensure_schema_updates` 会写入内置默认预设），本种子会为演示必修课/选修课**幂等绑定**首个可用预设（必修课同时 `is_enabled=True` 以配合自动评分作业）；否则不写入端点，由管理员或教师在课程 LLM 配置中手动选择。
+若数据库中已有**通过校验且可用于评分**的全局 LLM 端点预设（见 `bootstrap._ensure_default_llm_endpoint_preset`，可在配置 `DEFAULT_LLM_API_KEY` 时于首次启动尝试文本+图像自检），本种子会为演示必修课/选修课**幂等绑定**首个可用预设并启用课程 LLM。
 
-演示必修课作业**不包含参考答案**（`reference_answer` 为空）。必修课资料区含三层演示章节。
+必修课资料区含三层演示章节。
 """
 
 from __future__ import annotations
@@ -27,6 +29,8 @@ from apps.backend.wailearning_backend.db.models import (
     CourseMaterialChapter,
     CourseMaterialSection,
     Homework,
+    HomeworkAttempt,
+    HomeworkSubmission,
     LLMEndpointPreset,
     Semester,
     Student,
@@ -34,6 +38,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
+from apps.backend.wailearning_backend.llm_grading import refresh_submission_summary
 from apps.backend.wailearning_backend.domains.roster.sync import reconcile_student_users_and_roster
 
 _DEMO_PASSWORD = "111111"
@@ -91,7 +96,13 @@ _DEMO_CHAPTER_L3 = "【演示】1.1 课程资料与拓展阅读"
 
 def _first_validated_preset_for_demo_course(db: Session) -> LLMEndpointPreset | None:
     """
-    Global preset suitable for demo course LLM binding (validated + active + usable for grading rules).
+    Global preset suitable for demo course LLM binding.
+
+    Prefer rows that pass the same gates as the teacher UI (validated + active + vision-capable + text/vision steps not failed).
+
+    If none match — typical when `DEFAULT_LLM_API_KEY` is unset so the built-in seed preset stays `pending` —
+    fall back to the bootstrap default preset row (`gpt-5.4`) so demo bundles still get an endpoint link for local installs.
+    Automatic grading may still fail until an operator validates the preset or supplies a working key.
     """
     for pr in (
         db.query(LLMEndpointPreset)
@@ -112,7 +123,12 @@ def _first_validated_preset_for_demo_course(db: Session) -> LLMEndpointPreset | 
         if vs == "failed":
             continue
         return pr
-    return None
+    return (
+        db.query(LLMEndpointPreset)
+        .filter(LLMEndpointPreset.name == "gpt-5.4", LLMEndpointPreset.supports_vision.is_(True))
+        .order_by(LLMEndpointPreset.id.asc())
+        .first()
+    )
 
 
 def _ensure_demo_subject_llm_binding(
@@ -319,7 +335,9 @@ Wine 数据集中，不同化学成分的数值范围差异较大。例如 proli
 
 文件命名不规范一般不会严重扣分，但建议大家尽量按照格式提交，方便教师整理和查看。"""
 
-_RUBRIC_TEXT = """请根据以下标准评分，总分 100 分。评分时应以鼓励学生完成第一次数据挖掘实践为主，重点关注学生是否动手完成了基本流程，是否能够展示代码、结果和自己的理解。不要过度强调提交格式、图表美观程度或答案是否完全一致。
+_RUBRIC_TEXT_STUDENT = """本次作业满分 100。学生可见的评分导向：是否完成 Python 环境与 Wine 数据集的基本探索流程，能否用自己的话解释 NumPy/Pandas 的常见用途与若干基础操作，是否能给出至少一种合理的可视化或描述性统计小结，并简述标准化或特征尺度的直观意义。详细分项分值与加分细则仅供教师与自动评分模型内部参照，勿要求学生背诵逐项配分表。"""
+
+_RUBRIC_TEXT_STAFF_ONLY = """请根据以下标准评分，总分 100 分。评分时应以鼓励学生完成第一次数据挖掘实践为主，重点关注学生是否动手完成了基本流程，是否能够展示代码、结果和自己的理解。不要过度强调提交格式、图表美观程度或答案是否完全一致。
 
 一、Python 环境与基础运行，20 分
 
@@ -433,6 +451,8 @@ _RUBRIC_TEXT = """请根据以下标准评分，总分 100 分。评分时应以
 8. 学生如果使用了其他合理数据集完成类似流程，也可以酌情给分。
 9. 只有在几乎没有完成主要任务、内容明显与作业无关、完全无法判断完成情况，或存在明显大段抄袭时，才应给较低分。
 10. 对于认真完成主要任务的学生，建议分数集中在 85 分以上。"""
+
+_REFERENCE_OR_APPROACH = """（教师侧核对要点）典型思路示例：使用 sklearn.datasets.load_wine 载入数据；转换为 pandas.DataFrame 并查看 head()/info()/describe()；可按类别或特征做简单可视化（如箱线图、直方图）；标准化可用手写 (x−mean)/std 或 sklearn.preprocessing.StandardScaler。学生表述可与示例不完全一致，只要流程合理、结论与图表相符即可。"""
 
 
 def _seed_demo_grade_weights(db: Session, *, course: Subject) -> None:
@@ -586,7 +606,7 @@ def _seed_llm_elective_course(
         db,
         subject_id=course.id,
         teacher_id=teacher.id,
-        enable_auto_grading=False,
+        enable_auto_grading=True,
     )
 
     _seed_demo_grade_weights(db, course=course)
@@ -634,7 +654,7 @@ def _seed_llm_elective_course(
                 due_date=due,
                 max_score=100,
                 grade_precision="integer",
-                auto_grading_enabled=False,
+                auto_grading_enabled=True,
                 rubric_text=_LLM_RUBRIC_TEXT,
                 reference_answer=None,
                 response_language="zh-CN",
@@ -648,7 +668,73 @@ def _seed_llm_elective_course(
     else:
         hw.content = _LLM_HOMEWORK_CONTENT
         hw.rubric_text = _LLM_RUBRIC_TEXT
+        hw.auto_grading_enabled = True
         hw.due_date = hw.due_date or due
+
+
+_DEMO_PREFILL_STUDENT_NOS = ("stu1", "stu2", "stu3")
+_DEMO_PREFILL_BODIES = (
+    "我使用 Anaconda 中的 Jupyter 完成环境配置，已能 import numpy、pandas 并运行 Hello Python。"
+    "概念题：NumPy 侧重向量化数值计算，Pandas 侧重表格筛选与分组。"
+    "Wine 数据已用 load_wine 读入为 DataFrame，完成了 head 与 describe，并对 alcohol、color_intensity 画了散点图观察类别分布差异。",
+    "环境为 VS Code + 本地 Python 3.11。成功导入 numpy、pandas、matplotlib。"
+    "已用 loc 与布尔索引练习行筛选，并用 groupby 做了简单聚合；完成了一张特征分布图并写了两句文字结论。",
+    "我使用 Colab 完成。DataFrame 已包含 target 列，并用 describe() 查看了数值特征概况。"
+    "尝试对某一列做了标准化，观察到均值接近 0；时间有限代码不长，但主要步骤已跑通。",
+)
+
+
+def _seed_demo_prefilled_homework_submissions(db: Session, *, homework_row: Homework | None, klass: Class) -> None:
+    """幂等写入少量「已提交但未打分」记录，便于演示提交列表与教师批改界面。"""
+    if not homework_row:
+        return
+    roster = {row.student_no: row for row in db.query(Student).filter(Student.class_id == klass.id).all() if row.student_no}
+    touched = False
+    for idx, uname in enumerate(_DEMO_PREFILL_STUDENT_NOS):
+        st = roster.get(uname)
+        if not st:
+            continue
+        exists = (
+            db.query(HomeworkSubmission)
+            .filter(HomeworkSubmission.homework_id == homework_row.id, HomeworkSubmission.student_id == st.id)
+            .first()
+        )
+        if exists:
+            continue
+        body = _DEMO_PREFILL_BODIES[idx] if idx < len(_DEMO_PREFILL_BODIES) else _DEMO_PREFILL_BODIES[0]
+        submitted_at = datetime.now(timezone.utc) - timedelta(days=2)
+        summary = HomeworkSubmission(
+            homework_id=homework_row.id,
+            student_id=st.id,
+            subject_id=homework_row.subject_id,
+            class_id=homework_row.class_id,
+            content=body,
+            content_format="markdown",
+            submitted_at=submitted_at,
+            updated_at=submitted_at,
+        )
+        db.add(summary)
+        db.flush()
+        attempt = HomeworkAttempt(
+            homework_id=homework_row.id,
+            student_id=st.id,
+            subject_id=homework_row.subject_id,
+            class_id=homework_row.class_id,
+            submission_summary_id=summary.id,
+            content=body,
+            content_format="markdown",
+            is_late=False,
+            counts_toward_final_score=True,
+            submitted_at=submitted_at,
+            updated_at=submitted_at,
+        )
+        db.add(attempt)
+        db.flush()
+        summary.latest_attempt_id = attempt.id
+        refresh_submission_summary(db, summary)
+        touched = True
+    if touched:
+        print("Inserted demo prefilled homework submissions (first three roster students) without scores.")
 
 
 def seed_demo_course_bundle(db: Session) -> None:
@@ -805,8 +891,9 @@ def seed_demo_course_bundle(db: Session) -> None:
                 max_score=100,
                 grade_precision="integer",
                 auto_grading_enabled=True,
-                rubric_text=_RUBRIC_TEXT,
-                reference_answer=None,
+                rubric_text=_RUBRIC_TEXT_STUDENT,
+                rubric_staff_only=_RUBRIC_TEXT_STAFF_ONLY,
+                reference_answer=_REFERENCE_OR_APPROACH,
                 response_language="zh-CN",
                 allow_late_submission=True,
                 late_submission_affects_score=False,
@@ -814,18 +901,27 @@ def seed_demo_course_bundle(db: Session) -> None:
                 created_by=teacher.id,
             )
         )
+        db.flush()
         print("Created demo homework (first assignment).")
     else:
         hw.content = _HOMEWORK_CONTENT
         hw.max_score = 100
         hw.grade_precision = "integer"
         hw.auto_grading_enabled = True
-        hw.rubric_text = _RUBRIC_TEXT
-        hw.reference_answer = None
+        hw.rubric_text = _RUBRIC_TEXT_STUDENT
+        hw.rubric_staff_only = _RUBRIC_TEXT_STAFF_ONLY
+        hw.reference_answer = _REFERENCE_OR_APPROACH
         hw.response_language = "zh-CN"
         hw.due_date = hw.due_date or due
         hw.max_submissions = hw.max_submissions if hw.max_submissions is not None else 3
         print("Demo homework already exists; refreshed text fields.")
+
+    hw = (
+        db.query(Homework)
+        .filter(Homework.subject_id == course.id, Homework.title == _HOMEWORK_TITLE)
+        .first()
+    )
+    _seed_demo_prefilled_homework_submissions(db, homework_row=hw, klass=klass)
 
     _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)
 

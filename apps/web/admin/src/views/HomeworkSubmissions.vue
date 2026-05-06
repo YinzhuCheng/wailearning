@@ -43,6 +43,11 @@
           <el-descriptions-item label="满分">{{ formatScore(homework.max_score) }}</el-descriptions-item>
           <el-descriptions-item label="自动评分">{{ homework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
+          <el-descriptions-item label="成绩汇总说明" :span="2">
+            <span class="muted-text">
+              表格「有效成绩」为每名学生在截止时间之前的提交，以及仍计入总评的迟交提交（关闭「迟交影响评分」时）之中的最高分；评语对应该最高分来源。任务状态列仍反映每名学生的<strong>最近一次</strong>尝试。
+            </span>
+          </el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
             <PlainOrMarkdownBlock
               :text="homework.content"
@@ -51,10 +56,13 @@
               empty-text="暂无作业说明。"
             />
           </el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">
+          <el-descriptions-item label="评分要点（学生可见）" :span="2">
             <RichMarkdownDisplay :markdown="homework.rubric_text" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">
+            <RichMarkdownDisplay :markdown="homework.rubric_staff_only" variant="teacher" empty-text="未设置" />
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">
             <RichMarkdownDisplay :markdown="homework.reference_answer" variant="teacher" empty-text="未设置" />
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
@@ -181,7 +189,7 @@
                 <span v-else class="muted-text">—</span>
               </template>
             </el-table-column>
-            <el-table-column label="分数" width="100">
+            <el-table-column label="有效成绩（截止前/计入总评取最高）" width="120">
               <template #default="{ row }">
                 <template v-if="row.review_score !== null && row.review_score !== undefined">
                   <el-tag :type="scoreTag(row.review_score)" size="small">{{ formatScore(row.review_score) }}</el-tag>
@@ -288,12 +296,15 @@
             </el-button>
             <span v-else class="muted-text">无</span>
           </el-descriptions-item>
-          <el-descriptions-item label="当前展示分">
+          <el-descriptions-item label="有效成绩（截止前/计入总评取最高）">
             {{
               detailRow.review_score !== null && detailRow.review_score !== undefined
                 ? formatScore(detailRow.review_score)
                 : '—'
             }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detailRow.effective_score_note_zh" label="成绩说明" :span="2">
+            <span class="muted-text">{{ detailRow.effective_score_note_zh }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="评语">
             <div v-if="detailRow.review_comment" class="feedback-inline">
