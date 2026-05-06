@@ -706,6 +706,8 @@ class HomeworkResponse(HomeworkBase):
     task_error: Optional[str] = None
     attempt_count: int = 0
     latest_submission_is_late: Optional[bool] = None
+    graded_attempt_id: Optional[int] = None
+    latest_submission_attempt_id: Optional[int] = None
     grading_rule_hint: Optional[str] = None
 
     class Config:
@@ -749,6 +751,7 @@ class HomeworkSubmissionResponse(BaseModel):
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
     latest_attempt_id: Optional[int] = None
+    graded_attempt_id: Optional[int] = None
     latest_task_status: Optional[str] = None
     latest_task_error: Optional[str] = None
 
@@ -811,6 +814,7 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     review_score: Optional[float] = None
     review_comment: Optional[str] = None
     latest_attempt_id: Optional[int] = None
+    graded_attempt_id: Optional[int] = None
     latest_attempt_is_late: Optional[bool] = None
     latest_task_status: Optional[str] = None
     latest_task_error: Optional[str] = None

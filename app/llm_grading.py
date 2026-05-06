@@ -176,6 +176,45 @@ def _auto_candidate_sort_key(candidate: HomeworkScoreCandidate) -> tuple[float, 
     return (float(candidate.score or 0), ts)
 
 
+def _candidate_eligible_for_aggregate_grade(candidate: HomeworkScoreCandidate) -> bool:
+    """Participate in submission-level aggregate: counting attempts, or any teacher row (incl. late)."""
+    if candidate.score is None:
+        return False
+    attempt = candidate.attempt
+    if attempt is None:
+        return False
+    if bool(getattr(attempt, "counts_toward_final_score", True)):
+        return True
+    if (candidate.source or "") == "teacher":
+        return True
+    return False
+
+
+def _pick_best_within_attempt_for_aggregate(candidates: list[HomeworkScoreCandidate]) -> Optional[HomeworkScoreCandidate]:
+    """Same attempt: teacher beats auto; then higher score / newer."""
+    valid = [c for c in candidates if c.score is not None]
+    if not valid:
+        return None
+    teacher_rows = [c for c in valid if c.source == "teacher"]
+    if teacher_rows:
+        return max(teacher_rows, key=_teacher_candidate_sort_key)
+    auto_rows = [c for c in valid if c.source == "auto"]
+    if auto_rows:
+        return max(auto_rows, key=_auto_candidate_sort_key)
+    return max(valid, key=_auto_candidate_sort_key)
+
+
+def _cross_attempt_grade_sort_key(candidate: HomeworkScoreCandidate) -> tuple[float, float, int]:
+    """Higher score wins; tie-break by later attempt submission time, then attempt id."""
+    attempt = candidate.attempt
+    ts = attempt.submitted_at if attempt else datetime.min.replace(tzinfo=timezone.utc)
+    try:
+        ts_key = float(ts.timestamp()) if ts is not None and hasattr(ts, "timestamp") else 0.0
+    except Exception:
+        ts_key = 0.0
+    return (float(candidate.score or 0), ts_key, int(candidate.attempt_id or 0))
+
+
 def get_best_score_candidate(
     db: Session,
     homework_id: int,
@@ -184,43 +223,46 @@ def get_best_score_candidate(
     latest_attempt_id: Optional[int] = None,
 ) -> Optional[HomeworkScoreCandidate]:
     """
-    Best visible score for the submission summary: only the **latest attempt**'s
-    candidates apply (if latest_attempt_id is set). On that attempt, any **teacher**
-    score takes precedence over automatic scores so LLM output cannot override a
-    teacher's grade in the UI.
+    Aggregate visible score for the submission summary:
+
+    1. Take every score candidate that is either on an attempt with
+       ``counts_toward_final_score`` (按时或「迟交但不影响评分」), **or** is
+       teacher-sourced (教师可在迟交批次上给分，仍参与总评聚合).
+    2. Within each attempt, teacher rows beat auto rows on that attempt (same as before).
+    3. Across attempts, pick the **maximum score**; ties favor the **newer** submission.
+
+    ``latest_attempt_id`` is ignored (kept for backward-compatible call sites).
     """
-    query = (
+    _ = latest_attempt_id
+    candidates = (
         db.query(HomeworkScoreCandidate)
+        .options(joinedload(HomeworkScoreCandidate.attempt))
+        .join(HomeworkAttempt, HomeworkScoreCandidate.attempt_id == HomeworkAttempt.id)
         .filter(
             HomeworkScoreCandidate.homework_id == homework_id,
             HomeworkScoreCandidate.student_id == student_id,
         )
+        .all()
     )
-    if latest_attempt_id is not None:
-        query = query.filter(HomeworkScoreCandidate.attempt_id == latest_attempt_id)
-    candidates = query.all()
-    valid_candidates = [
-        c
-        for c in candidates
-        if c.score is not None and getattr(c.attempt, "counts_toward_final_score", True)
-    ]
-    if not valid_candidates:
+    eligible = [c for c in candidates if _candidate_eligible_for_aggregate_grade(c)]
+    by_attempt: dict[int, list[HomeworkScoreCandidate]] = {}
+    for item in eligible:
+        by_attempt.setdefault(item.attempt_id, []).append(item)
+    picks: list[HomeworkScoreCandidate] = []
+    for group in by_attempt.values():
+        chosen = _pick_best_within_attempt_for_aggregate(group)
+        if chosen:
+            picks.append(chosen)
+    if not picks:
         return None
-    teacher_rows = [c for c in valid_candidates if c.source == "teacher"]
-    if teacher_rows:
-        return max(teacher_rows, key=_teacher_candidate_sort_key)
-    auto_rows = [c for c in valid_candidates if c.source == "auto"]
-    if auto_rows:
-        return max(auto_rows, key=_auto_candidate_sort_key)
-    return max(valid_candidates, key=_auto_candidate_sort_key)
+    return max(picks, key=_cross_attempt_grade_sort_key)
 
 
 def refresh_submission_summary(db: Session, summary: HomeworkSubmission) -> HomeworkSubmission:
-    best_candidate = get_best_score_candidate(
-        db, summary.homework_id, summary.student_id, latest_attempt_id=summary.latest_attempt_id
-    )
+    best_candidate = get_best_score_candidate(db, summary.homework_id, summary.student_id)
     summary.review_score = best_candidate.score if best_candidate else None
     summary.review_comment = (best_candidate.comment or None) if best_candidate else None
+    summary.graded_best_attempt_id = best_candidate.attempt_id if best_candidate else None
 
     if summary.latest_attempt_id:
         latest_attempt = (

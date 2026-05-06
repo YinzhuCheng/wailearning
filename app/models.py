@@ -366,6 +366,7 @@ class HomeworkSubmission(Base):
     review_score = Column(Float, nullable=True)
     review_comment = Column(String, nullable=True)
     latest_attempt_id = Column(Integer, ForeignKey("homework_attempts.id"), nullable=True)
+    graded_best_attempt_id = Column(Integer, ForeignKey("homework_attempts.id"), nullable=True)
     latest_task_status = Column(String, nullable=True)
     latest_task_error = Column(Text, nullable=True)
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -380,6 +381,7 @@ class HomeworkSubmission(Base):
     subject = relationship("Subject")
     class_obj = relationship("Class")
     latest_attempt = relationship("HomeworkAttempt", foreign_keys=[latest_attempt_id])
+    graded_best_attempt = relationship("HomeworkAttempt", foreign_keys=[graded_best_attempt_id])
 
 
 class HomeworkAttempt(Base):

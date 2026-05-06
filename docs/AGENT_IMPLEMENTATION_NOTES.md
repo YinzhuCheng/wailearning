@@ -60,6 +60,37 @@
 - 文件：`app/llm_grading.py` → `_build_student_material`。
 - 顺序与标签用于提醒模型：**学生可见要点 → 教师专用要点 → 参考答案或思路**；并强调勿向学生泄露后两类内容。
 
+### 2.4 迟交、多次提交与「总评展示分」（聚合规则，面向 agent 精确复现）
+
+#### 2.4.1 业务目标（修复前的问题）
+
+- **旧行为（已废弃）**：`get_best_score_candidate` 仅查看 **`latest_attempt_id` 对应批次** 的 `HomeworkScoreCandidate`。若学生最后一次提交为 **迟交且开启「迟交影响评分」**，该批次 `counts_toward_final_score=false`，自动分被过滤后，**总评可能变为空**，即使此前按时提交已有高分。这与教务直觉（惩罚迟交那次，而非「吞掉历史高分」）不一致。
+
+#### 2.4.2 新行为（当前实现）
+
+- **聚合入口**：`app/llm_grading.py` → `get_best_score_candidate`（`refresh_submission_summary` 在每次刷新提交汇总时调用）。
+- **参与聚合的候选行**（`HomeworkScoreCandidate`）必须满足：
+  1. `score` 非空；且
+  2. 其所属 `HomeworkAttempt` 满足 **`counts_toward_final_score == True`**（按时，或迟交但作业未开启「迟交影响评分」），**或者** 候选 `source == "teacher"`（**教师手动评分始终可参与聚合**，即使打在迟交批次上——便于教师对补交单独给分）。
+- **同一 attempt 内**：与旧逻辑一致——若存在教师候选，取教师分中的最优（分数高、时间新）；否则在自动分中取最优。
+- **跨 attempt**：在「每个 attempt 的代表候选」中取 **分数最高** 者；分数相同则取 **提交时间更晚** 的 attempt，再比 `attempt_id`。
+- **持久化字段**：`homework_submissions.graded_best_attempt_id`（`ensure_schema_updates` 中 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS graded_best_attempt_id INTEGER`）在 `refresh_submission_summary` 中写入，表示 **当前总评分数/评语所来自的 attempt**。用于前端「计入总评」标签与文案，**不必**再猜 `latest_attempt_id`。
+
+#### 2.4.3 API 与前端契约
+
+- **响应字段**（示意）：
+  - `HomeworkSubmissionResponse.graded_attempt_id`：对应 ORM 的 `graded_best_attempt_id`。
+  - `HomeworkResponse.graded_attempt_id` + `latest_submission_attempt_id`：学生作业列表可判断 **总评来源是否与最新提交不同**。
+  - `HomeworkSubmissionStatusResponse.graded_attempt_id`：教师批改列表「总评来源」列。
+- **学生页**：`frontend/src/views/HomeworkSubmission.vue` — 描述区说明总评来源；时间轴上对 `graded_attempt_id` 匹配项打 **「计入总评」**；若开启迟交惩罚且最新批次 ≠ 总评来源，显示 **说明性 `el-alert`**。
+- **教师发布作业**：`frontend/src/views/Homework.vue` — 迟交规则下增加简短说明（自动分 vs 教师分参与总评的差异）。
+
+#### 2.4.4 测试与易错点
+
+- **回归用例**：`tests/test_llm_concurrency_scenarios.py::test_aggregate_score_keeps_best_counting_attempt_after_late_resubmit` — 第一次按时提交得 88 分，截止后第二次迟交自动 33 分且作业 `late_submission_affects_score=True`，断言 `GET /api/homeworks/{id}/submission/me` 的 `review_score` 仍为 **88** 且 `graded_attempt_id` 指向 **第一次 attempt**。
+- **坑**：若在未来修改 `get_best_score_candidate` 时去掉 `joinedload(HomeworkScoreCandidate.attempt)`，`_candidate_eligible_for_aggregate_grade` 可能因 `attempt` 未加载而 **错误排除候选**（lazy load 在已 detach 会话时也会出问题）。应保持 **查询时预加载 attempt** 或改显式 join 条件。
+- **坑**：教师给 **迟交批次** 打分时，该分数会进入聚合；若产品日后要求「教师分也仅能在计入批次上生效」，需单独开需求改 `_candidate_eligible_for_aggregate_grade`，与本文档脱钩。
+
 ---
 
 ## 3. 课程封面：`subjects.cover_image_url`
@@ -111,5 +142,6 @@
 1. `pytest tests/test_llm_settings_api.py -q` 通过。
 2. `pytest tests/test_homework_llm_grading.py -q`（若存在对 `HomeworkResponse` 字段数的假设，需更新）。
 3. `pytest tests/test_llm_course_e2e_scenarios.py -q` 通过（15 条 LLM/课程/作业交叉场景）。
-4. 前端：`npm run build`（在 `frontend/`）无语法错误。
-5. 手动：学生账号打开作业详情页，只能看到 **评分要点（对学生可见）**，看不到教师框与参考答案。
+4. `pytest tests/test_llm_concurrency_scenarios.py -q` 建议全跑；其中含 **迟交聚合** 用例 `test_aggregate_score_keeps_best_counting_attempt_after_late_resubmit`。
+5. 前端：`npm run build`（在 `frontend/`）无语法错误。
+6. 手动：学生账号打开作业详情页，只能看到 **评分要点（对学生可见）**，看不到教师框与参考答案。

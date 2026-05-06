@@ -98,7 +98,12 @@
                   {{ formatScore(row.review_score) }}
                 </el-tag>
                 <div v-if="row.review_comment" class="review-comment">{{ row.review_comment }}</div>
-                <div class="review-meta">共 {{ row.attempt_count || 0 }} 次提交，展示最高分对应评语</div>
+                <div class="review-meta">
+                  共 {{ row.attempt_count || 0 }} 次提交；总评取规则允许批次中的最高分
+                  <template v-if="row.graded_attempt_id && row.latest_submission_attempt_id && row.graded_attempt_id !== row.latest_submission_attempt_id">
+                    （当前总评来源与最新一次提交不同，见提交详情页）
+                  </template>
+                </div>
               </div>
               <span v-else class="muted-text">未评分</span>
             </template>
@@ -194,6 +199,9 @@
               inactive-text="迟交默认不影响评分"
             />
           </div>
+          <p class="late-rules-hint">
+            开启「迟交影响评分」时：迟交批次的<strong>自动分</strong>不参与总评；总评取各允许批次中的<strong>最高分</strong>（教师仍可在迟交批次上给分并参与比较）。学生端会标注总评分数来自哪一次提交。
+          </p>
         </el-form-item>
         <el-form-item label="附件">
           <el-upload
@@ -599,6 +607,13 @@ watch(selectedCourse, () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.late-rules-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #64748b;
 }
 
 @media (max-width: 768px) {

@@ -55,7 +55,7 @@
         <template #header>
           <div class="card-header">
             <span>提交情况</span>
-            <el-text type="info">仅勾选已提交且带附件的学生，可用于批量下载；主视图评分展示最高分对应评语。</el-text>
+            <el-text type="info">仅勾选已提交且带附件的学生，可用于批量下载；列表中的分数为「计入总评」的聚合结果（多次提交取规则允许批次中的最高分，可与最新一次不同）。</el-text>
           </div>
         </template>
 
@@ -80,6 +80,15 @@
                   <span v-else class="muted-text">{{ row.status === 'submitted' ? '待评分' : '未提交' }}</span>
                   <span v-if="row.latest_attempt_is_late" class="late-tip">已标记迟交</span>
                 </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="总评来源" min-width="120">
+              <template #default="{ row }">
+                <template v-if="row.status === 'submitted' && row.graded_attempt_id && row.latest_attempt_id">
+                  <el-tag v-if="row.graded_attempt_id !== row.latest_attempt_id" type="warning" size="small">非最新批次</el-tag>
+                  <el-tag v-else type="success" size="small">最新批次</el-tag>
+                </template>
+                <span v-else class="muted-text">—</span>
               </template>
             </el-table-column>
             <el-table-column label="提交时间" min-width="180">
