@@ -51,10 +51,17 @@
             </template>
           </el-table-column>
           <el-table-column prop="student_count" label="学生数" width="100" />
-          <el-table-column label="操作" width="140" fixed="right">
+          <el-table-column label="操作" width="320" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" size="small" @click="openCourseDetail(row)">
                 课程详细
+              </el-button>
+              <el-button type="primary" size="small" @click="openEditDialogForRow(row)">
+                编辑
+              </el-button>
+              <el-button type="success" size="small" @click="openLlmConfigDialog(row)">LLM 配置</el-button>
+              <el-button v-if="userStore.isAdmin" type="danger" size="small" @click="deleteCourse(row)">
+                删除
               </el-button>
             </template>
           </el-table-column>
@@ -129,8 +136,9 @@
           </el-table-column>
         </el-table>
       </el-card>
+    </template>
 
-      <el-dialog
+    <el-dialog
         v-model="dialogVisible"
         :title="editingCourse ? '编辑课程' : '新建课程'"
         width="960px"
@@ -229,6 +237,19 @@
           <el-form-item label="课程简介" prop="description">
             <el-input v-model="form.description" type="textarea" :rows="4" />
           </el-form-item>
+
+          <el-form-item label="课程封面">
+            <el-upload :auto-upload="false" :show-file-list="false" accept="image/*" :on-change="handleCoverChange">
+              <el-button>选择图片</el-button>
+            </el-upload>
+            <div v-if="coverObjectUrl" class="cover-preview">
+              <img :src="coverObjectUrl" alt="封面预览" class="cover-preview__img" />
+            </div>
+            <div v-else-if="form.cover_image_url" class="cover-hint muted-text">已保存封面；选择新图片可替换。</div>
+            <el-button v-if="coverObjectUrl || form.cover_image_url" link type="danger" @click="removeCover">
+              移除封面
+            </el-button>
+          </el-form-item>
         </el-form>
         <template #footer>
           <el-button @click="dialogVisible = false">取消</el-button>
@@ -286,8 +307,13 @@
             <el-input v-model="llmForm.system_prompt" type="textarea" :rows="5" placeholder="可选。若为空则使用系统默认提示词。" />
           </el-form-item>
 
-          <el-form-item label="教师提示词">
-            <el-input v-model="llmForm.teacher_prompt" type="textarea" :rows="5" placeholder="可选。可补充课程评分偏好、风格与要求。" />
+          <el-form-item label="教师提示词（自动评分 / 助教）">
+            <el-input
+              v-model="llmForm.teacher_prompt"
+              type="textarea"
+              :rows="5"
+              placeholder="可选。说明自动评分尺度、风格，以及智能助教回答时的偏好；勿在此写入应对学生保密的细则。"
+            />
           </el-form-item>
 
           <el-form-item label="端点顺序">
@@ -326,7 +352,6 @@
           <el-button type="primary" :loading="llmSaving" @click="saveLlmConfig">保存配置</el-button>
         </template>
       </el-dialog>
-    </template>
   </div>
 </template>
 
@@ -337,6 +362,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import CourseSchedulePicker from '@/components/CourseSchedulePicker.vue'
 import { useUserStore } from '@/stores/user'
+import { validateAttachmentFile } from '@/utils/attachments'
 import {
   filterCoursesByClassId,
   resolveClassTeacherClassId,
@@ -358,6 +384,39 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const editingCourse = ref(null)
 const formRef = ref(null)
+const coverFile = ref(null)
+const coverObjectUrl = ref('')
+
+const resetCover = () => {
+  if (coverObjectUrl.value) {
+    URL.revokeObjectURL(coverObjectUrl.value)
+    coverObjectUrl.value = ''
+  }
+  coverFile.value = null
+}
+
+const handleCoverChange = uploadFile => {
+  const file = uploadFile.raw
+  const result = validateAttachmentFile(file)
+  if (!result.valid) {
+    ElMessage.error(result.message)
+    return false
+  }
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('封面请使用图片文件')
+    return false
+  }
+  resetCover()
+  coverFile.value = file
+  coverObjectUrl.value = URL.createObjectURL(file)
+  return false
+}
+
+const removeCover = () => {
+  resetCover()
+  form.cover_image_url = ''
+}
+
 const courseDetailVisible = ref(false)
 const courseDetailLoading = ref(false)
 const detailCourse = ref(null)
@@ -401,7 +460,7 @@ const pageSubtitle = computed(() => {
     return currentClassId.value ? `${currentClassName.value} 全部课程信息` : '请先为班主任账号分配班级。'
   }
 
-  return '管理员可统一查看、编辑课程信息与课程时间安排。'
+  return '管理员与任课教师可管理课程信息、课程封面、以及课程级 LLM 配置；班主任可在本班课程列表中执行相同管理操作（删除课程仅管理员）。'
 })
 
 const form = reactive({
@@ -412,7 +471,8 @@ const form = reactive({
   course_type: 'required',
   status: 'active',
   course_times: [createEmptyCourseTime()],
-  description: ''
+  description: '',
+  cover_image_url: ''
 })
 
 const validateCourseTimes = (_rule, value, callback) => {
@@ -450,6 +510,7 @@ const rules = {
 }
 
 const resetForm = () => {
+  resetCover()
   Object.assign(form, {
     name: '',
     class_id: null,
@@ -458,7 +519,8 @@ const resetForm = () => {
     course_type: 'required',
     status: 'active',
     course_times: [createEmptyCourseTime()],
-    description: ''
+    description: '',
+    cover_image_url: ''
   })
 }
 
@@ -477,10 +539,6 @@ const loadCourses = async () => {
 }
 
 const loadOptions = async () => {
-  if (isClassTeacherView.value) {
-    return
-  }
-
   const [classData, userData, semesterData] = await Promise.all([
     api.classes.list(),
     api.users.list(),
@@ -513,6 +571,7 @@ const openCreateDialog = () => {
 
 const openEditDialog = course => {
   editingCourse.value = course
+  resetCover()
   const normalizedCourseTimes = normalizeEditableCourseTimes(course)
 
   Object.assign(form, {
@@ -523,9 +582,15 @@ const openEditDialog = course => {
     course_type: course.course_type || 'required',
     status: course.status || 'active',
     course_times: normalizedCourseTimes.length ? normalizedCourseTimes : [createEmptyCourseTime()],
-    description: course.description || ''
+    description: course.description || '',
+    cover_image_url: course.cover_image_url || ''
   })
   dialogVisible.value = true
+}
+
+const openEditDialogForRow = async row => {
+  await loadOptions()
+  openEditDialog(row)
 }
 
 const getCourseTimeLines = course =>
@@ -538,6 +603,12 @@ const submitForm = async () => {
   submitting.value = true
 
   try {
+    if (coverFile.value) {
+      const uploaded = await api.files.upload(coverFile.value)
+      form.cover_image_url = uploaded.attachment_url
+      resetCover()
+    }
+
     const payload = {
       name: form.name,
       class_id: form.class_id,
@@ -546,7 +617,8 @@ const submitForm = async () => {
       course_type: form.course_type,
       status: form.status,
       course_times: serializeCourseTimesPayload(form.course_times),
-      description: form.description
+      description: form.description,
+      cover_image_url: form.cover_image_url?.trim() || null
     }
 
     if (editingCourse.value) {
@@ -984,5 +1056,21 @@ watch(
   .course-time-panel__fields {
     grid-template-columns: 1fr;
   }
+}
+
+.cover-preview {
+  margin-top: 10px;
+}
+
+.cover-preview__img {
+  max-height: 140px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.cover-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #64748b;
 }
 </style>

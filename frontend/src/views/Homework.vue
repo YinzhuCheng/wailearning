@@ -140,16 +140,34 @@
         </el-form-item>
         <el-form-item label="自动评分">
           <el-switch v-model="form.auto_grading_enabled" />
-          <div class="attachment-help">启用后，学生新提交会进入异步评分队列；展示分数始终按最高分规则计算。</div>
+          <div class="attachment-help">默认建议开启；启用后学生新提交会进入异步评分队列；展示分数始终按最高分规则计算。</div>
         </el-form-item>
         <el-form-item label="响应语言">
           <el-input v-model="form.response_language" placeholder="例如 zh-CN / en-US，可为空" />
         </el-form-item>
-        <el-form-item label="评分要点">
-          <el-input v-model="form.rubric_text" type="textarea" :rows="4" placeholder="可填写评分量规、评分要点或教师说明" />
+        <el-form-item label="评分要点（对学生可见）">
+          <el-input
+            v-model="form.rubric_text"
+            type="textarea"
+            :rows="4"
+            placeholder="学生端始终可见；可写清得分维度、字数要求等，勿写保密细则。"
+          />
         </el-form-item>
-        <el-form-item label="参考答案">
-          <el-input v-model="form.reference_answer" type="textarea" :rows="4" placeholder="可选，供 LLM 评分参考" />
+        <el-form-item label="评分要点（仅教师可见）">
+          <el-input
+            v-model="form.rubric_teacher_text"
+            type="textarea"
+            :rows="4"
+            placeholder="仅教师与自动评分可见；可写内部尺度、扣分敏感点等。"
+          />
+        </el-form-item>
+        <el-form-item label="参考答案或思路（仅教师可见）">
+          <el-input
+            v-model="form.reference_answer"
+            type="textarea"
+            :rows="4"
+            placeholder="供 LLM 与教师参考；不会展示给学生。"
+          />
         </el-form-item>
         <el-form-item label="迟交规则">
           <div class="late-rules">
@@ -194,8 +212,15 @@
           <el-descriptions-item label="自动评分">{{ currentHomework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ currentHomework.grading_rule_hint }}</el-descriptions-item>
         <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '暂无内容' }}</el-descriptions-item>
-          <el-descriptions-item label="评分要点" :span="2">{{ currentHomework.rubric_text || '未设置' }}</el-descriptions-item>
-          <el-descriptions-item label="参考答案" :span="2">{{ currentHomework.reference_answer || '未设置' }}</el-descriptions-item>
+          <el-descriptions-item label="评分要点（对学生可见）" :span="2">{{
+            currentHomework.rubric_text || '未设置'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">{{
+            currentHomework.rubric_teacher_text || '未设置'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">{{
+            currentHomework.reference_answer || '未设置'
+          }}</el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentHomework.attachment_url" type="primary" link @click="openAttachment(currentHomework)">
             {{ currentHomework.attachment_name || '下载附件' }}
@@ -239,8 +264,9 @@ const form = reactive({
   attachment_url: '',
   max_score: 100,
   grade_precision: 'integer',
-  auto_grading_enabled: false,
+  auto_grading_enabled: true,
   rubric_text: '',
+  rubric_teacher_text: '',
   reference_answer: '',
   response_language: '',
   allow_late_submission: true,
@@ -286,8 +312,9 @@ const openCreateDialog = () => {
   form.attachment_url = ''
   form.max_score = 100
   form.grade_precision = 'integer'
-  form.auto_grading_enabled = false
+  form.auto_grading_enabled = true
   form.rubric_text = ''
+  form.rubric_teacher_text = ''
   form.reference_answer = ''
   form.response_language = ''
   form.allow_late_submission = true
@@ -350,6 +377,7 @@ const submitForm = async () => {
       grade_precision: form.grade_precision,
       auto_grading_enabled: form.auto_grading_enabled,
       rubric_text: form.rubric_text?.trim() || null,
+      rubric_teacher_text: form.rubric_teacher_text?.trim() || null,
       reference_answer: form.reference_answer?.trim() || null,
       response_language: form.response_language?.trim() || null,
       allow_late_submission: form.allow_late_submission,

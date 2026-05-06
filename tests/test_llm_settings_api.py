@@ -41,6 +41,22 @@ def _reset_db():
     SessionLocal().close()
 
 
+@pytest.fixture(autouse=True)
+def _mock_preset_connectivity():
+    """POST /presets now auto-validates; avoid real HTTP in unit tests."""
+    with (
+        mock.patch(
+            "app.routers.llm_settings.validate_text_connectivity",
+            return_value=(True, "text ok"),
+        ),
+        mock.patch(
+            "app.routers.llm_settings.validate_vision_connectivity",
+            return_value=(True, "vision ok"),
+        ),
+    ):
+        yield
+
+
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(app)
@@ -143,7 +159,11 @@ def test_validate_marks_validated(mock_txt, mock_vis, client: TestClient, admin_
         headers=admin_headers,
         json={"name": "p-val", "base_url": "https://a.test/v1/", "api_key": "k", "model_name": "m"},
     )
+    assert c.status_code == 200
+    assert c.json()["validation_status"] == "validated"
     pid = c.json()["id"]
+    mock_txt.reset_mock()
+    mock_vis.reset_mock()
     v = client.post(f"/api/llm-settings/presets/{pid}/validate", headers=admin_headers)
     assert v.status_code == 200
     d = v.json()
@@ -186,11 +206,22 @@ def test_get_put_course_config(_, __, client: TestClient, admin_headers, teacher
 
 
 def test_cannot_bind_unvalidated_preset(client: TestClient, admin_headers, teacher_headers, teacher_course_context):
-    c = client.post(
-        "/api/llm-settings/presets",
-        headers=admin_headers,
-        json={"name": "p-pending", "base_url": "https://a.test/v1/", "api_key": "k", "model_name": "m"},
-    )
+    with (
+        mock.patch(
+            "app.routers.llm_settings.validate_text_connectivity",
+            return_value=(True, "text ok"),
+        ),
+        mock.patch(
+            "app.routers.llm_settings.validate_vision_connectivity",
+            return_value=(False, "vision failed for test"),
+        ),
+    ):
+        c = client.post(
+            "/api/llm-settings/presets",
+            headers=admin_headers,
+            json={"name": "p-pending", "base_url": "https://a.test/v1/", "api_key": "k", "model_name": "m"},
+        )
+    assert c.status_code == 200
     pid = c.json()["id"]
     sid = teacher_course_context["subject_id"]
     r = client.put(

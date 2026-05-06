@@ -34,6 +34,38 @@ router = APIRouter(prefix="/api/llm-settings", tags=["LLM 配置"])
 VISION_NOTICE = "LLM 连通性验证会同时校验视觉接口。只有通过视觉能力校验的端点，才能被加入课程配置并用于作业自动评分。"
 
 
+def _apply_full_validation_to_preset(db: Session, preset: LLMEndpointPreset) -> LLMEndpointPresetResponse:
+    """Run text + vision (image) probe and persist status; used by admin UI create/update and mirrors POST /validate."""
+    ok_t, msg_t = validate_text_connectivity(
+        base_url=preset.base_url,
+        api_key=preset.api_key,
+        model_name=preset.model_name,
+        connect_timeout_seconds=preset.connect_timeout_seconds,
+        read_timeout_seconds=preset.read_timeout_seconds,
+    )
+    if not ok_t:
+        preset.validation_status = "failed"
+        preset.validation_message = msg_t
+        preset.supports_vision = False
+    else:
+        ok_v, msg_v = validate_vision_connectivity(
+            base_url=preset.base_url,
+            api_key=preset.api_key,
+            model_name=preset.model_name,
+            connect_timeout_seconds=preset.connect_timeout_seconds,
+            read_timeout_seconds=preset.read_timeout_seconds,
+        )
+        ok = ok_v
+        message = f"{msg_t} {msg_v}" if ok_v else msg_v
+        preset.validation_status = "validated" if ok else "failed"
+        preset.validation_message = message
+        preset.supports_vision = bool(ok_v)
+    preset.validated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(preset)
+    return _serialize_preset(preset)
+
+
 def _is_admin(user: User) -> bool:
     return user.role == UserRole.ADMIN
 
@@ -155,7 +187,7 @@ def create_endpoint_preset(
     db.add(preset)
     db.commit()
     db.refresh(preset)
-    return _serialize_preset(preset)
+    return _apply_full_validation_to_preset(db, preset)
 
 
 @router.put("/presets/{preset_id}", response_model=LLMEndpointPresetResponse)
@@ -191,6 +223,19 @@ def update_endpoint_preset(
 
     db.commit()
     db.refresh(preset)
+
+    should_revalidate = any(
+        getattr(payload, field) is not None
+        for field in (
+            "api_key",
+            "base_url",
+            "model_name",
+            "connect_timeout_seconds",
+            "read_timeout_seconds",
+        )
+    )
+    if should_revalidate:
+        return _apply_full_validation_to_preset(db, preset)
     return _serialize_preset(preset)
 
 
@@ -207,34 +252,7 @@ def validate_preset(
     if not preset:
         raise HTTPException(status_code=404, detail="Endpoint preset not found.")
 
-    ok_t, msg_t = validate_text_connectivity(
-        base_url=preset.base_url,
-        api_key=preset.api_key,
-        model_name=preset.model_name,
-        connect_timeout_seconds=preset.connect_timeout_seconds,
-        read_timeout_seconds=preset.read_timeout_seconds,
-    )
-    if not ok_t:
-        preset.validation_status = "failed"
-        preset.validation_message = msg_t
-        preset.supports_vision = False
-    else:
-        ok_v, msg_v = validate_vision_connectivity(
-            base_url=preset.base_url,
-            api_key=preset.api_key,
-            model_name=preset.model_name,
-            connect_timeout_seconds=preset.connect_timeout_seconds,
-            read_timeout_seconds=preset.read_timeout_seconds,
-        )
-        ok = ok_v
-        message = f"{msg_t} {msg_v}" if ok_v else msg_v
-        preset.validation_status = "validated" if ok else "failed"
-        preset.validation_message = message
-        preset.supports_vision = bool(ok_v)
-    preset.validated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(preset)
-    return _serialize_preset(preset)
+    return _apply_full_validation_to_preset(db, preset)
 
 
 @router.get("/courses/{subject_id}", response_model=CourseLLMConfigResponse)
