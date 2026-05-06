@@ -65,6 +65,8 @@ Subgroups:
   - course access
   - roster versus course enrollment behavior
   - required versus elective rules
+  - **`subject_class_links` regression:** `test_subject_multi_class_links.py`
+  - **student course-catalog / elective self-enroll** must track **schoolwide elective** policy (`test_student_course_catalog_behavior.py`, `test_student_elective_catalog_and_quota.py`; updated 2026-05 when electives stopped mirroring `Subject.class_id`)
 - `tests/backend/roster/`
   - roster enroll operations
   - batch class changes

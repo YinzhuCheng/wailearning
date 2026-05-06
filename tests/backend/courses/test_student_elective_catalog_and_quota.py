@@ -111,7 +111,6 @@ def test_elective_catalog_lists_active_electives_schoolwide(client: TestClient):
 @pytest.mark.parametrize(
     ("target_subject_key", "case_label"),
     [
-        ("oid", "elective_other_class"),
         ("rid", "required_course"),
     ],
 )
@@ -122,6 +121,14 @@ def test_student_cannot_self_enroll_forbidden_course_types(
     subject_ids = {"eid": eid, "oid": oid, "rid": rid}
     r = client.post(f"/api/subjects/{subject_ids[target_subject_key]}/student-self-enroll", headers=sh)
     assert r.status_code == 400, case_label
+
+
+def test_student_self_enroll_elective_other_class_offering_succeeds(client: TestClient):
+    """「外班选修」仅表示种子数据里的行政班字段遗留展示；学生仍可全校自主选课。"""
+    sh, kid, eid, oid, rid = _seed_student_and_elective(client)
+    r = client.post(f"/api/subjects/{oid}/student-self-enroll", headers=sh)
+    assert r.status_code == 200, r.text
+    assert r.json().get("created") is True
 
 
 def test_student_self_enroll_then_list_my_courses(client: TestClient):
@@ -235,4 +242,4 @@ def test_student_course_catalog_lists_required_and_elective_with_hints(client: T
     assert by_id[eid]["course_type"] == "elective"
     assert by_id[eid]["can_self_enroll_elective"] is True
     assert by_id[oid]["course_type"] == "elective"
-    assert by_id[oid]["can_self_enroll_elective"] is False
+    assert by_id[oid]["can_self_enroll_elective"] is True

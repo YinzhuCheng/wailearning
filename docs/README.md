@@ -53,6 +53,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 
 | Document | Purpose |
 |----------|---------|
+| [development/FULL_TEST_SUITE_REMEDIATION_REPORT_2026-05-06.md](development/FULL_TEST_SUITE_REMEDIATION_REPORT_2026-05-06.md) | **Round report:** full-suite audit commands, elective/catalog test alignment, coverage matrix excerpt |
 | [development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md](development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) | Matrix + command log for the 2026-05 full-stack test remediation pass |
 | [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md) | Local workflow, pytest/Playwright layers, E2E dual gate |
 | [development/TEST_SUITE_MAP.md](development/TEST_SUITE_MAP.md) | What lives where in `tests/` |

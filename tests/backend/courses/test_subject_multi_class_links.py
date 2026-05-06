@@ -177,3 +177,83 @@ def test_roster_subset_link_does_not_auto_sync_whole_class(client: TestClient):
         assert row.enrollment_mode == "roster_subset"
     finally:
         db.close()
+
+
+def test_required_roster_enroll_skips_student_outside_linked_classes(client: TestClient):
+    """必修课绑定 A+B 班时，C 班学生在 roster-enroll 中应计入 skipped_not_in_class_roster。"""
+    suffix = uuid.uuid4().hex[:10]
+    admin_user = f"adm_re_{suffix}"
+    _seed_admin(admin_user, "pw123456")
+    h = _login(client, admin_user, "pw123456")
+
+    ca = client.post("/api/classes", headers=h, json={"name": f"RA-{suffix}", "grade": 1})
+    cb = client.post("/api/classes", headers=h, json={"name": f"RB-{suffix}", "grade": 1})
+    cc = client.post("/api/classes", headers=h, json={"name": f"RC-{suffix}", "grade": 1})
+    assert ca.status_code == cb.status_code == cc.status_code == 200
+    ida, idb, idc = ca.json()["id"], cb.json()["id"], cc.json()["id"]
+
+    sr = client.post(
+        "/api/students",
+        headers=h,
+        json={"name": "outsider", "student_no": f"out_{suffix}", "gender": "male", "class_id": idc},
+    )
+    assert sr.status_code == 200, sr.text
+    sid = sr.json()["id"]
+
+    title = f"Chem-{suffix}"
+    cr = client.post(
+        "/api/subjects",
+        headers=h,
+        json={
+            "name": title,
+            "course_type": "required",
+            "status": "active",
+            "class_links": [
+                {"class_id": ida, "enrollment_mode": "all_in_class"},
+                {"class_id": idb, "enrollment_mode": "roster_subset"},
+            ],
+            "course_times": [],
+        },
+    )
+    assert cr.status_code == 200, cr.text
+    sub_id = cr.json()["id"]
+
+    rr = client.post(
+        f"/api/subjects/{sub_id}/roster-enroll",
+        headers=h,
+        json={"student_ids": [sid]},
+    )
+    assert rr.status_code == 200, rr.text
+    body = rr.json()
+    assert body.get("created", 0) == 0
+    assert body.get("skipped_not_in_class_roster", 0) >= 1
+
+
+def test_get_subject_serializes_elective_class_placeholder(client: TestClient):
+    """选修课序列化：班级展示占位「-」，且无 class_links。"""
+    suffix = uuid.uuid4().hex[:10]
+    admin_user = f"adm_g_{suffix}"
+    _seed_admin(admin_user, "pw123456")
+    h = _login(client, admin_user, "pw123456")
+
+    cr = client.post(
+        "/api/subjects",
+        headers=h,
+        json={
+            "name": f"FreeElective-{suffix}",
+            "course_type": "elective",
+            "status": "active",
+            "course_times": [],
+        },
+    )
+    assert cr.status_code == 200, cr.text
+    sub_id = cr.json()["id"]
+    assert cr.json().get("class_name") == "-"
+    assert cr.json().get("class_links") == []
+
+    gr = client.get(f"/api/subjects/{sub_id}", headers=h)
+    assert gr.status_code == 200, gr.text
+    row = gr.json()
+    assert row.get("class_name") == "-"
+    assert row.get("class_id") is None
+    assert row.get("class_links") == []
