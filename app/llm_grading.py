@@ -219,8 +219,6 @@ def get_best_score_candidate(
     db: Session,
     homework_id: int,
     student_id: int,
-    *,
-    latest_attempt_id: Optional[int] = None,
 ) -> Optional[HomeworkScoreCandidate]:
     """
     Aggregate visible score for the submission summary:
@@ -230,10 +228,7 @@ def get_best_score_candidate(
        teacher-sourced (教师可在迟交批次上给分，仍参与总评聚合).
     2. Within each attempt, teacher rows beat auto rows on that attempt (same as before).
     3. Across attempts, pick the **maximum score**; ties favor the **newer** submission.
-
-    ``latest_attempt_id`` is ignored (kept for backward-compatible call sites).
     """
-    _ = latest_attempt_id
     candidates = (
         db.query(HomeworkScoreCandidate)
         .options(joinedload(HomeworkScoreCandidate.attempt))

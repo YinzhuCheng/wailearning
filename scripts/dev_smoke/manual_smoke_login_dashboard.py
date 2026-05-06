@@ -3,7 +3,7 @@ import json
 
 BASE_URL = "http://localhost:8001"
 
-def test_login():
+def smoke_login():
     print("=" * 60)
     print("1. 测试登录")
     print("=" * 60)
@@ -33,7 +33,7 @@ def test_login():
         traceback.print_exc()
         return None
 
-def test_semesters(token):
+def smoke_semesters(token):
     print("\n" + "=" * 60)
     print("2. 测试获取学期列表")
     print("=" * 60)
@@ -57,7 +57,7 @@ def test_semesters(token):
         print(f"✗ 获取学期请求失败: {e}")
         return []
 
-def test_dashboard(token, semester=''):
+def smoke_dashboard(token, semester=''):
     print("\n" + "=" * 60)
     print(f"3. 测试Dashboard API (semester='{semester}')")
     print("=" * 60)
@@ -91,21 +91,21 @@ def main():
     print("=" * 60)
     
     # 测试登录
-    token = test_login()
+    token = smoke_login()
     if not token:
         print("\n✗ 登录失败，停止测试")
         return
     
     # 测试获取学期
-    semesters = test_semesters(token)
+    semesters = smoke_semesters(token)
     
     # 测试Dashboard (不指定学期)
-    test_dashboard(token)
+    smoke_dashboard(token)
     
     # 测试Dashboard (指定学期)
     if semesters:
         first_semester = semesters[0].get('name')
-        test_dashboard(token, first_semester)
+        smoke_dashboard(token, first_semester)
     
     print("\n" + "=" * 60)
     print("测试完成")

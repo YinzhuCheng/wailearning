@@ -103,7 +103,7 @@ export const useUserStore = defineStore('user', () => {
       return teachingCourses.value
     }
 
-    const data = await api.courses.list()
+    const data = await api.subjects.list()
     teachingCourses.value = rankTeachingCourses(Array.isArray(data) ? data : [])
     teachingCoursesLoaded.value = true
 

@@ -192,8 +192,6 @@ def test_lower_teacher_beats_higher_auto_on_summary(client: TestClient):
     sub = _submit(client, h, sth, "y")
     db = SessionLocal()
     try:
-        tsub = db.query(HomeworkSubmission).filter(HomeworkSubmission.id == sub).first()
-        att_id = tsub.latest_attempt_id
         tid2 = (
             db.query(HomeworkGradingTask)
             .order_by(HomeworkGradingTask.id.desc())
@@ -215,12 +213,7 @@ def test_lower_teacher_beats_higher_auto_on_summary(client: TestClient):
     assert r.json()["review_score"] == 40.0
     db = SessionLocal()
     try:
-        best = get_best_score_candidate(
-            db,
-            h,
-            ctx["student_id"],
-            latest_attempt_id=att_id,
-        )
+        best = get_best_score_candidate(db, h, ctx["student_id"])
         assert best is not None
         assert best.source == "teacher"
         assert best.score == 40.0

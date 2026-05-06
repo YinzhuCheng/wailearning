@@ -192,14 +192,37 @@
 - 生产部署总览：`DEPLOY.md`、`docs/FRESH_SERVER_DEPLOY_CN.md`
 - 运维与安全：`docs/SECURITY-AND-OPERATIONS.md`
 - 项目功能概览：`README.md`（若需对外同步「评分要点双框」等行为，可择机增补，本任务以代码与本文为准）
+- 迭代遗留 / 双轨专项清理报告（本轮）：`docs/CLEANUP_SESSION_DUAL_TRACK_2026-05-06.md`
 
 ---
 
 ## 7. 回归检查清单（agent 自测）
 
-1. `pytest tests/test_llm_settings_api.py -q` 通过。
+1. `pytest tests/ -q` 或分文件：`pytest tests/test_llm_settings_api.py -q` 通过。
 2. `pytest tests/test_homework_llm_grading.py -q`（若存在对 `HomeworkResponse` 字段数的假设，需更新）。
 3. `pytest tests/test_llm_course_e2e_scenarios.py -q` 通过（15 条 LLM/课程/作业交叉场景）。
 4. `pytest tests/test_llm_concurrency_scenarios.py -q` 建议全跑；其中含 **迟交聚合** 用例 `test_aggregate_score_keeps_best_counting_attempt_after_late_resubmit`。
 5. 前端：`npm run build`（在 `frontend/`）无语法错误。
 6. 手动：学生账号打开作业详情页，只能看到 **评分要点（对学生可见）**，看不到教师框与参考答案。
+
+---
+
+## 8. pytest 与手工冒烟脚本（避免「假测试文件」双轨）
+
+### 8.1 背景与坑
+
+- 历史上仓库根目录存在若干命名为 `test_*.py` 的文件，内容为 **`requests` 直连本机 `8001` 的手工脚本**，并非 pytest 用例。
+- **症状**：在 `<仓库根>` 执行裸 `pytest`（未限定路径）时，pytest 会尝试收集这些文件；若本机未启动后端，会在 **收集阶段** 报 `ConnectionError`（见 `<仓库根>/pytest.ini` 引入前的行为）。
+- **另一坑**：`scripts/dev_smoke/manual_smoke_login_dashboard.py` 曾包含以 `test_` 前缀命名的函数；pytest 会将其当作用例，但函数签名需要 fixture，导致混乱。
+- **`tests/test_llm_stress_scenarios.py::test_course_endpoints_cleared_before_grading_fails` 历史假设**：旧断言期望 `error_code == endpoint_missing`，但主业务早已在 `_grade_with_endpoint_group` 中于 **课程无端点行** 时回退到 `get_latest_validated_vision_preset`（与 `tests/test_llm_course_e2e_scenarios.py::test_grading_uses_global_fallback_when_course_has_no_endpoint_rows` 一致）。若不在单测里显式 **降级/禁用** 全局预设，任务会 **成功** 而非失败。修复方式：在断言失败路径前，对 `LLMEndpointPreset` 统一 `is_active=False` 且 `validation_status` 非 `validated`（并去掉 `supports_vision`），确保「无可用端点」与产品意图一致。
+
+### 8.2 当前规范（新逻辑主线）
+
+- **自动化回归**：统一在 `<仓库根>/tests/`。根目录 `pytest.ini` 设置 `testpaths = tests`，因此直接运行 `pytest` 或 `pytest -q` 只收集 `tests/` 下文件。
+- **手工 HTTP / 直连 DB 排障**：集中在 `<仓库根>/scripts/dev_smoke/`，文件名以 `manual_` 开头；说明与已知坑见同目录 `README.md`。
+- **前端 API 客户端**：课程相关调用统一使用 `api.subjects`（`/api/subjects`）；不再维护 `api.courses` 别名，避免「同一资源两套入口」的维护双轨。
+
+### 8.3 评分聚合内部 API
+
+- `app/llm_grading.py` 中 `get_best_score_candidate(db, homework_id, student_id)` 为跨 attempt 聚合的 **唯一入口**；已移除历史上无效果且误导的 `latest_attempt_id` 关键字参数（调用方与 `refresh_submission_summary` 始终依赖全量候选查询）。
+

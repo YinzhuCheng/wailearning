@@ -427,7 +427,7 @@ const loadStudents = async () => {
       return
     }
 
-    students.value = await api.courses.getStudents(selectedCourse.value.id)
+    students.value = await api.subjects.getStudents(selectedCourse.value.id)
   } catch (error) {
     console.error('加载学生数据失败', error)
     ElMessage.error('加载学生数据失败')
@@ -552,7 +552,7 @@ const removeStudent = async row => {
       '移除学生',
       { type: 'warning' }
     )
-    await api.courses.removeStudent(selectedCourse.value.id, row.student_id)
+    await api.subjects.removeStudent(selectedCourse.value.id, row.student_id)
     ElMessage.success('学生已从课程中移除')
     await loadStudents()
   } catch (error) {
@@ -568,7 +568,7 @@ const updateEnrollmentType = async (row, value) => {
   }
 
   try {
-    const updated = await api.courses.updateEnrollmentType(selectedCourse.value.id, row.student_id, {
+    const updated = await api.subjects.updateEnrollmentType(selectedCourse.value.id, row.student_id, {
       enrollment_type: value
     })
     const target = students.value.find(item => item.student_id === row.student_id)

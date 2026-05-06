@@ -363,7 +363,7 @@ const loadStudents = async () => {
     return
   }
 
-  students.value = await api.courses.getStudents(selectedCourse.value.id)
+  students.value = await api.subjects.getStudents(selectedCourse.value.id)
 }
 
 const loadAttendances = async () => {

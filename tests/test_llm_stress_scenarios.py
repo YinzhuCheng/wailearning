@@ -112,7 +112,7 @@ def test_llm_empty_choices_fails_task(client: TestClient):
         db.close()
 
 
-# 3) After submit, admin clears all course endpoint links -> grading fails
+# 3) After submit, admin clears all course endpoint links and no site-wide preset is usable -> grading fails
 def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework()
@@ -138,6 +138,14 @@ def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
     )
     db = SessionLocal()
     try:
+        # `_grade_with_endpoint_group` intentionally falls back to `get_latest_validated_vision_preset`
+        # when the course has zero endpoint rows (see `test_grading_uses_global_fallback_when_course_has_no_endpoint_rows`).
+        # Disable every preset so neither course wiring nor global fallback can call a model.
+        for preset in db.query(LLMEndpointPreset).all():
+            preset.is_active = False
+            preset.validation_status = "pending"
+            preset.supports_vision = False
+        db.commit()
         tid = db.query(HomeworkGradingTask).one().id
     finally:
         db.close()
@@ -148,7 +156,10 @@ def test_course_endpoints_cleared_before_grading_fails(client: TestClient):
     db = SessionLocal()
     try:
         t = db.query(HomeworkGradingTask).get(tid)
-        assert t.error_code == "endpoint_missing" or t.status == "failed"
+        assert t.status == "failed"
+        # Raised as NonRetryableLLMError inside `_grade_with_endpoint_group`, wrapped by worker as unexpected_error.
+        assert t.error_code == "unexpected_error"
+        assert t.error_message and "评分任务异常" in t.error_message
     finally:
         db.close()
 

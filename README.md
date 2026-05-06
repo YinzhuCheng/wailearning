@@ -575,6 +575,9 @@ DD-CLASS/
 │   │   └── main.js             # 入口文件
 │   ├── package.json             # 前端依赖
 │   └── vite.config.js          # Vite配置
+├── scripts/                     # 运维与开发辅助（含 dev_smoke 手工冒烟，非 pytest）
+├── tests/                       # pytest 自动化用例（根目录 pytest.ini 限定 testpaths）
+├── pytest.ini                   # pytest 仅默认收集 tests/
 ├── .gitignore                   # Git忽略文件
 ├── requirements.txt             # Python依赖
 └── README.md                   # 项目说明文档
@@ -710,6 +713,14 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 **解决**:
 - 确认当前用户是管理员、班主任或任课教师
 - 确认学生所在的班级在当前教师的权限范围内
+
+### 7. pytest 只收集自动化用例
+
+**问题**: 在仓库根运行 `pytest` 时想扩展根目录脚本，或看到与 `localhost:8001` 相关的 `ConnectionError`。
+
+**说明**:
+- 根目录 `pytest.ini` 已将 `testpaths` 设为 `tests/`，因此 **`pytest` 默认只跑 `tests/` 下的用例**。
+- 需要对手动 HTTP 冒烟脚本时，请使用 `scripts/dev_smoke/` 下以 `manual_` 前缀命名的文件（详见该目录 `README.md`）。
 
 ## 📄 使用许可
 

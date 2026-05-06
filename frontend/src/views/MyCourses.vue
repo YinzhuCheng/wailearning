@@ -268,7 +268,7 @@ const rosterSummary = computed(() =>
 const loadCourses = async () => {
   loading.value = true
   try {
-    courses.value = await api.courses.list()
+    courses.value = await api.subjects.list()
   } catch (error) {
     console.error('加载课程失败', error)
     ElMessage.error('加载课程失败')
@@ -562,7 +562,7 @@ const submitForm = async () => {
 
   submitting.value = true
   try {
-    const createdCourse = await api.courses.create({
+    const createdCourse = await api.subjects.create({
       ...form,
       semester_id: form.semester_id || null,
       students: rosterStudents.value

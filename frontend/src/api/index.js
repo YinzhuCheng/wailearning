@@ -117,7 +117,6 @@ const api = {
       })
   },
   subjects: subjectsApi,
-  courses: subjectsApi,
   scores: {
     list: params => http.get('/scores', { params }),
     get: id => http.get(`/scores/${id}`),

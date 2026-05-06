@@ -599,7 +599,7 @@ const loadCourses = async () => {
       return
     }
 
-    courses.value = await api.courses.list()
+    courses.value = await api.subjects.list()
   } finally {
     loading.value = false
   }
@@ -689,10 +689,10 @@ const submitForm = async () => {
     }
 
     if (editingCourse.value) {
-      await api.courses.update(editingCourse.value.id, payload)
+      await api.subjects.update(editingCourse.value.id, payload)
       ElMessage.success('课程已更新')
     } else {
-      await api.courses.create(payload)
+      await api.subjects.create(payload)
       ElMessage.success('课程已创建')
     }
 
@@ -904,7 +904,7 @@ const saveLlmConfig = async () => {
 const deleteCourse = async course => {
   try {
     await ElMessageBox.confirm(`确认删除课程“${course.name}”吗？`, '删除课程', { type: 'warning' })
-    await api.courses.delete(course.id)
+    await api.subjects.delete(course.id)
     ElMessage.success('课程已删除')
     await loadCourses()
   } catch (error) {
@@ -993,7 +993,7 @@ const openCourseDetail = async course => {
 
   try {
     const [studentsResult, attendanceResult, scoresResult, weightResult, homeworkRows] = await Promise.all([
-      api.courses.getStudents(course.id),
+      api.subjects.getStudents(course.id),
       api.attendance.list({
         class_id: course.class_id,
         subject_id: course.id,
