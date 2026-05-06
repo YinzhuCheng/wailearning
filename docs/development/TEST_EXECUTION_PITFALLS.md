@@ -329,7 +329,11 @@ If `material` is assigned only **after** `buildSequence()` finishes (DFS over ch
 
 ### Extension (May 2026): sidebar `default-active` vs nested routes (`/materials/read/:id`)
 
-`Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift.
+`Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift. **As of the full-page submission review change,** paths like `/homework/<id>/submissions/<submissionId>` also resolve to the **`/homework`** menu highlight (same rule: any prefix under `/homework/<id>/` that is not `students` maps to `/homework`).
+
+### Extension (May 2026): homework 「详情」 is a full route, not a dialog
+
+`HomeworkSubmissions.vue` used to open an `el-dialog` titled **提交详情与评分**; it now `router.push`es to **`/homework/:id/submissions/:submissionId`** (query preserved, e.g. `student_id`, for the **返回提交列表** back button). Specs that waited for `getByRole('dialog')` and nested locators should instead assert a URL like `toHaveURL(/\/homework\/\d+\/submissions\/\d+/)` and use `page.getByTestId('homework-submission-detail-body')` on the **page** (the test id still marks the latest summary body container).
 
 ### Extension (May 2026): teacher 「课程仪表盘」 deleted — update Playwright landing URLs
 

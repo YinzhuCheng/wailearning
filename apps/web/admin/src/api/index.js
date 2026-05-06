@@ -378,6 +378,9 @@ const api = {
     getMySubmissionHistory: id => http.get(`/homeworks/${id}/submission/me/history`),
     submit: (id, data) => http.post(`/homeworks/${id}/submission`, data),
     getSubmissions: (id, params) => http.get(`/homeworks/${id}/submissions`, { params }),
+    /** Teacher-only status row for one submission (deep-link review page). */
+    getSubmissionStatusRow: (homeworkId, submissionId) =>
+      http.get(`/homeworks/${homeworkId}/submissions/${submissionId}/status`),
     listCourseStudents: subjectId => http.get(`/homeworks/courses/${subjectId}/students`),
     listStudentHomeworks: (subjectId, studentId, params) =>
       http.get(`/homeworks/courses/${subjectId}/students/${studentId}/homeworks`, { params }),
