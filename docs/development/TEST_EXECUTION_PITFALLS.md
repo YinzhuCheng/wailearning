@@ -329,7 +329,7 @@ If `material` is assigned only **after** `buildSequence()` finishes (DFS over ch
 
 ### Extension (May 2026): sidebar `default-active` vs nested routes (`/materials/read/:id`)
 
-`Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift. **As of the full-page submission review change,** paths like `/homework/<id>/submissions/<submissionId>` also resolve to the **`/homework`** menu highlight (same rule: any prefix under `/homework/<id>/` that is not `students` maps to `/homework`).
+`Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift. **As of the full-page submission review change,** paths like `/homework/<id>/submissions/<submissionId>` also resolve to the **`/homework`** menu highlight (same rule: any prefix under `/homework/<id>/` that is not `students` maps to `/homework`). **Student rail (May 2026):** the 「课程学习」 `el-sub-menu` shell was removed — student sidebar entries (**选课与进度**, **课程作业**, **课程通知**, …) are **top-level** `menuitem` nodes; specs must not `click()` an expand row labeled 「课程学习」 before reaching **课程通知**.
 
 ### Extension (May 2026): homework 「详情」 is a full route, not a dialog
 
@@ -1336,11 +1336,11 @@ getByRole('link', { name: '我的课程' })
 
 ### Context
 
-The admin SPA (`apps/web/admin/src/views/Layout.vue`) grouped student navigation under **`课程学习`** and renamed the first child from **我的课程** to **选课与进度** (route `/courses` unchanged). Older specs that hard-coded the previous visible string will not find the control.
+The admin SPA (`apps/web/admin/src/views/Layout.vue`) grouped student navigation under **`课程学习`** until May 2026; the first child was renamed from **我的课程** to **选课与进度** (route `/courses` unchanged). **Current behavior:** the 「课程学习」 shell was **removed** — student links are **flat** top-level `el-menu-item` rows (same labels/paths as before). Older specs that hard-coded **我的课程** or assumed a parent expand step before **课程通知** will fail.
 
 ### Fix
 
-Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/e2e/web-admin/fixtures.cjs`, or role selectors anchored on `.elective-catalog-card`. If you must click the sidebar, match **`选课与进度`** or use stable **`data-testid`** hooks if added later.
+Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/e2e/web-admin/fixtures.cjs`, or role selectors anchored on `.elective-catalog-card`. If you must click the sidebar, match **`选课与进度`** / **`课程通知`** as **top-level** `menuitem` names or use stable **`data-testid`** hooks if added later.
 
 ### Interpretation
 

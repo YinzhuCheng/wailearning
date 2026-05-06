@@ -5,7 +5,7 @@
 Course notifications are stored server-side (`notifications` + `notification_reads`). The admin SPA must:
 
 1. Show **unread count on the header avatar** (badge) so users notice new items without opening the sidebar.
-2. Primary navigation to the inbox remains the **sidebar** (`课程学习` → **课程通知** for students). The avatar menu keeps **个人设置** / **退出登录** only so notification discovery is not duplicated in two places.
+2. Primary navigation to the inbox remains the **sidebar** (**课程通知** menu item at the student sidebar root for students — same route `/notifications`). The avatar menu keeps **个人设置** / **退出登录** only so notification discovery is not duplicated in two places.
 3. **Refresh quickly** when someone publishes a notification (including the **publisher’s own tab** on `/notifications`).
 4. Optionally **surface a desktop toast** (`ElNotification`) when the unread count increases or the inbox grows while unread exists.
 
@@ -48,7 +48,7 @@ This document ties together the Vue layout, the lightweight sync API, the `notif
 ### Sidebar vs avatar menu
 
 - **Unread count** still appears on the avatar badge; route to **`/notifications`** is via **sidebar** for students/teachers (see `Layout.vue` menu definitions).
-- **Historical note:** an older iteration duplicated **「查看通知」** inside the avatar dropdown (`data-testid="header-menu-notifications"`). That duplicate entry was removed to reduce redundant navigation paths; regression specs now click **`课程通知`** under **`课程学习`** where applicable.
+- **Historical note:** an older iteration duplicated **「查看通知」** inside the avatar dropdown (`data-testid="header-menu-notifications"`). That duplicate entry was removed to reduce redundant navigation paths; regression specs click the sidebar **`课程通知`** item (student rail: **top-level** menu item after the May 2026 flattening of 「课程学习」).
 
 ### Toast (`ElNotification`)
 
