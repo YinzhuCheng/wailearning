@@ -39,6 +39,22 @@
             </el-button>
             <span v-else class="muted-text">暂无附件</span>
           </el-descriptions-item>
+          <el-descriptions-item label="作业内容" :span="2">
+            <MarkdownPreview v-if="homework.content" :source="homework.content" />
+            <span v-else class="muted-text">暂无</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="评分要点（对学生可见）" :span="2">
+            <MarkdownPreview v-if="homework.rubric_text" :source="homework.rubric_text" />
+            <span v-else>未设置</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="评分要点（仅教师可见）" :span="2">
+            <MarkdownPreview v-if="homework.rubric_teacher_text" :source="homework.rubric_teacher_text" />
+            <span v-else>未设置</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="参考答案或思路（仅教师可见）" :span="2">
+            <MarkdownPreview v-if="homework.reference_answer" :source="homework.reference_answer" />
+            <span v-else>未设置</span>
+          </el-descriptions-item>
         </el-descriptions>
       </el-card>
 
@@ -46,7 +62,7 @@
         <template #header>
           <div class="card-header">
             <span>提交情况</span>
-            <el-text type="info">仅勾选已提交且带附件的学生，可用于批量下载；主视图评分展示最高分对应评语。</el-text>
+            <el-text type="info">仅勾选已提交且带附件的学生，可用于批量下载；列表中的分数为「计入总评」的聚合结果（多次提交取规则允许批次中的最高分，可与最新一次不同）。</el-text>
           </div>
         </template>
 
@@ -73,6 +89,15 @@
                 </div>
               </template>
             </el-table-column>
+            <el-table-column label="总评来源" min-width="120">
+              <template #default="{ row }">
+                <template v-if="row.status === 'submitted' && row.graded_attempt_id && row.latest_attempt_id">
+                  <el-tag v-if="row.graded_attempt_id !== row.latest_attempt_id" type="warning" size="small">非最新批次</el-tag>
+                  <el-tag v-else type="success" size="small">最新批次</el-tag>
+                </template>
+                <span v-else class="muted-text">—</span>
+              </template>
+            </el-table-column>
             <el-table-column label="提交时间" min-width="180">
               <template #default="{ row }">
                 {{ row.submitted_at ? formatDate(row.submitted_at) : '尚未提交' }}
@@ -83,9 +108,12 @@
                 {{ row.attempt_count || 0 }}
               </template>
             </el-table-column>
-            <el-table-column label="提交说明" min-width="220">
+            <el-table-column label="提交说明" min-width="240">
               <template #default="{ row }">
-                {{ row.content || '无' }}
+                <div v-if="row.content" class="table-md-cell">
+                  <MarkdownPreview :source="row.content" compact />
+                </div>
+                <span v-else>无</span>
               </template>
             </el-table-column>
             <el-table-column label="附件" min-width="180">
@@ -125,7 +153,10 @@
                 </div>
                 <div v-if="hasSavedReview(row)" class="review-result">
                   <span v-if="row.review_score !== null && row.review_score !== undefined">当前展示分：{{ formatScore(row.review_score) }}</span>
-                  <span v-if="row.review_comment">评语：{{ row.review_comment }}</span>
+                  <div v-if="row.review_comment" class="review-result__md">
+                    <span class="review-result__label">评语：</span>
+                    <MarkdownPreview :source="row.review_comment" compact />
+                  </div>
                 </div>
               </template>
             </el-table-column>
@@ -194,13 +225,16 @@
             </div>
 
             <div class="attempt-body">
-              <div>{{ attempt.content || '无提交说明' }}</div>
+              <MarkdownPreview v-if="attempt.content" :source="attempt.content" compact />
+              <span v-else>无提交说明</span>
               <div v-if="attempt.attachment_url" class="attempt-link">
                 <el-button type="primary" link @click="openAttachment(attempt.attachment_url, attempt.attachment_name)">
                   {{ attempt.attachment_name || '下载附件' }}
                 </el-button>
               </div>
-              <div v-if="attempt.review_comment" class="attempt-comment">{{ attempt.review_comment }}</div>
+              <div v-if="attempt.review_comment" class="attempt-comment">
+                <MarkdownPreview :source="attempt.review_comment" compact />
+              </div>
               <div v-if="attempt.task_error" class="attempt-error">{{ attempt.task_error }}</div>
             </div>
 
@@ -239,6 +273,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useUserStore } from '@/stores/user'
 import { downloadAttachment } from '@/utils/attachments'
 
@@ -524,6 +559,25 @@ watch(
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
+}
+
+.table-md-cell {
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.review-result__md {
+  margin-top: 8px;
+}
+
+.review-result__label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
 }
 
 .review-cell,

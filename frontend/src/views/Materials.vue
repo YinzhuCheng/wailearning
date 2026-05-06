@@ -56,13 +56,18 @@
       </el-card>
     </template>
 
-    <el-dialog v-model="dialogVisible" title="发布资料" width="620px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" title="发布资料" width="760px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="资料标题" prop="title">
           <el-input v-model="form.title" />
         </el-form-item>
         <el-form-item label="资料说明" prop="content">
-          <el-input v-model="form.content" type="textarea" :rows="6" />
+          <MarkdownEditorWithPreview
+            v-model="form.content"
+            :rows="8"
+            field-label="资料说明"
+            placeholder="支持 Markdown、公式；保存前请先预览确认排版。"
+          />
         </el-form-item>
         <el-form-item label="附件">
           <el-upload
@@ -94,13 +99,16 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="资料详情" width="620px" destroy-on-close>
+    <el-dialog v-model="detailVisible" title="资料详情" width="760px" destroy-on-close>
       <el-descriptions v-if="currentMaterial" :column="2" border>
         <el-descriptions-item label="资料标题" :span="2">{{ currentMaterial.title }}</el-descriptions-item>
         <el-descriptions-item label="课程">{{ currentMaterial.subject_name || selectedCourse?.name }}</el-descriptions-item>
         <el-descriptions-item label="发布人">{{ currentMaterial.creator_name }}</el-descriptions-item>
         <el-descriptions-item label="发布时间">{{ formatDate(currentMaterial.created_at) }}</el-descriptions-item>
-        <el-descriptions-item label="资料说明" :span="2">{{ currentMaterial.content || '暂无说明' }}</el-descriptions-item>
+        <el-descriptions-item label="资料说明" :span="2">
+          <MarkdownPreview v-if="currentMaterial.content" :source="currentMaterial.content" />
+          <span v-else class="muted-text">暂无说明</span>
+        </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentMaterial.attachment_url" type="primary" link @click="openAttachment(currentMaterial)">
             {{ currentMaterial.attachment_name || '下载附件' }}
@@ -117,6 +125,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import MarkdownEditorWithPreview from '@/components/MarkdownEditorWithPreview.vue'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 

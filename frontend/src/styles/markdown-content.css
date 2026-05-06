@@ -1,0 +1,120 @@
+/* Typography for rendered Markdown (pairs with KaTeX). Scoped under .markdown-content. */
+.markdown-content {
+  font-size: 15px;
+  line-height: 1.65;
+  color: #0f172a;
+  word-wrap: break-word;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  margin: 1.1em 0 0.5em;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #0f172a;
+}
+
+.markdown-content h1 {
+  font-size: 1.45rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.35em;
+}
+
+.markdown-content h2 {
+  font-size: 1.25rem;
+}
+
+.markdown-content h3 {
+  font-size: 1.1rem;
+}
+
+.markdown-content p {
+  margin: 0.65em 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 0.5em 0 0.5em 1.25em;
+  padding-left: 0.25em;
+}
+
+.markdown-content li {
+  margin: 0.25em 0;
+}
+
+.markdown-content blockquote {
+  margin: 0.75em 0;
+  padding: 0.35em 0.85em;
+  border-left: 4px solid #93c5fd;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.markdown-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.9em;
+  padding: 0.12em 0.35em;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.markdown-content pre {
+  margin: 0.75em 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #1e293b;
+  color: #e2e8f0;
+  overflow-x: auto;
+}
+
+.markdown-content pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: 0.88em;
+}
+
+.markdown-content a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75em 0;
+  font-size: 0.95em;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #e2e8f0;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: #f8fafc;
+}
+
+/* KaTeX display blocks */
+.markdown-content .katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-content.markdown-content--compact {
+  font-size: 14px;
+}
+
+.markdown-content.markdown-content--compact p {
+  margin: 0.45em 0;
+}

@@ -24,7 +24,12 @@
           <el-descriptions-item label="自动评分">{{ homework.auto_grading_enabled ? '已启用' : '未启用' }}</el-descriptions-item>
           <el-descriptions-item label="评分规则" :span="2">{{ homework.grading_rule_hint }}</el-descriptions-item>
           <el-descriptions-item label="作业内容" :span="2">
-            {{ homework.content || '暂无作业说明。' }}
+            <MarkdownPreview v-if="homework.content" :source="homework.content" />
+            <span v-else>暂无作业说明。</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="评分要点（对学生可见）" :span="2">
+            <MarkdownPreview v-if="homework.rubric_text" :source="homework.rubric_text" compact />
+            <span v-else>未设置</span>
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
             <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
@@ -32,8 +37,9 @@
             </el-button>
             <span v-else class="muted-text">暂无附件</span>
           </el-descriptions-item>
-          <el-descriptions-item label="最高分评语" :span="2">
-            <div v-if="summaryReviewText" class="best-review">
+          <el-descriptions-item label="计入成绩的分数与评语" :span="2">
+            <div v-if="aggregateGradeHint" class="aggregate-hint">{{ aggregateGradeHint }}</div>
+            <div v-if="hasAggregateScoreOrComment" class="best-review">
               <el-tag
                 v-if="historySummary?.review_score !== null && historySummary?.review_score !== undefined"
                 :type="scoreTag(historySummary.review_score)"
@@ -41,9 +47,11 @@
               >
                 {{ formatScore(historySummary.review_score) }}
               </el-tag>
-              <span>{{ summaryReviewText }}</span>
+              <div v-if="summaryReviewText" class="best-review__md">
+                <MarkdownPreview :source="historySummary.review_comment" compact />
+              </div>
             </div>
-            <span v-else class="muted-text">暂无评分</span>
+            <span v-else class="muted-text">暂无计入总评的分数</span>
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -74,10 +82,17 @@
             :title="`自动评分任务状态：${formatTaskStatus(latestTaskStatus)}`"
           />
           <el-alert
+            v-if="aggregateVsLatestAlert"
+            type="info"
+            :closable="false"
+            class="submission-alerts__item"
+            :title="aggregateVsLatestAlert"
+          />
+          <el-alert
             v-if="isPastDue && homework.allow_late_submission"
             type="warning"
             :closable="false"
-            title="当前提交将被标记为迟交。默认是否影响评分由作业规则决定。"
+            title="当前提交将被标记为迟交。若开启「迟交影响评分」，本次自动分可能不参与总评，总评仍可取此前按时提交中的较高分（见上方说明）。"
           />
           <el-alert
             v-if="isSubmissionLocked"
@@ -134,7 +149,7 @@
         <template #header>
           <div class="card-header">
             <span>提交历史</span>
-            <span class="muted-text">点击可下载历史附件，主界面始终显示最高分对应评语。</span>
+            <span class="muted-text">时间轴展示每次提交；「计入总评」标签标出当前总评分数来源批次（可能与最新一次不同）。</span>
           </div>
         </template>
 
@@ -150,6 +165,13 @@
             <div class="attempt-card">
               <div class="attempt-tags">
                 <el-tag size="small" type="primary">第 {{ getAttemptLabel(attempt) }} 次提交</el-tag>
+                <el-tag
+                  v-if="isGradedAggregateAttempt(attempt)"
+                  size="small"
+                  type="success"
+                >
+                  计入总评
+                </el-tag>
                 <el-tag v-if="attempt.is_late" size="small" type="warning">迟交</el-tag>
                 <el-tag
                   v-if="attempt.review_score !== null && attempt.review_score !== undefined"
@@ -162,14 +184,17 @@
                   {{ formatTaskStatus(attempt.task_status) }}
                 </el-tag>
               </div>
-              <div class="attempt-body">
-                <div>{{ attempt.content || '无提交说明' }}</div>
+                <div class="attempt-body">
+                  <MarkdownPreview v-if="attempt.content" :source="attempt.content" compact />
+                  <span v-else>无提交说明</span>
                 <div v-if="attempt.attachment_url" class="attempt-link">
                   <el-button type="primary" link @click="openAttachment(attempt.attachment_url, attempt.attachment_name)">
                     {{ attempt.attachment_name || '下载附件' }}
                   </el-button>
                 </div>
-                <div v-if="attempt.review_comment" class="attempt-comment">{{ attempt.review_comment }}</div>
+                <div v-if="attempt.review_comment" class="attempt-comment">
+                  <MarkdownPreview :source="attempt.review_comment" compact />
+                </div>
                 <div v-if="attempt.task_error" class="attempt-error">{{ attempt.task_error }}</div>
               </div>
             </div>
@@ -186,6 +211,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
@@ -207,6 +233,14 @@ const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
 const latestTaskStatus = computed(() => historySummary.value?.latest_task_status || '')
 const summaryReviewText = computed(() => historySummary.value?.review_comment || '')
+const hasAggregateScoreOrComment = computed(() => {
+  const s = historySummary.value
+  if (!s) {
+    return false
+  }
+  const hasScore = s.review_score !== null && s.review_score !== undefined
+  return hasScore || Boolean(s.review_comment)
+})
 const isPastDue = computed(() => {
   if (!homework.value?.due_date) {
     return false
@@ -217,6 +251,31 @@ const isPastDue = computed(() => {
 const isSubmissionLocked = computed(() => {
   return isPastDue.value && !homework.value?.allow_late_submission
 })
+
+const aggregateGradeHint = computed(() => {
+  const s = historySummary.value
+  if (!s?.graded_attempt_id || !attempts.value.length) {
+    return ''
+  }
+  const ga = attempts.value.find(a => a.id === s.graded_attempt_id)
+  const label = ga ? `第 ${getAttemptLabel(ga)} 次提交` : '某一历史批次'
+  return `当前总评分数与评语来自：${label}（在规则允许参与比较的各批次中取最高分；同一次提交内教师分优先于自动分）。`
+})
+
+const aggregateVsLatestAlert = computed(() => {
+  const h = homework.value
+  const s = historySummary.value
+  if (!h?.late_submission_affects_score || !s?.graded_attempt_id || !s?.latest_attempt_id) {
+    return ''
+  }
+  if (Number(s.graded_attempt_id) === Number(s.latest_attempt_id)) {
+    return ''
+  }
+  return '最近一次提交与「计入总评」的批次不同：若最新一次为迟交且自动分被排除，总评可保留较早按时提交的高分。请对照时间轴上的「计入总评」标签。'
+})
+
+const isGradedAggregateAttempt = attempt =>
+  Boolean(historySummary.value?.graded_attempt_id && attempt?.id === historySummary.value.graded_attempt_id)
 
 const form = reactive({
   content: '',
@@ -481,9 +540,21 @@ watch(
 
 .best-review {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
-  align-items: center;
   flex-wrap: wrap;
+}
+
+.best-review__md {
+  width: 100%;
+}
+
+.aggregate-hint {
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #64748b;
 }
 
 .attempt-card {

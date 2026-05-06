@@ -96,7 +96,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="editingNotification ? '编辑通知' : '发布通知'"
-      width="620px"
+      width="760px"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -114,7 +114,12 @@
           <el-switch v-model="form.is_pinned" />
         </el-form-item>
         <el-form-item label="通知内容" prop="content">
-          <el-input v-model="form.content" type="textarea" :rows="6" />
+          <MarkdownEditorWithPreview
+            v-model="form.content"
+            :rows="8"
+            field-label="通知内容"
+            placeholder="支持 Markdown 与公式；发布前请预览。"
+          />
         </el-form-item>
         <el-form-item label="附件">
           <el-upload
@@ -146,7 +151,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="通知详情" width="620px" destroy-on-close>
+    <el-dialog v-model="detailVisible" title="通知详情" width="760px" destroy-on-close>
       <el-descriptions v-if="currentNotification" :column="2" border>
         <el-descriptions-item label="通知标题" :span="2">{{ currentNotification.title }}</el-descriptions-item>
         <el-descriptions-item label="班级">{{ currentNotification.class_name || currentClassName || selectedCourse?.class_name || '-' }}</el-descriptions-item>
@@ -154,7 +159,10 @@
         <el-descriptions-item label="优先级">{{ priorityText(currentNotification.priority) }}</el-descriptions-item>
         <el-descriptions-item label="发布人">{{ currentNotification.creator_name }}</el-descriptions-item>
         <el-descriptions-item label="发布时间" :span="2">{{ formatDate(currentNotification.created_at) }}</el-descriptions-item>
-        <el-descriptions-item label="通知内容" :span="2">{{ currentNotification.content || '暂无内容' }}</el-descriptions-item>
+        <el-descriptions-item label="通知内容" :span="2">
+          <MarkdownPreview v-if="currentNotification.content" :source="currentNotification.content" />
+          <span v-else class="muted-text">暂无内容</span>
+        </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentNotification.attachment_url" type="primary" link @click="openAttachment(currentNotification)">
             {{ currentNotification.attachment_name || '下载附件' }}
@@ -171,6 +179,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import MarkdownEditorWithPreview from '@/components/MarkdownEditorWithPreview.vue'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 import {

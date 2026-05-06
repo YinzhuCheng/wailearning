@@ -51,10 +51,17 @@
             </template>
           </el-table-column>
           <el-table-column prop="student_count" label="学生数" width="100" />
-          <el-table-column label="操作" width="140" fixed="right">
+          <el-table-column label="操作" width="320" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" size="small" @click="openCourseDetail(row)">
                 课程详细
+              </el-button>
+              <el-button type="primary" size="small" @click="openEditDialogForRow(row)">
+                编辑
+              </el-button>
+              <el-button type="success" size="small" @click="openLlmConfigDialog(row)">LLM 配置</el-button>
+              <el-button v-if="userStore.isAdmin" type="danger" size="small" @click="deleteCourse(row)">
+                删除
               </el-button>
             </template>
           </el-table-column>
@@ -129,8 +136,9 @@
           </el-table-column>
         </el-table>
       </el-card>
+    </template>
 
-      <el-dialog
+    <el-dialog
         v-model="dialogVisible"
         :title="editingCourse ? '编辑课程' : '新建课程'"
         width="960px"
@@ -227,7 +235,25 @@
           </el-form-item>
 
           <el-form-item label="课程简介" prop="description">
-            <el-input v-model="form.description" type="textarea" :rows="4" />
+            <MarkdownEditorWithPreview
+              v-model="form.description"
+              :rows="5"
+              field-label="课程简介"
+              placeholder="支持 Markdown 与 LaTeX；保存前可预览。"
+            />
+          </el-form-item>
+
+          <el-form-item label="课程封面">
+            <el-upload :auto-upload="false" :show-file-list="false" accept="image/*" :on-change="handleCoverChange">
+              <el-button>选择图片</el-button>
+            </el-upload>
+            <div v-if="coverObjectUrl" class="cover-preview">
+              <img :src="coverObjectUrl" alt="封面预览" class="cover-preview__img" />
+            </div>
+            <div v-else-if="form.cover_image_url" class="cover-hint muted-text">已保存封面；选择新图片可替换。</div>
+            <el-button v-if="coverObjectUrl || form.cover_image_url" link type="danger" @click="removeCover">
+              移除封面
+            </el-button>
           </el-form-item>
         </el-form>
         <template #footer>
@@ -286,39 +312,96 @@
             <el-input v-model="llmForm.system_prompt" type="textarea" :rows="5" placeholder="可选。若为空则使用系统默认提示词。" />
           </el-form-item>
 
-          <el-form-item label="教师提示词">
-            <el-input v-model="llmForm.teacher_prompt" type="textarea" :rows="5" placeholder="可选。可补充课程评分偏好、风格与要求。" />
+          <el-form-item label="教师提示词（自动评分 / 助教）">
+            <el-input
+              v-model="llmForm.teacher_prompt"
+              type="textarea"
+              :rows="5"
+              placeholder="可选。说明自动评分尺度、风格，以及智能助教回答时的偏好；勿在此写入应对学生保密的细则。"
+            />
           </el-form-item>
 
-          <el-form-item label="端点顺序">
-            <div class="llm-endpoints">
-              <el-empty v-if="!llmPresets.length" description="暂无可用端点，请先由管理员创建并完成视觉校验。" />
-              <div
-                v-for="preset in llmPresets"
-                :key="preset.id"
-                class="llm-endpoint-row"
-              >
-                <el-checkbox
-                  :model-value="isPresetSelected(preset.id)"
-                  :disabled="preset.validation_status !== 'validated' || !preset.supports_vision"
-                  @change="checked => togglePresetSelection(preset, checked)"
+          <el-form-item label="路由策略">
+            <el-radio-group v-model="llmRoutingMode">
+              <el-radio label="flat">单列表优先级（按顺序故障转移）</el-radio>
+              <el-radio label="groups">多组故障转移（整组失败后切换下一组）</el-radio>
+            </el-radio-group>
+            <div class="llm-route-hint">与课程绑定；任课教师与管理员均可修改。保存时以当前选项为准。</div>
+          </el-form-item>
+
+          <template v-if="llmRoutingMode === 'flat'">
+            <el-form-item label="端点顺序">
+              <div class="llm-endpoints">
+                <el-empty v-if="!llmPresets.length" description="暂无可用端点，请先由管理员创建并完成视觉校验。" />
+                <div
+                  v-for="preset in llmPresets"
+                  :key="preset.id"
+                  class="llm-endpoint-row"
                 >
-                  <div class="llm-endpoint-meta">
-                    <strong>{{ preset.name }}</strong>
-                    <span>{{ preset.model_name }}</span>
-                    <span>状态：{{ preset.validation_status === 'validated' ? '已通过视觉校验' : preset.validation_message || '未校验' }}</span>
-                  </div>
-                </el-checkbox>
+                  <el-checkbox
+                    :model-value="isPresetSelected(preset.id)"
+                    :disabled="preset.validation_status !== 'validated' || !preset.supports_vision"
+                    @change="checked => togglePresetSelection(preset, checked)"
+                  >
+                    <div class="llm-endpoint-meta">
+                      <strong>{{ preset.name }}</strong>
+                      <span>{{ preset.model_name }}</span>
+                      <span>状态：{{ preset.validation_status === 'validated' ? '已通过视觉校验' : preset.validation_message || '未校验' }}</span>
+                    </div>
+                  </el-checkbox>
 
-                <el-input-number
-                  v-if="isPresetSelected(preset.id)"
-                  :model-value="getPresetPriority(preset.id)"
-                  :min="1"
-                  @update:model-value="value => updatePresetPriority(preset.id, value)"
-                />
+                  <el-input-number
+                    v-if="isPresetSelected(preset.id)"
+                    :model-value="getPresetPriority(preset.id)"
+                    :min="1"
+                    @update:model-value="value => updatePresetPriority(preset.id, value)"
+                  />
+                </div>
               </div>
-            </div>
-          </el-form-item>
+            </el-form-item>
+          </template>
+
+          <template v-else>
+            <el-form-item label="多组端点">
+              <div
+                v-for="(grp, gi) in llmGroupsUi"
+                :key="grp._key"
+                class="llm-group-panel"
+              >
+                <div class="llm-group-panel__head">
+                  <span class="llm-group-panel__title">故障转移组 {{ gi + 1 }}</span>
+                  <el-input v-model="grp.name" placeholder="组名称（可选）" style="width: 220px" clearable />
+                  <el-button v-if="llmGroupsUi.length > 1" text type="danger" @click="removeLlmGroup(gi)">删除组</el-button>
+                </div>
+                <div class="llm-endpoints">
+                  <div
+                    v-for="preset in llmPresets"
+                    :key="`${grp._key}-${preset.id}`"
+                    class="llm-endpoint-row"
+                  >
+                    <el-checkbox
+                      :model-value="isPresetInGroup(gi, preset.id)"
+                      :disabled="preset.validation_status !== 'validated' || !preset.supports_vision"
+                      @change="checked => togglePresetInGroup(gi, preset, checked)"
+                    >
+                      <div class="llm-endpoint-meta">
+                        <strong>{{ preset.name }}</strong>
+                        <span>{{ preset.model_name }}</span>
+                        <span>状态：{{ preset.validation_status === 'validated' ? '已通过视觉校验' : preset.validation_message || '未校验' }}</span>
+                      </div>
+                    </el-checkbox>
+                    <el-input-number
+                      v-if="isPresetInGroup(gi, preset.id)"
+                      :model-value="getGroupPresetPriority(gi, preset.id)"
+                      :min="1"
+                      @update:model-value="value => setGroupPresetPriority(gi, preset.id, value)"
+                    />
+                  </div>
+                </div>
+              </div>
+              <el-button type="primary" plain class="llm-add-group" @click="addLlmGroup">添加组</el-button>
+            </el-form-item>
+          </template>
         </el-form>
 
         <template #footer>
@@ -326,7 +409,6 @@
           <el-button type="primary" :loading="llmSaving" @click="saveLlmConfig">保存配置</el-button>
         </template>
       </el-dialog>
-    </template>
   </div>
 </template>
 
@@ -336,7 +418,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import CourseSchedulePicker from '@/components/CourseSchedulePicker.vue'
+import MarkdownEditorWithPreview from '@/components/MarkdownEditorWithPreview.vue'
 import { useUserStore } from '@/stores/user'
+import { validateAttachmentFile } from '@/utils/attachments'
 import {
   filterCoursesByClassId,
   resolveClassTeacherClassId,
@@ -358,6 +442,39 @@ const submitting = ref(false)
 const dialogVisible = ref(false)
 const editingCourse = ref(null)
 const formRef = ref(null)
+const coverFile = ref(null)
+const coverObjectUrl = ref('')
+
+const resetCover = () => {
+  if (coverObjectUrl.value) {
+    URL.revokeObjectURL(coverObjectUrl.value)
+    coverObjectUrl.value = ''
+  }
+  coverFile.value = null
+}
+
+const handleCoverChange = uploadFile => {
+  const file = uploadFile.raw
+  const result = validateAttachmentFile(file)
+  if (!result.valid) {
+    ElMessage.error(result.message)
+    return false
+  }
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('封面请使用图片文件')
+    return false
+  }
+  resetCover()
+  coverFile.value = file
+  coverObjectUrl.value = URL.createObjectURL(file)
+  return false
+}
+
+const removeCover = () => {
+  resetCover()
+  form.cover_image_url = ''
+}
+
 const courseDetailVisible = ref(false)
 const courseDetailLoading = ref(false)
 const detailCourse = ref(null)
@@ -389,6 +506,15 @@ const llmForm = reactive({
   endpoints: []
 })
 
+const llmRoutingMode = ref('flat')
+const llmGroupsUi = ref([])
+
+const emptyLlmGroup = () => ({
+  _key: `g-${Date.now()}-${Math.random()}`,
+  name: '',
+  presetPriorities: {}
+})
+
 const isClassTeacherView = computed(() => userStore.isClassTeacher)
 const currentClassId = computed(() => resolveClassTeacherClassId(userStore.userInfo, classTeacherCoursePool.value))
 const currentClassName = computed(() => resolveClassTeacherClassName(userStore.userInfo, classTeacherCoursePool.value) || '未分配班级')
@@ -401,7 +527,7 @@ const pageSubtitle = computed(() => {
     return currentClassId.value ? `${currentClassName.value} 全部课程信息` : '请先为班主任账号分配班级。'
   }
 
-  return '管理员可统一查看、编辑课程信息与课程时间安排。'
+  return '管理员与任课教师可管理课程信息、课程封面、以及课程级 LLM 配置；班主任可在本班课程列表中执行相同管理操作（删除课程仅管理员）。'
 })
 
 const form = reactive({
@@ -412,7 +538,8 @@ const form = reactive({
   course_type: 'required',
   status: 'active',
   course_times: [createEmptyCourseTime()],
-  description: ''
+  description: '',
+  cover_image_url: ''
 })
 
 const validateCourseTimes = (_rule, value, callback) => {
@@ -450,6 +577,7 @@ const rules = {
 }
 
 const resetForm = () => {
+  resetCover()
   Object.assign(form, {
     name: '',
     class_id: null,
@@ -458,7 +586,8 @@ const resetForm = () => {
     course_type: 'required',
     status: 'active',
     course_times: [createEmptyCourseTime()],
-    description: ''
+    description: '',
+    cover_image_url: ''
   })
 }
 
@@ -477,10 +606,6 @@ const loadCourses = async () => {
 }
 
 const loadOptions = async () => {
-  if (isClassTeacherView.value) {
-    return
-  }
-
   const [classData, userData, semesterData] = await Promise.all([
     api.classes.list(),
     api.users.list(),
@@ -513,6 +638,7 @@ const openCreateDialog = () => {
 
 const openEditDialog = course => {
   editingCourse.value = course
+  resetCover()
   const normalizedCourseTimes = normalizeEditableCourseTimes(course)
 
   Object.assign(form, {
@@ -523,9 +649,15 @@ const openEditDialog = course => {
     course_type: course.course_type || 'required',
     status: course.status || 'active',
     course_times: normalizedCourseTimes.length ? normalizedCourseTimes : [createEmptyCourseTime()],
-    description: course.description || ''
+    description: course.description || '',
+    cover_image_url: course.cover_image_url || ''
   })
   dialogVisible.value = true
+}
+
+const openEditDialogForRow = async row => {
+  await loadOptions()
+  openEditDialog(row)
 }
 
 const getCourseTimeLines = course =>
@@ -538,6 +670,12 @@ const submitForm = async () => {
   submitting.value = true
 
   try {
+    if (coverFile.value) {
+      const uploaded = await api.files.upload(coverFile.value)
+      form.cover_image_url = uploaded.attachment_url
+      resetCover()
+    }
+
     const payload = {
       name: form.name,
       class_id: form.class_id,
@@ -546,7 +684,8 @@ const submitForm = async () => {
       course_type: form.course_type,
       status: form.status,
       course_times: serializeCourseTimesPayload(form.course_times),
-      description: form.description
+      description: form.description,
+      cover_image_url: form.cover_image_url?.trim() || null
     }
 
     if (editingCourse.value) {
@@ -565,6 +704,8 @@ const submitForm = async () => {
 }
 
 const resetLlmForm = () => {
+  llmRoutingMode.value = 'flat'
+  llmGroupsUi.value = [emptyLlmGroup()]
   Object.assign(llmForm, {
     is_enabled: false,
     response_language: '',
@@ -598,10 +739,24 @@ const applyLlmConfig = config => {
   llmForm.quota_timezone = config.quota_timezone || 'UTC'
   llmForm.system_prompt = config.system_prompt || ''
   llmForm.teacher_prompt = config.teacher_prompt || ''
-  llmForm.endpoints = (config.endpoints || []).map(item => ({
-    preset_id: item.preset_id,
-    priority: item.priority
-  }))
+  const gr = config.groups || []
+  const hasGroupMembers = gr.some(g => (g.members || []).length > 0)
+  if (hasGroupMembers) {
+    llmRoutingMode.value = 'groups'
+    llmGroupsUi.value = gr.map(g => ({
+      _key: `g-${g.id}-${Math.random()}`,
+      name: g.name || '',
+      presetPriorities: Object.fromEntries((g.members || []).map(m => [m.preset_id, m.priority]))
+    }))
+    llmForm.endpoints = []
+  } else {
+    llmRoutingMode.value = 'flat'
+    llmForm.endpoints = (config.endpoints || []).map(item => ({
+      preset_id: item.preset_id,
+      priority: item.priority
+    }))
+    llmGroupsUi.value = [emptyLlmGroup()]
+  }
 }
 
 const openLlmConfigDialog = async course => {
@@ -648,13 +803,56 @@ const updatePresetPriority = (presetId, value) => {
   target.priority = value || 1
 }
 
+const addLlmGroup = () => {
+  llmGroupsUi.value.push(emptyLlmGroup())
+}
+
+const removeLlmGroup = index => {
+  if (llmGroupsUi.value.length <= 1) {
+    return
+  }
+  llmGroupsUi.value.splice(index, 1)
+}
+
+const isPresetInGroup = (groupIndex, presetId) => {
+  const g = llmGroupsUi.value[groupIndex]
+  if (!g) {
+    return false
+  }
+  return Object.prototype.hasOwnProperty.call(g.presetPriorities, presetId)
+}
+
+const togglePresetInGroup = (groupIndex, preset, checked) => {
+  const g = llmGroupsUi.value[groupIndex]
+  if (!g || preset.validation_status !== 'validated' || !preset.supports_vision) {
+    return
+  }
+  if (checked) {
+    const vals = Object.values(g.presetPriorities)
+    const maxP = vals.length ? Math.max(...vals) : 0
+    g.presetPriorities[preset.id] = maxP + 1
+  } else {
+    delete g.presetPriorities[preset.id]
+  }
+}
+
+const getGroupPresetPriority = (groupIndex, presetId) =>
+  llmGroupsUi.value[groupIndex]?.presetPriorities?.[presetId] ?? 1
+
+const setGroupPresetPriority = (groupIndex, presetId, value) => {
+  const g = llmGroupsUi.value[groupIndex]
+  if (g && Object.prototype.hasOwnProperty.call(g.presetPriorities, presetId)) {
+    g.presetPriorities[presetId] = value || 1
+  }
+}
+
 const saveLlmConfig = async () => {
   if (!llmDialogCourse.value) {
     return
   }
   llmSaving.value = true
   try {
-    await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
+    const base = {
       is_enabled: llmForm.is_enabled,
       response_language: llmForm.response_language?.trim() || null,
       daily_student_token_limit: normalizeNullableNumber(llmForm.daily_student_token_limit),
@@ -664,9 +862,38 @@ const saveLlmConfig = async () => {
       max_output_tokens: llmForm.max_output_tokens,
       quota_timezone: llmForm.quota_timezone?.trim() || 'UTC',
       system_prompt: llmForm.system_prompt?.trim() || null,
-      teacher_prompt: llmForm.teacher_prompt?.trim() || null,
-      endpoints: [...llmForm.endpoints].sort((left, right) => left.priority - right.priority)
-    })
+      teacher_prompt: llmForm.teacher_prompt?.trim() || null
+    }
+    if (llmRoutingMode.value === 'groups') {
+      const groupsPayload = llmGroupsUi.value
+        .map((g, gi) => {
+          const ids = Object.keys(g.presetPriorities).map(Number)
+          const members = ids
+            .sort((a, b) => (g.presetPriorities[a] || 99) - (g.presetPriorities[b] || 99))
+            .map((pid, idx) => ({ preset_id: pid, priority: idx + 1 }))
+          return {
+            priority: gi + 1,
+            name: (g.name || '').trim() || `group ${gi + 1}`,
+            members
+          }
+        })
+        .filter(g => g.members.length > 0)
+      if (!groupsPayload.length) {
+        ElMessage.warning('多组模式下请至少在一个组内勾选一个已校验端点')
+        return
+      }
+      await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
+        ...base,
+        groups: groupsPayload,
+        endpoints: []
+      })
+    } else {
+      await api.llmSettings.updateCourseConfig(llmDialogCourse.value.id, {
+        ...base,
+        endpoints: [...llmForm.endpoints].sort((left, right) => left.priority - right.priority),
+        groups: []
+      })
+    }
     ElMessage.success('LLM 配置已保存')
     llmDialogVisible.value = false
   } finally {
@@ -984,5 +1211,49 @@ watch(
   .course-time-panel__fields {
     grid-template-columns: 1fr;
   }
+}
+
+.cover-preview {
+  margin-top: 10px;
+}
+
+.cover-preview__img {
+  max-height: 140px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.cover-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.llm-route-hint {
+  margin: 6px 0 14px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.llm-group-panel {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.llm-group-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.llm-group-panel__title {
+  font-weight: 600;
+  color: #0f172a;
 }
 </style>

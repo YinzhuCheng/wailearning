@@ -18,7 +18,12 @@ from app.attachments import (
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access, get_enrolled_students
 from app.database import get_db
-from app.llm_grading import normalize_score_for_homework, queue_grading_task, refresh_submission_summary
+from app.llm_grading import (
+    normalize_score_for_homework,
+    queue_grading_task,
+    refresh_submission_summary,
+    validate_homework_auto_grading_prerequisites,
+)
 from app.models import (
     Class,
     CourseEnrollment,
@@ -123,7 +128,16 @@ def _resolve_student_for_user(homework: Homework, current_user: User, db: Sessio
 
 
 def _grade_rule_hint(homework: Homework) -> str:
-    return f"多次提交取最高分；迟交默认{'影响' if homework.late_submission_affects_score else '不影响'}评分，系统会标记迟交。"
+    if homework.late_submission_affects_score:
+        return (
+            "多次提交时，总评分数取规则允许参与比较的所有批次中的最高分（同一次提交内教师分优先于自动分）。"
+            "开启「迟交影响评分」时，迟交批次的自动分不参与总评，但教师仍可在迟交批次上给分并参与比较；"
+            "若最新一次为迟交且自动分被排除，总评可保留较早按时提交的高分。系统会标记迟交。"
+        )
+    return (
+        "多次提交时，总评分数取各批次中的最高分（同一次提交内教师分优先于自动分）。"
+        "迟交默认不影响评分，迟交批次的自动分仍参与总评比较。系统会标记迟交。"
+    )
 
 
 def _is_homework_submission_closed(homework: Homework) -> bool:
@@ -220,6 +234,7 @@ def _serialize_submission(db: Session, submission: HomeworkSubmission) -> Homewo
         review_score=submission.review_score,
         review_comment=submission.review_comment,
         latest_attempt_id=submission.latest_attempt_id,
+        graded_attempt_id=submission.graded_best_attempt_id,
         latest_task_status=submission.latest_task_status,
         latest_task_error=submission.latest_task_error,
     )
@@ -291,6 +306,7 @@ def _serialize_submission_status(
         review_score=submission.review_score if submission else None,
         review_comment=submission.review_comment if submission else None,
         latest_attempt_id=submission.latest_attempt_id if submission else None,
+        graded_attempt_id=submission.graded_best_attempt_id if submission else None,
         latest_attempt_is_late=latest_attempt.is_late if latest_attempt else None,
         latest_task_status=submission.latest_task_status if submission else None,
         latest_task_error=submission.latest_task_error if submission else None,
@@ -306,6 +322,8 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         task_error = submission.latest_task_error
         attempt_count = len(submission.attempts)
         latest_submission_is_late = submission.latest_attempt.is_late if submission.latest_attempt else None
+        graded_attempt_id = submission.graded_best_attempt_id
+        latest_submission_attempt_id = submission.latest_attempt_id
     else:
         review_score = None
         review_comment = None
@@ -313,6 +331,8 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         task_error = None
         attempt_count = 0
         latest_submission_is_late = None
+        graded_attempt_id = None
+        latest_submission_attempt_id = None
 
     return HomeworkResponse(
         id=homework.id,
@@ -327,6 +347,7 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         grade_precision=homework.grade_precision,
         auto_grading_enabled=homework.auto_grading_enabled,
         rubric_text=homework.rubric_text,
+        rubric_teacher_text=homework.rubric_teacher_text,
         reference_answer=homework.reference_answer,
         response_language=homework.response_language,
         allow_late_submission=homework.allow_late_submission,
@@ -343,6 +364,8 @@ def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmiss
         task_error=task_error,
         attempt_count=attempt_count,
         latest_submission_is_late=latest_submission_is_late,
+        graded_attempt_id=graded_attempt_id,
+        latest_submission_attempt_id=latest_submission_attempt_id,
         grading_rule_hint=_grade_rule_hint(homework),
     )
 
@@ -355,7 +378,7 @@ def _serialize_homework_for_user(
     response = _serialize_homework(homework, submission)
     if current_user.role == UserRole.STUDENT:
         response.reference_answer = None
-        response.rubric_text = None
+        response.rubric_teacher_text = None
     return response
 
 
@@ -484,6 +507,10 @@ def create_homework(
         if course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
+    validate_homework_auto_grading_prerequisites(
+        db, subject_id=data.subject_id, auto_grading=data.auto_grading_enabled
+    )
+
     homework = Homework(
         title=data.title,
         content=data.content,
@@ -496,6 +523,7 @@ def create_homework(
         grade_precision=data.grade_precision,
         auto_grading_enabled=data.auto_grading_enabled,
         rubric_text=data.rubric_text,
+        rubric_teacher_text=data.rubric_teacher_text,
         reference_answer=data.reference_answer,
         response_language=data.response_language,
         allow_late_submission=data.allow_late_submission,
@@ -551,6 +579,8 @@ def update_homework(
         homework.auto_grading_enabled = data.auto_grading_enabled
     if data.rubric_text is not None:
         homework.rubric_text = data.rubric_text
+    if data.rubric_teacher_text is not None:
+        homework.rubric_teacher_text = data.rubric_teacher_text
     if data.reference_answer is not None:
         homework.reference_answer = data.reference_answer
     if data.response_language is not None:
@@ -559,6 +589,10 @@ def update_homework(
         homework.allow_late_submission = data.allow_late_submission
     if data.late_submission_affects_score is not None:
         homework.late_submission_affects_score = data.late_submission_affects_score
+
+    validate_homework_auto_grading_prerequisites(
+        db, subject_id=homework.subject_id, auto_grading=homework.auto_grading_enabled
+    )
 
     db.commit()
     db.refresh(homework)

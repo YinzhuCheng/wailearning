@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     LLM_GRADING_TASK_STALE_SECONDS: int = 600
     DEFAULT_ESTIMATED_IMAGE_TOKENS: int = 850
 
+    # Optional: first-boot LLM preset + vision/text validation + demo course wiring (see app.bootstrap.seed_initial_llm_deployment_bundle).
+    INIT_LLM_PRESET_NAME: str = "deployment-primary"
+    INIT_LLM_BASE_URL: str = ""
+    INIT_LLM_API_KEY: str = ""
+    INIT_LLM_MODEL_NAME: str = ""
+    INIT_LLM_CONNECT_TIMEOUT_SECONDS: int = 10
+    INIT_LLM_READ_TIMEOUT_SECONDS: int = 120
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
