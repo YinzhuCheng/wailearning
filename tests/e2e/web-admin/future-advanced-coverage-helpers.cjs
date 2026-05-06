@@ -1,15 +1,28 @@
 const { expect } = require('@playwright/test')
+const { seedHeaders } = require('./e2e-seed-headers.cjs')
 
 function apiBase() {
   return (process.env.E2E_API_URL || 'http://127.0.0.1:8012').replace(/\/$/, '')
 }
 
-function seedHeaders() {
-  return { 'X-E2E-Seed-Token': process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed' }
-}
-
 function escapeRegex(text) {
   return `${text || ''}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Open header course dropdown (click; Layout uses trigger="hover" but click reliably opens popper)
+ * and select a course row by visible label text inside `.course-option`.
+ * Prefer over hover()+deep click — avoids "element is not visible / not stable" with Element Plus teleported menus.
+ */
+async function clickCourseSwitcherOption(page, courseLabel) {
+  const switcher = page.getByTestId('header-course-switch')
+  await expect(switcher).toBeVisible({ timeout: 15000 })
+  await switcher.click()
+  const menu = page.locator('.course-dropdown-menu').filter({ visible: true }).first()
+  await expect(menu).toBeVisible({ timeout: 15000 })
+  const row = menu.locator('.course-option').filter({ hasText: courseLabel }).first()
+  await expect(row).toBeVisible({ timeout: 12000 })
+  await row.click({ force: true })
 }
 
 function isDestroyedContextError(err) {
@@ -390,10 +403,21 @@ async function apiPostForm(pathname, token, formData) {
   return res.json()
 }
 
+/**
+ * Element Plus ElMessageBox.confirm — teleported, NOT `el-dialog` course forms.
+ * Using generic `getByRole('dialog')` often matches the wrong overlay after long SQLite runs.
+ */
+async function confirmElMessageBoxPrimary(page) {
+  const box = page.locator('.el-message-box').filter({ visible: true }).last()
+  await box.waitFor({ state: 'visible', timeout: 30000 })
+  await box.locator('.el-message-box__btns .el-button--primary').click({ timeout: 60000 })
+}
+
 module.exports = {
   apiBase,
   seedHeaders,
   escapeRegex,
+  clickCourseSwitcherOption,
   login,
   obtainAccessToken,
   apiGetJson,
@@ -422,5 +446,6 @@ module.exports = {
   flattenChapterTree,
   getChapterTree,
   currentSelectedCourseId,
-  apiPostForm
+  apiPostForm,
+  confirmElMessageBoxPrimary
 }

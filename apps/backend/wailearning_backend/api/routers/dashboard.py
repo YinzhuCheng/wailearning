@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import Attendance, Class, Score, Student, Subject, User
 from apps.backend.wailearning_backend.api.schemas import ClassRanking, DashboardStats, ScoreResponse, StudentRanking
@@ -18,12 +18,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["仪表盘"])
 def _apply_course_scope(subject_id: Optional[int], current_user: User, db: Session):
     selected_course = None
     if subject_id:
-        try:
-            selected_course = ensure_course_access(subject_id, current_user, db)
-        except ValueError:
-            raise HTTPException(status_code=404, detail="Course not found.")
-        except PermissionError:
-            raise HTTPException(status_code=403, detail="You do not have access to this course.")
+        selected_course = ensure_course_access_http(subject_id, current_user, db)
     return selected_course
 
 

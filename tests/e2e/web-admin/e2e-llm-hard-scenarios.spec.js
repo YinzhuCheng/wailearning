@@ -1,5 +1,6 @@
 ﻿const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { seedHeaders } = require('./e2e-seed-headers.cjs')
 
 const scenario = () => loadE2eScenario()
 const TINY_PNG = Buffer.from(
@@ -13,10 +14,6 @@ function apiBase() {
 
 function escapeRegex(text) {
   return `${text || ''}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function seedHeaders() {
-  return { 'X-E2E-Seed-Token': process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed' }
 }
 
 async function login(page, username, password) {
@@ -689,7 +686,7 @@ test.describe('E2E LLM hard scenarios', () => {
       await waitForReviewScore(studentBToken, hw.id, 82)
       await login(page, s.student_plain.username, s.student_plain.password)
       await page.goto('/courses')
-      await expect(page.getByText(/LLM/)).toBeVisible({ timeout: 15000 })
+      await expect(page.getByText('全站 LLM 日额度')).toBeVisible({ timeout: 15000 })
 
       const quotaA = await studentQuotaSummary(studentAToken)
       const rowA = (quotaA.courses || []).find(row => Number(row.subject_id) === Number(s.course_required_id))
@@ -722,7 +719,7 @@ test.describe('E2E LLM hard scenarios', () => {
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await page.goto(`/homework/${hw.id}/submissions`)
     await page.getByTestId('homework-submission-detail-' + s.student_plain.username).click()
-    await expect(page.locator('.detail-text')).toContainText('<script>window.__e2eInjected=1</script>')
+    await expect(page.getByTestId('homework-submission-detail-body')).toContainText('<script>window.__e2eInjected=1</script>')
     expect(await page.evaluate(() => window.__e2eInjected || 0)).toBe(0)
   })
 

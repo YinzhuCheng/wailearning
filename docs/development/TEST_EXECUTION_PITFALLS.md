@@ -1309,6 +1309,458 @@ Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/
 
 This is usually a **test harness expectation drift**, not a routing regression — verify with `router.beforeEach` guards and direct navigation before rewriting product copy back to the old label.
 
+### Pitfall 50: Notification header badge E2E — disabled course card clicks, hover-only dropdowns, badge/API races
+
+### Symptom
+
+Playwright scenarios around **`data-testid="header-notification-badge"`** time out on **`进入课程|查看课程`** with **`element is not enabled`**, or assertions fail when relying on **duplicate** avatar-dropdown notification entries (removed in favor of **sidebar `课程通知`** — update specs accordingly), or the badge digit **lags** `GET /api/notifications/sync-status` by one poll.
+
+### Context
+
+- **`enterSeededRequiredCourse`** (`tests/e2e/web-admin/fixtures.cjs`) clicks the course-card primary button. After a student visits **`/courses`**, the UI may keep that button **disabled** until client enrollment reconciliation catches up — **re-clicking the card is unsafe** for routing-edge specs.
+- Element Plus **`hover()`** on **`header-user-menu`** remains timing-sensitive; prefer **`click()`** on triggers when a dropdown must open. Notification routing assertions should use **sidebar** **`getByRole('menuitem', { name: /课程通知/ })`** (student menu) rather than a removed duplicate dropdown row.
+- **`Layout.vue`** updates **`headerUnreadCount`** from **`pollNotificationSync`** (route watcher + focus handler). Parallel **`fetch`** writes from the test can advance **`sync-status`** **before** the next **`pollNotificationSync`** completes — **`expect.poll`** pairing badge text with **`sync-status`** avoids flaky strict equality.
+
+### Fix
+
+- For **“return from `/courses` with fresh unread”** scenarios, **`page.goto('/course-home')`** after **`window.dispatchEvent(new Event('focus'))`** rather than calling **`enterSeededRequiredCourse`** twice.
+- To verify navigation to **`/notifications`**, use the **sidebar** notification item (see **`e2e-notification-header-sync-tier.spec.js`** case **09**) instead of avatar-dropdown-only flows.
+- After multi-step API mutations (two **`POST /api/notifications`**, **`POST .../read`**), use **`expect.poll`** until **`badge digit === sync.unread_count`**.
+
+### Interpretation
+
+These failures showed up while authoring **`tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js`** on a Linux agent with **`npm`** installed via **`apt-get install nodejs npm`** (see **Pitfall 48**). They are **harness timing / selector** issues unless **`sync-status`** itself diverges from list totals — in that case prefer **`tests/behavior/test_notification_sync_api_edge_behavior.py`** to isolate HTTP contracts first.
+
+### Pitfall 51: Teacher dashboard default course may not be the seeded required course
+
+### Symptom
+
+Playwright asserts **`badge digit === sync-status(...?subject_id=<course_required_id>)`** after **`page.goto('/dashboard')`** but the badge stays **0** or matches a **different** subject.
+
+### Context
+
+**`ensureSelectedCourse`** picks **`rankTeachingCourses`** order (semester + id), not necessarily **`E2E必修课_<suffix>`**. **`notificationSyncParams`** uses **`selectedCourse.id`**, so the layout polls **`sync-status`** for whatever course is selected — which may **not** be `course_required_id` from the seed JSON.
+
+### Fix
+
+Before comparing UI to API for **`course_required_id`**, open **`header-course-switch`** with **`click()`** and select the **`.course-option`** row whose **heading text** matches the seeded required course name.
+
+### Interpretation
+
+Documented while authoring **`tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js`** case **02**.
+
+### Pitfall 52: Full Playwright suite + persistent SQLite — `students.parent_code` UNIQUE collisions on `reset-scenario`
+
+### Symptom
+
+Backend log:
+
+```text
+sqlite3.IntegrityError: UNIQUE constraint failed: students.parent_code
+```
+
+Playwright / `fixtures.cjs`:
+
+```text
+E2E seed failed (500): Internal Server Error
+```
+
+Follow-on failures: timeouts on `page.goto`, missing table rows, logins that succeed but show empty shells — **not obviously “notification UI broke”**.
+
+### Context
+
+- Admin Playwright uses a **file-backed SQLite** URL (see `apps/web/admin/playwright.config.cjs`; Unix placeholder pattern like `/tmp/playwright_e2e_<port>.sqlite`).
+- **`POST /api/e2e/dev/reset-scenario`** runs in many specs’ **`beforeEach`** hooks.
+- `Student.parent_code` is **`unique=True`** in `apps/backend/wailearning_backend/db/models.py`.
+- If seed assigns **`parent_code`** from a **small** derived space (historically a short prefix of `suffix`), repeated inserts into the **same** SQLite file across a long full-suite run increase collision probability (“birthday paradox” vs leftover rows).
+
+Short targeted runs often pass because the DB file is young or resets are fewer.
+
+### Fix
+
+- **Product / seed fix (preferred):** derive **`parent_code`** from the **full** unique run suffix (or another high-entropy string), not an aggressively truncated token. The E2E seed handler in `apps/backend/wailearning_backend/api/routers/e2e_dev.py` uses **`P{suffix.upper()}`** where **`suffix`** is **`uuid.uuid4().hex[:10]`**, keeping the code space large enough for persistent SQLite full-suite runs.
+- **Operator mitigation (diagnostic only):** delete the Playwright SQLite file at `<E2E_SQLITE>` or change **`E2E_API_PORT`** so a fresh file is used — confirms collision vs logic regression; **do not** rely on this instead of seed entropy in CI.
+
+### Interpretation
+
+See also **§ Key pitfall A** in [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+
+### Pitfall 53: Avatar oversized PNG body hits format validation before the 2 MB guard
+
+### Symptom
+
+`tests/backend/user_profile/test_profile_and_avatar.py::test_avatar_oversized_rejected_and_orphan_not_left_on_disk` expects HTTP **400** with **`Avatar image must be 2 MB or smaller`** (English substring **`2 MB`**). Instead the API returns generic attachment validation text such as **`图片文件无法通过校验…`** when the uploaded bytes are not a valid PNG image.
+
+### Context
+
+`/api/auth/me/avatar` ultimately calls **`save_attachment`**, which runs **`assert_attachment_format_compliant`** before persisting. A synthetic **`huge.png`** payload of **`0xFF` repeated bytes** fails PNG validation **before** `upload_my_avatar` can compare **`size > MAX_AVATAR_BYTES`**.
+
+### Fix
+
+In **`apps/backend/wailearning_backend/api/routers/auth.py`**, read the **`UploadFile`** bytes first and reject **`len(content) > MAX_AVATAR_BYTES`** immediately. Pass bytes into **`save_attachment(..., preloaded=content)`** so oversized rejects happen **without** writing to disk and **without** entering format validation for oversize junk payloads.
+
+### Interpretation
+
+This is a **route-ordering** regression guard: size limits for avatars must precede generic attachment sniffing when the upload route shares **`save_attachment`**.
+
+### Pitfall 54: Markdown discussion collapsed preview flattened newlines (tier-3 **`...`** ellipsis specs broke)
+
+### Symptom
+
+Playwright **`e2e-discussion-cover-llm-tier3.spec.js`** expects **`discussion-row__text`** to contain **`...`** when more than three logical lines exist. Instead the UI showed all lines separated by spaces with **no** ellipsis.
+
+### Context
+
+**`collapsedBodyPreview`** in **`CourseDiscussionPanel.vue`** treated non-plain bodies by replacing **`\n`** with spaces before applying only a **240-character** cap. That bypassed **`previewText()` / `lineSegmentsFromBody()`**, which implement the intended **three logical-line** preview model (including counting **`![](...)`** and **`<img>`** as lines).
+
+### Fix
+
+For markdown bodies, when **`isTruncated(body)`** is true, render **`previewText(body)`** (same helper chain as plain text). Keep expanded rows stable by wrapping both collapsed text and **`PlainOrMarkdownBlock`** inside a persistent **`.discussion-row__text`** container so Playwright locators survive expand/collapse.
+
+### Interpretation
+
+Full-suite runs surfaced this because discussion specs execute late and depend on DOM structure + ellipsis semantics staying aligned with **`PREVIEW_LINE_LIMIT`**.
+
+### Pitfall 55: Powerful `/api/e2e/dev/*` routes now expect admin Bearer when `E2E_DEV_REQUIRE_ADMIN_JWT` is true
+
+### Symptom
+
+Playwright or curl calls return **403** with detail mentioning **`administrator Bearer`** when hitting:
+
+- `/api/e2e/dev/mock-llm/configure`
+- `/api/e2e/dev/grading-state`
+- `/api/e2e/dev/process-grading`
+- `/api/e2e/dev/worker`
+- `/api/e2e/dev/mark-preset-validated`
+
+even though **`X-E2E-Seed-Token`** is correct.
+
+### Context
+
+The seed token alone proves possession of a shared CI secret; it does **not** prove an interactive admin session. When **`settings.E2E_DEV_REQUIRE_ADMIN_JWT`** is **true**, selected routes require **`Authorization: Bearer <admin JWT>`** in addition to the seed header. **`reset-scenario`** stays seed-only so **`globalSetup`** can run before any login.
+
+Playwright stores the post-reset admin token in **`process.env.E2E_DEV_ADMIN_BEARER`** via **`tests/e2e/web-admin/e2e-seed-headers.cjs`** (`refreshE2eAdminBearer`). Specs that duplicate **`seedHeaders()`** locally must either import **`seedHeaders`** from **`e2e-seed-headers.cjs`** or duplicate the merge logic.
+
+### Fix
+
+- Managed Playwright: rely on **`fixtures.cjs`** / **`global-setup.cjs`** (they refresh the bearer after each seed).
+- External API without Playwright env: login as seeded **`admin`** from **`scenario.json`** and pass **`Authorization`** with **`POST /api/e2e/dev/*`** calls.
+- Opt out only for intentional legacy scripts: **`E2E_DEV_REQUIRE_ADMIN_JWT=false`** on the backend process.
+
+### Interpretation
+
+This pitfall appeared while closing **P0 E2E exposure** findings: misconfigured non-production hosts previously allowed powerful actions with only a static seed header.
+
+### Pitfall 57: Default `SECRET_KEY` placeholder remains valid unless production or `REQUIRE_STRONG_SECRETS`
+
+### Symptom
+
+Operators expect **`SECRET_KEY=change-me-in-production`** to fail fast in **all** environments; instead the app starts when **`APP_ENV`** is not production-style **and** **`REQUIRE_STRONG_SECRETS`** is **false** (the default), because **`reject_weak_secrets_in_production`** only forces strong secrets when **`REQUIRE_STRONG_SECRETS` or production APP_ENV**.
+
+### Context
+
+Changing **`REQUIRE_STRONG_SECRETS`** default to **`true`** breaks **`from apps.backend.wailearning_backend.core.config import settings`** for processes that have **no** `.env` and rely on code defaults — pytest/conftest sets **`SECRET_KEY`** explicitly, but bare **`python -m uvicorn`** without env would crash unless operators create secrets first.
+
+### Fix
+
+Deployments must set **`APP_ENV=production`** (or **`REQUIRE_STRONG_SECRETS=true`**) **and** supply **`SECRET_KEY`** / **`DATABASE_URL`** per **`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`**. Treat **`change-me-in-production`** as invalid anywhere tokens matter.
+
+### Interpretation
+
+This documents **P0 weak-default-key** risk without silently breaking developer **`import settings`** ergonomics.
+
+### Pitfall 56: Attachment download by basename — ambiguous collision returns **400** (not 403)
+
+### Symptom
+
+`GET /api/files/download/<stored_basename>` returns **400** with text about passing **`attachment_url`**, where the same lesson previously returned **403** (“Ambiguous attachment reference…”).
+
+### Context
+
+Multiple logical **`attachment_url`** rows can reference the same on-disk name. Returning **403** misclassified “caller knows basename but DB has multiple logical URLs” as purely forbidden; **400** invites passing the canonical **`attachment_url`** query parameter to disambiguate after ACL checks.
+
+### Fix
+
+Clients that deep-link **`/api/files/download/{name}`** without a query parameter must tolerate **400** when collisions exist; prefer **`GET /api/files/download?attachment_url=...`** (already supported) or pass **`?attachment_url=`** on the basename route.
+
+### Interpretation
+
+**`tests/backend/files/test_files_attachment_download.py`** still expects **200** when the teacher has access and either there is a single matching URL or paths coincide.
+
+### Pitfall 58: `ensure_course_access` raised `ValueError` inside FastAPI routes (500 instead of 404)
+
+### Symptom
+
+Calling course-scoped endpoints with a non-existent **`subject_id`** returned **500 Internal Server Error** because **`ensure_course_access`** calls **`get_course_or_404`**, which raises **`ValueError("Course not found.")`** — uncaught in many routers.
+
+### Context
+
+Only some handlers wrapped **`try/except ValueError`**. Others assumed **`ensure_course_access`** only raised **`PermissionError`**.
+
+### Fix
+
+**`ensure_course_access_http`** (in **`apps/backend/wailearning_backend/domains/courses/access.py`**) now maps **`ValueError`** to HTTP **404** and **`PermissionError`** to **403**. Route modules were migrated to call **`ensure_course_access_http`** instead of **`ensure_course_access`** for HTTP endpoints (**`homework.py`**, **`scores.py`**, **`attendance.py`**, **`dashboard.py`**, **`subjects.py`**, **`llm_settings.py`**, **`files.py`** attachment ACL helper).
+
+### Interpretation
+
+Regression guard: unknown course IDs must never surface as **500** for authenticated callers.
+
+### Pitfall 59: Homework **`class_id`** vs course **`Subject.class_id`** mismatch
+
+### Symptom
+
+Corrupt rows where **`Homework.class_id`** references class A but **`Homework.subject_id`** points at a **`Subject`** owned by class B caused confusing auth: **`ensure_course_access`** could return **404** (“course not in accessible list”) after the user already passed class-level homework checks.
+
+### Context
+
+Multi-column inconsistency is an administrator/data-import defect; students should not see **404** suggesting “wrong roster” when the real issue is inconsistent homework wiring.
+
+### Fix
+
+**`_ensure_homework_access`** compares **`Subject.class_id`** to **`Homework.class_id`** when both are set and returns **403** with an explicit **data integrity** message before calling **`ensure_course_access_http`**.
+
+### Interpretation
+
+Covered by **`tests/backend/homework/test_homework_course_class_integrity.py`** (admin sees integrity **403**; student is blocked **403**).
+
+### Pitfall 60: `POST /api/auth/forgot-password` spam and throttle semantics
+
+### Symptom
+
+Repeated forgot-password requests for the same username flood **`notifications`** rows for administrators; scripted clients can also hammer the endpoint from one IP.
+
+### Context
+
+The endpoint intentionally returns the **same generic message** for missing accounts (anti-enumeration). Throttling must therefore avoid leaking “account exists” via different HTTP codes — skipped work still returns the canonical success body.
+
+### Fix
+
+- **`FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS`** (default **600**): suppresses a **new** admin notification if another **`password_reset_request`** notification for the same titled user was created within the window. A **`operation_logs`** row with **`result=cooldown`** records the skip (no notification row).
+- **`FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR`** (default **40**): counts **`operation_logs`** rows with **`action=forgot_password_request`** per IP in the rolling hour; when over budget, skip notification creation and log **`result=rate_limited`**.
+
+Disable by setting **`FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS=0`** and/or **`FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR=0`** (zero disables that gate).
+
+### Interpretation
+
+**`tests/backend/auth/test_forgot_password_flow.py`** still expects the first successful path unchanged; add parallel tests if you tighten defaults further.
+
+### Pitfall 61: Public registration with invented **`class_id`**
+
+### Symptom
+
+With **`ALLOW_PUBLIC_REGISTRATION=true`**, **`POST /api/auth/register`** accepted arbitrary **`class_id`** values, creating student accounts pointing at non-existent **`classes`** rows (orphan **`users.class_id`**).
+
+### Fix
+
+When **`PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS`** is **true** (default), **`register`** queries **`classes`** and returns **400** with **`Invalid class_id: class does not exist.`** if missing.
+
+### Interpretation
+
+**`tests/backend/auth/test_public_registration_validation.py`** asserts rejection for a synthetic ID; **`tests/backend/courses/test_student_course_roster_behavior.py::test_public_register_student_then_roster_same_username_gets_enrollments`** still uses a real class from the scenario.
+
+### Pitfall 62: Student LLM quota GET endpoint creating **`CourseLLMConfig`** rows
+
+### Symptom
+
+**`GET /api/llm-settings/courses/student-quota/{subject_id}`** called **`ensure_course_llm_config`**, which inserts **`course_llm_configs`** and may sync template endpoints — an unintended **write** side effect for a read-only quota view.
+
+### Fix
+
+After **`ensure_course_access_http`**, build usage via **`get_student_quota_usage_snapshot(db, None, student_id=..., subject_id=...)`** (extended signature in **`domains/llm/quota.py`**) without initializing course LLM config.
+
+**`GET /api/llm-settings/courses/student-quotas`** no longer calls **`ensure_course_llm_config`** per enrollment row (read-only aggregation).
+
+### Interpretation
+
+Teachers still invoke **`ensure_course_llm_config`** through **`GET/PUT /api/llm-settings/courses/{subject_id}`** when editing LLM settings — that path intentionally creates/configures rows.
+
+### Pitfall 63: Stale `node` / `uvicorn` on default E2E ports after interrupted full run
+
+### Symptom
+
+`npm run test:e2e` aborts before tests start:
+
+```text
+Error: http://127.0.0.1:3012/ is already used
+Error: http://127.0.0.1:8012/api/health is already used
+```
+
+### Context
+
+Playwright `webServer` in **`apps/web/admin/playwright.config.cjs`** tries to bind **Vite** and **uvicorn**. A killed CLI may leave the child **`node`** (Vite) or Python server alive; **`fuser`** may be missing in the image.
+
+### Fix
+
+**`lsof -i :<E2E_UI_PORT>`** and **`lsof -i :<E2E_API_PORT>`** then **`kill -9`**, or use **`PLAYWRIGHT_USE_EXTERNAL_SERVERS=1`** and manage processes explicitly.
+
+### Interpretation
+
+This is an **operator / environment** failure, not a test assertion failure. Documented in [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md) as runbook **Pitfall 63** (mirrors this pitfall number for cross-linking).
+
+### Pitfall 64: `header-course-switch` — hover-based Element Plus dropdown vs Playwright click
+
+### Symptom
+
+**`e2e-notification-header-sync-tier.spec.js`** / **`e2e-notification-sync-deep-tier.spec.js`**: timeout on **`.course-dropdown-menu`** click — “element is not visible / not stable”.
+
+### Context
+
+**`el-dropdown` `trigger="hover"`** + teleported menu: **`hover()` + getByText** on nested **`<strong>`** is fragile; **`scrollIntoViewIfNeeded`** on an animating popper can block until test timeout.
+
+### Fix
+
+**`clickCourseSwitcherOption`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`**: click **切换课程**, visible **`.course-dropdown-menu`**, **force** click **`.course-option`**.
+
+### Pitfall 65: Mock LLM `discuss_<suffix>` profile cursor drift in full Playwright run
+
+### Symptom
+
+**`e2e-homework-comment-cover-tier4.spec.js`** case **08** — **`expect.poll` on `comment_preview`** never contains **`复`**, value stays **`discuss_<hex>:ok`**.
+
+### Context
+
+**`/api/e2e/dev/mock-llm/<profile>/v1/chat/completions`** advances a **per-profile cursor** in **`e2e_dev.py`**. Other specs (discussion LLM, validation) and ordering can exhaust **`steps`** so the handler falls back to default **`{profile}:ok`**.
+
+### Fix
+
+After the first graded comment is confirmed, **`configureMockLlm`** again with **only** the step intended for the **regrade** attempt.
+
+### Interpretation
+
+Same numbered narrative as **FULL_PLAYWRIGHT_E2E_RUNBOOK.md** sections **Pitfall 64–65** (course switcher vs mock cursor).
+
+### Pitfall 66: Tier-4 chapter reorder — wrong HTTP verb / payload vs tree shape
+
+### Symptom
+
+**`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** case **13**: **`movable.length >= 2`** fails at **1**, or reorder returns **405/422** after fixing counts.
+
+### Context
+
+1. **`GET /api/material-chapters/tree`** returns a **nested** tree. Filtering **`tree.nodes`** only counts **root-level** rows. A single extra **`CourseMaterialChapter`** inserted as a **child** under another chapter still yields **one** movable root sibling alongside **未分类**.
+2. Reorder is **`POST /api/material-chapters/reorder?subject_id=...`** with JSON **`{ parent_id: null, ordered_chapter_ids: [...] }`** — not **`PUT`**, and not **`chapter_ids`** (see **`material_chapters.py`**).
+
+### Fix
+
+- Seed **two non-uncategorized root chapters** (`parent_id=None`) for the required course in **`e2e_dev.py`** so **`nodes.filter(!is_uncategorized)`** has **≥ 2** entries at the root.
+- Call **`apiPostJson`** with **`ordered_chapter_ids`**, matching the SPA client (**`apps/web/admin/src/api/index.js`** → **`reorderChapters`**).
+
+### Interpretation
+
+When authoring chapter reorder specs, align with **`CourseMaterialChapterReorderRequest`** in **`apps/backend/.../schemas.py`** and prefer **`flattenChapterTree`** from **`future-advanced-coverage-helpers.cjs`** if you must include nested chapters.
+
+### Pitfall 67: Responsive E2E — **`boundingBox()`** over huge **`catalog-mobile-item`** lists times out
+
+### Symptom
+
+**`ui-responsive-layout-regression.spec.js`** — **`mobile course cards and catalog cards stay inside a 390px viewport`** exceeds **120s** while **`waiting for locator('.catalog-mobile-item').nth(N)`** with **N** in the hundreds.
+
+### Context
+
+The elective catalog can return **many** rows in smoke databases. **`expectLocatorBoxesWithinViewport`** previously iterated **every** match; each **`boundingBox()`** forces layout work — **O(n)** becomes prohibitive.
+
+### Fix
+
+Cap sampled rows (**first `maxItems`**) and rely on **`expectNoPageHorizontalOverflow`** for the global **`scrollWidth`** invariant.
+
+### Pitfall 68: Users-page **`tbody tr`** + **`batch-set-class`** UI vs accumulated SQLite user rows
+
+### Symptom
+
+**`e2e-scenario-resilience.spec.js`** (`student mid-session class migration`, `stale roster dialog…`) times out on **`expect(tr).toBeVisible`** or on **`batch-class`** dropdown option clicks after many full Playwright runs against the **same file-backed SQLite** (`<E2E_SQLITE>` in **`FULL_PLAYWRIGHT_E2E_RUNBOOK.md`**).
+
+### Context
+
+**`/users`** loads **all** users (`GET /api/users` returns `query.all()`). **`reset-scenario`** does not truncate unrelated historical rows; **local E2E user counts grow**. **`getByRole('row', { name: … })`** on **`el-table`** can also miss when the accessible **name** does not include the username column text.
+
+### Fix
+
+- Prefer **`POST /api/users/batch-set-class`** from the test harness when the scenario only needs **authoritative class migration + enrollment sync**, not **batch-class dialog UX**.
+- When asserting presence on **`Users.vue`**, use **`locator('tbody tr').filter({ hasText: username })`** instead of **`getByRole('row', { name: regex })`**.
+- **`boundary: admin creates a new student`** now creates via **`POST /api/users`** then verifies the **table row** — avoids **`el-select`** teleport edge cases under heavy lists.
+
+### Pitfall 69: E2E assertions vs **`prepare_student_course_context`** and inconsistent **`page_size`** caps across routers
+
+### Symptom
+
+Authoring **`tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js`** (or similar API-heavy specs):
+
+1. **`student_b`** “not enrolled in required course” — **`GET /api/homeworks/{id}/submission/me`** unexpectedly returns **200** because **`prepare_student_course_context`** + **`sync_student_course_enrollments`** auto-create **`CourseEnrollment`** for **all** students in the class when the required-course sync runs — **待人工确认** whether treating every roster student as implicitly enrolled is intended product-wise.
+
+2. Cross-class homework submission expectation **`404`** from **`_resolve_student_for_user`** sometimes yields **`403`** instead because **`_ensure_homework_access`** runs **`ensure_course_access_http`** first; students enrolled only elsewhere hit **`PermissionError`** (**403**) before roster mismatch (**404**).
+
+3. **`GET /api/scores/appeals`** has **no `page_size` query parameter** — FastAPI ignores unknown query keys; **`page_size=5000`** returns **200** with the router's fixed **`limit(200)`** behavior. Tests that expect **422** from oversized **`page_size`** must target a route that actually declares **`Query(..., le=...)`** (for example **`GET /api/students`** uses **`le=1000`**).
+
+4. Same-class students may **`GET /api/points/students/{other_student_id}`** without **403** when both share a **`class_id`** — privacy expectations must not assume “student cannot read peer points” unless product explicitly forbids it (**待人工确认**).
+
+### Fix
+
+- Prefer **explicit cross-class homework rows** (admin-created **`Homework`** with **`class_id`** / **`subject_id`** pointing at **`course_other_teacher_id`** + **`class_id_2`**) when testing “wrong class” submission denial.
+- Accept **`[403, 404]`** where course-access vs roster-order differs.
+- Validate pagination bounds only against routers that validate **`page_size`** in **`Query`** — grep **`apps/backend/wailearning_backend/api/routers/*.py`** before writing **`422`** expectations.
+
+### Interpretation
+
+Documentation that says “enrollment must exist” should mention **class-wide required-course sync** on student requests, or new readers (and agents) will mis-design tests and false-positive “bugs”.
+
+### Pitfall 70: **`ElMessageBox.confirm`** vs **`el-dialog`** — wrong overlay target after long SQLite runs
+
+### Symptom
+
+**`tests/e2e/web-admin/e2e-pitfall-guard-rails.spec.js`** case **01**, **`e2e-scenario-boundary-dynamic-complex.spec.js`** delete path, **`future-advanced-coverage.spec.js`** case **3**, **`e2e-scenario-resilience.spec.js`** batch-class paths:
+
+- `waitForResponse` on **`DELETE /api/subjects/:id`** times out,
+- or `getByRole('dialog').filter({ has: button OK })` clicks the **wrong** overlay,
+- or Playwright waits until **test timeout** (~300s) while the **MessageBox** never receives the intended click.
+
+### Context
+
+Element Plus **`ElMessageBox.confirm`** renders a **teleported** small modal with class **`el-message-box`**, not the same accessibility tree as large **`el-dialog`** course forms. After hundreds of seeds, **multiple** hidden `.el-select-dropdown` nodes and **stacked** overlays can exist; targeting **“last dialog”** is ambiguous.
+
+### Fix
+
+Use a **MessageBox-scoped** primary button:
+
+- helper **`confirmElMessageBoxPrimary`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`** — waits for **`.el-message-box`** then clicks **`.el-message-box__btns .el-button--primary`**.
+
+### Interpretation
+
+Do not assert delete flows by title **`删除课程`** alone — pair **network** assertions with the **MessageBox** button actually wired to **`ElMessageBox.confirm`**.
+
+### Pitfall 71: **`el-select-dropdown`** — many nodes stay **`hidden`** in DOM; prefer **visible** scoping
+
+### Symptom
+
+**`e2e-scenario-boundary-dynamic-complex.spec.js`** — `clickSelectOptionByLabel` waits forever on **`.el-select-dropdown.last()`** where the last node is **always hidden** (teleported popper retain).
+
+### Fix
+
+Use **`.filter({ visible: true })`**, wait for **visible** popper after opening the trigger, or **avoid UI selects entirely** for setup — e.g. **`POST /api/subjects`** with **`SubjectCreate`** for course rows when the test goal is **delete / list consistency**, not **form layout**.
+
+### Pitfall 72: Roster-enroll UI assumes **`student_b`** is **not** already in the required course
+
+### Symptom
+
+**`roster-and-users.spec.js`** — checkbox stays disabled / no **`POST .../roster-enroll`**.
+
+### Context
+
+**`sync_course_enrollments`** (bootstrap + course writes) can enroll **all** class roster students into **required** courses. **`student_b`** is often already **`已在课`**, and **`el-table`** selection is **`selectable: row => !row._enrolled`**.
+
+### Fix
+
+Before opening **从花名册进课**, **`DELETE /api/subjects/{course_required_id}/students/{student_row_id}`** as admin (ignore **404**) so the row returns to **未在课** for the UI assertion.
+
+### Pitfall 73: **Batch调班** — enable **`users-open-batch-class`** before open; optional filter on **`filterable`** `el-select`
+
+### Symptom
+
+**`dialog-batch-class`** never appears — **`users-open-batch-class`** stays disabled because **no row selected** in a huge **`/users`** table.
+
+### Fix
+
+**`scrollIntoViewIfNeeded`** on the **`tr`**, then **`expect(users-open-batch-class).toBeEnabled`**, then open dialog; pick target class via **visible** dropdown + **`getByRole('option')`** (filter input is **optional** — may not exist in all EP builds).
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

@@ -78,27 +78,21 @@ ops\scripts\windows\start-parent-frontend.bat
 
 ## Key Development Settings
 
-Defined in [`../../apps/backend/wailearning_backend/core/config.py`](../../apps/backend/wailearning_backend/core/config.py):
+The canonical list of **all** `Settings` fields, defaults, and related Vite variables is in [../architecture/CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md) (kept in sync with [`apps/backend/wailearning_backend/core/config.py`](../../apps/backend/wailearning_backend/core/config.py)).
 
-- `APP_ENV`
-- `DEBUG`
-- `DATABASE_URL`
-- `SECRET_KEY`
-- `BACKEND_CORS_ORIGINS`
-- `TRUSTED_HOSTS`
-- `INIT_ADMIN_USERNAME`
-- `INIT_ADMIN_PASSWORD`
-- `INIT_ADMIN_REAL_NAME`
-- `ALLOW_PUBLIC_REGISTRATION`
-- `INIT_DEFAULT_DATA`
-- `E2E_DEV_SEED_ENABLED`
-- `E2E_DEV_SEED_TOKEN`
-- `ENABLE_LLM_GRADING_WORKER`
-- `LLM_GRADING_WORKER_LEADER`
-- `LLM_GRADING_WORKER_POLL_SECONDS`
-- `LLM_GRADING_TASK_STALE_SECONDS`
-- `DEFAULT_LLM_API_KEY`
-- `REQUIRE_STRONG_SECRETS`
+Quick reminders for developers running locally:
+
+- Prefer `.env` at the repo root for backend variables (`Settings` reads `.env` with UTF-8 encoding).
+- Never commit real secrets; placeholder defaults exist for local ergonomics but fail validation when `APP_ENV` is production or `REQUIRE_STRONG_SECRETS=true`.
+- Frontend dev servers read `VITE_*` from `apps/web/admin/` or `apps/web/parent/` — see CONFIGURATION_REFERENCE **Frontend dev** section.
+
+Playwright-specific additions (not part of `Settings`):
+
+- `PLAYWRIGHT_USE_EXTERNAL_SERVERS` — skip spawning managed uvicorn/vite when pointing at already-running servers.
+- `E2E_API_PORT`, `E2E_UI_PORT` — defaults **8012** / **3012** inside `apps/web/admin/playwright.config.cjs`.
+- `E2E_PYTHON` — Python executable for the managed API subprocess.
+
+Dual gate for `/api/e2e/dev/*` — see [E2E Seed and Environment](#e2e-seed-and-environment) below and CONFIGURATION_REFERENCE (`E2E_DEV_REQUIRE_ADMIN_JWT`).
 
 ## Test Layers
 
@@ -131,6 +125,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+For environment variables, persistent SQLite behavior during long serial runs, selector strategy, and triage order when many specs fail together, read [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+
 Key files:
 
 - `apps/web/admin/playwright.config.cjs`
@@ -157,10 +153,7 @@ Shared helpers live in:
 
 - `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
 
-Historical note:
-
-- older documentation and older branches described these files as a skipped placeholder backlog behind `E2E_ENABLE_BACKLOG_SPECS`
-- that description is no longer true for this branch, but the historical workflow is still preserved in [E2E_BACKLOG_SCENARIOS.md](E2E_BACKLOG_SCENARIOS.md) so future maintainers can interpret older commits correctly
+Scenario index (cases 1–30), verification commands, and interpretation notes are consolidated in [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md) under the Playwright section — there is no separate env-gated “backlog” suite in this repository.
 
 ## E2E Seed and Environment
 
@@ -169,6 +162,23 @@ The repository includes an E2E-only reset API used by browser tests.
 - Route family: `/api/e2e/...`
 - Guarded by `E2E_DEV_SEED_ENABLED` and `E2E_DEV_SEED_TOKEN`
 - Never enable this in production; additionally, `APP_ENV=production` forces `expose_e2e_dev_api()` to **false**, so every `/api/e2e/...` request returns **404** even if seed flags were mis-set (see `tests/backend/test_settings_e2e_router_gate.py`). The router remains registered for test-time toggles; access is blocked by a router-level dependency.
+
+**Dual gate for powerful dev routes (mock LLM, grading pump, preset shortcuts)**
+
+When `E2E_DEV_REQUIRE_ADMIN_JWT=true` (default in `apps/web/admin/playwright.config.cjs` for the managed API subprocess), the following endpoints require **both** header `X-E2E-Seed-Token` **and** a valid **administrator** `Authorization: Bearer <jwt>`:
+
+- `POST /api/e2e/dev/mock-llm/configure`
+- `GET /api/e2e/dev/mock-llm/state`
+- `GET /api/e2e/dev/grading-state`
+- `POST /api/e2e/dev/process-grading`
+- `POST /api/e2e/dev/worker`
+- `POST /api/e2e/dev/mark-preset-validated`
+
+`POST /api/e2e/dev/reset-scenario` remains **seed-token only** so automation can obtain credentials before any JWT exists.
+
+Playwright (`tests/e2e/web-admin/fixtures.cjs`, `global-setup.cjs`) calls `refreshE2eAdminBearer()` from `e2e-seed-headers.cjs` after each successful reset to store the seeded admin token in `process.env.E2E_DEV_ADMIN_BEARER` and merge it into shared `seedHeaders()` for specs that call powerful `/api/e2e/dev/*` routes.
+
+To disable the admin JWT requirement (legacy tooling that only passes the seed header): set `E2E_DEV_REQUIRE_ADMIN_JWT=0` in the backend environment.
 
 Playwright scenarios commonly use:
 
@@ -265,10 +275,9 @@ Further test-authoring lessons from the tier-4 stress E2E pass are recorded in t
 
 This is judgment for maintainers, not an automatic delete list:
 
-- **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the implemented **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
+- **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
 - Older E2E that still rely on `toBeHidden` on Element Plus dialogs alone are more fragile than patterns that confirm success via network response, navigation, and table-row state. Prefer aligning those tests with the authoritative-state-first rule rather than deleting them outright.
 - **`TEST_REDUNDANCY_AUDIT.md`** remains the formal gate for safe deletes; the audit's protected list intentionally keeps high-difficulty files, so do not clean up stress specs without reading that policy.
-- Historical backlog note: if you are reading an older branch where `E2E_ENABLE_BACKLOG_SPECS` still gates placeholder suites, do not treat those placeholders as failing debt; treat them as a queue with explicit enablement. In this branch, the `future-advanced-coverage*.spec.js` pair is already runnable coverage.
 
 ### May 2026: lessons from a full `pytest` + full admin Playwright run (Linux agent)
 
@@ -296,6 +305,27 @@ These notes **add** to the bullets above; they do not replace the redundancy aud
   - `npx playwright test e2e-pitfall-guard-rails-batch2.spec.js`
 - When adding more list-endpoint tests, **parameterize `(path, max_page_size)`** from code or a tiny shared table in the spec; avoid magic `200` unless you confirmed `le` for that router.
 - **`e2e-pitfall-guard-rails.spec.js`** (15 cases) and **batch2** (10 cases) overlap conceptually with **`e2e-cross-cutting-tier3.spec.js`** HTTP-edge tests; new edges should **extend** batch2 or tier3, not fork a third file, unless the invariant is genuinely new.
+
+## Pitfalls index (fast lookup)
+
+The exhaustive narrative lives in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md). Use this table to jump when triaging failures.
+
+| Topic | Pitfall ids / keywords | Notes |
+|-------|-------------------------|-------|
+| Ports already bound (`3012`, `8012`, `8001`) | **63**, stale `node`/`uvicorn` | Kill stray listeners before full Playwright runs. |
+| Course switcher / Element Plus dropdown flakiness | **64**, `clickCourseSwitcherOption`, hover-trigger menus | Prefer helpers over raw `.hover()` when CI is unstable. |
+| Mock LLM profile cursor drift across scenarios | **65**, `configureMockLlm` after setup steps | Reset mock steps before multi-phase grading assertions. |
+| Material chapter reorder contract (`ordered_chapter_ids`, POST vs PUT) | **66**, `material-chapters` API | Align tests with router verb + payload; seed needs ≥2 movable chapters. |
+| Responsive layout regression timeouts (`boundingBox` sampling) | **67**, large `el-table` / many cards | Cap locator iteration for viewport proofs. |
+| Large `users` table + Element Plus forms (`el-select`, batch move) | **68**, API-first setup | Prefer `page.request` / shared API helpers over flaky UI for bulk actions in long suites. |
+| Enrollment / cross-class homework expectations vs `prepare_student_course_context`, unknown `page_size` query keys | **69** | See pitfalls doc — do not assume `student_b` lacks required enrollment; validate `Query(le=...)` on the actual router. |
+| `ElMessageBox.confirm` vs large `el-dialog`, stacked overlays | **70**, `confirmElMessageBoxPrimary` | Delete/batch confirms — click `.el-message-box` primary, not generic dialog filters. |
+| Many `.el-select-dropdown` nodes stay hidden (teleported poppers) | **71**, visible filter / API setup | Prefer **`POST /api/subjects`** when testing delete/list invariants, not form picker ergonomics. |
+| Roster-enroll UI needs **`student_b`** **未在课** | **72**, admin `DELETE .../subjects/{id}/students/{sid}` first | Required-course sync may already enroll class roster. |
+| Batch调班 on huge **`/users`** table | **73**, scroll row, wait **`users-open-batch-class` enabled** | Optional **`filterable`** input may not exist — option click still works. |
+| `SECRET_KEY` / `REQUIRE_STRONG_SECRETS` startup failures | **57** | Weak secrets rejected when strong validation is on — see [CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md). |
+
+When adding a **new** recurring failure mode, append it to `TEST_EXECUTION_PITFALLS.md` first, then add one row here so agents discover it without rereading the entire pitfalls file every time.
 
 ## After Documentation Updates
 
@@ -550,6 +580,9 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 - `tests/postgres/test_postgres_llm_schema_and_policy.py` — LLM **schema shape** guards (`information_schema`, FK `ON DELETE CASCADE`, nullable attribution columns).
 - `tests/postgres/test_postgres_quota_api_and_constraints.py` — fifteen **HTTP + SQL** hazard checks for quota policy, course LLM boundaries, uniqueness, and FK violations.
 - `tests/e2e/web-admin/e2e-agent-followup-batch.spec.js` — ten API/navigation checks complementary to pitfall rails.
+- `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js` — ten **UI + API** checks for **`header-notification-badge`**, **`header-course-switch`** scoped **`sync-status`**, dropdown label convergence, and dual-tab polling (see [NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](NOTIFICATION_HEADER_AND_REALTIME_SYNC.md), **Pitfall 50** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
+- `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` — fifteen **follow-up** checks (admin global sync vs list, teacher course-switch discipline, localStorage poison + reload paths, concurrent POST storms, cross-teacher isolation, alien `subject_id` **403**, mobile viewport, delete-under-navigation stress).
+- `tests/behavior/test_notification_sync_api_edge_behavior.py` — ten **pytest** checks aligning **`GET /api/notifications`** aggregates with **`GET /api/notifications/sync-status`**, concurrent publishes/reads, and student **403** on inaccessible **`subject_id`** (depends on notifications router using **`ensure_course_access_http`** — documented in the same notification doc).
 - `tests/e2e/web-admin/e2e-postgres-hazard-tier.spec.js` — fifteen **API + UI** checks for global quota vs course LLM (see subsection **4** above for commands).
 - `tests/e2e/web-admin/e2e-agent-hazard-tier-15.spec.js` — fifteen **API-only** Playwright checks (pagination `422` boundaries, LLM admin vs student, parallel `mark-all-read`, E2E seed header gates, `forgot-password` empty username, registration disabled). Same seed contract as other web-admin E2E; run **serially** (Pitfall 41).
 - `tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py` — fifteen **pytest + TestClient** checks against `/api/e2e/dev/*` and cross-actor HTTP edges using the same DB reset as `test_e2e_dev_seed.py` (no Playwright; fast in CI when `E2E_DEV_SEED_ENABLED` is toggled per test).

@@ -20,6 +20,8 @@ def _reset_e2e_settings():
     yield
     settings.E2E_DEV_SEED_ENABLED = False
     settings.E2E_DEV_SEED_TOKEN = ""
+    if hasattr(settings, "E2E_DEV_REQUIRE_ADMIN_JWT"):
+        settings.E2E_DEV_REQUIRE_ADMIN_JWT = False
 
 
 @pytest.fixture(autouse=True)
@@ -63,6 +65,23 @@ def _enable_seed() -> None:
 
 def _seed_headers() -> dict[str, str]:
     return {"X-E2E-Seed-Token": _SEED}
+
+
+def _admin_headers(client: TestClient) -> dict[str, str]:
+    body = f"username=adm&password=a"
+    lr = client.post(
+        "/api/auth/login",
+        content=body.encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert lr.status_code == 200, lr.text
+    tok = lr.json()["access_token"]
+    return {"Authorization": f"Bearer {tok}"}
+
+
+def _powerful_e2e_headers(client: TestClient) -> dict[str, str]:
+    """Seed token + admin JWT when E2E_DEV_REQUIRE_ADMIN_JWT is enabled."""
+    return {**_seed_headers(), **_admin_headers(client)}
 
 
 def _reset_scenario(client: TestClient) -> dict:
@@ -112,6 +131,7 @@ def test_hz03_reset_scenario_rejects_missing_seed_header(client: TestClient) -> 
 
 def test_hz04_mock_llm_configure_rejects_wrong_seed(client: TestClient) -> None:
     _enable_seed()
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     r = client.post(
         "/api/e2e/dev/mock-llm/configure",
         headers={"X-E2E-Seed-Token": "wrong"},
@@ -121,26 +141,29 @@ def test_hz04_mock_llm_configure_rejects_wrong_seed(client: TestClient) -> None:
 
 
 def test_hz05_mock_llm_configure_profiles_roundtrip_state(client: TestClient) -> None:
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     _reset_scenario(client)
     cfg = client.post(
         "/api/e2e/dev/mock-llm/configure",
-        headers=_seed_headers(),
+        headers=_powerful_e2e_headers(client),
         json={"profiles": {"hz_prof": {"steps": [{"kind": "ok", "score": 77.0, "comment": "hz"}], "repeat_last": True}}},
     )
     assert cfg.status_code == 200, cfg.text
-    st = client.get("/api/e2e/dev/mock-llm/state", headers=_seed_headers())
+    st = client.get("/api/e2e/dev/mock-llm/state", headers=_powerful_e2e_headers(client))
     assert st.status_code == 200, st.text
     assert "hz_prof" in st.json().get("profiles", {})
 
 
 def test_hz06_grading_state_requires_valid_seed(client: TestClient) -> None:
     _enable_seed()
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     r = client.get("/api/e2e/dev/grading-state", headers={"X-E2E-Seed-Token": "nope"})
     assert r.status_code == 403
 
 
 def test_hz07_process_grading_requires_valid_seed(client: TestClient) -> None:
     _enable_seed()
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     r = client.post(
         "/api/e2e/dev/process-grading",
         headers={"X-E2E-Seed-Token": "nope"},
@@ -151,7 +174,8 @@ def test_hz07_process_grading_requires_valid_seed(client: TestClient) -> None:
 
 def test_hz08_worker_status_payload_shape_when_disabled(client: TestClient) -> None:
     _reset_scenario(client)
-    r = client.post("/api/e2e/dev/worker", headers=_seed_headers(), json={"action": "status"})
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
+    r = client.post("/api/e2e/dev/worker", headers=_powerful_e2e_headers(client), json={"action": "status"})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body.get("ok") is True
@@ -160,9 +184,10 @@ def test_hz08_worker_status_payload_shape_when_disabled(client: TestClient) -> N
 
 def test_hz09_mark_preset_validated_rejects_non_int_preset_id(client: TestClient) -> None:
     _reset_scenario(client)
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     r = client.post(
         "/api/e2e/dev/mark-preset-validated",
-        headers=_seed_headers(),
+        headers=_powerful_e2e_headers(client),
         json={"preset_id": "not-an-int"},
     )
     assert r.status_code == 400
@@ -170,9 +195,10 @@ def test_hz09_mark_preset_validated_rejects_non_int_preset_id(client: TestClient
 
 def test_hz10_mark_preset_validated_returns_404_for_unknown_preset(client: TestClient) -> None:
     _reset_scenario(client)
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
     r = client.post(
         "/api/e2e/dev/mark-preset-validated",
-        headers=_seed_headers(),
+        headers=_powerful_e2e_headers(client),
         json={"preset_id": 999_999_999},
     )
     assert r.status_code == 404
@@ -258,3 +284,15 @@ def test_hz15_discussion_list_clamps_page_size_above_user_max(client: TestClient
     assert r.status_code == 200, r.text
     body = r.json()
     assert int(body.get("page_size") or 0) <= 50
+
+
+def test_hz16_powerful_e2e_requires_admin_jwt_when_dual_gate_enabled(client: TestClient) -> None:
+    """Dual gate: valid seed alone is insufficient for mock-llm/configure when REQUIRE_ADMIN_JWT is on."""
+    _enable_seed()
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
+    r = client.post(
+        "/api/e2e/dev/mock-llm/configure",
+        headers=_seed_headers(),
+        json={"profiles": {"no_auth": {"steps": [{"kind": "ok", "score": 1.0, "comment": "x"}], "repeat_last": True}}},
+    )
+    assert r.status_code == 403

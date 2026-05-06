@@ -89,10 +89,15 @@ def validate_attachment_upload(file: UploadFile) -> str:
     return extension
 
 
-async def save_attachment(file: UploadFile, request: Request) -> dict[str, object]:
+async def save_attachment(
+    file: UploadFile,
+    request: Request,
+    *,
+    preloaded: bytes | None = None,
+) -> dict[str, object]:
     ensure_upload_directories()
     extension = validate_attachment_upload(file)
-    content = await file.read()
+    content = preloaded if preloaded is not None else await file.read()
     size = len(content)
     if size == 0:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")

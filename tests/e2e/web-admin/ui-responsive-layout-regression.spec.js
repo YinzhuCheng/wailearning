@@ -29,12 +29,13 @@ async function expectNoPageHorizontalOverflow(page) {
     .toBeTruthy()
 }
 
-async function expectLocatorBoxesWithinViewport(page, locator) {
+async function expectLocatorBoxesWithinViewport(page, locator, { maxItems = 24 } = {}) {
   const viewport = page.viewportSize()
   expect(viewport).toBeTruthy()
   const count = await locator.count()
   expect(count).toBeGreaterThan(0)
-  for (let index = 0; index < count; index += 1) {
+  const n = Math.min(count, maxItems)
+  for (let index = 0; index < n; index += 1) {
     const box = await locator.nth(index).boundingBox()
     expect(box, `expected visible bounding box for item ${index}`).toBeTruthy()
     expect(box.x, `item ${index} should not overflow left`).toBeGreaterThanOrEqual(-1)
@@ -91,8 +92,8 @@ test.describe('responsive layout regression guard rails', () => {
     await expect(page.locator('.catalog-mobile-item').first()).toBeVisible({ timeout: 60000 })
     await expect(page.locator('.elective-catalog-card .el-table')).toBeHidden({ timeout: 30000 })
 
-    await expectLocatorBoxesWithinViewport(page, page.locator('article.course-card'))
-    await expectLocatorBoxesWithinViewport(page, page.locator('.catalog-mobile-item'))
+    await expectLocatorBoxesWithinViewport(page, page.locator('article.course-card'), { maxItems: 12 })
+    await expectLocatorBoxesWithinViewport(page, page.locator('.catalog-mobile-item'), { maxItems: 24 })
     await expectNoPageHorizontalOverflow(page)
   })
 

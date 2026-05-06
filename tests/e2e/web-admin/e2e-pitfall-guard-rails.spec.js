@@ -11,7 +11,8 @@ const {
   obtainAccessToken,
   apiGetJson,
   apiPostJson,
-  apiDelete
+  apiDelete,
+  confirmElMessageBoxPrimary
 } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
@@ -34,8 +35,7 @@ async function fetchStatus(method, pathname, { token, body } = {}) {
 }
 
 async function confirmPrimaryOverlay(page) {
-  const dlg = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: /^(确定|OK)$/ }) })
-  await dlg.getByRole('button', { name: /^(确定|OK)$/ }).click()
+  await confirmElMessageBoxPrimary(page)
 }
 
 function electiveCatalogRow(page, courseName) {

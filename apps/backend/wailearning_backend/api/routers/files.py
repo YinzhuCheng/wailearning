@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ from apps.backend.wailearning_backend.attachments import (
     save_attachment,
 )
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, Subject, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
@@ -47,8 +47,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         if current_user.role == UserRole.ADMIN or homework.class_id in allowed_class_ids:
             if homework.subject_id:
                 try:
-                    ensure_course_access(homework.subject_id, current_user, db)
-                except (ValueError, PermissionError):
+                    ensure_course_access_http(homework.subject_id, current_user, db)
+                except HTTPException:
                     return False
             return True
         return False
@@ -58,8 +58,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         if current_user.role == UserRole.ADMIN or material.class_id in allowed_class_ids:
             if material.subject_id:
                 try:
-                    ensure_course_access(material.subject_id, current_user, db)
-                except (ValueError, PermissionError):
+                    ensure_course_access_http(material.subject_id, current_user, db)
+                except HTTPException:
                     return False
             return True
         return False
@@ -72,8 +72,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
             return False
         if notification.subject_id:
             try:
-                ensure_course_access(notification.subject_id, current_user, db)
-            except (ValueError, PermissionError):
+                ensure_course_access_http(notification.subject_id, current_user, db)
+            except HTTPException:
                 return False
         return True
 
@@ -84,8 +84,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         if current_user.role == UserRole.ADMIN or submission.class_id in allowed_class_ids:
             if submission.subject_id:
                 try:
-                    ensure_course_access(submission.subject_id, current_user, db)
-                except (ValueError, PermissionError):
+                    ensure_course_access_http(submission.subject_id, current_user, db)
+                except HTTPException:
                     return False
             return True
         return False
@@ -97,8 +97,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         if current_user.role == UserRole.ADMIN or attempt.class_id in allowed_class_ids:
             if attempt.subject_id:
                 try:
-                    ensure_course_access(attempt.subject_id, current_user, db)
-                except (ValueError, PermissionError):
+                    ensure_course_access_http(attempt.subject_id, current_user, db)
+                except HTTPException:
                     return False
             return True
         return False
@@ -106,8 +106,8 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
     subject_cover = db.query(Subject).filter(Subject.cover_image_url == attachment_url).first()
     if subject_cover:
         try:
-            ensure_course_access(subject_cover.id, current_user, db)
-        except (ValueError, PermissionError):
+            ensure_course_access_http(subject_cover.id, current_user, db)
+        except HTTPException:
             return False
         return True
 
@@ -154,6 +154,10 @@ def _attachment_urls_with_exact_stored_basename(db: Session, stored_basename: st
 @router.get("/download/{stored_name:path}", name="download_attachment_by_name")
 def download_attachment_by_stored_name(
     stored_name: str,
+    attachment_url: Optional[str] = Query(
+        None,
+        description="Canonical attachment URL when multiple DB rows share the same stored file name (disambiguates basename collisions).",
+    ),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -169,34 +173,45 @@ def download_attachment_by_stored_name(
     if not allowed:
         raise HTTPException(status_code=403, detail="You do not have access to this attachment.")
 
-    paths: list[Path] = []
+    url_to_path: dict[str, Path] = {}
     for u in allowed:
         p = get_attachment_file_path(u)
         if not p or not p.exists():
             raise HTTPException(status_code=404, detail="Attachment file not found on server.")
         try:
-            paths.append(p.resolve())
+            url_to_path[u] = p.resolve()
         except OSError:
-            paths.append(p)
-    unique_paths = {str(p) for p in paths}
-    if len(unique_paths) != 1:
+            url_to_path[u] = p
+
+    unique_disk_paths = {str(path) for path in url_to_path.values()}
+    chosen_url: Optional[str] = None
+
+    if attachment_url is not None:
+        au = unquote(attachment_url).strip()
+        if au not in url_to_path:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have access to this attachment reference.",
+            )
+        chosen_url = au
+    elif len(unique_disk_paths) == 1:
+        chosen_url = sorted(allowed)[0]
+    else:
         _log.warning(
-            "attachment basename collision with differing files: user=%s basename=%s paths=%s",
+            "attachment basename collision: user=%s basename=%s allowed_urls=%s",
             getattr(current_user, "id", None),
             target_base,
-            sorted(unique_paths),
+            len(allowed),
         )
         raise HTTPException(
-            status_code=403,
-            detail="Ambiguous attachment reference; use the full download URL from the application.",
+            status_code=400,
+            detail="Multiple attachment references share this file name. Open the file from the application or pass the full attachment_url query parameter.",
         )
 
-    url = sorted(allowed)[0]
-    file_path = paths[0]
-
+    file_path = url_to_path[chosen_url]
     return FileResponse(
         path=file_path,
-        filename=get_attachment_download_name(url, None),
+        filename=get_attachment_download_name(chosen_url, None),
         media_type="application/octet-stream",
     )
 

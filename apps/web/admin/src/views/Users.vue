@@ -109,8 +109,10 @@
         <el-form-item v-if="showClassAssignmentField" label="所属班级" prop="class_id">
           <el-select
             v-model="form.class_id"
+            data-testid="user-form-class-select"
             :placeholder="form.role === 'student' ? '请选择班级' : '可选'"
             style="width: 100%"
+            filterable
             :clearable="form.role !== 'student'"
           >
             <el-option v-for="item in classes" :key="item.id" :label="item.name" :value="item.id" />

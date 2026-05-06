@@ -1329,8 +1329,13 @@ watch(
 
   .page-header {
     flex-direction: column;
+    align-items: stretch;
     gap: 14px;
     margin-bottom: 18px;
+  }
+
+  .quota-card {
+    max-width: 100%;
   }
 
   .page-title {
@@ -1353,6 +1358,19 @@ watch(
 
   .catalog-mobile-list {
     display: block;
+    min-width: 0;
+  }
+
+  .catalog-mobile-item {
+    min-width: 0;
+  }
+
+  .course-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  }
+
+  .course-grid > article.course-card {
+    min-width: 0;
   }
 
   .course-section {

@@ -2,6 +2,7 @@ const fs = require('fs')
 const path = require('path')
 
 const { expect } = require('@playwright/test')
+const { refreshE2eAdminBearer } = require('./e2e-seed-headers.cjs')
 
 let cached
 
@@ -39,6 +40,7 @@ async function resetE2eScenario() {
     throw new Error(`E2E seed failed (${res.status}): ${await res.text()}`)
   }
   const data = await res.json()
+  await refreshE2eAdminBearer(data)
   const p = path.join(__dirname, '.cache', 'scenario.json')
   fs.mkdirSync(path.dirname(p), { recursive: true })
   fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8')

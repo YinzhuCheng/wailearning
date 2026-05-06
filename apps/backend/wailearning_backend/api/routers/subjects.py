@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
 from apps.backend.wailearning_backend.domains.courses.access import (
-    ensure_course_access,
+    ensure_course_access_http,
     get_accessible_courses_query,
     get_enrolled_students,
     get_student_course_catalog_query,
@@ -537,7 +537,7 @@ def get_subject(
     current_user: User = Depends(get_current_active_user),
 ):
     try:
-        course = ensure_course_access(subject_id, current_user, db)
+        course = ensure_course_access_http(subject_id, current_user, db)
     except ValueError:
         raise HTTPException(status_code=404, detail="Course not found.")
     except PermissionError:
@@ -657,7 +657,7 @@ def update_subject(
         pass
     else:
         try:
-            ensure_course_access(subject_id, current_user, db)
+            ensure_course_access_http(subject_id, current_user, db)
         except ValueError:
             raise HTTPException(status_code=404, detail="Course not found.")
         except PermissionError:
@@ -749,7 +749,7 @@ async def upload_subject_cover_image(
         pass
     else:
         try:
-            ensure_course_access(subject_id, current_user, db)
+            ensure_course_access_http(subject_id, current_user, db)
         except ValueError:
             raise HTTPException(status_code=404, detail="Course not found.")
         except PermissionError:
@@ -781,7 +781,7 @@ def delete_subject(
         pass
     else:
         try:
-            ensure_course_access(subject_id, current_user, db)
+            ensure_course_access_http(subject_id, current_user, db)
         except ValueError:
             raise HTTPException(status_code=404, detail="Course not found.")
         except PermissionError:
@@ -877,7 +877,7 @@ def get_subject_students(
     current_user: User = Depends(get_current_active_user),
 ):
     try:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
     except ValueError:
         raise HTTPException(status_code=404, detail="Course not found.")
     except PermissionError:
@@ -898,7 +898,7 @@ def sync_subject_enrollments(
         raise HTTPException(status_code=403, detail="Students cannot modify course rosters.")
 
     try:
-        course = ensure_course_access(subject_id, current_user, db)
+        course = ensure_course_access_http(subject_id, current_user, db)
     except ValueError:
         raise HTTPException(status_code=404, detail="Course not found.")
     except PermissionError:
@@ -929,7 +929,7 @@ def enroll_roster_students_on_subject(
         raise HTTPException(status_code=403, detail="Students cannot modify course rosters.")
 
     try:
-        course = ensure_course_access(subject_id, current_user, db)
+        course = ensure_course_access_http(subject_id, current_user, db)
     except ValueError:
         raise HTTPException(status_code=404, detail="Course not found.")
     except PermissionError:
@@ -1021,7 +1021,7 @@ def update_subject_student_enrollment_type(
         raise HTTPException(status_code=403, detail="Students cannot modify course enrollment types.")
 
     try:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
     except ValueError:
         raise HTTPException(status_code=404, detail="Course not found.")
     except PermissionError:
@@ -1060,7 +1060,7 @@ def remove_subject_student(
         raise HTTPException(status_code=403, detail="Students cannot modify course rosters.")
 
     try:
-        ensure_course_access(subject_id, current_user, db)
+        ensure_course_access_http(subject_id, current_user, db)
     except ValueError:
         raise HTTPException(status_code=404, detail="Course not found.")
     except PermissionError:

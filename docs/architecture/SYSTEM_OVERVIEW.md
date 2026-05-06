@@ -9,9 +9,24 @@ BIMSA-CLASS is a multi-role teaching-management platform for classroom administr
 ### Identity and access
 
 - JWT-based authentication for admin, class teacher, subject teacher, and student accounts.
-- Optional student self-registration, disabled by default.
+- Optional student self-registration, disabled by default (see `ALLOW_PUBLIC_REGISTRATION` and `PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS` in [CONFIGURATION_REFERENCE.md](CONFIGURATION_REFERENCE.md)).
 - Parent access through parent codes instead of full user accounts.
 - Trusted-host and CORS controls through backend configuration.
+
+### Roles (`UserRole`)
+
+Stored on `users.role` as lowercase strings — see `apps/backend/wailearning_backend/db/models.py`:
+
+| Role value | Typical capability surface |
+|------------|----------------------------|
+| `admin` | Full API access; bypasses most class-scoped filters; user/class/subject administration. |
+| `class_teacher` | Class-scoped visibility; union of courses in `user.class_id` plus courses where `Subject.teacher_id == user.id` — see `get_accessible_courses_query` in `domains/courses/access.py`. |
+| `teacher` | Courses where the user is the assigned subject teacher (`Subject.teacher_id`). |
+| `student` | Enrolled courses only; roster linkage via `students.student_no == users.username` within `class_id`. |
+
+Parent-code flows (`/api/parent/*`) authenticate with a **different mechanism** than JWT staff/student users — see [../product/PARENT_PORTAL.md](../product/PARENT_PORTAL.md).
+
+For **permission-style helpers** in routers (e.g. `is_teacher`, instructor checks), grep `UserRole` and `core/permissions.py` alongside domain access helpers.
 
 ### Class, student, and user administration
 
@@ -124,27 +139,36 @@ The detailed repository boundary rules are documented in [REPOSITORY_STRUCTURE.m
 
 ## Backend Route Groups
 
-The application exposes these primary route groups:
+Router registration order is visible in `apps/backend/wailearning_backend/main.py` (`app.include_router(...)`). Prefixes below match the `APIRouter(prefix=...)` declarations in `api/routers/*.py`.
 
-- `/api/auth`
-- `/api/classes`
-- `/api/students`
-- `/api/users`
-- `/api/subjects`
-- `/api/homeworks`
-- `/api/llm-settings`
-- `/api/materials`
-- `/api/material-chapters`
-- `/api/notifications`
-- `/api/scores`
-- `/api/attendance`
-- `/api/points`
-- `/api/semesters`
-- `/api/settings`
-- `/api/parent`
-- `/api/files`
-- `/api/dashboard`
-- `/api/logs`
+**Core product**
+
+- `/api/auth` — login, password flows, optional student registration
+- `/api/classes`, `/api/students`, `/api/users` — administration and roster
+- `/api/subjects` — courses (the `Subject` model is the persistence “course” row)
+- `/api/homeworks` — homework lifecycle, submissions, grading visibility
+- `/api/materials`, `/api/material-chapters` — course materials tree
+- `/api/discussions` — course homework/material discussion threads (`discussions.py`)
+- `/api/notifications` — notifications + read state + `sync-status` lightweight polling
+- `/api/scores`, `/api/attendance`, `/api/points`, `/api/semesters` — academic records
+- `/api/dashboard` — aggregated dashboard endpoints
+- `/api/logs` — operational logging views for staff
+
+**LLM and appearance**
+
+- `/api/llm-settings` — presets, course LLM config, quota policy
+- `/api/appearance` — user theme presets / appearance styles (`appearance.py`)
+
+**Files and parent**
+
+- `/api/files` — uploads, downloads, attachment authorization
+- `/api/parent` — parent-code verified read APIs
+
+**E2E / automation (never exposed in production)**
+
+- `/api/e2e` — gated by `settings.expose_e2e_dev_api()` (returns **404** when disabled — router still registered so tests can toggle `E2E_DEV_SEED_ENABLED` without reloading `main`). See `api/routers/e2e_dev.py` and [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_AND_TESTING.md).
+
+Cross-cutting flow diagrams (submission → DB queue → worker → UI) live in [CORE_BUSINESS_FLOWS.md](CORE_BUSINESS_FLOWS.md).
 
 ## Bootstrap Behavior
 
@@ -168,3 +192,10 @@ The current `lifespan` sequence in `main.py` is intentionally ordered so that:
 - and worker startup does not race the bootstrap transaction.
 
 See [../operations/ADMIN_BOOTSTRAP.md](../operations/ADMIN_BOOTSTRAP.md) and [../operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md).
+
+## Related architecture docs
+
+- [CORE_BUSINESS_FLOWS.md](CORE_BUSINESS_FLOWS.md) — vertical slices (homework grading chain, notifications, E2E gates)
+- [CONFIGURATION_REFERENCE.md](CONFIGURATION_REFERENCE.md) — environment variables backed by `Settings`
+- [MAINTAINER_AGENT_GUIDE.md](MAINTAINER_AGENT_GUIDE.md) — grep keywords and high-risk modules
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — symptom-first index to pitfalls and ops docs

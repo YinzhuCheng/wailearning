@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access, get_student_profile_for_user, prepare_student_course_context
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http, get_student_profile_for_user, prepare_student_course_context
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.llm_grading import (
     build_png_data_url_from_image_bytes,
@@ -344,7 +344,6 @@ def list_student_llm_quotas_for_enrolled_courses(
         .all()
     )
     for _enr, subj in enrollments:
-        ensure_course_llm_config(db, subj.id, current_user.id)
         db.flush()
         course_used = get_used_tokens_for_scope(
             db,
@@ -409,12 +408,7 @@ def get_student_llm_quota_for_course(
     if not student:
         raise HTTPException(status_code=400, detail="未找到与账号匹配的花名册。")
 
-    try:
-        ensure_course_access(subject_id, current_user, db)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    ensure_course_access_http(subject_id, current_user, db)
 
     pol = get_or_create_global_quota_policy(db)
     db.commit()
@@ -422,10 +416,7 @@ def get_student_llm_quota_for_course(
     ov = db.query(LLMStudentTokenOverride).filter(LLMStudentTokenOverride.student_id == student.id).first()
     uses_override = ov is not None
 
-    config = ensure_course_llm_config(db, subject_id, current_user.id)
-    db.commit()
-    db.refresh(config)
-    snap = get_student_quota_usage_snapshot(db, config, student_id=student.id)
+    snap = get_student_quota_usage_snapshot(db, None, student_id=student.id, subject_id=subject_id)
     course_used = get_used_tokens_for_scope(
         db,
         usage_date=str(snap["usage_date"]),
@@ -568,12 +559,7 @@ def get_course_llm_config(
 ):
     if not _can_manage_course_llm(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can manage course LLM config.")
-    try:
-        ensure_course_access(subject_id, current_user, db)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    ensure_course_access_http(subject_id, current_user, db)
 
     config = ensure_course_llm_config(db, subject_id, current_user.id)
     db.commit()
@@ -590,12 +576,7 @@ def update_course_llm_config(
 ):
     if not _can_manage_course_llm(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can manage course LLM config.")
-    try:
-        ensure_course_access(subject_id, current_user, db)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    ensure_course_access_http(subject_id, current_user, db)
 
     config = ensure_course_llm_config(db, subject_id, current_user.id)
     existing_has_group_rows = (

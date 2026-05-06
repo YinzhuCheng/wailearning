@@ -7,7 +7,14 @@
     }"
   >
     <div v-if="isMobile && !isCollapsed" class="mobile-sidebar-backdrop" @click="isCollapsed = true" />
-    <el-aside :width="sidebarWidth" class="sidebar" :class="{ 'sidebar--hidden': isSidebarHidden && !isMobile }">
+    <el-aside
+      :width="sidebarWidth"
+      class="sidebar"
+      :class="{
+        'sidebar--hidden': isSidebarHidden && !isMobile,
+        'sidebar--mobile-collapsed': isMobile && isCollapsed
+      }"
+    >
       <div class="logo">
         <div class="logo-main">
           <div class="logo-icon">
@@ -183,9 +190,6 @@
                     <p>{{ tokenDetailText }}</p>
                   </div>
                 </el-dropdown-item>
-                <el-dropdown-item command="notifications" data-testid="header-menu-notifications">
-                  {{ notificationsMenuLabel }}
-                </el-dropdown-item>
                 <el-dropdown-item command="personal-settings">个人设置</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -296,14 +300,6 @@ const notificationSyncParams = computed(() => {
   return {}
 })
 
-const notificationsMenuLabel = computed(() => {
-  const n = headerUnreadCount.value
-  if (n > 0) {
-    return `查看通知（${n} 条未读）`
-  }
-  return '查看通知'
-})
-
 const quotaBarColors = [
   { color: '#93c5fd', percentage: 60 },
   { color: '#3b82f6', percentage: 85 },
@@ -408,7 +404,7 @@ const pollNotificationSync = async () => {
         title: '新通知',
         message:
           unread > 0
-            ? `您有 ${unread} 条未读通知，请点击头像菜单「查看通知」或进入通知页。`
+            ? `您有 ${unread} 条未读通知，请打开侧边栏「通知」或通知中心页面查看。`
             : '通知列表已更新。',
         type: unread > 0 ? 'info' : 'success',
         duration: 5200,
@@ -542,11 +538,16 @@ const homeworkMenuOpenIndices = computed(() => {
     }
     return []
   }
-  if (p.startsWith('/homework') || p.startsWith('/materials')) {
-    return ['homework-and-materials']
-  }
-  if (p.startsWith('/dashboard') || p.startsWith('/students') || p.startsWith('/scores') || p.startsWith('/attendance') || p.startsWith('/notifications')) {
-    return ['class-teaching']
+  if (
+    p.startsWith('/dashboard') ||
+    p.startsWith('/students') ||
+    p.startsWith('/scores') ||
+    p.startsWith('/attendance') ||
+    p.startsWith('/notifications') ||
+    p.startsWith('/homework') ||
+    p.startsWith('/materials')
+  ) {
+    return ['teacher-daily']
   }
   return []
 })
@@ -569,23 +570,15 @@ const classTeacherMenu = [
 const teacherMenu = [
   {
     type: 'submenu',
-    index: 'class-teaching',
-    label: '班级教学',
+    index: 'teacher-daily',
+    label: '日常教学',
     icon: School,
     children: [
       { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
       { path: '/students', label: '学生管理', icon: User },
       { path: '/scores', label: '成绩管理', icon: Collection },
       { path: '/attendance', label: '考勤管理', icon: Collection },
-      { path: '/notifications', label: '通知中心', icon: Bell }
-    ]
-  },
-  {
-    type: 'submenu',
-    index: 'homework-and-materials',
-    label: '作业与资料',
-    icon: Reading,
-    children: [
+      { path: '/notifications', label: '通知中心', icon: Bell },
       { path: '/homework', label: '作业管理', icon: Reading },
       { path: '/homework/students', label: '学生作业一览', icon: User },
       { path: '/materials', label: '课程资料', icon: Collection }
@@ -782,11 +775,6 @@ const handleCourseSwitch = courseId => {
 }
 
 const handleCommand = command => {
-  if (command === 'notifications') {
-    router.push('/notifications')
-    return
-  }
-
   if (command === 'personal-settings') {
     router.push('/personal-settings')
     return
@@ -1254,6 +1242,23 @@ watch(notificationSyncParams, () => {
 }
 
 @media (max-width: 768px) {
+  .sidebar.sidebar--mobile-collapsed {
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    pointer-events: none;
+  }
+
+  .sidebar.sidebar--mobile-collapsed .sidebar-body,
+  .sidebar.sidebar--mobile-collapsed .logo {
+    visibility: hidden;
+  }
+
   .layout-container {
     position: relative;
   }

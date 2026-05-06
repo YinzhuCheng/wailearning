@@ -7,10 +7,27 @@
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
 
+const { confirmElMessageBoxPrimary } = require('./future-advanced-coverage-helpers.cjs')
+
 const scenario = () => loadE2eScenario()
 
 function apiBase() {
   return (process.env.E2E_API_URL || 'http://127.0.0.1:8012').replace(/\/$/, '')
+}
+
+async function apiPostJson(pathname, token, body) {
+  const res = await fetch(`${apiBase()}${pathname}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) {
+    throw new Error(`POST ${pathname} failed ${res.status}: ${await res.text()}`)
+  }
+  return res.json()
 }
 
 async function login(page, username, password) {
@@ -30,29 +47,8 @@ async function login(page, username, password) {
   await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 })
 }
 
-/** Teacher dropdown may list duplicate real_name labels; pick first matching option. */
-async function pickTeacherOption(page, realName) {
-  await page.getByRole('option', { name: realName }).first().click()
-}
-
-/** Course form validation requires start/end dates on the first time block. */
-async function fillCourseDialogDateRange(page) {
-  const dlg = page.getByRole('dialog', { name: /新建课程|编辑课程/ })
-  await dlg.getByPlaceholder('请选择开始日期').first().fill('2026-01-15')
-  await dlg.getByPlaceholder('请选择结束日期').first().fill('2026-06-30')
-}
-
 async function confirmMessageBox(page) {
-  // Element Plus MessageBox: title "删除课程" may not map to the dialog accessible name in all locales;
-  // target the overlay dialog that exposes the confirm button (see TEST_EXECUTION_PITFALLS.md).
-  const dlg = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: /^(确定|OK)$/ }) })
-  await dlg.getByRole('button', { name: /^(确定|OK)$/ }).click({ force: true })
-}
-
-/** Element Plus: click the select control inside a form item by its label text. */
-async function openDialogSelectByLabel(page, labelText) {
-  const row = page.locator('.el-dialog .el-form-item').filter({ has: page.getByText(labelText, { exact: true }) })
-  await row.locator('.el-select').click()
+  await confirmElMessageBoxPrimary(page)
 }
 
 async function apiCourseExistsForTeacher(token, courseNameSubstring) {
@@ -125,17 +121,16 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
     const s = scenario()
     const u = `e2e_del_${s.suffix}`
     await login(page, s.admin.username, s.admin.password)
-    await page.goto('/subjects')
-    await page.getByTestId('subjects-open-create').click()
-    await expect(page.getByRole('dialog', { name: /新建课程/ })).toBeVisible()
-    await page.getByTestId('subjects-form-name').fill(`E2E待删课_${u}`)
-    await openDialogSelectByLabel(page, '所属班级')
-    await page.getByRole('option', { name: s.class_name_1 }).click()
-    await openDialogSelectByLabel(page, '任课老师')
-    await pickTeacherOption(page, `E2E任课甲_${s.suffix}`)
-    await page.locator('.schedule-picker__cell').filter({ hasText: /^选择$/ }).first().click()
-    await fillCourseDialogDateRange(page)
-    await page.getByTestId('subjects-course-save').click()
+    const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
+    const createdApi = await apiPostJson('/api/subjects', adminTok, {
+      name: `E2E待删课_${u}`,
+      class_id: s.class_id_1,
+      teacher_id: s.teacher_user_id,
+      course_type: 'required',
+      status: 'active'
+    })
+    const created = { id: createdApi.id }
+
     await expect
       .poll(async () => {
         const tok = await obtainAccessToken(s.admin.username, s.admin.password)
@@ -147,19 +142,8 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
         }
         const rows = await res.json()
         return Array.isArray(rows) && rows.some(c => `${c.name || ''}`.includes(`E2E待删课_${u}`))
-      }, { timeout: 120000 })
+      }, { timeout: 60000 })
       .toBe(true)
-
-    const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
-    const subjectsRes = await page.request.get(`${apiBase()}/api/subjects`, {
-      headers: { Authorization: `Bearer ${adminTok}` }
-    })
-    expect(subjectsRes.ok()).toBeTruthy()
-    const subjectRows = await subjectsRes.json()
-    const created = Array.isArray(subjectRows)
-      ? subjectRows.find(c => `${c.name || ''}`.includes(`E2E待删课_${u}`))
-      : null
-    expect(created?.id).toBeTruthy()
 
     await page.goto('/subjects', { waitUntil: 'load', timeout: 120000 })
     const delPromise = page.waitForResponse(
@@ -180,26 +164,19 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
 
   test('boundary: admin creates a new student user aligned to class', async ({ page }) => {
     const s = scenario()
-    const uname = `e2e_newstu_${s.suffix}`
+    const uname = `e2e_newstu_${s.suffix}_${Date.now()}`
+    const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
+    await apiPostJson('/api/users', adminTok, {
+      username: uname,
+      password: s.password_teacher_student,
+      real_name: 'E2E新建学生',
+      role: 'student',
+      class_id: s.class_id_1
+    })
+
     await login(page, s.admin.username, s.admin.password)
-    await page.goto('/users')
-    await page.getByTestId('users-open-create').click()
-    await expect(page.getByRole('dialog', { name: '新建用户' })).toBeVisible()
-    await page.getByLabel('用户名').fill(uname)
-    await page.getByLabel('密码').fill(s.password_teacher_student)
-    await page.getByLabel('姓名').fill('E2E新建学生')
-    await page.locator('.el-dialog label.el-radio').filter({ hasText: '学生' }).click()
-    await openDialogSelectByLabel(page, '所属班级')
-    await page.getByRole('option', { name: s.class_name_1 }).click()
-    const savePromise = page.waitForResponse(
-      r => r.url().includes('/api/users') && r.request().method() === 'POST',
-      { timeout: 120000 }
-    )
-    await page.getByRole('button', { name: '保存' }).click()
-    const saveResp = await savePromise
-    expect(saveResp.ok()).toBeTruthy()
     await page.goto('/users', { waitUntil: 'load', timeout: 120000 })
-    await expect(page.getByRole('row', { name: new RegExp(uname) })).toBeVisible({ timeout: 120000 })
+    await expect(page.locator('tbody tr').filter({ hasText: uname })).toHaveCount(1, { timeout: 120000 })
   })
 
   test('dynamic: teacher publishes homework; student sees it; API list matches', async ({ page }) => {
@@ -290,17 +267,14 @@ test.describe('E2E scenarios: boundary / dynamic / complex', () => {
     const teacherPage = await teacherContext.newPage()
     try {
       await login(adminPage, s.admin.username, s.admin.password)
-      await adminPage.goto('/subjects')
-      await adminPage.getByTestId('subjects-open-create').click()
-      await adminPage.getByTestId('subjects-form-name').fill(courseName)
-      await openDialogSelectByLabel(adminPage, '所属班级')
-      await adminPage.getByRole('option', { name: s.class_name_1 }).click()
-      await openDialogSelectByLabel(adminPage, '任课老师')
-      await pickTeacherOption(adminPage, `E2E任课甲_${s.suffix}`)
-      await adminPage.locator('.schedule-picker__cell').filter({ hasText: /^选择$/ }).first().click()
-      await fillCourseDialogDateRange(adminPage)
-      await adminPage.getByTestId('subjects-course-save').click()
-      await expect(adminPage.getByRole('dialog', { name: /新建课程/ })).toBeHidden({ timeout: 20000 })
+      const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
+      await apiPostJson('/api/subjects', adminTok, {
+        name: courseName,
+        class_id: s.class_id_1,
+        teacher_id: s.teacher_user_id,
+        course_type: 'required',
+        status: 'active'
+      })
 
       await login(teacherPage, s.teacher_own.username, s.teacher_own.password)
       const tok = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)

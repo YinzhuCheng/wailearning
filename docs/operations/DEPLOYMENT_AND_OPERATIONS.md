@@ -4,6 +4,8 @@
 
 This document consolidates the current production, upgrade, and operational guidance for the repository. It replaces the older scattered deployment notes, upgrade runbooks, and server-specific markdown files.
 
+Environment variables referenced below are documented field-by-field in [../architecture/CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md) (derived from `apps/backend/wailearning_backend/core/config.py`). Keep deploy templates aligned with that file when defaults change.
+
 ## Target Production Shape
 
 - Nginx serves the admin SPA at `/`

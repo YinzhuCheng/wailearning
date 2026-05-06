@@ -27,14 +27,14 @@ const {
   flattenChapterTree,
   getChapterTree,
   currentSelectedCourseId,
+  confirmElMessageBoxPrimary,
   apiPostForm
 } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
 
 async function confirmPrimaryDialog(page) {
-  const dlg = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: /^(确定|OK)$/ }) })
-  await dlg.getByRole('button', { name: /^(确定|OK)$/ }).click()
+  await confirmElMessageBoxPrimary(page)
 }
 
 test.describe('Future advanced E2E coverage expansion', () => {
