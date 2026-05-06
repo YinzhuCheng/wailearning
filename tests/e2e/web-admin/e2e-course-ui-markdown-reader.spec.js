@@ -1,7 +1,8 @@
 /**
  * Targeted E2E for course UI: Markdown LaTeX demo, sidebar collapse control,
  * materials layout + reader route (including discussion on reader),
- * flat teacher sidebar without 「日常教学」 submenu, teaching calendar route.
+ * flat teacher sidebar without 「日常教学」 submenu, flat student sidebar without 「课程学习」 submenu,
+ * teaching calendar route.
  *
  * Dashboard (`/dashboard`) was removed from the product UI (May 2026); enrollment
  * count regressions for `GET /api/dashboard/stats` remain covered in pytest
@@ -124,6 +125,18 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     })
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程资料' })).toBeVisible()
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程仪表盘' })).toHaveCount(0)
+  })
+
+  test('student sidebar has no 课程学习 wrapper; former children are top-level', async ({ page }) => {
+    const s = scenario()
+    const pw = s.student_plain.password || s.password_teacher_student
+    await login(page, s.student_plain.username, pw)
+    await page.goto('/courses')
+    await expect(page.locator('.sidebar-menu .el-sub-menu__title').filter({ hasText: '课程学习' })).toHaveCount(0)
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '选课与进度' })).toBeVisible({
+      timeout: 15000
+    })
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程通知' })).toBeVisible()
   })
 
   test('teaching calendar page mounts TeachingCalendar for selected course', async ({ page }) => {

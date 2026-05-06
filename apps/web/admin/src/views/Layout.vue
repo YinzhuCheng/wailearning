@@ -516,16 +516,7 @@ const sidebarMenuActivePath = computed(() => {
 const homeworkMenuOpenIndices = computed(() => {
   const p = route.path
   if (userStore.isStudent) {
-    if (
-      p.startsWith('/courses') ||
-      p.startsWith('/course-home') ||
-      p.startsWith('/homework') ||
-      p.startsWith('/materials') ||
-      p.startsWith('/student-scores') ||
-      p.startsWith('/notifications')
-    ) {
-      return ['student-learning']
-    }
+    // Student rail is flat (no `student-learning` submenu); nothing to pre-open.
     return []
   }
   if (userStore.isAdmin) {
@@ -580,21 +571,14 @@ const teacherMenu = [
   { path: '/materials', label: '课程资料', icon: Collection }
 ]
 
+/** Flat menu: all entries used to live under one 「课程学习」 submenu — removed for fewer clicks (parity with teacher rail). */
 const studentMenu = [
-  {
-    type: 'submenu',
-    index: 'student-learning',
-    label: '课程学习',
-    icon: Reading,
-    children: [
-      { path: '/courses', label: '选课与进度', icon: School },
-      { path: '/course-home', label: '学习主页', icon: DataAnalysis },
-      { path: '/homework', label: '课程作业', icon: Document },
-      { path: '/materials', label: '课程资料', icon: Collection },
-      { path: '/student-scores', label: '我的成绩', icon: Collection },
-      { path: '/notifications', label: '课程通知', icon: Bell }
-    ]
-  }
+  { path: '/courses', label: '选课与进度', icon: School },
+  { path: '/course-home', label: '学习主页', icon: DataAnalysis },
+  { path: '/homework', label: '课程作业', icon: Document },
+  { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/student-scores', label: '我的成绩', icon: Collection },
+  { path: '/notifications', label: '课程通知', icon: Bell }
 ]
 
 const adminMenu = [
