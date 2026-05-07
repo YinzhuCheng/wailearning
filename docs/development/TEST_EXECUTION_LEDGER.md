@@ -555,17 +555,19 @@ git diff --check
 
 **Category:** `static-check`
 
-**Scope:** Static and smoke validation for the first-version diff-based validation target selector. This target proves the selector script compiles, the machine-readable registry is valid JSON, representative path-based recommendations work, and the selector can read target-level history from this ledger.
+**Scope:** Static and smoke validation for the first-version diff-based validation target selector. This target proves the selector script compiles, the machine-readable registry is valid JSON, representative path-based recommendations work, the selector can read target-level history from this ledger, and the runners can write ignored structured local history, pytest JUnit result summaries, and profile-level summaries.
 
 The selector is advisory. It does not run pytest, Playwright, PostgreSQL, or frontend build commands by itself, and it does not edit this ledger. It emits a conservative recommendation that an agent must still review against the actual task, changed code, and environment constraints.
 
 **Canonical command:**
 
 ```powershell
-.venv\Scripts\python.exe -m py_compile ops\scripts\dev\select_validation_targets.py
+.venv\Scripts\python.exe -m py_compile ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py ops\scripts\dev\validation_history.py tests\backend\manual\test_validation_selector.py
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths apps\backend\wailearning_backend\api\routers\learning_notes.py
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths ops\scripts\dev\select_validation_targets.py tests\TEST_SELECTION_TARGETS.json --json
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json
+python -m unittest tests.backend.manual.test_validation_selector -v
+python ops\scripts\dev\run_validation_target.py static.validation_selector --dry-run
 ```
 
 **Working directory:** `<repo>`
@@ -573,7 +575,11 @@ The selector is advisory. It does not run pytest, Playwright, PostgreSQL, or fro
 **Relevant paths:**
 
 - `ops/scripts/dev/select_validation_targets.py`
+- `ops/scripts/dev/run_validation_target.py`
+- `ops/scripts/dev/run_validation_profile.py`
+- `ops/scripts/dev/validation_history.py`
 - `tests/TEST_SELECTION_TARGETS.json`
+- `tests/backend/manual/test_validation_selector.py`
 - `docs/development/DEVELOPMENT_AND_TESTING.md`
 - `docs/development/TEST_SUITE_MAP.md`
 - `docs/development/TEST_EXECUTION_LEDGER.md`
@@ -585,6 +591,8 @@ The selector is advisory. It does not run pytest, Playwright, PostgreSQL, or fro
 - Changes to the ledger heading or strict field format parsed by the selector.
 - Changes to validation-profile documentation or target-selection policy.
 - Changes to path matching semantics, fallback rules, or risk-level ordering.
+- Changes to structured local history schema, signature calculation, or runner history writing.
+- Changes to validation profile policy, risk filtering, or review-target execution defaults.
 
 **Last branch:** `cursor/discussion-avatar-chat-ui-921d`
 
@@ -594,15 +602,19 @@ The selector is advisory. It does not run pytest, Playwright, PostgreSQL, or fro
 
 **Last run date:** `2026-05-08`
 
-**Pass count:** `1`
+**Pass count:** `5`
 
-**Run count:** `1`
+**Run count:** `5`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Selector compiled; learning-notes API path recommended `backend.learning_notes.api` and `admin.e2e.learning_notes_attendance_cover_tier20`; selector self/registry paths recommended `static.validation_selector`; `--worktree --json` included untracked selector/registry files; ledger fields were included in Markdown/JSON output for targets that already have ledger IDs. | Initial smoke found three selector-rule issues before this passing row: broad backend fallback fired even when a precise target already matched; Python `fnmatch` pattern `**/*.py` did not match a root-level backend `.py` path; plain `git diff` did not include untracked new files, so `--worktree` now merges `git ls-files --others --exclude-standard` unless `--no-include-untracked` is supplied. A separate line-health check before staging also did not count new files because `repo_line_health.py` intentionally uses `git ls-files`; rerun line health after staging when this distinction matters. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v`; `python ops\scripts\dev\run_validation_target.py static.validation_selector --dry-run` | `passed` | Selector, runner, and selector tests compiled; target registry parsed as valid JSON; `8` standard-library selector/runner tests passed; runner dry-run wrote a redacted local `run.json` and `ledger-snippet.md`. | Current local interpreter lacked `pytest`, so the new selector tests are standard-library `unittest` cases that remain pytest-collectable when pytest is available. A direct `python -m pytest tests\backend\manual\test_validation_selector.py -q` attempt was blocked by missing pytest and was not counted as this target's passing command. Runner dry-run artifacts live under ignored `.agent-run/logs/` and are not committed. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120` | `passed` | Runner executed all three `static.validation_selector` commands: selector/runner compile passed, selector JSON smoke passed, nested runner dry-run smoke passed. | The runner used the current interpreter because `<repo>/.venv/Scripts/python.exe` was absent in this worktree, and recorded that fallback in ignored local artifacts. The generated `run.json` used `<repo>` and `<python>` placeholders instead of private absolute paths. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v` | `passed` | Structured local validation history helper, selector, target runner, profile runner, and selector tests compiled; target registry parsed as valid JSON; `15` standard-library selector/runner/history/profile tests passed. | This run covered JSONL history writing, selector use of matching structured history as fresh evidence, stale classification when the structured history changed-path signature differs from the selector input, pytest JUnit XML argument injection, parsing testcase-level JUnit results, redaction of absolute testcase file paths from JUnit XML, static profile dry-runs, and selector-recommended profile skipping review-required targets by default. Ignored JSONL/XML/profile files under `.agent-run/` are local evidence only and are not committed. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v`; `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `python ops\scripts\dev\run_validation_profile.py static --dry-run --timeout-seconds 120`; `python ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Final handoff validation passed after adding the committed validation automation handoff document; `15` unittest cases passed; static target runner passed; static profile dry-run passed; worktree selector returned `non_full_validation.status=acceptable` and `unmatched_paths=[]`; diff whitespace check passed. | Current worktree still had no repository `.venv`, so runner smoke used the current Python interpreter and recorded the fallback in ignored artifacts. Worktree selector considered the new handoff document and validation tooling files and recommended only static targets. |
 
 ## Known First-Version Limitations
 

@@ -123,15 +123,25 @@ Inputs:
 - the script also parses target-level history from
   [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md) so recommendations can
   show the last observed result, last commit, and pass/run count when a ledger
-  entry exists.
+  entry exists;
+- unless `--no-history` is supplied, the script also reads ignored structured
+  local history from `<repo>/.agent-run/validation-history.jsonl`. Structured
+  history is treated as fresh evidence only when its changed-path signature
+  matches the current selector input; otherwise it is reported as stale.
 
 Outputs:
 
 - Markdown by default for agent review;
 - JSON with `--json` for future automation;
+- `non_full_validation.status`, one of `acceptable`, `needs_review`, or
+  `not_sufficient`;
+- per-target `history_status`, one of `fresh`, `stale`, `unknown`, or
+  `blocked`, or `not-recorded`;
 - changed paths and statuses;
 - recommended target IDs, categories, risk levels, working directories, command
-  argv arrays, matched paths, selection reasons, and ledger history;
+  argv arrays, matched paths, selection reasons, coverage tags, review reasons,
+  ledger history, and the latest matching structured history record when one is
+  available;
 - unmatched paths, which mean "the first-version registry has no precise rule",
   not "no validation is needed";
 - a ledger snippet template for observed results.
@@ -150,16 +160,134 @@ Operational rules:
 - If the selector recommends no Playwright target for docs-only diffs, that is
   expected. If it recommends no Playwright target for admin UI, E2E fixture,
   Playwright config, route, auth, or seed changes, treat that as a registry gap.
+- If `non_full_validation.status` is `not_sufficient`, do not present targeted
+  validation as complete evidence until the blocking reason is addressed or
+  explicitly deferred. Typical blockers are recommended full targets or
+  unmatched product source paths.
+- If `non_full_validation.status` is `needs_review`, targeted validation may
+  still be the right first pass, but the output names the expensive or
+  environment-sensitive target that needs operator judgment.
+- `history_status=stale` does not mean a target failed. It means the previous
+  ledger or structured run result should not be counted as current evidence for
+  this diff.
+- `history_status=blocked` means the latest structured runner evidence for the
+  current changed-path snapshot was blocked by environment or orchestration
+  preflight. Treat it as unresolved validation, not a product pass or fail.
 - Record only tests that actually ran in `TEST_EXECUTION_LEDGER.md`. Selector
   output and `--paths` smoke runs are planning/discovery, not observed test
   execution.
 
+### Validation target runner
+
+The runner executes a single target from
+[`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json)
+and writes local artifacts under the ignored agent workspace:
+
+```bash
+python ops/scripts/dev/run_validation_target.py static.validation_selector
+python ops/scripts/dev/run_validation_target.py frontend.admin.build --timeout-seconds 900
+python ops/scripts/dev/run_validation_target.py backend.learning_notes.api
+python ops/scripts/dev/run_validation_target.py static.validation_selector --dry-run
+```
+
+Windows agents may use the same command with the repository virtual environment
+when present:
+
+```powershell
+.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector
+```
+
+The runner is deliberately narrower than the selector:
+
+- it runs one target ID at a time;
+- it reads the same target registry as the selector;
+- it resolves the repository virtualenv Python when present, otherwise it uses
+  the current interpreter and records that fallback in local artifacts;
+- it writes `<repo>/.agent-run/logs/<timestamp>-<target-id>/run.json`;
+- it writes `<repo>/.agent-run/logs/<timestamp>-<target-id>/ledger-snippet.md`;
+- it appends a compact structured record to
+  `<repo>/.agent-run/validation-history.jsonl` unless `--no-history` is passed;
+- it captures per-command stdout/stderr logs under the same artifact directory;
+- for `python -m pytest` targets that do not already specify `--junitxml`, it
+  adds an ignored JUnit XML artifact and records testcase-level totals and case
+  statuses in `run.json` and structured history;
+- it classifies missing interpreters, missing pytest, missing npm/npx/browser
+  command, or unresolved command placeholders as `blocked` rather than product
+  failures;
+- it does not provision PostgreSQL, install dependencies, install browsers, or
+  mutate the committed execution ledger.
+
+Exit codes:
+
+- `0`: target commands passed, or `--dry-run` recorded the target without
+  execution;
+- `1`: target command ran and failed;
+- `2`: environment or command preflight blocked execution;
+- `4`: command timed out;
+- `5`: command was interrupted;
+- `6`: invalid target, invalid registry, or invalid arguments.
+
+Treat runner artifacts as local evidence. If a run should become durable project
+history, review the generated `ledger-snippet.md`, redact any private details if
+needed, and then update [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md)
+manually with the observed result.
+
+Structured history is a machine-readable local companion to the Markdown
+ledger, not a replacement for it. It records target id, result, failure class,
+artifact pointers, changed paths, a changed-path signature, and parsed test
+artifact summaries when available so the selector can tell whether a local run
+actually covered the current diff. Keep it under ignored `.agent-run/`; do not
+commit local history files.
+
+### Validation profile runner
+
+The profile runner orchestrates one or more target runner invocations and writes
+a profile-level summary under ignored `.agent-run/logs/`:
+
+```bash
+python ops/scripts/dev/run_validation_profile.py static
+python ops/scripts/dev/run_validation_profile.py selector-recommended --paths apps/web/admin/src/views/HomeworkSubmissions.vue --dry-run
+python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk targeted
+python ops/scripts/dev/run_validation_profile.py selector-recommended --include-review-targets --max-risk broad
+```
+
+Initial profiles:
+
+- `static`: runs the static selector validation target.
+- `selector-recommended`: runs selector recommendations for explicit `--paths`
+  or the current worktree.
+
+Profile safety defaults:
+
+- `--max-risk targeted` is the default; `broad` and `full` recommendations are
+  skipped unless explicitly allowed.
+- Targets with `requires_review_reason` are skipped unless
+  `--include-review-targets` is passed.
+- `--dry-run` is useful for proving orchestration and artifact writing without
+  executing the underlying commands.
+- If selector output says `non_full_validation.status=not_sufficient`, the
+  profile exits with code `4` even if the runnable subset passed or was skipped.
+
+Profile exit codes:
+
+- `0`: no product or environment failure was observed, including dry-run or
+  policy-skipped targets;
+- `1`: at least one executed target failed or timed out;
+- `2`: at least one executed target was blocked by environment or command
+  preflight;
+- `4`: selector policy says non-full validation is not sufficient;
+- `6`: profile setup, selector execution, or JSON parsing failed.
+
 Known first-version limitations:
 
 - The registry is conservative and incomplete. It covers the high-value targets
-  currently represented in the ledger plus several broad escalation rules.
+  currently represented in the ledger plus maintained Playwright suites,
+  important behavior/security pytest targets, and several broad escalation
+  rules.
 - The selector works at target level, not individual `pytest` test item or
-  Playwright `test(...)` case level.
+  Playwright `test(...)` case level. The runner can now record pytest JUnit XML
+  case summaries, but the selector still uses target-level history for
+  sufficiency decisions.
 - Markdown ledger parsing is intentionally shallow: it extracts the strict
   `Last result`, `Last commit`, `Pass count`, and `Run count` fields. The
   machine-readable registry remains the source for selection rules.
@@ -171,6 +299,10 @@ Known first-version limitations:
 - This tool is not a replacement for reading task-scoped docs. It makes the
   first recommendation easier to audit; it does not understand every semantic
   dependency in the application.
+- The runner is a first operational layer, not a full validation orchestrator.
+  PostgreSQL lifecycle management, Playwright port isolation, browser install
+  detection beyond executable preflight, and machine-readable pytest/Playwright
+  item-level result parsing remain follow-up work.
 
 ### Admin frontend
 

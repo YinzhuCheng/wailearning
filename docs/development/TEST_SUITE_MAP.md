@@ -13,6 +13,9 @@ It is intended for contributors and LLM coding agents who need to answer questio
 
 For concrete historical execution records, use [TEST_EXECUTION_LEDGER.md](TEST_EXECUTION_LEDGER.md). That ledger records per-target category, canonical command, last branch/commit, pass count, run count, and run-by-run results. This map answers **what exists and when to run it**; the ledger answers **what was actually run and what happened**.
 
+For the current validation automation handoff, use
+[VALIDATION_AUTOMATION_HANDOFF_2026-05-08.md](VALIDATION_AUTOMATION_HANDOFF_2026-05-08.md).
+
 ## Top-Level Test Layout
 
   ```text
@@ -54,13 +57,36 @@ The executable selector lives outside `tests/` because it is a repository-wide
 developer command:
 
 - [`ops/scripts/dev/select_validation_targets.py`](../../ops/scripts/dev/select_validation_targets.py)
+- [`ops/scripts/dev/validation_history.py`](../../ops/scripts/dev/validation_history.py)
 
 The registry maps repository-relative changed paths to validation targets such
 as focused backend pytest files, admin frontend build, targeted Playwright, full
 Playwright consideration, PostgreSQL package tests, and full PostgreSQL pytest.
-It complements, but does not replace,
+It now also carries coverage tags, target review reasons, and high-blast-radius
+fallback rules so selector output can distinguish `acceptable`, `needs_review`,
+and `not_sufficient` non-full validation states. It complements, but does not replace,
 [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md). The ledger records
 observed executions; the registry recommends what to run next.
+
+The executable runner for one target lives next to the selector:
+
+- [`ops/scripts/dev/run_validation_target.py`](../../ops/scripts/dev/run_validation_target.py)
+- [`ops/scripts/dev/run_validation_profile.py`](../../ops/scripts/dev/run_validation_profile.py)
+
+The runner consumes the same registry, executes one target id, and writes local
+artifacts under `.agent-run/logs/`. It also appends ignored JSONL history to
+`.agent-run/validation-history.jsonl` so future selector runs can distinguish
+fresh, stale, skipped, and blocked local evidence for the current changed-path
+snapshot. For pytest targets, it adds ignored JUnit XML output when the command
+does not already request one and records testcase-level totals and statuses in
+the local artifacts. It intentionally does not update the committed ledger
+automatically. Use it when a selector recommendation should be turned into a
+local run record with stdout/stderr logs and a ledger snippet.
+
+The profile runner provides a small orchestration layer over the target runner.
+Its first profiles are `static` and `selector-recommended`. It defaults to
+running only static/targeted targets and skips targets that require explicit
+operator review unless `--include-review-targets` is passed.
 
 When adding or moving test files, update this registry if the moved file should
 influence future diff-based validation recommendations. If the selector output

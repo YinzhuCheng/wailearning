@@ -26,6 +26,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from validation_history import (
+    DEFAULT_HISTORY,
+    changed_paths_signature,
+    latest_records_by_target,
+    load_history_entries,
+)
+
 
 DEFAULT_REGISTRY = "tests/TEST_SELECTION_TARGETS.json"
 DEFAULT_LEDGER = "docs/development/TEST_EXECUTION_LEDGER.md"
@@ -50,6 +57,9 @@ class Recommendation:
     matched_paths: list[str] = field(default_factory=list)
     source_rules: list[str] = field(default_factory=list)
     ledger: dict[str, str] | None = None
+    structured_history: dict[str, Any] | None = None
+    history_status: str = "unknown"
+    history_reason: str = "history was not evaluated"
 
     @property
     def target_id(self) -> str:
@@ -181,8 +191,7 @@ def path_matches_any(path: str, patterns: list[str]) -> bool:
 
 
 def match_target(target: dict[str, Any], changed_paths: list[ChangedPath]) -> tuple[list[str], list[str]]:
-    triggers = target.get("triggers", {})
-    patterns = list(triggers.get("paths", [])) + list(triggers.get("globs", []))
+    patterns = target_trigger_patterns(target)
     matched: list[str] = []
     reasons: list[str] = []
     for changed in changed_paths:
@@ -192,6 +201,148 @@ def match_target(target: dict[str, Any], changed_paths: list[ChangedPath]) -> tu
                 reasons.append(f"{changed.path} matched {pattern}")
                 break
     return sorted(set(matched)), reasons
+
+
+def target_trigger_patterns(target: dict[str, Any]) -> list[str]:
+    triggers = target.get("triggers", {})
+    return list(triggers.get("paths", [])) + list(triggers.get("globs", []))
+
+
+def assess_history_status(item: Recommendation, changed_paths: list[ChangedPath]) -> tuple[str, str]:
+    if item.structured_history is not None:
+        result = str(item.structured_history.get("result") or "").strip().lower()
+        failure_class = item.structured_history.get("failure_class")
+        ended_at = item.structured_history.get("ended_at", "unknown time")
+        current_signature = changed_paths_signature(
+            [{"status": changed.status, "path": changed.path} for changed in changed_paths]
+        )
+        history_signature = str(item.structured_history.get("changed_paths_signature") or "")
+        if history_signature and history_signature != current_signature:
+            return "stale", f"latest structured run at {ended_at} covered a different changed-path snapshot"
+        if result == "passed":
+            return "fresh", f"latest structured run passed at {ended_at}"
+        if result == "skipped":
+            return "unknown", f"latest structured run was dry-run/skipped at {ended_at}"
+        if result == "blocked":
+            class_note = f" ({failure_class})" if failure_class else ""
+            return "blocked", f"latest structured run was blocked{class_note} at {ended_at}"
+        if result:
+            return "stale", f"latest structured run result is `{result}` at {ended_at}"
+
+    if item.ledger is None:
+        if item.target.get("ledger_id"):
+            return "not-recorded", "target has a ledger_id but no parsed ledger entry was found"
+        return "not-recorded", "target has no ledger_id yet"
+
+    last_result = (item.ledger.get("last_result") or "").strip().lower()
+    if last_result and last_result != "passed":
+        return "stale", f"last recorded result is `{last_result}`, not passing evidence"
+
+    patterns = target_trigger_patterns(item.target)
+    trigger_matches = [
+        changed.path
+        for changed in changed_paths
+        if any(path_matches_pattern(changed.path, pattern) for pattern in patterns)
+    ]
+    if trigger_matches:
+        return "stale", "target trigger changed in current diff"
+
+    if item.source_rules:
+        return "stale", f"target was recommended by fallback rule(s): {', '.join(item.source_rules)}"
+
+    if not last_result:
+        return "unknown", "ledger entry did not include a last result"
+
+    return "fresh", "last recorded passing result is not invalidated by direct target triggers"
+
+
+def is_product_source_path(path: str) -> bool:
+    normalized = normalize_path(path)
+    product_patterns = [
+        "apps/backend/wailearning_backend/*.py",
+        "apps/backend/wailearning_backend/**/*.py",
+        "apps/web/admin/src/**",
+        "apps/web/parent/src/**",
+        "apps/web/admin/package.json",
+        "apps/web/admin/package-lock.json",
+        "apps/web/admin/vite.config.js",
+        "apps/web/admin/playwright.config.cjs",
+        "apps/web/parent/package.json",
+        "apps/web/parent/package-lock.json",
+        "apps/web/parent/vite.config.js",
+    ]
+    return path_matches_any(normalized, product_patterns)
+
+
+def build_non_full_validation_summary(
+    recommendations: list[Recommendation],
+    unmatched: list[str],
+    changed_paths: list[ChangedPath],
+) -> dict[str, Any]:
+    if not changed_paths:
+        return {
+            "status": "acceptable",
+            "reason": "no changed paths were detected",
+            "blocking_reasons": [],
+            "review_reasons": [],
+        }
+
+    blocking_reasons: list[str] = []
+    review_reasons: list[str] = []
+
+    unmatched_product_paths = [path for path in unmatched if is_product_source_path(path)]
+    if unmatched_product_paths:
+        blocking_reasons.append(
+            "unmatched product source path(s): " + ", ".join(f"`{path}`" for path in unmatched_product_paths)
+        )
+
+    full_targets = [item.target_id for item in recommendations if item.risk == "full"]
+    if full_targets:
+        blocking_reasons.append("full validation target(s) recommended: " + ", ".join(f"`{target}`" for target in full_targets))
+
+    broad_targets = [item.target_id for item in recommendations if item.risk == "broad"]
+    if broad_targets:
+        review_reasons.append("broad validation target(s) recommended: " + ", ".join(f"`{target}`" for target in broad_targets))
+
+    blocked_history_targets = [
+        f"`{item.target_id}`: {item.history_reason}"
+        for item in recommendations
+        if item.history_status == "blocked"
+    ]
+    if blocked_history_targets:
+        review_reasons.append("target(s) have blocked latest structured run: " + "; ".join(blocked_history_targets))
+
+    review_targets = [
+        f"`{item.target_id}`: {item.target.get('requires_review_reason')}"
+        for item in recommendations
+        if item.target.get("requires_review_reason")
+    ]
+    if review_targets:
+        review_reasons.append("target(s) require operator review: " + "; ".join(review_targets))
+
+    unmatched_non_product = [path for path in unmatched if path not in unmatched_product_paths]
+    if unmatched_non_product:
+        review_reasons.append("unmatched non-product path(s): " + ", ".join(f"`{path}`" for path in unmatched_non_product))
+
+    if not recommendations:
+        review_reasons.append("no validation targets were selected")
+
+    if blocking_reasons:
+        status = "not_sufficient"
+        reason = blocking_reasons[0]
+    elif review_reasons:
+        status = "needs_review"
+        reason = review_reasons[0]
+    else:
+        status = "acceptable"
+        reason = "only static or targeted validation was recommended; run the recommended targets before claiming coverage"
+
+    return {
+        "status": status,
+        "reason": reason,
+        "blocking_reasons": blocking_reasons,
+        "review_reasons": review_reasons,
+    }
 
 
 def ensure_recommendation(
@@ -287,6 +438,7 @@ def select_targets(
     registry: dict[str, Any],
     changed_paths: list[ChangedPath],
     ledger_entries: dict[str, dict[str, str]],
+    structured_history: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[Recommendation], list[str], list[str]]:
     targets = list(registry.get("targets", []))
     target_by_id = {str(target["id"]): target for target in targets}
@@ -314,6 +466,9 @@ def select_targets(
         ledger_id = item.target.get("ledger_id")
         if ledger_id:
             item.ledger = ledger_entries.get(str(ledger_id))
+        if structured_history:
+            item.structured_history = structured_history.get(item.target_id)
+        item.history_status, item.history_reason = assess_history_status(item, changed_paths)
     return ordered, unmatched, notes
 
 
@@ -328,9 +483,11 @@ def build_json_result(
     unmatched: list[str],
     notes: list[str],
 ) -> dict[str, Any]:
+    non_full_summary = build_non_full_validation_summary(recommendations, unmatched, changed_paths)
     return {
         "registry_version": registry.get("version"),
         "selection_policy": registry.get("defaults", {}).get("selection_policy"),
+        "non_full_validation": non_full_summary,
         "changed_paths": [{"status": item.status, "path": item.path} for item in changed_paths],
         "recommendations": [
             {
@@ -340,11 +497,17 @@ def build_json_result(
                 "description": item.target.get("description"),
                 "working_directory": item.target.get("working_directory"),
                 "commands": item.target.get("commands", []),
+                "requires_review_reason": item.target.get("requires_review_reason"),
+                "coverage_tags": item.target.get("coverage_tags", []),
+                "risk_escalation": item.target.get("risk_escalation"),
                 "matched_paths": item.matched_paths,
                 "reasons": item.reasons,
                 "source_rules": item.source_rules,
                 "ledger_id": item.target.get("ledger_id"),
                 "ledger": item.ledger,
+                "structured_history": item.structured_history,
+                "history_status": item.history_status,
+                "history_reason": item.history_reason,
                 "notes": item.target.get("notes"),
             }
             for item in recommendations
@@ -370,11 +533,14 @@ def render_markdown(
     unmatched: list[str],
     notes: list[str],
 ) -> str:
+    non_full_summary = build_non_full_validation_summary(recommendations, unmatched, changed_paths)
     lines: list[str] = []
     lines.append("# Validation Target Recommendation")
     lines.append("")
     lines.append(f"Registry version: `{registry.get('version')}`")
     lines.append(f"Selection policy: `{registry.get('defaults', {}).get('selection_policy', 'unknown')}`")
+    lines.append(f"Non-full validation status: `{non_full_summary['status']}`")
+    lines.append(f"Non-full validation reason: {non_full_summary['reason']}")
     lines.append("")
 
     lines.append("## Changed Paths")
@@ -397,6 +563,13 @@ def render_markdown(
             lines.append(f"- Category: `{item.target.get('category')}`")
             lines.append(f"- Risk: `{item.risk}`")
             lines.append(f"- Working directory: `{item.target.get('working_directory')}`")
+            if item.target.get("coverage_tags"):
+                tags = ", ".join(f"`{tag}`" for tag in item.target.get("coverage_tags", []))
+                lines.append(f"- Coverage tags: {tags}")
+            if item.target.get("requires_review_reason"):
+                lines.append(f"- Requires review: {item.target.get('requires_review_reason')}")
+            if item.target.get("risk_escalation"):
+                lines.append(f"- Risk escalation: {item.target.get('risk_escalation')}")
             if item.target.get("ledger_id"):
                 lines.append(f"- Ledger ID: `{item.target.get('ledger_id')}`")
                 if item.ledger:
@@ -410,6 +583,14 @@ def render_markdown(
                     lines.append("- Ledger last run: not found in parsed ledger")
             else:
                 lines.append("- Ledger ID: not yet recorded")
+            lines.append(f"- History status: `{item.history_status}` ({item.history_reason})")
+            if item.structured_history:
+                lines.append(
+                    "- Structured history: "
+                    f"result `{item.structured_history.get('result', 'unknown')}`, "
+                    f"commit `{item.structured_history.get('commit', 'unknown')}`, "
+                    f"ended `{item.structured_history.get('ended_at', 'unknown')}`"
+                )
             description = item.target.get("description")
             if description:
                 lines.append(f"- Description: {description}")
@@ -476,6 +657,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--repo-root", default=".", help="Repository root. Defaults to current directory.")
     parser.add_argument("--registry", default=DEFAULT_REGISTRY, help=f"Target registry path. Defaults to {DEFAULT_REGISTRY}.")
     parser.add_argument("--ledger", default=DEFAULT_LEDGER, help=f"Execution ledger path. Defaults to {DEFAULT_LEDGER}.")
+    parser.add_argument("--history", default=DEFAULT_HISTORY, help=f"Ignored JSONL run history path. Defaults to {DEFAULT_HISTORY}.")
+    parser.add_argument("--no-history", action="store_true", help="Do not read ignored structured run history.")
     parser.add_argument("--base", default=None, help="Base ref for git diff. Defaults to upstream when available.")
     parser.add_argument("--head", default="HEAD", help="Head ref for git diff. Defaults to HEAD.")
     parser.add_argument("--staged", action="store_true", help="Use staged diff instead of base...head.")
@@ -496,6 +679,7 @@ def main(argv: list[str]) -> int:
     repo_root = Path(args.repo_root).resolve()
     registry = load_registry(repo_root, args.registry)
     ledger_entries = parse_ledger(repo_root, args.ledger)
+    structured_history = {} if args.no_history else latest_records_by_target(load_history_entries(repo_root, args.history))
 
     if args.paths:
         changed_paths = [ChangedPath(path=normalize_path(path), status="M") for path in args.paths]
@@ -512,7 +696,7 @@ def main(argv: list[str]) -> int:
             print(f"ERROR unable to read git diff: {exc}", file=sys.stderr)
             return 2
 
-    recommendations, unmatched, notes = select_targets(registry, changed_paths, ledger_entries)
+    recommendations, unmatched, notes = select_targets(registry, changed_paths, ledger_entries, structured_history)
 
     if args.json:
         print(

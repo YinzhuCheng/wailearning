@@ -19,6 +19,7 @@
       "risk": "static",
       "description": "UTF-8, mojibake-safety, whitespace, and docs/tooling hygiene checks for encoding-sensitive or documentation-only changes.",
       "working_directory": ".",
+      "coverage_tags": ["encoding-tooling", "documentation", "static"],
       "commands": [
         {
           "label": "diff whitespace",
@@ -57,26 +58,40 @@
       "risk": "static",
       "description": "Static validation for the diff-based validation selector and its machine-readable target registry.",
       "working_directory": ".",
+      "coverage_tags": ["validation-selector", "static", "tooling"],
       "commands": [
         {
           "label": "compile selector",
-          "argv": [".venv/Scripts/python.exe", "-m", "py_compile", "ops/scripts/dev/select_validation_targets.py"]
+          "argv": [".venv/Scripts/python.exe", "-m", "py_compile", "ops/scripts/dev/select_validation_targets.py", "ops/scripts/dev/run_validation_target.py", "ops/scripts/dev/run_validation_profile.py", "ops/scripts/dev/validation_history.py", "tests/backend/manual/test_validation_selector.py"]
         },
         {
           "label": "selector smoke",
           "argv": [".venv/Scripts/python.exe", "ops/scripts/dev/select_validation_targets.py", "--paths", "ops/scripts/dev/select_validation_targets.py", "tests/TEST_SELECTION_TARGETS.json", "--json"]
+        },
+        {
+          "label": "runner smoke",
+          "argv": [".venv/Scripts/python.exe", "ops/scripts/dev/run_validation_target.py", "static.validation_selector", "--dry-run"]
         }
       ],
       "triggers": {
         "paths": [
           "ops/scripts/dev/select_validation_targets.py",
+          "ops/scripts/dev/run_validation_target.py",
+          "ops/scripts/dev/run_validation_profile.py",
+          "ops/scripts/dev/validation_history.py",
+          "tests/backend/manual/test_validation_selector.py",
           "tests/TEST_SELECTION_TARGETS.json",
           "docs/development/DEVELOPMENT_AND_TESTING.md",
+          "docs/development/VALIDATION_AUTOMATION_HANDOFF_2026-05-08.md",
           "docs/development/TEST_EXECUTION_LEDGER.md",
           "docs/development/TEST_SUITE_MAP.md"
         ],
         "globs": [
           "ops/scripts/dev/select_validation_targets.py",
+          "ops/scripts/dev/run_validation_target.py",
+          "ops/scripts/dev/run_validation_profile.py",
+          "ops/scripts/dev/validation_history.py",
+          "tests/backend/manual/test_validation_selector.py",
           "tests/TEST_SELECTION_TARGETS.json"
         ]
       },
@@ -89,6 +104,7 @@
       "risk": "static",
       "description": "Repository line-health metrics for structure, documentation, test-code, and primary-source trend checks.",
       "working_directory": ".",
+      "coverage_tags": ["repository-health", "documentation", "static"],
       "commands": [
         {
           "label": "line health",
@@ -116,6 +132,7 @@
       "risk": "targeted",
       "description": "Focused backend API regressions for learning notes, note discussion metadata, and attendance date parsing used by embedded attendance/calendar workflows.",
       "working_directory": ".",
+      "coverage_tags": ["learning-notes", "attendance", "backend-api"],
       "commands": [
         {
           "label": "pytest",
@@ -145,6 +162,7 @@
       "risk": "targeted",
       "description": "Admin SPA production build. Catches Vue/Vite import, syntax, bundling, and asset pipeline regressions before browser E2E is interpreted.",
       "working_directory": "apps/web/admin",
+      "coverage_tags": ["admin-frontend", "build", "vite"],
       "commands": [
         {
           "label": "build",
@@ -174,6 +192,8 @@
       "risk": "targeted",
       "description": "Targeted admin Playwright tier for learning-note, course-cover, teaching-calendar redirect, and attendance/calendar surfaces.",
       "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "learning-notes", "attendance", "course-cover"],
       "commands": [
         {
           "label": "playwright targeted",
@@ -205,6 +225,7 @@
       "risk": "targeted",
       "description": "Focused backend attachment extraction and classification tests for text, Office, zip, and RAR handling.",
       "working_directory": ".",
+      "coverage_tags": ["llm", "attachments", "backend-pytest"],
       "commands": [
         {
           "label": "pytest",
@@ -233,6 +254,7 @@
       "risk": "targeted",
       "description": "Focused course/roster regression target for student account to roster synchronization, required-course enrollment sync, homework submission access, and class/course invariants.",
       "working_directory": ".",
+      "coverage_tags": ["course-access", "roster", "homework", "backend-pytest"],
       "commands": [
         {
           "label": "pytest",
@@ -259,11 +281,502 @@
       "notes": "Course access and roster changes often have broad effects. Consider behavior/security tests and PostgreSQL full validation for larger changes."
     },
     {
+      "id": "backend.homework.llm_grading",
+      "category": "backend-pytest",
+      "risk": "targeted",
+      "description": "Focused homework LLM grading pytest target for grading lifecycle, effective score behavior, retries, queue state, and submission serialization.",
+      "working_directory": ".",
+      "coverage_tags": ["homework", "llm", "backend-pytest"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/backend/homework/test_homework_llm_grading.py", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/backend/homework/test_homework_llm_grading.py",
+          "apps/backend/wailearning_backend/api/routers/homework.py",
+          "apps/backend/wailearning_backend/llm_grading.py",
+          "apps/backend/wailearning_backend/llm_worker.py",
+          "apps/backend/wailearning_backend/api/schemas.py",
+          "apps/backend/wailearning_backend/db/models.py"
+        ],
+        "globs": [
+          "tests/backend/homework/**",
+          "apps/backend/wailearning_backend/domains/homework/**"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Pair with behavior and Playwright homework targets when browser-visible submission, review, or LLM routing behavior changes."
+    },
+    {
+      "id": "behavior.notifications.sync_api_edge",
+      "category": "behavior-pytest",
+      "risk": "targeted",
+      "description": "Behavior pytest target for notification list/sync-status alignment, concurrent read-state updates, and subject-scoped authorization edges.",
+      "working_directory": ".",
+      "coverage_tags": ["notifications", "course-access", "behavior-pytest"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/behavior/test_notification_sync_api_edge_behavior.py", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/behavior/test_notification_sync_api_edge_behavior.py",
+          "apps/backend/wailearning_backend/api/routers/notifications.py",
+          "apps/backend/wailearning_backend/domains/courses/access.py",
+          "apps/backend/wailearning_backend/api/schemas.py",
+          "apps/web/admin/src/views/Layout.vue",
+          "apps/web/admin/src/views/Notifications.vue"
+        ],
+        "globs": [
+          "apps/backend/wailearning_backend/domains/notifications/**"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Use before or alongside notification header Playwright tiers when the invariant is mostly API/read-state behavior."
+    },
+    {
+      "id": "behavior.homework_lifecycle_llm",
+      "category": "behavior-pytest",
+      "risk": "targeted",
+      "description": "Cross-feature behavior pytest target for homework lifecycle, LLM grading, score visibility, quota, and multi-actor transitions.",
+      "working_directory": ".",
+      "coverage_tags": ["homework", "llm", "behavior-pytest"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/behavior/test_homework_lifecycle_llm_behavior.py", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/behavior/test_homework_lifecycle_llm_behavior.py",
+          "apps/backend/wailearning_backend/api/routers/homework.py",
+          "apps/backend/wailearning_backend/llm_grading.py",
+          "apps/backend/wailearning_backend/domains/llm/quota.py",
+          "apps/backend/wailearning_backend/api/routers/llm_settings.py"
+        ],
+        "globs": [
+          "apps/backend/wailearning_backend/domains/homework/**",
+          "apps/backend/wailearning_backend/domains/llm/**"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Recommended for cross-module homework/LLM changes that exceed a single focused backend file."
+    },
+    {
+      "id": "behavior.course_roster_homework_edge",
+      "category": "behavior-pytest",
+      "risk": "targeted",
+      "description": "Behavior pytest target for course, roster, homework, score appeal, and enrollment edge interactions.",
+      "working_directory": ".",
+      "coverage_tags": ["course-access", "roster", "homework", "behavior-pytest"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/behavior/test_course_roster_homework_edge_behavior.py", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/behavior/test_course_roster_homework_edge_behavior.py",
+          "apps/backend/wailearning_backend/domains/courses/access.py",
+          "apps/backend/wailearning_backend/domains/roster/reconciliation.py",
+          "apps/backend/wailearning_backend/api/routers/homework.py",
+          "apps/backend/wailearning_backend/api/routers/subjects.py",
+          "apps/backend/wailearning_backend/api/routers/roster.py"
+        ],
+        "globs": [
+          "apps/backend/wailearning_backend/domains/courses/**",
+          "apps/backend/wailearning_backend/domains/roster/**"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Escalate to PostgreSQL full consideration when schema or broad course access helpers change."
+    },
+    {
+      "id": "backend.e2e_dev.api_hazard_tier",
+      "category": "backend-pytest",
+      "risk": "targeted",
+      "description": "Fast TestClient hazard tier for /api/e2e/dev seed gates, mock LLM helpers, grading pump, and cross-role E2E-dev API edges.",
+      "working_directory": ".",
+      "coverage_tags": ["e2e-dev", "seed-reset", "llm", "backend-pytest"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py",
+          "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
+          "apps/backend/wailearning_backend/main.py",
+          "apps/backend/wailearning_backend/core/config.py",
+          "tests/e2e/web-admin/e2e-seed-headers.cjs",
+          "tests/e2e/web-admin/fixtures.cjs",
+          "tests/e2e/web-admin/global-setup.cjs"
+        ],
+        "globs": [
+          "tests/backend/e2e_dev/**"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "This pytest target is usually cheaper and less fragile than Playwright when validating E2E dev API gates."
+    },
+    {
+      "id": "security.api_regression",
+      "category": "security-pytest",
+      "risk": "broad",
+      "description": "Security regression pytest suite for unauthenticated access, role boundaries, admin-only routes, IDOR edges, invalid tokens, and abuse cases.",
+      "working_directory": ".",
+      "requires_review_reason": "Security runs are broad API guardrails; failures should be triaged before accepting targeted-only evidence.",
+      "risk_escalation": "Strongly recommended for auth, permission helper, course access, homework ACL, LLM admin route, or parent-code changes.",
+      "coverage_tags": ["security", "auth", "course-access", "homework", "llm"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/security", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/security/test_security_regression.py",
+          "apps/backend/wailearning_backend/core/auth.py",
+          "apps/backend/wailearning_backend/api/deps.py",
+          "apps/backend/wailearning_backend/domains/courses/access.py",
+          "apps/backend/wailearning_backend/api/routers/auth.py",
+          "apps/backend/wailearning_backend/api/routers/users.py",
+          "apps/backend/wailearning_backend/api/routers/homework.py",
+          "apps/backend/wailearning_backend/api/routers/llm_settings.py",
+          "apps/backend/wailearning_backend/api/routers/notifications.py"
+        ],
+        "globs": [
+          "tests/security/**"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Does not replace full PostgreSQL validation for schema-sensitive authorization behavior."
+    },
+    {
+      "id": "admin.e2e.discussion_cover_llm_tier3",
+      "category": "admin-playwright",
+      "risk": "targeted",
+      "description": "Targeted admin Playwright suite for discussion LLM assistant, long reply preview expansion, and course cover API/UI flows.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "discussions", "llm", "course-cover"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-discussion-cover-llm-tier3.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js",
+          "apps/web/admin/src/views/Discussion.vue",
+          "apps/web/admin/src/views/MyCourses.vue",
+          "apps/backend/wailearning_backend/api/routers/discussions.py",
+          "apps/backend/wailearning_backend/llm_discussion.py",
+          "apps/backend/wailearning_backend/api/routers/subjects.py"
+        ],
+        "globs": [
+          "apps/web/admin/src/**/Discussion*.vue"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Escalate when shared E2E fixtures, route guards, or LLM seed helpers change."
+    },
+    {
+      "id": "admin.e2e.homework_comment_cover_tier4",
+      "category": "admin-playwright",
+      "risk": "targeted",
+      "description": "Targeted admin Playwright suite for homework submission previews, long comments, LLM regrade/recovery, multi-role API guards, and course cover flows.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "homework", "llm", "course-cover"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-homework-comment-cover-tier4.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-homework-comment-cover-tier4.spec.js",
+          "apps/web/admin/src/views/Homework.vue",
+          "apps/web/admin/src/views/HomeworkSubmissions.vue",
+          "apps/web/admin/src/views/HomeworkSubmissionReview.vue",
+          "apps/web/admin/src/views/HomeworkSubmission.vue",
+          "apps/backend/wailearning_backend/api/routers/homework.py",
+          "apps/backend/wailearning_backend/llm_grading.py"
+        ],
+        "globs": [
+          "apps/web/admin/src/**/Homework*.vue"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Pair with backend homework/LLM pytest for API-heavy changes."
+    },
+    {
+      "id": "admin.e2e.core_flows_smoke",
+      "category": "admin-playwright",
+      "risk": "targeted",
+      "description": "Admin Playwright smoke suite for login, seeded homework grid, teacher materials/notifications routes, and admin user grid.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "smoke", "auth", "routing"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-core-flows-smoke.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-core-flows-smoke.spec.js",
+          "apps/web/admin/src/views/Login.vue",
+          "apps/web/admin/src/views/Layout.vue",
+          "apps/web/admin/src/router/index.js",
+          "apps/backend/wailearning_backend/api/routers/auth.py",
+          "apps/backend/wailearning_backend/api/routers/e2e_dev.py"
+        ],
+        "globs": [
+          "apps/web/admin/src/api/**"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Useful as a low-cost browser smoke when broad UI routing or auth surface changes, but not a replacement for route-specific suites."
+    },
+    {
+      "id": "admin.e2e.course_ui_markdown_reader",
+      "category": "admin-playwright",
+      "risk": "targeted",
+      "description": "Targeted admin Playwright suite for student course UI, markdown reader/demo, sidebar controls, materials layout, and teaching-calendar redirect behavior.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "materials", "markdown", "course-access", "attendance"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-course-ui-markdown-reader.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js",
+          "apps/web/admin/src/views/MyCourses.vue",
+          "apps/web/admin/src/views/StudentCourseHome.vue",
+          "apps/web/admin/src/views/Materials.vue",
+          "apps/web/admin/src/views/MaterialRead.vue",
+          "apps/web/admin/src/components/MarkdownEditorPanel.vue",
+          "apps/web/admin/src/router/index.js"
+        ],
+        "globs": [
+          "apps/web/admin/src/**/Material*.vue",
+          "apps/web/admin/src/**/Markdown*.vue"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "Use for browser-visible course reader, materials, markdown, or course-entry UI changes."
+    },
+    {
+      "id": "admin.e2e.docs_gap_tier15",
+      "category": "admin-playwright",
+      "risk": "targeted",
+      "description": "API-heavy admin Playwright tier for discussions validation, cross-class homework guards, LLM mock grading drain, and sync-status shape.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "discussions", "homework", "llm", "notifications"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-docs-gap-tier15.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js",
+          "apps/backend/wailearning_backend/api/routers/discussions.py",
+          "apps/backend/wailearning_backend/api/routers/homework.py",
+          "apps/backend/wailearning_backend/api/routers/llm_settings.py",
+          "apps/backend/wailearning_backend/api/routers/notifications.py",
+          "apps/backend/wailearning_backend/api/routers/e2e_dev.py"
+        ],
+        "globs": []
+      },
+      "ledger_id": null,
+      "notes": "Many assertions are API-heavy; consider moving future pure HTTP invariants to pytest when practical."
+    },
+    {
+      "id": "admin.e2e.future_advanced_coverage_part1",
+      "category": "admin-playwright",
+      "risk": "broad",
+      "description": "Future advanced coverage Playwright scenarios 1-15 for stale tabs, concurrency, LLM failover, notifications, materials, attendance, and multi-actor races.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "High-difficulty Playwright scenarios are costly and environment-sensitive; run when touched invariants justify browser race coverage.",
+      "coverage_tags": ["admin-playwright", "concurrency", "homework", "llm", "notifications", "materials"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "future-advanced-coverage.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/future-advanced-coverage.spec.js",
+          "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs"
+        ],
+        "globs": []
+      },
+      "ledger_id": null,
+      "notes": "Do not use as a cheap default. It is recommended mostly when the spec/helper itself changes or broad race-prone surfaces are under review."
+    },
+    {
+      "id": "admin.e2e.future_advanced_coverage_part2",
+      "category": "admin-playwright",
+      "risk": "broad",
+      "description": "Future advanced coverage Playwright scenarios 16-30 for material races, stale homework, LLM policy changes, parent/student visibility, notifications, and score overrides.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "High-difficulty Playwright scenarios are costly and environment-sensitive; run when touched invariants justify browser race coverage.",
+      "coverage_tags": ["admin-playwright", "concurrency", "homework", "llm", "notifications", "materials"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "future-advanced-coverage-2.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/future-advanced-coverage-2.spec.js",
+          "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs"
+        ],
+        "globs": []
+      },
+      "ledger_id": null,
+      "notes": "Do not use as a cheap default. It is recommended mostly when the spec/helper itself changes or broad race-prone surfaces are under review."
+    },
+    {
+      "id": "admin.e2e.agent_followup_batch",
+      "category": "admin-playwright",
+      "risk": "targeted",
+      "description": "Additive Playwright API/navigation checks for pagination boundaries, health, settings public, and course entry.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "pagination", "settings", "course-access"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-agent-followup-batch.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-agent-followup-batch.spec.js",
+          "apps/backend/wailearning_backend/api/routers/settings.py",
+          "apps/backend/wailearning_backend/api/routers/subjects.py",
+          "apps/web/admin/src/views/MyCourses.vue"
+        ],
+        "globs": []
+      },
+      "ledger_id": null,
+      "notes": "Use for small API/navigation edges; prefer pytest for pure API contract expansion."
+    },
+    {
+      "id": "admin.e2e.agent_hazard_tier15",
+      "category": "admin-playwright",
+      "risk": "targeted",
+      "description": "API-heavy Playwright hazard tier for pagination 422 boundaries, LLM admin/student edges, parallel mark-all-read, E2E seed gates, forgot password, and disabled registration.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "e2e-dev", "llm", "notifications", "auth"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-agent-hazard-tier-15.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-agent-hazard-tier-15.spec.js",
+          "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
+          "apps/backend/wailearning_backend/api/routers/llm_settings.py",
+          "apps/backend/wailearning_backend/api/routers/notifications.py",
+          "apps/backend/wailearning_backend/api/routers/auth.py"
+        ],
+        "globs": []
+      },
+      "ledger_id": null,
+      "notes": "The backend TestClient hazard target is usually a cheaper first check for /api/e2e/dev route changes."
+    },
+    {
+      "id": "admin.e2e.notification_header_sync_tier",
+      "category": "admin-playwright",
+      "risk": "targeted",
+      "description": "Targeted admin Playwright suite for header notification badge, course switcher scoped sync-status, and focus-triggered convergence.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+      "coverage_tags": ["admin-playwright", "notifications", "course-switcher"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-notification-header-sync-tier.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js",
+          "docs/development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
+          "apps/web/admin/src/views/Layout.vue",
+          "apps/web/admin/src/views/Notifications.vue",
+          "apps/backend/wailearning_backend/api/routers/notifications.py"
+        ],
+        "globs": []
+      },
+      "ledger_id": null,
+      "notes": "Pair with behavior.notifications.sync_api_edge for API-state changes."
+    },
+    {
+      "id": "admin.e2e.notification_sync_deep_tier",
+      "category": "admin-playwright",
+      "risk": "broad",
+      "description": "Deeper notification sync Playwright tier for admin global totals, course switch discipline, localStorage poison healing, concurrent publishes, isolation, mobile viewport, cold polling, and delete races.",
+      "working_directory": "apps/web/admin",
+      "requires_review_reason": "High-cost browser tier with concurrency and viewport coverage; run when notification UI/state convergence changes are material.",
+      "coverage_tags": ["admin-playwright", "notifications", "course-switcher", "mobile", "concurrency"],
+      "commands": [
+        {
+          "label": "playwright targeted",
+          "argv": ["npx.cmd", "playwright", "test", "e2e-notification-sync-deep-tier.spec.js", "--project=chromium"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js",
+          "docs/development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
+          "apps/web/admin/src/views/Layout.vue",
+          "apps/web/admin/src/views/Notifications.vue",
+          "apps/backend/wailearning_backend/api/routers/notifications.py",
+          "apps/backend/wailearning_backend/domains/courses/access.py"
+        ],
+        "globs": []
+      },
+      "ledger_id": null,
+      "notes": "Use after narrower notification API/header targets when changes affect convergence or multi-role isolation."
+    },
+    {
       "id": "postgres.pytest.package",
       "category": "postgres-pytest",
       "risk": "broad",
       "description": "PostgreSQL-only pytest package for dialect-specific schema, constraint, and transaction behavior.",
       "working_directory": ".",
+      "requires_review_reason": "Requires a live throwaway PostgreSQL database and TEST_DATABASE_URL; the selector does not provision it.",
+      "coverage_tags": ["postgres-schema", "database", "backend-pytest"],
       "commands": [
         {
           "label": "postgres package pytest",
@@ -294,6 +807,9 @@
       "risk": "full",
       "description": "Full pytest tree under PostgreSQL, intended for release-quality backend validation and zero PostgreSQL-only skips.",
       "working_directory": ".",
+      "requires_review_reason": "Expensive environment-dependent full backend profile; requires PostgreSQL and supported attachment extractors before it can prove zero-skip validation.",
+      "risk_escalation": "Required or strongly recommended for schema, auth/security, DB reset, bootstrap, or broad backend changes.",
+      "coverage_tags": ["postgres-schema", "full-backend", "database", "security"],
       "commands": [
         {
           "label": "postgres full pytest",
@@ -327,6 +843,9 @@
       "risk": "full",
       "description": "Full admin Playwright E2E suite under apps/web/admin. Recommended when shared E2E harness, Playwright config, global setup, seed/reset, auth, or broad frontend routing changes make targeted evidence too weak.",
       "working_directory": "apps/web/admin",
+      "requires_review_reason": "High-cost browser profile with local browser, port, seed/reset, backend, and frontend dependencies; run serially unless isolated ports are configured.",
+      "risk_escalation": "Required or strongly recommended for Playwright harness, global setup, admin router, auth layout, seed/reset, or broad frontend navigation changes.",
+      "coverage_tags": ["admin-playwright", "playwright-harness", "full-browser"],
       "commands": [
         {
           "label": "full playwright",
@@ -354,6 +873,24 @@
     }
   ],
   "fallback_rules": [
+    {
+      "id": "backend-high-blast-radius",
+      "description": "Shared backend entrypoint, auth, config, bootstrap, schema, and E2E-dev gate changes require broad backend context beyond one targeted suite.",
+      "if_any_path_matches": [
+        "apps/backend/wailearning_backend/main.py",
+        "apps/backend/wailearning_backend/bootstrap.py",
+        "apps/backend/wailearning_backend/core/config.py",
+        "apps/backend/wailearning_backend/core/auth.py",
+        "apps/backend/wailearning_backend/api/deps.py",
+        "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
+        "apps/backend/wailearning_backend/db/models.py",
+        "tests/conftest.py",
+        "tests/db_reset.py",
+        "pytest.ini",
+        "requirements.txt"
+      ],
+      "recommend": ["full.pytest.postgres"]
+    },
     {
       "id": "docs-only-static",
       "description": "When all changed files are documentation or repository policy files, static checks are normally enough unless the docs claim runtime behavior changed.",
