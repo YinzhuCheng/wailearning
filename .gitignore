@@ -59,6 +59,7 @@ apps/web/parent/.vite/
 
 # E2E
 tests/e2e/web-admin/.cache/
+.agent-run/
 .e2e-run/
 playwright-report/
 

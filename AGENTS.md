@@ -14,6 +14,7 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 4. **Never weaken `/api/e2e/dev/*` gates** without reading [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md) E2E sections — production still mounts the router but handlers return **404** unless `expose_e2e_dev_api()` is true (`main.py`).
 5. **Frontend hiding ≠ authorization.** Every sensitive mutation must be enforced in FastAPI routers / domain helpers (`domains/courses/access.py`, homework routers, etc.).
 6. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
+7. **Local agent workspace:** `.agent-run/` is the ignored, local-only workspace for handoffs, private absolute paths, temporary orchestrators, logs, screenshots, and validation planning notes. Read it when continuing work on this machine, especially `.agent-run/local-private-paths.md` and `.agent-run/validation-automation-upgrade-outline.md` if present. Never commit `.agent-run/` contents. Older local notes may still say `.e2e-run/`; in this worktree that role has been superseded by `.agent-run/` while `.e2e-run/` remains ignored for compatibility.
 
 ---
 

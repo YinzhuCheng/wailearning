@@ -86,7 +86,9 @@ Interpretation rules:
   bytes through `safe_show_text.py --escape`, a UTF-8 editor, or `git diff`.
 - Do not put machine-specific profile paths or console screenshots into
   committed documentation. Use placeholders such as `<repo>` in tracked docs and
-  `.e2e-run/` for private local notes.
+  `.agent-run/` for private local notes. `.e2e-run/` is legacy local
+  workspace naming and remains ignored only for compatibility with older
+  handoffs or tools.
 
 ### UTF-8-safe file display
 
@@ -114,8 +116,8 @@ Use `safe_write_text.py` only when a full-file write is intentional and the
 input source is trusted:
 
 ```powershell
-python ops\scripts\dev\safe_write_text.py .e2e-run\handoff.md --stdin --mkdirs
-python ops\scripts\dev\safe_write_text.py docs\example.md --from-file .e2e-run\draft.md --replace
+python ops\scripts\dev\safe_write_text.py .agent-run\handoff.md --stdin --mkdirs
+python ops\scripts\dev\safe_write_text.py docs\example.md --from-file .agent-run\draft.md --replace
 ```
 
 Default behavior:
@@ -150,7 +152,7 @@ python ops\scripts\dev\check_text_encoding.py docs\development\ENCODING_AND_MOJI
 Default behavior:
 
 - scans files returned by `git ls-files`;
-- ignores local artifacts and private `.e2e-run/` notes by construction;
+- ignores local artifacts and private `.agent-run/` notes by construction;
 - fails on UTF-8 decode errors;
 - reports suspicious mojibake markers without failing.
 
@@ -267,9 +269,9 @@ python ops\scripts\dev\safe_show_text.py <path> --start-line <n> --end-line <m>
 
 ### Writing local handoff notes that contain private paths
 
-1. Keep the file under `.e2e-run/`.
+1. Keep the file under `.agent-run/`.
 2. Use `safe_write_text.py` when generating the file from a known-good source.
-3. Use real absolute paths only in `.e2e-run/` notes.
+3. Use real absolute paths only in `.agent-run/` notes.
 4. Use `<repo>`, `<user-home>`, `<artifact-dir>`, `<local-port>`, and similar
    placeholders in committed docs.
 
