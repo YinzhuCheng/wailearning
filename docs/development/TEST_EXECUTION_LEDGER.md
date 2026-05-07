@@ -134,15 +134,15 @@ Avoid vague triggers such as "frontend changed" unless the target is genuinely b
 
 **Last branch:** `cursor/discussion-avatar-chat-ui-921d`
 
-**Last commit:** `6a95aad`
+**Last commit:** `this commit`
 
 **Last result:** `passed`
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `1`
+**Pass count:** `2`
 
-**Run count:** `1`
+**Run count:** `2`
 
 **Runs:**
 
@@ -196,6 +196,7 @@ npm.cmd run build
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `6a95aad` | `npm.cmd run build` | `passed` | Vite production build completed successfully. | Output included the known Vite CJS Node API deprecation warning and chunk-size warnings. Treat the warnings as follow-up optimization noise unless they change into build failures. |
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2378 modules transformed`, built in about 20 seconds. | Output again included the known Vite CJS Node API deprecation warning and chunk-size warnings for large bundles. No Vue, JS, CSS, or asset pipeline error was reported. |
 
 ### Test ID: `admin.e2e.learning_notes_attendance_cover_tier20`
 
@@ -378,21 +379,122 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 
 **Last branch:** `cursor/discussion-avatar-chat-ui-921d`
 
-**Last commit:** `e7904f4`
+**Last commit:** `4e765a9`
 
-**Last result:** `interrupted`
+**Last result:** `passed`
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `0`
+**Pass count:** `1`
 
-**Run count:** `1`
+**Run count:** `3`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `e7904f4` | Single PowerShell orchestrator: start local PostgreSQL binary, create role/db, set `TEST_DATABASE_URL`, run `.venv\Scripts\python.exe -m pytest tests\postgres -q` | `interrupted` | User intentionally interrupted the orchestrated run before a pytest result was observed. | Earlier setup confirmed a local PostgreSQL binary could initialize a throwaway data directory and direct `postgres.exe` could answer `SELECT version()` inside the same command lifecycle. Cross-command background process persistence was unreliable on this Windows sandbox, so the next run should use one orchestrator command/script. Local paths are recorded only in `.e2e-run/`. |
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | Local-only PowerShell orchestrator under `.e2e-run/`: start local PostgreSQL binary using a reused data directory, create role/db, set `TEST_DATABASE_URL`, run `.venv\Scripts\python.exe -m pytest tests\postgres -q` | `blocked` | PostgreSQL exited before readiness while recovering the reused data directory. | Local stderr showed crash recovery followed by `could not signal for checkpoint: Operation not permitted`. This is a Windows local runtime/data-directory recovery issue, not a pytest product result. Real local paths and logs are recorded only under `.e2e-run/`. |
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | Local-only PowerShell orchestrator under `.e2e-run/`: create a fresh throwaway PostgreSQL data directory, start local PostgreSQL binary, create role/db, set `TEST_DATABASE_URL`, run `.venv\Scripts\python.exe -m pytest tests\postgres -q` | `passed` | `42 passed, 59 warnings in 94.79s` | The fresh data-directory path avoided the previous crash-recovery checkpoint failure. `initdb` still printed restricted-token and locale/text-search warnings after pytest output, but PostgreSQL was usable and the pytest package completed green. |
+
+### Test ID: `backend.courses.student_course_roster_behavior`
+
+**Category:** `backend-pytest`
+
+**Scope:** Focused backend course/roster regression file for student account to roster synchronization, required-course enrollment sync, homework submission access, teacher enrollment counts, duplicate student numbers, course removal blocks, sync-enrollments repair, and related class/course invariants.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `tests/backend/courses/test_student_course_roster_behavior.py`
+- `apps/backend/wailearning_backend/domains/courses/access.py`
+- `apps/backend/wailearning_backend/domains/roster/reconciliation.py`
+- `apps/backend/wailearning_backend/api/routers/auth.py`
+- `apps/backend/wailearning_backend/api/routers/homework.py`
+- `apps/backend/wailearning_backend/api/routers/subjects.py`
+
+**Retest triggers:**
+
+- Changes to `prepare_student_course_context`, `sync_student_course_enrollments`, `sync_course_enrollments`, or `sync_student_roster_from_user_accounts`.
+- Changes to student login behavior, public registration, admin-created student users, or student account to roster synchronization.
+- Changes to required-course class linking, course enrollment blocks, roster enroll/sync endpoints, or homework submission authorization.
+- Any full PostgreSQL pytest run that reports failures in course/roster tests.
+
+**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-07`
+
+**Pass count:** `1`
+
+**Run count:** `2`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q` | `failed` | `3 failed, 11 passed, 57 warnings in 42.83s` | The failures were stale test expectations: three tests still expected student accounts with class ids but missing or mismatched roster rows to remain unable to see/submit required-course work. Current product behavior intentionally repairs a same-class roster row from the student account during login and then syncs required-course enrollment. |
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q` | `passed` | `14 passed, 58 warnings in 42.98s` | Tests now assert the current repair contract: same-class student accounts receive or reuse a `Student` roster row and required-course enrollment during login/context preparation. |
+
+### Test ID: `full.pytest.postgres`
+
+**Category:** `full-suite`
+
+**Scope:** Full pytest tree under `tests/` with `TEST_DATABASE_URL` pointing at a throwaway PostgreSQL database. This is the production-aligned backend regression profile for eliminating PostgreSQL-only skips and exercising schema/dialect behavior alongside the default backend and behavior suites.
+
+**Canonical command:**
+
+```powershell
+$env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:<local-port>/wailearning_pytest_all'
+.venv\Scripts\python.exe -m pytest tests -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `tests/`
+- `tests/conftest.py`
+- `tests/db_reset.py`
+- `tests/postgres/`
+- `docs/development/DEVELOPMENT_AND_TESTING.md`
+- `docs/development/TEST_EXECUTION_PITFALLS.md`
+- `docs/development/TEST_EXECUTION_LEDGER.md`
+
+**Retest triggers:**
+
+- Claims of full-suite, release-quality, or zero-skip backend validation.
+- Changes to database models, schema repair, test reset behavior, PostgreSQL provisioning, LLM quota schema, roster/course sync, homework access, or attachment extraction.
+- Any broad backend, behavior, security, or PostgreSQL test change.
+
+**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-07`
+
+**Pass count:** `1`
+
+**Run count:** `2`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests -q` | `timed out` | Command timed out after 20 minutes with progress at about 94% and early `F` markers observed, but no final pytest summary. | Follow-up focused rerun identified the actionable failures in `tests/backend/courses/test_student_course_roster_behavior.py`. Local PostgreSQL logs also showed several expected negative-test constraint errors; those logs alone were not treated as pytest failures. |
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests -q` | `passed` | `487 passed, 1107 warnings in 1285.11s (0:21:25)` | Fresh throwaway PostgreSQL data directory was created under the ignored artifact area. The run completed with zero skipped tests. Warnings were dependency/framework deprecations plus one SQLAlchemy delete-row warning in a concurrent discussion delete regression. |
 
 ## Known First-Version Limitations
 

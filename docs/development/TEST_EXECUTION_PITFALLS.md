@@ -2502,6 +2502,53 @@ Known Windows friction:
 - PowerShell `Start-Process` cannot redirect stdout and stderr to the same file; use separate log files.
 - If an interrupted orchestrator kills PostgreSQL during startup or recovery, the data directory can retain a stale `postmaster.pid` or enter crash recovery. For full-suite validation, a fresh throwaway data directory is often cheaper than trying to reason about the partially started one.
 
+### Windows PostgreSQL reused data directory can fail crash recovery before pytest starts
+
+During a follow-up cleanup validation on `cursor/discussion-avatar-chat-ui-921d`, a local-only PowerShell orchestrator first reused a data directory from a previously interrupted PostgreSQL attempt. The server began crash recovery, repeatedly reported that the database system was still starting up to `pg_isready`, and then exited before readiness with:
+
+```text
+could not signal for checkpoint: Operation not permitted
+```
+
+This happened before pytest could connect to the database. Treat this as a local PostgreSQL runtime/data-directory recovery failure, not as evidence that `tests/postgres` failed.
+
+The successful local pattern was:
+
+1. keep the orchestrator under `<repo>/.e2e-run/`;
+2. create a fresh throwaway data directory for each validation attempt, for example `<artifact-dir>/postgres-package-tests/data-<timestamp>`;
+3. run `initdb` into that fresh directory;
+4. tolerate the known Windows restricted-token and locale/text-search warnings when `PG_VERSION` and the cluster files were created successfully;
+5. start `postgres.exe` directly with `-D <fresh-data-dir> -h 127.0.0.1 -p <local-port>`;
+6. create the throwaway role/database;
+7. set `TEST_DATABASE_URL`;
+8. run pytest;
+9. stop the process in the orchestrator `finally` block.
+
+Do not copy the real data directory, log path, local port, or user profile into committed docs. Put those in `.e2e-run/local-private-paths.md`.
+
+### PostgreSQL full pytest can expose stale roster-sync test expectations
+
+A PostgreSQL-backed full pytest run on `cursor/discussion-avatar-chat-ui-921d` initially showed early failure markers and later timed out before a final summary. A focused rerun identified three failures in:
+
+```text
+tests/backend/courses/test_student_course_roster_behavior.py
+```
+
+The failing expectations were older than the current product behavior. They assumed that a student-role `User` with a `class_id` but no matching same-class `Student` roster row would continue to see no required course and would not be able to submit course homework. Current code intentionally calls `prepare_student_course_context(...)` during student login/course access. That helper can:
+
+- create or repair the same-class roster row through `sync_student_roster_from_user_accounts(...)`;
+- then call `sync_student_course_enrollments(...)`;
+- then expose required courses for that class and allow homework submission when the repaired roster/enrollment is authoritative.
+
+For tests around this area:
+
+- assert the final repaired product state when the scenario is a normal same-class student account;
+- use explicit cross-class data, enrollment blocks, or intentionally conflicting roster rows when the intended invariant is denial;
+- do not assert "no roster row means no course forever" unless the product rule changes;
+- keep route-denial tests separate from login-time repair tests so failures diagnose the right invariant.
+
+This is a test semantics pitfall, not a reason to remove the login-time repair behavior.
+
 ### Ledger interpretation
 
 Record environment failures and interruptions in `TEST_EXECUTION_LEDGER.md`:
