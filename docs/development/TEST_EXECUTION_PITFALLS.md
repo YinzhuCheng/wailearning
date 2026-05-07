@@ -2400,6 +2400,33 @@ Additional example from the richer demo-content pass:
 
 `npm.cmd run build` rendered some chunk output and Chinese-adjacent console text through the Windows terminal encoding, but the Vue SFC source still compiled as UTF-8 and `rg` showed correct file content. Do not copy build output strings back into source. Use build success/failure as the syntax signal and inspect file diffs for content changes.
 
+### Pitfall: targeted Playwright validation can fail before product code runs when subprocess spawning is blocked
+
+During the standalone teaching-calendar wrapper cleanup, the targeted command below failed immediately in the default sandbox:
+
+```powershell
+npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium
+```
+
+Observed symptom:
+
+```text
+Error: spawn EPERM
+```
+
+Interpretation:
+
+- this failure happened before the browser test could start the managed backend/frontend subprocesses;
+- it is an execution-environment permission failure, not evidence that `/teaching-calendar` redirect behavior or the attendance page is broken;
+- the correct next step is to retry the same command outside the restricted sandbox or with an approved execution context, then evaluate any real Playwright assertion failures separately.
+
+Agent workflow rule:
+
+1. First run fast static checks such as `git diff --check` and `npm.cmd run build` from the admin frontend package to catch syntax/import regressions.
+2. If the targeted Playwright command fails with `spawn EPERM`, do not rewrite selectors or route code based on that result.
+3. Record the blocked command and the exact high-level failure (`spawn EPERM`) in this pitfalls document.
+4. Keep local absolute paths, user profile names, browser cache paths, or other machine-identifying details in an ignored local note under `.e2e-run/`, not in committed documentation.
+
 ### Pitfall: learning-note public visibility is not the same as "must bind a course"
 
 The first implementation of learning notes treated `visibility="course"` as literally course-only and rejected public notes where `subject_id` was null. That no longer matches the product rule: a public note with a course is same-course-visible, while a public note without a course is visible to every authenticated user.

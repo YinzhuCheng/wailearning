@@ -368,7 +368,7 @@ const loadClassTeacherNotifications = async () => {
   unreadCount.value = filtered.filter(item => !item.is_read).length
 }
 
-const loadLegacyNotifications = async () => {
+const loadCourseNotifications = async () => {
   if (!selectedCourse.value) {
     notifications.value = []
     unreadCount.value = 0
@@ -398,7 +398,7 @@ const loadNotifications = async () => {
     } else if (isClassTeacherView.value) {
       await loadClassTeacherNotifications()
     } else {
-      await loadLegacyNotifications()
+      await loadCourseNotifications()
     }
   } finally {
     loading.value = false

@@ -490,7 +490,6 @@ const routeNameMap = {
   '/scores': '成绩管理',
   '/student-scores': '我的成绩',
   '/attendance': '考勤管理',
-  '/teaching-calendar': '教学日历',
   '/rankings': '班级排名',
   '/analysis': '数据分析',
   '/users': '用户管理',
@@ -537,7 +536,7 @@ const sidebarMenuActivePath = computed(() => {
 const homeworkMenuOpenIndices = computed(() => {
   const p = route.path
   if (userStore.isStudent) {
-    // Student rail is flat (no `student-learning` submenu); nothing to pre-open.
+    // Student rail is flat, so there is no submenu to pre-open.
     return []
   }
   if (userStore.isAdmin) {
@@ -561,7 +560,7 @@ const homeworkMenuOpenIndices = computed(() => {
     }
     return []
   }
-  // Teacher accounts use a flat sidebar (no `teacher-daily` submenu); nothing to pre-open here.
+  // Teacher accounts use a flat sidebar, so there is no submenu to pre-open here.
   return []
 })
 
@@ -580,7 +579,7 @@ const classTeacherMenu = [
   }
 ]
 
-/** Flat menu: all entries used to live under a single 「日常教学」 submenu — removed for fewer clicks. */
+/** Flat menu: teacher routes are direct top-level entries for lower click depth. */
 const teacherMenu = [
   { path: '/students', label: '学生管理', icon: User },
   { path: '/scores', label: '成绩管理', icon: Collection },
@@ -592,7 +591,7 @@ const teacherMenu = [
   { path: '/learning-notes', label: '学习笔记', icon: Document }
 ]
 
-/** Flat menu: all entries used to live under one 「课程学习」 submenu — removed for fewer clicks (parity with teacher rail). */
+/** Flat menu: student course routes are direct top-level entries for lower click depth. */
 const studentMenu = [
   { path: '/courses', label: '选课与进度', icon: School },
   { path: '/course-home', label: '学习主页', icon: DataAnalysis },

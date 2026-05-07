@@ -193,6 +193,59 @@ Cross-links were updated:
 
 This deletion does **not** remove or rename any Playwright spec files. The **`future-advanced-coverage*.spec.js`** pair remains normal runnable coverage under `npm run test:e2e`.
 
+### 7. Standalone teaching-calendar wrapper removed (`2026-05`)
+
+This pass removed a frontend dual-track implementation that was no longer reachable from the live route graph:
+
+- **Deleted:** `apps/web/admin/src/views/TeachingCalendarPage.vue`
+- **Kept:** `apps/web/admin/src/components/TeachingCalendar.vue`
+- **Kept:** the historical `/teaching-calendar` route in `apps/web/admin/src/router/index.js`, as a redirect to `/attendance`
+
+**Why the wrapper was safe to delete**
+
+The current product decision is that teaching calendar behavior belongs inside **考勤管理**. `Attendance.vue` embeds `TeachingCalendar.vue` and wires the widget to the attendance date state: selecting a course day from the calendar updates `sessionForm.date`, reloads attendance history, and re-syncs current-session drafts. The old wrapper page had its own page header, class-teacher branch, and calendar panel, but the router no longer imported or mounted it:
+
+- `/teaching-calendar` redirects to `/attendance`;
+- the teacher sidebar no longer exposes a standalone **教学日历** item;
+- `Attendance.vue` is the current owner of the calendar + attendance coupling;
+- `TeachingCalendar.vue` remains live and must not be deleted as part of this cleanup.
+
+This made `TeachingCalendarPage.vue` misleading dead weight: it suggested to future agents that the system still supported a separate calendar page when the route had already moved to attendance.
+
+**Compatibility boundary intentionally retained**
+
+The redirect route is **not** dead code. It preserves stale bookmarks and old test/operator deep links. Removing it would be a behavior change because a user or script hitting `/teaching-calendar` would stop landing in the attendance workflow. Future cleanup should not remove the redirect unless product explicitly retires that deep-link contract and updates:
+
+- `apps/web/admin/src/router/index.js`;
+- admin/student hidden-route guards in the same file;
+- `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js`;
+- `docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`;
+- any external deployment or training material that still mentions `/teaching-calendar`.
+
+**Test and documentation alignment**
+
+The Playwright coverage in `e2e-course-ui-markdown-reader.spec.js` now asserts the current behavior:
+
+- the teacher sidebar shows **考勤管理** and does not show a standalone **教学日历** menu item;
+- visiting `/teaching-calendar` redirects to `/attendance`;
+- `.attendance-page .teaching-calendar` renders the actual calendar widget.
+
+`CODE_MAP_AND_ENTRYPOINTS.md`, `TEST_SUITE_MAP.md`, and `CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md` were updated so agents see the current owner (`Attendance.vue`) instead of a retained wrapper component.
+
+**Adjacent naming cleanup**
+
+`apps/web/admin/src/views/Notifications.vue` had a function named `loadLegacyNotifications`, but the function was the normal course-scoped notification loader for teacher/student views. It was renamed to `loadCourseNotifications` without changing behavior. This reduces false-positive "legacy" search hits during future cleanup sweeps.
+
+**Validation command pitfall encountered**
+
+One status-check attempt used `git status --short --ignored=.matching`, which failed on the local Git version with `fatal: Invalid ignored mode '.matching'`. This was a command-compatibility issue, not a worktree problem. The follow-up validation used:
+
+```powershell
+git check-ignore -v .e2e-run\local-private-paths.md
+```
+
+That command confirmed `.e2e-run/` is ignored by `.gitignore`, so the local private path note created during validation is not part of the committed source surface.
+
 ## PowerShell Encoding Safety Rules
 
 This repository is frequently edited from Windows PowerShell sessions where console rendering can misrepresent UTF-8 text. That rendering issue must not be allowed to write mojibake back into the repo.
