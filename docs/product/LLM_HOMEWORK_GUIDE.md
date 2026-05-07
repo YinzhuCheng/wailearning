@@ -171,6 +171,27 @@ Quota behavior is easy to describe incorrectly, so the practical rules matter:
 - Per-student overrides can replace the default daily cap.
 - Course IDs remain on usage logs and student summaries for attribution. They do not create independent course quota pools.
 - Per-student overrides can split outcomes between students on the same course.
+- A student does **not** need a separately pre-created quota row to "be eligible". Once the account resolves to a `Student` roster row, quota reads and billing use the global default cap unless an explicit `LLMStudentTokenOverride` exists.
+
+### Student account binding and discussion-assistant billing
+
+The student LLM surfaces in this repository all rely on the same logical identity:
+
+- login account: `users` row with `role=student`;
+- roster/billing identity: matching `students` row;
+- usage / reservations / overrides: `student_id`.
+
+Operational rule (current implementation):
+
+1. Student account creation paths (`/api/users` for admins, `/api/auth/register` when enabled) immediately try to create/align the matching roster row.
+2. Roster creation paths (`/api/students`, batch roster import) immediately try to create/align the matching student login account.
+3. `prepare_student_course_context(...)` is the final self-healing step on login and student feature access; if a legacy student login still lacks a roster row, it attempts the same user→roster sync before quota/discussion logic gives up.
+
+For **discussion LLM** specifically:
+
+- billing now resolves the student through that shared account↔roster repair path;
+- it validates against the explicit discussion `class_id` scope rather than requiring `Subject.class_id` to be populated;
+- therefore elective / multi-class-compatible course shapes with `subjects.class_id == NULL` can still bill and answer correctly as long as the student account is legitimately bound and enrolled.
 
 ## Failure and Recovery Patterns
 

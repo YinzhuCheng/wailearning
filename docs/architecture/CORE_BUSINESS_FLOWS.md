@@ -32,6 +32,16 @@ If you change router signatures, queue semantics, or worker startup, update this
 2. Subsequent requests send `Authorization: Bearer <token>`.
 3. Role checks use string values stored on `users.role` aligned with `UserRole` enum — `apps/backend/wailearning_backend/db/models.py` (`admin`, `class_teacher`, `teacher`, `student`).
 
+For **student** accounts, login is also a light repair point:
+
+4. After successful login, the router caches the role/class decision **before** writing the login `operation_logs` row, then re-queries the user when needed and runs `prepare_student_course_context(...)`.
+5. `prepare_student_course_context(...)` may:
+   - reconcile a sole same-`student_no` roster row into the account class,
+   - create a missing roster row from the student account itself (`sync_student_roster_from_user_accounts`) when legacy drift left only the login account,
+   - and then sync required-course enrollments.
+
+This is important because student quota APIs, homework submission, and discussion LLM billing all depend on the resolved `Student.id`, not merely on `users.id`.
+
 ### Related configuration
 
 - `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES` — `apps/backend/wailearning_backend/core/config.py`
@@ -168,6 +178,12 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 - Access uses `ensure_course_access_http` and `is_course_instructor` patterns consistent with other course features.
 
 Discussion LLM jobs (if enabled for a course) are orchestrated through modules referenced from this router and `llm_discussion.py` — **待人工确认**: exact job lifecycle should be verified against `DiscussionLLMJob` usage when changing async discussion behavior.
+
+Implementation-aligned student binding rule for discussion LLM:
+
+- the assistant reply path no longer requires `Subject.class_id` to be populated;
+- instead it runs the same `prepare_student_course_context(...)` + `get_student_profile_for_user(...)` chain used elsewhere and validates the discussion's explicit `class_id` scope against the resolved roster row;
+- this matters for elective / multi-class-compatible course shapes where `subjects.class_id` may be `NULL` while the homework/material discussion itself is still class-scoped and the student is legitimately enrolled.
 
 ---
 

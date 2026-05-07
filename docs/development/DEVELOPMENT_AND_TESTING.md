@@ -345,6 +345,8 @@ The exhaustive narrative lives in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PI
 | Playwright runner installed but Chromium missing | **75**, `Executable doesn't exist`, `playwright install` | Run `npx playwright install chromium` before targeted E2E. |
 | Discussion Markdown demo / preview expectation drift | **76**, `discussion-markdown-preview`, `查看 Markdown + LaTeX 示例` | Demo is collapsed by default; assert preview or click toggle first. |
 | Wrapper-based dual-scroll refactor broke Vue template structure | **77**, `Element is missing end tag` | Recount preserved scroll-container tags and run `npm run build` immediately. |
+| Student login route reads ORM user after logging commit | **78**, `DetachedInstanceError`, expired `User` state | Cache role/class before log commit or re-query user before student-specific repair. |
+| Legacy pytest module imports `main.py` too early | **79**, `table already exists`, `no such table` during isolated runs | Import `main.app` lazily inside fixtures after DB reset setup. |
 | `SECRET_KEY` / `REQUIRE_STRONG_SECRETS` startup failures | **57** | Weak secrets rejected when strong validation is on — see [CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md). |
 
 When adding a **new** recurring failure mode, append it to `TEST_EXECUTION_PITFALLS.md` first, then add one row here so agents discover it without rereading the entire pitfalls file every time.

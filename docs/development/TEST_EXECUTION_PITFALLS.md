@@ -1949,6 +1949,93 @@ This is a **template-structure regression** introduced during refactor, not a
 runtime bug in the scrolling logic itself. Build-first validation is the fastest
 way to catch it.
 
+### Pitfall 78: Student login flows can trip ORM state expiry if post-login code reads `user.role` after logging commits
+
+### Symptom
+
+A targeted student registration/login test fails inside `/api/auth/login` with a stack resembling:
+
+```text
+DetachedInstanceError / expired scalar load on User
+```
+
+or a loader trace triggered at the branch that decides whether to run
+student-specific post-login context repair.
+
+### Context
+
+`auth.py::login` historically did:
+
+1. query `user`,
+2. build the JWT,
+3. call `LogService.log_login(...)`,
+4. **then** branch on `user.role` / `user.class_id`.
+
+`LogService.log_login` commits the shared session. On some student-login test
+paths, that commit can expire the ORM instance before the later role/class read,
+turning a normal student login into a session-state failure unrelated to
+credentials or quota logic.
+
+### Fix
+
+Cache the values needed for post-login branching **before** calling the logging
+helper, or re-query the `User` row by id after the logging commit before calling
+student-only repair such as `prepare_student_course_context(...)`.
+
+This repository now follows that rule in `apps/backend/wailearning_backend/api/routers/auth.py`.
+
+### Interpretation
+
+This is a **session-lifecycle pitfall** in route implementation, not evidence
+that public registration or student quota binding itself is broken.
+
+### Pitfall 79: Some legacy pytest modules are fragile when `main.py` is imported at module load before DB reset helpers
+
+### Symptom
+
+A narrowly targeted pytest invocation against one module can fail during
+collection or fixture setup with errors such as:
+
+```text
+table users already exists
+no such table: llm_endpoint_presets
+no such table: course_llm_configs
+```
+
+### Context
+
+Certain older backend test modules import `apps.backend.wailearning_backend.main`
+at module load time. In this repository, `main.py` still calls:
+
+```text
+Base.metadata.create_all(bind=engine)
+```
+
+when `APP_ENV != production`.
+
+If that import happens before the test's own reset helper has re-established the
+expected schema lifecycle, isolated single-module runs can observe a different
+DDL order from the steady-state suite and surface "already exists" or "missing
+table" errors that are really test-harness sequencing issues.
+
+### Fix
+
+- Prefer client fixtures that import `main.app` **inside** the fixture after the
+  module's reset/autouse setup has run.
+- For new focused regression files, reuse the shared `tests.db_reset.reset_test_database_schema()`
+  pattern and avoid extra module-level side effects when a local fixture can
+  import the app lazily.
+- When triaging a new single-file failure, separate:
+  1. business-logic regression,
+  2. ORM/session bug,
+  3. test harness import/DDL ordering.
+
+### Interpretation
+
+This is a **test authoring / collection-order pitfall**. Do not infer a product
+schema regression solely from these errors until you confirm the module's import
+order and reset strategy.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

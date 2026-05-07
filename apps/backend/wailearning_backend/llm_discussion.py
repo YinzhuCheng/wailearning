@@ -23,6 +23,7 @@ from apps.backend.wailearning_backend.domains.llm.protocol import (
 )
 from apps.backend.wailearning_backend.domains.llm.discussion_ui import strip_llm_ui_prefix
 from apps.backend.wailearning_backend.domains.text_content_format import body_text_for_grading_llm, normalize_content_format
+from apps.backend.wailearning_backend.domains.courses.access import get_student_profile_for_user, prepare_student_course_context
 from apps.backend.wailearning_backend.domains.llm.quota import (
     record_discussion_usage_if_needed,
     release_discussion_quota_reservation,
@@ -42,18 +43,11 @@ from apps.backend.wailearning_backend.db.models import (
     User,
 )
 
-def resolve_student_for_discussion_llm(db: Session, user: User, course: Subject) -> Student:
-    """Student roster row for quota billing (username == student_no, same class as course)."""
-    cid = course.class_id
-    if cid is None:
-        raise ValueError("course has no class")
-    row = (
-        db.query(Student)
-        .filter(Student.student_no == user.username, Student.class_id == int(cid))
-        .order_by(Student.id.asc())
-        .first()
-    )
-    if not row:
+def resolve_student_for_discussion_llm(db: Session, user: User, *, class_id: int) -> Student:
+    """Student roster row for quota billing, using the same account<->roster repair path as the rest of the app."""
+    prepare_student_course_context(user, db)
+    row = get_student_profile_for_user(user, db)
+    if not row or row.class_id is None or int(row.class_id) != int(class_id):
         raise ValueError("no_linked_student")
     return row
 
@@ -431,7 +425,7 @@ def _run_discussion_llm_reply_unlocked(
         return
 
     try:
-        student = resolve_student_for_discussion_llm(db, user, course)
+        student = resolve_student_for_discussion_llm(db, user, class_id=class_id)
     except ValueError:
         _fail_visible("当前账号无法计费：请使用已绑定学籍的学生账号发起智能助教。", release_reservation=False)
         return
