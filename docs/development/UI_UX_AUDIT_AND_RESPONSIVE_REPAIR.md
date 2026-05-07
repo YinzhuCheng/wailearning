@@ -2151,3 +2151,186 @@ mock LLM endpoint is local:
 ```text
 /api/e2e/dev/mock-llm/<profile>/v1/
 ```
+
+## Centered Header/Form Alignment And Effective Font-Scale Propagation Follow-Up
+
+This pass addressed two user-visible consistency issues in the admin SPA:
+
+1. several page/form surfaces centered their controls while others still kept
+   the same class of controls left- or edge-aligned, producing an inconsistent
+   visual rhythm;
+2. the personal-settings appearance control for **字号** (`font_scale`) appeared
+   to save and preview state, but many real controls in the SPA did not show a
+   meaningful size change.
+
+### Problem statement
+
+The operator review focused first on the concrete pages the user pointed at:
+
+- `apps/web/admin/src/views/Homework.vue`
+- `apps/web/admin/src/views/Scores.vue`
+- `apps/web/admin/src/views/PersonalSettings.vue`
+- `apps/web/admin/src/components/AppearanceStylePanel.vue`
+
+The inconsistency was not purely cosmetic. These screens combine:
+
+- page headers with title + subtitle + action buttons;
+- form sections with labels and inputs;
+- explanatory text directly below the form;
+- action buttons that finish the task.
+
+When one page centers those layers and another keeps them left-anchored or
+split to opposite edges, the UI feels less intentional than the underlying
+component vocabulary already is.
+
+### Root cause of the font-size issue
+
+The appearance system already wrote scaled `--wa-font-size-*` variables to
+`:root` through `apps/web/admin/src/utils/theme.js::applyTypography()`.
+However, the user-facing result looked weak because much of the admin SPA still
+rendered through Element Plus defaults or page-local font rules that did **not**
+consume those `--wa-*` variables directly.
+
+In practice this meant:
+
+- some custom page titles and stats responded to `font_scale`,
+- but many Element Plus controls (buttons, form labels, inputs, dialogs,
+  pagination, table text) kept their framework default sizes,
+- so changing **小 / 中 / 大** in Personal Settings could look almost like a
+  no-op outside the small preview surface.
+
+### Frontend changes made
+
+#### 1. Global typography bridge in `apps/web/admin/src/style.css`
+
+The global stylesheet now maps the appearance tokens onto Element Plus font-size
+variables:
+
+```text
+--el-font-size-extra-large
+--el-font-size-large
+--el-font-size-medium
+--el-font-size-base
+--el-font-size-small
+--el-font-size-extra-small
+```
+
+and also sets:
+
+```text
+body { font-size: var(--wa-font-size-md); }
+```
+
+plus shared component-level font hooks for common Element Plus surfaces such as:
+
+- buttons,
+- inputs / textareas / selects / input-number,
+- form labels,
+- segmented controls,
+- tags,
+- empty-state descriptions,
+- tables,
+- dialog titles,
+- pagination.
+
+This does **not** mean every page now uses zero local font rules. It means the
+framework baseline and most dense operational controls finally participate in
+the same scaling model as the appearance tokens.
+
+#### 2. Centered personal-settings surface
+
+`apps/web/admin/src/views/PersonalSettings.vue` now centers the major profile
+sections more consistently:
+
+- page heading is centered;
+- card headers are centered;
+- basic-info and password forms are constrained with `margin: 0 auto`;
+- top labels are centered;
+- avatar row and avatar action column are centered;
+- save / update-password action areas are centered;
+- helper text beneath avatar and form controls is centered.
+
+This keeps the "single-user settings" page visually distinct from the more
+table-heavy operational screens.
+
+#### 3. Centered appearance-panel composition
+
+`apps/web/admin/src/components/AppearanceStylePanel.vue` now aligns the
+appearance-management surface around a centered reading axis:
+
+- section headers stack and center title + description + secondary action;
+- preset cards are centered internally;
+- control grid stays width-bounded and centered;
+- preview surface is centered;
+- save/apply buttons are centered;
+- saved-style rows and action groups are centered.
+
+This is intentional: the appearance panel is a configuration/preview surface,
+not a dense left-to-right audit table.
+
+#### 4. Centered course-page header/tool areas on the explicitly reported pages
+
+To align the screens shown in the user report, the pass also updated:
+
+- `apps/web/admin/src/views/Homework.vue`
+- `apps/web/admin/src/views/Scores.vue`
+
+The affected areas now center:
+
+- page title + subtitle block,
+- header action button rows,
+- score-composition explanatory text,
+- score-composition tag rows,
+- card header inline toolbars,
+- score-page filter toolbar and related summary/action clusters.
+
+The intent is not "everything in the admin product must always be centered".
+The narrower rule from this pass is:
+
+- **single-focus configuration surfaces** and the explicitly reported
+  page-header/tool clusters should use a centered composition when they read as
+  one conceptual unit.
+
+Dense data tables themselves remain tables; this pass did not convert their cell
+content to centered marketing-style layouts beyond existing column-level
+alignment choices already present in the code.
+
+### Validation performed
+
+Commands run for this pass:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+npm run build
+
+cd <REPO_ROOT>
+python3 -m pytest tests/backend/user_profile/test_appearance_styles.py -q
+```
+
+Observed result:
+
+- frontend production build passed;
+- backend appearance contract tests passed: `3 passed`;
+- warnings were limited to existing ecosystem/dependency deprecations
+  (`passlib`, `pydantic`, `jose`, SWIG wrapper warnings), not new failures from
+  this UI pass.
+
+### Practical guidance for future agents
+
+If a future report says:
+
+```text
+字号切换看起来没生效
+```
+
+check these layers in order:
+
+1. `theme.js` still writes the scaled `--wa-font-size-*` tokens;
+2. `style.css` still mirrors those tokens into Element Plus `--el-font-size-*`;
+3. the affected page is not hard-coding too many `px` font sizes in scoped CSS;
+4. the affected control is not bypassing the normal Element Plus text stack.
+
+If a future alignment pass continues this work, prefer centering **shared
+form/header/action groups** deliberately rather than forcing every table-heavy
+operational page into one universal alignment rule. The admin SPA still contains
+surfaces where left alignment is more appropriate for high-density scanning.
