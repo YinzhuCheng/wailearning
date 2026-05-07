@@ -551,6 +551,59 @@ git diff --check
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Python helpers compiled; PowerShell UTF-8 helper ran with `-Quiet`; `safe_show_text.py --escape` produced escaped output for the encoding doc; `safe_write_text.py` wrote an ignored `.e2e-run` smoke file; selected files reported `scanned=8 decode_errors=0 suspicious=0`; `git diff --check` passed. | The audit intentionally scanned the newly added helpers and edited docs, not the whole repository. Whole-repo suspicious-marker scans may report historical hotspots and should be interpreted through `ENCODING_AND_MOJIBAKE_SAFETY.md`. |
 
+### Test ID: `static.validation_selector`
+
+**Category:** `static-check`
+
+**Scope:** Static and smoke validation for the first-version diff-based validation target selector. This target proves the selector script compiles, the machine-readable registry is valid JSON, representative path-based recommendations work, and the selector can read target-level history from this ledger.
+
+The selector is advisory. It does not run pytest, Playwright, PostgreSQL, or frontend build commands by itself, and it does not edit this ledger. It emits a conservative recommendation that an agent must still review against the actual task, changed code, and environment constraints.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m py_compile ops\scripts\dev\select_validation_targets.py
+.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths apps\backend\wailearning_backend\api\routers\learning_notes.py
+.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths ops\scripts\dev\select_validation_targets.py tests\TEST_SELECTION_TARGETS.json --json
+.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `ops/scripts/dev/select_validation_targets.py`
+- `tests/TEST_SELECTION_TARGETS.json`
+- `docs/development/DEVELOPMENT_AND_TESTING.md`
+- `docs/development/TEST_SUITE_MAP.md`
+- `docs/development/TEST_EXECUTION_LEDGER.md`
+
+**Retest triggers:**
+
+- Changes to the selector script.
+- Changes to the machine-readable target registry.
+- Changes to the ledger heading or strict field format parsed by the selector.
+- Changes to validation-profile documentation or target-selection policy.
+- Changes to path matching semantics, fallback rules, or risk-level ordering.
+
+**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-08`
+
+**Pass count:** `1`
+
+**Run count:** `1`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Selector compiled; learning-notes API path recommended `backend.learning_notes.api` and `admin.e2e.learning_notes_attendance_cover_tier20`; selector self/registry paths recommended `static.validation_selector`; `--worktree --json` included untracked selector/registry files; ledger fields were included in Markdown/JSON output for targets that already have ledger IDs. | Initial smoke found three selector-rule issues before this passing row: broad backend fallback fired even when a precise target already matched; Python `fnmatch` pattern `**/*.py` did not match a root-level backend `.py` path; plain `git diff` did not include untracked new files, so `--worktree` now merges `git ls-files --others --exclude-standard` unless `--no-include-untracked` is supplied. A separate line-health check before staging also did not count new files because `repo_line_health.py` intentionally uses `git ls-files`; rerun line health after staging when this distinction matters. |
+
 ## Known First-Version Limitations
 
 1. This first ledger version starts with the verified runs around commit `6a95aad`; it intentionally does not backfill older branch history from memory.

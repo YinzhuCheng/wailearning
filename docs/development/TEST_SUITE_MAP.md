@@ -43,6 +43,30 @@ Current utilities:
 - [`tests/devtools/audit_test_redundancy.py`](../../tests/devtools/audit_test_redundancy.py) — regenerates [`TEST_REDUNDANCY_AUDIT.md`](TEST_REDUNDANCY_AUDIT.md).
 - [`tests/devtools/README.md`](../../tests/devtools/README.md) — short rules, commands, and cross-links for agents.
 
+### Diff selector support files
+
+The first-version diff-based validation selector uses a machine-readable target
+registry:
+
+- [`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json)
+
+The executable selector lives outside `tests/` because it is a repository-wide
+developer command:
+
+- [`ops/scripts/dev/select_validation_targets.py`](../../ops/scripts/dev/select_validation_targets.py)
+
+The registry maps repository-relative changed paths to validation targets such
+as focused backend pytest files, admin frontend build, targeted Playwright, full
+Playwright consideration, PostgreSQL package tests, and full PostgreSQL pytest.
+It complements, but does not replace,
+[`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md). The ledger records
+observed executions; the registry recommends what to run next.
+
+When adding or moving test files, update this registry if the moved file should
+influence future diff-based validation recommendations. If the selector output
+has unmatched paths for a real source change, either add a registry rule or
+choose a broader profile manually and document the reason.
+
 ## Category Overview
 
 ### `tests/backend/`

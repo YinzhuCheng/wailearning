@@ -82,6 +82,96 @@ Interpretation guidance:
 
 Do not use line counts as a quality score by themselves. They are a trend signal: a sudden test-code drop, documentation shrink, primary-source spike, or lockfile-heavy increase should prompt a closer diff review.
 
+### Diff-based validation target selection
+
+Use the validation selector when you need a conservative first pass for
+answering: "Given this diff, which validation targets should I run first?"
+
+The selector is intentionally advisory. It does **not** run tests, does **not**
+edit the execution ledger, and does **not** prove that the recommended set is a
+mathematically minimal or complete safety proof. It turns the current diff plus
+a machine-readable target registry into a reviewable command list with reasons.
+
+Run from repository root:
+
+```bash
+python ops/scripts/dev/select_validation_targets.py
+python ops/scripts/dev/select_validation_targets.py --base origin/main
+python ops/scripts/dev/select_validation_targets.py --base origin/main --head HEAD --json
+python ops/scripts/dev/select_validation_targets.py --staged
+python ops/scripts/dev/select_validation_targets.py --worktree
+python ops/scripts/dev/select_validation_targets.py --paths apps/backend/wailearning_backend/api/routers/learning_notes.py
+```
+
+Windows agents should use the venv interpreter when available:
+
+```powershell
+.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --base origin/cursor/discussion-avatar-chat-ui-921d --head HEAD
+```
+
+Inputs:
+
+- changed paths come from `git diff --name-status --no-renames <base>...<head>`,
+  from `git diff --cached --name-status --no-renames` when `--staged` is used,
+  from `git diff --name-status --no-renames` when `--worktree` is used,
+  or from explicit `--paths`;
+- `--worktree` includes untracked, non-ignored files by default using
+  `git ls-files --others --exclude-standard`; use `--no-include-untracked` if
+  you need only tracked worktree modifications;
+- the machine-readable registry is
+  [`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json);
+- the script also parses target-level history from
+  [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md) so recommendations can
+  show the last observed result, last commit, and pass/run count when a ledger
+  entry exists.
+
+Outputs:
+
+- Markdown by default for agent review;
+- JSON with `--json` for future automation;
+- changed paths and statuses;
+- recommended target IDs, categories, risk levels, working directories, command
+  argv arrays, matched paths, selection reasons, and ledger history;
+- unmatched paths, which mean "the first-version registry has no precise rule",
+  not "no validation is needed";
+- a ledger snippet template for observed results.
+
+Operational rules:
+
+- Treat `risk=static` targets as hygiene checks, not product behavior coverage.
+- Treat `risk=targeted` targets as the normal first pass for bounded code
+  surfaces.
+- Treat `risk=broad` and `risk=full` targets as escalation recommendations.
+  They may be expensive or environment-dependent; review the reason before
+  starting PostgreSQL or full Playwright.
+- If a changed path is unmatched, do not silently skip validation. Either add a
+  registry rule, run a broader profile, or document why no runtime target is
+  appropriate.
+- If the selector recommends no Playwright target for docs-only diffs, that is
+  expected. If it recommends no Playwright target for admin UI, E2E fixture,
+  Playwright config, route, auth, or seed changes, treat that as a registry gap.
+- Record only tests that actually ran in `TEST_EXECUTION_LEDGER.md`. Selector
+  output and `--paths` smoke runs are planning/discovery, not observed test
+  execution.
+
+Known first-version limitations:
+
+- The registry is conservative and incomplete. It covers the high-value targets
+  currently represented in the ledger plus several broad escalation rules.
+- The selector works at target level, not individual `pytest` test item or
+  Playwright `test(...)` case level.
+- Markdown ledger parsing is intentionally shallow: it extracts the strict
+  `Last result`, `Last commit`, `Pass count`, and `Run count` fields. The
+  machine-readable registry remains the source for selection rules.
+- Python `fnmatch` treats `**` as a glob pattern, not as a full gitignore-style
+  recursive operator with every edge case. When writing registry rules, include
+  both one-level and recursive patterns if both are required, for example
+  `apps/backend/wailearning_backend/*.py` and
+  `apps/backend/wailearning_backend/**/*.py`.
+- This tool is not a replacement for reading task-scoped docs. It makes the
+  first recommendation easier to audit; it does not understand every semantic
+  dependency in the application.
+
 ### Admin frontend
 
 ```bash
