@@ -228,6 +228,242 @@ _COURSE_DESCRIPTION = (
 _DEMO_CHAPTER_ROOT = "【演示】第一单元：导论与数据概览"
 _DEMO_CHAPTER_L2 = "【演示】第一节：Python 环境与常用库"
 _DEMO_CHAPTER_L3 = "【演示】1.1 课程资料与拓展阅读"
+_DEMO_REQUIRED_MATERIAL_TREE = (
+    {
+        "title": _DEMO_CHAPTER_ROOT,
+        "sort_order": 10,
+        "children": (
+            {
+                "title": _DEMO_CHAPTER_L2,
+                "sort_order": 0,
+                "children": (
+                    {
+                        "title": _DEMO_CHAPTER_L3,
+                        "sort_order": 0,
+                        "materials": (
+                            {
+                                "title": "【演示】课程运行说明与第一次课检查清单",
+                                "sort_order": 0,
+                                "content": """## 课程运行说明
+
+本课程已经进入第 3 周演示状态。资料区会持续补充课件、实验讲义、课堂问答整理和作业说明，学生可以把这里的章节树复制到自己的学习笔记中再做二次整理。
+
+### 第一次课需要确认的事项
+
+1. 已经能登录平台并进入“数据挖掘”课程。
+2. 已经安装或可访问一个 Python 运行环境：Anaconda、Jupyter Notebook、VS Code、Google Colab、学校实验服务器均可。
+3. 已经能导入 `numpy`、`pandas`、`matplotlib`，如果 `seaborn` 或 `sklearn` 暂时失败，需要在作业里写清楚错误信息和尝试过的解决方式。
+4. 已阅读 Wine 数据集字段说明，理解本课程第一次作业重点不是建复杂模型，而是把数据读取、查看、统计、可视化和解释串起来。
+
+### 教师提醒
+
+- 提交内容可以是 Notebook、PDF、Markdown、截图组合或压缩包。
+- 不要求所有同学使用完全一致的环境，关键是过程可复现、结论可解释。
+- 后续资料会逐步补充到“数据清洗”“可视化报告”“模型入门”单元。""",
+                            },
+                            {
+                                "title": "【演示】Wine 数据集字段速查表",
+                                "sort_order": 10,
+                                "content": """## Wine 数据集字段速查表
+
+Wine 数据集来自经典机器学习示例，共 178 条样本、13 个连续型化学特征，以及 3 个类别标签。第一次作业只要求完成基础探索，不要求训练分类器。
+
+| 字段 | 可解释含义 | 第一次作业建议观察点 |
+| --- | --- | --- |
+| `alcohol` | 酒精含量 | 数值范围较窄，可与类别均值一起观察 |
+| `malic_acid` | 苹果酸 | 分布可能偏斜，适合画直方图 |
+| `ash` | 灰分 | 可作为字段查看和描述统计示例 |
+| `alcalinity_of_ash` | 灰分碱度 | 与若干类别差异有关 |
+| `magnesium` | 镁含量 | 量纲与部分字段差异明显 |
+| `color_intensity` | 颜色强度 | 常用于观察不同类别的分布差异 |
+| `hue` | 色调 | 与 `color_intensity` 组合画散点图较直观 |
+| `proline` | 脯氨酸 | 数值尺度明显大于大多数字段，适合讨论标准化 |
+
+### 推荐最小分析路径
+
+1. `load_wine()` 读取数据。
+2. 转为 `DataFrame`，添加 `target` 和 `target_name`。
+3. 使用 `head()`、`info()`、`describe()` 检查数据。
+4. 使用 `groupby("target_name").mean()` 查看类别均值差异。
+5. 对 `alcohol`、`color_intensity`、`proline` 至少画一种图或给出统计解释。""",
+                            },
+                        ),
+                    },
+                ),
+            },
+            {
+                "title": "【演示】第二节：课堂纪要与常见问题",
+                "sort_order": 10,
+                "materials": (
+                    {
+                        "title": "【演示】第 1-2 周课堂 FAQ：环境、路径与包导入",
+                        "sort_order": 0,
+                        "content": """## 第 1-2 周课堂 FAQ
+
+### Q1：`ModuleNotFoundError: No module named 'sklearn'` 怎么办？
+
+通常是当前 Python 环境没有安装 `scikit-learn`，或者 Notebook 内核不是你安装包的那个环境。建议先在 Notebook 里运行：
+
+```python
+import sys
+print(sys.executable)
+```
+
+确认当前解释器路径，再在对应环境中安装依赖。作业中如果仍未解决，可以截图或复制错误信息，并说明你已经尝试过哪些步骤。
+
+### Q2：为什么 `info()` 的输出没有直接显示在提交里？
+
+`DataFrame.info()` 默认写到标准输出，不直接返回字符串。可以在 Notebook 中截图，也可以先关注 `df.shape`、`df.columns`、`df.dtypes`、`df.isna().sum()` 这些更容易复制到报告里的结果。
+
+### Q3：图表显示中文乱码会不会扣很多分？
+
+第一次作业不以图表美观为重点。只要图表或统计结果能支持你的观察，中文字体问题不会作为主要扣分项。请在报告中写清楚图表含义。
+
+### Q4：可以用在线环境吗？
+
+可以。Colab、学校实验平台、Kaggle Notebook 都可以。请写明环境名称和主要库版本，便于教师判断问题来源。""",
+                    },
+                ),
+            },
+        ),
+    },
+    {
+        "title": "【演示】第二单元：数据清洗与特征理解",
+        "sort_order": 20,
+        "children": (
+            {
+                "title": "【演示】2.1 缺失值、重复值与异常值检查",
+                "sort_order": 0,
+                "materials": (
+                    {
+                        "title": "【演示】实验讲义：从 DataFrame 质量检查开始",
+                        "sort_order": 0,
+                        "content": """## 实验目标
+
+本讲义用于第二单元的数据质量检查练习。即使 Wine 数据集本身比较干净，也要养成先检查数据质量再分析的习惯。
+
+### 建议代码片段
+
+```python
+from sklearn.datasets import load_wine
+import pandas as pd
+
+wine = load_wine(as_frame=True)
+df = wine.frame.copy()
+df["target_name"] = df["target"].map(dict(enumerate(wine.target_names)))
+
+print(df.shape)
+print(df.isna().sum().sort_values(ascending=False).head())
+print(df.duplicated().sum())
+print(df.describe().T[["mean", "std", "min", "max"]])
+```
+
+### 报告写作建议
+
+- 如果没有缺失值，也要写“检查结果为无缺失”，不要省略检查过程。
+- 对数值范围特别大的字段，例如 `proline`，说明它为什么会影响基于距离或梯度的模型。
+- 不要只贴代码，至少写 2-3 句解释。""",
+                    },
+                ),
+            },
+            {
+                "title": "【演示】2.2 标准化、归一化与尺度敏感模型",
+                "sort_order": 10,
+                "materials": (
+                    {
+                        "title": "【演示】标准化课堂板书整理",
+                        "sort_order": 0,
+                        "content": """## 标准化为什么重要
+
+Wine 数据集中 `proline` 的数值通常远大于 `alcohol`、`hue` 等字段。如果直接把这些字段输入到 KNN、K-Means、SVM 等对距离或尺度敏感的模型中，数值范围大的字段可能占据过高权重。
+
+### 常用公式
+
+```python
+def standardize(x):
+    return (x - x.mean()) / x.std()
+```
+
+标准化后的数据通常具有均值接近 0、标准差接近 1 的特点。第一次作业不要求比较模型效果，但要求能解释标准化的直观意义。
+
+### 常见误区
+
+1. “标准化会让数据变得更准确”这个说法不严谨。标准化改变的是尺度，不是原始观测质量。
+2. 不是所有模型都同样依赖标准化。树模型通常没有 KNN 那么敏感。
+3. 标准化应只使用训练集统计量再应用到验证集或测试集。第一次作业可以先理解概念，后续建模单元会再展开。""",
+                    },
+                ),
+            },
+        ),
+    },
+    {
+        "title": "【演示】第三单元：可视化、报告与课堂讨论",
+        "sort_order": 30,
+        "children": (
+            {
+                "title": "【演示】3.1 探索性数据分析报告模板",
+                "sort_order": 0,
+                "materials": (
+                    {
+                        "title": "【演示】EDA 小报告模板：从图表到结论",
+                        "sort_order": 0,
+                        "content": """## EDA 小报告建议结构
+
+### 1. 数据来源与样本规模
+
+说明使用了 `sklearn.datasets.load_wine`，包含多少行、多少个特征、多少个类别。不要只写“我加载了数据”，要让读者知道数据大致是什么。
+
+### 2. 字段和质量检查
+
+列出你重点观察的字段，例如 `alcohol`、`color_intensity`、`hue`、`proline`。说明是否存在缺失值、重复行，是否发现明显尺度差异。
+
+### 3. 图表或统计结果
+
+至少给出一种图表或一组按类别统计的表格。可选图表包括：
+
+- 直方图：看单个字段分布；
+- 箱线图：比较不同类别的字段范围；
+- 散点图：观察两个字段是否能区分类别；
+- 热力图：粗略观察特征相关性。
+
+### 4. 观察结论
+
+建议写成 2-4 条短结论，每条结论都对应一个统计结果或图表。例如：
+
+> 类别 0 的 `proline` 均值高于另外两类，因此该字段可能对分类有帮助。
+
+### 5. 遇到的问题
+
+真实报告可以写问题。比如图表字体、依赖安装、Notebook 内核、截图不清晰等，只要说明处理方式即可。""",
+                    },
+                    {
+                        "title": "【演示】第 3 周课堂讨论记录：哪些特征可能有用",
+                        "sort_order": 10,
+                        "content": """## 课堂讨论记录
+
+本记录模拟课程运行一段时间后的资料沉淀，便于部署后检查资料树、材料详情和讨论入口。
+
+### 讨论问题
+
+如果只允许选择 3 个字段做一个很粗略的葡萄酒类别判断，你会先选哪些字段？
+
+### 课堂归纳
+
+多数同学优先选择了：
+
+1. `proline`：数值范围大，按类别看均值差异较明显；
+2. `color_intensity`：直方图和箱线图容易观察差异；
+3. `hue` 或 `flavanoids`：与颜色、化学成分相关，散点图中可能有一定区分度。
+
+### 教师补充
+
+字段“看起来有差异”不等于模型一定表现好。后续课程会使用训练集、验证集和交叉验证来判断特征组合是否真正有效。第一次作业只需要把观察过程写清楚。""",
+                    },
+                ),
+            },
+        ),
+    },
+)
 
 
 def _first_validated_preset_for_demo_course(db: Session) -> LLMEndpointPreset | None:
@@ -611,49 +847,110 @@ def _seed_demo_grade_weights(db: Session, *, course: Subject) -> None:
         db.add(CourseExamWeight(subject_id=course.id, exam_type="期末考试", weight=50.0))
 
 
-def _seed_demo_material_chapters(db: Session, *, subject_id: int) -> None:
-    """Three-level outline (root → child → grandchild) for course materials UI demo."""
-    exists = (
+def _get_or_create_demo_chapter(
+    db: Session,
+    *,
+    subject_id: int,
+    parent_id: int | None,
+    title: str,
+    sort_order: int,
+) -> CourseMaterialChapter:
+    chapter = (
         db.query(CourseMaterialChapter)
         .filter(
             CourseMaterialChapter.subject_id == subject_id,
-            CourseMaterialChapter.title == _DEMO_CHAPTER_ROOT,
+            CourseMaterialChapter.parent_id == parent_id,
+            CourseMaterialChapter.title == title,
             CourseMaterialChapter.is_uncategorized.is_(False),
         )
         .first()
     )
-    if exists:
-        return
-
-    root = CourseMaterialChapter(
+    if chapter:
+        if chapter.sort_order != sort_order:
+            chapter.sort_order = sort_order
+        return chapter
+    chapter = CourseMaterialChapter(
         subject_id=subject_id,
-        parent_id=None,
-        title=_DEMO_CHAPTER_ROOT,
-        sort_order=10,
+        parent_id=parent_id,
+        title=title,
+        sort_order=sort_order,
         is_uncategorized=False,
     )
-    db.add(root)
+    db.add(chapter)
     db.flush()
+    return chapter
 
-    level2 = CourseMaterialChapter(
-        subject_id=subject_id,
-        parent_id=root.id,
-        title=_DEMO_CHAPTER_L2,
-        sort_order=0,
-        is_uncategorized=False,
-    )
-    db.add(level2)
-    db.flush()
 
-    level3 = CourseMaterialChapter(
-        subject_id=subject_id,
-        parent_id=level2.id,
-        title=_DEMO_CHAPTER_L3,
-        sort_order=0,
-        is_uncategorized=False,
+def _ensure_demo_material(
+    db: Session,
+    *,
+    subject: Subject,
+    class_id: int,
+    created_by: int,
+    chapter_id: int,
+    title: str,
+    content: str,
+    sort_order: int,
+) -> None:
+    material = (
+        db.query(CourseMaterial)
+        .filter(CourseMaterial.subject_id == subject.id, CourseMaterial.title == title)
+        .first()
     )
-    db.add(level3)
-    print("Created demo course material chapter outline (3 levels).")
+    if not material:
+        material = CourseMaterial(
+            title=title,
+            content=content,
+            content_format="markdown",
+            class_id=class_id,
+            subject_id=subject.id,
+            created_by=created_by,
+        )
+        db.add(material)
+        db.flush()
+    else:
+        material.content = content
+        material.content_format = "markdown"
+        material.class_id = class_id
+        material.created_by = material.created_by or created_by
+
+    exists_sec = (
+        db.query(CourseMaterialSection)
+        .filter(CourseMaterialSection.material_id == material.id, CourseMaterialSection.chapter_id == chapter_id)
+        .first()
+    )
+    if not exists_sec:
+        db.add(CourseMaterialSection(material_id=material.id, chapter_id=chapter_id, sort_order=sort_order))
+    elif exists_sec.sort_order != sort_order:
+        exists_sec.sort_order = sort_order
+
+
+def _seed_demo_material_chapters(db: Session, *, course: Subject, class_id: int, teacher_id: int) -> None:
+    """Richer multi-week outline and materials for the required demo course."""
+
+    def walk(nodes: tuple[dict, ...], parent_id: int | None = None) -> None:
+        for node in nodes:
+            chapter = _get_or_create_demo_chapter(
+                db,
+                subject_id=course.id,
+                parent_id=parent_id,
+                title=str(node["title"]),
+                sort_order=int(node.get("sort_order", 0)),
+            )
+            for material in node.get("materials", ()):
+                _ensure_demo_material(
+                    db,
+                    subject=course,
+                    class_id=class_id,
+                    created_by=teacher_id,
+                    chapter_id=chapter.id,
+                    title=str(material["title"]),
+                    content=str(material["content"]),
+                    sort_order=int(material.get("sort_order", 0)),
+                )
+            walk(tuple(node.get("children", ())), chapter.id)
+
+    walk(tuple(_DEMO_REQUIRED_MATERIAL_TREE))
 
 
 def _merge_legacy_demo_class_into_target(db: Session, *, target: Class) -> None:
@@ -993,15 +1290,237 @@ def _seed_probability_elective_course(
     )
 
 
-_DEMO_PREFILL_STUDENT_NOS = ("stu1", "stu2", "stu3")
+_DEMO_PREFILL_STUDENT_NOS = ("stu1", "stu2", "stu3", "stu4", "stu5")
 _DEMO_PREFILL_BODIES = (
-    "我使用 Anaconda 中的 Jupyter 完成环境配置，已能 import numpy、pandas 并运行 Hello Python。"
-    "概念题：NumPy 侧重向量化数值计算，Pandas 侧重表格筛选与分组。"
-    "Wine 数据已用 load_wine 读入为 DataFrame，完成了 head 与 describe，并对 alcohol、color_intensity 画了散点图观察类别分布差异。",
-    "环境为 VS Code + 本地 Python 3.11。成功导入 numpy、pandas、matplotlib。"
-    "已用 loc 与布尔索引练习行筛选，并用 groupby 做了简单聚合；完成了一张特征分布图并写了两句文字结论。",
-    "我使用 Colab 完成。DataFrame 已包含 target 列，并用 describe() 查看了数值特征概况。"
-    "尝试对某一列做了标准化，观察到均值接近 0；时间有限代码不长，但主要步骤已跑通。",
+    """# 数据挖掘第一次作业提交 - stu1
+
+## 1. 环境说明
+
+我使用 Anaconda + Jupyter Notebook 完成本次作业。Python 版本为 3.11，能够正常导入：
+
+```python
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.datasets import load_wine
+from sklearn.preprocessing import StandardScaler
+```
+
+环境配置中主要遇到的问题是 Notebook 内核一开始不是 base 环境，所以 `sklearn` 导入失败。我通过重新选择 kernel 解决，并在 Notebook 首页确认解释器路径后再运行代码。
+
+## 2. NumPy 与 Pandas 理解
+
+NumPy 更像是数值计算底座，适合处理数组、矩阵和批量数学运算；Pandas 更像是表格数据处理工具，适合字段筛选、缺失值检查、分组统计和数据清洗。
+
+对示例代码的理解：
+
+- `df.loc[0:10, ['age', 'score']]`：按照标签选择第 0 到 10 行，并只保留 `age` 和 `score` 两列。
+- `df[df['age'] > 20]`：条件筛选，保留年龄大于 20 的记录。
+- `df.groupby('gender')['score'].mean()`：先按 `gender` 分组，再计算每组的 `score` 平均值。
+
+## 3. Wine 数据集探索
+
+我使用 `load_wine(as_frame=True)` 读取数据，转成 DataFrame 后得到 178 行、14 列，其中 13 个化学特征和 1 个 `target` 类别列。我额外添加了 `target_name`，便于按类别查看。
+
+我重点观察了 `alcohol`、`color_intensity`、`hue`、`proline` 四个字段：
+
+- `proline` 的数值范围明显大，和 `alcohol`、`hue` 不在同一尺度；
+- `color_intensity` 在不同类别之间的均值有差异，可能对类别区分有帮助；
+- `hue` 的范围较窄，但按类别画箱线图时能看到一定差异；
+- 数据集中没有发现缺失值，`df.isna().sum().sum()` 的结果为 0。
+
+## 4. 可视化与观察
+
+我画了两类图：
+
+1. `proline` 按 `target_name` 分组的箱线图；
+2. `color_intensity` 与 `hue` 的散点图，并用类别上色。
+
+观察结论：
+
+- `proline` 在类别之间的中位数差异比较明显，可能是一个重要特征；
+- `color_intensity` 与 `hue` 组合后，不同类别在散点图上有一定分离；
+- 单个字段不能完全区分类别，但多个特征组合后可能更有效。
+
+## 5. 标准化练习
+
+我先手写了标准化函数：
+
+```python
+def standardize(x):
+    return (x - x.mean()) / x.std()
+```
+
+对 `proline` 标准化后，均值接近 0，标准差接近 1。我的理解是：标准化不是改变数据本身的真实含义，而是让不同量纲的字段在模型中更公平地参与计算。KNN、K-Means、SVM 等模型比较依赖距离或尺度，因此更需要标准化。
+
+## 6. 小结
+
+本次作业让我熟悉了从数据读取到基础 EDA 的完整流程。后续我想继续尝试相关系数热力图，并比较标准化前后 KNN 分类效果是否有明显差异。""",
+    """# 数据挖掘第一次作业提交 - stu2
+
+## 环境与导入
+
+我使用 VS Code + 本地虚拟环境完成。最开始 `seaborn` 没有安装，运行时报错：
+
+```text
+ModuleNotFoundError: No module named 'seaborn'
+```
+
+后来通过 `python -m pip install seaborn` 解决。当前可以导入 `numpy`、`pandas`、`matplotlib`、`seaborn` 和 `sklearn`。
+
+## 基础概念回答
+
+NumPy 主要用于高效数值计算，例如数组运算、均值、标准差和矩阵计算。Pandas 主要用于处理表格数据，例如读取 CSV、筛选行列、分组统计、处理缺失值。
+
+NumPy 数组更适合纯数值矩阵，Pandas DataFrame 更适合有字段名、有不同列含义的数据表。本次 Wine 数据集更适合先用 DataFrame 查看，再在标准化时转成 NumPy 数组。
+
+## Wine 数据集完成情况
+
+我完成了以下步骤：
+
+1. 使用 `load_wine()` 加载数据；
+2. 把 `data` 转成 DataFrame；
+3. 添加 `target` 和 `target_name`；
+4. 查看 `head()`、`shape`、`describe()`；
+5. 用 `groupby("target_name").mean()` 查看不同类别的均值。
+
+我重点看了 `alcohol`、`malic_acid`、`color_intensity`、`hue`、`proline`。其中 `proline` 的范围最大，`color_intensity` 在三类之间看起来差异比较明显。
+
+## 可视化
+
+我画了 `alcohol` 的直方图和 `proline` 的箱线图。箱线图显示 `proline` 在不同类别之间差异比 `alcohol` 更明显。由于本地中文字体没有配置好，图标题中的中文显示不完整，所以我在报告里用文字补充说明。
+
+## 标准化理解
+
+我使用 `StandardScaler` 对 `proline` 做了标准化，标准化后的均值非常接近 0。我理解标准化的作用是避免数值范围大的字段在模型里过度影响距离计算。例如 KNN 会计算样本之间的距离，如果不标准化，`proline` 可能比其他字段影响更大。
+
+## 遗留问题
+
+我还没有完成 pairplot，因为运行较慢且图比较大。后面我会尝试只选择 3-4 个字段来画 pairplot，避免一次性画全部字段导致图太复杂。""",
+    """# 数据挖掘第一次作业提交 - stu3
+
+## 本次完成内容
+
+我使用 Google Colab 完成了主要部分。能够运行 Python，并成功导入：
+
+```python
+import numpy as np
+import pandas as pd
+from sklearn.datasets import load_wine
+```
+
+`matplotlib` 可以导入，但我对画图还不熟练，所以本次主要提交了数据查看和文字分析。
+
+## 对工具的理解
+
+NumPy 主要处理数组，例如一列数值的平均值、最大值、最小值和标准差。Pandas 可以把数据整理成表格，更方便按列名查看，比如 `df["alcohol"]`、`df.describe()`。
+
+我理解：
+
+- `loc` 可以按行和列选数据；
+- 条件筛选可以找出符合条件的行；
+- `groupby` 可以按类别统计平均值。
+
+## Wine 数据集探索
+
+我用 `load_wine()` 加载数据后，看到数据有 178 条。我查看了前 5 行和 `describe()`。我注意到 `proline` 的最大值比其他字段大很多，说明不同字段的数值尺度不一样。
+
+按类别看均值时，我发现 `alcohol` 和 `color_intensity` 在不同类别之间有一些差异，但我还不能判断哪个字段最重要。
+
+## 标准化练习
+
+我尝试对 `alcohol` 做标准化：
+
+```python
+x = df["alcohol"].to_numpy()
+z = (x - x.mean()) / x.std()
+```
+
+计算后 `z.mean()` 接近 0，`z.std()` 接近 1。我的理解是，标准化可以让不同单位或不同范围的数据更容易放在一起比较。
+
+## 没有完全完成的部分
+
+可视化部分我只尝试了直方图，还没有整理好截图。pairplot 和热力图暂时没有完成。后续我会补做 `color_intensity` 和 `hue` 的散点图。""",
+    """# 数据挖掘第一次作业提交 - stu4
+
+## 环境
+
+我使用学校实验服务器的 JupyterLab。服务器已经安装了大部分包，`seaborn` 也可以正常导入。提交文件名为 `stu4_wine_eda_week3.ipynb`，这里粘贴主要结论。
+
+## 数据质量检查
+
+读取 Wine 数据后，我先做了以下检查：
+
+```python
+df.shape
+df.dtypes
+df.isna().sum()
+df.duplicated().sum()
+```
+
+结果显示数据没有缺失值，也没有重复行。所有化学特征基本都是数值类型，适合做描述性统计和可视化。
+
+## 分组统计发现
+
+我使用：
+
+```python
+df.groupby("target_name")[["alcohol", "color_intensity", "hue", "proline"]].mean()
+```
+
+观察到：
+
+1. `proline` 的类别均值差异较大；
+2. `color_intensity` 在不同类别之间也有明显变化；
+3. `hue` 的数值范围较小，但和 `color_intensity` 一起看时比较有用。
+
+## 可视化
+
+我完成了三个图：
+
+- `proline` 的箱线图；
+- `color_intensity` 的直方图；
+- `color_intensity` vs `hue` 的散点图。
+
+散点图中三类样本不是完全分开，但大致能看到某些区域的聚集现象。我认为这说明单靠两个字段不够，但它们可能是后续分类模型中的有效特征。
+
+## 标准化与模型思考
+
+我分别用手写函数和 `StandardScaler` 对 `proline` 做了标准化，结果基本一致。KNN、K-Means 这类模型需要计算距离，如果不标准化，`proline` 这样范围大的特征会让距离主要由它决定。
+
+## 额外尝试
+
+我还试着画了相关系数热力图，发现部分化学特征之间存在较强相关性。这个部分我还没有完全理解，只是作为扩展结果放在 Notebook 最后。""",
+    """# 数据挖掘第一次作业提交 - stu5
+
+## 说明
+
+这次作业我完成得不够完整，但已经把能做的部分整理如下。我的电脑本地环境配置失败，所以最后使用在线 Notebook 完成。
+
+## 已完成
+
+1. 能运行基础 Python；
+2. 成功导入 `numpy` 和 `pandas`；
+3. `sklearn` 在在线 Notebook 中可以导入；
+4. 已经加载 Wine 数据集并转成 DataFrame；
+5. 查看了 `head()` 和 `describe()`。
+
+## 概念回答
+
+NumPy 用于数组和数值计算，Pandas 用于表格数据处理。NumPy 更像底层计算工具，Pandas 更方便看每一列是什么、筛选数据和分组统计。
+
+`df[df['age'] > 20]` 这种写法是条件筛选。`groupby` 是按某一列分组后计算统计量。
+
+## 数据观察
+
+Wine 数据集中 `proline` 的数值比很多字段大。我认为如果直接把所有字段输入模型，数值大的字段可能影响更大，所以需要标准化。
+
+我还看到 `color_intensity` 这个字段不同样本之间差异明显，但我没有完成按类别的图表比较。
+
+## 未完成与后续计划
+
+没有完成正式可视化截图，也没有完成 Iris 扩展练习。我计划下次先补上 `proline` 的箱线图，再补一个按类别分组的均值表。""",
 )
 
 
@@ -1073,7 +1592,7 @@ def _seed_demo_prefilled_homework_submissions(db: Session, *, homework_row: Home
         klass=klass,
         student_nos=_DEMO_PREFILL_STUDENT_NOS,
         bodies=_DEMO_PREFILL_BODIES,
-        log_label="demo prefilled homework submissions (first three roster students)",
+        log_label="demo prefilled homework submissions (stu1-stu5)",
     )
 
 
@@ -1245,7 +1764,7 @@ def seed_demo_course_bundle(db: Session) -> None:
     )
 
     _seed_demo_grade_weights(db, course=course)
-    _seed_demo_material_chapters(db, subject_id=course.id)
+    _seed_demo_material_chapters(db, course=course, class_id=klass.id, teacher_id=teacher.id)
 
     enrolled = sync_course_enrollments(course, db)
     if enrolled:

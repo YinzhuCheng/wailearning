@@ -2389,6 +2389,13 @@ Current product code therefore gates learning-note assistant replies through cou
 
 Fix pattern: for multilingual files, use ASCII identifiers/path names as patch anchors, then run `py_compile` immediately.
 
+Additional example from the richer demo-content pass:
+
+- Replacing the old three-level `_seed_demo_material_chapters(...)` implementation by matching its Chinese-containing docstring initially failed. The reliable patch matched only the ASCII function definition `def _seed_demo_material_chapters` and the next ASCII function boundary, then replaced the function body with helper functions.
+- Replacing `_DEMO_PREFILL_BODIES` by matching the old Chinese homework body text also failed. The reliable patch anchored on `_DEMO_PREFILL_STUDENT_NOS` and the following ASCII boundary `def _seed_prefilled_submissions_for_homework`.
+- Do not treat either failure as evidence that the tracked file is corrupt. In this repository, PowerShell rendering may display valid UTF-8 Chinese as mojibake, while `apply_patch` still writes valid UTF-8 when given a precise byte-level context.
+- For future seed-data edits, prefer this order: introduce new constants near ASCII identifiers, replace call signatures by ASCII function names, compile with `.venv\Scripts\python.exe -m py_compile apps\backend\wailearning_backend\domains\seed\demo.py`, then run the focused demo seed tests.
+
 ### Pitfall: Vite build can succeed while terminal output looks mojibake
 
 `npm.cmd run build` rendered some chunk output and Chinese-adjacent console text through the Windows terminal encoding, but the Vue SFC source still compiled as UTF-8 and `rg` showed correct file content. Do not copy build output strings back into source. Use build success/failure as the syntax signal and inspect file diffs for content changes.
