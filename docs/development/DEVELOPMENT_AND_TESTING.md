@@ -48,6 +48,40 @@ Optional Windows convenience launcher:
 ops\scripts\windows\start-backend.bat
 ```
 
+### Repository line-health metrics
+
+Use the repository line-health script when you need a coarse, repeatable measure of how the repository is evolving across documentation, tests, and primary application code.
+
+The script lives under `ops/scripts/dev/` because it is a repository-wide developer utility rather than a pytest module, deployment script, or app-local command:
+
+```bash
+python ops/scripts/dev/repo_line_health.py
+python ops/scripts/dev/repo_line_health.py --json
+python ops/scripts/dev/repo_line_health.py --details
+```
+
+Default behavior:
+
+- uses `git ls-files` so local artifacts are excluded;
+- counts text files only;
+- skips binary files and undecodable files;
+- reports total tracked text lines;
+- reports "health" text lines excluding generated or lock files;
+- reports required health categories: `documentation`, `test_code`, and `primary_source`;
+- reports supporting categories such as `tooling`, `operations`, `configuration`, `application_support`, `generated_or_lock`, and `other`;
+- emits Markdown by default and JSON when `--json` is passed;
+- prints `<repo>` as the repository-root placeholder in JSON output rather than a local absolute path.
+
+Interpretation guidance:
+
+- `documentation` includes `docs/`, root `README.md`, root `AGENTS.md`, and Markdown/Text/RST files under app, ops, or tests folders.
+- `test_code` includes `tests/backend/`, `tests/behavior/`, `tests/e2e/`, `tests/postgres/`, `tests/security/`, `tests/scenarios/`, plus repository pytest bootstrapping files.
+- `primary_source` includes `apps/backend/wailearning_backend/`, `apps/web/admin/src/`, and `apps/web/parent/src/`.
+- `tooling` includes repository maintenance utilities such as `ops/scripts/` and `tests/devtools/`.
+- `generated_or_lock` is separated so files such as `package-lock.json` do not distort the main health trend.
+
+Do not use line counts as a quality score by themselves. They are a trend signal: a sudden test-code drop, documentation shrink, primary-source spike, or lockfile-heavy increase should prompt a closer diff review.
+
 ### Admin frontend
 
 ```bash

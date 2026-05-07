@@ -2536,6 +2536,53 @@ Agent workflow rule:
 3. Record the blocked command and the exact high-level failure (`spawn EPERM`) in this pitfalls document.
 4. Keep local absolute paths, user profile names, browser cache paths, or other machine-identifying details in an ignored local note under `.e2e-run/`, not in committed documentation.
 
+### Pitfall: execution ledgers become misleading if they only record green runs
+
+The structured execution ledger lives at:
+
+```text
+<repo-root>/docs/development/TEST_EXECUTION_LEDGER.md
+```
+
+It is meant to help agents avoid reflexively rerunning every suite when a narrow change only touches known surfaces. The ledger becomes actively harmful if failed, blocked, timed-out, skipped, or interrupted validation attempts are omitted from the `Run count`.
+
+Fix pattern:
+
+- record every observed validation attempt that was started for a target, including blocked Playwright runs and environment failures;
+- increment `Run count` for blocked/failed/timed-out/interrupted/skipped attempts;
+- increment `Pass count` only for `Result: passed`;
+- keep committed command rows repository-relative (`<repo>`, `<repo>/apps/web/admin`, `<python-with-requirements>`);
+- put machine-specific paths, user profile names, browser cache paths, local database files, and exact private working directories in `.e2e-run/local-private-paths.md` or another ignored `.e2e-run/` note;
+- do not backfill historical pass counts from memory or branch names.
+
+Interpretation:
+
+Use the ledger as a test-selection aid, not as a substitute for touched-file analysis. A high pass count for a target does not prove the target can be skipped after relevant code changes. Conversely, a blocked run should not be treated as a product failure without reading the environment details in this pitfalls document.
+
+### Pitfall: line-count health scripts must not count local artifacts
+
+The repository line-health script lives at:
+
+```text
+<repo-root>/ops/scripts/dev/repo_line_health.py
+```
+
+The first implementation deliberately uses `git ls-files` by default. A naive recursive filesystem walk would count `.venv/`, `node_modules/`, `apps/web/*/dist/`, `.e2e-run/`, Playwright reports, local sqlite files, upload directories, and other machine-local artifacts. That would make the reported "repository size" mostly a measure of local environment churn, not source evolution.
+
+Fix pattern:
+
+- use tracked files as the default metric source;
+- keep an explicit `--include-untracked` mode only for diagnostics, and still skip obvious artifact directories;
+- split `generated_or_lock` from normal application and documentation categories so lockfile churn does not look like feature-code growth;
+- print `<repo>` in machine-readable output instead of an absolute repository path;
+- keep any machine-specific path notes in `.e2e-run/`, not in committed metric output.
+
+During development of the script, remember that a newly added metrics script or documentation file is not part of `git ls-files` until it is staged. If you need the line-health output to represent the exact intended commit, stage the new tracked files first, then rerun the command before recording the ledger row.
+
+Interpretation:
+
+Line counts are trend indicators, not quality metrics. A larger documentation count can be healthy in this repository because documentation is agent-facing operating context. A smaller test count can be healthy after deduplication only if the redundancy audit or equivalent evidence explains why coverage was preserved.
+
 ### Pitfall: learning-note public visibility is not the same as "must bind a course"
 
 The first implementation of learning notes treated `visibility="course"` as literally course-only and rejected public notes where `subject_id` was null. That no longer matches the product rule: a public note with a course is same-course-visible, while a public note without a course is visible to every authenticated user.

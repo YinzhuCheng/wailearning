@@ -130,6 +130,7 @@ Detail: [`product/PARENT_PORTAL.md`](../product/PARENT_PORTAL.md).
 | [`ops/systemd/ddclass-backend.service`](../../ops/systemd/ddclass-backend.service) | systemd unit template |
 | [`ops/nginx/wailearning.xyz.conf`](../../ops/nginx/wailearning.xyz.conf) | Example nginx |
 | [`ops/scripts/deploy_backend.sh`](../../ops/scripts/deploy_backend.sh) | Deploy helper |
+| [`ops/scripts/dev/repo_line_health.py`](../../ops/scripts/dev/repo_line_health.py) | Repository line-count health metrics: documentation, tests, primary source, and supporting categories |
 
 ---
 

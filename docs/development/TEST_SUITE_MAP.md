@@ -11,6 +11,8 @@ It is intended for contributors and LLM coding agents who need to answer questio
 - which files are reusable helpers versus actual pytest entrypoints,
 - which categories are most likely to fail because of environment issues rather than product regressions.
 
+For concrete historical execution records, use [TEST_EXECUTION_LEDGER.md](TEST_EXECUTION_LEDGER.md). That ledger records per-target category, canonical command, last branch/commit, pass count, run count, and run-by-run results. This map answers **what exists and when to run it**; the ledger answers **what was actually run and what happened**.
+
 ## Top-Level Test Layout
 
   ```text
