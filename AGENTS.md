@@ -18,7 +18,63 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 2. Deep maps (read these for structural edits)
+## 2. Operational defaults for autonomous agents
+
+These defaults are part of the repository working contract for LLM coding agents.
+Follow them unless the user explicitly gives a conflicting instruction for the
+current task.
+
+1. **Read before acting.** At the start of every work round, read this file,
+   [`docs/README.md`](docs/README.md), and the task-scoped documents identified
+   in [`docs/README.md`](docs/README.md) §5 before editing code, tests, docs,
+   scripts, or repository structure. If local continuation files exist under
+   `.agent-run/`, read the task-relevant local notes as well.
+2. **Execute basic repository operations directly.** For ordinary file reads,
+   file writes, code edits, test-target discovery, and Git operations, proceed
+   directly with the necessary commands. Do not ask the user to run routine
+   commands or confirm routine local inspection. Ask only when an operation is
+   destructive, privacy-sensitive, network-/installation-heavy, or otherwise
+   outside the task's reasonable execution boundary.
+3. **Minimize avoidable command prompts.** Prefer self-contained local commands
+   for development, validation, and Git workflow. When a non-basic command is
+   required, make the narrowest reasonable choice and explain the purpose only
+   when it materially affects the user's risk or time.
+4. **Keep documentation agent-grade.** Documentation updates should be detailed
+   enough for future LLM agents to act without guessing. Do not shorten docs
+   merely because a human might prefer a brief note. The primary consumer of
+   repository process docs is an agentic coding system that benefits from
+   explicit commands, preconditions, interpretation rules, and failure modes.
+5. **Preserve text encoding.** Treat Windows PowerShell rendering as
+   display-only until verified. When editing multilingual or encoding-sensitive
+   files, follow
+   [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md):
+   use UTF-8-safe display/write helpers, patch around ASCII anchors when
+   practical, and verify suspicious glyphs by bytes or escaped output rather
+   than by terminal appearance. If a CLI-side encoding adjustment is needed to
+   prevent corruption, perform it directly instead of asking the user to repair
+   the shell.
+6. **Record pitfalls in the repository.** When a command fails, times out, is
+   blocked by environment setup, exposes a flaky harness assumption, or reveals
+   a repeatable trap, document the cause and mitigation in the relevant
+   committed documentation using repository-relative paths and placeholders such
+   as `<repo>`, `<artifact-dir>`, `<local-port>`, `<local-postgres-bin>`, or
+   `<local-browser-cache>`.
+7. **Keep private machine details local.** Real user names, absolute home
+   paths, browser cache paths, downloaded binary locations, local database
+   directories, local credentials/tokens, and machine-specific logs belong only
+   in ignored local files under `.agent-run/`. Do not copy those details into
+   committed docs, tests, scripts, commit messages, PR text, or ledger rows.
+8. **Verify the commit boundary.** Before committing, confirm that ignored local
+   notes are not tracked, scan committed changes for private path leaks, and run
+   the narrowest useful static checks for the files touched. For validation
+   selection, prefer
+   [`ops/scripts/dev/select_validation_targets.py`](ops/scripts/dev/select_validation_targets.py)
+   as the first pass, then run or explicitly defer the recommended targets based
+   on task scope.
+
+---
+
+## 3. Deep maps (read these for structural edits)
 
 | Topic | Document |
 |-------|----------|
@@ -40,7 +96,7 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 3. grep keywords (fast navigation)
+## 4. grep keywords (fast navigation)
 
 | Intent | Keywords / symbols |
 |--------|---------------------|
@@ -56,7 +112,7 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 4. High-risk modules (touch with a trace plan)
+## 5. High-risk modules (touch with a trace plan)
 
 1. **`apps/backend/wailearning_backend/llm_grading.py`** — quotas, retries, attachment extraction, effective-score aggregation, worker orchestration.
 2. **`apps/backend/wailearning_backend/domains/courses/access.py`** — enrollment visibility; impacts every role.
@@ -66,7 +122,7 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 5. Verification checklist after edits
+## 6. Verification checklist after edits
 
 1. **Backend:** targeted `pytest` for touched package (from repo root). See [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md).
 2. **LLM paths:** run nearest tests under `tests/backend/llm/` or homework folders; watch for HTTP mocking patterns.
@@ -75,14 +131,14 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 6. Naming honesty (avoid agent confusion)
+## 7. Naming honesty (avoid agent confusion)
 
 - **Product name:** README branding is **BIMSA-CLASS**; npm package may still show legacy names (`ddclass-frontend`) — treat as historical artifact unless migrating build metadata.
 - **`Subject` vs “course”:** ORM model `Subject` maps to user-facing “course” in much of the UI and `/api/subjects` routes.
 
 ---
 
-## 7. Where CI runs tests
+## 8. Where CI runs tests
 
 Cloud pipeline definition (Alibaba DevOps style YAML): [`ops/ci/pr-pipeline.yml`](ops/ci/pr-pipeline.yml) — uses `python3 -m pytest -q`. There is **no** `.github/workflows/` directory in this repository snapshot; do not assume GitHub Actions unless added later.
 
