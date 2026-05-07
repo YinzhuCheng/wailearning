@@ -2036,6 +2036,51 @@ This is a **test authoring / collection-order pitfall**. Do not infer a product
 schema regression solely from these errors until you confirm the module's import
 order and reset strategy.
 
+### Pitfall 80: Isolated admin-discussion smoke tests can be noisier than teacher-path tests under legacy helper / session setup
+
+### Symptom
+
+A narrowly scoped behavior test that:
+
+1. creates a course/student scenario,
+2. calls `ensure_admin()`,
+3. logs in as `pytest_admin`,
+4. then exercises `/api/discussions` with `invoke_llm=true`
+
+can fail inside the **login logging** path with an `IntegrityError` around
+`operation_logs.user_id` rather than around the actual discussion feature.
+
+### Context
+
+This showed up during a discussion-LLM permission expansion pass. The product
+change itself was "teachers/admins may invoke discussion LLM", but one isolated
+admin API smoke path was less stable than:
+
+- the teacher-path route regression, and
+- the lower-level helper regression proving that admin is part of the
+  quota-exempt role set.
+
+The likely cause cluster is legacy helper/session/test-app lifecycle interaction,
+not the discussion serializer or route guard directly.
+
+### Fix
+
+When a new admin discussion regression becomes noisy under isolated SQLite test
+setup:
+
+- keep one stable **teacher route** regression for `invoke_llm=true` acceptance;
+- keep a focused **helper-level** regression for the admin quota-exempt role
+  decision;
+- if an admin route assertion is still required, build the admin user inside the
+  same fixture/app lifecycle as the target scenario instead of depending on a
+  broader shared helper whose session timing may differ.
+
+### Interpretation
+
+This is primarily a **test-harness stability** issue. It should not, by itself,
+be read as evidence that admin discussion-LLM permission is broken once the
+teacher route and quota-exempt helper regressions are green.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

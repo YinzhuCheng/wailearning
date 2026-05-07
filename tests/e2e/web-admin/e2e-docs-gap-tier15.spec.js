@@ -97,7 +97,7 @@ test.describe('E2E docs-gap tier (15 cases)', () => {
     expect(st).toBe(400)
   })
 
-  test('03 teacher cannot invoke_llm on discussion create (403)', async () => {
+  test('03 teacher can invoke_llm on discussion create (200)', async () => {
     const s = scenario()
     const tok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
     const hwId = Number(s.homework_id)
@@ -114,7 +114,7 @@ test.describe('E2E docs-gap tier (15 cases)', () => {
         invoke_llm: true
       }
     })
-    expect(status).toBe(403)
+    expect(status).toBe(200)
   })
 
   test('04 student cannot GET submission/me for homework in another class (403 or 404)', async () => {

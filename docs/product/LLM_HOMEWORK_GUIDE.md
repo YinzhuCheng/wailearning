@@ -192,6 +192,9 @@ For **discussion LLM** specifically:
 - billing now resolves the student through that shared account↔roster repair path;
 - it validates against the explicit discussion `class_id` scope rather than requiring `Subject.class_id` to be populated;
 - therefore elective / multi-class-compatible course shapes with `subjects.class_id == NULL` can still bill and answer correctly as long as the student account is legitimately bound and enrolled.
+- teachers, class teachers, and administrators may also invoke course discussion LLM on discussions they can access;
+- those staff/admin discussion-LMM calls bypass the student daily token-cap checks and do not allocate a student quota reservation row;
+- student callers remain the only role whose discussion-LMM usage consumes the personal daily token pool.
 
 ## Failure and Recovery Patterns
 

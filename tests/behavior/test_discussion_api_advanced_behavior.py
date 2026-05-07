@@ -230,6 +230,15 @@ def test_behavior_discussion_llm_resolves_student_without_subject_anchor_class(c
         db.close()
 
 
+def test_behavior_discussion_llm_quota_exempt_roles_helper():
+    from apps.backend.wailearning_backend.llm_discussion import discussion_llm_user_is_quota_exempt
+
+    assert discussion_llm_user_is_quota_exempt(User(role=UserRole.ADMIN.value)) is True
+    assert discussion_llm_user_is_quota_exempt(User(role=UserRole.TEACHER.value)) is True
+    assert discussion_llm_user_is_quota_exempt(User(role=UserRole.CLASS_TEACHER.value)) is True
+    assert discussion_llm_user_is_quota_exempt(User(role=UserRole.STUDENT.value)) is False
+
+
 def test_behavior_discussion_concurrent_posts_eventually_list_total_matches(client: TestClient):
     ctx = make_grading_course_with_homework()
     st = headers_for(client, ctx["student_username"], ctx["student_password"])

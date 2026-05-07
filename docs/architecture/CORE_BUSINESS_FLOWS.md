@@ -185,6 +185,18 @@ Implementation-aligned student binding rule for discussion LLM:
 - instead it runs the same `prepare_student_course_context(...)` + `get_student_profile_for_user(...)` chain used elsewhere and validates the discussion's explicit `class_id` scope against the resolved roster row;
 - this matters for elective / multi-class-compatible course shapes where `subjects.class_id` may be `NULL` while the homework/material discussion itself is still class-scoped and the student is legitimately enrolled.
 
+Implementation-aligned role / quota rule for discussion LLM:
+
+- students may invoke discussion LLM and are billed against the same per-student daily pool used by homework grading;
+- teachers, class teachers, and administrators may also invoke discussion LLM on accessible course discussions;
+- those staff/admin discussion-LMM calls are **not** gated by student token caps and do not require a `requester_student_id`;
+- student-only hidden rubric / reference-answer leakage rules still apply: staff/admin invocation changes quota treatment, not content redaction boundaries.
+
+Admin SPA discussion list rendering:
+
+- each discussion row now serializes `author_avatar_url` alongside author identity fields;
+- the frontend discussion panel fetches authenticated avatar blobs when available and otherwise falls back to role-colored initials (or `助` for the assistant user).
+
 ---
 
 ## 8. Appearance presets (user themes)

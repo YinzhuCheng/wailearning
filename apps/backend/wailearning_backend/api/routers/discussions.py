@@ -29,6 +29,12 @@ MAX_PAGE_SIZE = 50
 MAX_BODY_LEN = 8000
 
 TargetType = Literal["homework", "material"]
+LLM_DISCUSSION_ALLOWED_ROLES = {
+    UserRole.STUDENT,
+    UserRole.TEACHER,
+    UserRole.CLASS_TEACHER,
+    UserRole.ADMIN,
+}
 
 
 def _run_discussion_llm_job(job_id: int) -> None:
@@ -128,6 +134,7 @@ def _serialize_entry(row: CourseDiscussionEntry, author: User) -> CourseDiscussi
         author_real_name=author.real_name,
         author_username=author.username,
         author_role=author.role,
+        author_avatar_url=author.avatar_url,
         body=row.body,
         body_format=getattr(row, "body_format", None) or "markdown",
         message_kind=getattr(row, "message_kind", None) or "human",
@@ -213,8 +220,8 @@ def create_discussion(
         )
 
     invoke_llm = bool(payload.invoke_llm)
-    if invoke_llm and current_user.role != UserRole.STUDENT:
-        raise HTTPException(status_code=403, detail="仅学生账号可发起智能助教回复。")
+    if invoke_llm and current_user.role not in LLM_DISCUSSION_ALLOWED_ROLES:
+        raise HTTPException(status_code=403, detail="当前账号类型不支持发起智能助教回复。")
 
     body_for_display = body
     llm_invocation = False

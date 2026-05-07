@@ -64,7 +64,7 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
   1. a lightweight toolbar row with **查看 Markdown + LaTeX 示例** / **隐藏 Markdown + LaTeX 示例** so the fixed example stays **collapsed by default**,
   2. an always-live **回复预览** block under the textarea, rendered by the same `RichMarkdownDisplay` stack used after publishing.
   
-  Published rows also changed: **short** discussion bodies now render immediately via `PlainOrMarkdownBlock` (so Markdown + KaTeX works right after posting), while **long** bodies still use the existing three-logical-line collapsed preview and only switch to the full renderer after the user expands them. `POST /api/discussions` still sends `body_format`.
+  Published rows also changed: **short** discussion bodies now render immediately via `PlainOrMarkdownBlock` (so Markdown + KaTeX works right after posting), while **long** bodies still use the existing three-logical-line collapsed preview and only switch to the full renderer after the user expands them. Discussion rows now also show the author's avatar when `author_avatar_url` is present; otherwise the UI falls back to a role-colored initial avatar (assistant rows use `助`). `POST /api/discussions` still sends `body_format`.
 
 ## Testing
 

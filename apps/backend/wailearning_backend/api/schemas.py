@@ -106,6 +106,7 @@ class CourseDiscussionEntryResponse(BaseModel):
     author_real_name: str
     author_username: str
     author_role: str
+    author_avatar_url: Optional[str] = None
     body: str
     body_format: ContentFormatLiteral = "markdown"
     message_kind: str = "human"

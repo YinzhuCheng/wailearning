@@ -41,6 +41,7 @@ from apps.backend.wailearning_backend.db.models import (
     Student,
     Subject,
     User,
+    UserRole,
 )
 
 def resolve_student_for_discussion_llm(db: Session, user: User, *, class_id: int) -> Student:
@@ -52,6 +53,14 @@ def resolve_student_for_discussion_llm(db: Session, user: User, *, class_id: int
     return row
 
 
+def discussion_llm_user_is_quota_exempt(user: User) -> bool:
+    return (user.role or "").strip() in {
+        UserRole.ADMIN.value,
+        UserRole.TEACHER.value,
+        UserRole.CLASS_TEACHER.value,
+    }
+
+
 def _strip_for_context(text: str, max_chars: int) -> str:
     t = (text or "").strip()
     if len(t) <= max_chars:
@@ -59,7 +68,7 @@ def _strip_for_context(text: str, max_chars: int) -> str:
     return t[: max_chars - 20] + "\n…（已截断）"
 
 
-def _homework_context_blocks(db: Session, hw: Homework, *, student_id: int) -> list[str]:
+def _homework_context_blocks(db: Session, hw: Homework, *, student_id: Optional[int]) -> list[str]:
     parts: list[str] = []
     parts.append(f"【作业标题】\n{hw.title}")
     ctx_hw = _strip_for_context(hw.content or '', 12000)
@@ -68,6 +77,9 @@ def _homework_context_blocks(db: Session, hw: Homework, *, student_id: int) -> l
     parts.append(f"【作业说明】\n{ctx_hw}")
     if (hw.rubric_text or "").strip():
         parts.append(f"【评分要点（学生可见）】\n{_strip_for_context(hw.rubric_text, 8000)}")
+    if student_id is None:
+        parts.append("【当前提问者身份】当前提问者不是学生账号，未附带个人提交记录。")
+        return parts
     sub = (
         db.query(HomeworkSubmission)
         .filter(HomeworkSubmission.homework_id == hw.id, HomeworkSubmission.student_id == student_id)
@@ -424,11 +436,14 @@ def _run_discussion_llm_reply_unlocked(
         _fail_visible("课程不存在。", release_reservation=False)
         return
 
-    try:
-        student = resolve_student_for_discussion_llm(db, user, class_id=class_id)
-    except ValueError:
-        _fail_visible("当前账号无法计费：请使用已绑定学籍的学生账号发起智能助教。", release_reservation=False)
-        return
+    student: Optional[Student] = None
+    quota_exempt = discussion_llm_user_is_quota_exempt(user)
+    if not quota_exempt:
+        try:
+            student = resolve_student_for_discussion_llm(db, user, class_id=class_id)
+        except ValueError:
+            _fail_visible("当前账号无法计费：请使用已绑定学籍的学生账号发起智能助教。", release_reservation=False)
+            return
 
     config = ensure_course_llm_config(db, subject_id, user_id=user.id)
     if not config.is_enabled:
@@ -441,7 +456,7 @@ def _run_discussion_llm_reply_unlocked(
     max_out = max(1, min(8000, int(config.max_output_tokens or 1000)))
     context_parts: list[str] = []
     if hw:
-        context_parts.extend(_homework_context_blocks(db, hw, student_id=student.id))
+        context_parts.extend(_homework_context_blocks(db, hw, student_id=student.id if student else None))
     elif mat:
         context_parts.extend(_material_context_blocks(mat))
     context_text = "\n\n".join(context_parts)
@@ -462,23 +477,24 @@ def _run_discussion_llm_reply_unlocked(
         response_language=config.response_language,
     )
     est = _estimate_discussion_prompt_tokens(messages, max_out)
-    job.requester_student_id = student.id
+    job.requester_student_id = student.id if student else None
     db.flush()
 
-    allowed, err = reserve_discussion_quota_tokens(
-        db,
-        job,
-        config,
-        student_id=student.id,
-        subject_id=subject_id,
-        estimated_tokens=est,
-    )
-    if not allowed:
-        msg = {
-            "quota_exceeded_student": "已达到本日学生 token 上限，智能助教未执行。",
-        }.get(err or "", "今日额度已用尽，智能助教未执行。")
-        _fail_visible(msg, release_reservation=False)
-        return
+    if not quota_exempt:
+        allowed, err = reserve_discussion_quota_tokens(
+            db,
+            job,
+            config,
+            student_id=student.id,
+            subject_id=subject_id,
+            estimated_tokens=est,
+        )
+        if not allowed:
+            msg = {
+                "quota_exceeded_student": "已达到本日学生 token 上限，智能助教未执行。",
+            }.get(err or "", "今日额度已用尽，智能助教未执行。")
+            _fail_visible(msg, release_reservation=False)
+            return
 
     try:
         result = _call_discussion_with_routing(
@@ -519,5 +535,6 @@ def _run_discussion_llm_reply_unlocked(
     job.status = "success"
     job.error_message = None
     job.finished_at = datetime.now(timezone.utc)
-    record_discussion_usage_if_needed(db, job, config, student.id, subject_id, usage)
+    if not quota_exempt and student is not None:
+        record_discussion_usage_if_needed(db, job, config, student.id, subject_id, usage)
     db.commit()

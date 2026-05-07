@@ -21,45 +21,55 @@
       <div v-loading="loading" class="discussion-body">
         <div v-if="!entries.length && !loading" class="muted-text">暂无讨论，发表第一条回复吧。</div>
         <div v-for="row in entries" :key="row.id" class="discussion-row">
-          <div class="discussion-row__meta">
-            <span class="discussion-row__name">{{ displayAuthorName(row) }}</span>
-            <el-tag v-if="row.message_kind === 'llm_assistant'" type="success" size="small" effect="plain">
-              智能助教
-            </el-tag>
-            <el-tag v-else size="small" effect="plain">{{ roleLabel(row.author_role) }}</el-tag>
-            <el-tag v-if="row.llm_invocation" type="warning" size="small" effect="plain">调用智能助教</el-tag>
-            <span class="discussion-row__time">{{ formatTime(row.created_at) }}</span>
-          </div>
-          <div
-            class="discussion-row__body"
-            :class="{
-              'discussion-row__body--clickable': isTruncated(row.body) && !isExpanded(row.id)
-            }"
-            @click="onBodyClick(row)"
-          >
-            <div
-              class="discussion-row__text"
-              :class="{ 'discussion-row__text--block': shouldRenderRichBody(row) }"
-            >
-              <PlainOrMarkdownBlock
-                v-if="shouldRenderRichBody(row)"
-                :text="row.body"
-                :format="row.body_format"
-                variant="student"
-              />
-              <template v-else>{{ collapsedBodyPreview(row) }}</template>
+          <div class="discussion-row__main">
+            <DiscussionAuthorAvatar
+              :avatar-url="row.author_avatar_url"
+              :name="displayAuthorName(row)"
+              :role="row.author_role"
+              :message-kind="row.message_kind"
+            />
+            <div class="discussion-row__content">
+              <div class="discussion-row__meta">
+                <span class="discussion-row__name">{{ displayAuthorName(row) }}</span>
+                <el-tag v-if="row.message_kind === 'llm_assistant'" type="success" size="small" effect="plain">
+                  智能助教
+                </el-tag>
+                <el-tag v-else size="small" effect="plain">{{ roleLabel(row.author_role) }}</el-tag>
+                <el-tag v-if="row.llm_invocation" type="warning" size="small" effect="plain">调用智能助教</el-tag>
+                <span class="discussion-row__time">{{ formatTime(row.created_at) }}</span>
+              </div>
+              <div
+                class="discussion-row__body"
+                :class="{
+                  'discussion-row__body--clickable': isTruncated(row.body) && !isExpanded(row.id)
+                }"
+                @click="onBodyClick(row)"
+              >
+                <div
+                  class="discussion-row__text"
+                  :class="{ 'discussion-row__text--block': shouldRenderRichBody(row) }"
+                >
+                  <PlainOrMarkdownBlock
+                    v-if="shouldRenderRichBody(row)"
+                    :text="row.body"
+                    :format="row.body_format"
+                    variant="student"
+                  />
+                  <template v-else>{{ collapsedBodyPreview(row) }}</template>
+                </div>
+                <button
+                  v-if="isTruncated(row.body) && isExpanded(row.id)"
+                  type="button"
+                  class="discussion-row__collapse-btn"
+                  @click.stop="collapseRow(row.id)"
+                >
+                  收起
+                </button>
+              </div>
+              <div v-if="canDelete(row)" class="discussion-row__actions">
+                <el-button type="danger" link size="small" @click="removeEntry(row)">删除</el-button>
+              </div>
             </div>
-            <button
-              v-if="isTruncated(row.body) && isExpanded(row.id)"
-              type="button"
-              class="discussion-row__collapse-btn"
-              @click.stop="collapseRow(row.id)"
-            >
-              收起
-            </button>
-          </div>
-          <div v-if="canDelete(row)" class="discussion-row__actions">
-            <el-button type="danger" link size="small" @click="removeEntry(row)">删除</el-button>
           </div>
         </div>
 
@@ -74,7 +84,7 @@
           @current-change="loadList"
         />
 
-        <div v-if="isStudent" class="discussion-llm-bar">
+        <div v-if="canInvokeLlm" class="discussion-llm-bar">
           <el-button
             size="small"
             :type="llmMode ? 'primary' : 'default'"
@@ -85,7 +95,7 @@
             请 LLM 回复
           </el-button>
           <el-text v-if="llmMode" type="info" size="small">
-            将附带「@LLM」并消耗你的全站 LLM 日额度；输出长度由教师在课程 LLM 设置中的 max_output_tokens 控制。
+            {{ llmModeHint }}
           </el-text>
         </div>
         <div class="discussion-format-bar">
@@ -145,6 +155,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import DiscussionAuthorAvatar from '@/components/DiscussionAuthorAvatar.vue'
 import MarkdownLatexLiveDemo from '@/components/MarkdownLatexLiveDemo.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
@@ -169,7 +180,7 @@ const props = defineProps({
   classId: { type: Number, default: null },
   /** Backend hint: homework/material not linked to a subject. */
   discussionRequiresContext: { type: Boolean, default: false },
-  /** Student UI: show "请 LLM 回复" and allow invoke_llm. Teachers post plain comments only. */
+  /** Student UI flag from callers; actual LLM permissions derive from current user role. */
   isStudent: { type: Boolean, default: false }
 })
 
@@ -221,6 +232,17 @@ const inputPlaceholder = computed(() => {
     return '首行已自动包含 @LLM（勿删），下一行起输入要向智能助教说明的问题…'
   }
   return '输入讨论内容（需登录，不支持匿名）'
+})
+
+const canInvokeLlm = computed(() =>
+  ['student', 'teacher', 'class_teacher', 'admin'].includes(userStore.userInfo?.role || '')
+)
+
+const llmModeHint = computed(() => {
+  if (userStore.isStudent) {
+    return '将附带「@LLM」并消耗你的全站 LLM 日额度；输出长度由教师在课程 LLM 设置中的 max_output_tokens 控制。'
+  }
+  return '将附带「@LLM」并调用课程智能助教；教师/班主任/管理员发起的讨论助教请求不受学生 token 日额度限制，输出长度仍由课程 LLM 设置中的 max_output_tokens 控制。'
 })
 
 const appendDraftSnippet = snippet => {
@@ -469,7 +491,7 @@ const toggleMarkdownDemo = () => {
 const submit = async () => {
   const text = draft.value.trim()
   if (!text || !canUseDiscussion.value) return
-  if (llmMode.value && props.isStudent) {
+  if (llmMode.value) {
     const inner = text.replace(/^\s*@LLM\s*\n?/i, '').trim()
     if (!inner) {
       ElMessage.warning('请填写要向智能助教说明的内容（@LLM 之后不能为空）。')
@@ -478,7 +500,7 @@ const submit = async () => {
   }
   posting.value = true
   try {
-    const invokeLlm = Boolean(llmMode.value && props.isStudent)
+    const invokeLlm = Boolean(llmMode.value && canInvokeLlm.value)
     const res = await api.discussions.create({
       target_type: props.targetType,
       target_id: props.targetId,
@@ -580,6 +602,17 @@ loadList()
 
 .discussion-row:last-of-type {
   border-bottom: none;
+}
+
+.discussion-row__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.discussion-row__content {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .discussion-row__meta {
