@@ -98,6 +98,8 @@ See [HTTP client slow-response busy hint](HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md
 - `tests/backend/auth/`
   - forgot-password flow and admin notification content (`test_forgot_password_flow.py`)
   - public registration validation when `ALLOW_PUBLIC_REGISTRATION` is enabled (`test_public_registration_validation.py`)
+- `tests/backend/learning_notes/`
+  - learning-note visibility, owner-only mutation, course-bound vs all-authenticated public notes, note-local copied outline/resources, note discussion metadata, and attendance date parsing regressions that support the embedded teaching-calendar workflow (`test_learning_notes_api.py`)
 
 ### `tests/behavior/`
 
@@ -131,6 +133,8 @@ Another targeted suite: **`e2e-core-flows-smoke.spec.js`** — ten stability-foc
 Another targeted suite: **`e2e-course-ui-markdown-reader.spec.js`** (12 cases) — **`subject_id` enrollment counts** surfaced via **学生管理** header (dashboard UI removed), **Markdown LaTeX demo** (scoped `MarkdownEditorPanel`), **sidebar** controls, **materials** layout + **MaterialRead** + discussion card, and historical **`/teaching-calendar`** deep-link coverage. Current product behavior redirects `/teaching-calendar` to **`/attendance`**; the teaching calendar is embedded inside the attendance page instead of appearing as a separate sidebar item, and no standalone `TeachingCalendarPage.vue` remains. Student sidebar remains flat (no 「课程学习」 parent — items match former children; regression: submenu title count `0`). Run alone with `npx playwright test e2e-course-ui-markdown-reader.spec.js` from `apps/web/admin`.
 
 Additive API-heavy tier after documentation alignment: **`e2e-docs-gap-tier15.spec.js`** — **`/api/discussions`** validation (`page_size`, scope mismatch, **`invoke_llm`** teacher acceptance), cross-class homework submission guards, orphan-course homework list for **class_teacher**, **`page_size`** discipline (**students** list **`le=1000`**), dual-gate mock LLM + **`process-grading`**, end-to-end mock grading drain, **`sync-status`** shape. Run alone with `npx playwright test e2e-docs-gap-tier15.spec.js` from `apps/web/admin`.
+
+Additive newer-surface tier: **`e2e-learning-notes-attendance-cover-tier20.spec.js`** (20 cases) — learning-note private/public visibility, all-authenticated public notes when `subject_id` is null, course-bound public notes, copied course outline/material snapshots, copied-note editing (`parent_id: null`, `chapter_id: null`, attachment clearing), note discussion metadata, `page_size` validation, learning-notes UI tabs/default-private dialog, student course-card cover visibility, `/teaching-calendar` redirect to embedded attendance calendar, and course/date-scoped attendance list behavior. Run alone with `npx playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium` from `apps/web/admin`.
 
 They also have the highest dependence on the local execution environment.
 

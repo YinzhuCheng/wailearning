@@ -2081,6 +2081,115 @@ This is primarily a **test-harness stability** issue. It should not, by itself,
 be read as evidence that admin discussion-LLM permission is broken once the
 teacher route and quota-exempt helper regressions are green.
 
+### Pitfall 81: PowerShell `python` may be system Python without pytest even when repo `.venv` exists
+
+### Symptom
+
+Running a focused pytest command from the repository root fails immediately:
+
+```text
+<system-python>: No module named pytest
+```
+
+### Context
+
+On Windows, `python` can resolve to a system interpreter even when the repository has a populated `.venv`. This surfaced while adding the learning-note / attendance-cover test tier: `python -m pytest tests/backend/learning_notes/test_learning_notes_api.py -q` failed before collection, while `<repo>/.venv/Scripts/python.exe -m pytest ...` ran the target module successfully.
+
+### Fix
+
+Use the repository virtualenv explicitly for targeted backend validation:
+
+```powershell
+<repo>\.venv\Scripts\python.exe -m pytest tests\backend\learning_notes\test_learning_notes_api.py -q
+```
+
+Do not rewrite imports or pytest configuration to fix a missing `pytest` package on the wrong interpreter. This is the Windows-specific variant of Pitfall 46.
+
+### Pitfall 82: Learning-note copied resources and chapters require `model_fields_set` to distinguish omitted vs explicit `null`
+
+### Symptom
+
+Tests or UI flows that try to freely edit a copied learning note cannot detach a resource from a copied chapter or promote a copied child chapter back to the note root. Payloads like these appear accepted but do not change the relationship:
+
+```json
+{ "chapter_id": null }
+{ "parent_id": null }
+{ "attachment_url": null }
+```
+
+### Cause
+
+The first implementation used `if payload.chapter_id is not None` / `if payload.parent_id is not None` / `if payload.attachment_url is not None`. That pattern treats an explicitly supplied JSON `null` exactly like an omitted field, so owner edits cannot clear nullable relationships or attachment references.
+
+### Fix
+
+Use Pydantic v2 `payload.model_fields_set` for nullable update fields:
+
+```text
+if "chapter_id" in payload.model_fields_set: ...
+if "parent_id" in payload.model_fields_set: ...
+if "attachment_url" in payload.model_fields_set: ...
+```
+
+Regression coverage:
+
+- `tests/backend/learning_notes/test_learning_notes_api.py`
+- `tests/e2e/web-admin/e2e-learning-notes-attendance-cover-tier20.spec.js`
+
+### Pitfall 83: Attendance single-create and date filters must parse `YYYY-MM-DD`, not pass raw strings to SQLite `DateTime`
+
+### Symptom
+
+`POST /api/attendance` returns **500** on SQLite when the request body uses the same date format emitted by the attendance page date picker / teaching-calendar flow:
+
+```json
+{ "date": "2026-05-07" }
+```
+
+The backend stack includes:
+
+```text
+SQLite DateTime type only accepts Python datetime and date objects as input.
+```
+
+A follow-up list request with `start_date=2026-05-07&end_date=2026-05-07` can also return **422** if the route parameters are typed as `datetime` directly, because Pydantic expects a datetime separator.
+
+### Cause
+
+Batch attendance routes already parsed incoming date strings before insert, but the single-create route wrote the raw Pydantic string into the ORM model. List/statistics filters also let FastAPI parse query dates as `datetime`, which rejects date-only values that the UI naturally sends.
+
+### Fix
+
+Centralize attendance date parsing in the router:
+
+- single-create converts `YYYY-MM-DD` or ISO datetime strings to `datetime` before querying/inserting;
+- list/class-stat/student-stat query boundaries accept string params and normalize date-only values to start/end of day;
+- invalid date strings return **400** instead of leaking database exceptions.
+
+Regression coverage:
+
+- `tests/backend/learning_notes/test_learning_notes_api.py::test_ln11_attendance_single_create_parses_iso_date_string_for_sqlite`
+- `tests/e2e/web-admin/e2e-learning-notes-attendance-cover-tier20.spec.js` case 20
+
+### Pitfall 84: Course-cover E2E should assert the enrolled course card, not assume catalog thumbnail placement
+
+### Symptom
+
+After setting `subjects.cover_image_url`, an E2E assertion for `data-testid="course-catalog-cover-thumb"` times out, while the active enrolled course card correctly renders `data-testid="course-card-cover"`.
+
+### Context
+
+`MyCourses.vue` renders two different student surfaces:
+
+- the schoolwide catalog table (`course-catalog-cover-thumb`);
+- the student's active/completed course cards (`course-card-cover`).
+
+Depending on current catalog filters, enrollment state, table virtualization, and route timing, a test that only wants to verify "students can see a selected course's cover" should target the active course card for the seeded course.
+
+### Fix
+
+Scope the locator to the exact `article.course-card` whose heading is the seeded course title, then assert `course-card-cover` inside that card. Keep separate catalog-thumbnail tests for catalog-specific behavior if that surface is the product target.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

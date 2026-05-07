@@ -475,7 +475,7 @@ def update_learning_note_chapter(
     chapter = _ensure_chapter_owner(note_id, chapter_id, db)
     if payload.title is not None:
         chapter.title = payload.title.strip()
-    if payload.parent_id is not None:
+    if "parent_id" in payload.model_fields_set:
         parent = _ensure_chapter_owner(note_id, payload.parent_id, db)
         if parent and parent.id == chapter.id:
             raise HTTPException(status_code=400, detail="Chapter cannot be its own parent.")
@@ -557,7 +557,7 @@ def update_learning_note_resource(
     )
     if not resource:
         raise HTTPException(status_code=404, detail="Learning note resource not found.")
-    if payload.chapter_id is not None:
+    if "chapter_id" in payload.model_fields_set:
         chapter = _ensure_chapter_owner(note_id, payload.chapter_id, db)
         resource.chapter_id = chapter.id if chapter else None
     if payload.title is not None:
@@ -566,9 +566,9 @@ def update_learning_note_resource(
         resource.content = payload.content
     if payload.content_format is not None:
         resource.content_format = normalize_content_format(payload.content_format)
-    if payload.attachment_name is not None:
+    if "attachment_name" in payload.model_fields_set:
         resource.attachment_name = payload.attachment_name
-    if payload.attachment_url is not None:
+    if "attachment_url" in payload.model_fields_set:
         resource.attachment_url = payload.attachment_url
     if payload.sort_order is not None:
         resource.sort_order = int(payload.sort_order)
