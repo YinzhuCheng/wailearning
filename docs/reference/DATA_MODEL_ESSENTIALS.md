@@ -30,11 +30,18 @@ The repository maintains **two persisted representations** of a learner:
 - `GET /api/students` (list) and `GET /api/students/{id}` call `reconcile_student_users_and_roster` then `commit` before querying/serializing.
 - `GET /api/users` (admin list) does the same **before** returning rows.
 
+Additional implementation truth (May 2026):
+
+- **Student-role account creation paths** (`POST /api/users` for admin-created student users and `POST /api/auth/register` for public student registration when enabled) already call **`sync_student_roster_from_user_accounts(...)`**. That means a newly created student login should immediately have a matching `students` row; there is no longer a product expectation that an operator must "also" open 学生管理 and re-enter the same learner just to unlock quota- or discussion-related flows.
+- **Roster-first creation paths** (`POST /api/students`, batch roster import) still call **`sync_student_user_from_roster_row(...)`**, so the reverse direction remains true: adding a roster row should create/align the student login account.
+- **`prepare_student_course_context`** now acts as a final self-healing guard for legacy drift: if a student login reaches a quota / homework / discussion path and the matching roster row is still missing, it locally triggers the same user→roster sync helper before continuing. This keeps quota and course-access code from inventing a second "bound student" standard.
+
 Effects for agents:
 
 - Do **not** expect `GET /api/users/student-candidates` or `POST /api/users/student-candidates/load` — those endpoints were removed when the admin UI dropped 「文件导入学生用户」; roster import remains on **学生管理** (`Students.vue`: 文件 / 粘贴导入).
 - `StudentResponse` (`api/schemas.py`) intentionally allows **`gender` default `MALE`** and **`class_id: Optional[int]`** so legacy rows with NULL ORM fields still serialize; `build_student_response` fills display placeholders (`无` / `—`) for empty names or student numbers.
 - Permission checks on `GET/PUT/DELETE /api/students/{id}` treat **`class_id is None`** as “not yet assigned to a class shell” and **do not** 403 solely because `None not in class_ids` (that Python expression was a bug source).
+- For LLM quota / discussion billing, the effective identity is the resolved **`Student.id`** from this same binding chain. There is **no** separate pre-created "quota row" requirement; the global default quota policy applies automatically when no `LLMStudentTokenOverride` row exists.
 
 ### 1.2 Pitfall catalog (student admin UX)
 

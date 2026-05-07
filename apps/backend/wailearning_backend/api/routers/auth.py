@@ -55,10 +55,14 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
+    user_id = user.id
+    username = user.username
+    is_student_with_class = user.role == UserRole.STUDENT.value and bool(user.class_id)
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={
-            "sub": user.username,
+            "sub": username,
             "tv": int(getattr(user, "token_version", 0) or 0),
         },
         expires_delta=access_token_expires,
@@ -66,16 +70,18 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
     LogService.log_login(
         db=db,
-        user_id=user.id,
-        username=user.username,
+        user_id=user_id,
+        username=username,
         ip_address=_client_ip(request),
         user_agent=str(request.headers.get("user-agent")) if request else None,
         success=True
     )
 
-    if user.role == UserRole.STUDENT.value and user.class_id:
-        prepare_student_course_context(user, db)
-        db.commit()
+    if is_student_with_class:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is not None:
+            prepare_student_course_context(user, db)
+            db.commit()
 
     return {"access_token": access_token, "token_type": "bearer"}
 

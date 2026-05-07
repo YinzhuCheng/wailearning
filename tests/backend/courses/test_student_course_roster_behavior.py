@@ -578,8 +578,8 @@ def test_batch_import_students_existing_course_all_get_enrollment(client: TestCl
         db.close()
 
 
-def test_public_register_student_then_roster_same_username_gets_enrollments(client: TestClient, monkeypatch):
-    """公开注册学生后补同用户名花名册：应有该班课程的选课。"""
+def test_public_register_student_immediately_gets_roster_enrollments_and_quota(client: TestClient, monkeypatch):
+    """公开注册学生后，无需再补学生管理花名册，也应直接获得本班课程上下文与额度视图。"""
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
     from apps.backend.wailearning_backend.core.config import settings
 
@@ -599,18 +599,20 @@ def test_public_register_student_then_roster_same_username_gets_enrollments(clie
     )
     assert r.status_code == 200, r.text
 
-    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
-    r2 = client.post(
-        "/api/students",
-        headers=th,
-        json={"name": "自注册", "student_no": reg_no, "gender": "male", "class_id": ctx["class_id"]},
-    )
-    assert r2.status_code == 200, r2.text
+    db = SessionLocal()
+    try:
+        st = db.query(Student).filter(Student.student_no == reg_no, Student.class_id == ctx["class_id"]).first()
+        assert st is not None
+    finally:
+        db.close()
 
     sh = login_api(client, reg_no, "rp")
     r_list = client.get("/api/subjects", headers=sh)
     assert r_list.status_code == 200
     assert ctx["course_id"] in {item["id"] for item in r_list.json()}
+    quota = client.get("/api/llm-settings/courses/student-quotas", headers=sh)
+    assert quota.status_code == 200, quota.text
+    assert quota.json().get("daily_student_token_limit") is not None
 
 
 def test_get_homework_list_for_student_submission_map_consistent(client: TestClient):

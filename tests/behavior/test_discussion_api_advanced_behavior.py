@@ -8,7 +8,6 @@ from __future__ import annotations
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -208,6 +207,36 @@ def test_behavior_discussion_concurrent_double_delete_idempotent_both_204(client
     t2.join()
     assert all(s in (204, 404) for s in statuses)
     assert 204 in statuses
+
+
+def test_behavior_discussion_llm_resolves_student_without_subject_anchor_class(client: TestClient):
+    """Discussion LLM student binding should not depend on Subject.class_id being populated."""
+    ctx = make_grading_course_with_homework()
+    db = SessionLocal()
+    try:
+        subj = db.query(Subject).filter(Subject.id == ctx["subject_id"]).first()
+        assert subj is not None
+        # Elective-like / multi-class-compatible shape: no single anchor class on Subject.
+        subj.class_id = None
+        subj.course_type = "elective"
+        db.commit()
+        student_user = db.query(User).filter(User.id == ctx["student_user_id"]).first()
+        assert student_user is not None
+        from apps.backend.wailearning_backend.llm_discussion import resolve_student_for_discussion_llm
+
+        student = resolve_student_for_discussion_llm(db, student_user, class_id=ctx["class_id"])
+        assert student.id == ctx["student_id"]
+    finally:
+        db.close()
+
+
+def test_behavior_discussion_llm_quota_exempt_roles_helper():
+    from apps.backend.wailearning_backend.llm_discussion import discussion_llm_user_is_quota_exempt
+
+    assert discussion_llm_user_is_quota_exempt(User(role=UserRole.ADMIN.value)) is True
+    assert discussion_llm_user_is_quota_exempt(User(role=UserRole.TEACHER.value)) is True
+    assert discussion_llm_user_is_quota_exempt(User(role=UserRole.CLASS_TEACHER.value)) is True
+    assert discussion_llm_user_is_quota_exempt(User(role=UserRole.STUDENT.value)) is False
 
 
 def test_behavior_discussion_concurrent_posts_eventually_list_total_matches(client: TestClient):

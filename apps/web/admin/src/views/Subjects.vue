@@ -22,7 +22,9 @@
 
     <template v-else-if="isClassTeacherView">
       <el-card shadow="never">
-        <el-table :data="classTeacherCourses" v-loading="loading">
+        <DualHorizontalScroll target-selector=".courses-table-scroll">
+          <div class="courses-table-scroll dual-scroll-target">
+            <el-table :data="classTeacherCourses" v-loading="loading">
           <el-table-column prop="name" label="课程名称" min-width="180" />
           <el-table-column prop="teacher_name" label="任课老师" width="160" />
           <el-table-column prop="class_name" label="班级" width="160" />
@@ -67,7 +69,9 @@
               </el-button>
             </template>
           </el-table-column>
-        </el-table>
+            </el-table>
+          </div>
+        </DualHorizontalScroll>
       </el-card>
 
       <el-dialog
@@ -82,13 +86,17 @@
           <div><strong>任课老师：</strong>{{ detailCourse.teacher_name || '未安排教师' }}</div>
         </div>
 
-        <el-table :data="courseDetailRows" v-loading="courseDetailLoading">
+        <DualHorizontalScroll target-selector=".courses-detail-scroll">
+          <div class="courses-detail-scroll dual-scroll-target">
+            <el-table :data="courseDetailRows" v-loading="courseDetailLoading">
           <el-table-column prop="student_name" label="学生姓名" min-width="150" />
           <el-table-column prop="student_no" label="学号" min-width="160" />
           <el-table-column prop="absence_count" label="缺勤次数" width="120" />
           <el-table-column prop="missing_homework_count" label="缺交次数" width="120" />
           <el-table-column prop="final_score_text" label="最终成绩" width="140" />
-        </el-table>
+            </el-table>
+          </div>
+        </DualHorizontalScroll>
 
         <template v-if="detailCourse?.class_id || (detailCourse?.class_links && detailCourse.class_links.length)" #footer>
           <div class="course-detail-footer">
@@ -101,7 +109,9 @@
 
     <template v-else>
       <el-card shadow="never">
-        <el-table :data="courses" v-loading="loading">
+        <DualHorizontalScroll target-selector=".courses-table-scroll">
+          <div class="courses-table-scroll dual-scroll-target">
+            <el-table :data="courses" v-loading="loading">
           <el-table-column prop="name" label="课程名称" min-width="180" />
           <el-table-column prop="class_name" label="班级" width="160" />
           <el-table-column prop="teacher_name" label="任课老师" width="160" />
@@ -152,7 +162,9 @@
               <el-button type="danger" size="small" :data-testid="`subjects-delete-${row.id}`" @click="deleteCourse(row)">删除</el-button>
             </template>
           </el-table-column>
-        </el-table>
+            </el-table>
+          </div>
+        </DualHorizontalScroll>
       </el-card>
 
       <el-dialog
@@ -354,25 +366,29 @@
             <span>当前班级：{{ rosterSelectedClassLabel }}</span>
           </div>
 
-          <el-table
-            ref="rosterEnrollTableRef"
-            data-testid="table-roster-enroll-pick"
-            :data="rosterEnrollRows"
-            v-loading="rosterEnrollLoading"
-            max-height="420"
-            row-key="id"
-            @selection-change="onRosterEnrollSelectionChange"
-          >
-            <el-table-column type="selection" width="48" :selectable="row => !row._enrolled" />
-            <el-table-column prop="name" label="姓名" min-width="120" />
-            <el-table-column prop="student_no" label="学号" min-width="140" />
-            <el-table-column label="选课状态" width="120">
-              <template #default="{ row }">
-                <el-tag v-if="row._enrolled" type="success" size="small">已在课</el-tag>
-                <el-tag v-else type="info" size="small">未在课</el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
+          <DualHorizontalScroll target-selector=".courses-roster-scroll">
+            <div class="courses-roster-scroll dual-scroll-target">
+              <el-table
+                ref="rosterEnrollTableRef"
+                data-testid="table-roster-enroll-pick"
+                :data="rosterEnrollRows"
+                v-loading="rosterEnrollLoading"
+                max-height="420"
+                row-key="id"
+                @selection-change="onRosterEnrollSelectionChange"
+              >
+                <el-table-column type="selection" width="48" :selectable="row => !row._enrolled" />
+                <el-table-column prop="name" label="姓名" min-width="120" />
+                <el-table-column prop="student_no" label="学号" min-width="140" />
+                <el-table-column label="选课状态" width="120">
+                  <template #default="{ row }">
+                    <el-tag v-if="row._enrolled" type="success" size="small">已在课</el-tag>
+                    <el-tag v-else type="info" size="small">未在课</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </DualHorizontalScroll>
         </template>
 
         <template #footer>
@@ -534,6 +550,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import CourseSchedulePicker from '@/components/CourseSchedulePicker.vue'
+import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import { useUserStore } from '@/stores/user'
 import {
   filterCoursesByClassId,
@@ -1415,7 +1432,26 @@ watch(
 }
 
 .courses-page :deep(.el-card__body) {
+  overflow-x: hidden;
+}
+
+.courses-table-scroll,
+.courses-detail-scroll,
+.courses-roster-scroll {
   overflow-x: auto;
+  max-width: 100%;
+}
+
+.courses-table-scroll :deep(.el-table) {
+  min-width: 1260px;
+}
+
+.courses-detail-scroll :deep(.el-table) {
+  min-width: 760px;
+}
+
+.courses-roster-scroll :deep(.el-table) {
+  min-width: 520px;
 }
 
 .page-header {

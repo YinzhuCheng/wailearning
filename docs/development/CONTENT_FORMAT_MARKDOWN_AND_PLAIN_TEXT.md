@@ -48,7 +48,8 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 ### Shared components
 
 - `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar, KaTeX usage hint, fixed **LaTeX live demo** (`MarkdownLatexLiveDemo.vue`), and live preview are hidden; the textarea remains monospace for editing. In Markdown mode the toolbar includes **行内公式** / **独立公式** snippets (`\(…\)`, `$$…$$`). Above the textarea, a **non-editable canonical example** (`apps/web/admin/src/utils/markdownLatexDemo.js`) is always rendered via `RichMarkdownDisplay` so authors see correct delimiter behavior before typing; below that, **您的内容预览** mirrors the editable textarea. Props `compact-demo` reduces padding / hides the collapsible raw-markdown panel when multiple Markdown fields stack in one dialog (homework rubric blocks still show the **same rendered** demo).
-- `MarkdownLatexLiveDemo.vue`: reusable demo card + copy / insert actions; imported by `MarkdownEditorPanel` and by `CourseDiscussionPanel` whenever `draftFormat === 'markdown'`.
+- `MarkdownLatexLiveDemo.vue`: reusable demo card + copy / insert actions. In large authoring surfaces (`MarkdownEditorPanel`) it is rendered immediately; in the discussion composer it is hidden behind an explicit **查看 Markdown + LaTeX 示例** toggle so the reply area does not start with a long instructional block.
+- `RichMarkdownDisplay.vue` + `apps/web/admin/src/utils/markdownIt.js`: shared Markdown + KaTeX render path. Important implementation detail: before calling `markdown-it`, the renderer temporarily replaces `\(`, `\)`, `\[`, `\]` with placeholder tokens and restores them in the generated HTML. Without that protection, `markdown-it` consumes the backslashes as Markdown escapes, so KaTeX never sees the promised delimiters. This placeholder round-trip is now part of the contract for editor preview, published discussion rows, material readers, and any other UI using `RichMarkdownDisplay` / `FeedbackRichText`.
 - `PlainOrMarkdownBlock.vue`: read-only display; delegates Markdown mode to `RichMarkdownDisplay` and uses `white-space: pre-wrap` for plain mode.
 - `apps/web/admin/src/utils/contentFormat.js`: mirrors backend normalization for client defaults.
 
@@ -59,7 +60,11 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 - **Materials** (`Materials.vue` + `MaterialRead.vue`): authoring uses the same Markdown panel; table rows expose **阅读页** linking to `/materials/read/:id` with prev/next navigation while the modal detail dialog keeps quick preview + discussion threading. **Full-page reader (`MaterialRead.vue`) also mounts `CourseDiscussionPanel` below the article** so behavior matches the modal: thread bodies render via `PlainOrMarkdownBlock` (Markdown + KaTeX vs plain); composer shows the same Markdown/LaTeX live demo when reply format is Markdown. Orphan materials (`discussion_requires_context=true`) show the existing warning card instead of the thread composer.
 - **Notifications** (`Notifications.vue`): compose + detail (non-password-reset) respect `content_format`.
 - **Teacher submissions** (`HomeworkSubmissions.vue` + `HomeworkSubmissionReview.vue`): the **list** still uses `PlainOrMarkdownBlock` in the **历史** dialog for expanded attempt bodies. **「详情」** no longer opens a 720px dialog: it **navigates to** `HomeworkSubmissionReview.vue` at **`/homework/:homeworkId/submissions/:submissionId`** (query params such as `student_id` are preserved for return navigation). The review page uses the same render stack for the latest summary body, embeds a score/comment form, a collapsible per-attempt history timeline, and a **返回提交列表** control. The teacher-only API **`GET /api/homeworks/{homework_id}/submissions/{submission_id}/status`** returns a single `HomeworkSubmissionStatusResponse` row for that page (avoids paging the full class roster). **Pitfall:** older Playwright specs that waited for `getByRole('dialog')` after clicking **详情** must be updated to assert `toHaveURL(/\/homework\/\d+\/submissions\/\d+/)` and target `data-testid="homework-submission-detail-body"` on the **page** (not inside a dialog).
-- **Discussions** (`CourseDiscussionPanel.vue`): radio group **回复格式** before posting; choosing **Markdown** reveals the same live KaTeX demo (`MarkdownLatexLiveDemo`) plus copy/insert helpers; `POST /api/discussions` sends `body_format`.
+- **Discussions** (`CourseDiscussionPanel.vue`): radio group **回复格式** before posting; choosing **Markdown** now shows two separate affordances:
+  1. a lightweight toolbar row with **查看 Markdown + LaTeX 示例** / **隐藏 Markdown + LaTeX 示例** so the fixed example stays **collapsed by default**,
+  2. an always-live **回复预览** block under the textarea, rendered by the same `RichMarkdownDisplay` stack used after publishing.
+  
+  Published rows also changed: **short** discussion bodies now render immediately via `PlainOrMarkdownBlock` (so Markdown + KaTeX works right after posting), while **long** bodies still use the existing three-logical-line collapsed preview and only switch to the full renderer after the user expands them. Discussion rows now also show the author's avatar when `author_avatar_url` is present; otherwise the UI falls back to a role-colored initial avatar (assistant rows use `助`). `POST /api/discussions` still sends `body_format`.
 
 ## Testing
 
@@ -112,6 +117,14 @@ They assert round-trip persistence for homework update + student submission, dis
    - **Admin visibility:** `/teaching-calendar` is listed in `adminHiddenPaths` like other teacher tools — admins hitting it bounce to **`/students`** (admin home).  
    - **Students:** `/teaching-calendar` is blocked (student redirect list in `router.beforeEach`), same spirit as `/scores`.  
    **Backend:** `dashboard.router` APIs (`/api/dashboard/stats`, rankings, analysis) remain for **排行榜 / 数据分析** pages — only the dedicated SPA aggregate page was removed.
+
+11. **Discussion short-body rendering vs expand-only rendering**  
+   A discussion row used to mount `PlainOrMarkdownBlock` **only when expanded**. Symptom: a newly posted short Markdown reply (including LaTeX) appeared as raw source in the list until the row was manually expanded — and because short rows are not truncated, there was no expand action at all, so users perceived this as “发布后渲染失败”.  
+   **Fix:** `CourseDiscussionPanel.vue` now renders the rich block immediately when the body is **not truncated**, and keeps the collapsed plain-text preview path only for long rows. Regression guard: `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js` case **material detail discussion keeps demo collapsed by default, shows live preview, and renders posted KaTeX**.
+
+12. **Markdown-it escaping of `\(...\)` and `\[...\]`**  
+   The repository documentation and UI hints explicitly promise four delimiter families: `$...$`, `$$...$$`, `\(...\)`, `\[...\]`. In practice, `markdown-it` treats `\(` / `\[` as escape sequences and drops the backslashes before the DOM reaches `renderMathInElement`, so the preview can degrade to literal `(x^2)` text even though KaTeX support is configured.  
+   **Fix:** `apps/web/admin/src/utils/markdownIt.js::renderCourseMarkdown` now performs a placeholder round-trip around `md.render(...)`. `RichMarkdownDisplay.vue` and `FeedbackRichText.vue` both call that helper, so editor previews and published views preserve these delimiters consistently.
 
 ## Related documentation
 

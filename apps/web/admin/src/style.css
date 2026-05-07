@@ -65,6 +65,12 @@
   --el-color-primary-light-8: var(--wa-color-primary-100);
   --el-color-primary-light-9: var(--wa-color-primary-50);
   --el-color-primary-dark-2: var(--wa-color-primary-700);
+  --el-font-size-extra-large: var(--wa-font-size-xl);
+  --el-font-size-large: var(--wa-font-size-lg);
+  --el-font-size-medium: var(--wa-font-size-md);
+  --el-font-size-base: var(--wa-font-size-md);
+  --el-font-size-small: var(--wa-font-size-sm);
+  --el-font-size-extra-small: var(--wa-font-size-xs);
   --el-border-radius-base: var(--wa-radius-sm);
   --el-border-radius-small: var(--wa-radius-xs);
   --el-border-radius-round: 18px;
@@ -140,6 +146,8 @@ body {
     Arial,
     sans-serif
   );
+  font-size: var(--wa-font-size-md);
+  line-height: var(--wa-line-height-normal);
   background-color: var(--wa-color-bg);
   color: var(--wa-color-text);
 }
@@ -209,6 +217,7 @@ html[data-wa-density='spacious'] {
 }
 
 .el-button {
+  font-size: var(--wa-font-size-md);
   border-radius: var(--wa-radius-sm);
   transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
@@ -231,7 +240,20 @@ html[data-wa-density='spacious'] {
 .el-input-number,
 .el-date-editor.el-input,
 .el-date-editor.el-input__wrapper {
+  font-size: var(--wa-font-size-md);
   border-radius: var(--wa-radius-sm);
+}
+
+.el-form-item__label,
+.el-radio,
+.el-checkbox,
+.el-segmented,
+.el-tag,
+.el-empty__description,
+.el-table,
+.el-dialog__title,
+.el-pagination {
+  font-size: var(--wa-font-size-md);
 }
 
 .el-tag {

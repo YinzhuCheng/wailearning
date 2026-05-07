@@ -131,50 +131,54 @@
         title="连通性会依次测试：先纯文本，再使用你上传的测试图做多模态校验（服务端将图片规范为 PNG + base64）。通过视觉能力校验的端点，才可被教师配置到课程中并用于带图作业自动评分。"
       />
 
-      <el-table :data="presets" v-loading="presetsLoading">
-        <el-table-column prop="name" label="名称" min-width="140" />
-        <el-table-column prop="model_name" label="模型" min-width="180" />
-        <el-table-column prop="base_url" label="Base URL" min-width="220" show-overflow-tooltip />
-        <el-table-column label="文本" width="110">
-          <template #default="{ row }">
-            <el-tag :type="presetStepTagType(row.text_validation_status)" size="small">
-              {{ presetStepLabel(row.text_validation_status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="视觉" width="110">
-          <template #default="{ row }">
-            <el-tag :type="presetStepTagType(row.vision_validation_status)" size="small">
-              {{ presetStepLabel(row.vision_validation_status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="总状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.validation_status === 'validated' ? 'success' : row.validation_status === 'failed' ? 'danger' : 'info'">
-              {{ row.validation_status === 'validated' ? '已通过' : row.validation_status === 'failed' ? '失败' : '未校验' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="启用" width="90">
-          <template #default="{ row }">
-            <el-tag :type="row.is_active ? 'success' : 'info'">
-              {{ row.is_active ? '是' : '否' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="详情" min-width="240" show-overflow-tooltip>
-          <template #default="{ row }">
-            {{ formatPresetDetail(row) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" type="primary" :data-testid="`settings-llm-preset-edit-${row.id}`" @click="openPresetDialog(row)">编辑</el-button>
-            <el-button size="small" :data-testid="`settings-llm-preset-validate-${row.id}`" :loading="row.validating" @click="openValidateDialog(row)">校验</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <DualHorizontalScroll target-selector=".settings-preset-scroll">
+        <div class="settings-preset-scroll dual-scroll-target">
+          <el-table :data="presets" v-loading="presetsLoading">
+            <el-table-column prop="name" label="名称" min-width="140" />
+            <el-table-column prop="model_name" label="模型" min-width="180" />
+            <el-table-column prop="base_url" label="Base URL" min-width="220" show-overflow-tooltip />
+            <el-table-column label="文本" width="110">
+              <template #default="{ row }">
+                <el-tag :type="presetStepTagType(row.text_validation_status)" size="small">
+                  {{ presetStepLabel(row.text_validation_status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="视觉" width="110">
+              <template #default="{ row }">
+                <el-tag :type="presetStepTagType(row.vision_validation_status)" size="small">
+                  {{ presetStepLabel(row.vision_validation_status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="总状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.validation_status === 'validated' ? 'success' : row.validation_status === 'failed' ? 'danger' : 'info'">
+                  {{ row.validation_status === 'validated' ? '已通过' : row.validation_status === 'failed' ? '失败' : '未校验' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="启用" width="90">
+              <template #default="{ row }">
+                <el-tag :type="row.is_active ? 'success' : 'info'">
+                  {{ row.is_active ? '是' : '否' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="详情" min-width="240" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ formatPresetDetail(row) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="220" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" type="primary" :data-testid="`settings-llm-preset-edit-${row.id}`" @click="openPresetDialog(row)">编辑</el-button>
+                <el-button size="small" :data-testid="`settings-llm-preset-validate-${row.id}`" :loading="row.validating" @click="openValidateDialog(row)">校验</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </DualHorizontalScroll>
     </el-card>
 
     <el-card id="settings-section-llm-quota" class="preview-card settings-section-card">
@@ -324,6 +328,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, Refresh, Select, Setting, UploadFilled, View } from '@element-plus/icons-vue'
+import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import { normalizeBrandingText } from '@/utils/branding'
 import { appearancePresets } from '@/utils/theme'
 import { http } from '@/api'
@@ -891,6 +896,15 @@ onMounted(() => {
   min-width: 0;
 }
 
+.settings-preset-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.settings-preset-scroll :deep(.el-table) {
+  min-width: 1310px;
+}
+
 .login-preview {
   background: #f5f7fa;
   padding: 20px;
@@ -963,7 +977,7 @@ onMounted(() => {
 }
 
 .preview-card :deep(.el-card__body) {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 @media (max-width: 768px) {

@@ -248,7 +248,7 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
       .toBe(true)
   })
 
-  test('06 teacher invoke_llm forbidden (403)', async () => {
+  test('06 teacher invoke_llm accepted (200)', async () => {
     const s = scenario()
     const teTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
     const r = await apiPostDiscussion(teTok, {
@@ -259,7 +259,8 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
       body: '@LLM\nx',
       invoke_llm: true
     })
-    expect(r.status).toBe(403)
+    expect(r.status).toBe(200)
+    expect(r.json?.llm_invocation).toBe(true)
   })
 
   test('07 student UI: empty @LLM tail blocks submit (toast)', async ({ page }) => {

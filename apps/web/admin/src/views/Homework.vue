@@ -32,13 +32,15 @@
 
     <template v-else>
       <el-card shadow="never" class="homework-list-card">
-        <el-table
-          ref="homeworkTableRef"
-          :data="homeworks"
-          v-loading="loading"
-          row-key="id"
-          @selection-change="onHomeworkSelectionChange"
-        >
+        <DualHorizontalScroll target-selector=".homework-table-scroll">
+          <div class="homework-table-scroll dual-scroll-target">
+            <el-table
+              ref="homeworkTableRef"
+              :data="homeworks"
+              v-loading="loading"
+              row-key="id"
+              @selection-change="onHomeworkSelectionChange"
+            >
           <template #empty>
             <div class="homework-empty-state">
               <div class="homework-empty-state__title">
@@ -158,7 +160,9 @@
               {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
-        </el-table>
+            </el-table>
+          </div>
+        </DualHorizontalScroll>
       </el-card>
     </template>
 
@@ -393,6 +397,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
@@ -807,26 +812,32 @@ watch(selectedCourse, () => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   gap: 16px;
   margin-bottom: 24px;
+  text-align: center;
 }
 
 .page-title {
   margin: 0 0 8px;
-  font-size: 28px;
+  font-size: var(--wa-font-size-stat);
   color: #0f172a;
 }
 
 .page-subtitle {
   margin: 0;
   color: #64748b;
+  font-size: var(--wa-font-size-md);
 }
 
 .header-actions {
   display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
+  width: 100%;
 }
 
 .attachment-help,
@@ -893,10 +904,14 @@ watch(selectedCourse, () => {
 }
 
 .homework-list-card :deep(.el-card__body) {
+  overflow-x: hidden;
+}
+
+.homework-table-scroll {
   overflow-x: auto;
 }
 
-.homework-list-card :deep(.el-table) {
+.homework-table-scroll :deep(.el-table) {
   min-width: 1060px;
 }
 
@@ -945,7 +960,7 @@ watch(selectedCourse, () => {
 
 @media (max-width: 768px) {
   .page-header {
-    flex-direction: column;
+    align-items: center;
   }
 
   .homework-page {

@@ -341,6 +341,13 @@ The exhaustive narrative lives in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PI
 | Many `.el-select-dropdown` nodes stay hidden (teleported poppers) | **71**, visible filter / API setup | Prefer **`POST /api/subjects`** when testing delete/list invariants, not form picker ergonomics. |
 | Roster-enroll UI needs **`student_b`** **未在课** | **72**, admin `DELETE .../subjects/{id}/students/{sid}` first | Required-course sync may already enroll class roster. |
 | Batch调班 on huge **`/users`** table | **73**, scroll row, wait **`users-open-batch-class` enabled** | Optional **`filterable`** input may not exist — option click still works. |
+| Admin frontend build fails with `vite: not found` | **74**, missing `node_modules` under `apps/web/admin` | Run `npm ci` before `npm run build` on fresh agents. |
+| Playwright runner installed but Chromium missing | **75**, `Executable doesn't exist`, `playwright install` | Run `npx playwright install chromium` before targeted E2E. |
+| Discussion Markdown demo / preview expectation drift | **76**, `discussion-markdown-preview`, `查看 Markdown + LaTeX 示例` | Demo is collapsed by default; assert preview or click toggle first. |
+| Wrapper-based dual-scroll refactor broke Vue template structure | **77**, `Element is missing end tag` | Recount preserved scroll-container tags and run `npm run build` immediately. |
+| Student login route reads ORM user after logging commit | **78**, `DetachedInstanceError`, expired `User` state | Cache role/class before log commit or re-query user before student-specific repair. |
+| Legacy pytest module imports `main.py` too early | **79**, `table already exists`, `no such table` during isolated runs | Import `main.app` lazily inside fixtures after DB reset setup. |
+| Isolated admin discussion smoke can fail inside login logging, not route logic | **80**, `operation_logs.user_id`, `ensure_admin()` | Prefer stable teacher-route regression plus helper-level admin entitlement proof. |
 | `SECRET_KEY` / `REQUIRE_STRONG_SECRETS` startup failures | **57** | Weak secrets rejected when strong validation is on — see [CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md). |
 
 When adding a **new** recurring failure mode, append it to `TEST_EXECUTION_PITFALLS.md` first, then add one row here so agents discover it without rereading the entire pitfalls file every time.

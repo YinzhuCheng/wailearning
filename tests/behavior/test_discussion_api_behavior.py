@@ -108,9 +108,13 @@ def test_behavior_discussion_wrong_class_for_subject_post_400(client: TestClient
     assert r.status_code == 400
 
 
-def test_behavior_discussion_teacher_invoke_llm_forbidden_403(client: TestClient):
+def test_behavior_discussion_teacher_invoke_llm_allowed_200(client: TestClient, monkeypatch):
     ctx = make_grading_course_with_homework()
     te = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    monkeypatch.setattr(
+        "apps.backend.wailearning_backend.api.routers.discussions.threading.Thread",
+        lambda *args, **kwargs: type("NoopThread", (), {"start": lambda self: None})(),
+    )
     base = {
         "target_type": "homework",
         "target_id": ctx["homework_id"],
@@ -120,7 +124,8 @@ def test_behavior_discussion_teacher_invoke_llm_forbidden_403(client: TestClient
         "invoke_llm": True,
     }
     r = client.post("/api/discussions", headers=te, json=base)
-    assert r.status_code == 403
+    assert r.status_code == 200, r.text
+    assert r.json()["llm_invocation"] is True
 
 
 def test_behavior_discussion_student_cannot_delete_teacher_message_403(client: TestClient):
@@ -153,6 +158,32 @@ def test_behavior_discussion_teacher_can_delete_student_message_204(client: Test
     assert c.status_code == 200
     d = client.delete(f"/api/discussions/{c.json()['id']}", headers=te)
     assert d.status_code == 204
+
+
+def test_behavior_discussion_list_includes_author_avatar_url(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    te = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    db = SessionLocal()
+    try:
+        teacher = db.query(User).filter(User.username == ctx["teacher_username"]).first()
+        assert teacher is not None
+        teacher.avatar_url = "/uploads/test-avatar.png"
+        db.commit()
+    finally:
+        db.close()
+
+    base = {
+        "target_type": "homework",
+        "target_id": ctx["homework_id"],
+        "subject_id": ctx["subject_id"],
+        "class_id": ctx["class_id"],
+    }
+    created = _post_discussion(client, te, {**base, "body": "avatar-row"})
+    assert created.status_code == 200, created.text
+    listed = _list_discussion(client, te, {**base, "page": 1, "page_size": 10})
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json()["data"] if item["id"] == created.json()["id"])
+    assert row["author_avatar_url"] == "/uploads/test-avatar.png"
 
 
 def test_behavior_discussion_pagination_exact_counts(client: TestClient):

@@ -16,11 +16,12 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import Class, Gender, Student, User, UserRole
+from apps.backend.wailearning_backend.db.models import Class, Gender, Student, User
+from tests.scenarios.llm_scenario import ensure_admin, login_api
 
 
 @pytest.fixture(autouse=True)
@@ -31,20 +32,14 @@ def _reset_db():
     from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
-    db = SessionLocal()
     try:
-        if not db.query(User).filter(User.username == "adm").first():
-            db.add(
-                User(
-                    username="adm",
-                    hashed_password=get_password_hash("a"),
-                    real_name="Admin",
-                    role=UserRole.ADMIN.value,
-                )
-            )
-            db.commit()
-    finally:
-        db.close()
+        ensure_admin()
+    except IntegrityError:
+        db = SessionLocal()
+        try:
+            db.rollback()
+        finally:
+            db.close()
     yield
     SessionLocal().close()
 
@@ -55,9 +50,7 @@ def client() -> TestClient:
 
 
 def _admin_headers(client: TestClient) -> dict[str, str]:
-    r = client.post("/api/auth/login", data={"username": "adm", "password": "a"})
-    assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return login_api(client, "pytest_admin", "pytest_admin_pass")
 
 
 def test_admin_create_student_user_creates_roster_and_round_trips_display_name(client: TestClient):
@@ -98,6 +91,13 @@ def test_admin_create_student_user_creates_roster_and_round_trips_display_name(c
         assert u.real_name == "展示姓名甲"
     finally:
         db.close()
+
+    student_login = client.post("/api/auth/login", data={"username": uname, "password": "init-pass"})
+    assert student_login.status_code == 200, student_login.text
+    student_headers = {"Authorization": f"Bearer {student_login.json()['access_token']}"}
+    quota = client.get("/api/llm-settings/courses/student-quotas", headers=student_headers)
+    assert quota.status_code == 200, quota.text
+    assert quota.json().get("daily_student_token_limit") is not None
 
     r2 = client.put(
         f"/api/users/{uid}",
@@ -188,6 +188,13 @@ def test_post_students_omit_gender_defaults_to_male(client: TestClient):
         assert st.gender == Gender.MALE
     finally:
         db.close()
+
+    student_login = client.post("/api/auth/login", data={"username": f"nog_{suf}", "password": f"nog_{suf}"})
+    assert student_login.status_code == 200, student_login.text
+    student_headers = {"Authorization": f"Bearer {student_login.json()['access_token']}"}
+    quota = client.get("/api/llm-settings/courses/student-quotas", headers=student_headers)
+    assert quota.status_code == 200, quota.text
+    assert quota.json().get("daily_student_token_limit") is not None
 
 
 def test_batch_students_row_without_gender_key_succeeds_as_male(client: TestClient):

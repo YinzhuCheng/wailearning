@@ -1810,6 +1810,277 @@ Before opening **从花名册进课**, **`DELETE /api/subjects/{course_required_
 
 **`scrollIntoViewIfNeeded`** on the **`tr`**, then **`expect(users-open-batch-class).toBeEnabled`**, then open dialog; pick target class via **visible** dropdown + **`getByRole('option')`** (filter input is **optional** — may not exist in all EP builds).
 
+### Pitfall 74: `npm run build` in `apps/web/admin` can fail with `vite: not found` on fresh agents
+
+### Symptom
+
+```text
+> ddclass-frontend@1.0.0 build
+> vite build
+
+sh: 1: vite: not found
+```
+
+### Context
+
+The repository stores the admin SPA lockfile under **`<REPO_ROOT>/apps/web/admin/package-lock.json`**, but fresh cloud agents and Python-first CI images often start with **no `node_modules/` directory**. In that state, `npm run build` launches the package script correctly but fails because the local Vite binary from `devDependencies` is missing.
+
+This surfaced during a discussion-editor repair pass: the code change itself was valid, but the first build failed before Vite executed.
+
+### Fix
+
+From **`<REPO_ROOT>/apps/web/admin`**:
+
+```bash
+npm ci
+npm run build
+```
+
+If the image lacks Node/npm entirely, first read **Pitfall 48**. Do **not** treat `vite: not found` as evidence that the Vite config or source imports are broken.
+
+### Interpretation
+
+This is **frontend dependency bootstrap debt**, not a product regression in the edited Vue files.
+
+### Pitfall 75: Playwright browsers may be missing even after `npm ci`
+
+### Symptom
+
+```text
+browserType.launch: Executable doesn't exist at .../chromium_headless_shell-.../chrome-headless-shell
+Looks like Playwright was just installed or updated.
+Please run: npx playwright install
+```
+
+### Context
+
+Installing **`@playwright/test`** via `npm ci` provides the runner but **not necessarily the browser binaries**. On blank Linux agents, the first targeted E2E may therefore fail only after the managed backend and Vite startup have already succeeded, which can mislead operators into suspecting the app boot sequence.
+
+### Fix
+
+From **`<REPO_ROOT>/apps/web/admin`**:
+
+```bash
+npx playwright install chromium
+npx playwright test <spec> --project=chromium
+```
+
+If disk budgets or custom browser caches matter, also align `PLAYWRIGHT_BROWSERS_PATH` with your runner policy.
+
+### Interpretation
+
+This is **browser-runtime bootstrap debt**. When the error explicitly says the executable does not exist, do not debug selectors, routes, or API startup first.
+
+### Pitfall 76: Discussion Markdown demo is intentionally collapsed by default; target preview or click the toggle first
+
+### Symptom
+
+Older Playwright expectations fail after opening a discussion composer:
+
+```text
+expect(getByTestId('markdown-latex-demo-render')).toBeVisible()
+Received: 0 matching elements
+```
+
+or the test verifies a posted short Markdown reply and sees raw source / plain text instead of a rendered `.katex` node because it was written against the pre-fix DOM behavior.
+
+### Context
+
+`CourseDiscussionPanel.vue` changed in May 2026 so the long fixed example is **hidden behind** **`查看 Markdown + LaTeX 示例`** until the user asks for it. At the same time, Markdown authoring gained a dedicated **`discussion-markdown-preview`** live preview region, and short published rows now render through `PlainOrMarkdownBlock` immediately instead of waiting for an expand action that short rows never expose.
+
+### Fix
+
+- For the example card, assert the **toggle button** first, then click it before expecting **`markdown-latex-demo-render`**.
+- For authoring feedback, assert **`data-testid="discussion-markdown-preview"`** (for example, wait for `.katex` inside it after typing).
+- For published output, scope to the specific **`.discussion-row`** and assert a rendered `.katex` node on short Markdown posts.
+
+Reference regression guard:
+
+- `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js`
+  - `material detail discussion keeps demo collapsed by default, shows live preview, and renders posted KaTeX`
+
+### Interpretation
+
+This is mostly **test expectation drift** caused by a deliberate UX change, not a regression in the discussion feature.
+
+### Pitfall 77: wrapper-based dual-scroll refactors can leave Vue templates with a missing closing tag
+
+### Symptom
+
+`npm run build` fails quickly with a Vue SFC parse error such as:
+
+```text
+[vite:vue] src/views/Attendance.vue (...): Element is missing end tag.
+```
+
+### Context
+
+This surfaced while adding a synchronized **top horizontal scrollbar** above an
+existing bottom-only wide-surface scroll area. The affected page
+(`apps/web/admin/src/views/Attendance.vue`) already had:
+
+```text
+<div class="sheet-scroll">
+  <div class="attendance-grid">...</div>
+</div>
+```
+
+Wrapping that block in a new `DualHorizontalScroll` component introduced one more
+container level. During the first edit, the explicit `.sheet-scroll` closing
+`</div>` was accidentally dropped, so the SFC parser reached `</DualHorizontalScroll>`
+while one inner `div` was still open.
+
+### Fix
+
+When wrapping an existing wide table/grid in a new scroll shell:
+
+1. count the original container boundaries first;
+2. preserve the **existing real scroll target** (`.sheet-scroll`, `.table-wrapper`,
+   etc.);
+3. add the wrapper **around** that target rather than half-replacing it;
+4. run `npm run build` immediately after the structural edit.
+
+For the specific attendance failure, restoring the missing `</div>` for
+`.sheet-scroll` resolved the build.
+
+### Interpretation
+
+This is a **template-structure regression** introduced during refactor, not a
+runtime bug in the scrolling logic itself. Build-first validation is the fastest
+way to catch it.
+
+### Pitfall 78: Student login flows can trip ORM state expiry if post-login code reads `user.role` after logging commits
+
+### Symptom
+
+A targeted student registration/login test fails inside `/api/auth/login` with a stack resembling:
+
+```text
+DetachedInstanceError / expired scalar load on User
+```
+
+or a loader trace triggered at the branch that decides whether to run
+student-specific post-login context repair.
+
+### Context
+
+`auth.py::login` historically did:
+
+1. query `user`,
+2. build the JWT,
+3. call `LogService.log_login(...)`,
+4. **then** branch on `user.role` / `user.class_id`.
+
+`LogService.log_login` commits the shared session. On some student-login test
+paths, that commit can expire the ORM instance before the later role/class read,
+turning a normal student login into a session-state failure unrelated to
+credentials or quota logic.
+
+### Fix
+
+Cache the values needed for post-login branching **before** calling the logging
+helper, or re-query the `User` row by id after the logging commit before calling
+student-only repair such as `prepare_student_course_context(...)`.
+
+This repository now follows that rule in `apps/backend/wailearning_backend/api/routers/auth.py`.
+
+### Interpretation
+
+This is a **session-lifecycle pitfall** in route implementation, not evidence
+that public registration or student quota binding itself is broken.
+
+### Pitfall 79: Some legacy pytest modules are fragile when `main.py` is imported at module load before DB reset helpers
+
+### Symptom
+
+A narrowly targeted pytest invocation against one module can fail during
+collection or fixture setup with errors such as:
+
+```text
+table users already exists
+no such table: llm_endpoint_presets
+no such table: course_llm_configs
+```
+
+### Context
+
+Certain older backend test modules import `apps.backend.wailearning_backend.main`
+at module load time. In this repository, `main.py` still calls:
+
+```text
+Base.metadata.create_all(bind=engine)
+```
+
+when `APP_ENV != production`.
+
+If that import happens before the test's own reset helper has re-established the
+expected schema lifecycle, isolated single-module runs can observe a different
+DDL order from the steady-state suite and surface "already exists" or "missing
+table" errors that are really test-harness sequencing issues.
+
+### Fix
+
+- Prefer client fixtures that import `main.app` **inside** the fixture after the
+  module's reset/autouse setup has run.
+- For new focused regression files, reuse the shared `tests.db_reset.reset_test_database_schema()`
+  pattern and avoid extra module-level side effects when a local fixture can
+  import the app lazily.
+- When triaging a new single-file failure, separate:
+  1. business-logic regression,
+  2. ORM/session bug,
+  3. test harness import/DDL ordering.
+
+### Interpretation
+
+This is a **test authoring / collection-order pitfall**. Do not infer a product
+schema regression solely from these errors until you confirm the module's import
+order and reset strategy.
+
+### Pitfall 80: Isolated admin-discussion smoke tests can be noisier than teacher-path tests under legacy helper / session setup
+
+### Symptom
+
+A narrowly scoped behavior test that:
+
+1. creates a course/student scenario,
+2. calls `ensure_admin()`,
+3. logs in as `pytest_admin`,
+4. then exercises `/api/discussions` with `invoke_llm=true`
+
+can fail inside the **login logging** path with an `IntegrityError` around
+`operation_logs.user_id` rather than around the actual discussion feature.
+
+### Context
+
+This showed up during a discussion-LLM permission expansion pass. The product
+change itself was "teachers/admins may invoke discussion LLM", but one isolated
+admin API smoke path was less stable than:
+
+- the teacher-path route regression, and
+- the lower-level helper regression proving that admin is part of the
+  quota-exempt role set.
+
+The likely cause cluster is legacy helper/session/test-app lifecycle interaction,
+not the discussion serializer or route guard directly.
+
+### Fix
+
+When a new admin discussion regression becomes noisy under isolated SQLite test
+setup:
+
+- keep one stable **teacher route** regression for `invoke_llm=true` acceptance;
+- keep a focused **helper-level** regression for the admin quota-exempt role
+  decision;
+- if an admin route assertion is still required, build the admin user inside the
+  same fixture/app lifecycle as the target scenario instead of depending on a
+  broader shared helper whose session timing may differ.
+
+### Interpretation
+
+This is primarily a **test-harness stability** issue. It should not, by itself,
+be read as evidence that admin discussion-LLM permission is broken once the
+teacher route and quota-exempt helper regressions are green.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:

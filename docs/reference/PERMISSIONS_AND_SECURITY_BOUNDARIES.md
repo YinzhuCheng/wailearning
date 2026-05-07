@@ -57,7 +57,11 @@ Homework routers (`api/routers/homework.py`) generally:
 3. Compare `homework.subject_id` / `class_id` against accessible courses or instructor relationship.
 4. Return redacted payloads for students (e.g. `rubric_staff_only`, `reference_answer` hidden — see serializers in-router).
 
-**LLM discussion:** `llm_discussion.py` intentionally omits teacher-only homework fields from student-triggered assistant threads.
+**LLM discussion:** `llm_discussion.py` intentionally omits teacher-only homework fields from student-triggered assistant threads. Current invoke matrix:
+
+- **student**: allowed, billed against the student's daily token pool after account↔roster resolution;
+- **teacher / class_teacher / admin**: allowed on discussions they can already access, but not limited by student token caps;
+- hidden teacher-only homework fields remain hidden from student-triggered context even though staff/admin may also invoke the assistant.
 
 ---
 

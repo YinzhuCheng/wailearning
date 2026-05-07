@@ -26,13 +26,15 @@
     </div>
 
     <el-card shadow="never">
-      <el-table
-        ref="usersTableRef"
-        :data="users"
-        v-loading="loading"
-        row-key="id"
-        @selection-change="handleUserSelectionChange"
-      >
+      <DualHorizontalScroll target-selector=".users-table-scroll">
+        <div class="users-table-scroll dual-scroll-target">
+          <el-table
+            ref="usersTableRef"
+            :data="users"
+            v-loading="loading"
+            row-key="id"
+            @selection-change="handleUserSelectionChange"
+          >
         <el-table-column type="selection" width="48" :selectable="row => row.role === 'student'" />
         <el-table-column prop="username" label="用户名" min-width="160" />
         <el-table-column prop="real_name" label="姓名" min-width="140" />
@@ -76,7 +78,9 @@
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+          </el-table>
+        </div>
+      </DualHorizontalScroll>
     </el-card>
 
     <el-dialog
@@ -267,6 +271,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import { useUserStore } from '@/stores/user'
 import { loadAllPages } from '@/utils/pagedFetch'
 
@@ -704,7 +709,15 @@ watch(
 }
 
 .users-page :deep(.el-card__body) {
+  overflow-x: hidden;
+}
+
+.users-table-scroll {
   overflow-x: auto;
+}
+
+.users-table-scroll :deep(.el-table) {
+  min-width: 1040px;
 }
 
 .page-header {

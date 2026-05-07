@@ -81,6 +81,16 @@ def prepare_student_course_context(user: User, db: Session) -> None:
             db.flush()
 
     student = get_student_profile_for_user(user, db)
+    if not student:
+        # Legacy / drift recovery: some student-role users may exist before a matching
+        # roster row was created. Reuse the same user->roster sync path used by
+        # registration/admin creation so downstream quota/homework/discussion code sees
+        # one consistent "student account <-> Student row" contract.
+        from apps.backend.wailearning_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
+
+        sync_student_roster_from_user_accounts(db, [user.id])
+        db.flush()
+        student = get_student_profile_for_user(user, db)
     if student:
         sync_student_course_enrollments(student, db, respect_enrollment_blocks=True)
     db.flush()
