@@ -1827,6 +1827,147 @@ Observed results:
   screenshot side effects in maintained regression tests unless the screenshot is
   itself the maintained artifact.
 
+## Dual Horizontal Scrollbar Follow-Up For Wide/Long Data Surfaces
+
+This pass continued the earlier "table-heavy page containment" work, but it
+changed the operator ergonomics rather than the containment boundary itself.
+
+### Problem statement
+
+Several admin/teacher pages already prevented page-level horizontal overflow by
+putting wide tables or grids inside an internal horizontally scrollable area.
+That solved the viewport-break problem, but it left a usability gap on long
+tables:
+
+- the only horizontal scrollbar lived at the **bottom** of the wide surface;
+- if the table had many rows, the user had to scroll to the bottom before they
+  could drag horizontally;
+- at the top of the table, column headers were visible but horizontal movement
+  was inconvenient.
+
+This was especially noticeable on the teacher homework submissions page, where
+the table is both wide and long and where the user often needs to compare early
+columns with action/status columns near the right edge.
+
+### Product adjustment
+
+The current contract for explicitly wide admin data surfaces is now:
+
+- keep the existing bottom horizontal scrollbar on the actual table/grid scroll
+  container;
+- add a synchronized **top** horizontal scrollbar above that surface;
+- keep both scrollbars moving the same underlying horizontal position.
+
+This is not a browser-global rule. It applies to the surfaces that are already
+known to be wide enough to need internal horizontal scrolling.
+
+### Frontend implementation
+
+New reusable component:
+
+- `apps/web/admin/src/components/DualHorizontalScroll.vue`
+
+Behavior:
+
+- renders a lightweight top scrollbar only when the target surface actually
+  overflows horizontally;
+- syncs the top scrollbar with the real target scroll container;
+- supports two implementation shapes:
+  1. a custom explicit scroll container such as `.table-wrapper` or
+     `.sheet-scroll`;
+  2. framework-owned internals when needed via selector matching.
+
+Key implementation details:
+
+- `targetSelector` identifies the real horizontal scroll element inside the
+  slotted content;
+- the component mirrors `scrollLeft` in both directions;
+- `MutationObserver` + `ResizeObserver` recalculate the top scrollbar width
+  after DOM/content changes so the bar stays accurate when tables paginate,
+  reload, or change column width;
+- the top bar hides itself automatically when `scrollWidth <= clientWidth`.
+
+### Surfaces updated in this round
+
+The scan first looked for pages that already had one or more of:
+
+- explicit `overflow-x: auto`,
+- large `min-width` values on tables/grids,
+- fixed-right action columns,
+- or known "table-heavy" operational density from prior UI audit notes.
+
+The pass then applied the reusable top scrollbar to the currently identified
+high-value wide surfaces:
+
+- `apps/web/admin/src/views/HomeworkSubmissions.vue`
+  - teacher **提交情况** table
+  - also moved **有效成绩（截止前/计入总评取最高）** to the third visible column
+    after **学生姓名 / 学号**
+- `apps/web/admin/src/views/Homework.vue`
+  - homework list table
+- `apps/web/admin/src/views/Users.vue`
+  - users management table
+- `apps/web/admin/src/views/Subjects.vue`
+  - class-teacher course table
+  - admin course table
+  - course-detail student table
+  - roster-enroll picker table
+- `apps/web/admin/src/views/Scores.vue`
+  - weighted composition table
+  - score list table
+  - batch-entry student table
+  - exam-weight table
+- `apps/web/admin/src/views/Settings.vue`
+  - LLM endpoint preset table
+- `apps/web/admin/src/views/Materials.vue`
+  - materials list table
+- `apps/web/admin/src/views/Attendance.vue`
+  - custom `.sheet-scroll` attendance grid
+
+This is a practical scan result, not a claim that every table in the repository
+must now use the component. Narrow tables and short lists are intentionally left
+alone.
+
+### Validation performed
+
+Commands run in this pass:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+npm run build
+```
+
+Observed result:
+
+- first build attempt failed because `src/views/Attendance.vue` had a missing
+  end tag after the new `DualHorizontalScroll` wrapper was inserted around
+  `.sheet-scroll`;
+- the template structure was corrected by restoring the missing closing `</div>`
+  for the explicit scroll container;
+- the second `npm run build` completed successfully.
+
+### Practical guidance for future agents
+
+If a new page reports:
+
+```text
+wide table only scrolls horizontally from the bottom
+```
+
+check in this order:
+
+1. whether the page already has a real horizontal scroll target
+   (`overflow-x: auto` or a framework-owned table body wrapper);
+2. whether a top synchronized scrollbar is appropriate for that surface;
+3. whether the page should use `DualHorizontalScroll.vue` with:
+   - a custom target selector such as `.table-wrapper`, or
+   - a framework wrapper selector if the scroll container is internal;
+4. whether the table is truly wide enough to justify the extra control.
+
+Do **not** blindly add the component to every short or narrow table. The goal is
+to improve usability on genuinely wide/long operational surfaces, not to add
+visual noise everywhere.
+
 ## Round 3: LLM Quota Semantics And Header Interaction Boundary Review
 
 This pass followed the earlier quota consolidation work and focused on removing

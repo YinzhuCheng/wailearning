@@ -1903,6 +1903,52 @@ Reference regression guard:
 
 This is mostly **test expectation drift** caused by a deliberate UX change, not a regression in the discussion feature.
 
+### Pitfall 77: wrapper-based dual-scroll refactors can leave Vue templates with a missing closing tag
+
+### Symptom
+
+`npm run build` fails quickly with a Vue SFC parse error such as:
+
+```text
+[vite:vue] src/views/Attendance.vue (...): Element is missing end tag.
+```
+
+### Context
+
+This surfaced while adding a synchronized **top horizontal scrollbar** above an
+existing bottom-only wide-surface scroll area. The affected page
+(`apps/web/admin/src/views/Attendance.vue`) already had:
+
+```text
+<div class="sheet-scroll">
+  <div class="attendance-grid">...</div>
+</div>
+```
+
+Wrapping that block in a new `DualHorizontalScroll` component introduced one more
+container level. During the first edit, the explicit `.sheet-scroll` closing
+`</div>` was accidentally dropped, so the SFC parser reached `</DualHorizontalScroll>`
+while one inner `div` was still open.
+
+### Fix
+
+When wrapping an existing wide table/grid in a new scroll shell:
+
+1. count the original container boundaries first;
+2. preserve the **existing real scroll target** (`.sheet-scroll`, `.table-wrapper`,
+   etc.);
+3. add the wrapper **around** that target rather than half-replacing it;
+4. run `npm run build` immediately after the structural edit.
+
+For the specific attendance failure, restoring the missing `</div>` for
+`.sheet-scroll` resolved the build.
+
+### Interpretation
+
+This is a **template-structure regression** introduced during refactor, not a
+runtime bug in the scrolling logic itself. Build-first validation is the fastest
+way to catch it.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
