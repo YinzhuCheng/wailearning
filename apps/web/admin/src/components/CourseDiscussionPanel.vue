@@ -20,7 +20,12 @@
     <template v-else>
       <div v-loading="loading" class="discussion-body">
         <div v-if="!entries.length && !loading" class="muted-text">暂无讨论，发表第一条回复吧。</div>
-        <div v-for="row in entries" :key="row.id" class="discussion-row">
+        <div
+          v-for="row in entries"
+          :key="row.id"
+          class="discussion-row"
+          :class="{ 'discussion-row--assistant': row.message_kind === 'llm_assistant' }"
+        >
           <div class="discussion-row__main">
             <DiscussionAuthorAvatar
               :avatar-url="row.author_avatar_url"
@@ -30,12 +35,29 @@
             />
             <div class="discussion-row__content">
               <div class="discussion-row__meta">
-                <span class="discussion-row__name">{{ displayAuthorName(row) }}</span>
-                <el-tag v-if="row.message_kind === 'llm_assistant'" type="success" size="small" effect="plain">
-                  智能助教
+                <span
+                  class="discussion-row__name"
+                  :class="{ 'discussion-row__name--assistant': row.message_kind === 'llm_assistant' }"
+                >
+                  {{ displayAuthorName(row) }}
+                </span>
+                <el-tag
+                  v-if="row.message_kind !== 'llm_assistant'"
+                  size="small"
+                  effect="plain"
+                  class="discussion-row__role-tag"
+                >
+                  {{ roleLabel(row.author_role) }}
                 </el-tag>
-                <el-tag v-else size="small" effect="plain">{{ roleLabel(row.author_role) }}</el-tag>
-                <el-tag v-if="row.llm_invocation" type="warning" size="small" effect="plain">调用智能助教</el-tag>
+                <el-tag
+                  v-if="row.llm_invocation"
+                  type="warning"
+                  size="small"
+                  effect="plain"
+                  class="discussion-row__llm-tag"
+                >
+                  调用智能助教
+                </el-tag>
                 <span class="discussion-row__time">{{ formatTime(row.created_at) }}</span>
               </div>
               <div
@@ -596,8 +618,20 @@ loadList()
 }
 
 .discussion-row {
-  padding: 12px 0;
+  padding: 8px 0 10px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.discussion-row--assistant {
+  margin: 4px 0;
+  padding: 10px 12px 12px;
+  border-bottom: none;
+  border-radius: 12px;
+  background: linear-gradient(120deg, rgba(240, 253, 244, 0.95), rgba(236, 253, 245, 0.65));
+  box-shadow:
+    inset 3px 0 0 0 #22c55e,
+    0 0 0 1px rgba(34, 197, 94, 0.12),
+    0 4px 14px rgba(15, 118, 110, 0.06);
 }
 
 .discussion-row:last-of-type {
@@ -607,7 +641,7 @@ loadList()
 .discussion-row__main {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
 }
 
 .discussion-row__content {
@@ -619,9 +653,10 @@ loadList()
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 6px 8px;
+  margin-bottom: 4px;
   font-size: 13px;
+  line-height: 1.35;
 }
 
 .discussion-row__name {
@@ -629,17 +664,33 @@ loadList()
   color: #0f172a;
 }
 
+.discussion-row__name--assistant {
+  color: #166534;
+  letter-spacing: 0.02em;
+}
+
+.discussion-row__role-tag,
+.discussion-row__llm-tag {
+  flex-shrink: 0;
+}
+
 .discussion-row__time {
+  margin-left: auto;
   color: #94a3b8;
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .discussion-row__body {
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.5;
   color: #334155;
+}
+
+.discussion-row--assistant .discussion-row__body {
+  color: #14532d;
 }
 
 .discussion-row__body--clickable {
