@@ -243,6 +243,28 @@ Playwright scenarios commonly use:
 
 This repository is actively used on Windows, so path and encoding discipline matters.
 
+- At the start of any Windows PowerShell session that may display or edit
+  multilingual repository files, run the UTF-8 session helper:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+```
+
+- If you need the settings in the current interactive shell rather than a child
+  process, dot-source it:
+
+```powershell
+. .\ops\scripts\windows\set-utf8-session.ps1
+```
+
+- For byte-safe inspection and controlled text writes, use:
+
+```powershell
+python ops\scripts\dev\safe_show_text.py <path> --escape
+python ops\scripts\dev\safe_write_text.py <path> --stdin --replace
+python ops\scripts\dev\check_text_encoding.py <path>
+```
+
 - Prefer running `pytest` from the repository root.
 - Prefer the repository virtual environment instead of a global Python.
 - Keep documentation and scripted edits ASCII-first when possible.

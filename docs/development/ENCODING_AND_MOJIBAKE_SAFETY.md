@@ -45,6 +45,135 @@ Use this workflow for any multilingual or encoding-sensitive file.
 4. If a non-ASCII literal truly must change, verify it through a UTF-8-safe editor or another byte-safe path before editing.
 5. After the edit, review the git diff for the specific file and confirm that only the intended lines changed.
 
+## Repository Helpers Added For Windows + PowerShell
+
+The repository now includes small utilities whose purpose is to reduce encoding
+mistakes during agent work. These helpers are not a license to trust terminal
+glyphs blindly. They provide safer defaults and repeatable inspection paths.
+
+### Current PowerShell session setup
+
+Run this at the start of a Windows PowerShell session that may inspect or edit
+multilingual repository files:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+```
+
+If you want the environment changes to stay in the current interactive shell,
+dot-source it instead:
+
+```powershell
+. .\ops\scripts\windows\set-utf8-session.ps1
+```
+
+The script changes only the current process and child-process environment. It
+sets:
+
+- console code page `65001`;
+- `[Console]::OutputEncoding` to UTF-8 without BOM;
+- `[Console]::InputEncoding` to UTF-8 without BOM;
+- `$OutputEncoding` to UTF-8 without BOM;
+- `PYTHONUTF8=1`;
+- `PYTHONIOENCODING=utf-8`;
+- `LESSCHARSET=utf-8`.
+
+Interpretation rules:
+
+- This reduces mojibake in many PowerShell sessions, but it does not prove that
+  terminal-rendered Chinese is correct.
+- If output still looks garbled, treat the terminal as display-only and verify
+  bytes through `safe_show_text.py --escape`, a UTF-8 editor, or `git diff`.
+- Do not put machine-specific profile paths or console screenshots into
+  committed documentation. Use placeholders such as `<repo>` in tracked docs and
+  `.e2e-run/` for private local notes.
+
+### UTF-8-safe file display
+
+Use `safe_show_text.py` when a terminal might render valid UTF-8 incorrectly:
+
+```powershell
+python ops\scripts\dev\safe_show_text.py docs\development\ENCODING_AND_MOJIBAKE_SAFETY.md
+python ops\scripts\dev\safe_show_text.py apps\web\admin\src\views\Layout.vue --start-line 1 --end-line 120
+python ops\scripts\dev\safe_show_text.py tests\e2e\web-admin\e2e-scenario-resilience.spec.js --escape --start-line 1 --end-line 80
+```
+
+Normal mode decodes the file as UTF-8 and prints text. Escape mode prints
+non-ASCII as Python `unicode_escape` sequences so the terminal cannot hide the
+actual code points behind mojibake. Escape mode is less pleasant for humans, but
+it is useful for agents deciding whether a suspicious string is present in the
+file bytes or only in the display layer.
+
+When a file fails to decode as UTF-8, the script exits non-zero with the byte
+position. Treat that as a real file-content issue for that path, not as ordinary
+PowerShell rendering noise.
+
+### UTF-8-safe full-file writes
+
+Use `safe_write_text.py` only when a full-file write is intentional and the
+input source is trusted:
+
+```powershell
+python ops\scripts\dev\safe_write_text.py .e2e-run\handoff.md --stdin --mkdirs
+python ops\scripts\dev\safe_write_text.py docs\example.md --from-file .e2e-run\draft.md --replace
+```
+
+Default behavior:
+
+- reads stdin or `--from-file` as text;
+- writes UTF-8 without BOM;
+- normalizes output newlines to LF unless `--newline crlf` or
+  `--newline preserve` is specified;
+- refuses to overwrite an existing file unless `--replace` is supplied;
+- writes through a temporary file and atomic replace.
+
+Important limits:
+
+- For small source edits, repository-aware patching is still preferred over a
+  full-file rewrite.
+- Do not pipe PowerShell-rendered Chinese text into this tool and assume it is
+  safe; if the source stream already contains mojibake, this tool will preserve
+  the mojibake as valid UTF-8.
+- Use this helper for generated docs, local handoffs, machine-readable reports,
+  or deliberate whole-file rewrites where the source bytes are already verified.
+
+### Tracked text encoding audit
+
+Use `check_text_encoding.py` before or after encoding-sensitive edits:
+
+```powershell
+python ops\scripts\dev\check_text_encoding.py
+python ops\scripts\dev\check_text_encoding.py --fail-on-suspicious
+python ops\scripts\dev\check_text_encoding.py docs\development\ENCODING_AND_MOJIBAKE_SAFETY.md
+```
+
+Default behavior:
+
+- scans files returned by `git ls-files`;
+- ignores local artifacts and private `.e2e-run/` notes by construction;
+- fails on UTF-8 decode errors;
+- reports suspicious mojibake markers without failing.
+
+Use `--fail-on-suspicious` only when the suspicious-marker set is expected to be
+clean for the selected files. The repository has known historical hotspots, so a
+whole-repo suspicious-marker failure may be useful for dedicated cleanup work
+but too noisy for unrelated feature branches.
+
+### Git output settings that can help
+
+When an agent or maintainer repeatedly reads paths or commit messages containing
+non-ASCII text from Windows shells, these local git settings can reduce display
+confusion:
+
+```powershell
+git config core.quotepath false
+git config i18n.logOutputEncoding utf-8
+git config i18n.commitEncoding utf-8
+```
+
+These settings affect the local clone. They do not repair file contents and they
+do not replace the repository helpers above.
+
 ## Unsafe Practices
 
 Do not do the following:
@@ -100,11 +229,64 @@ The important operational rule is the same in all three cases: do not "repair" t
 When you need to decide whether a mojibake-looking string is real file corruption:
 
 1. inspect the file through a UTF-8-safe editor,
-2. compare against git history when available,
-3. review whether the string is user-facing copy, test data, or a literal that affects selectors or assertions,
-4. isolate the repair into a dedicated change set if possible.
+2. run `python ops/scripts/dev/safe_show_text.py <path> --escape` around the suspicious lines,
+3. run `python ops/scripts/dev/check_text_encoding.py <path>` to catch decode errors and known marker patterns,
+4. compare against git history when available,
+5. review whether the string is user-facing copy, test data, or a literal that affects selectors or assertions,
+6. isolate the repair into a dedicated change set if possible.
 
 Do not combine encoding cleanup with a large refactor unless the encoding issue blocks the refactor itself.
+
+## Operational Recipes For Agents
+
+### Beginning a Windows work session
+
+1. Read `AGENTS.md`, `docs/README.md`, and task-scoped docs first.
+2. Apply the session helper:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+```
+
+3. If you will keep using the same interactive shell, dot-source the helper
+   instead of launching it as a child process.
+4. Continue to prefer ASCII anchors and patch-based edits for source files.
+
+### Inspecting a suspicious multilingual file
+
+1. Identify an ASCII anchor with `rg`, such as a function name, test id, route
+   path, or Markdown heading.
+2. Display a narrow range with:
+
+```powershell
+python ops\scripts\dev\safe_show_text.py <path> --start-line <n> --end-line <m>
+```
+
+3. If glyphs still look wrong, repeat with `--escape`.
+4. Compare with `git diff` or `git show` before editing the literal.
+
+### Writing local handoff notes that contain private paths
+
+1. Keep the file under `.e2e-run/`.
+2. Use `safe_write_text.py` when generating the file from a known-good source.
+3. Use real absolute paths only in `.e2e-run/` notes.
+4. Use `<repo>`, `<user-home>`, `<artifact-dir>`, `<local-port>`, and similar
+   placeholders in committed docs.
+
+### After editing encoding-sensitive files
+
+Run the narrowest useful checks:
+
+```powershell
+python ops\scripts\dev\check_text_encoding.py <edited-file>
+git diff --check
+```
+
+For Python helpers added under `ops/scripts/dev/`, also run:
+
+```powershell
+python -m py_compile ops\scripts\dev\safe_show_text.py ops\scripts\dev\safe_write_text.py ops\scripts\dev\check_text_encoding.py
+```
 
 ## Rules For Documentation Upgrades
 

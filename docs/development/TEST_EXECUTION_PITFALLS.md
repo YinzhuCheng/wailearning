@@ -30,10 +30,10 @@ If you skip this checklist, you may spend time debugging the shell, temp directo
 ## Scope of the Recorded Session
 
 - Host shell: Windows PowerShell
-- Repository root: `C:\Users\bloom\wailearning-e2e-boundary-dynamic-complex-d8c7`
+- Repository root: `<repo>`
 - Python runtime: repository `.venv`
 - Frontend package runner: `npm.cmd` / `npx.cmd`
-- Browser cache path: `C:\Users\bloom\AppData\Local\ms-playwright`
+- Browser cache path: `<local-browser-cache>`
 - Tested after repository structure migration into:
   - `apps/backend/wailearning_backend/`
   - `apps/web/admin/`
@@ -62,6 +62,66 @@ Chinese output shown in the terminal may render as mojibake even when the underl
 - Prefer patch-based file edits over terminal-mediated rewrite flows.
 - When touching files that may already contain Chinese text, treat the file content on disk as authoritative, not the shell rendering.
 - If a file appears garbled in the shell, inspect it through a safer path before editing.
+
+### Extension: repository UTF-8 helpers for PowerShell sessions and text I/O
+
+The branch now includes explicit helper scripts so agents do not have to
+rediscover the same PowerShell encoding setup every time.
+
+For the current Windows PowerShell process, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+```
+
+For an already-open interactive shell, dot-source instead:
+
+```powershell
+. .\ops\scripts\windows\set-utf8-session.ps1
+```
+
+What the script changes:
+
+- console code page `65001`;
+- `[Console]::OutputEncoding`;
+- `[Console]::InputEncoding`;
+- `$OutputEncoding`;
+- `PYTHONUTF8`;
+- `PYTHONIOENCODING`;
+- `LESSCHARSET`.
+
+This reduces display and child-process decoding friction, but it does not turn
+PowerShell output into the source of truth. If a multilingual string matters,
+inspect it through:
+
+```powershell
+python ops\scripts\dev\safe_show_text.py <path> --start-line <n> --end-line <m>
+python ops\scripts\dev\safe_show_text.py <path> --escape --start-line <n> --end-line <m>
+```
+
+For generated or trusted full-file writes, use:
+
+```powershell
+python ops\scripts\dev\safe_write_text.py <path> --stdin --replace
+```
+
+For tracked-file audits, use:
+
+```powershell
+python ops\scripts\dev\check_text_encoding.py
+python ops\scripts\dev\check_text_encoding.py <path>
+```
+
+Interpretation:
+
+- `set-utf8-session.ps1` is an environment mitigation, not a content repair.
+- `safe_show_text.py --escape` is the preferred CLI view when terminal glyphs
+  are suspect.
+- `safe_write_text.py` is for deliberate full-file writes from trusted input; it
+  must not be used to pipe already-garbled terminal text into source files.
+- `check_text_encoding.py` scans `git ls-files` by default and intentionally
+  ignores `.e2e-run/` private notes. Use placeholders such as `<repo>` in
+  committed docs and keep real machine paths in `.e2e-run/`.
 
 ## Pitfall 2: `npm` PowerShell shim may be blocked by execution policy
 

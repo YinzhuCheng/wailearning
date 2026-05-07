@@ -496,6 +496,61 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests -q` | `timed out` | Command timed out after 20 minutes with progress at about 94% and early `F` markers observed, but no final pytest summary. | Follow-up focused rerun identified the actionable failures in `tests/backend/courses/test_student_course_roster_behavior.py`. Local PostgreSQL logs also showed several expected negative-test constraint errors; those logs alone were not treated as pytest failures. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests -q` | `passed` | `487 passed, 1107 warnings in 1285.11s (0:21:25)` | Fresh throwaway PostgreSQL data directory was created under the ignored artifact area. The run completed with zero skipped tests. Warnings were dependency/framework deprecations plus one SQLAlchemy delete-row warning in a concurrent discussion delete regression. |
 
+### Test ID: `static.encoding_text_tools`
+
+**Category:** `static-check`
+
+**Scope:** Static and smoke validation for repository UTF-8 / mojibake-safety helpers. This target proves the helper scripts compile, the PowerShell session helper can execute in quiet mode, safe text display works for documentation, selected tracked files decode as UTF-8, and the current diff has no whitespace errors.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m py_compile ops\scripts\dev\safe_show_text.py ops\scripts\dev\safe_write_text.py ops\scripts\dev\check_text_encoding.py
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1 -Quiet
+.venv\Scripts\python.exe ops\scripts\dev\safe_show_text.py docs\development\ENCODING_AND_MOJIBAKE_SAFETY.md --start-line 1 --end-line 12 --escape
+'encoding helper smoke' | .venv\Scripts\python.exe ops\scripts\dev\safe_write_text.py .e2e-run\encoding-helper-smoke.txt --stdin --replace --mkdirs
+.venv\Scripts\python.exe ops\scripts\dev\check_text_encoding.py ops\scripts\dev\safe_show_text.py ops\scripts\dev\safe_write_text.py ops\scripts\dev\check_text_encoding.py ops\scripts\windows\set-utf8-session.ps1 docs\development\ENCODING_AND_MOJIBAKE_SAFETY.md docs\development\DEVELOPMENT_AND_TESTING.md docs\development\TEST_EXECUTION_PITFALLS.md docs\development\TEST_EXECUTION_LEDGER.md
+git diff --check
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `ops/scripts/windows/set-utf8-session.ps1`
+- `ops/scripts/dev/safe_show_text.py`
+- `ops/scripts/dev/safe_write_text.py`
+- `ops/scripts/dev/check_text_encoding.py`
+- `docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`
+- `docs/development/DEVELOPMENT_AND_TESTING.md`
+- `docs/development/TEST_EXECUTION_PITFALLS.md`
+- `docs/development/TEST_EXECUTION_LEDGER.md`
+
+**Retest triggers:**
+
+- Changes to any UTF-8 / mojibake helper script under `ops/scripts/dev/` or `ops/scripts/windows/`.
+- Changes to encoding-safety documentation, Windows notes, or pitfalls that cite these helpers.
+- Changes to text-file classification or suspicious-marker rules in `check_text_encoding.py`.
+- Any branch that deliberately repairs suspected mojibake in tracked files.
+
+**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-07`
+
+**Pass count:** `1`
+
+**Run count:** `1`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Python helpers compiled; PowerShell UTF-8 helper ran with `-Quiet`; `safe_show_text.py --escape` produced escaped output for the encoding doc; `safe_write_text.py` wrote an ignored `.e2e-run` smoke file; selected files reported `scanned=8 decode_errors=0 suspicious=0`; `git diff --check` passed. | The audit intentionally scanned the newly added helpers and edited docs, not the whole repository. Whole-repo suspicious-marker scans may report historical hotspots and should be interpreted through `ENCODING_AND_MOJIBAKE_SAFETY.md`. |
+
 ## Known First-Version Limitations
 
 1. This first ledger version starts with the verified runs around commit `6a95aad`; it intentionally does not backfill older branch history from memory.
