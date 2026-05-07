@@ -82,11 +82,13 @@
             </div>
           </div>
         </template>
-        <el-table
-          v-loading="compositionLoading"
-          :data="classCompositions"
-          empty-text="请选择学期并点击「刷新成绩构成」。"
-        >
+        <DualHorizontalScroll target-selector=".scores-composition-scroll">
+          <div class="scores-composition-scroll dual-scroll-target">
+            <el-table
+              v-loading="compositionLoading"
+              :data="classCompositions"
+              empty-text="请选择学期并点击「刷新成绩构成」。"
+            >
           <el-table-column prop="student_name" label="学生" min-width="120" />
           <el-table-column prop="student_no" label="学号" width="120" />
           <el-table-column label="作业平时(折算%)" width="130">
@@ -116,7 +118,9 @@
               {{ (row.missing_for_total || []).length ? row.missing_for_total.join('、') : '—' }}
             </template>
           </el-table-column>
-        </el-table>
+            </el-table>
+          </div>
+        </DualHorizontalScroll>
       </el-card>
 
       <el-card shadow="never" class="appeals-card">
@@ -155,7 +159,9 @@
           </el-select>
         </div>
 
-        <el-table :data="scores" v-loading="loading">
+        <DualHorizontalScroll target-selector=".scores-list-scroll">
+          <div class="scores-list-scroll dual-scroll-target">
+            <el-table :data="scores" v-loading="loading">
           <el-table-column prop="student_name" label="学生" min-width="180" />
           <el-table-column prop="score" label="成绩" width="100">
             <template #default="{ row }">
@@ -175,7 +181,9 @@
               <el-button type="danger" size="small" @click="deleteScore(row)">删除</el-button>
             </template>
           </el-table-column>
-        </el-table>
+            </el-table>
+          </div>
+        </DualHorizontalScroll>
       </el-card>
     </template>
 
@@ -262,7 +270,9 @@
           <el-button @click="fillAllScores">一键录入</el-button>
         </div>
 
-        <el-table :data="batchStudents" max-height="420">
+        <DualHorizontalScroll target-selector=".scores-batch-scroll">
+          <div class="scores-batch-scroll dual-scroll-target">
+            <el-table :data="batchStudents" max-height="420">
           <el-table-column prop="student_name" label="学生姓名" min-width="180" />
           <el-table-column prop="student_no" label="学号" width="180" />
           <el-table-column label="成绩" width="180">
@@ -279,7 +289,9 @@
               />
             </template>
           </el-table-column>
-        </el-table>
+            </el-table>
+          </div>
+        </DualHorizontalScroll>
       </div>
 
       <template #footer>
@@ -315,7 +327,9 @@
         <el-button @click="addWeightRow">新增考试</el-button>
         <span class="weight-total">考试合计 {{ totalWeight }}%</span>
       </div>
-      <el-table :data="weightForm.items" empty-text="请新增考试并填写占比">
+      <DualHorizontalScroll target-selector=".scores-weight-scroll">
+        <div class="scores-weight-scroll dual-scroll-target">
+          <el-table :data="weightForm.items" empty-text="请新增考试并填写占比">
         <el-table-column label="考试名称" min-width="220">
           <template #default="{ row }">
             <el-input v-model="row.exam_type" placeholder="例如：期中考试" />
@@ -331,7 +345,9 @@
             <el-button type="danger" size="small" @click="removeWeightRow($index)">删除</el-button>
           </template>
         </el-table-column>
-      </el-table>
+          </el-table>
+        </div>
+      </DualHorizontalScroll>
       <template #footer>
         <el-button @click="weightDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingWeights" @click="saveWeights">保存</el-button>
@@ -369,6 +385,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import { useUserStore } from '@/stores/user'
 
 const OTHER_DAILY = '其他平时分'
@@ -853,7 +870,7 @@ watch(selectedCourse, async () => {
 }
 
 .scores-page :deep(.el-card__body) {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .page-header {
@@ -889,6 +906,30 @@ watch(selectedCourse, async () => {
 
 .stats-card {
   margin-bottom: 20px;
+}
+
+.scores-composition-scroll,
+.scores-list-scroll,
+.scores-batch-scroll,
+.scores-weight-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.scores-composition-scroll :deep(.el-table) {
+  min-width: 1100px;
+}
+
+.scores-list-scroll :deep(.el-table) {
+  min-width: 900px;
+}
+
+.scores-batch-scroll :deep(.el-table) {
+  min-width: 560px;
+}
+
+.scores-weight-scroll :deep(.el-table) {
+  min-width: 520px;
 }
 
 .weights-card,

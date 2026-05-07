@@ -108,12 +108,14 @@
           </div>
 
           <el-card shadow="never">
-            <el-table
-              :data="materials"
-              v-loading="loading"
-              row-key="id"
-              @row-click="viewMaterial"
-            >
+            <DualHorizontalScroll target-selector=".materials-table-scroll">
+              <div class="materials-table-scroll dual-scroll-target">
+                <el-table
+                  :data="materials"
+                  v-loading="loading"
+                  row-key="id"
+                  @row-click="viewMaterial"
+                >
               <el-table-column prop="title" label="资料标题" min-width="200" align="center" header-align="center" />
               <el-table-column v-if="showPlacementColumn" label="所在章节" min-width="180" align="center" header-align="center">
                 <template #default="{ row }">
@@ -202,7 +204,9 @@
                   </div>
                 </template>
               </el-table-column>
-            </el-table>
+                </el-table>
+              </div>
+            </DualHorizontalScroll>
           </el-card>
         </section>
       </div>
@@ -339,6 +343,7 @@ import { Expand, Fold, Minus, Plus } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
+import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
@@ -1168,6 +1173,15 @@ watch(selectedChapterId, () => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.materials-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.materials-table-scroll :deep(.el-table) {
+  min-width: 1160px;
 }
 
 .wa-table-actions {

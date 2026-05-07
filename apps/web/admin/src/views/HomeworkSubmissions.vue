@@ -104,15 +104,24 @@
           />
         </div>
 
-        <div class="table-wrapper">
-          <el-table
-            :data="submissions"
-            :row-class-name="submissionRowClassName"
-            @selection-change="handleSelectionChange"
-          >
-            <el-table-column type="selection" width="52" :selectable="selectableForAnyBatchAction" />
-            <el-table-column prop="student_name" label="学生姓名" min-width="140" />
-            <el-table-column prop="student_no" label="学号" min-width="140" />
+        <DualHorizontalScroll target-selector=".table-wrapper">
+          <div class="table-wrapper dual-scroll-target">
+            <el-table
+              :data="submissions"
+              :row-class-name="submissionRowClassName"
+              @selection-change="handleSelectionChange"
+            >
+              <el-table-column type="selection" width="52" :selectable="selectableForAnyBatchAction" />
+              <el-table-column prop="student_name" label="学生姓名" min-width="140" />
+              <el-table-column prop="student_no" label="学号" min-width="140" />
+              <el-table-column label="有效成绩（截止前/计入总评取最高）" width="120">
+                <template #default="{ row }">
+                  <template v-if="row.review_score !== null && row.review_score !== undefined">
+                    <el-tag :type="scoreTag(row.review_score)" size="small">{{ formatScore(row.review_score) }}</el-tag>
+                  </template>
+                  <span v-else class="muted-text">—</span>
+                </template>
+              </el-table-column>
             <el-table-column label="提交状态" width="120">
               <template #default="{ row }">
                 <el-tag :type="row.status === 'submitted' ? 'success' : 'warning'">
@@ -189,14 +198,6 @@
                 <span v-else class="muted-text">—</span>
               </template>
             </el-table-column>
-            <el-table-column label="有效成绩（截止前/计入总评取最高）" width="120">
-              <template #default="{ row }">
-                <template v-if="row.review_score !== null && row.review_score !== undefined">
-                  <el-tag :type="scoreTag(row.review_score)" size="small">{{ formatScore(row.review_score) }}</el-tag>
-                </template>
-                <span v-else class="muted-text">—</span>
-              </template>
-            </el-table-column>
             <el-table-column label="操作" width="200" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" type="primary" link :data-testid="`homework-submission-detail-${row.student_no || row.student_id}`" @click="openDetail(row)">详情</el-button>
@@ -221,8 +222,9 @@
                 </el-button>
               </template>
             </el-table-column>
-          </el-table>
-        </div>
+            </el-table>
+          </div>
+        </DualHorizontalScroll>
 
         <div class="table-toolbar table-toolbar--bottom">
           <el-pagination
@@ -384,6 +386,7 @@ import { Minus, Plus } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
+import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'

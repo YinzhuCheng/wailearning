@@ -87,15 +87,16 @@
             class="sheet-empty"
           />
 
-          <div v-else class="sheet-scroll">
-            <div class="attendance-grid">
-              <div class="attendance-grid-header">
-                <div>新的出勤记录</div>
-                <div>学号</div>
-                <div>姓名</div>
-                <div>班级</div>
-                <div>历次出勤记录：{{ historyRangeText }}</div>
-              </div>
+          <DualHorizontalScroll v-else target-selector=".sheet-scroll">
+            <div class="sheet-scroll dual-scroll-target">
+              <div class="attendance-grid">
+                <div class="attendance-grid-header">
+                  <div>新的出勤记录</div>
+                  <div>学号</div>
+                  <div>姓名</div>
+                  <div>班级</div>
+                  <div>历次出勤记录：{{ historyRangeText }}</div>
+                </div>
 
               <div
                 v-for="student in filteredStudents"
@@ -145,7 +146,7 @@
                 </div>
               </div>
             </div>
-          </div>
+          </DualHorizontalScroll>
         </div>
       </el-card>
     </template>
@@ -157,6 +158,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import { useUserStore } from '@/stores/user'
 
 const STATUS_OPTIONS = [
