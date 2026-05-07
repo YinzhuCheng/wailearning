@@ -13,7 +13,7 @@ import katex from 'katex'
 import renderMathInElement from 'katex/contrib/auto-render'
 import 'katex/dist/katex.min.css'
 
-import { createCourseMarkdownIt } from '@/utils/markdownIt'
+import { createCourseMarkdownIt, renderCourseMarkdown } from '@/utils/markdownIt'
 
 const props = defineProps({
   text: { type: String, default: '' },
@@ -30,7 +30,7 @@ const renderedHtml = computed(() => {
   if (!raw) {
     return '<p class="feedback-rich__empty">暂无内容</p>'
   }
-  return md.render(raw)
+  return renderCourseMarkdown(md, raw)
 })
 
 const applyMath = () => {

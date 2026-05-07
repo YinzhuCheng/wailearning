@@ -159,7 +159,9 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(materialsItem).toHaveClass(/is-active/, { timeout: 10000 })
   })
 
-  test('material detail discussion shows Markdown LaTeX demo', async ({ page }) => {
+  test('material detail discussion keeps demo collapsed by default, shows live preview, and renders posted KaTeX', async ({
+    page
+  }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await clickCourseSwitcherOption(page, `E2E必修课_${s.suffix}`)
@@ -167,10 +169,21 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await page.locator('.el-table tbody tr').first().click()
     const dlg = page.getByRole('dialog', { name: '资料详情' })
     await expect(dlg).toBeVisible({ timeout: 20000 })
-    await expect(dlg.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 15000 })
+    const stamp = Date.now()
+    const textarea = dlg.locator('.discussion-input textarea')
+    await expect(dlg.getByRole('button', { name: '查看 Markdown + LaTeX 示例' })).toBeVisible({ timeout: 15000 })
+    await expect(dlg.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
     const fmtBar = dlg.locator('.discussion-format-bar')
     await expect(fmtBar.getByRole('radio', { name: 'Markdown' })).toBeChecked({ timeout: 5000 })
-    await fmtBar.locator('.el-radio-button').filter({ hasText: '纯文本' }).click()
-    await expect(dlg.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
+    await textarea.fill(`md-material-${stamp}\n\n公式：\\(x^2+y^2=z^2\\)`)
+    await expect(dlg.getByTestId('discussion-markdown-preview').locator('.katex').first()).toBeVisible({
+      timeout: 15000
+    })
+    await dlg.getByRole('button', { name: '查看 Markdown + LaTeX 示例' }).click()
+    await expect(dlg.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 15000 })
+    await dlg.getByTestId('discussion-submit').click()
+    const row = dlg.locator('.discussion-row').filter({ hasText: `md-material-${stamp}` })
+    await expect(row).toBeVisible({ timeout: 15000 })
+    await expect(row.locator('.katex').first()).toBeVisible({ timeout: 15000 })
   })
 })

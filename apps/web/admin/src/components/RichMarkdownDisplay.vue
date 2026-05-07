@@ -13,7 +13,7 @@ import katex from 'katex'
 import renderMathInElement from 'katex/contrib/auto-render'
 import 'katex/dist/katex.min.css'
 
-import { createCourseMarkdownIt } from '@/utils/markdownIt'
+import { createCourseMarkdownIt, renderCourseMarkdown } from '@/utils/markdownIt'
 
 const props = defineProps({
   markdown: { type: String, default: '' },
@@ -29,7 +29,7 @@ const renderedHtml = computed(() => {
   if (!raw) {
     return `<p class="rich-md__empty">${escapeHtml(props.emptyText)}</p>`
   }
-  return md.render(raw)
+  return renderCourseMarkdown(md, raw)
 })
 
 function escapeHtml(s) {

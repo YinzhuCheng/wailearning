@@ -39,10 +39,10 @@
           >
             <div
               class="discussion-row__text"
-              :class="{ 'discussion-row__text--expanded': isExpanded(row.id) }"
+              :class="{ 'discussion-row__text--block': shouldRenderRichBody(row) }"
             >
               <PlainOrMarkdownBlock
-                v-if="isExpanded(row.id)"
+                v-if="shouldRenderRichBody(row)"
                 :text="row.body"
                 :format="row.body_format"
                 variant="student"
@@ -95,7 +95,13 @@
             <el-radio-button label="plain">纯文本</el-radio-button>
           </el-radio-group>
         </div>
-        <div v-if="draftFormat === 'markdown'" class="discussion-md-demo-wrap">
+        <div v-if="draftFormat === 'markdown'" class="discussion-md-toolbar">
+          <el-button type="primary" link size="small" @click="toggleMarkdownDemo">
+            {{ showMarkdownDemo ? '隐藏 Markdown + LaTeX 示例' : '查看 Markdown + LaTeX 示例' }}
+          </el-button>
+          <span class="discussion-md-toolbar__hint">编辑区下方会实时显示渲染预览。</span>
+        </div>
+        <div v-if="draftFormat === 'markdown' && showMarkdownDemo" class="discussion-md-demo-wrap">
           <MarkdownLatexLiveDemo
             compact
             :show-insert="true"
@@ -114,6 +120,12 @@
           :placeholder="inputPlaceholder"
           class="discussion-input"
         />
+        <template v-if="draftFormat === 'markdown'">
+          <div class="discussion-preview-label">回复预览</div>
+          <div class="discussion-preview" data-testid="discussion-markdown-preview">
+            <RichMarkdownDisplay :markdown="draft" variant="student" empty-text="（空）" />
+          </div>
+        </template>
         <el-button
           type="primary"
           :loading="posting"
@@ -135,6 +147,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import MarkdownLatexLiveDemo from '@/components/MarkdownLatexLiveDemo.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
+import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
 import { normalizeContentFormat } from '@/utils/contentFormat'
 
@@ -195,6 +208,7 @@ const total = ref(0)
 const entries = ref([])
 const draft = ref('')
 const draftFormat = ref('markdown')
+const showMarkdownDemo = ref(false)
 const llmMode = ref(false)
 /** entry id -> expanded full body */
 const expandedEntryIds = ref(new Set())
@@ -304,6 +318,10 @@ function isTruncated(body) {
 
 function isExpanded(id) {
   return expandedEntryIds.value.has(id)
+}
+
+function shouldRenderRichBody(row) {
+  return isExpanded(row.id) || !isTruncated(row.body)
 }
 
 function previewText(body) {
@@ -423,6 +441,12 @@ watch(draft, val => {
   }
 })
 
+watch(draftFormat, val => {
+  if (normalizeContentFormat(val) !== 'markdown') {
+    showMarkdownDemo.value = false
+  }
+})
+
 const ensureLlmPrefix = () => {
   const t = draft.value || ''
   if (!/^\s*@LLM\b/i.test(t)) {
@@ -436,6 +460,10 @@ const toggleLlmMode = () => {
   else {
     draft.value = (draft.value || '').replace(/^\s*@LLM\s*\n?/i, '').trimStart()
   }
+}
+
+const toggleMarkdownDemo = () => {
+  showMarkdownDemo.value = !showMarkdownDemo.value
 }
 
 const submit = async () => {
@@ -462,6 +490,7 @@ const submit = async () => {
     })
     draft.value = ''
     draftFormat.value = 'markdown'
+    showMarkdownDemo.value = false
     llmMode.value = false
     const lastPage = Math.max(1, Math.ceil((total.value + 1) / effectivePageSize.value))
     page.value = lastPage
@@ -584,7 +613,7 @@ loadList()
   cursor: pointer;
 }
 
-.discussion-row__body--clickable:hover .discussion-row__text:not(.discussion-row__text--expanded) {
+.discussion-row__body--clickable:hover .discussion-row__text:not(.discussion-row__text--block) {
   color: #2563eb;
 }
 
@@ -593,7 +622,7 @@ loadList()
   vertical-align: baseline;
 }
 
-.discussion-row__text--expanded {
+.discussion-row__text--block {
   display: block;
 }
 
@@ -642,6 +671,19 @@ loadList()
   margin-top: 10px;
 }
 
+.discussion-md-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.discussion-md-toolbar__hint {
+  font-size: 12px;
+  color: #64748b;
+}
+
 .discussion-format-bar__label {
   font-size: 12px;
   color: #64748b;
@@ -649,6 +691,20 @@ loadList()
 
 .discussion-input {
   margin: 12px 0;
+}
+
+.discussion-preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.discussion-preview {
+  margin: 6px 0 12px;
+  padding: 10px 12px;
+  border: 1px dashed #dbe3ee;
+  border-radius: 10px;
+  background: #fafbfc;
 }
 
 .muted-text {

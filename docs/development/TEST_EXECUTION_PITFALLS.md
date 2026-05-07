@@ -1810,6 +1810,99 @@ Before opening **从花名册进课**, **`DELETE /api/subjects/{course_required_
 
 **`scrollIntoViewIfNeeded`** on the **`tr`**, then **`expect(users-open-batch-class).toBeEnabled`**, then open dialog; pick target class via **visible** dropdown + **`getByRole('option')`** (filter input is **optional** — may not exist in all EP builds).
 
+### Pitfall 74: `npm run build` in `apps/web/admin` can fail with `vite: not found` on fresh agents
+
+### Symptom
+
+```text
+> ddclass-frontend@1.0.0 build
+> vite build
+
+sh: 1: vite: not found
+```
+
+### Context
+
+The repository stores the admin SPA lockfile under **`<REPO_ROOT>/apps/web/admin/package-lock.json`**, but fresh cloud agents and Python-first CI images often start with **no `node_modules/` directory**. In that state, `npm run build` launches the package script correctly but fails because the local Vite binary from `devDependencies` is missing.
+
+This surfaced during a discussion-editor repair pass: the code change itself was valid, but the first build failed before Vite executed.
+
+### Fix
+
+From **`<REPO_ROOT>/apps/web/admin`**:
+
+```bash
+npm ci
+npm run build
+```
+
+If the image lacks Node/npm entirely, first read **Pitfall 48**. Do **not** treat `vite: not found` as evidence that the Vite config or source imports are broken.
+
+### Interpretation
+
+This is **frontend dependency bootstrap debt**, not a product regression in the edited Vue files.
+
+### Pitfall 75: Playwright browsers may be missing even after `npm ci`
+
+### Symptom
+
+```text
+browserType.launch: Executable doesn't exist at .../chromium_headless_shell-.../chrome-headless-shell
+Looks like Playwright was just installed or updated.
+Please run: npx playwright install
+```
+
+### Context
+
+Installing **`@playwright/test`** via `npm ci` provides the runner but **not necessarily the browser binaries**. On blank Linux agents, the first targeted E2E may therefore fail only after the managed backend and Vite startup have already succeeded, which can mislead operators into suspecting the app boot sequence.
+
+### Fix
+
+From **`<REPO_ROOT>/apps/web/admin`**:
+
+```bash
+npx playwright install chromium
+npx playwright test <spec> --project=chromium
+```
+
+If disk budgets or custom browser caches matter, also align `PLAYWRIGHT_BROWSERS_PATH` with your runner policy.
+
+### Interpretation
+
+This is **browser-runtime bootstrap debt**. When the error explicitly says the executable does not exist, do not debug selectors, routes, or API startup first.
+
+### Pitfall 76: Discussion Markdown demo is intentionally collapsed by default; target preview or click the toggle first
+
+### Symptom
+
+Older Playwright expectations fail after opening a discussion composer:
+
+```text
+expect(getByTestId('markdown-latex-demo-render')).toBeVisible()
+Received: 0 matching elements
+```
+
+or the test verifies a posted short Markdown reply and sees raw source / plain text instead of a rendered `.katex` node because it was written against the pre-fix DOM behavior.
+
+### Context
+
+`CourseDiscussionPanel.vue` changed in May 2026 so the long fixed example is **hidden behind** **`查看 Markdown + LaTeX 示例`** until the user asks for it. At the same time, Markdown authoring gained a dedicated **`discussion-markdown-preview`** live preview region, and short published rows now render through `PlainOrMarkdownBlock` immediately instead of waiting for an expand action that short rows never expose.
+
+### Fix
+
+- For the example card, assert the **toggle button** first, then click it before expecting **`markdown-latex-demo-render`**.
+- For authoring feedback, assert **`data-testid="discussion-markdown-preview"`** (for example, wait for `.katex` inside it after typing).
+- For published output, scope to the specific **`.discussion-row`** and assert a rendered `.katex` node on short Markdown posts.
+
+Reference regression guard:
+
+- `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js`
+  - `material detail discussion keeps demo collapsed by default, shows live preview, and renders posted KaTeX`
+
+### Interpretation
+
+This is mostly **test expectation drift** caused by a deliberate UX change, not a regression in the discussion feature.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
