@@ -156,7 +156,7 @@ Router registration order is visible in `apps/backend/wailearning_backend/main.p
 - `/api/dashboard` — aggregated dashboard endpoints
 - `/api/logs` — operational logging views for staff
 
-- `/api/learning-notes` - owned learning-note CRUD, editable note outline/resources, public note discovery for same-course and all-authenticated scopes, and note-scoped discussion threads.
+- `/api/learning-notes` — owned learning-note CRUD, editable note outline/resources, public note discovery for same-course and all-authenticated scopes, and note-scoped discussion threads. In `main.py`, this router is mounted between homework and course-discussion routers; it is a first-class product route, not a frontend-only feature.
 
 **LLM and appearance**
 

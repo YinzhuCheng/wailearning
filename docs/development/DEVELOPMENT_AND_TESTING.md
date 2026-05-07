@@ -390,17 +390,17 @@ WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/
 
 That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the additive **quota / constraint hazard** module described below), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and the RAR-based attachment tests (when **`unrar`** is available).
 
-**Skip counts (reference):** On **SQLite** with **`unrar`** (or `unrar-free`) on `PATH` but **without** `TEST_DATABASE_URL` / auto-Postgres, expect **43 skipped** (PostgreSQL-only modules + `test_r3`). If **`unrar` is also missing**, add **2** skips for the RAR attachment cases (**45** total). With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, expect **432 passed, 0 skipped** in the current collection (same **432** tests collected as SQLite; Postgres runs the previously skipped `tests/postgres/*` and `test_r3`, May 2026).
+**Skip counts (reference):** On **SQLite** with **`unrar`** (or `unrar-free`) on `PATH` but **without** `TEST_DATABASE_URL` / auto-Postgres, expect the PostgreSQL-only modules and `test_r3` to skip (the latest full-suite report recorded **43 skipped**). If **`unrar` is missing**, attachment-format tests may add extra skips depending on fixture/tool availability. With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, the target is **0 skipped**; the latest documented Postgres-forced full tree recorded **466 passed, 0 skipped** in [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md). Do not memorize the `passed` integer as a permanent constant.
 
-The **SQLite-only `passed` integer** (for example **389** when **43** tests skip) is not a permanent constant as new tests land in the default collection; rely on **skip deltas** and the **432 / 0** Postgres matrix instead of memorizing a single `passed` tally.
+The **SQLite-only `passed` integer** is not a permanent constant as new tests land in the default collection; rely on **skip classes** and the **Postgres 0-skip** matrix instead of memorizing a single `passed` tally. Historical rows below may still show **389/432** from an earlier May 2026 pass; newer rows in the coverage matrix show **423/466** after additional tests landed.
 
 Default `pytest` without Postgres or **`unrar`** remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
 
-**Agent recipe — Debian/Ubuntu cloud image with only `apt` (no preinstalled Node):** Minimal Python-only sandboxes can still reach **432 passed, 0 skipped** and run **one** Playwright hazard file without hand-installing Node from upstream tarballs:
+**Agent recipe — Debian/Ubuntu cloud image with only `apt` (no preinstalled Node):** Minimal Python-only sandboxes can still reach a **0-skip Postgres pytest** run and run **one** Playwright hazard file without hand-installing Node from upstream tarballs:
 
 1. **PostgreSQL + throwaway DB:** `sudo apt-get install -y postgresql postgresql-contrib` → `sudo pg_ctlcluster 16 main start` (version may differ) → `bash <REPO_ROOT>/ops/scripts/dev/provision_postgres_pytest.sh` (requires `sudo -u postgres`).
 2. **RAR extractors:** `sudo apt-get install -y unrar rar` (or `unrar-free` where `unrar` is unavailable).
-3. **pytest:** `python3 -m pip install -r <REPO_ROOT>/requirements.txt` then `cd <REPO_ROOT> && WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` → expect **432 passed, 0 skipped** when steps 1–2 succeeded.
+3. **pytest:** `python3 -m pip install -r <REPO_ROOT>/requirements.txt` then `cd <REPO_ROOT> && WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` → expect **0 skipped** when steps 1–2 succeeded; consult [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) for the latest representative `passed` count.
 4. **Node + Playwright (apt, not `nvm`):** `sudo apt-get install -y nodejs npm` — on Ubuntu 24.04 this typically yields **Node 18.x** and **npm 9.x**, sufficient for `<REPO_ROOT>/apps/web/admin/package.json`.
 5. **Admin deps + browser:** `cd <REPO_ROOT>/apps/web/admin && npm ci && npx playwright install chromium`.
 6. **E2E run:** Use **`E2E_PYTHON`** pointing at an interpreter that has **`uvicorn`** on `PYTHONPATH` (repository **`.venv`** if present, else **`/usr/bin/python3`** after `pip install -r requirements.txt`). Example smoke:
@@ -524,14 +524,16 @@ This subsection records **machine-verified** outcomes so future agents do not re
 
 ##### 5a. `python3 -m pytest tests/` — two engine configurations
 
+The table immediately below is a **historical representative run** from an earlier May 2026 cleanup pass. It remains useful for understanding the SQLite-vs-Postgres skip split, but it is not the newest count. The newer full-suite report currently records **423 passed, 43 skipped** on SQLite-default and **466 passed, 0 skipped** on Postgres-forced. Treat integer counts as moving; treat the skip classes and required dependencies as stable operational guidance.
+
 | Configuration | Command pattern | Outcome (representative) | Wall-clock order of magnitude |
 |---------------|-----------------|---------------------------|--------------------------------|
-| **Default SQLite** (no `TEST_DATABASE_URL`, no `WAILEARNING_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | **389 passed**, **43 skipped** when **`unrar`** is present; **45 skipped** when **`unrar`** is missing (adds 2 RAR attachment tests) | ~8 minutes on a typical cloud CPU |
-| **PostgreSQL** (`TEST_DATABASE_URL` **or** `WAILEARNING_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | **432 passed**, **0 skipped** (with **`unrar`** + Postgres provisioned) | ~9.5 minutes on a typical cloud CPU |
+| **Default SQLite** (no `TEST_DATABASE_URL`, no `WAILEARNING_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | Historical: **389 passed**, **43 skipped** when **`unrar`** was present; newer report: **423 passed**, **43 skipped** | ~8 minutes on a typical cloud CPU |
+| **PostgreSQL** (`TEST_DATABASE_URL` **or** `WAILEARNING_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | Historical: **432 passed**, **0 skipped**; newer report: **466 passed**, **0 skipped** when **`unrar`** + Postgres were provisioned | ~9.5 minutes on a typical cloud CPU |
 
 Interpretation for agents:
 
-- The **delta** (`432 - 389 = 43` extra tests executed on Postgres vs default SQLite) is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
+- The **skip class** is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
 - **Zero-skip CI:** install **`unrar`** (or `unrar-free`), run **`ops/scripts/dev/provision_postgres_pytest.sh`**, then set **`WAILEARNING_AUTO_PG_TESTS=1`** (Linux agents) or **`TEST_DATABASE_URL`** explicitly (portable).
 
 **Not executed in the same session:** a full `npx playwright test` over **all** `tests/e2e/web-admin/*.spec.js` files (that run is hours-wide and belongs in a dedicated CI job). What **was** executed after the PostgreSQL pytest pass is the **additive** hazard file only:

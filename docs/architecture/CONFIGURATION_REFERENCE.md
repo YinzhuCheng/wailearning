@@ -19,6 +19,7 @@ If code adds a field to `Settings`, update this document in the same change set.
 
 | Variable | Default / notes | Role |
 |----------|-----------------|------|
+| `APP_NAME` | `BIMSA-CLASS API` | Display/name metadata for the backend application. |
 | `APP_ENV` | `development` | Drives production checks; `production`/`prod` triggers strong secret validation. |
 | `DEBUG` | `false` | FastAPI/debug tooling flag. |
 | `HOST` | `127.0.0.1` | Bind address for documented uvicorn examples. |
@@ -70,6 +71,15 @@ If code adds a field to `Settings`, update this document in the same change set.
 
 ---
 
+## Process and logging knobs
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `GUNICORN_WORKERS` | `3` | Intended process count for Gunicorn-based deployment templates and operator configuration. Keep this aligned with the worker-leader rule below; more web workers does not mean more intended grading leaders. |
+| `LOG_LEVEL` | `info` | Backend process logging level used by deployment/runtime entrypoints that read settings. |
+
+---
+
 ## LLM grading worker
 
 | Variable | Default | Notes |
@@ -113,7 +123,7 @@ These are **client** environment variables read by Vite:
 |----------|---------------|----------------|---------|
 | `VITE_DEV_PORT` | `3000` (`apps/web/admin/vite.config.js`) | `5174` (`apps/web/parent/vite.config.js`) | Dev server port. |
 | `VITE_PROXY_TARGET` | `http://127.0.0.1:8001` | same | Backend for `/api` proxy. |
-| `VITE_APP_BASE_PATH` | `/` | SPA base path for deployments under subpaths. |
+| `VITE_APP_BASE_PATH` | `/` | `/` | SPA base path for deployments under subpaths. |
 
 Playwright additionally defines `E2E_API_PORT` / `E2E_UI_PORT` (defaults **8012** / **3012**) inside `apps/web/admin/playwright.config.cjs` for managed test servers — see [../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 

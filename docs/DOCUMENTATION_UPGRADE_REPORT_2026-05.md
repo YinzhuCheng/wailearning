@@ -2,6 +2,8 @@
 
 This report satisfies the “final output” requirement for the documentation system upgrade round. It is stored **in-repo** so agents can diff it like code.
 
+**Status note for future agents:** this file began as an early documentation-upgrade audit trail. Some rows below intentionally preserve the original observed failures, but the current full-suite baseline is newer and lives in [`development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md). When a row says “historical” or “mitigated”, do not treat the old failure as the current repository state.
+
 ---
 
 ## 一、实际实现主线总结（fact-aligned）
@@ -52,8 +54,8 @@ This report satisfies the “final output” requirement for the documentation s
 
 | 标题 | 写入位置 | 涉及路径 | 风险 | 后续 |
 |------|-----------|----------|------|------|
-| pytest 持久 sqlite 文件损坏 | `TEST_EXECUTION_PITFALLS.md`, `known-issues-and-risks.md` | `tests/conftest.py`, `.pytest_tmp/test.sqlite` | 假阴性/假阳性测试 | 删除 sqlite；调研是否应在 `db_reset` 强制 import models |
-| `ensure_schema_updates` 报缺表 | `known-issues-and-risks.md` | `bootstrap.py`, `tests/db_reset.py` | CI 不稳定 | **待人工确认** 根因 |
+| pytest 持久 sqlite 文件损坏 | `TEST_EXECUTION_PITFALLS.md`, `known-issues-and-risks.md` | `tests/conftest.py`, `.pytest_tmp/test.sqlite` | 假阴性/假阳性测试 | 删除 sqlite；避免并发 pytest 共用同一个 sqlite 文件 |
+| `ensure_schema_updates` 报缺表 | `known-issues-and-risks.md`, `development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md` | `bootstrap.py`, `tests/db_reset.py` | 历史 CI 不稳定 | **已缓解**：`tests/db_reset.py` 在 `drop_all/create_all` 前导入 `db.models`，确保 `course_llm_configs` 等表进入 metadata |
 | 无 `.github/workflows` | `known-issues-and-risks.md`, `AGENTS.md` | `ops/ci/` | 搜错自动化入口 | 若迁移至 GH Actions 需新增文档 |
 
 ---
@@ -62,19 +64,21 @@ This report satisfies the “final output” requirement for the documentation s
 
 | 命令 | 是否运行 | 结果 | 失败原因 | 是否写入文档 |
 |------|-----------|------|----------|--------------|
-| `python3 -m pytest tests/backend/e2e_dev -q` | 是 | 大量失败/错误 | sqlite 状态 + 集合污染 + 缺表/唯一约束 | 是（known issues + pitfalls） |
-| `python3 -m pytest tests/backend/e2e_dev/test_demo_course_seed.py -q` | 是 | 失败（缺 `course_llm_configs`） | 见 §四 | 是 |
-| `python3 -m pytest -q`（全量） | 尝试 | **未完成**（超时后台） | 全量耗时超出本轮交互预算 | 在报告中诚实记录 |
+| `python3 -m pytest tests/backend/e2e_dev -q` | 是 | **历史记录：** 大量失败/错误 | sqlite 状态 + 集合污染 + 缺表/唯一约束；后续已拆分修复若干根因 | 是（known issues + pitfalls） |
+| `python3 -m pytest tests/backend/e2e_dev/test_demo_course_seed.py -q` | 是 | **历史记录：** 失败（缺 `course_llm_configs`） | 见 §四；后续由 `tests/db_reset.py` 模型导入修复系统性缺表根因 | 是 |
+| `python3 -m pytest -q`（全量） | 尝试 | **历史记录：** 未完成（超时后台） | 全量耗时超出当轮交互预算；后续完整基线已补录到测试覆盖矩阵 | 在报告中诚实记录 |
 
-**补充对照实验：** 手动新建 sqlite + `import models` + `create_all` + `ensure_schema_updates` 成功 — 记录在 `known-issues-and-risks.md` 作为证据。
+**补充对照实验：** 手动新建 sqlite + `import models` + `create_all` + `ensure_schema_updates` 成功 — 记录在 `known-issues-and-risks.md` 作为证据。后续实现已把这个经验固化到 `tests/db_reset.py`。
+
+**后续完整基线（当前优先参考）：** [`development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) 记录了补齐依赖后的完整验证：PostgreSQL full tree **466 passed, 0 skipped**，SQLite-default full tree **423 passed, 43 skipped**，Full Playwright **303 passed**。这些数字会随新增测试变化；判断原则是 Postgres 强制运行应趋向 **0 skipped**，SQLite-default 的 Postgres-only skips 属于环境差异。
 
 ---
 
-## 六、仍待人工确认
+## 六、已缓解与仍待确认
 
 | 问题 | 涉及路径 | 无法确认原因 | 建议人工动作 |
 |------|-----------|--------------|--------------|
-| pytest 缺表是否源自 db_reset 未加载 metadata | `tests/db_reset.py`, SQLAlchemy import graph | 未做全量 bisect + 全绿 CI | 最小复现 PR；必要时在 `db_reset` 增加模型导入 |
+| pytest 缺表是否源自 db_reset 未加载 metadata | `tests/db_reset.py`, SQLAlchemy import graph | **已缓解**：`reset_test_database_schema()` 已强制导入 `db.models`；最新 full-suite 报告未再把该项列为当前失败 | 保留为历史陷阱；若复发，先检查是否有并发 pytest 或损坏 sqlite 文件 |
 | `HomeworkGradingTask.status` 全部历史取值 | `db/models.py`, `llm_grading.py` | 未枚举历史 DB | grep + 生产样本 |
 
 ---
@@ -84,12 +88,12 @@ This report satisfies the “final output” requirement for the documentation s
 1. 自动从 OpenAPI 导出静态 API reference（或 CI artifact）。
 2. ER 图（选修：从 models 生成）。
 3. 权限矩阵（role × route）自动化校验测试。
-4. 若引入 Alembic：新增 `docs/migrations.md` 并淡化“仅靠 bootstrap”叙述。
+4. 若引入 Alembic：在 `docs/` 下新增专门的 migrations 文档，并淡化“仅靠 bootstrap”叙述。
 5. Playwright 与 pytest 双栈并行时的 sqlite 隔离策略（每 worker 独立 DB 文件）。
 
 ---
 
 ## 八、声明
 
-- 本轮遵循约束：**未修改业务代码**（仅文档与导航性 README 补充）。
+- 原始文档升级轮遵循约束：**未修改业务代码**（仅文档与导航性 README 补充）。后续维护轮如果在核对文档时发现代码缺口，应在对应提交说明中单独记录。
 - 若后续代码改动使本文过时，请同时更新本文件或删除过时段落。

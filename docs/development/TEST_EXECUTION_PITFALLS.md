@@ -1232,7 +1232,7 @@ Fix:
 
 Interpretation:
 
-**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for **432 passed, 0 skipped** with the recipe above (same collection count as SQLite; Postgres executes the previously skipped modules). Older notes that cite **417** or **45 skips tied to `rar`** describe pre-fixture layouts and should not be used when triaging current branches.
+**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for a **Postgres-backed 0-skip** full pytest with the recipe above (Postgres executes the modules skipped by SQLite). The latest full-suite report currently records **466 passed, 0 skipped** for that profile and **423 passed, 43 skipped** for SQLite-default. Older notes that cite **432**, **417**, or fixed **45-skip** expectations describe earlier fixture layouts and should not be used as the current branch’s pass-count oracle.
 
 ### Pitfall 46: disposable Linux / cloud-agent runners may lack `pytest` until `requirements.txt` is installed
 

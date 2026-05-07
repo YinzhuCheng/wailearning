@@ -186,7 +186,7 @@ The thirty-scenario index for **`future-advanced-coverage.spec.js`** / **`future
 Cross-links were updated:
 
 - [README.md](../../README.md) (repository root)
-- [docs/README.md](README.md) (documentation hub)
+- [docs/README.md](../README.md) (documentation hub)
 - [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)
 
 **What was intentionally not claimed**

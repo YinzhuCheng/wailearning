@@ -68,6 +68,7 @@ Routers live under `apps/backend/wailearning_backend/api/routers/`.
 | `llm_settings.router` | Global LLM presets + quotas |
 | `files.router` | Authenticated uploads/downloads |
 | `homework.router` | Homework CRUD, submissions, grading tasks, appeals |
+| `learning_notes.router` | `/api/learning-notes` — owned learning-note CRUD, public note discovery, note outline/resource editing, note discussion |
 | `discussions.router` | Course discussions |
 | `material_chapters.router` | Material hierarchy |
 | `materials.router` | Materials CRUD |
