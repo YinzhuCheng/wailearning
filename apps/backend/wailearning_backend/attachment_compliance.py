@@ -95,9 +95,9 @@ def _zip_has_allowed_inner(content: bytes) -> bool:
 
 
 def _rar_has_allowed_inner(content: bytes) -> bool:
-    from apps.backend.wailearning_backend.domains.llm.attachments import _unrar_tool_path
+    from apps.backend.wailearning_backend.domains.llm.attachments import _rar_extractor_tool_path
 
-    if not _unrar_tool_path():
+    if not _rar_extractor_tool_path():
         return True
 
     import rarfile

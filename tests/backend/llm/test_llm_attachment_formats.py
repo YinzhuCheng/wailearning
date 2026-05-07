@@ -10,15 +10,20 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from apps.backend.wailearning_backend.llm_grading import _classify_and_extract, _walk_rar_bytes, _walk_zip_bytes
+from apps.backend.wailearning_backend.llm_grading import (
+    _classify_and_extract,
+    _walk_rar_bytes,
+    _walk_zip_bytes,
+)
+from apps.backend.wailearning_backend.domains.llm.attachments import _rar_extractor_tool_path
 
 _FIXTURE_RAR_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "llm_rar"
 
 
-def _require_unrar() -> None:
-    """RAR walking matches production: needs ``unrar`` or ``unrar-free`` in PATH."""
-    if not (shutil.which("unrar") or shutil.which("unrar-free")):
-        pytest.skip("unrar or unrar-free required in PATH (install OS package `unrar`)")
+def _require_rar_extractor() -> None:
+    """RAR walking matches production: needs unrar/unrar-free or libarchive tar in PATH."""
+    if not _rar_extractor_tool_path():
+        pytest.skip("RAR extractor required in PATH (install unrar/unrar-free or provide libarchive tar)")
 
 
 def _blocks_to_text(blocks: list) -> str:
@@ -93,7 +98,7 @@ def test_zip_nested_xlsx():
 
 
 def test_rar_unencrypted_extracts_inner_txt():
-    _require_unrar()
+    _require_rar_extractor()
     fixture = _FIXTURE_RAR_DIR / "unencrypted_nested_zip.rar"
     assert fixture.is_file(), f"missing committed fixture: {fixture}"
     content = fixture.read_bytes()
@@ -104,7 +109,7 @@ def test_rar_unencrypted_extracts_inner_txt():
 
 
 def test_rar_password_rejected():
-    _require_unrar()
+    _require_rar_extractor()
     fixture = _FIXTURE_RAR_DIR / "password_protected.rar"
     assert fixture.is_file(), f"missing committed fixture: {fixture}"
     content = fixture.read_bytes()

@@ -2454,7 +2454,62 @@ Always distinguish **“installed”** from **“listening”**. Full-suite veri
 
 ## Full-suite dependency: `unrar` for LLM attachment extraction tests
 
-`tests/backend/llm/test_llm_attachment_formats.py` calls `_require_unrar()` which skips when neither `unrar` nor `unrar-free` exists on `PATH`. Installing `unrar` via apt removes the skip without weakening assertions.
+`tests/backend/llm/test_llm_attachment_formats.py` calls `_require_rar_extractor()` which skips when neither `unrar`, `unrar-free`, nor compatible libarchive-backed `tar` / `bsdtar` exists on `PATH`. Installing `unrar` via apt or providing a compatible `tar` removes the skip without weakening assertions.
+
+## Windows full-suite dependency provisioning: do not leave environment skips unexercised
+
+### Symptom
+
+A full-suite validation attempt can appear "mostly green" while important tests did not actually execute:
+
+- RAR attachment tests skip because no `unrar` / `unrar-free` exists on `PATH`.
+- PostgreSQL-only tests skip because `TEST_DATABASE_URL` is unset or no local PostgreSQL listener exists.
+- Playwright tests abort before browser assertions because Node, Chromium, or subprocess spawning is unavailable.
+
+### Policy
+
+For a result described as a full validation, do not accept those skips as final evidence. Install or provision the missing environment and rerun the affected target at least once. It is fine to keep a fast-loop SQLite profile or a targeted smoke profile, but the ledger must clearly distinguish it from a complete environment-backed run.
+
+Committed documentation must use placeholders such as `<repo>`, `<local-postgres-bin>`, `<local-postgres-data>`, `<local-browser-cache>`, and `<artifact-dir>`. Real local paths, user names, browser cache paths, downloaded archive paths, and service logs belong in an ignored `.e2e-run/` note.
+
+### Windows RAR extractor notes from the 2026-05-07 session
+
+The Windows host did not have `unrar`, `unrar-free`, or `rar` on `PATH`. Attempts to install `unrar` through a system package manager failed because the package manager's system directories were locked or not writable from the automation shell. That should be documented as environment bootstrap debt, not as a product bug.
+
+Downloading RARLAB's Windows installer-style executable is not equivalent to installing a command-line `unrar` for automated tests. In this session, trying to treat that executable as `unrar` caused test execution to hang before product assertions. Do not rely on installer executables as CLI extractors unless you have verified `unrar` command semantics with a small archive.
+
+The repository now accepts a libarchive-backed `tar` / `bsdtar` executable as a RAR extraction fallback when `unrar` and `unrar-free` are absent. This is useful on Windows where `tar.exe` may be present even when package-manager installation is blocked. Validate with:
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\backend\llm\test_llm_attachment_formats.py -q
+```
+
+### Windows `tar.exe` temp-directory ACL notes
+
+During the fallback implementation, `tar.exe -xf <archive> -C <temp-dir> <member>` failed against some `tempfile.mkdtemp(...)` directories and left directories that Git could not enumerate (`Permission denied` warnings for `rar-one-*`). The working pattern was to create the per-member extraction directory explicitly with `Path(tempfile.gettempdir()) / f"rar-one-{uuid}"` plus `Path.mkdir(...)`, then remove it with `shutil.rmtree(..., ignore_errors=True)`.
+
+If local `rar-one-*` directories remain after interrupted runs, treat them as local artifacts. Remove them only after verifying the resolved path is inside the intended temp/artifact area. Do not commit them and do not list their machine-specific absolute paths in committed docs.
+
+### Windows PostgreSQL local-binary notes from the 2026-05-07 session
+
+When the host lacks a PostgreSQL service, Docker, `psql`, or `pg_ctl` on `PATH`, an official PostgreSQL Windows binary archive under an ignored local artifact directory can be enough for a throwaway test database. Keep the archive, extracted binaries, data directory, and logs out of Git.
+
+Known Windows friction:
+
+- `initdb.exe` may finish writing a usable data directory but still print restricted-token errors at the end.
+- `pg_ctl.exe start` can fail with restricted-token errors even when direct `postgres.exe -D <data-dir> -h 127.0.0.1 -p <port>` works.
+- A background `postgres.exe` started by one automation command may not stay alive for the next tool call in this sandboxed environment. Prefer a single orchestrator command/script that starts PostgreSQL, waits for readiness, creates the test role/database, runs pytest, and then stops the process.
+- PowerShell `Start-Process` cannot redirect stdout and stderr to the same file; use separate log files.
+- If an interrupted orchestrator kills PostgreSQL during startup or recovery, the data directory can retain a stale `postmaster.pid` or enter crash recovery. For full-suite validation, a fresh throwaway data directory is often cheaper than trying to reason about the partially started one.
+
+### Ledger interpretation
+
+Record environment failures and interruptions in `TEST_EXECUTION_LEDGER.md`:
+
+- increment `Run count` for started validation attempts that were blocked or interrupted;
+- increment `Pass count` only for actual passed test runs;
+- record whether a skip was eliminated by provisioning the missing condition;
+- store exact local paths and downloaded tool locations only in ignored `.e2e-run/` handoff notes.
 
 ## Stale documentation paths after removing root `tools/` (2026-05)
 

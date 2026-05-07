@@ -299,6 +299,101 @@ python ops\scripts\dev\repo_line_health.py
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\repo_line_health.py` | `passed` | Total tracked text lines: `100981`; health text lines excluding generated/lock files: `97244`; documentation: `12754`; test code: `29161`; primary source: `52260`; tracked text files: `343`. | Command was rerun after staging the new script/docs so `git ls-files` included the intended commit contents. `py_compile` also passed for `ops/scripts/dev/repo_line_health.py`. |
 
+### Test ID: `backend.llm.attachment_formats`
+
+**Category:** `backend-pytest`
+
+**Scope:** Focused backend attachment extraction and classification tests for plain text, Office formats, zip nesting, and RAR fixture handling. The RAR cases exercise committed archives under `tests/fixtures/llm_rar/` and must execute when `unrar`, `unrar-free`, or a compatible libarchive-backed `tar` / `bsdtar` is available.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\backend\llm\test_llm_attachment_formats.py -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `tests/backend/llm/test_llm_attachment_formats.py`
+- `tests/fixtures/llm_rar/`
+- `apps/backend/wailearning_backend/domains/llm/attachments.py`
+- `apps/backend/wailearning_backend/attachment_compliance.py`
+- `apps/backend/wailearning_backend/llm_grading.py`
+
+**Retest triggers:**
+
+- Changes to attachment classification, extraction, archive walking, or RAR/zip safety checks.
+- Changes to upload compliance for `.rar` or `.zip` files.
+- Changes to committed RAR fixtures or fixture-generation assumptions.
+- Changes to environment provisioning rules for `unrar`, `unrar-free`, `tar`, or `bsdtar`.
+
+**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+
+**Last commit:** `e7904f4`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-07`
+
+**Pass count:** `1`
+
+**Run count:** `1`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `e7904f4` | `.venv\Scripts\python.exe -m pytest tests\backend\llm\test_llm_attachment_formats.py -q` | `passed` | `7 passed, 13 warnings in 2.45s` | The host had no `unrar` / `unrar-free`; the RAR tests executed through the compatible `tar` fallback instead of skipping. Warnings were dependency deprecations from import/openpyxl paths. |
+
+### Test ID: `postgres.pytest.package`
+
+**Category:** `postgres-pytest`
+
+**Scope:** PostgreSQL-only pytest package under `tests/postgres/`. This target proves dialect-specific schema, constraint, and transactional behavior that SQLite intentionally cannot cover.
+
+**Canonical command:**
+
+```powershell
+$env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:<local-port>/wailearning_pytest_all'
+.venv\Scripts\python.exe -m pytest tests\postgres -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `tests/postgres/`
+- `tests/conftest.py`
+- `tests/db_reset.py`
+- `ops/scripts/dev/provision_postgres_pytest.sh`
+- `docs/development/DEVELOPMENT_AND_TESTING.md`
+- `docs/development/TEST_EXECUTION_PITFALLS.md`
+
+**Retest triggers:**
+
+- Changes to database models, migrations/repair logic, quota schema, FK constraints, or raw SQL in tests.
+- Changes to `tests/db_reset.py`, `tests/conftest.py`, or PostgreSQL provisioning docs/scripts.
+- Claims of full-suite or zero-skip pytest validation.
+
+**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+
+**Last commit:** `e7904f4`
+
+**Last result:** `interrupted`
+
+**Last run date:** `2026-05-07`
+
+**Pass count:** `0`
+
+**Run count:** `1`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `e7904f4` | Single PowerShell orchestrator: start local PostgreSQL binary, create role/db, set `TEST_DATABASE_URL`, run `.venv\Scripts\python.exe -m pytest tests\postgres -q` | `interrupted` | User intentionally interrupted the orchestrated run before a pytest result was observed. | Earlier setup confirmed a local PostgreSQL binary could initialize a throwaway data directory and direct `postgres.exe` could answer `SELECT version()` inside the same command lifecycle. Cross-command background process persistence was unreliable on this Windows sandbox, so the next run should use one orchestrator command/script. Local paths are recorded only in `.e2e-run/`. |
+
 ## Known First-Version Limitations
 
 1. This first ledger version starts with the verified runs around commit `6a95aad`; it intentionally does not backfill older branch history from memory.
