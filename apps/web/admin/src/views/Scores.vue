@@ -858,28 +858,33 @@ watch(selectedCourse, async () => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   gap: 16px;
   margin-bottom: 24px;
+  text-align: center;
 }
 
 .page-title {
   margin: 0 0 8px;
-  font-size: 28px;
+  font-size: var(--wa-font-size-stat);
   color: #0f172a;
 }
 
 .page-subtitle {
   margin: 0;
   color: #64748b;
+  font-size: var(--wa-font-size-md);
 }
 
 .header-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
   min-width: 0;
+  width: 100%;
 }
 
 .stats-card {
@@ -895,20 +900,23 @@ watch(selectedCourse, async () => {
 .scheme-hint {
   margin: 0 0 12px;
   color: #64748b;
-  font-size: 14px;
+  font-size: var(--wa-font-size-md);
   line-height: 1.5;
+  text-align: center;
 }
 
 .scheme-tags {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
 }
 
 .scheme-sum {
   margin: 12px 0 0;
-  font-size: 14px;
+  font-size: var(--wa-font-size-md);
   color: #0f172a;
+  text-align: center;
 }
 
 .scheme-sum.invalid {
@@ -917,12 +925,13 @@ watch(selectedCourse, async () => {
 
 .toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   margin-bottom: 16px;
 }
 
 .toolbar-inline {
   display: flex;
+  justify-content: center;
   gap: 8px;
   min-width: 0;
   flex-wrap: wrap;
@@ -930,21 +939,25 @@ watch(selectedCourse, async () => {
 
 .card-header-inline {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  flex-direction: column;
   gap: 16px;
   flex-wrap: wrap;
+  text-align: center;
 }
 
 .weight-total {
   color: #64748b;
-  font-size: 14px;
+  font-size: var(--wa-font-size-md);
 }
 
 .weight-dialog-tools {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
@@ -957,7 +970,7 @@ watch(selectedCourse, async () => {
 }
 
 .small {
-  font-size: 13px;
+  font-size: var(--wa-font-size-sm);
 }
 
 .batch-entry-panel {
@@ -969,9 +982,11 @@ watch(selectedCourse, async () => {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  justify-content: center;
   padding: 14px 16px;
   background: #f8fafc;
   border-radius: 12px;
+  text-align: center;
 }
 
 .summary-item {
@@ -986,6 +1001,7 @@ watch(selectedCourse, async () => {
   display: flex;
   gap: 12px;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
 }
 
@@ -995,8 +1011,7 @@ watch(selectedCourse, async () => {
   }
 
   .page-header {
-    flex-direction: column;
-    align-items: stretch;
+    align-items: center;
   }
 }
 </style>

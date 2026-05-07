@@ -807,26 +807,32 @@ watch(selectedCourse, () => {
 
 .page-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   gap: 16px;
   margin-bottom: 24px;
+  text-align: center;
 }
 
 .page-title {
   margin: 0 0 8px;
-  font-size: 28px;
+  font-size: var(--wa-font-size-stat);
   color: #0f172a;
 }
 
 .page-subtitle {
   margin: 0;
   color: #64748b;
+  font-size: var(--wa-font-size-md);
 }
 
 .header-actions {
   display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
+  width: 100%;
 }
 
 .attachment-help,
@@ -945,7 +951,7 @@ watch(selectedCourse, () => {
 
 @media (max-width: 768px) {
   .page-header {
-    flex-direction: column;
+    align-items: center;
   }
 
   .homework-page {

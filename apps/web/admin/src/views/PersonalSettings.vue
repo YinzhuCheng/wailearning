@@ -326,18 +326,19 @@ onBeforeUnmount(() => {
 
 .page-head {
   margin-bottom: 20px;
+  text-align: center;
 }
 
 .page-head h1 {
   margin: 0 0 6px;
-  font-size: 22px;
+  font-size: var(--wa-font-size-2xl);
   font-weight: 600;
   color: #0f172a;
 }
 
 .muted {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--wa-font-size-md);
   color: #64748b;
 }
 
@@ -346,40 +347,69 @@ onBeforeUnmount(() => {
   border-radius: 12px;
 }
 
+.settings-grid :deep(.el-card__header) {
+  text-align: center;
+}
+
 .block-card--profile {
   grid-row: span 2;
 }
 
 .profile-form {
-  max-width: 480px;
+  max-width: 520px;
+  margin: 0 auto;
 }
 
 .avatar-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 24px;
+  text-align: center;
 }
 
 .avatar-actions {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
 }
 
 .avatar-actions .hint {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: var(--wa-font-size-sm);
   color: #64748b;
+  text-align: center;
 }
 
 .pwd-form {
-  max-width: 480px;
+  max-width: 520px;
+  margin: 0 auto;
 }
 
 .pwd-actions {
+  display: flex;
+  justify-content: center;
   margin-top: 16px;
+}
+
+.profile-form :deep(.el-form-item__label),
+.pwd-form :deep(.el-form-item__label) {
+  justify-content: center;
+  width: 100%;
+  text-align: center;
+}
+
+.profile-form .hint,
+.pwd-form :deep(.el-text) {
+  display: block;
+  text-align: center;
+}
+
+.profile-form > .el-button {
+  display: flex;
+  margin: 0 auto;
 }
 
 .hidden-username {
