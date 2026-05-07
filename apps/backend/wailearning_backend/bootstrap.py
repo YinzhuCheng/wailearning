@@ -18,6 +18,10 @@ from apps.backend.wailearning_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    LearningNote,
+    LearningNoteChapter,
+    LearningNoteDiscussionEntry,
+    LearningNoteResource,
     CourseLLMConfig,
     LLMGlobalQuotaPolicy,
     LLMGroup,
@@ -132,6 +136,68 @@ def ensure_schema_updates() -> None:
         """,
         "CREATE INDEX IF NOT EXISTS ix_user_appearance_styles_user_id ON user_appearance_styles(user_id)",
         "CREATE INDEX IF NOT EXISTS ix_user_appearance_styles_is_selected ON user_appearance_styles(is_selected)",
+        """
+        CREATE TABLE IF NOT EXISTS learning_notes (
+            id INTEGER PRIMARY KEY,
+            title VARCHAR NOT NULL,
+            description TEXT,
+            owner_user_id INTEGER NOT NULL REFERENCES users(id),
+            subject_id INTEGER REFERENCES subjects(id),
+            visibility VARCHAR NOT NULL DEFAULT 'private',
+            source_subject_id INTEGER REFERENCES subjects(id),
+            copied_materials BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_learning_notes_owner_user_id ON learning_notes(owner_user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_learning_notes_subject_id ON learning_notes(subject_id)",
+        """
+        CREATE TABLE IF NOT EXISTS learning_note_chapters (
+            id INTEGER PRIMARY KEY,
+            note_id INTEGER NOT NULL REFERENCES learning_notes(id) ON DELETE CASCADE,
+            parent_id INTEGER REFERENCES learning_note_chapters(id),
+            title VARCHAR NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            source_chapter_id INTEGER REFERENCES course_material_chapters(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_learning_note_chapters_note_id ON learning_note_chapters(note_id)",
+        "CREATE INDEX IF NOT EXISTS ix_learning_note_chapters_parent_id ON learning_note_chapters(parent_id)",
+        """
+        CREATE TABLE IF NOT EXISTS learning_note_resources (
+            id INTEGER PRIMARY KEY,
+            note_id INTEGER NOT NULL REFERENCES learning_notes(id) ON DELETE CASCADE,
+            chapter_id INTEGER REFERENCES learning_note_chapters(id) ON DELETE SET NULL,
+            title VARCHAR NOT NULL,
+            content TEXT,
+            content_format VARCHAR NOT NULL DEFAULT 'markdown',
+            attachment_name VARCHAR,
+            attachment_url VARCHAR,
+            source_material_id INTEGER REFERENCES course_materials(id),
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_learning_note_resources_note_id ON learning_note_resources(note_id)",
+        "CREATE INDEX IF NOT EXISTS ix_learning_note_resources_chapter_id ON learning_note_resources(chapter_id)",
+        """
+        CREATE TABLE IF NOT EXISTS learning_note_discussion_entries (
+            id INTEGER PRIMARY KEY,
+            note_id INTEGER NOT NULL REFERENCES learning_notes(id) ON DELETE CASCADE,
+            author_user_id INTEGER NOT NULL REFERENCES users(id),
+            body TEXT NOT NULL,
+            body_format VARCHAR NOT NULL DEFAULT 'markdown',
+            message_kind VARCHAR NOT NULL DEFAULT 'human',
+            llm_invocation BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_learning_note_discussion_entries_note_id ON learning_note_discussion_entries(note_id)",
+        "CREATE INDEX IF NOT EXISTS ix_learning_note_discussion_entries_author_user_id ON learning_note_discussion_entries(author_user_id)",
         """
         CREATE TABLE IF NOT EXISTS homework_grade_appeals (
             id INTEGER PRIMARY KEY,

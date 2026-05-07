@@ -45,6 +45,20 @@ from apps.backend.wailearning_backend.domains.roster.sync import reconcile_stude
 
 _DEMO_PASSWORD = "111111"
 
+_DEMO_COURSE_COVER_DATA_URL = (
+    "data:image/svg+xml;utf8,"
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 960 540'>"
+    "<rect width='960' height='540' fill='%230f766e'/>"
+    "<path d='M0 420 C160 360 260 470 430 405 C590 345 650 250 960 315 L960 540 L0 540 Z' fill='%2314b8a6'/>"
+    "<circle cx='750' cy='130' r='82' fill='%23facc15' opacity='0.9'/>"
+    "<rect x='115' y='115' width='390' height='310' rx='28' fill='%23ffffff' opacity='0.92'/>"
+    "<rect x='155' y='165' width='250' height='28' rx='14' fill='%230f766e'/>"
+    "<rect x='155' y='225' width='300' height='20' rx='10' fill='%2314b8a6'/>"
+    "<rect x='155' y='270' width='245' height='20' rx='10' fill='%232dd4bf'/>"
+    "<rect x='155' y='315' width='280' height='20' rx='10' fill='%2399f6e4'/>"
+    "</svg>"
+)
+
 _CLASS_NAME = "人工智能1班"
 _LEGACY_CLASS_NAME = "数据挖掘默认班"
 _COURSE_NAME = "数据挖掘"
@@ -282,6 +296,12 @@ def _ensure_demo_subject_llm_binding(
     if enable_auto_grading:
         cfg.is_enabled = True
     db.flush()
+
+
+def _ensure_demo_course_cover(course: Subject) -> None:
+    """Attach a simple built-in cover only when the course has no cover yet."""
+    if not course.cover_image_url:
+        course.cover_image_url = _DEMO_COURSE_COVER_DATA_URL
 
 
 _HOMEWORK_TITLE = "数据挖掘第一次作业：Python 环境、NumPy/Pandas 基础与 Wine 数据探索"
@@ -1206,6 +1226,7 @@ def seed_demo_course_bundle(db: Session) -> None:
         course.course_times = _COURSE_TIMES
         course.description = _COURSE_DESCRIPTION
         print(f"Demo course '{_COURSE_NAME}' already exists.")
+    _ensure_demo_course_cover(course)
 
     link_row = (
         db.query(SubjectClassLink)

@@ -28,6 +28,7 @@ from apps.backend.wailearning_backend.api.routers import (
     e2e_dev,
     files,
     homework,
+    learning_notes,
     logs,
     materials,
     material_chapters,
@@ -106,6 +107,7 @@ app.include_router(system_settings.router)
 app.include_router(llm_settings.router)
 app.include_router(files.router)
 app.include_router(homework.router)
+app.include_router(learning_notes.router)
 app.include_router(discussions.router)
 app.include_router(material_chapters.router)
 app.include_router(materials.router)

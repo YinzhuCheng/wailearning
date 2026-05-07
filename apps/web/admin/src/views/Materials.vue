@@ -1101,8 +1101,9 @@ watch(selectedChapterId, () => {
 
 .chapter-tree :deep(.el-tree-node__content) {
   height: auto;
-  min-height: 32px;
+  min-height: 38px;
   align-items: flex-start;
+  font-size: 16px;
 }
 
 .chapter-tree :deep(.el-tree-node__expand-icon) {
@@ -1151,8 +1152,11 @@ watch(selectedChapterId, () => {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  min-height: 32px;
+  min-height: 38px;
   padding-right: 8px;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .tree-tag {

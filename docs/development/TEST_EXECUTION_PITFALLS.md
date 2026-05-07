@@ -2364,3 +2364,44 @@ Run `rg 'tools/testing' -g '*.{py,yml,yaml,sh,bat,cjs,js,json}'` from the reposi
 ### Pitfall during validation
 
 If you only move the script but forget to skip `tests/devtools/` inside the auditor’s inventory walk, the generated `TEST_REDUNDANCY_AUDIT.md` may include spurious “uncategorized-python” rows for the utility itself. This pass adds an explicit `rel_path.startswith("tests/devtools/")` guard.
+
+## Learning notes and attendance/calendar implementation pitfalls (2026-05)
+
+### Pitfall: old doc path memory for code maps
+
+During the learning-notes / attendance-calendar pass, an agent-side memory pointed at `docs/architecture/CODE_MAP_AND_ENTRYPOINTS.md`. The actual current file is:
+
+```text
+<repo-root>/docs/reference/CODE_MAP_AND_ENTRYPOINTS.md
+```
+
+Fix: use `docs/README.md` as the documentation hub and prefer `rg "CODE_MAP_AND_ENTRYPOINTS"` over guessing a folder.
+
+### Pitfall: `LLMQuotaReservation` cannot be reused for learning-note assistant replies by inventing a dummy job id
+
+Course discussion quota rows currently attach to discussion/homework job tables. A learning-note discussion entry id is **not** a valid `discussion_llm_jobs.id`, so inserting quota/reservation rows with a dummy note discussion id would violate foreign-key expectations or silently corrupt attribution semantics.
+
+Current product code therefore gates learning-note assistant replies through course access and course LLM config, but does not claim quota parity. A future implementation should add a note-specific LLM job table or generalize the quota attribution schema before recording learning-note token usage.
+
+### Pitfall: patching multilingual demo seed with Chinese context can miss anchors
+
+`domains/seed/demo.py` is data-heavy and contains many Chinese strings. A patch that matched nearby rendered Chinese text failed because PowerShell display and exact file bytes did not line up. The successful approach used ASCII anchors such as `_DEMO_PASSWORD`, `_HOMEWORK_TITLE`, and `link_row`.
+
+Fix pattern: for multilingual files, use ASCII identifiers/path names as patch anchors, then run `py_compile` immediately.
+
+### Pitfall: Vite build can succeed while terminal output looks mojibake
+
+`npm.cmd run build` rendered some chunk output and Chinese-adjacent console text through the Windows terminal encoding, but the Vue SFC source still compiled as UTF-8 and `rg` showed correct file content. Do not copy build output strings back into source. Use build success/failure as the syntax signal and inspect file diffs for content changes.
+
+### Pitfall: learning-note public visibility is not the same as "must bind a course"
+
+The first implementation of learning notes treated `visibility="course"` as literally course-only and rejected public notes where `subject_id` was null. That no longer matches the product rule: a public note with a course is same-course-visible, while a public note without a course is visible to every authenticated user.
+
+Implementation consequence:
+
+- Do not restore a validator like `Public course-visible notes must be associated with a course`.
+- Public list queries without a course filter must include both `subject_id IS NULL` notes and course-bound notes for ids returned by `get_accessible_course_ids(...)`.
+- Public list queries with a concrete `subject_id` still call `ensure_course_access_http(...)` and filter to that course only, so a course-specific view does not unexpectedly mix in all-authenticated notes.
+- Update payload handling must distinguish "field omitted" from `"subject_id": null`; otherwise a user cannot clear a note's course binding and publish it to all authenticated users.
+
+Verification pattern: after editing `api/routers/learning_notes.py`, run targeted Python compilation and grep for the obsolete validator/error text before claiming the visibility semantics are fixed.

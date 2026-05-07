@@ -53,6 +53,8 @@ For **permission-style helpers** in routers (e.g. `is_teacher`, instructor check
 ### Course materials and notifications
 
 - Hierarchical material chapters and material placement.
+- Course covers are stored on `subjects.cover_image_url`; the student course catalog/cards and the materials page render that URL when present. Demo seed attaches a small built-in SVG data URL to the required demo course only when no cover already exists, so user-uploaded covers are not overwritten.
+- Learning notes (`/api/learning-notes`) are separate from course materials: teachers and students can create named, editable notes; new notes default to private owner-only visibility. Public learning notes reuse the stored `visibility="course"` value for compatibility, but their audience is decided by `subject_id`: notes with a course are readable/commentable by users who already have that course access, while public notes without a course are readable/commentable by any authenticated user.
 - Class-wide, course-wide, targeted-student, and targeted-user notifications.
 - Per-user read-state tracking and mark-all-read behavior.
 - Notification support for grading and appeal events.
@@ -60,7 +62,7 @@ For **permission-style helpers** in routers (e.g. `is_teacher`, instructor check
 ### Scores, attendance, and points
 
 - Score entry, grade schemes, exam weights, and composition views.
-- Attendance tracking and bulk attendance flows.
+- Attendance tracking and bulk attendance flows. The teaching calendar is no longer a separate sidebar destination; `/teaching-calendar` redirects to `/attendance`, where `TeachingCalendar.vue` is embedded and clicking a rendered course day selects that date for the attendance form.
 - Points system for rewards, ranking, and classroom incentive scenarios.
 
 ### Parent portal
@@ -153,6 +155,8 @@ Router registration order is visible in `apps/backend/wailearning_backend/main.p
 - `/api/scores`, `/api/attendance`, `/api/points`, `/api/semesters` — academic records
 - `/api/dashboard` — aggregated dashboard endpoints
 - `/api/logs` — operational logging views for staff
+
+- `/api/learning-notes` - owned learning-note CRUD, editable note outline/resources, public note discovery for same-course and all-authenticated scopes, and note-scoped discussion threads.
 
 **LLM and appearance**
 

@@ -64,8 +64,13 @@
           :class="{
             'is-outside': !cell.isCurrentMonth,
             'is-holiday': Boolean(cell.holiday),
-            'is-class-day': Boolean(cell.classDay)
+            'is-class-day': Boolean(cell.classDay),
+            'is-selected': selectedDate && cell.dateKey === selectedDate
           }"
+          role="button"
+          :tabindex="cell.classDay ? 0 : -1"
+          @click="handleCellClick(cell)"
+          @keydown.enter.prevent="handleCellClick(cell)"
         >
           <div class="calendar-cell__day">{{ cell.dayNumber }}</div>
           <div v-if="cell.holiday" class="calendar-pill calendar-pill-holiday">
@@ -106,8 +111,14 @@ const props = defineProps({
   course: {
     type: Object,
     default: null
+  },
+  selectedDate: {
+    type: String,
+    default: ''
   }
 })
+
+const emit = defineEmits(['select-date'])
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -360,6 +371,11 @@ const goToNextMonth = () => {
   currentMonth.value = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 1, 1)
 }
 
+const handleCellClick = cell => {
+  if (!cell?.classDay) return
+  emit('select-date', cell.dateKey)
+}
+
 watch(
   () => props.course,
   course => {
@@ -514,6 +530,13 @@ watch(
 
 .calendar-cell.is-class-day {
   background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  cursor: pointer;
+}
+
+.calendar-cell.is-class-day:hover,
+.calendar-cell.is-selected {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
 }
 
 .calendar-cell.is-holiday {

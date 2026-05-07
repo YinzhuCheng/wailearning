@@ -66,7 +66,7 @@
               :disabled="!row.homework_id"
               @click="goSubmissions(row.homework_id)"
             >
-              班级提交
+              作业详情
             </el-button>
           </template>
         </el-table-column>

@@ -230,7 +230,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
-  Calendar,
   Collection,
   DataAnalysis,
   Document,
@@ -502,6 +501,7 @@ const routeNameMap = {
   '/points-display': '积分展示',
   '/settings': '系统设置',
   '/materials': '课程资料',
+  '/learning-notes': '学习笔记',
   '/homework': '作业管理',
   '/homework/students': '学生作业一览',
   '/homework/by-student': '学生作业一览',
@@ -552,7 +552,7 @@ const homeworkMenuOpenIndices = computed(() => {
   }
   if (userStore.isClassTeacher) {
     if (
-      p.startsWith('/teaching-calendar') ||
+      p.startsWith('/attendance') ||
       p.startsWith('/students') ||
       p.startsWith('/subjects') ||
       p.startsWith('/notifications')
@@ -572,7 +572,7 @@ const classTeacherMenu = [
     label: '班级教学',
     icon: School,
     children: [
-      { path: '/teaching-calendar', label: '教学日历', icon: Calendar },
+      { path: '/attendance', label: '考勤管理', icon: Collection },
       { path: '/students', label: '学生信息', icon: User },
       { path: '/subjects', label: '课程信息', icon: Reading },
       { path: '/notifications', label: '通知信息', icon: Bell }
@@ -585,11 +585,11 @@ const teacherMenu = [
   { path: '/students', label: '学生管理', icon: User },
   { path: '/scores', label: '成绩管理', icon: Collection },
   { path: '/attendance', label: '考勤管理', icon: Collection },
-  { path: '/teaching-calendar', label: '教学日历', icon: Calendar },
   { path: '/notifications', label: '通知中心', icon: Bell },
   { path: '/homework', label: '作业管理', icon: Reading },
   { path: '/homework/students', label: '学生作业一览', icon: User },
-  { path: '/materials', label: '课程资料', icon: Collection }
+  { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/learning-notes', label: '学习笔记', icon: Document }
 ]
 
 /** Flat menu: all entries used to live under one 「课程学习」 submenu — removed for fewer clicks (parity with teacher rail). */
@@ -598,6 +598,7 @@ const studentMenu = [
   { path: '/course-home', label: '学习主页', icon: DataAnalysis },
   { path: '/homework', label: '课程作业', icon: Document },
   { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/learning-notes', label: '学习笔记', icon: Document },
   { path: '/student-scores', label: '我的成绩', icon: Collection },
   { path: '/notifications', label: '课程通知', icon: Bell }
 ]

@@ -21,6 +21,8 @@ The database stores the flag on the row so API consumers and LLM pipelines can b
 | `course_materials` | `content_format` | Material description body |
 | `notifications` | `content_format` | Teacher/admin-authored notification body (`password_reset_request` remains HTML from the system) |
 | `course_discussion_entries` | `body_format` | Each discussion message body (including LLM assistant rows, which remain `markdown`) |
+| `learning_note_resources` | `content_format` | Owner-editable learning-note resources, including course material snapshots copied into a note |
+| `learning_note_discussion_entries` | `body_format` | Learning-note discussion messages and assistant replies |
 
 Schema migrations are applied via `ensure_schema_updates()` in `apps/backend/wailearning_backend/bootstrap.py` using `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... DEFAULT 'markdown'`.
 
@@ -30,6 +32,8 @@ Schema migrations are applied via `ensure_schema_updates()` in `apps/backend/wai
 - `HomeworkSubmissionCreate`, `HomeworkSubmissionResponse`, `HomeworkAttemptResponse`: `content_format`.
 - `HomeworkSubmissionStatusResponse`: includes `content_format` for teacher grid/detail views.
 - `CourseDiscussionCreate`, `CourseDiscussionEntryResponse`: `body_format`.
+- `LearningNoteResourceCreate` / `LearningNoteResourceUpdate` / `LearningNoteResourceResponse`: `content_format`.
+- `LearningNoteDiscussionCreate` / `LearningNoteDiscussionEntryResponse`: `body_format`.
 - `NotificationBase` / `NotificationUpdate` / `NotificationResponse`: `content_format`.
 - `CourseMaterialBase` / `CourseMaterialUpdate` / `CourseMaterialResponse`: `content_format`.
 
@@ -150,3 +154,7 @@ They assert round-trip persistence for homework update + student submission, dis
 - [LLM and Homework Guide](../product/LLM_HOMEWORK_GUIDE.md) — grading pipeline overview
 - [Test Suite Map](TEST_SUITE_MAP.md) — where API tests live
 - [Encoding And Mojibake Safety](ENCODING_AND_MOJIBAKE_SAFETY.md) — UTF-8 expectations for text fields
+
+## Learning notes format notes
+
+`LearningNotes.vue` and `api/routers/learning_notes.py` use the same `markdown` / `plain` normalization model for note resources and note discussion bodies. The persistence tables are `learning_note_resources` and `learning_note_discussion_entries`, not `course_materials` or `course_discussion_entries`, because students can own and edit copied course outlines while official course materials remain teacher-published. When copying course materials into a note, attachment URLs are kept by reference rather than copied on disk. A future richer note editor should reuse `MarkdownEditorPanel` / `PlainOrMarkdownBlock` rather than inventing another renderer.
