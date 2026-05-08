@@ -25,6 +25,7 @@ For the current validation automation handoff, use
     postgres/                 PostgreSQL-only guards (skip unless Postgres: TEST_DATABASE_URL or WAILEARNING_AUTO_PG_TESTS=1 after provision script)
     security/                 API authorization / abuse-edge regression (roles, tokens)
     e2e/web-admin/            Playwright browser coverage for the admin SPA
+    frontend/                 lightweight frontend Node tests without backend/browser startup
     devtools/                 maintenance scripts that scan or rewrite test artifacts (not pytest-discovered; filenames must not start with `test_`)
     fixtures/                 static files used by tests
     scenarios/                shared scenario builders and stress helpers
@@ -45,6 +46,22 @@ Current utilities:
 
 - [`tests/devtools/audit_test_redundancy.py`](../../tests/devtools/audit_test_redundancy.py) — regenerates [`TEST_REDUNDANCY_AUDIT.md`](TEST_REDUNDANCY_AUDIT.md).
 - [`tests/devtools/README.md`](../../tests/devtools/README.md) — short rules, commands, and cross-links for agents.
+
+### `tests/frontend/` (Node-based frontend checks)
+
+This subdirectory holds focused frontend tests that do not start FastAPI, Vite,
+or a browser. Use it for shared utility contracts where full Playwright would
+be too expensive or too environment-sensitive.
+
+Current tests:
+
+- [`tests/frontend/admin/markdown_latex_and_clipboard.test.mjs`](../../tests/frontend/admin/markdown_latex_and_clipboard.test.mjs) checks admin Markdown/LaTeX preprocessing, copy fallback behavior, and Playwright preflight JSON output.
+
+Run from the repository root:
+
+```bash
+node --test tests/frontend/admin/markdown_latex_and_clipboard.test.mjs
+```
 
 ### Diff selector support files
 

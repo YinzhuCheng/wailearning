@@ -26,6 +26,7 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
+import { copyText } from '@/utils/clipboard'
 import { MARKDOWN_LATEX_EXAMPLE_MARKDOWN } from '@/utils/markdownLatexDemo'
 
 defineProps({
@@ -54,10 +55,8 @@ const emitInsert = () => {
 
 const copySource = async () => {
   try {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(MARKDOWN_LATEX_EXAMPLE_MARKDOWN)
-    } else {
-      throw new Error('no clipboard')
+    if (!(await copyText(MARKDOWN_LATEX_EXAMPLE_MARKDOWN))) {
+      throw new Error('copy failed')
     }
     copied.value = true
     ElMessage.success('示例 Markdown 已复制')

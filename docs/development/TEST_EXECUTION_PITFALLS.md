@@ -2698,6 +2698,67 @@ Agent workflow rule:
 3. Record the blocked command and the exact high-level failure (`spawn EPERM`) in this pitfalls document.
 4. Keep local absolute paths, user profile names, browser cache paths, or other machine-identifying details in an ignored local note under `.e2e-run/`, not in committed documentation.
 
+### Pitfall: Playwright managed `webServer` can fail when the repository `.venv` is a stale junction
+
+On Windows worktrees, `<repo>/.venv` may be a junction or symlink to another
+local checkout. If that target directory is later deleted or moved, the admin
+Playwright config still tries to start the managed FastAPI server with:
+
+```text
+<repo>/.venv/Scripts/python.exe -m uvicorn apps.backend.wailearning_backend.main:app ...
+```
+
+The targeted Playwright command may then fail after the sandbox `spawn EPERM`
+issue is resolved, before any browser assertion runs:
+
+```powershell
+npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium
+```
+
+Observed symptom:
+
+```text
+Error: Process from config.webServer was not able to start. Exit code: 1
+[WebServer] The system cannot find the path specified.
+```
+
+Interpretation:
+
+- this is a local Playwright environment/bootstrap failure, not evidence that
+  the changed UI behavior is broken;
+- the admin Playwright config defaults `E2E_PYTHON` to
+  `<repo>/.venv/Scripts/python.exe` on Windows;
+- a system Python without `uvicorn`, `fastapi`, and `sqlalchemy` is not a valid
+  replacement unless project dependencies were installed into that interpreter;
+- real junction targets, browser cache locations, and user-profile paths belong
+  only in ignored local notes under `.agent-run/`.
+
+Preflight before rerunning Playwright:
+
+```powershell
+python ops\scripts\dev\playwright_preflight.py
+python ops\scripts\dev\playwright_preflight.py --json
+```
+
+Use `--include-private-paths` only for local ignored handoff notes:
+
+```powershell
+python ops\scripts\dev\playwright_preflight.py --include-private-paths
+```
+
+Fix patterns:
+
+1. recreate the repository virtual environment and install requirements;
+2. or set `E2E_PYTHON=<python-with-project-dependencies>` before invoking
+   Playwright;
+3. or start backend/frontend manually, verify health, and run Playwright with
+   `PLAYWRIGHT_USE_EXTERNAL_SERVERS=1`;
+4. rerun the same targeted Playwright command only after the preflight no longer
+   reports missing backend Python dependencies.
+
+Do not edit Playwright selectors, Vue components, or route code based solely on
+this `webServer` bootstrap failure.
+
 ### Pitfall: execution ledgers become misleading if they only record green runs
 
 The structured execution ledger lives at:

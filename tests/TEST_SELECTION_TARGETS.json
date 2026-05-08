@@ -190,6 +190,36 @@
       "notes": "Recommended for admin frontend source/config changes. A Playwright spec-only change does not necessarily require rebuild unless shared helpers or config changed."
     },
     {
+      "id": "frontend.admin.markdown_latex_clipboard",
+      "category": "frontend-node-test",
+      "risk": "targeted",
+      "description": "Node test coverage for admin Markdown/LaTeX preprocessing, clipboard fallback behavior, and Playwright preflight JSON diagnostics.",
+      "working_directory": ".",
+      "coverage_tags": ["admin-frontend", "markdown", "latex", "clipboard", "playwright-preflight"],
+      "commands": [
+        {
+          "label": "node test",
+          "argv": ["node", "--test", "tests/frontend/admin/markdown_latex_and_clipboard.test.mjs"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/frontend/admin/markdown_latex_and_clipboard.test.mjs",
+          "apps/web/admin/src/utils/markdownIt.js",
+          "apps/web/admin/src/utils/clipboard.js",
+          "apps/web/admin/src/components/MarkdownLatexLiveDemo.vue",
+          "ops/scripts/dev/playwright_preflight.py"
+        ],
+        "globs": [
+          "tests/frontend/admin/**",
+          "apps/web/admin/src/utils/markdown*.js",
+          "apps/web/admin/src/utils/clipboard.js"
+        ]
+      },
+      "ledger_id": null,
+      "notes": "This target is intentionally cheaper than Playwright and should run before browser E2E for Markdown/LaTeX or copy-button changes."
+    },
+    {
       "id": "admin.e2e.learning_notes_attendance_cover_tier20",
       "category": "admin-playwright",
       "risk": "targeted",

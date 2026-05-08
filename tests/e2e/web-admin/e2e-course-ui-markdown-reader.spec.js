@@ -50,6 +50,14 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex').first()).toBeVisible({
       timeout: 15000
     })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display').first()).toBeVisible({
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display')).toHaveCount(2, {
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).not.toContainText('$$')
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).not.toContainText('\\[')
   })
 
   test('homework dialog hides LaTeX demo when switching body to plain text', async ({ page }) => {
@@ -177,15 +185,29 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(dlg.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
     const fmtBar = dlg.locator('.discussion-format-bar')
     await expect(fmtBar.getByRole('radio', { name: 'Markdown' })).toBeChecked({ timeout: 5000 })
-    await textarea.fill(`md-material-${stamp}\n\n公式：\\(x^2+y^2=z^2\\)`)
+    await textarea.fill([
+      `md-material-${stamp}`,
+      '',
+      'inline math: \\(x^2+y^2=z^2\\)',
+      '',
+      '$$',
+      '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}',
+      '$$'
+    ].join('\n'))
     await expect(dlg.getByTestId('discussion-markdown-preview').locator('.katex').first()).toBeVisible({
       timeout: 15000
     })
+    await expect(dlg.getByTestId('discussion-markdown-preview').locator('.katex-display').first()).toBeVisible({
+      timeout: 15000
+    })
+    await expect(dlg.getByTestId('discussion-markdown-preview')).not.toContainText('$$')
     await dlg.getByRole('button', { name: '查看 Markdown + LaTeX 示例' }).click()
     await expect(dlg.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 15000 })
     await dlg.getByTestId('discussion-submit').click()
     const row = dlg.locator('.discussion-row').filter({ hasText: `md-material-${stamp}` })
     await expect(row).toBeVisible({ timeout: 15000 })
     await expect(row.locator('.katex').first()).toBeVisible({ timeout: 15000 })
+    await expect(row.locator('.katex-display').first()).toBeVisible({ timeout: 15000 })
+    await expect(row).not.toContainText('$$')
   })
 })
