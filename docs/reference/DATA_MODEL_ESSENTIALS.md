@@ -64,6 +64,10 @@ Effects for agents:
 | `CourseGradeScheme` | `course_grade_schemes` | Weights |
 | `CourseExamWeight` | `course_exam_weights` | Exam composition |
 
+### 2.2 Course covers
+
+`Subject.cover_image_url` is the course-cover source of truth. Frontend course-selection cards (`MyCourses.vue`) and the materials banner (`Materials.vue`) render this URL when present. The demo seed gives the required demo course a small inline SVG data URL only when `cover_image_url` is empty; this preserves operator-uploaded covers and keeps demo installs visibly exercising the cover-card path.
+
 ### 2.1 Required vs elective class binding (implementation truth, May 2026)
 
 - **必修课**：通过 `subject_class_links` 绑定 **多个** 行政班；每个绑定均有独立的 `enrollment_mode`。
@@ -112,9 +116,21 @@ Legacy quota columns on `course_llm_configs` were dropped on Postgres via `ensur
 
 | Model | Table | Notes |
 |-------|-------|------|
+| `LearningNote` | `learning_notes` | User-owned note; `visibility` is `private` or `course`. The `course` value means "public" in the current API: with `subject_id` it is same-course-visible, and with `subject_id IS NULL` it is visible to every authenticated user. |
+| `LearningNoteChapter` | `learning_note_chapters` | Note-local editable outline copied from course material chapters or created freely. |
+| `LearningNoteResource` | `learning_note_resources` | Note-owned resource snapshot/reference; can copy course material text and keep attachment URLs by reference without duplicating files. |
+| `LearningNoteDiscussionEntry` | `learning_note_discussion_entries` | Discussion messages scoped to one learning note; private notes remain owner-only, course-bound public notes use course access, and unbound public notes allow any authenticated participant. |
 | `CourseDiscussionEntry` | `course_discussion_entries` | Thread bodies; `body_format` |
 | `Notification` | `notifications` | Multiple targeting modes |
 | `NotificationRead` | `notification_reads` | Read receipts |
+
+### 5.1 Learning-note implementation notes
+
+Learning notes intentionally do not reuse `CourseMaterial` rows. Course materials remain teacher-published course state, while learning notes are owner-editable state that students may create. Copying a course outline writes new `LearningNoteChapter` rows; copying materials writes `LearningNoteResource` rows with copied title/content/content format plus `source_material_id` and attachment URL references. Backend DDL compatibility is in `bootstrap.ensure_schema_updates()` because this repository has no separate Alembic tree.
+
+Visibility semantics are intentionally encoded as two columns rather than a three-value enum in this branch. `visibility="private"` is owner-only regardless of `subject_id`. `visibility="course"` with a non-null `subject_id` is public only inside the normal course-access boundary. `visibility="course"` with a null `subject_id` is public to every authenticated user, so public listing queries must include `LearningNote.subject_id.is_(None)` in addition to course ids from `get_accessible_course_ids(...)`. Do not reintroduce a validator that rejects public notes without a course unless the product requirement changes and the UI/docs are updated in the same patch.
+
+Current LLM caveat: `learning_note_discussion_entries` can receive assistant replies through the course LLM routing stack, but the note path does not yet have a dedicated quota reservation/job table. Do not assume `LLMQuotaReservation` or `LLMTokenUsageLog` contains learning-note assistant usage until a future schema generalizes quota attribution.
 
 ---
 

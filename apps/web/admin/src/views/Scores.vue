@@ -1,6 +1,9 @@
 <template>
   <div class="scores-page">
     <div class="page-header">
+      <el-button class="back-button" plain @click="router.push('/students')">
+        返回学生管理
+      </el-button>
       <div>
         <h1 class="page-title">成绩管理</h1>
         <p class="page-subtitle">
@@ -382,6 +385,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
@@ -391,6 +395,7 @@ import { useUserStore } from '@/stores/user'
 const OTHER_DAILY = '其他平时分'
 
 const userStore = useUserStore()
+const router = useRouter()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -874,6 +879,7 @@ watch(selectedCourse, async () => {
 }
 
 .page-header {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -881,6 +887,12 @@ watch(selectedCourse, async () => {
   gap: 16px;
   margin-bottom: 24px;
   text-align: center;
+}
+
+.back-button {
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
 .page-title {
@@ -1053,6 +1065,11 @@ watch(selectedCourse, async () => {
 
   .page-header {
     align-items: center;
+  }
+
+  .back-button {
+    position: static;
+    align-self: flex-start;
   }
 }
 </style>

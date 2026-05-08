@@ -76,7 +76,7 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
     expect(sync.unread_count).toBeGreaterThanOrEqual(1)
   })
 
-  test('02 unread surfaces on header badge after publish (sidebar is primary nav to notifications)', async ({
+  test('02 unread surfaces on header badge after publish (footer nav opens notifications)', async ({
     page
   }) => {
     const s = scenario()
@@ -96,7 +96,7 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
     const badge = await badgeContentLocator(page)
     await expect(badge).toBeVisible({ timeout: 20000 })
     await expect(badge).toHaveText(/\d+/)
-    await page.getByRole('menuitem', { name: /课程通知/ }).click()
+    await page.getByTestId('sidebar-notifications').click()
     await expect(page).toHaveURL(/\/notifications$/, { timeout: 20000 })
   })
 
@@ -300,13 +300,13 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
     await ctx.close()
   })
 
-  test('09 sidebar course notification entry navigates to /notifications', async ({ page }) => {
+  test('09 sidebar footer notification entry navigates to /notifications', async ({ page }) => {
     const s = scenario()
 
     await login(page, s.student_plain.username, s.password_teacher_student)
     await enterSeededRequiredCourse(page, s.suffix)
 
-    await page.getByRole('menuitem', { name: /课程通知/ }).click()
+    await page.getByTestId('sidebar-notifications').click()
     await expect(page).toHaveURL(/\/notifications$/, { timeout: 20000 })
   })
 

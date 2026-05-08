@@ -141,6 +141,207 @@ class CourseDiscussionCreate(BaseModel):
         return normalize_content_format(value if isinstance(value, str) else None)
 
 
+class LearningNoteVisibility(str, Enum):
+    PRIVATE = "private"
+    COURSE = "course"
+
+
+class LearningNoteResourceResponse(BaseModel):
+    id: int
+    note_id: int
+    chapter_id: Optional[int] = None
+    title: str
+    content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    source_material_id: Optional[int] = None
+    sort_order: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LearningNoteChapterNode(BaseModel):
+    id: int
+    note_id: int
+    parent_id: Optional[int] = None
+    title: str
+    sort_order: int
+    source_chapter_id: Optional[int] = None
+    resources: List[LearningNoteResourceResponse] = Field(default_factory=list)
+    children: List["LearningNoteChapterNode"] = Field(default_factory=list)
+
+
+class LearningNoteBase(BaseModel):
+    title: str = Field(..., min_length=1, max_length=160)
+    description: Optional[str] = Field(None, max_length=4000)
+    subject_id: Optional[int] = Field(None, ge=1)
+    visibility: LearningNoteVisibility = LearningNoteVisibility.PRIVATE
+
+    @field_validator("title")
+    @classmethod
+    def strip_learning_note_title(cls, value: str) -> str:
+        stripped = (value or "").strip()
+        if not stripped:
+            raise ValueError("title cannot be empty.")
+        return stripped
+
+    @field_validator("description")
+    @classmethod
+    def strip_learning_note_description(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+
+class LearningNoteCreate(LearningNoteBase):
+    copy_from_subject_id: Optional[int] = Field(None, ge=1)
+    copy_chapters: bool = False
+    copy_materials: bool = False
+
+
+class LearningNoteUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=160)
+    description: Optional[str] = Field(None, max_length=4000)
+    subject_id: Optional[int] = Field(None, ge=1)
+    visibility: Optional[LearningNoteVisibility] = None
+
+    @field_validator("title")
+    @classmethod
+    def strip_learning_note_update_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = (value or "").strip()
+        if not stripped:
+            raise ValueError("title cannot be empty.")
+        return stripped
+
+    @field_validator("description")
+    @classmethod
+    def strip_learning_note_update_description(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+
+class LearningNoteResponse(LearningNoteBase):
+    id: int
+    owner_user_id: int
+    owner_real_name: Optional[str] = None
+    owner_username: Optional[str] = None
+    owner_role: Optional[str] = None
+    subject_name: Optional[str] = None
+    source_subject_id: Optional[int] = None
+    source_subject_name: Optional[str] = None
+    copied_materials: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LearningNoteListResponse(BaseModel):
+    total: int
+    data: List[LearningNoteResponse]
+
+
+class LearningNoteDetailResponse(LearningNoteResponse):
+    chapters: List[LearningNoteChapterNode] = Field(default_factory=list)
+    loose_resources: List[LearningNoteResourceResponse] = Field(default_factory=list)
+
+
+class LearningNoteChapterCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=160)
+    parent_id: Optional[int] = None
+    sort_order: Optional[int] = None
+
+
+class LearningNoteChapterUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=160)
+    parent_id: Optional[int] = None
+    sort_order: Optional[int] = None
+
+
+class LearningNoteResourceCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    chapter_id: Optional[int] = None
+    sort_order: Optional[int] = None
+
+    @field_validator("content_format", mode="before")
+    @classmethod
+    def validate_note_resource_content_format(cls, value):
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
+
+
+class LearningNoteResourceUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    content: Optional[str] = None
+    content_format: Optional[ContentFormatLiteral] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    chapter_id: Optional[int] = None
+    sort_order: Optional[int] = None
+
+    @field_validator("content_format", mode="before")
+    @classmethod
+    def validate_note_resource_update_content_format(cls, value):
+        if value is None:
+            return None
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
+
+
+class LearningNoteDiscussionEntryResponse(BaseModel):
+    id: int
+    note_id: int
+    author_user_id: int
+    author_real_name: Optional[str] = None
+    author_username: str
+    author_role: str
+    author_avatar_url: Optional[str] = None
+    body: str
+    body_format: ContentFormatLiteral = "markdown"
+    message_kind: str = "human"
+    llm_invocation: bool = False
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LearningNoteDiscussionListResponse(BaseModel):
+    page: int
+    page_size: int
+    total: int
+    data: List[LearningNoteDiscussionEntryResponse]
+
+
+class LearningNoteDiscussionCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=8000)
+    body_format: ContentFormatLiteral = "markdown"
+    invoke_llm: bool = False
+
+    @field_validator("body_format", mode="before")
+    @classmethod
+    def normalize_note_discussion_body_format(cls, value):
+        from apps.backend.wailearning_backend.domains.text_content_format import normalize_content_format
+
+        return normalize_content_format(value if isinstance(value, str) else None)
+
+
 class StudentRosterUpsertFromUsersRequest(BaseModel):
     user_ids: List[int]
 
@@ -1741,3 +1942,4 @@ class CourseMaterialAddPlacementRequest(BaseModel):
 
 
 CourseMaterialChapterNode.model_rebuild()
+LearningNoteChapterNode.model_rebuild()

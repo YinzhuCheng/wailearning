@@ -54,6 +54,7 @@
         </el-menu>
 
         <div class="sidebar-footer">
+          <div v-show="!isCollapsed" class="sidebar-footer__section-title">账户</div>
           <el-tooltip content="个人设置" placement="right" :disabled="!isCollapsed || isMobile">
             <button
               type="button"
@@ -64,6 +65,21 @@
             >
               <el-icon :size="18"><Setting /></el-icon>
               <span v-show="!isCollapsed" class="sidebar-footer__label">个人设置</span>
+            </button>
+          </el-tooltip>
+          <el-tooltip content="通知中心" placement="right" :disabled="!isCollapsed || isMobile">
+            <button
+              type="button"
+              class="sidebar-footer__btn"
+              :class="{ 'sidebar-footer__btn--active': route.path === '/notifications' }"
+              data-testid="sidebar-notifications"
+              @click="goNotifications"
+            >
+              <el-icon :size="18"><Bell /></el-icon>
+              <span v-show="!isCollapsed" class="sidebar-footer__label">通知中心</span>
+              <span v-if="!isCollapsed && headerUnreadCount > 0" class="sidebar-footer__badge">
+                {{ headerUnreadCount > 99 ? '99+' : headerUnreadCount }}
+              </span>
             </button>
           </el-tooltip>
           <el-tooltip content="退出登录" placement="right" :disabled="!isCollapsed || isMobile">
@@ -234,6 +250,7 @@ import {
   Collection,
   DataAnalysis,
   Document,
+  EditPen,
   Expand,
   Fold,
   Reading,
@@ -418,7 +435,7 @@ const pollNotificationSync = async () => {
         title: '新通知',
         message:
           unread > 0
-            ? `您有 ${unread} 条未读通知，请打开侧边栏「通知」或通知中心页面查看。`
+            ? `您有 ${unread} 条未读通知，请打开底部「通知中心」查看。`
             : '通知列表已更新。',
         type: unread > 0 ? 'info' : 'success',
         duration: 5200,
@@ -491,7 +508,6 @@ const routeNameMap = {
   '/scores': '成绩管理',
   '/student-scores': '我的成绩',
   '/attendance': '考勤管理',
-  '/teaching-calendar': '教学日历',
   '/rankings': '班级排名',
   '/analysis': '数据分析',
   '/users': '用户管理',
@@ -502,6 +518,7 @@ const routeNameMap = {
   '/points-display': '积分展示',
   '/settings': '系统设置',
   '/materials': '课程资料',
+  '/learning-notes': '学习笔记',
   '/homework': '作业管理',
   '/homework/students': '学生作业一览',
   '/homework/by-student': '学生作业一览',
@@ -537,7 +554,7 @@ const sidebarMenuActivePath = computed(() => {
 const homeworkMenuOpenIndices = computed(() => {
   const p = route.path
   if (userStore.isStudent) {
-    // Student rail is flat (no `student-learning` submenu); nothing to pre-open.
+    // Student rail is flat, so there is no submenu to pre-open.
     return []
   }
   if (userStore.isAdmin) {
@@ -545,23 +562,21 @@ const homeworkMenuOpenIndices = computed(() => {
     if (p.startsWith('/semesters') || p.startsWith('/settings')) {
       open.push('admin-academic-config')
     }
-    if (p.startsWith('/notifications') || p.startsWith('/logs')) {
+    if (p.startsWith('/logs')) {
       open.push('admin-ops')
     }
     return open
   }
   if (userStore.isClassTeacher) {
     if (
-      p.startsWith('/teaching-calendar') ||
       p.startsWith('/students') ||
-      p.startsWith('/subjects') ||
-      p.startsWith('/notifications')
+      p.startsWith('/subjects')
     ) {
       return ['class-teaching']
     }
     return []
   }
-  // Teacher accounts use a flat sidebar (no `teacher-daily` submenu); nothing to pre-open here.
+  // Teacher accounts use a flat sidebar, so there is no submenu to pre-open here.
   return []
 })
 
@@ -572,34 +587,28 @@ const classTeacherMenu = [
     label: '班级教学',
     icon: School,
     children: [
-      { path: '/teaching-calendar', label: '教学日历', icon: Calendar },
       { path: '/students', label: '学生信息', icon: User },
-      { path: '/subjects', label: '课程信息', icon: Reading },
-      { path: '/notifications', label: '通知信息', icon: Bell }
+      { path: '/subjects', label: '课程信息', icon: Reading }
     ]
   }
 ]
 
-/** Flat menu: all entries used to live under a single 「日常教学」 submenu — removed for fewer clicks. */
+/** Flat menu: teacher routes are direct top-level entries for lower click depth. */
 const teacherMenu = [
   { path: '/students', label: '学生管理', icon: User },
-  { path: '/scores', label: '成绩管理', icon: Collection },
-  { path: '/attendance', label: '考勤管理', icon: Collection },
-  { path: '/teaching-calendar', label: '教学日历', icon: Calendar },
-  { path: '/notifications', label: '通知中心', icon: Bell },
   { path: '/homework', label: '作业管理', icon: Reading },
-  { path: '/homework/students', label: '学生作业一览', icon: User },
-  { path: '/materials', label: '课程资料', icon: Collection }
+  { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/learning-notes', label: '学习笔记', icon: EditPen }
 ]
 
-/** Flat menu: all entries used to live under one 「课程学习」 submenu — removed for fewer clicks (parity with teacher rail). */
+/** Flat menu: student course routes are direct top-level entries for lower click depth. */
 const studentMenu = [
   { path: '/courses', label: '选课与进度', icon: School },
   { path: '/course-home', label: '学习主页', icon: DataAnalysis },
   { path: '/homework', label: '课程作业', icon: Document },
   { path: '/materials', label: '课程资料', icon: Collection },
-  { path: '/student-scores', label: '我的成绩', icon: Collection },
-  { path: '/notifications', label: '课程通知', icon: Bell }
+  { path: '/learning-notes', label: '学习笔记', icon: EditPen },
+  { path: '/student-scores', label: '我的成绩', icon: DataAnalysis }
 ]
 
 const adminMenu = [
@@ -613,7 +622,7 @@ const adminMenu = [
     label: '学期与配置',
     icon: Setting,
     children: [
-      { path: '/semesters', label: '学期管理', icon: Collection },
+      { path: '/semesters', label: '学期管理', icon: Calendar },
       { path: '/settings', label: '系统设置', icon: Setting }
     ]
   },
@@ -623,8 +632,7 @@ const adminMenu = [
     label: '消息与审计',
     icon: Bell,
     children: [
-      { path: '/notifications', label: '消息与通知', icon: Bell },
-      { path: '/logs', label: '操作日志', icon: Collection }
+      { path: '/logs', label: '操作日志', icon: Document }
     ]
   }
 ]
@@ -777,6 +785,13 @@ const goPersonalSettings = () => {
   }
 }
 
+const goNotifications = () => {
+  router.push('/notifications')
+  if (isMobile.value) {
+    isCollapsed.value = true
+  }
+}
+
 const sidebarLogout = () => {
   userStore.logout()
   router.push('/login')
@@ -858,8 +873,13 @@ watch(notificationSyncParams, () => {
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--wa-sidebar-bg);
   color: #fff;
   transition: width 0.2s ease, transform 0.2s ease;
@@ -933,16 +953,27 @@ watch(notificationSyncParams, () => {
 
 .sidebar-footer {
   flex-shrink: 0;
-  padding: 8px 10px 14px;
+  padding: 10px 10px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(8, 15, 34, 0) 0%, rgba(8, 15, 34, 0.16) 14%, rgba(8, 15, 34, 0.38) 100%);
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
+.sidebar-footer__section-title {
+  padding: 0 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+}
+
 .sidebar-footer__btn {
   display: flex;
   width: 100%;
+  position: relative;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
@@ -950,17 +981,19 @@ watch(notificationSyncParams, () => {
   padding: 10px 12px;
   border: none;
   border-radius: var(--wa-radius-lg);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.82);
   font-size: 14px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .sidebar-footer__btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .sidebar-footer__btn--active {
@@ -981,6 +1014,19 @@ watch(notificationSyncParams, () => {
 
 .sidebar-footer__label {
   white-space: nowrap;
+}
+
+.sidebar-footer__badge {
+  margin-left: auto;
+  min-width: 20px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  padding: 0 6px;
+  text-align: center;
 }
 
 .logo {

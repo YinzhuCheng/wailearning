@@ -11,6 +11,14 @@ It is intended for contributors and LLM coding agents who need to answer questio
 - which files are reusable helpers versus actual pytest entrypoints,
 - which categories are most likely to fail because of environment issues rather than product regressions.
 
+For concrete historical execution records, use [TEST_EXECUTION_LEDGER.md](TEST_EXECUTION_LEDGER.md). That ledger records per-target category, canonical command, last branch/commit, pass count, run count, and run-by-run results. This map answers **what exists and when to run it**; the ledger answers **what was actually run and what happened**.
+
+For the current validation automation handoff, use
+[VALIDATION_AUTOMATION_HANDOFF_2026-05-08.md](VALIDATION_AUTOMATION_HANDOFF_2026-05-08.md).
+For the second-round infrastructure reflection and third-round improvement
+backlog, use
+[VALIDATION_INFRASTRUCTURE_REVIEW_2026-05-08.md](VALIDATION_INFRASTRUCTURE_REVIEW_2026-05-08.md).
+
 ## Top-Level Test Layout
 
   ```text
@@ -20,6 +28,7 @@ It is intended for contributors and LLM coding agents who need to answer questio
     postgres/                 PostgreSQL-only guards (skip unless Postgres: TEST_DATABASE_URL or WAILEARNING_AUTO_PG_TESTS=1 after provision script)
     security/                 API authorization / abuse-edge regression (roles, tokens)
     e2e/web-admin/            Playwright browser coverage for the admin SPA
+    frontend/                 lightweight frontend Node tests without backend/browser startup
     devtools/                 maintenance scripts that scan or rewrite test artifacts (not pytest-discovered; filenames must not start with `test_`)
     fixtures/                 static files used by tests
     scenarios/                shared scenario builders and stress helpers
@@ -40,6 +49,75 @@ Current utilities:
 
 - [`tests/devtools/audit_test_redundancy.py`](../../tests/devtools/audit_test_redundancy.py) — regenerates [`TEST_REDUNDANCY_AUDIT.md`](TEST_REDUNDANCY_AUDIT.md).
 - [`tests/devtools/README.md`](../../tests/devtools/README.md) — short rules, commands, and cross-links for agents.
+
+### `tests/frontend/` (Node-based frontend checks)
+
+This subdirectory holds focused frontend tests that do not start FastAPI, Vite,
+or a browser. Use it for shared utility contracts where full Playwright would
+be too expensive or too environment-sensitive.
+
+Current tests:
+
+- [`tests/frontend/admin/markdown_latex_and_clipboard.test.mjs`](../../tests/frontend/admin/markdown_latex_and_clipboard.test.mjs) checks admin Markdown/LaTeX preprocessing, copy fallback behavior, and Playwright preflight JSON output.
+
+Run from the repository root:
+
+```bash
+node --test tests/frontend/admin/markdown_latex_and_clipboard.test.mjs
+```
+
+### Diff selector support files
+
+The first-version diff-based validation selector uses a machine-readable target
+registry:
+
+- [`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json)
+
+The executable selector lives outside `tests/` because it is a repository-wide
+developer command:
+
+- [`ops/scripts/dev/select_validation_targets.py`](../../ops/scripts/dev/select_validation_targets.py)
+- [`ops/scripts/dev/validation_history.py`](../../ops/scripts/dev/validation_history.py)
+
+The registry maps repository-relative changed paths to validation targets such
+as focused backend pytest files, admin frontend build, targeted Playwright, full
+Playwright consideration, PostgreSQL package tests, and full PostgreSQL pytest.
+It now also carries coverage tags, target review reasons, and high-blast-radius
+fallback rules so selector output can distinguish `acceptable`, `needs_review`,
+and `not_sufficient` non-full validation states. It complements, but does not replace,
+[`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md). The ledger records
+observed executions; the registry recommends what to run next.
+
+The executable runner for one target lives next to the selector:
+
+- [`ops/scripts/dev/run_validation_target.py`](../../ops/scripts/dev/run_validation_target.py)
+- [`ops/scripts/dev/run_validation_profile.py`](../../ops/scripts/dev/run_validation_profile.py)
+
+The runner consumes the same registry, executes one target id, and writes local
+artifacts under `.agent-run/logs/`. It also appends ignored JSONL history to
+`.agent-run/validation-history.jsonl` so future selector runs can distinguish
+fresh, stale, skipped, and blocked local evidence for the current changed-path
+snapshot. For pytest targets, it adds ignored JUnit XML output when the command
+does not already request one and records testcase-level totals and statuses in
+the local artifacts. It intentionally does not update the committed ledger
+automatically. Use it when a selector recommendation should be turned into a
+local run record with stdout/stderr logs and a ledger snippet.
+
+The profile runner provides a small orchestration layer over the target runner.
+Its first profiles are `static` and `selector-recommended`. It defaults to
+running only static/targeted targets and skips targets that require explicit
+operator review unless `--include-review-targets` is passed.
+
+When adding or moving test files, update this registry if the moved file should
+influence future diff-based validation recommendations. If the selector output
+has unmatched paths for a real source change, either add a registry rule or
+choose a broader profile manually and document the reason.
+
+CI workflow changes under `.github/workflows/` are currently mapped to static
+text/tooling validation. That is enough for lightweight YAML and documentation
+edits, but changes that materially alter cloud test scope should also be
+reviewed against this map and the execution ledger so local and cloud validation
+expectations do not drift.
 
 ## Category Overview
 
@@ -98,6 +176,8 @@ See [HTTP client slow-response busy hint](HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md
 - `tests/backend/auth/`
   - forgot-password flow and admin notification content (`test_forgot_password_flow.py`)
   - public registration validation when `ALLOW_PUBLIC_REGISTRATION` is enabled (`test_public_registration_validation.py`)
+- `tests/backend/learning_notes/`
+  - learning-note visibility, owner-only mutation, course-bound vs all-authenticated public notes, note-local copied outline/resources, note discussion metadata, and attendance date parsing regressions that support the embedded teaching-calendar workflow (`test_learning_notes_api.py`)
 
 ### `tests/behavior/`
 
@@ -128,9 +208,11 @@ Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases
 
 Another targeted suite: **`e2e-core-flows-smoke.spec.js`** — ten stability-focused journeys (invalid login stays on `/login`, student homework grid contains seeded title, teacher materials/notifications routes, admin user grid). Run alone with `npx playwright test e2e-core-flows-smoke.spec.js` from `apps/web/admin`.
 
-Another targeted suite: **`e2e-course-ui-markdown-reader.spec.js`** (12 cases) — **`subject_id` enrollment counts** surfaced via **学生管理** header (dashboard UI removed), **Markdown LaTeX demo** (scoped `MarkdownEditorPanel`), **sidebar** controls, **materials** layout + **MaterialRead** + discussion card, **`/teaching-calendar`** route (calendar component parity vs removed **`Dashboard.vue`**), **flat teacher sidebar** items including **教学日历** placement after **考勤管理**, **flat student sidebar** (no 「课程学习」 parent — items match former children; regression: submenu title count `0`). Run alone with `npx playwright test e2e-course-ui-markdown-reader.spec.js` from `apps/web/admin`.
+Another targeted suite: **`e2e-course-ui-markdown-reader.spec.js`** (12 cases) — **`subject_id` enrollment counts** surfaced via **学生管理** header (dashboard UI removed), **Markdown LaTeX demo** (scoped `MarkdownEditorPanel`), **sidebar** controls, **materials** layout + **MaterialRead** + discussion card, and historical **`/teaching-calendar`** deep-link coverage. Current product behavior redirects `/teaching-calendar` to **`/attendance`**; the teaching calendar is embedded inside the attendance page instead of appearing as a separate sidebar item, and no standalone `TeachingCalendarPage.vue` remains. Student sidebar remains flat (no 「课程学习」 parent — items match former children; regression: submenu title count `0`). Run alone with `npx playwright test e2e-course-ui-markdown-reader.spec.js` from `apps/web/admin`.
 
 Additive API-heavy tier after documentation alignment: **`e2e-docs-gap-tier15.spec.js`** — **`/api/discussions`** validation (`page_size`, scope mismatch, **`invoke_llm`** teacher acceptance), cross-class homework submission guards, orphan-course homework list for **class_teacher**, **`page_size`** discipline (**students** list **`le=1000`**), dual-gate mock LLM + **`process-grading`**, end-to-end mock grading drain, **`sync-status`** shape. Run alone with `npx playwright test e2e-docs-gap-tier15.spec.js` from `apps/web/admin`.
+
+Additive newer-surface tier: **`e2e-learning-notes-attendance-cover-tier20.spec.js`** (20 cases) — learning-note private/public visibility, all-authenticated public notes when `subject_id` is null, course-bound public notes, copied course outline/material snapshots, copied-note editing (`parent_id: null`, `chapter_id: null`, attachment clearing), note discussion metadata, `page_size` validation, learning-notes UI tabs/default-private dialog, student course-card cover visibility, `/teaching-calendar` redirect to embedded attendance calendar, and course/date-scoped attendance list behavior. Run alone with `npx playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium` from `apps/web/admin`.
 
 They also have the highest dependence on the local execution environment.
 

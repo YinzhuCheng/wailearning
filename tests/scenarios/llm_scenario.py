@@ -20,6 +20,7 @@ from apps.backend.wailearning_backend.db.models import (
     LLMStudentTokenOverride,
     Student,
     Subject,
+    SubjectClassLink,
     User,
     UserRole,
 )
@@ -97,6 +98,7 @@ def make_grading_course_with_homework(
         course = Subject(name=f"pytest-course-{uid}", teacher_id=teacher.id, class_id=klass.id)
         db.add(course)
         db.flush()
+        db.add(SubjectClassLink(subject_id=course.id, class_id=klass.id, enrollment_mode="all_in_class"))
 
         db.add(
             CourseEnrollment(

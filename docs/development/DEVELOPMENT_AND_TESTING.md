@@ -48,6 +48,356 @@ Optional Windows convenience launcher:
 ops\scripts\windows\start-backend.bat
 ```
 
+### Repository line-health metrics
+
+Use the repository line-health script when you need a coarse, repeatable measure of how the repository is evolving across documentation, tests, and primary application code.
+
+The script lives under `ops/scripts/dev/` because it is a repository-wide developer utility rather than a pytest module, deployment script, or app-local command:
+
+```bash
+python ops/scripts/dev/repo_line_health.py
+python ops/scripts/dev/repo_line_health.py --json
+python ops/scripts/dev/repo_line_health.py --details
+```
+
+Default behavior:
+
+- uses `git ls-files` so local artifacts are excluded;
+- counts text files only;
+- skips binary files and undecodable files;
+- reports total tracked text lines;
+- reports "health" text lines excluding generated or lock files;
+- reports required health categories: `documentation`, `test_code`, and `primary_source`;
+- reports supporting categories such as `tooling`, `operations`, `configuration`, `application_support`, `generated_or_lock`, and `other`;
+- emits Markdown by default and JSON when `--json` is passed;
+- prints `<repo>` as the repository-root placeholder in JSON output rather than a local absolute path.
+
+Interpretation guidance:
+
+- `documentation` includes `docs/`, root `README.md`, root `AGENTS.md`, and Markdown/Text/RST files under app, ops, or tests folders.
+- `test_code` includes `tests/backend/`, `tests/behavior/`, `tests/e2e/`, `tests/postgres/`, `tests/security/`, `tests/scenarios/`, plus repository pytest bootstrapping files.
+- `primary_source` includes `apps/backend/wailearning_backend/`, `apps/web/admin/src/`, and `apps/web/parent/src/`.
+- `tooling` includes repository maintenance utilities such as `ops/scripts/` and `tests/devtools/`.
+- `generated_or_lock` is separated so files such as `package-lock.json` do not distort the main health trend.
+
+Do not use line counts as a quality score by themselves. They are a trend signal: a sudden test-code drop, documentation shrink, primary-source spike, or lockfile-heavy increase should prompt a closer diff review.
+
+### Diff-based validation workflow
+
+The diff-based validation tools provide the repository's first standard
+incremental validation workflow. Use them after edits to decide what to run
+before reaching for full `pytest`, full Playwright, or PostgreSQL-heavy
+profiles.
+
+The workflow has three layers:
+
+- selector: recommend targets from changed paths;
+- target runner: execute one selected target and write local artifacts;
+- profile runner: execute a small named group of targets.
+
+Default agent loop:
+
+1. Review the changed-path recommendation from the repository root:
+
+   ```bash
+   python ops/scripts/dev/select_validation_targets.py --worktree
+   ```
+
+2. If the output is for automation or you need to inspect exact target IDs, use:
+
+   ```bash
+   python ops/scripts/dev/select_validation_targets.py --worktree --json
+   ```
+
+3. For documentation-only or validation-tooling changes, run the static profile
+   first:
+
+   ```bash
+   python ops/scripts/dev/run_validation_profile.py static --dry-run --timeout-seconds 120
+   ```
+
+   Use the real static target when you need observed evidence rather than a
+   profile smoke:
+
+   ```bash
+   python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120
+   ```
+
+4. For ordinary product or test changes, either run the target IDs shown by the
+   selector one by one, or use the selector-recommended profile:
+
+   ```bash
+   python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk targeted
+   ```
+
+5. If the selector recommends a review-required target, decide explicitly
+   whether the environment is ready. Browser targets generally need Node,
+   `node_modules`, Playwright browsers, clean ports, and a known backend/frontend
+   startup mode:
+
+   ```bash
+   python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk broad --include-review-targets
+   ```
+
+6. Read the final selector/profile status before claiming validation coverage:
+
+   - `acceptable`: static/targeted evidence is a reasonable first-pass result
+     for the current diff.
+   - `needs_review`: a broad or review-required target was recommended; either
+     run it or state why it was deferred.
+   - `not_sufficient`: targeted validation is not enough; address the blocker
+     or explicitly defer it as unresolved validation.
+
+This is a planning and evidence workflow, not a magic minimizer. The selector is
+conservative and path-based. It does not understand every semantic dependency in
+the product. If the diff touches high-risk behavior and the recommendation looks
+too narrow, run the broader target and update
+[`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json)
+when the gap is repeatable.
+
+Artifact and ledger rules:
+
+- `.agent-run/validation-history.jsonl` and `.agent-run/logs/` are ignored local
+  evidence. They can help the selector identify fresh local runs for the same
+  changed-path signature.
+- Do not commit `.agent-run/` artifacts.
+- Do not update [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md) for
+  selector output, dry-run planning, or commands that were only recommended.
+- Do update the ledger manually when an actual target run should become durable
+  project history. Review the generated `ledger-snippet.md` first and redact any
+  private machine details.
+- If a runner result is `blocked`, `timed out`, `interrupted`, or `skipped`, do
+  not summarize it as a pass. Record or hand off the unresolved validation
+  state.
+
+Windows note: prefer `.venv\Scripts\python.exe` when the repository virtual
+environment exists. If it does not, the runner falls back to the current Python
+and records that fallback in local artifacts; this is acceptable for selector
+smoke work but not proof that the full application dependency environment is
+ready.
+
+### Diff-based validation target selection
+
+Use the validation selector when you need a conservative first pass for
+answering: "Given this diff, which validation targets should I run first?"
+
+The selector is intentionally advisory. It does **not** run tests, does **not**
+edit the execution ledger, and does **not** prove that the recommended set is a
+mathematically minimal or complete safety proof. It turns the current diff plus
+a machine-readable target registry into a reviewable command list with reasons.
+
+Run from repository root:
+
+```bash
+python ops/scripts/dev/select_validation_targets.py
+python ops/scripts/dev/select_validation_targets.py --base origin/main
+python ops/scripts/dev/select_validation_targets.py --base origin/main --head HEAD --json
+python ops/scripts/dev/select_validation_targets.py --staged
+python ops/scripts/dev/select_validation_targets.py --worktree
+python ops/scripts/dev/select_validation_targets.py --paths apps/backend/wailearning_backend/api/routers/learning_notes.py
+```
+
+Windows agents should use the venv interpreter when available:
+
+```powershell
+.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --base origin/cursor/discussion-avatar-chat-ui-921d --head HEAD
+```
+
+Inputs:
+
+- changed paths come from `git diff --name-status --no-renames <base>...<head>`,
+  from `git diff --cached --name-status --no-renames` when `--staged` is used,
+  from `git diff --name-status --no-renames` when `--worktree` is used,
+  or from explicit `--paths`;
+- `--worktree` includes untracked, non-ignored files by default using
+  `git ls-files --others --exclude-standard`; use `--no-include-untracked` if
+  you need only tracked worktree modifications;
+- the machine-readable registry is
+  [`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json);
+- the script also parses target-level history from
+  [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md) so recommendations can
+  show the last observed result, last commit, and pass/run count when a ledger
+  entry exists;
+- unless `--no-history` is supplied, the script also reads ignored structured
+  local history from `<repo>/.agent-run/validation-history.jsonl`. Structured
+  history is treated as fresh evidence only when its changed-path signature
+  matches the current selector input; otherwise it is reported as stale.
+
+Outputs:
+
+- Markdown by default for agent review;
+- JSON with `--json` for future automation;
+- `non_full_validation.status`, one of `acceptable`, `needs_review`, or
+  `not_sufficient`;
+- per-target `history_status`, one of `fresh`, `stale`, `unknown`, or
+  `blocked`, or `not-recorded`;
+- changed paths and statuses;
+- recommended target IDs, categories, risk levels, working directories, command
+  argv arrays, matched paths, selection reasons, coverage tags, review reasons,
+  ledger history, and the latest matching structured history record when one is
+  available;
+- unmatched paths, which mean "the first-version registry has no precise rule",
+  not "no validation is needed";
+- a ledger snippet template for observed results.
+
+Operational rules:
+
+- Treat `risk=static` targets as hygiene checks, not product behavior coverage.
+- Treat `risk=targeted` targets as the normal first pass for bounded code
+  surfaces.
+- Treat `risk=broad` and `risk=full` targets as escalation recommendations.
+  They may be expensive or environment-dependent; review the reason before
+  starting PostgreSQL or full Playwright.
+- If a changed path is unmatched, do not silently skip validation. Either add a
+  registry rule, run a broader profile, or document why no runtime target is
+  appropriate.
+- If the selector recommends no Playwright target for docs-only diffs, that is
+  expected. If it recommends no Playwright target for admin UI, E2E fixture,
+  Playwright config, route, auth, or seed changes, treat that as a registry gap.
+- If `non_full_validation.status` is `not_sufficient`, do not present targeted
+  validation as complete evidence until the blocking reason is addressed or
+  explicitly deferred. Typical blockers are recommended full targets or
+  unmatched product source paths.
+- If `non_full_validation.status` is `needs_review`, targeted validation may
+  still be the right first pass, but the output names the expensive or
+  environment-sensitive target that needs operator judgment.
+- `history_status=stale` does not mean a target failed. It means the previous
+  ledger or structured run result should not be counted as current evidence for
+  this diff.
+- `history_status=blocked` means the latest structured runner evidence for the
+  current changed-path snapshot was blocked by environment or orchestration
+  preflight. Treat it as unresolved validation, not a product pass or fail.
+- Record only tests that actually ran in `TEST_EXECUTION_LEDGER.md`. Selector
+  output and `--paths` smoke runs are planning/discovery, not observed test
+  execution.
+
+### Validation target runner
+
+The runner executes a single target from
+[`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json)
+and writes local artifacts under the ignored agent workspace:
+
+```bash
+python ops/scripts/dev/run_validation_target.py static.validation_selector
+python ops/scripts/dev/run_validation_target.py frontend.admin.build --timeout-seconds 900
+python ops/scripts/dev/run_validation_target.py backend.learning_notes.api
+python ops/scripts/dev/run_validation_target.py static.validation_selector --dry-run
+```
+
+Windows agents may use the same command with the repository virtual environment
+when present:
+
+```powershell
+.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector
+```
+
+The runner is deliberately narrower than the selector:
+
+- it runs one target ID at a time;
+- it reads the same target registry as the selector;
+- it resolves the repository virtualenv Python when present, otherwise it uses
+  the current interpreter and records that fallback in local artifacts;
+- it writes `<repo>/.agent-run/logs/<timestamp>-<target-id>/run.json`;
+- it writes `<repo>/.agent-run/logs/<timestamp>-<target-id>/ledger-snippet.md`;
+- it appends a compact structured record to
+  `<repo>/.agent-run/validation-history.jsonl` unless `--no-history` is passed;
+- it captures per-command stdout/stderr logs under the same artifact directory;
+- for `python -m pytest` targets that do not already specify `--junitxml`, it
+  adds an ignored JUnit XML artifact and records testcase-level totals and case
+  statuses in `run.json` and structured history;
+- it classifies missing interpreters, missing pytest, missing npm/npx/browser
+  command, or unresolved command placeholders as `blocked` rather than product
+  failures;
+- it does not provision PostgreSQL, install dependencies, install browsers, or
+  mutate the committed execution ledger.
+
+Exit codes:
+
+- `0`: target commands passed, or `--dry-run` recorded the target without
+  execution;
+- `1`: target command ran and failed;
+- `2`: environment or command preflight blocked execution;
+- `4`: command timed out;
+- `5`: command was interrupted;
+- `6`: invalid target, invalid registry, or invalid arguments.
+
+Treat runner artifacts as local evidence. If a run should become durable project
+history, review the generated `ledger-snippet.md`, redact any private details if
+needed, and then update [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md)
+manually with the observed result.
+
+Structured history is a machine-readable local companion to the Markdown
+ledger, not a replacement for it. It records target id, result, failure class,
+artifact pointers, changed paths, a changed-path signature, and parsed test
+artifact summaries when available so the selector can tell whether a local run
+actually covered the current diff. Keep it under ignored `.agent-run/`; do not
+commit local history files.
+
+### Validation profile runner
+
+The profile runner orchestrates one or more target runner invocations and writes
+a profile-level summary under ignored `.agent-run/logs/`:
+
+```bash
+python ops/scripts/dev/run_validation_profile.py static
+python ops/scripts/dev/run_validation_profile.py selector-recommended --paths apps/web/admin/src/views/HomeworkSubmissions.vue --dry-run
+python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk targeted
+python ops/scripts/dev/run_validation_profile.py selector-recommended --include-review-targets --max-risk broad
+```
+
+Initial profiles:
+
+- `static`: runs the static selector validation target.
+- `selector-recommended`: runs selector recommendations for explicit `--paths`
+  or the current worktree.
+
+Profile safety defaults:
+
+- `--max-risk targeted` is the default; `broad` and `full` recommendations are
+  skipped unless explicitly allowed.
+- Targets with `requires_review_reason` are skipped unless
+  `--include-review-targets` is passed.
+- `--dry-run` is useful for proving orchestration and artifact writing without
+  executing the underlying commands.
+- If selector output says `non_full_validation.status=not_sufficient`, the
+  profile exits with code `4` even if the runnable subset passed or was skipped.
+
+Profile exit codes:
+
+- `0`: no product or environment failure was observed, including dry-run or
+  policy-skipped targets;
+- `1`: at least one executed target failed or timed out;
+- `2`: at least one executed target was blocked by environment or command
+  preflight;
+- `4`: selector policy says non-full validation is not sufficient;
+- `6`: profile setup, selector execution, or JSON parsing failed.
+
+Known first-version limitations:
+
+- The registry is conservative and incomplete. It covers the high-value targets
+  currently represented in the ledger plus maintained Playwright suites,
+  important behavior/security pytest targets, and several broad escalation
+  rules.
+- The selector works at target level, not individual `pytest` test item or
+  Playwright `test(...)` case level. The runner can now record pytest JUnit XML
+  case summaries, but the selector still uses target-level history for
+  sufficiency decisions.
+- Markdown ledger parsing is intentionally shallow: it extracts the strict
+  `Last result`, `Last commit`, `Pass count`, and `Run count` fields. The
+  machine-readable registry remains the source for selection rules.
+- Python `fnmatch` treats `**` as a glob pattern, not as a full gitignore-style
+  recursive operator with every edge case. When writing registry rules, include
+  both one-level and recursive patterns if both are required, for example
+  `apps/backend/wailearning_backend/*.py` and
+  `apps/backend/wailearning_backend/**/*.py`.
+- This tool is not a replacement for reading task-scoped docs. It makes the
+  first recommendation easier to audit; it does not understand every semantic
+  dependency in the application.
+- The runner is a first operational layer, not a full validation orchestrator.
+  PostgreSQL lifecycle management, Playwright port isolation, browser install
+  detection beyond executable preflight, and machine-readable pytest/Playwright
+  item-level result parsing remain follow-up work.
+
 ### Admin frontend
 
 ```bash
@@ -98,7 +448,9 @@ Dual gate for `/api/e2e/dev/*` — see [E2E Seed and Environment](#e2e-seed-and-
 
 ### CI reference (cloud pipelines)
 
-This repository snapshot stores example pipeline YAML under [`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml) (branch pipeline siblings in the same directory). It runs:
+This repository stores example Alibaba DevOps-style pipeline YAML under
+[`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml) and sibling files. The
+PR pipeline runs:
 
 ```bash
 python3 -m pip install --upgrade pip
@@ -106,7 +458,33 @@ pip3 install -r requirements.txt
 python3 -m pytest -q
 ```
 
-There is **no** `.github/workflows/` directory here — do not assume GitHub Actions unless it is added to the tree later.
+The repository also has a lightweight GitHub Actions entrypoint at
+[`../../.github/workflows/lightweight-validation.yml`](../../.github/workflows/lightweight-validation.yml).
+It is intentionally a first cloud gate, not full validation. On pull requests it
+runs selector/tooling checks, emits a diff-based validation recommendation,
+runs quick backend `pytest`, and builds the admin and parent frontends.
+
+Current GitHub Actions scope:
+
+- validates selector scripts and `tests/TEST_SELECTION_TARGETS.json`;
+- runs `python -m unittest tests.backend.manual.test_validation_selector -v`;
+- uploads `validation-selection.json` for pull requests;
+- runs default quick backend `pytest`;
+- runs `npm ci` plus `npm run build` for `apps/web/admin` and
+  `apps/web/parent`.
+
+Current GitHub Actions non-goals:
+
+- no PostgreSQL service container yet;
+- no zero-skip backend guarantee;
+- no RAR/unrar environment provisioning;
+- no Playwright browser install or E2E run;
+- no automated execution of selector-recommended broad/full targets.
+
+Use this as the current compromise path: cloud catches cheap regressions and
+records selector recommendations, while PostgreSQL-backed pytest, RAR-dependent
+attachment coverage, and Playwright E2E remain local/manual or future
+cloud-profile work.
 
 Agents on Linux should prefer **`python3`** invocations to match CI even when local README examples historically showed `python` for Windows-oriented quick starts.
 
@@ -208,6 +586,28 @@ Playwright scenarios commonly use:
 ## Windows Notes
 
 This repository is actively used on Windows, so path and encoding discipline matters.
+
+- At the start of any Windows PowerShell session that may display or edit
+  multilingual repository files, run the UTF-8 session helper:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+```
+
+- If you need the settings in the current interactive shell rather than a child
+  process, dot-source it:
+
+```powershell
+. .\ops\scripts\windows\set-utf8-session.ps1
+```
+
+- For byte-safe inspection and controlled text writes, use:
+
+```powershell
+python ops\scripts\dev\safe_show_text.py <path> --escape
+python ops\scripts\dev\safe_write_text.py <path> --stdin --replace
+python ops\scripts\dev\check_text_encoding.py <path>
+```
 
 - Prefer running `pytest` from the repository root.
 - Prefer the repository virtual environment instead of a global Python.
@@ -364,6 +764,20 @@ and then any targeted Playwright spec that covers the affected workflow.
 
 ### Cross-platform and CI smoke expectations
 
+### Full-suite environment policy: do not accept missing-dependency skips as final evidence
+
+For any run described as "full suite", "full regression", "zero-skip", "release-quality", or "ready to push after validation", missing local tools are not an acceptable reason to leave tests skipped. Provision the missing environment first, then run the affected tests at least once under conditions that make them execute.
+
+Operational rules for agents:
+
+- If a backend test skips because PostgreSQL is absent, install or provision a throwaway PostgreSQL instance and rerun with `TEST_DATABASE_URL` (or the documented auto-pick path where available).
+- If an attachment test skips because a RAR extractor is absent, install `unrar` / `unrar-free` or provide a compatible `tar` / `bsdtar` fallback, then rerun the attachment suite so the RAR cases execute.
+- If Playwright skips or aborts because Node, browser binaries, or subprocess permissions are missing, install the missing runtime or rerun in an approved execution context before claiming full browser coverage.
+- If a test is conditionally skipped for seed-data, service, browser, or database state, create the required condition at least once during the full validation cycle. A skip may remain documented as a fast-loop profile, but it must not be the final proof for the affected code path.
+- Record the environment work and any blocked/interrupted attempts in `TEST_EXECUTION_LEDGER.md`. Use committed docs with placeholders such as `<repo>`, `<local-postgres-bin>`, and `<local-browser-cache>`; put real machine paths only in ignored `.e2e-run/` notes.
+
+This policy intentionally raises the bar for "full suite" claims. SQLite-only pytest, Playwright discovery, or a target that skipped due to missing dependencies can still be useful for iteration, but they are not complete evidence that the skipped behavior works.
+
 If you only run `pytest` on the default SQLite configuration, note that `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` is skipped unless the dialect is PostgreSQL (unless you set **`WAILEARNING_AUTO_PG_TESTS=1`** after provisioning the standard throwaway DB — see below). That guard asserts `information_schema` shows **no** legacy token-limit or course-level quota-policy columns on `course_llm_configs` (including removed `quota_timezone`, `estimated_chars_per_token`, `estimated_image_tokens`). Full PostgreSQL-only assertions require `TEST_DATABASE_URL` (or auto-pick) pointing at a live Postgres instance with migrated schema. This does not replace the default workflow for most changes; it matters when validating schema-level regressions.
 
 **PostgreSQL local smoke (Linux example):** Install Postgres, then either:
@@ -374,7 +788,7 @@ If you only run `pytest` on the default SQLite configuration, note that `tests/b
 
 Tests recreate schema via `tests/db_reset.py` (`DROP SCHEMA public CASCADE` on non-SQLite, plus dropping leftover **`pg` ENUM types** in `public` before `create_all` so SQLAlchemy can recreate enums cleanly). Use a database reserved for automation only; do not point at production. Avoid running two pytest processes against the same `TEST_DATABASE_URL` concurrently — resets collide.
 
-**RAR attachment tests:** `tests/backend/llm/test_llm_attachment_formats.py` exercises the same RAR code path as production (`domains/llm/attachments.py` via `llm_grading` imports). Committed sample archives live under **`tests/fixtures/llm_rar/`** so tests do **not** shell out to the **`rar`** compressor at runtime. Unpacking still requires **`unrar`** or **`unrar-free`** on `PATH` (the product’s `_unrar_tool_path` check). If neither tool is installed, the two RAR tests **skip** with a short message (same failure mode as missing extractors in production for RAR inputs). Regenerating the binary fixtures (optional) still uses **`rar a ...`** on a maintainer machine; do not commit regenerated bytes without re-running the full attachment suite.
+**RAR attachment tests:** `tests/backend/llm/test_llm_attachment_formats.py` exercises the same RAR code path as production (`domains/llm/attachments.py` via `llm_grading` imports). Committed sample archives live under **`tests/fixtures/llm_rar/`** so tests do **not** shell out to the **`rar`** compressor at runtime. Unpacking prefers **`unrar`** or **`unrar-free`** on `PATH`, and can also use a libarchive-backed **`tar`** / **`bsdtar`** executable when the local platform supports RAR extraction through that tool. If none of those extractors is available, the RAR cases skip with a short message (same failure mode as missing extractors in production for RAR inputs). Regenerating the binary fixtures (optional) still uses **`rar a ...`** on a maintainer machine; do not commit regenerated bytes without re-running the full attachment suite.
 
 **Full regression prerequisites (what maintainers should enable before claiming “no skips”):**  
 CI machines and anyone publishing “green full-suite” results should install **`unrar`** (or `unrar-free`), provision the throwaway database (see `ops/scripts/dev/provision_postgres_pytest.sh`), then run one of:
@@ -388,19 +802,19 @@ python3 -m pytest tests/
 WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/
 ```
 
-That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the additive **quota / constraint hazard** module described below), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and the RAR-based attachment tests (when **`unrar`** is available).
+That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the additive **quota / constraint hazard** module described below), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and the RAR-based attachment tests (when a supported RAR extractor is available).
 
-**Skip counts (reference):** On **SQLite** with **`unrar`** (or `unrar-free`) on `PATH` but **without** `TEST_DATABASE_URL` / auto-Postgres, expect **43 skipped** (PostgreSQL-only modules + `test_r3`). If **`unrar` is also missing**, add **2** skips for the RAR attachment cases (**45** total). With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, expect **432 passed, 0 skipped** in the current collection (same **432** tests collected as SQLite; Postgres runs the previously skipped `tests/postgres/*` and `test_r3`, May 2026).
+**Skip counts (reference):** On **SQLite** with **`unrar`** (or `unrar-free`) on `PATH` but **without** `TEST_DATABASE_URL` / auto-Postgres, expect the PostgreSQL-only modules and `test_r3` to skip (the latest full-suite report recorded **43 skipped**). If **`unrar` is missing**, attachment-format tests may add extra skips depending on fixture/tool availability. With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, the target is **0 skipped**; the latest documented Postgres-forced full tree recorded **466 passed, 0 skipped** in [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md). Do not memorize the `passed` integer as a permanent constant.
 
-The **SQLite-only `passed` integer** (for example **389** when **43** tests skip) is not a permanent constant as new tests land in the default collection; rely on **skip deltas** and the **432 / 0** Postgres matrix instead of memorizing a single `passed` tally.
+The **SQLite-only `passed` integer** is not a permanent constant as new tests land in the default collection; rely on **skip classes** and the **Postgres 0-skip** matrix instead of memorizing a single `passed` tally. Historical rows below may still show **389/432** from an earlier May 2026 pass; newer rows in the coverage matrix show **423/466** after additional tests landed.
 
 Default `pytest` without Postgres or **`unrar`** remains valid for fast loops but **will report skips** for those items — treat that as **environment debt**, not product absence.
 
-**Agent recipe — Debian/Ubuntu cloud image with only `apt` (no preinstalled Node):** Minimal Python-only sandboxes can still reach **432 passed, 0 skipped** and run **one** Playwright hazard file without hand-installing Node from upstream tarballs:
+**Agent recipe — Debian/Ubuntu cloud image with only `apt` (no preinstalled Node):** Minimal Python-only sandboxes can still reach a **0-skip Postgres pytest** run and run **one** Playwright hazard file without hand-installing Node from upstream tarballs:
 
 1. **PostgreSQL + throwaway DB:** `sudo apt-get install -y postgresql postgresql-contrib` → `sudo pg_ctlcluster 16 main start` (version may differ) → `bash <REPO_ROOT>/ops/scripts/dev/provision_postgres_pytest.sh` (requires `sudo -u postgres`).
 2. **RAR extractors:** `sudo apt-get install -y unrar rar` (or `unrar-free` where `unrar` is unavailable).
-3. **pytest:** `python3 -m pip install -r <REPO_ROOT>/requirements.txt` then `cd <REPO_ROOT> && WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` → expect **432 passed, 0 skipped** when steps 1–2 succeeded.
+3. **pytest:** `python3 -m pip install -r <REPO_ROOT>/requirements.txt` then `cd <REPO_ROOT> && WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` → expect **0 skipped** when steps 1–2 succeeded; consult [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) for the latest representative `passed` count.
 4. **Node + Playwright (apt, not `nvm`):** `sudo apt-get install -y nodejs npm` — on Ubuntu 24.04 this typically yields **Node 18.x** and **npm 9.x**, sufficient for `<REPO_ROOT>/apps/web/admin/package.json`.
 5. **Admin deps + browser:** `cd <REPO_ROOT>/apps/web/admin && npm ci && npx playwright install chromium`.
 6. **E2E run:** Use **`E2E_PYTHON`** pointing at an interpreter that has **`uvicorn`** on `PYTHONPATH` (repository **`.venv`** if present, else **`/usr/bin/python3`** after `pip install -r requirements.txt`). Example smoke:
@@ -524,14 +938,16 @@ This subsection records **machine-verified** outcomes so future agents do not re
 
 ##### 5a. `python3 -m pytest tests/` — two engine configurations
 
+The table immediately below is a **historical representative run** from an earlier May 2026 cleanup pass. It remains useful for understanding the SQLite-vs-Postgres skip split, but it is not the newest count. The newer full-suite report currently records **423 passed, 43 skipped** on SQLite-default and **466 passed, 0 skipped** on Postgres-forced. Treat integer counts as moving; treat the skip classes and required dependencies as stable operational guidance.
+
 | Configuration | Command pattern | Outcome (representative) | Wall-clock order of magnitude |
 |---------------|-----------------|---------------------------|--------------------------------|
-| **Default SQLite** (no `TEST_DATABASE_URL`, no `WAILEARNING_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | **389 passed**, **43 skipped** when **`unrar`** is present; **45 skipped** when **`unrar`** is missing (adds 2 RAR attachment tests) | ~8 minutes on a typical cloud CPU |
-| **PostgreSQL** (`TEST_DATABASE_URL` **or** `WAILEARNING_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | **432 passed**, **0 skipped** (with **`unrar`** + Postgres provisioned) | ~9.5 minutes on a typical cloud CPU |
+| **Default SQLite** (no `TEST_DATABASE_URL`, no `WAILEARNING_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | Historical: **389 passed**, **43 skipped** when **`unrar`** was present; newer report: **423 passed**, **43 skipped** | ~8 minutes on a typical cloud CPU |
+| **PostgreSQL** (`TEST_DATABASE_URL` **or** `WAILEARNING_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | Historical: **432 passed**, **0 skipped**; newer report: **466 passed**, **0 skipped** when **`unrar`** + Postgres were provisioned | ~9.5 minutes on a typical cloud CPU |
 
 Interpretation for agents:
 
-- The **delta** (`432 - 389 = 43` extra tests executed on Postgres vs default SQLite) is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
+- The **skip class** is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
 - **Zero-skip CI:** install **`unrar`** (or `unrar-free`), run **`ops/scripts/dev/provision_postgres_pytest.sh`**, then set **`WAILEARNING_AUTO_PG_TESTS=1`** (Linux agents) or **`TEST_DATABASE_URL`** explicitly (portable).
 
 **Not executed in the same session:** a full `npx playwright test` over **all** `tests/e2e/web-admin/*.spec.js` files (that run is hours-wide and belongs in a dedicated CI job). What **was** executed after the PostgreSQL pytest pass is the **additive** hazard file only:

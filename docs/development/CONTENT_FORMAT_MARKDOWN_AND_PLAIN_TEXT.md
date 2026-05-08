@@ -21,6 +21,8 @@ The database stores the flag on the row so API consumers and LLM pipelines can b
 | `course_materials` | `content_format` | Material description body |
 | `notifications` | `content_format` | Teacher/admin-authored notification body (`password_reset_request` remains HTML from the system) |
 | `course_discussion_entries` | `body_format` | Each discussion message body (including LLM assistant rows, which remain `markdown`) |
+| `learning_note_resources` | `content_format` | Owner-editable learning-note resources, including course material snapshots copied into a note |
+| `learning_note_discussion_entries` | `body_format` | Learning-note discussion messages and assistant replies |
 
 Schema migrations are applied via `ensure_schema_updates()` in `apps/backend/wailearning_backend/bootstrap.py` using `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... DEFAULT 'markdown'`.
 
@@ -30,6 +32,8 @@ Schema migrations are applied via `ensure_schema_updates()` in `apps/backend/wai
 - `HomeworkSubmissionCreate`, `HomeworkSubmissionResponse`, `HomeworkAttemptResponse`: `content_format`.
 - `HomeworkSubmissionStatusResponse`: includes `content_format` for teacher grid/detail views.
 - `CourseDiscussionCreate`, `CourseDiscussionEntryResponse`: `body_format`.
+- `LearningNoteResourceCreate` / `LearningNoteResourceUpdate` / `LearningNoteResourceResponse`: `content_format`.
+- `LearningNoteDiscussionCreate` / `LearningNoteDiscussionEntryResponse`: `body_format`.
 - `NotificationBase` / `NotificationUpdate` / `NotificationResponse`: `content_format`.
 - `CourseMaterialBase` / `CourseMaterialUpdate` / `CourseMaterialResponse`: `content_format`.
 
@@ -50,6 +54,7 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 - `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar, KaTeX usage hint, fixed **LaTeX live demo** (`MarkdownLatexLiveDemo.vue`), and live preview are hidden; the textarea remains monospace for editing. In Markdown mode the toolbar includes **行内公式** / **独立公式** snippets (`\(…\)`, `$$…$$`). Above the textarea, a **non-editable canonical example** (`apps/web/admin/src/utils/markdownLatexDemo.js`) is always rendered via `RichMarkdownDisplay` so authors see correct delimiter behavior before typing; below that, **您的内容预览** mirrors the editable textarea. Props `compact-demo` reduces padding / hides the collapsible raw-markdown panel when multiple Markdown fields stack in one dialog (homework rubric blocks still show the **same rendered** demo).
 - `MarkdownLatexLiveDemo.vue`: reusable demo card + copy / insert actions. In large authoring surfaces (`MarkdownEditorPanel`) it is rendered immediately; in the discussion composer it is hidden behind an explicit **查看 Markdown + LaTeX 示例** toggle so the reply area does not start with a long instructional block.
 - `RichMarkdownDisplay.vue` + `apps/web/admin/src/utils/markdownIt.js`: shared Markdown + KaTeX render path. Important implementation detail: before calling `markdown-it`, the renderer temporarily replaces `\(`, `\)`, `\[`, `\]` with placeholder tokens and restores them in the generated HTML. Without that protection, `markdown-it` consumes the backslashes as Markdown escapes, so KaTeX never sees the promised delimiters. This placeholder round-trip is now part of the contract for editor preview, published discussion rows, material readers, and any other UI using `RichMarkdownDisplay` / `FeedbackRichText`.
+  Multiline display math whose delimiters live on their own lines is also protected as a complete block before Markdown rendering (`$$...$$` and `\[...\]`). Do not remove this block-level placeholder pass: Markdown-it `breaks: true` can otherwise split multiline formulas into `<br>` / paragraph boundaries before KaTeX auto-render scans the DOM.
 - `PlainOrMarkdownBlock.vue`: read-only display; delegates Markdown mode to `RichMarkdownDisplay` and uses `white-space: pre-wrap` for plain mode.
 - `apps/web/admin/src/utils/contentFormat.js`: mirrors backend normalization for client defaults.
 
@@ -60,11 +65,22 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 - **Materials** (`Materials.vue` + `MaterialRead.vue`): authoring uses the same Markdown panel; table rows expose **阅读页** linking to `/materials/read/:id` with prev/next navigation while the modal detail dialog keeps quick preview + discussion threading. **Full-page reader (`MaterialRead.vue`) also mounts `CourseDiscussionPanel` below the article** so behavior matches the modal: thread bodies render via `PlainOrMarkdownBlock` (Markdown + KaTeX vs plain); composer shows the same Markdown/LaTeX live demo when reply format is Markdown. Orphan materials (`discussion_requires_context=true`) show the existing warning card instead of the thread composer.
 - **Notifications** (`Notifications.vue`): compose + detail (non-password-reset) respect `content_format`.
 - **Teacher submissions** (`HomeworkSubmissions.vue` + `HomeworkSubmissionReview.vue`): the **list** still uses `PlainOrMarkdownBlock` in the **历史** dialog for expanded attempt bodies. **「详情」** no longer opens a 720px dialog: it **navigates to** `HomeworkSubmissionReview.vue` at **`/homework/:homeworkId/submissions/:submissionId`** (query params such as `student_id` are preserved for return navigation). The review page uses the same render stack for the latest summary body, embeds a score/comment form, a collapsible per-attempt history timeline, and a **返回提交列表** control. The teacher-only API **`GET /api/homeworks/{homework_id}/submissions/{submission_id}/status`** returns a single `HomeworkSubmissionStatusResponse` row for that page (avoids paging the full class roster). **Pitfall:** older Playwright specs that waited for `getByRole('dialog')` after clicking **详情** must be updated to assert `toHaveURL(/\/homework\/\d+\/submissions\/\d+/)` and target `data-testid="homework-submission-detail-body"` on the **page** (not inside a dialog).
-- **Discussions** (`CourseDiscussionPanel.vue`): radio group **回复格式** before posting; choosing **Markdown** now shows two separate affordances:
+- **Discussions** (`CourseDiscussionPanel.vue` + `DiscussionAuthorAvatar.vue`): radio group **回复格式** before posting; choosing **Markdown** now shows two separate affordances:
   1. a lightweight toolbar row with **查看 Markdown + LaTeX 示例** / **隐藏 Markdown + LaTeX 示例** so the fixed example stays **collapsed by default**,
   2. an always-live **回复预览** block under the textarea, rendered by the same `RichMarkdownDisplay` stack used after publishing.
   
-  Published rows also changed: **short** discussion bodies now render immediately via `PlainOrMarkdownBlock` (so Markdown + KaTeX works right after posting), while **long** bodies still use the existing three-logical-line collapsed preview and only switch to the full renderer after the user expands them. Discussion rows now also show the author's avatar when `author_avatar_url` is present; otherwise the UI falls back to a role-colored initial avatar (assistant rows use `助`). `POST /api/discussions` still sends `body_format`.
+  Published rows also changed: **short** discussion bodies now render immediately via `PlainOrMarkdownBlock` (so Markdown + KaTeX works right after posting), while **long** bodies still use the existing three-logical-line collapsed preview and only switch to the full renderer after the user expands them. `POST /api/discussions` still sends `body_format`.
+
+  **Discussion list presentation (May 2026, chat-oriented refinement)** — agents editing UX should preserve these contracts alongside Markdown/plain rendering:
+
+  | Concern | Implementation detail |
+  |---------|------------------------|
+  | Author avatar | Each row mounts `DiscussionAuthorAvatar` with `author_avatar_url`, `author_real_name` (via `displayAuthorName`), `author_role`, and `message_kind`. Blob URLs use `fetchAttachmentBlobUrl` like other attachment-backed previews. |
+  | Fallback initials | When no photo URL resolves, `el-avatar` shows one Chinese character: first character of display name when present; otherwise role-based **管 / 班 / 师 / 学 / 人**; assistant rows use **助** inside the avatar circle. |
+  | Corner role badge | A **small overlay** at the bottom-right of the avatar (not only on fallback initials) shows **管 / 师 / 班 / 学 / 助** so staff vs student remains visible when a profile photo is shown. Mapping: `admin→管`, `teacher→师`, `class_teacher→班`, `student→学`, `message_kind===llm_assistant→助`. Unknown roles omit the badge character but keep gray fallback styling. CSS classes: `discussion-author-avatar__badge--role-*` and `discussion-author-avatar__badge--assistant`. |
+  | Assistant contrast | Rows with `message_kind === 'llm_assistant'` get `discussion-row--assistant`: light green gradient panel, inset green left bar, subtle outer ring/shadow, stronger green emphasis on the avatar (`discussion-author-avatar--assistant`), and body text tint (`discussion-row__name--assistant`, darker green body copy). This is **in addition to** the avatar label **智能助教** — the duplicate `el-tag` “智能助教” next to the name was removed to avoid showing the same label twice. |
+  | Compact meta row | `discussion-row__meta` uses tighter vertical spacing; **timestamp** uses `margin-left: auto` so on wide viewports it sits flush right on the first line (chat-header pattern). Role chips for humans remain `el-tag` with classes `discussion-row__role-tag`; **调用智能助教** keeps `discussion-row__llm-tag`. |
+  | DOM hooks for E2E | Existing Playwright specs rely on **`.discussion-row`**, **`.discussion-row__body`**, **`.discussion-row__text`** — these class names remain stable. New styling is additive (`discussion-row--assistant`, badge spans). Do not remove `.discussion-row__text` from the rich-body path. |
 
 ## Testing
 
@@ -109,14 +125,15 @@ They assert round-trip persistence for homework update + student submission, dis
    Historically `Layout.vue` wrapped **teacher** routes under 「日常教学」 (`teacher-daily`) and **student** routes under 「课程学习」 (`student-learning`), each forcing an extra expand click despite containing only one logical group. Both are now **flat `el-menu-item` rows** at the sidebar root (same paths and labels as the former children). **`default-openeds` / `homeworkMenuOpenIndices` no longer references `teacher-daily` or `student-learning`.** Admin 「学期与配置」 / 「消息与审计」 and **班主任「班级教学」** groupings remain as nested menus where multiple unrelated destinations still benefit from grouping.  
    **Menu active highlight:** `el-menu` `default-active` is driven by `sidebarMenuActivePath`, mapping nested routes (e.g. `/materials/read/123` → `/materials`, `/homework/9/submit` → `/homework`) so the correct rail item stays selected; without this mapping, Element Plus leaves no item highlighted when `route.path` does not exactly equal a menu `index`.
 
-10. **Removal of teacher 「课程仪表盘」 (`Dashboard.vue`) + `/teaching-calendar` extraction**  
-   Product decision: delete the aggregated dashboard view as low-value/noisy. **Teaching calendar** (`TeachingCalendar.vue`, titled 「教学日历」 inside the widget) and **class semester grid** (`ClassSemesterCalendar.vue`, titled 「学期日历」) previously lived inside `Dashboard.vue`; they now render from **`TeachingCalendarPage.vue`** at **`/teaching-calendar`**.  
-   - **任课教师** sidebar order: … **考勤管理** → **教学日历** → … (`Layout.vue` `teacherMenu`).  
-   - **班主任** submenu replaces the old 「课程仪表盘」 child with **教学日历** linking to the same route (`classTeacherMenu`).  
+10. **Removal of teacher 「课程仪表盘」 (`Dashboard.vue`) + standalone `/teaching-calendar` page**
+   Product decision: delete the aggregated dashboard view as low-value/noisy and avoid splitting the same attendance workflow across two sidebar destinations. **Teaching calendar** (`TeachingCalendar.vue`, titled 「教学日历」 inside the widget) previously moved through a standalone wrapper, but the current supported owner is **`Attendance.vue`** at **`/attendance`**. The widget is embedded at the top of the attendance page; selecting a rendered course day updates the attendance date and reloads / re-syncs the attendance draft for that day.
+   - **任课教师 sidebar:** exposes **考勤管理** only for this workflow. There is no separate **教学日历** menu item; the calendar is part of attendance management.
+   - **班主任 sidebar:** keeps teaching operations under **班级教学** and does not expose a standalone calendar page.
    - **Login / root redirect:** teachers and class teachers default to **`/students`** (see `Login.vue`, empty-path redirect in `router/index.js`). **`/dashboard` → `/students` redirect** preserves stale bookmarks without resurrecting the Vue page.  
-   - **Admin visibility:** `/teaching-calendar` is listed in `adminHiddenPaths` like other teacher tools — admins hitting it bounce to **`/students`** (admin home).  
-   - **Students:** `/teaching-calendar` is blocked (student redirect list in `router.beforeEach`), same spirit as `/scores`.  
-   **Backend:** `dashboard.router` APIs (`/api/dashboard/stats`, rankings, analysis) remain for **排行榜 / 数据分析** pages — only the dedicated SPA aggregate page was removed.
+   - **Historical deep link:** `/teaching-calendar` remains in `router/index.js` only as a compatibility redirect to **`/attendance`**. Agents should not recreate `TeachingCalendarPage.vue`; tests should assert the redirect and the embedded `.attendance-page .teaching-calendar` widget.
+   - **Admin visibility:** `/teaching-calendar` remains listed in `adminHiddenPaths` like other teacher tools, so admins hitting it bounce to **`/students`** (admin home) before the teacher redirect matters.
+   - **Students:** `/teaching-calendar` remains blocked (student redirect list in `router.beforeEach`), same spirit as `/scores`; students use course pages and attendance is not a student navigation target.
+   **Backend:** `dashboard.router` APIs (`/api/dashboard/stats`, rankings, analysis) remain for **排行榜 / 数据分析** pages — only the dedicated SPA aggregate page and standalone calendar wrapper were removed.
 
 11. **Discussion short-body rendering vs expand-only rendering**  
    A discussion row used to mount `PlainOrMarkdownBlock` **only when expanded**. Symptom: a newly posted short Markdown reply (including LaTeX) appeared as raw source in the list until the row was manually expanded — and because short rows are not truncated, there was no expand action at all, so users perceived this as “发布后渲染失败”.  
@@ -126,8 +143,20 @@ They assert round-trip persistence for homework update + student submission, dis
    The repository documentation and UI hints explicitly promise four delimiter families: `$...$`, `$$...$$`, `\(...\)`, `\[...\]`. In practice, `markdown-it` treats `\(` / `\[` as escape sequences and drops the backslashes before the DOM reaches `renderMathInElement`, so the preview can degrade to literal `(x^2)` text even though KaTeX support is configured.  
    **Fix:** `apps/web/admin/src/utils/markdownIt.js::renderCourseMarkdown` now performs a placeholder round-trip around `md.render(...)`. `RichMarkdownDisplay.vue` and `FeedbackRichText.vue` both call that helper, so editor previews and published views preserve these delimiters consistently.
 
+13. **Admin SPA `npm run build` without prior `npm install` (missing local `vite`)**  
+   Symptom (fresh clone / CI worktree / agent sandbox): from `<repo>/apps/web/admin`, `npm run build` fails immediately with `sh: 1: vite: not found` or equivalent because devDependencies (including `vite`) are not installed in that directory’s `node_modules`.  
+   **Fix:** run `npm install` in `<repo>/apps/web/admin` before `npm run build`. Long-term, automation should treat `apps/web/admin/package-lock.json` + `npm ci`/`npm install` as the gate for any Vue verification step. This is **not** a product bug; it is an environment precondition pitfall.
+
+14. **Discussion assistant row: duplicate “智能助教” label vs accessibility**  
+   Before the chat-oriented layout pass, the UI rendered **both** the bold display name **智能助教** (`displayAuthorName`) **and** a plain `el-tag` also labeled **智能助教** for `message_kind === 'llm_assistant'`. Symptom: noisy duplicate labels and wasted horizontal space in the meta row.  
+   **Fix:** drop the redundant tag for assistant rows; rely on styled text (`discussion-row__name--assistant`), assistant row chrome (`discussion-row--assistant`), and the avatar corner badge **助**. Agents updating specs should **not** assume a second adjacent “智能助教” tag on assistant rows — filter Playwright assertions on `.discussion-row` text content or body content as today.
+
 ## Related documentation
 
 - [LLM and Homework Guide](../product/LLM_HOMEWORK_GUIDE.md) — grading pipeline overview
 - [Test Suite Map](TEST_SUITE_MAP.md) — where API tests live
 - [Encoding And Mojibake Safety](ENCODING_AND_MOJIBAKE_SAFETY.md) — UTF-8 expectations for text fields
+
+## Learning notes format notes
+
+`LearningNotes.vue` and `api/routers/learning_notes.py` use the same `markdown` / `plain` normalization model for note resources and note discussion bodies. The persistence tables are `learning_note_resources` and `learning_note_discussion_entries`, not `course_materials` or `course_discussion_entries`, because students can own and edit copied course outlines while official course materials remain teacher-published. When copying course materials into a note, attachment URLs are kept by reference rather than copied on disk. A future richer note editor should reuse `MarkdownEditorPanel` / `PlainOrMarkdownBlock` rather than inventing another renderer.

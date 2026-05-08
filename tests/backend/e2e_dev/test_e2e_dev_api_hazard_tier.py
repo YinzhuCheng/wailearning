@@ -12,7 +12,7 @@ from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.core.config import settings
 from apps.backend.wailearning_backend.db.database import SessionLocal
 from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import User, UserRole
+from apps.backend.wailearning_backend.db.models import Homework, User, UserRole
 
 
 @pytest.fixture(autouse=True)
@@ -296,3 +296,121 @@ def test_hz16_powerful_e2e_requires_admin_jwt_when_dual_gate_enabled(client: Tes
         json={"profiles": {"no_auth": {"steps": [{"kind": "ok", "score": 1.0, "comment": "x"}], "repeat_last": True}}},
     )
     assert r.status_code == 403
+
+
+def test_hz17_discussion_list_rejects_page_size_above_query_limit(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    hid = int(s["homework_id"])
+    subj = int(s["course_required_id"])
+    cls = int(s["class_id_1"])
+    r = client.get(
+        "/api/discussions",
+        headers={"Authorization": f"Bearer {tok}"},
+        params={
+            "target_type": "homework",
+            "target_id": hid,
+            "subject_id": subj,
+            "class_id": cls,
+            "page": 1,
+            "page_size": 200,
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_hz18_discussion_list_rejects_homework_class_id_mismatch(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    hid = int(s["homework_id"])
+    subj = int(s["course_required_id"])
+    wrong_class = int(s["class_id_2"])
+    r = client.get(
+        "/api/discussions",
+        headers={"Authorization": f"Bearer {tok}"},
+        params={
+            "target_type": "homework",
+            "target_id": hid,
+            "subject_id": subj,
+            "class_id": wrong_class,
+            "page": 1,
+        },
+    )
+    assert r.status_code == 400
+
+
+def test_hz19_student_cannot_access_foreign_homework_submission_me(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    student_tok = _login_form(client, s["student_plain"]["username"], s["password_teacher_student"])
+    db = SessionLocal()
+    try:
+        admin_user = db.query(User).filter(User.username == s["admin"]["username"]).first()
+        assert admin_user is not None
+        hw = Homework(
+            title=f"hz19-foreign-{s['suffix']}",
+            content="cross-class probe",
+            class_id=int(s["class_id_2"]),
+            subject_id=int(s["course_other_teacher_id"]),
+            max_score=100,
+            auto_grading_enabled=False,
+            created_by=int(admin_user.id),
+        )
+        db.add(hw)
+        db.commit()
+        db.refresh(hw)
+        foreign_homework_id = int(hw.id)
+    finally:
+        db.close()
+
+    r = client.get(
+        f"/api/homeworks/{foreign_homework_id}/submission/me",
+        headers={"Authorization": f"Bearer {student_tok}"},
+    )
+    assert r.status_code in (403, 404)
+
+
+def test_hz20_homework_list_rejects_page_size_above_100(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    r = client.get(
+        "/api/homeworks",
+        headers={"Authorization": f"Bearer {tok}"},
+        params={"subject_id": int(s["course_required_id"]), "page": 1, "page_size": 500},
+    )
+    assert r.status_code == 422
+
+
+def test_hz21_materials_list_rejects_page_size_above_100_for_teacher_and_student(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    subj = int(s["course_required_id"])
+    for username in (s["teacher_own"]["username"], s["student_plain"]["username"]):
+        password = s["password_teacher_student"]
+        tok = _login_form(client, username, password)
+        r = client.get(
+            "/api/materials",
+            headers={"Authorization": f"Bearer {tok}"},
+            params={"subject_id": subj, "page": 1, "page_size": 250},
+        )
+        assert r.status_code == 422
+
+
+def test_hz22_students_list_rejects_page_size_above_1000_for_admin(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["admin"]["username"], s["password_admin"])
+    r = client.get(
+        "/api/students",
+        headers={"Authorization": f"Bearer {tok}"},
+        params={"page": 1, "page_size": 5000},
+    )
+    assert r.status_code == 422
+
+
+def test_hz23_class_teacher_cannot_list_homework_for_orphan_subject(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    tok = _login_form(client, s["class_teacher"]["username"], s["password_teacher_student"])
+    r = client.get(
+        "/api/homeworks",
+        headers={"Authorization": f"Bearer {tok}"},
+        params={"subject_id": int(s["course_orphan_id"]), "page": 1, "page_size": 20},
+    )
+    assert r.status_code in (403, 404)

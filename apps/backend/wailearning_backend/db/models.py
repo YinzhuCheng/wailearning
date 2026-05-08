@@ -858,6 +858,97 @@ class CourseMaterialSection(Base):
     chapter = relationship("CourseMaterialChapter", backref="section_links")
 
 
+class LearningNote(Base):
+    """Personal or course-scoped public learning note owned by a teacher/student."""
+
+    __tablename__ = "learning_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True, index=True)
+    visibility = Column(String, nullable=False, default="private")  # private | course
+    source_subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    copied_materials = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    owner = relationship("User", foreign_keys=[owner_user_id])
+    subject = relationship("Subject", foreign_keys=[subject_id])
+    source_subject = relationship("Subject", foreign_keys=[source_subject_id])
+    chapters = relationship(
+        "LearningNoteChapter",
+        back_populates="note",
+        cascade="all, delete-orphan",
+    )
+    resources = relationship(
+        "LearningNoteResource",
+        back_populates="note",
+        cascade="all, delete-orphan",
+    )
+
+
+class LearningNoteChapter(Base):
+    """Editable chapter tree inside one learning note."""
+
+    __tablename__ = "learning_note_chapters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    note_id = Column(Integer, ForeignKey("learning_notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_id = Column(Integer, ForeignKey("learning_note_chapters.id"), nullable=True, index=True)
+    title = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    source_chapter_id = Column(Integer, ForeignKey("course_material_chapters.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    note = relationship("LearningNote", back_populates="chapters")
+    parent = relationship("LearningNoteChapter", remote_side=[id], backref="children")
+    source_chapter = relationship("CourseMaterialChapter")
+
+
+class LearningNoteResource(Base):
+    """Note-owned material snapshot/reference copied from course materials or created freely."""
+
+    __tablename__ = "learning_note_resources"
+
+    id = Column(Integer, primary_key=True, index=True)
+    note_id = Column(Integer, ForeignKey("learning_notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("learning_note_chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = Column(String, nullable=False)
+    content = Column(Text, nullable=True)
+    content_format = Column(String, nullable=False, default="markdown")
+    attachment_name = Column(String, nullable=True)
+    attachment_url = Column(String, nullable=True)
+    source_material_id = Column(Integer, ForeignKey("course_materials.id"), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    note = relationship("LearningNote", back_populates="resources")
+    chapter = relationship("LearningNoteChapter", backref="resources")
+    source_material = relationship("CourseMaterial")
+
+
+class LearningNoteDiscussionEntry(Base):
+    """Discussion messages scoped to a learning note."""
+
+    __tablename__ = "learning_note_discussion_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    note_id = Column(Integer, ForeignKey("learning_notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    body = Column(Text, nullable=False)
+    body_format = Column(String, nullable=False, default="markdown")
+    message_kind = Column(String, nullable=False, default="human")
+    llm_invocation = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    note = relationship("LearningNote")
+    author = relationship("User", foreign_keys=[author_user_id])
+
+
 class CourseDiscussionEntry(Base):
     """Linear discussion messages for homework or course materials (scoped by subject + class)."""
 

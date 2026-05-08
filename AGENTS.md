@@ -14,10 +14,105 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 4. **Never weaken `/api/e2e/dev/*` gates** without reading [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md) E2E sections — production still mounts the router but handlers return **404** unless `expose_e2e_dev_api()` is true (`main.py`).
 5. **Frontend hiding ≠ authorization.** Every sensitive mutation must be enforced in FastAPI routers / domain helpers (`domains/courses/access.py`, homework routers, etc.).
 6. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
+7. **Local agent workspace:** `.agent-run/` is the ignored, local-only workspace for handoffs, private absolute paths, temporary orchestrators, logs, screenshots, and validation planning notes. Read it when continuing work on this machine, especially `.agent-run/local-private-paths.md` and `.agent-run/validation-automation-upgrade-outline.md` if present. Never commit `.agent-run/` contents. Older local notes may still say `.e2e-run/`; in this worktree that role has been superseded by `.agent-run/` while `.e2e-run/` remains ignored for compatibility.
 
 ---
 
-## 2. Deep maps (read these for structural edits)
+## 2. Operational defaults for autonomous agents
+
+These defaults are part of the repository working contract for LLM coding agents.
+Follow them unless the user explicitly gives a conflicting instruction for the
+current task.
+
+1. **Read before acting.** At the start of every work round, read this file,
+   [`docs/README.md`](docs/README.md), and the task-scoped documents identified
+   in [`docs/README.md`](docs/README.md) §5 before editing code, tests, docs,
+   scripts, or repository structure. If local continuation files exist under
+   `.agent-run/`, read the task-relevant local notes as well.
+2. **Execute basic repository operations directly.** For ordinary file reads,
+   file writes, code edits, test-target discovery, and Git operations, proceed
+   directly with the necessary commands. Do not ask the user to run routine
+   commands or confirm routine local inspection. Ask only when an operation is
+   destructive, privacy-sensitive, network-/installation-heavy, or otherwise
+   outside the task's reasonable execution boundary.
+3. **Minimize avoidable command prompts.** Prefer self-contained local commands
+   for development, validation, and Git workflow. When a non-basic command is
+   required, make the narrowest reasonable choice and explain the purpose only
+   when it materially affects the user's risk or time.
+4. **Keep documentation agent-grade.** Documentation updates should be detailed
+   enough for future LLM agents to act without guessing. Do not shorten docs
+   merely because a human might prefer a brief note. The primary consumer of
+   repository process docs is an agentic coding system that benefits from
+   explicit commands, preconditions, interpretation rules, and failure modes.
+5. **Preserve text encoding.** Treat Windows PowerShell rendering as
+   display-only until verified. When editing multilingual or encoding-sensitive
+   files, follow
+   [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md):
+   use UTF-8-safe display/write helpers, patch around ASCII anchors when
+   practical, and verify suspicious glyphs by bytes or escaped output rather
+   than by terminal appearance. If a CLI-side encoding adjustment is needed to
+   prevent corruption, perform it directly instead of asking the user to repair
+   the shell.
+6. **Record pitfalls in the repository.** When a command fails, times out, is
+   blocked by environment setup, exposes a flaky harness assumption, or reveals
+   a repeatable trap, document the cause and mitigation in the relevant
+   committed documentation using repository-relative paths and placeholders such
+   as `<repo>`, `<artifact-dir>`, `<local-port>`, `<local-postgres-bin>`, or
+   `<local-browser-cache>`.
+   Prefer converting repeatable pitfalls into executable guardrails in the same
+   or a follow-up change: preflight checks, selector/runner rules, lint scripts,
+   tests, registry entries, or CI/profile steps. If a pitfall cannot reasonably
+   be automated yet, document the manual procedure and name the missing
+   automation point so a later agent can code it instead of rediscovering the
+   same failure.
+7. **Keep private machine details local.** Real user names, absolute home
+   paths, browser cache paths, downloaded binary locations, local database
+   directories, local credentials/tokens, and machine-specific logs belong only
+   in ignored local files under `.agent-run/`. Do not copy those details into
+   committed docs, tests, scripts, commit messages, PR text, or ledger rows.
+8. **Keep environment dependencies local unless explicitly promoted.** Tools
+   copied into the working tree for agent convenience, including local
+   PostgreSQL binaries, RAR extractors, Playwright browser caches, virtualenvs,
+   npm dependencies, local databases, generated logs, screenshots, and upload
+   fixtures, must live under ignored paths such as `.agent-run/`, `.e2e-run/`,
+   `.venv/`, `node_modules/`, `uploads/`, or package-local artifact folders.
+   Do not commit them unless the task explicitly asks for a tracked,
+   cross-machine script/template and the file contains no private paths,
+   secrets, machine-generated logs, or binary runtime payloads.
+9. **Use the local VPN proxy before declaring network failure.** On this
+   workstation, dependency and GitHub traffic may require the local VPN HTTP
+   proxy at `http://127.0.0.1:7897`. When `pip`, `npm`, `npx`, Playwright
+   browser install, `git fetch`, or similar outbound commands fail with network
+   / socket / DNS errors, retry with `HTTP_PROXY`, `HTTPS_PROXY`, and
+   `ALL_PROXY` set to that proxy before treating the environment as offline.
+   Keep `NO_PROXY=localhost,127.0.0.1,::1` so local backend, Vite, PostgreSQL,
+   and Playwright traffic stays on loopback.
+10. **Refresh handoff notes on request.** When the user says they are preparing
+   to hand off, replace stale content in the active local handoff document with
+   the current problem statement, confirmed findings, touched files, remaining
+   plan, validation state, branch/worktree context, and explicit warnings for
+   the next agent. Assume the user may close the conversation immediately after
+   that request and another agent system may continue from only those notes.
+11. **Verify the commit boundary.** Before committing, confirm that ignored local
+   notes are not tracked, scan committed changes for private path leaks, and run
+   the narrowest useful static checks for the files touched. For validation
+   selection, prefer
+   [`ops/scripts/dev/select_validation_targets.py`](ops/scripts/dev/select_validation_targets.py)
+   as the first pass, then run or explicitly defer the recommended targets based
+   on task scope.
+12. **Default to change-scoped validation.** Unless the user explicitly requests
+   full-suite, release-quality, zero-skip, or another broader validation level,
+   verify only the samples, targets, and checks that are directly relevant to
+   the changed files and affected behavior. Use the diff selector first, run the
+   recommended static and targeted targets, inspect any `needs_review` or
+   `not_sufficient` status, and document any deliberately deferred broad/full
+   target in the final handoff. Do not use this default to ignore unmatched
+   product paths, high-risk behavior, or selector gaps; add a registry rule, run
+   a broader target, or explain the unresolved validation state.
+
+---
+
+## 3. Deep maps (read these for structural edits)
 
 | Topic | Document |
 |-------|----------|
@@ -39,7 +134,7 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 3. grep keywords (fast navigation)
+## 4. grep keywords (fast navigation)
 
 | Intent | Keywords / symbols |
 |--------|---------------------|
@@ -55,7 +150,7 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 4. High-risk modules (touch with a trace plan)
+## 5. High-risk modules (touch with a trace plan)
 
 1. **`apps/backend/wailearning_backend/llm_grading.py`** — quotas, retries, attachment extraction, effective-score aggregation, worker orchestration.
 2. **`apps/backend/wailearning_backend/domains/courses/access.py`** — enrollment visibility; impacts every role.
@@ -65,7 +160,38 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 5. Verification checklist after edits
+## 6. Diff-based validation workflow
+
+Use the diff selector as the default validation planning entrypoint after every
+non-trivial edit. It is advisory, not a replacement for engineering judgment,
+but it prevents agents from either running a full suite unnecessarily or
+claiming a narrow run when the diff asks for broader evidence.
+
+Basic loop from the repository root:
+
+1. Inspect the current recommendation:
+   `python ops/scripts/dev/select_validation_targets.py --worktree`
+2. If the output is easier to consume programmatically, rerun with `--json`.
+3. Run the recommended `static` and `targeted` targets directly, or use:
+   `python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk targeted`
+4. If the selector reports `needs_review`, decide whether to include the named
+   broad / review-required target now. Playwright targets usually require an
+   explicit browser-ready environment and may need `--include-review-targets`.
+5. If the selector reports `not_sufficient`, do not present targeted validation
+   as complete until the full/broad blocker is handled or explicitly deferred
+   in the final handoff.
+
+Runner artifacts and structured history live under ignored `.agent-run/`. They
+are useful local evidence, but they are not durable project history. Only update
+[`docs/development/TEST_EXECUTION_LEDGER.md`](docs/development/TEST_EXECUTION_LEDGER.md)
+after reviewing an actual run result; selector planning output alone is not a
+ledger entry. Detailed semantics, commands, and limitations are in
+[`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md)
+under "Diff-based validation workflow".
+
+---
+
+## 7. Verification checklist after edits
 
 1. **Backend:** targeted `pytest` for touched package (from repo root). See [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md).
 2. **LLM paths:** run nearest tests under `tests/backend/llm/` or homework folders; watch for HTTP mocking patterns.
@@ -74,16 +200,18 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
-## 6. Naming honesty (avoid agent confusion)
+## 8. Naming honesty (avoid agent confusion)
 
 - **Product name:** README branding is **BIMSA-CLASS**; npm package may still show legacy names (`ddclass-frontend`) — treat as historical artifact unless migrating build metadata.
 - **`Subject` vs “course”:** ORM model `Subject` maps to user-facing “course” in much of the UI and `/api/subjects` routes.
 
 ---
 
-## 7. Where CI runs tests
+## 9. Where CI runs tests
 
-Cloud pipeline definition (Alibaba DevOps style YAML): [`ops/ci/pr-pipeline.yml`](ops/ci/pr-pipeline.yml) — uses `python3 -m pytest -q`. There is **no** `.github/workflows/` directory in this repository snapshot; do not assume GitHub Actions unless added later.
+Cloud pipeline definitions (Alibaba DevOps style YAML) live under [`ops/ci/`](ops/ci/); `pr-pipeline.yml` uses `python3 -m pytest -q`.
+
+GitHub Actions now has a lightweight entrypoint at [`.github/workflows/lightweight-validation.yml`](.github/workflows/lightweight-validation.yml). It runs selector/tooling checks, emits a diff-based validation recommendation for pull requests, runs quick backend `pytest`, and builds the admin and parent frontends. Treat it as the first cloud gate, not as full production-aligned validation. PostgreSQL-backed pytest, RAR-dependent attachment coverage, and Playwright E2E remain local/manual or future cloud-profile work unless a later workflow explicitly adds those environments.
 
 ---
 

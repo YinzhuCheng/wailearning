@@ -170,7 +170,32 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 
 ---
 
-## 7. Course discussions (homework / materials threads)
+## 7. Learning notes
+
+### HTTP
+
+- `api/routers/learning_notes.py` - prefix `/api/learning-notes`.
+- `GET /api/learning-notes?scope=mine|public&subject_id=...` lists owned notes or public notes. The persisted enum value for public notes is still `visibility="course"` for compatibility, but the effective audience is determined by `subject_id`: a public note with a course remains same-course-visible, while a public note with `subject_id IS NULL` is visible to every authenticated user. Public listing with a `subject_id` filter returns only notes bound to that accessible course; public listing without a filter returns unbound public notes plus public notes for courses from `get_accessible_course_ids(current_user, db)`.
+- `POST /api/learning-notes` creates a named note. `visibility` defaults to `private`; `visibility="course"` may be saved with a valid accessible `subject_id` for same-course sharing or with `subject_id = NULL` for all-authenticated sharing.
+- `GET/PUT/DELETE /api/learning-notes/{note_id}` enforce owner-only mutation and owner-or-public-scope read. Private notes remain owner-only. Public notes bound to a course require normal course access for non-owner readers/commenters. Public notes without a course can be read and discussed by any authenticated user.
+- `/{note_id}/chapters` and `/{note_id}/resources` implement an editable note-local outline and resource tree.
+- `/{note_id}/discussion` stores note-scoped discussion entries. Private note discussion is readable/commentable only by the owner. Course-visible note discussion is readable/commentable by same-course users.
+
+### Copy semantics
+
+Learning notes deliberately do **not** reuse `CourseMaterial` rows. When a note is created with `copy_from_subject_id`, the backend copies the course's `CourseMaterialChapter` tree into `LearningNoteChapter` rows owned by the new note. If `copy_materials` is true, each copied resource stores a note-owned snapshot of title/body/content format and keeps attachment URLs by reference through `LearningNoteResource.source_material_id` / `attachment_url`. This avoids physical file duplication while allowing students to freely edit their note structure and resource text.
+
+### LLM discussion behavior
+
+The note discussion assistant reuses the course LLM routing stack (`ensure_course_llm_config` + `_call_discussion_with_routing`) only after the note is associated with a course. Student callers still must resolve to a roster row through the discussion binding helper before an assistant reply is attempted. Current implementation caveat: learning-note assistant replies do **not** reserve or write rows in `LLMQuotaReservation` / `LLMTokenUsageLog` because those quota rows are currently tied to `discussion_llm_jobs` or homework grading jobs. A robust future implementation should add a note-specific LLM job/usage attribution table or generalize quota attribution before claiming parity with course discussion billing.
+
+### Admin SPA
+
+`apps/web/admin/src/views/LearningNotes.vue` exposes the teacher/student sidebar destination `/learning-notes`. It lets users create private notes, optionally copy course outline/materials from accessible courses, publish a note either to same-course users (when a course is selected) or to all authenticated users (when no course is selected), edit the note-local outline/resources, and participate in the note discussion. Admin users are intentionally routed away by `adminHiddenPaths`; the feature was requested for teachers and students.
+
+---
+
+## 8. Course discussions (homework / materials threads)
 
 ### HTTP
 
@@ -199,7 +224,7 @@ Admin SPA discussion list rendering:
 
 ---
 
-## 8. Appearance presets (user themes)
+## 9. Appearance presets (user themes)
 
 ### HTTP
 
@@ -207,7 +232,7 @@ Admin SPA discussion list rendering:
 
 ---
 
-## 9. E2E and mock LLM (non-production only)
+## 10. E2E and mock LLM (non-production only)
 
 ### Router registration
 
@@ -223,7 +248,7 @@ Details: [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_
 
 ---
 
-## 10. Operational logging
+## 11. Operational logging
 
 ### HTTP
 

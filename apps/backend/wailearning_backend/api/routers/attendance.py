@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -18,6 +18,24 @@ router = APIRouter(prefix="/api/attendance", tags=["考勤管理"])
 def _ensure_attendance_write_access(current_user: User):
     if current_user.role == UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Students cannot modify attendance.")
+
+
+def _parse_attendance_date(value) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception as exc:
+            raise ValueError("Invalid date format.") from exc
+    raise ValueError("Invalid date format.")
+
+
+def _parse_attendance_query_boundary(value, *, end_of_day: bool = False) -> datetime:
+    parsed = _parse_attendance_date(value)
+    if isinstance(value, str) and "T" not in value and "t" not in value and " " not in value and "_" not in value:
+        return datetime.combine(parsed.date(), time.max if end_of_day else time.min)
+    return parsed
 
 
 def _serialize_attendance(attendance: Attendance) -> AttendanceResponse:
@@ -42,8 +60,8 @@ def get_attendances(
     student_id: Optional[int] = None,
     student_name: Optional[str] = None,
     subject_id: Optional[int] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     status: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(1000, ge=1, le=10000),
@@ -65,9 +83,17 @@ def get_attendances(
         ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
-        query = query.filter(Attendance.date >= start_date)
+        try:
+            start_dt = _parse_attendance_query_boundary(start_date, end_of_day=False)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format.")
+        query = query.filter(Attendance.date >= start_dt)
     if end_date:
-        query = query.filter(Attendance.date <= end_date)
+        try:
+            end_dt = _parse_attendance_query_boundary(end_date, end_of_day=True)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format.")
+        query = query.filter(Attendance.date <= end_dt)
     if status:
         query = query.filter(Attendance.status == status)
 
@@ -96,9 +122,14 @@ def create_attendance(
         if course.class_id and course.class_id != attendance_data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
+    try:
+        attendance_date = _parse_attendance_date(attendance_data.date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format.")
+
     existing = db.query(Attendance).filter(
         Attendance.student_id == attendance_data.student_id,
-        Attendance.date == attendance_data.date,
+        Attendance.date == attendance_date,
         Attendance.subject_id == attendance_data.subject_id,
     ).first()
     if existing:
@@ -108,7 +139,7 @@ def create_attendance(
         student_id=attendance_data.student_id,
         class_id=attendance_data.class_id,
         subject_id=attendance_data.subject_id,
-        date=attendance_data.date,
+        date=attendance_date,
         status=attendance_data.status,
         remark=attendance_data.remark,
     )
@@ -168,8 +199,8 @@ def delete_attendance(
 def get_class_attendance_stats(
     class_id: int,
     subject_id: Optional[int] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -182,9 +213,17 @@ def get_class_attendance_stats(
         ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
-        query = query.filter(Attendance.date >= start_date)
+        try:
+            start_dt = _parse_attendance_query_boundary(start_date, end_of_day=False)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format.")
+        query = query.filter(Attendance.date >= start_dt)
     if end_date:
-        query = query.filter(Attendance.date <= end_date)
+        try:
+            end_dt = _parse_attendance_query_boundary(end_date, end_of_day=True)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format.")
+        query = query.filter(Attendance.date <= end_dt)
 
     attendances = query.all()
     stats = {"total": len(attendances), "present": 0, "absent": 0, "late": 0, "leave": 0}
@@ -258,9 +297,8 @@ async def create_attendances_batch(
             errors.append(f"Row {index}: missing date.")
             continue
         try:
-            if isinstance(attendance_date, str):
-                attendance_date = datetime.fromisoformat(attendance_date.replace("Z", "+00:00"))
-        except Exception:
+            attendance_date = _parse_attendance_date(attendance_date)
+        except ValueError:
             errors.append(f"Row {index}: invalid date format.")
             continue
 
@@ -332,9 +370,8 @@ async def create_class_attendance_batch(
             return {"success": 0, "failed": 1, "errors": ["Course does not belong to the selected class."]}
 
     try:
-        if isinstance(attendance_date, str):
-            attendance_date = datetime.fromisoformat(attendance_date.replace("Z", "+00:00"))
-    except Exception:
+        attendance_date = _parse_attendance_date(attendance_date)
+    except ValueError:
         return {"success": 0, "failed": 1, "errors": ["Invalid date format."]}
 
     students = db.query(Student).filter(Student.class_id == class_id).all()
@@ -372,8 +409,8 @@ async def create_class_attendance_batch(
 def get_student_attendance_stats(
     student_id: int,
     subject_id: Optional[int] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -390,9 +427,17 @@ def get_student_attendance_stats(
         ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
-        query = query.filter(Attendance.date >= start_date)
+        try:
+            start_dt = _parse_attendance_query_boundary(start_date, end_of_day=False)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format.")
+        query = query.filter(Attendance.date >= start_dt)
     if end_date:
-        query = query.filter(Attendance.date <= end_date)
+        try:
+            end_dt = _parse_attendance_query_boundary(end_date, end_of_day=True)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format.")
+        query = query.filter(Attendance.date <= end_dt)
 
     attendances = query.all()
     stats = {"total": len(attendances), "present": 0, "absent": 0, "late": 0, "leave": 0}

@@ -464,6 +464,21 @@ const api = {
     removePlacement: (sectionId, subjectId) =>
       http.delete(`/material-chapters/placements/${sectionId}?subject_id=${subjectId}`)
   },
+  learningNotes: {
+    list: params => http.get('/learning-notes', { params }),
+    get: id => http.get(`/learning-notes/${id}`),
+    create: data => http.post('/learning-notes', data),
+    update: (id, data) => http.put(`/learning-notes/${id}`, data),
+    delete: id => http.delete(`/learning-notes/${id}`),
+    createChapter: (noteId, data) => http.post(`/learning-notes/${noteId}/chapters`, data),
+    updateChapter: (noteId, chapterId, data) => http.put(`/learning-notes/${noteId}/chapters/${chapterId}`, data),
+    deleteChapter: (noteId, chapterId) => http.delete(`/learning-notes/${noteId}/chapters/${chapterId}`),
+    createResource: (noteId, data) => http.post(`/learning-notes/${noteId}/resources`, data),
+    updateResource: (noteId, resourceId, data) => http.put(`/learning-notes/${noteId}/resources/${resourceId}`, data),
+    deleteResource: (noteId, resourceId) => http.delete(`/learning-notes/${noteId}/resources/${resourceId}`),
+    discussion: (noteId, params) => http.get(`/learning-notes/${noteId}/discussion`, { params }),
+    createDiscussion: (noteId, data) => http.post(`/learning-notes/${noteId}/discussion`, data)
+  },
   files: {
     upload: file => {
       const formData = new FormData()

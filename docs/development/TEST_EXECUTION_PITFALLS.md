@@ -30,10 +30,10 @@ If you skip this checklist, you may spend time debugging the shell, temp directo
 ## Scope of the Recorded Session
 
 - Host shell: Windows PowerShell
-- Repository root: `C:\Users\bloom\wailearning-e2e-boundary-dynamic-complex-d8c7`
+- Repository root: `<repo>`
 - Python runtime: repository `.venv`
 - Frontend package runner: `npm.cmd` / `npx.cmd`
-- Browser cache path: `C:\Users\bloom\AppData\Local\ms-playwright`
+- Browser cache path: `<local-browser-cache>`
 - Tested after repository structure migration into:
   - `apps/backend/wailearning_backend/`
   - `apps/web/admin/`
@@ -62,6 +62,66 @@ Chinese output shown in the terminal may render as mojibake even when the underl
 - Prefer patch-based file edits over terminal-mediated rewrite flows.
 - When touching files that may already contain Chinese text, treat the file content on disk as authoritative, not the shell rendering.
 - If a file appears garbled in the shell, inspect it through a safer path before editing.
+
+### Extension: repository UTF-8 helpers for PowerShell sessions and text I/O
+
+The branch now includes explicit helper scripts so agents do not have to
+rediscover the same PowerShell encoding setup every time.
+
+For the current Windows PowerShell process, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+```
+
+For an already-open interactive shell, dot-source instead:
+
+```powershell
+. .\ops\scripts\windows\set-utf8-session.ps1
+```
+
+What the script changes:
+
+- console code page `65001`;
+- `[Console]::OutputEncoding`;
+- `[Console]::InputEncoding`;
+- `$OutputEncoding`;
+- `PYTHONUTF8`;
+- `PYTHONIOENCODING`;
+- `LESSCHARSET`.
+
+This reduces display and child-process decoding friction, but it does not turn
+PowerShell output into the source of truth. If a multilingual string matters,
+inspect it through:
+
+```powershell
+python ops\scripts\dev\safe_show_text.py <path> --start-line <n> --end-line <m>
+python ops\scripts\dev\safe_show_text.py <path> --escape --start-line <n> --end-line <m>
+```
+
+For generated or trusted full-file writes, use:
+
+```powershell
+python ops\scripts\dev\safe_write_text.py <path> --stdin --replace
+```
+
+For tracked-file audits, use:
+
+```powershell
+python ops\scripts\dev\check_text_encoding.py
+python ops\scripts\dev\check_text_encoding.py <path>
+```
+
+Interpretation:
+
+- `set-utf8-session.ps1` is an environment mitigation, not a content repair.
+- `safe_show_text.py --escape` is the preferred CLI view when terminal glyphs
+  are suspect.
+- `safe_write_text.py` is for deliberate full-file writes from trusted input; it
+  must not be used to pipe already-garbled terminal text into source files.
+- `check_text_encoding.py` scans `git ls-files` by default and intentionally
+  ignores `.e2e-run/` private notes. Use placeholders such as `<repo>` in
+  committed docs and keep real machine paths in `.e2e-run/`.
 
 ## Pitfall 2: `npm` PowerShell shim may be blocked by execution policy
 
@@ -1232,7 +1292,7 @@ Fix:
 
 Interpretation:
 
-**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for **432 passed, 0 skipped** with the recipe above (same collection count as SQLite; Postgres executes the previously skipped modules). Older notes that cite **417** or **45 skips tied to `rar`** describe pre-fixture layouts and should not be used when triaging current branches.
+**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for a **Postgres-backed 0-skip** full pytest with the recipe above (Postgres executes the modules skipped by SQLite). The latest full-suite report currently records **466 passed, 0 skipped** for that profile and **423 passed, 43 skipped** for SQLite-default. Older notes that cite **432**, **417**, or fixed **45-skip** expectations describe earlier fixture layouts and should not be used as the current branch’s pass-count oracle.
 
 ### Pitfall 46: disposable Linux / cloud-agent runners may lack `pytest` until `requirements.txt` is installed
 
@@ -2081,6 +2141,115 @@ This is primarily a **test-harness stability** issue. It should not, by itself,
 be read as evidence that admin discussion-LLM permission is broken once the
 teacher route and quota-exempt helper regressions are green.
 
+### Pitfall 81: PowerShell `python` may be system Python without pytest even when repo `.venv` exists
+
+### Symptom
+
+Running a focused pytest command from the repository root fails immediately:
+
+```text
+<system-python>: No module named pytest
+```
+
+### Context
+
+On Windows, `python` can resolve to a system interpreter even when the repository has a populated `.venv`. This surfaced while adding the learning-note / attendance-cover test tier: `python -m pytest tests/backend/learning_notes/test_learning_notes_api.py -q` failed before collection, while `<repo>/.venv/Scripts/python.exe -m pytest ...` ran the target module successfully.
+
+### Fix
+
+Use the repository virtualenv explicitly for targeted backend validation:
+
+```powershell
+<repo>\.venv\Scripts\python.exe -m pytest tests\backend\learning_notes\test_learning_notes_api.py -q
+```
+
+Do not rewrite imports or pytest configuration to fix a missing `pytest` package on the wrong interpreter. This is the Windows-specific variant of Pitfall 46.
+
+### Pitfall 82: Learning-note copied resources and chapters require `model_fields_set` to distinguish omitted vs explicit `null`
+
+### Symptom
+
+Tests or UI flows that try to freely edit a copied learning note cannot detach a resource from a copied chapter or promote a copied child chapter back to the note root. Payloads like these appear accepted but do not change the relationship:
+
+```json
+{ "chapter_id": null }
+{ "parent_id": null }
+{ "attachment_url": null }
+```
+
+### Cause
+
+The first implementation used `if payload.chapter_id is not None` / `if payload.parent_id is not None` / `if payload.attachment_url is not None`. That pattern treats an explicitly supplied JSON `null` exactly like an omitted field, so owner edits cannot clear nullable relationships or attachment references.
+
+### Fix
+
+Use Pydantic v2 `payload.model_fields_set` for nullable update fields:
+
+```text
+if "chapter_id" in payload.model_fields_set: ...
+if "parent_id" in payload.model_fields_set: ...
+if "attachment_url" in payload.model_fields_set: ...
+```
+
+Regression coverage:
+
+- `tests/backend/learning_notes/test_learning_notes_api.py`
+- `tests/e2e/web-admin/e2e-learning-notes-attendance-cover-tier20.spec.js`
+
+### Pitfall 83: Attendance single-create and date filters must parse `YYYY-MM-DD`, not pass raw strings to SQLite `DateTime`
+
+### Symptom
+
+`POST /api/attendance` returns **500** on SQLite when the request body uses the same date format emitted by the attendance page date picker / teaching-calendar flow:
+
+```json
+{ "date": "2026-05-07" }
+```
+
+The backend stack includes:
+
+```text
+SQLite DateTime type only accepts Python datetime and date objects as input.
+```
+
+A follow-up list request with `start_date=2026-05-07&end_date=2026-05-07` can also return **422** if the route parameters are typed as `datetime` directly, because Pydantic expects a datetime separator.
+
+### Cause
+
+Batch attendance routes already parsed incoming date strings before insert, but the single-create route wrote the raw Pydantic string into the ORM model. List/statistics filters also let FastAPI parse query dates as `datetime`, which rejects date-only values that the UI naturally sends.
+
+### Fix
+
+Centralize attendance date parsing in the router:
+
+- single-create converts `YYYY-MM-DD` or ISO datetime strings to `datetime` before querying/inserting;
+- list/class-stat/student-stat query boundaries accept string params and normalize date-only values to start/end of day;
+- invalid date strings return **400** instead of leaking database exceptions.
+
+Regression coverage:
+
+- `tests/backend/learning_notes/test_learning_notes_api.py::test_ln11_attendance_single_create_parses_iso_date_string_for_sqlite`
+- `tests/e2e/web-admin/e2e-learning-notes-attendance-cover-tier20.spec.js` case 20
+
+### Pitfall 84: Course-cover E2E should assert the enrolled course card, not assume catalog thumbnail placement
+
+### Symptom
+
+After setting `subjects.cover_image_url`, an E2E assertion for `data-testid="course-catalog-cover-thumb"` times out, while the active enrolled course card correctly renders `data-testid="course-card-cover"`.
+
+### Context
+
+`MyCourses.vue` renders two different student surfaces:
+
+- the schoolwide catalog table (`course-catalog-cover-thumb`);
+- the student's active/completed course cards (`course-card-cover`).
+
+Depending on current catalog filters, enrollment state, table virtualization, and route timing, a test that only wants to verify "students can see a selected course's cover" should target the active course card for the seeded course.
+
+### Fix
+
+Scope the locator to the exact `article.course-card` whose heading is the seeded course title, then assert `course-card-cover` inside that card. Keep separate catalog-thumbnail tests for catalog-specific behavior if that surface is the product target.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
@@ -2223,6 +2392,51 @@ If the same test passes when rerun serially with the same code and local mock
 LLM endpoint, treat the earlier `ECONNRESET` as local E2E orchestration
 contention rather than product behavior.
 
+### Pitfall: outbound dependency commands may need the local VPN proxy
+
+On this workstation, outbound dependency and repository commands can fail even
+when the network is usable through the local VPN proxy. Typical affected
+commands include:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm.cmd install
+npx.cmd playwright install chromium
+git fetch
+```
+
+Observed symptoms include socket permission errors, DNS/connection failures, or
+package managers reporting no matching package versions because they could not
+reach the index. Before recording the environment as offline, retry with the
+local HTTP proxy:
+
+```powershell
+$env:HTTP_PROXY='http://127.0.0.1:7897'
+$env:HTTPS_PROXY='http://127.0.0.1:7897'
+$env:ALL_PROXY='http://127.0.0.1:7897'
+$env:NO_PROXY='localhost,127.0.0.1,::1'
+```
+
+For npm, prefer environment variables first; if the process still ignores them,
+use a one-command scoped config rather than writing global npm state:
+
+```powershell
+npm.cmd --proxy=http://127.0.0.1:7897 --https-proxy=http://127.0.0.1:7897 install
+```
+
+Interpretation:
+
+- `NO_PROXY` is mandatory for local Playwright/FastAPI/Vite/PostgreSQL traffic;
+- do not commit machine-specific proxy logs or user-profile paths;
+- local helper tools used to make these retries work, such as copied RAR
+  extractors, local PostgreSQL binaries, virtualenvs, browser caches, and
+  generated logs, must stay under ignored paths such as `.agent-run/`,
+  `.e2e-run/`, `.venv/`, or `node_modules/`;
+- ignored local bootstrap scripts under `.agent-run/` may set this proxy by
+  default for this workstation;
+- if the proxy retry also fails, record both attempts and the exact failure mode
+  before treating the command as blocked.
+
 - It does not claim the product code is bug-free.
 - It does not claim all Windows environments need the exact same workarounds.
 - It does not claim the sandbox restrictions seen here will match CI or a developer's normal terminal.
@@ -2345,7 +2559,109 @@ Always distinguish **“installed”** from **“listening”**. Full-suite veri
 
 ## Full-suite dependency: `unrar` for LLM attachment extraction tests
 
-`tests/backend/llm/test_llm_attachment_formats.py` calls `_require_unrar()` which skips when neither `unrar` nor `unrar-free` exists on `PATH`. Installing `unrar` via apt removes the skip without weakening assertions.
+`tests/backend/llm/test_llm_attachment_formats.py` calls `_require_rar_extractor()` which skips when neither `unrar`, `unrar-free`, nor compatible libarchive-backed `tar` / `bsdtar` exists on `PATH`. Installing `unrar` via apt or providing a compatible `tar` removes the skip without weakening assertions.
+
+## Windows full-suite dependency provisioning: do not leave environment skips unexercised
+
+### Symptom
+
+A full-suite validation attempt can appear "mostly green" while important tests did not actually execute:
+
+- RAR attachment tests skip because no `unrar` / `unrar-free` exists on `PATH`.
+- PostgreSQL-only tests skip because `TEST_DATABASE_URL` is unset or no local PostgreSQL listener exists.
+- Playwright tests abort before browser assertions because Node, Chromium, or subprocess spawning is unavailable.
+
+### Policy
+
+For a result described as a full validation, do not accept those skips as final evidence. Install or provision the missing environment and rerun the affected target at least once. It is fine to keep a fast-loop SQLite profile or a targeted smoke profile, but the ledger must clearly distinguish it from a complete environment-backed run.
+
+Committed documentation must use placeholders such as `<repo>`, `<local-postgres-bin>`, `<local-postgres-data>`, `<local-browser-cache>`, and `<artifact-dir>`. Real local paths, user names, browser cache paths, downloaded archive paths, and service logs belong in an ignored `.e2e-run/` note.
+
+### Windows RAR extractor notes from the 2026-05-07 session
+
+The Windows host did not have `unrar`, `unrar-free`, or `rar` on `PATH`. Attempts to install `unrar` through a system package manager failed because the package manager's system directories were locked or not writable from the automation shell. That should be documented as environment bootstrap debt, not as a product bug.
+
+Downloading RARLAB's Windows installer-style executable is not equivalent to installing a command-line `unrar` for automated tests. In this session, trying to treat that executable as `unrar` caused test execution to hang before product assertions. Do not rely on installer executables as CLI extractors unless you have verified `unrar` command semantics with a small archive.
+
+The repository now accepts a libarchive-backed `tar` / `bsdtar` executable as a RAR extraction fallback when `unrar` and `unrar-free` are absent. This is useful on Windows where `tar.exe` may be present even when package-manager installation is blocked. Validate with:
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\backend\llm\test_llm_attachment_formats.py -q
+```
+
+### Windows `tar.exe` temp-directory ACL notes
+
+During the fallback implementation, `tar.exe -xf <archive> -C <temp-dir> <member>` failed against some `tempfile.mkdtemp(...)` directories and left directories that Git could not enumerate (`Permission denied` warnings for `rar-one-*`). The working pattern was to create the per-member extraction directory explicitly with `Path(tempfile.gettempdir()) / f"rar-one-{uuid}"` plus `Path.mkdir(...)`, then remove it with `shutil.rmtree(..., ignore_errors=True)`.
+
+If local `rar-one-*` directories remain after interrupted runs, treat them as local artifacts. Remove them only after verifying the resolved path is inside the intended temp/artifact area. Do not commit them and do not list their machine-specific absolute paths in committed docs.
+
+### Windows PostgreSQL local-binary notes from the 2026-05-07 session
+
+When the host lacks a PostgreSQL service, Docker, `psql`, or `pg_ctl` on `PATH`, an official PostgreSQL Windows binary archive under an ignored local artifact directory can be enough for a throwaway test database. Keep the archive, extracted binaries, data directory, and logs out of Git.
+
+Known Windows friction:
+
+- `initdb.exe` may finish writing a usable data directory but still print restricted-token errors at the end.
+- `pg_ctl.exe start` can fail with restricted-token errors even when direct `postgres.exe -D <data-dir> -h 127.0.0.1 -p <port>` works.
+- A background `postgres.exe` started by one automation command may not stay alive for the next tool call in this sandboxed environment. Prefer a single orchestrator command/script that starts PostgreSQL, waits for readiness, creates the test role/database, runs pytest, and then stops the process.
+- PowerShell `Start-Process` cannot redirect stdout and stderr to the same file; use separate log files.
+- If an interrupted orchestrator kills PostgreSQL during startup or recovery, the data directory can retain a stale `postmaster.pid` or enter crash recovery. For full-suite validation, a fresh throwaway data directory is often cheaper than trying to reason about the partially started one.
+
+### Windows PostgreSQL reused data directory can fail crash recovery before pytest starts
+
+During a follow-up cleanup validation on `cursor/discussion-avatar-chat-ui-921d`, a local-only PowerShell orchestrator first reused a data directory from a previously interrupted PostgreSQL attempt. The server began crash recovery, repeatedly reported that the database system was still starting up to `pg_isready`, and then exited before readiness with:
+
+```text
+could not signal for checkpoint: Operation not permitted
+```
+
+This happened before pytest could connect to the database. Treat this as a local PostgreSQL runtime/data-directory recovery failure, not as evidence that `tests/postgres` failed.
+
+The successful local pattern was:
+
+1. keep the orchestrator under `<repo>/.e2e-run/`;
+2. create a fresh throwaway data directory for each validation attempt, for example `<artifact-dir>/postgres-package-tests/data-<timestamp>`;
+3. run `initdb` into that fresh directory;
+4. tolerate the known Windows restricted-token and locale/text-search warnings when `PG_VERSION` and the cluster files were created successfully;
+5. start `postgres.exe` directly with `-D <fresh-data-dir> -h 127.0.0.1 -p <local-port>`;
+6. create the throwaway role/database;
+7. set `TEST_DATABASE_URL`;
+8. run pytest;
+9. stop the process in the orchestrator `finally` block.
+
+Do not copy the real data directory, log path, local port, or user profile into committed docs. Put those in `.e2e-run/local-private-paths.md`.
+
+### PostgreSQL full pytest can expose stale roster-sync test expectations
+
+A PostgreSQL-backed full pytest run on `cursor/discussion-avatar-chat-ui-921d` initially showed early failure markers and later timed out before a final summary. A focused rerun identified three failures in:
+
+```text
+tests/backend/courses/test_student_course_roster_behavior.py
+```
+
+The failing expectations were older than the current product behavior. They assumed that a student-role `User` with a `class_id` but no matching same-class `Student` roster row would continue to see no required course and would not be able to submit course homework. Current code intentionally calls `prepare_student_course_context(...)` during student login/course access. That helper can:
+
+- create or repair the same-class roster row through `sync_student_roster_from_user_accounts(...)`;
+- then call `sync_student_course_enrollments(...)`;
+- then expose required courses for that class and allow homework submission when the repaired roster/enrollment is authoritative.
+
+For tests around this area:
+
+- assert the final repaired product state when the scenario is a normal same-class student account;
+- use explicit cross-class data, enrollment blocks, or intentionally conflicting roster rows when the intended invariant is denial;
+- do not assert "no roster row means no course forever" unless the product rule changes;
+- keep route-denial tests separate from login-time repair tests so failures diagnose the right invariant.
+
+This is a test semantics pitfall, not a reason to remove the login-time repair behavior.
+
+### Ledger interpretation
+
+Record environment failures and interruptions in `TEST_EXECUTION_LEDGER.md`:
+
+- increment `Run count` for started validation attempts that were blocked or interrupted;
+- increment `Pass count` only for actual passed test runs;
+- record whether a skip was eliminated by provisioning the missing condition;
+- store exact local paths and downloaded tool locations only in ignored `.e2e-run/` handoff notes.
 
 ## Stale documentation paths after removing root `tools/` (2026-05)
 
@@ -2364,3 +2680,236 @@ Run `rg 'tools/testing' -g '*.{py,yml,yaml,sh,bat,cjs,js,json}'` from the reposi
 ### Pitfall during validation
 
 If you only move the script but forget to skip `tests/devtools/` inside the auditor’s inventory walk, the generated `TEST_REDUNDANCY_AUDIT.md` may include spurious “uncategorized-python” rows for the utility itself. This pass adds an explicit `rel_path.startswith("tests/devtools/")` guard.
+
+## Learning notes and attendance/calendar implementation pitfalls (2026-05)
+
+### Pitfall: old doc path memory for code maps
+
+During the learning-notes / attendance-calendar pass, an agent-side memory pointed at `docs/architecture/CODE_MAP_AND_ENTRYPOINTS.md`. The actual current file is:
+
+```text
+<repo-root>/docs/reference/CODE_MAP_AND_ENTRYPOINTS.md
+```
+
+Fix: use `docs/README.md` as the documentation hub and prefer `rg "CODE_MAP_AND_ENTRYPOINTS"` over guessing a folder.
+
+### Pitfall: `LLMQuotaReservation` cannot be reused for learning-note assistant replies by inventing a dummy job id
+
+Course discussion quota rows currently attach to discussion/homework job tables. A learning-note discussion entry id is **not** a valid `discussion_llm_jobs.id`, so inserting quota/reservation rows with a dummy note discussion id would violate foreign-key expectations or silently corrupt attribution semantics.
+
+Current product code therefore gates learning-note assistant replies through course access and course LLM config, but does not claim quota parity. A future implementation should add a note-specific LLM job table or generalize the quota attribution schema before recording learning-note token usage.
+
+### Pitfall: patching multilingual demo seed with Chinese context can miss anchors
+
+`domains/seed/demo.py` is data-heavy and contains many Chinese strings. A patch that matched nearby rendered Chinese text failed because PowerShell display and exact file bytes did not line up. The successful approach used ASCII anchors such as `_DEMO_PASSWORD`, `_HOMEWORK_TITLE`, and `link_row`.
+
+Fix pattern: for multilingual files, use ASCII identifiers/path names as patch anchors, then run `py_compile` immediately.
+
+Additional example from the richer demo-content pass:
+
+- Replacing the old three-level `_seed_demo_material_chapters(...)` implementation by matching its Chinese-containing docstring initially failed. The reliable patch matched only the ASCII function definition `def _seed_demo_material_chapters` and the next ASCII function boundary, then replaced the function body with helper functions.
+- Replacing `_DEMO_PREFILL_BODIES` by matching the old Chinese homework body text also failed. The reliable patch anchored on `_DEMO_PREFILL_STUDENT_NOS` and the following ASCII boundary `def _seed_prefilled_submissions_for_homework`.
+- Do not treat either failure as evidence that the tracked file is corrupt. In this repository, PowerShell rendering may display valid UTF-8 Chinese as mojibake, while `apply_patch` still writes valid UTF-8 when given a precise byte-level context.
+- For future seed-data edits, prefer this order: introduce new constants near ASCII identifiers, replace call signatures by ASCII function names, compile with `.venv\Scripts\python.exe -m py_compile apps\backend\wailearning_backend\domains\seed\demo.py`, then run the focused demo seed tests.
+
+### Pitfall: Vite build can succeed while terminal output looks mojibake
+
+`npm.cmd run build` rendered some chunk output and Chinese-adjacent console text through the Windows terminal encoding, but the Vue SFC source still compiled as UTF-8 and `rg` showed correct file content. Do not copy build output strings back into source. Use build success/failure as the syntax signal and inspect file diffs for content changes.
+
+### Pitfall: targeted Playwright validation can fail before product code runs when subprocess spawning is blocked
+
+During the standalone teaching-calendar wrapper cleanup, the targeted command below failed immediately in the default sandbox:
+
+```powershell
+npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium
+```
+
+Observed symptom:
+
+```text
+Error: spawn EPERM
+```
+
+Interpretation:
+
+- this failure happened before the browser test could start the managed backend/frontend subprocesses;
+- it is an execution-environment permission failure, not evidence that `/teaching-calendar` redirect behavior or the attendance page is broken;
+- the correct next step is to retry the same command outside the restricted sandbox or with an approved execution context, then evaluate any real Playwright assertion failures separately.
+
+Agent workflow rule:
+
+1. First run fast static checks such as `git diff --check` and `npm.cmd run build` from the admin frontend package to catch syntax/import regressions.
+2. If the targeted Playwright command fails with `spawn EPERM`, do not rewrite selectors or route code based on that result.
+3. Record the blocked command and the exact high-level failure (`spawn EPERM`) in this pitfalls document.
+4. Keep local absolute paths, user profile names, browser cache paths, or other machine-identifying details in an ignored local note under `.e2e-run/`, not in committed documentation.
+
+### Pitfall: Playwright managed `webServer` can fail when the repository `.venv` is a stale junction
+
+On Windows worktrees, `<repo>/.venv` may be a junction or symlink to another
+local checkout. If that target directory is later deleted or moved, the admin
+Playwright config still tries to start the managed FastAPI server with:
+
+```text
+<repo>/.venv/Scripts/python.exe -m uvicorn apps.backend.wailearning_backend.main:app ...
+```
+
+The targeted Playwright command may then fail after the sandbox `spawn EPERM`
+issue is resolved, before any browser assertion runs:
+
+```powershell
+npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium
+```
+
+Observed symptom:
+
+```text
+Error: Process from config.webServer was not able to start. Exit code: 1
+[WebServer] The system cannot find the path specified.
+```
+
+Interpretation:
+
+- this is a local Playwright environment/bootstrap failure, not evidence that
+  the changed UI behavior is broken;
+- the admin Playwright config defaults `E2E_PYTHON` to
+  `<repo>/.venv/Scripts/python.exe` on Windows;
+- a system Python without `uvicorn`, `fastapi`, and `sqlalchemy` is not a valid
+  replacement unless project dependencies were installed into that interpreter;
+- real junction targets, browser cache locations, and user-profile paths belong
+  only in ignored local notes under `.agent-run/`.
+
+Preflight before rerunning Playwright:
+
+```powershell
+python ops\scripts\dev\playwright_preflight.py
+python ops\scripts\dev\playwright_preflight.py --json
+```
+
+Use `--include-private-paths` only for local ignored handoff notes:
+
+```powershell
+python ops\scripts\dev\playwright_preflight.py --include-private-paths
+```
+
+Fix patterns:
+
+1. recreate the repository virtual environment and install requirements;
+2. or set `E2E_PYTHON=<python-with-project-dependencies>` before invoking
+   Playwright;
+3. or start backend/frontend manually, verify health, and run Playwright with
+   `PLAYWRIGHT_USE_EXTERNAL_SERVERS=1`;
+4. rerun the same targeted Playwright command only after the preflight no longer
+   reports missing backend Python dependencies.
+
+Do not edit Playwright selectors, Vue components, or route code based solely on
+this `webServer` bootstrap failure.
+
+### Pitfall: Playwright preflight must cover seed-time backend dependencies, not only uvicorn startup
+
+The managed admin Playwright path can pass a shallow `uvicorn` import check and
+still fail before the first browser assertion when `globalSetup` calls
+`POST /api/e2e/dev/reset-scenario`.
+
+Observed cluster on the Windows `cursor/discussion-avatar-chat-ui-921d` branch:
+
+- the host only exposed Python 3.14, while the pinned `requirements.txt`
+  includes packages with known Python-3.14 install friction
+  (`pydantic==2.5.3` via `pydantic-core==2.14.6`, and
+  `psycopg2-binary==2.9.9` source-build risk without `pg_config`);
+- a locally smoke-capable Python 3.14 `.venv` was possible only after installing
+  compatible wheels, so "requirements installed" and "current venv works" were
+  not the same claim;
+- `bcrypt==5.0.0` with `passlib==1.7.4` caused the E2E seed password hashing
+  path to return `500`, even though the backend process itself had started;
+- the failed seed left the default file-backed Playwright SQLite database in the
+  temp directory, which can confuse the next diagnostic pass if the operator
+  assumes every rerun starts from a clean database.
+
+Fix pattern now encoded in `ops/scripts/dev/playwright_preflight.py`:
+
+```powershell
+.\.venv\Scripts\python.exe ops\scripts\dev\playwright_preflight.py --json
+```
+
+The preflight must check:
+
+- the selected `E2E_PYTHON` exists and can run;
+- Python version details are visible, with Python 3.14 recorded as local-smoke
+  usable only when dependencies are already installed;
+- known Python-3.14 requirement pins are surfaced in the JSON detail;
+- backend modules needed by startup and seed routes import successfully
+  (`uvicorn`, `fastapi`, `sqlalchemy`, `pydantic`, `pydantic_settings`, `jose`,
+  `passlib`, `multipart`, `httpx`);
+- `passlib` can hash a bcrypt password, catching the `bcrypt==5.0.0` /
+  `passlib==1.7.4` seed-500 class before Playwright launches;
+- the default Playwright SQLite file for `E2E_API_PORT` is visible in output so
+  a half-initialized local artifact is not mistaken for product state.
+
+Interpretation rule:
+
+- Missing Python, missing imports, or failing bcrypt smoke is a blocking
+  environment failure for managed Playwright.
+- Python 3.14 pin friction and an existing local SQLite file are diagnostic
+  details for local smoke, not automatic product failures. Use Python 3.11/3.12
+  for release-like validation, or document that the run used a specially
+  populated Python 3.14 environment.
+
+### Pitfall: execution ledgers become misleading if they only record green runs
+
+The structured execution ledger lives at:
+
+```text
+<repo-root>/docs/development/TEST_EXECUTION_LEDGER.md
+```
+
+It is meant to help agents avoid reflexively rerunning every suite when a narrow change only touches known surfaces. The ledger becomes actively harmful if failed, blocked, timed-out, skipped, or interrupted validation attempts are omitted from the `Run count`.
+
+Fix pattern:
+
+- record every observed validation attempt that was started for a target, including blocked Playwright runs and environment failures;
+- increment `Run count` for blocked/failed/timed-out/interrupted/skipped attempts;
+- increment `Pass count` only for `Result: passed`;
+- keep committed command rows repository-relative (`<repo>`, `<repo>/apps/web/admin`, `<python-with-requirements>`);
+- put machine-specific paths, user profile names, browser cache paths, local database files, and exact private working directories in `.e2e-run/local-private-paths.md` or another ignored `.e2e-run/` note;
+- do not backfill historical pass counts from memory or branch names.
+
+Interpretation:
+
+Use the ledger as a test-selection aid, not as a substitute for touched-file analysis. A high pass count for a target does not prove the target can be skipped after relevant code changes. Conversely, a blocked run should not be treated as a product failure without reading the environment details in this pitfalls document.
+
+### Pitfall: line-count health scripts must not count local artifacts
+
+The repository line-health script lives at:
+
+```text
+<repo-root>/ops/scripts/dev/repo_line_health.py
+```
+
+The first implementation deliberately uses `git ls-files` by default. A naive recursive filesystem walk would count `.venv/`, `node_modules/`, `apps/web/*/dist/`, `.e2e-run/`, Playwright reports, local sqlite files, upload directories, and other machine-local artifacts. That would make the reported "repository size" mostly a measure of local environment churn, not source evolution.
+
+Fix pattern:
+
+- use tracked files as the default metric source;
+- keep an explicit `--include-untracked` mode only for diagnostics, and still skip obvious artifact directories;
+- split `generated_or_lock` from normal application and documentation categories so lockfile churn does not look like feature-code growth;
+- print `<repo>` in machine-readable output instead of an absolute repository path;
+- keep any machine-specific path notes in `.e2e-run/`, not in committed metric output.
+
+During development of the script, remember that a newly added metrics script or documentation file is not part of `git ls-files` until it is staged. If you need the line-health output to represent the exact intended commit, stage the new tracked files first, then rerun the command before recording the ledger row.
+
+Interpretation:
+
+Line counts are trend indicators, not quality metrics. A larger documentation count can be healthy in this repository because documentation is agent-facing operating context. A smaller test count can be healthy after deduplication only if the redundancy audit or equivalent evidence explains why coverage was preserved.
+
+### Pitfall: learning-note public visibility is not the same as "must bind a course"
+
+The first implementation of learning notes treated `visibility="course"` as literally course-only and rejected public notes where `subject_id` was null. That no longer matches the product rule: a public note with a course is same-course-visible, while a public note without a course is visible to every authenticated user.
+
+Implementation consequence:
+
+- Do not restore a validator like `Public course-visible notes must be associated with a course`.
+- Public list queries without a course filter must include both `subject_id IS NULL` notes and course-bound notes for ids returned by `get_accessible_course_ids(...)`.
+- Public list queries with a concrete `subject_id` still call `ensure_course_access_http(...)` and filter to that course only, so a course-specific view does not unexpectedly mix in all-authenticated notes.
+- Update payload handling must distinguish "field omitted" from `"subject_id": null`; otherwise a user cannot clear a note's course binding and publish it to all authenticated users.
+
+Verification pattern: after editing `api/routers/learning_notes.py`, run targeted Python compilation and grep for the obsolete validator/error text before claiming the visibility semantics are fixed.

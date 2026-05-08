@@ -68,6 +68,7 @@ Routers live under `apps/backend/wailearning_backend/api/routers/`.
 | `llm_settings.router` | Global LLM presets + quotas |
 | `files.router` | Authenticated uploads/downloads |
 | `homework.router` | Homework CRUD, submissions, grading tasks, appeals |
+| `learning_notes.router` | `/api/learning-notes` — owned learning-note CRUD, public note discovery, note outline/resource editing, note discussion |
 | `discussions.router` | Course discussions |
 | `material_chapters.router` | Material hierarchy |
 | `materials.router` | Materials CRUD |
@@ -90,8 +91,9 @@ Routers live under `apps/backend/wailearning_backend/api/routers/`.
 | [`apps/web/admin/src/router/index.js`](../../apps/web/admin/src/router/index.js) | Routes + `meta.requiresAdmin` style gates (UI only) |
 | [`apps/web/admin/src/api/index.js`](../../apps/web/admin/src/api/index.js) | Axios client, interceptors, validation error formatting |
 | [`apps/web/admin/src/stores/user.js`](../../apps/web/admin/src/stores/user.js) | Pinia user session |
-| [`apps/web/admin/src/views/TeachingCalendarPage.vue`](../../apps/web/admin/src/views/TeachingCalendarPage.vue) | **教学日历** route (`/teaching-calendar`): wraps `TeachingCalendar.vue` for subject teachers (requires `selected_course`) and `ClassSemesterCalendar.vue` for class teachers; replaced aggregate `Dashboard.vue` (removed). |
 | [`apps/web/admin/src/views/HomeworkSubmissionReview.vue`](../../apps/web/admin/src/views/HomeworkSubmissionReview.vue) | Teacher **全页阅卷**：`/homework/:homeworkId/submissions/:submissionId` — renders latest submission body via `PlainOrMarkdownBlock`, score/comment editor, collapsible attempt history, LLM log dialog; backed by `GET /api/homeworks/{id}/submissions/{submission_id}/status`. |
+| [`apps/web/admin/src/views/Attendance.vue`](../../apps/web/admin/src/views/Attendance.vue) | Attendance management; embeds `TeachingCalendar.vue` so clicking a rendered course day selects the attendance date and reloads that day's records. Historical `/teaching-calendar` deep links redirect here; there is no retained standalone page component. |
+| [`apps/web/admin/src/views/LearningNotes.vue`](../../apps/web/admin/src/views/LearningNotes.vue) | Teacher/student learning notes at `/learning-notes`: private-by-default note CRUD, optional course outline/material copy, course-visible public notes, note outline/resource editing, and note discussion. |
 | [`apps/web/admin/src/views/*.vue`](../../apps/web/admin/src/views/) | Pages |
 | [`apps/web/admin/src/components/*.vue`](../../apps/web/admin/src/components/) | Shared UI (e.g. `MarkdownEditorPanel.vue`, `RichMarkdownDisplay.vue`) |
 
@@ -128,6 +130,7 @@ Detail: [`product/PARENT_PORTAL.md`](../product/PARENT_PORTAL.md).
 | [`ops/systemd/ddclass-backend.service`](../../ops/systemd/ddclass-backend.service) | systemd unit template |
 | [`ops/nginx/wailearning.xyz.conf`](../../ops/nginx/wailearning.xyz.conf) | Example nginx |
 | [`ops/scripts/deploy_backend.sh`](../../ops/scripts/deploy_backend.sh) | Deploy helper |
+| [`ops/scripts/dev/repo_line_health.py`](../../ops/scripts/dev/repo_line_health.py) | Repository line-count health metrics: documentation, tests, primary source, and supporting categories |
 
 ---
 
@@ -140,4 +143,8 @@ See [`architecture/REPOSITORY_STRUCTURE.md`](../architecture/REPOSITORY_STRUCTUR
 ## 9. Deliberately absent (do not grep forever)
 
 - **No Redis/Celery queue** in-repo for LLM grading — queue is SQL (`homework_grading_tasks`).
-- **No `.github/workflows/`** in this snapshot — CI may live entirely in external DevOps (`ops/ci/`).
+- **No full GitHub Actions validation matrix** yet. A lightweight workflow exists at
+  [`.github/workflows/lightweight-validation.yml`](../../.github/workflows/lightweight-validation.yml),
+  while external DevOps examples still live under [`ops/ci/`](../../ops/ci/).
+  PostgreSQL-backed pytest, RAR-dependent attachment coverage, and Playwright
+  E2E are not yet fully cloud-orchestrated.

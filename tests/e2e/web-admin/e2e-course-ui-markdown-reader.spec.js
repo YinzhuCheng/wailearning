@@ -2,7 +2,7 @@
  * Targeted E2E for course UI: Markdown LaTeX demo, sidebar collapse control,
  * materials layout + reader route (including discussion on reader),
  * flat teacher sidebar without 「日常教学」 submenu, flat student sidebar without 「课程学习」 submenu,
- * teaching calendar route.
+ * and the historical teaching-calendar deep link redirect.
  *
  * Dashboard (`/dashboard`) was removed from the product UI (May 2026); enrollment
  * count regressions for `GET /api/dashboard/stats` remain covered in pytest
@@ -50,6 +50,14 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex').first()).toBeVisible({
       timeout: 15000
     })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display').first()).toBeVisible({
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display')).toHaveCount(2, {
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).not.toContainText('$$')
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).not.toContainText('\\[')
   })
 
   test('homework dialog hides LaTeX demo when switching body to plain text', async ({ page }) => {
@@ -115,16 +123,21 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.locator('.material-read-title')).toBeVisible({ timeout: 15000 })
   })
 
-  test('teacher sidebar exposes 教学日历 and hides removed 课程仪表盘', async ({ page }) => {
+  test('teacher sidebar groups student workflows under students and hides removed standalone pages', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await page.goto('/students')
     await expect(page.locator('.sidebar-menu .el-sub-menu__title').filter({ hasText: '日常教学' })).toHaveCount(0)
-    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '教学日历' })).toBeVisible({
-      timeout: 15000
-    })
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '学生管理' })).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '考勤管理' })).toHaveCount(0)
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '成绩管理' })).toHaveCount(0)
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '学生作业一览' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '成绩管理' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '考勤管理' })).toBeVisible()
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '教学日历' })).toHaveCount(0)
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程资料' })).toBeVisible()
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程仪表盘' })).toHaveCount(0)
+    await expect(page.getByTestId('sidebar-notifications')).toBeVisible()
   })
 
   test('student sidebar has no 课程学习 wrapper; former children are top-level', async ({ page }) => {
@@ -136,16 +149,18 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '选课与进度' })).toBeVisible({
       timeout: 15000
     })
-    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程通知' })).toBeVisible()
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程通知' })).toHaveCount(0)
+    await expect(page.getByTestId('sidebar-notifications')).toBeVisible()
   })
 
-  test('teaching calendar page mounts TeachingCalendar for selected course', async ({ page }) => {
+  test('historical teaching-calendar deep link redirects to attendance with embedded TeachingCalendar', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await clickCourseSwitcherOption(page, `E2E必修课_${s.suffix}`)
     await page.goto('/teaching-calendar')
-    await expect(page.locator('.teaching-calendar-page .page-title')).toHaveText('教学日历', { timeout: 15000 })
-    await expect(page.locator('.teaching-calendar-page .teaching-calendar h3')).toHaveText('教学日历', {
+    await expect(page).toHaveURL(/\/attendance$/, { timeout: 15000 })
+    await expect(page.locator('.attendance-page .page-title')).toHaveText('考勤管理', { timeout: 15000 })
+    await expect(page.locator('.attendance-page .teaching-calendar h3')).toHaveText('教学日历', {
       timeout: 15000
     })
   })
@@ -175,15 +190,29 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(dlg.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
     const fmtBar = dlg.locator('.discussion-format-bar')
     await expect(fmtBar.getByRole('radio', { name: 'Markdown' })).toBeChecked({ timeout: 5000 })
-    await textarea.fill(`md-material-${stamp}\n\n公式：\\(x^2+y^2=z^2\\)`)
+    await textarea.fill([
+      `md-material-${stamp}`,
+      '',
+      'inline math: \\(x^2+y^2=z^2\\)',
+      '',
+      '$$',
+      '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}',
+      '$$'
+    ].join('\n'))
     await expect(dlg.getByTestId('discussion-markdown-preview').locator('.katex').first()).toBeVisible({
       timeout: 15000
     })
+    await expect(dlg.getByTestId('discussion-markdown-preview').locator('.katex-display').first()).toBeVisible({
+      timeout: 15000
+    })
+    await expect(dlg.getByTestId('discussion-markdown-preview')).not.toContainText('$$')
     await dlg.getByRole('button', { name: '查看 Markdown + LaTeX 示例' }).click()
     await expect(dlg.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 15000 })
     await dlg.getByTestId('discussion-submit').click()
     const row = dlg.locator('.discussion-row').filter({ hasText: `md-material-${stamp}` })
     await expect(row).toBeVisible({ timeout: 15000 })
     await expect(row.locator('.katex').first()).toBeVisible({ timeout: 15000 })
+    await expect(row.locator('.katex-display').first()).toBeVisible({ timeout: 15000 })
+    await expect(row).not.toContainText('$$')
   })
 })

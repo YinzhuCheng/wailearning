@@ -32,8 +32,7 @@ const routes = [
       },
       {
         path: 'teaching-calendar',
-        name: 'TeachingCalendarPage',
-        component: () => import('@/views/TeachingCalendarPage.vue'),
+        redirect: '/attendance',
         meta: { title: '教学日历' }
       },
       {
@@ -188,6 +187,12 @@ const routes = [
         component: () => import('@/views/Materials.vue')
       },
       {
+        path: 'learning-notes',
+        name: 'LearningNotes',
+        component: () => import('@/views/LearningNotes.vue'),
+        meta: { title: '学习笔记' }
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/Notifications.vue')
@@ -217,6 +222,7 @@ const adminHiddenPaths = [
   '/analysis',
   '/points',
   '/materials',
+  '/learning-notes',
   '/homework',
   '/homework/students'
 ]
@@ -277,7 +283,13 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
-  if (userStore.isStudent && to.path !== '/courses' && !userStore.selectedCourse && to.path !== '/personal-settings') {
+  if (
+    userStore.isStudent &&
+    to.path !== '/courses' &&
+    to.path !== '/learning-notes' &&
+    !userStore.selectedCourse &&
+    to.path !== '/personal-settings'
+  ) {
     try {
       await userStore.ensureSelectedCourse(false, {
         preserveEmptySelection: false

@@ -1,0 +1,618 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SELECTOR = REPO_ROOT / "ops" / "scripts" / "dev" / "select_validation_targets.py"
+sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
+from lint_validation_registry import lint_registry  # noqa: E402
+from validation_history import changed_paths_signature  # noqa: E402
+from run_validation_target import (
+    RESULT_BLOCKED,
+    expand_command_placeholders,
+    infer_failure_class,
+    parse_junit_xml,
+    target_needs_playwright_preflight,
+    with_pytest_junitxml,
+)  # noqa: E402
+
+
+def run_selector(*args: str) -> dict:
+    result = subprocess.run(
+        [sys.executable, str(SELECTOR), "--repo-root", str(REPO_ROOT), *args, "--json"],
+        cwd=REPO_ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return json.loads(result.stdout)
+
+
+def run_validation_target(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "ops" / "scripts" / "dev" / "run_validation_target.py"),
+            "--repo-root",
+            str(REPO_ROOT),
+            *args,
+        ],
+        cwd=REPO_ROOT,
+        check=check,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def run_validation_profile(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "ops" / "scripts" / "dev" / "run_validation_profile.py"),
+            "--repo-root",
+            str(REPO_ROOT),
+            *args,
+        ],
+        cwd=REPO_ROOT,
+        check=check,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def recommendation_ids(payload: dict) -> set[str]:
+    return {item["id"] for item in payload["recommendations"]}
+
+
+def recommendation(payload: dict, target_id: str) -> dict:
+    for item in payload["recommendations"]:
+        if item["id"] == target_id:
+            return item
+    raise AssertionError(f"{target_id} not recommended; got {recommendation_ids(payload)}")
+
+
+def write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def write_json(path: Path, payload: dict) -> None:
+    write_text(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+
+
+class ValidationSelectorTests(unittest.TestCase):
+    def test_learning_notes_backend_path_selects_precise_backend_and_playwright_targets(self):
+        payload = run_selector("--paths", "apps/backend/wailearning_backend/api/routers/learning_notes.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("backend.learning_notes.api", ids)
+        self.assertIn("admin.e2e.learning_notes_attendance_cover_tier20", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["unmatched_paths"], [])
+        self.assertEqual(payload["non_full_validation"]["status"], "needs_review")
+
+        backend_target = recommendation(payload, "backend.learning_notes.api")
+        self.assertEqual(backend_target["history_status"], "stale")
+        self.assertEqual(backend_target["history_reason"], "target trigger changed in current diff")
+        self.assertIn("learning-notes", backend_target["coverage_tags"])
+
+    def test_unmapped_backend_source_escalates_to_full_postgres(self):
+        payload = run_selector("--paths", "apps/backend/wailearning_backend/unknown_new_module.py")
+
+        self.assertEqual(recommendation_ids(payload), {"full.pytest.postgres"})
+        self.assertEqual(payload["non_full_validation"]["status"], "not_sufficient")
+        self.assertIn("full validation target", payload["non_full_validation"]["reason"])
+        target = recommendation(payload, "full.pytest.postgres")
+        self.assertEqual(target["history_status"], "stale")
+        self.assertIn("fallback", target["history_reason"])
+
+    def test_admin_homework_view_selects_build_and_homework_playwright_target(self):
+        payload = run_selector("--paths", "apps/web/admin/src/views/HomeworkSubmissions.vue")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("frontend.admin.build", ids)
+        self.assertIn("admin.e2e.homework_comment_cover_tier4", ids)
+        self.assertNotIn("admin.e2e.full", ids)
+        self.assertEqual(payload["unmatched_paths"], [])
+
+        e2e_target = recommendation(payload, "admin.e2e.homework_comment_cover_tier4")
+        self.assertTrue(e2e_target["requires_review_reason"])
+        self.assertIn("homework", e2e_target["coverage_tags"])
+
+    def test_playwright_harness_selects_full_playwright_and_marks_non_full_insufficient(self):
+        payload = run_selector("--paths", "tests/e2e/web-admin/global-setup.cjs")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("admin.e2e.full", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "not_sufficient")
+        self.assertIn("admin.e2e.full", payload["non_full_validation"]["reason"])
+
+    def test_docs_only_change_is_static_and_non_full_acceptable_after_running_targets(self):
+        payload = run_selector("--paths", "docs/development/TEST_SUITE_MAP.md")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.validation_selector", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_security_sensitive_path_recommends_security_and_full_postgres_context(self):
+        payload = run_selector("--paths", "apps/backend/wailearning_backend/core/auth.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("security.api_regression", ids)
+        self.assertIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "not_sufficient")
+        security = recommendation(payload, "security.api_regression")
+        self.assertEqual(security["risk"], "broad")
+        self.assertIn("security", security["coverage_tags"])
+
+    def test_discussion_router_prefers_pytest_hazard_tier_before_api_heavy_playwright(self):
+        payload = run_selector("--paths", "apps/backend/wailearning_backend/api/routers/discussions.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("backend.e2e_dev.api_hazard_tier", ids)
+        self.assertIn("admin.e2e.discussion_cover_llm_tier3", ids)
+        self.assertNotIn("admin.e2e.docs_gap_tier15", ids)
+
+    def test_runner_dry_run_writes_redacted_run_record(self):
+        history_path = ".agent-run/test-selector-history-dry-run.jsonl"
+        result = run_validation_target("static.validation_selector", "--dry-run", "--history", history_path)
+        payload = json.loads(result.stdout)
+
+        self.assertEqual(payload["target_id"], "static.validation_selector")
+        self.assertEqual(payload["result"], "skipped")
+        self.assertTrue(payload["private_paths_redacted"])
+        self.assertTrue(payload["artifact_dir"].startswith("<repo>/.agent-run/logs/"))
+        self.assertEqual(payload["history"], f"<repo>/{history_path}")
+        run_json = REPO_ROOT / payload["artifact_dir"].replace("<repo>/", "") / "run.json"
+        self.assertTrue(run_json.exists())
+        history_jsonl = REPO_ROOT / history_path
+        self.assertTrue(history_jsonl.exists())
+        last_history = json.loads(history_jsonl.read_text(encoding="utf-8").splitlines()[-1])
+        self.assertEqual(last_history["target_id"], "static.validation_selector")
+        self.assertEqual(last_history["result"], "skipped")
+        self.assertTrue(last_history["private_paths_redacted"])
+
+    def test_runner_uses_explicit_changed_paths_for_history_attribution(self):
+        history_path = ".agent-run/test-selector-history-explicit-paths.jsonl"
+        changed_paths = [
+            {"status": "M", "path": "docs/development/TEST_SUITE_MAP.md"},
+            {"status": "??", "path": "notes/new-note.md"},
+        ]
+        result = run_validation_target(
+            "static.validation_selector",
+            "--dry-run",
+            "--history",
+            history_path,
+            "--changed-paths-json",
+            json.dumps(changed_paths),
+        )
+        payload = json.loads(result.stdout)
+
+        history_jsonl = REPO_ROOT / history_path
+        last_history = json.loads(history_jsonl.read_text(encoding="utf-8").splitlines()[-1])
+
+        self.assertEqual(payload["result"], "skipped")
+        self.assertEqual(last_history["changed_paths"], changed_paths)
+        self.assertEqual(last_history["changed_paths_signature"], changed_paths_signature(changed_paths))
+        self.assertIn("explicitly provided changed-path snapshot", payload["notes"])
+
+    def test_runner_blocks_missing_pytest_as_environment_not_product_failure(self):
+        result = run_validation_target(
+            "backend.learning_notes.api",
+            "--artifact-root",
+            ".agent-run/test-selector-runner-logs",
+            "--history",
+            ".agent-run/test-selector-history-blocked.jsonl",
+            check=False,
+        )
+        payload = json.loads(result.stdout)
+
+        if result.returncode == 0:
+            self.assertEqual(payload["result"], "passed")
+        else:
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(payload["result"], "blocked")
+            self.assertEqual(payload["failure_class"], "environment")
+            self.assertIn("pytest", payload["summary"])
+
+    def test_runner_detects_playwright_targets_for_preflight(self):
+        self.assertTrue(target_needs_playwright_preflight({"category": "admin-playwright"}))
+        self.assertFalse(target_needs_playwright_preflight({"category": "backend-pytest"}))
+
+    def test_runner_classifies_spawn_eperm_as_environment_block(self):
+        from run_validation_target import run_command
+
+        artifact_dir = REPO_ROOT / ".agent-run/test-selector-spawn-eperm"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        script = artifact_dir / "spawn_eperm.py"
+        stdout_path = artifact_dir / "stdout.log"
+        stderr_path = artifact_dir / "stderr.log"
+        script.write_text("print('Error: spawn EPERM')\nraise SystemExit(1)\n", encoding="utf-8")
+
+        result, failure_class, return_code, _duration = run_command(
+            [sys.executable, str(script)],
+            REPO_ROOT,
+            30,
+            stdout_path,
+            stderr_path,
+        )
+
+        self.assertEqual(result, RESULT_BLOCKED)
+        self.assertEqual(failure_class, "environment")
+        self.assertEqual(return_code, 1)
+
+    def test_failure_classification_marks_port_collision_as_environment(self):
+        failure_class = infer_failure_class(
+            ["python", "-m", "uvicorn"],
+            "ERROR: [Errno 10048] Only one usage of each socket address is normally permitted\n",
+        )
+
+        self.assertEqual(failure_class, "environment")
+
+    def test_failure_classification_marks_missing_playwright_browser_as_environment(self):
+        failure_class = infer_failure_class(
+            ["npx.cmd", "playwright", "test"],
+            "browser executable doesn't exist at C:\\cache\\chromium\nPlease run the following command to download new browsers: npx playwright install\n",
+        )
+
+        self.assertEqual(failure_class, "environment")
+
+    def test_failure_classification_marks_missing_python_module_as_environment(self):
+        failure_class = infer_failure_class(
+            ["python", "-m", "pytest"],
+            "Traceback...\nModuleNotFoundError: No module named 'uvicorn'\n",
+        )
+
+        self.assertEqual(failure_class, "environment")
+
+    def test_failure_classification_leaves_assertion_failures_as_product(self):
+        failure_class = infer_failure_class(
+            ["python", "-m", "pytest"],
+            "E   AssertionError: expected 200 but got 500\n1 failed, 3 passed\n",
+        )
+
+        self.assertEqual(failure_class, "product")
+
+    def test_runner_adds_pytest_junitxml_argument_when_missing(self):
+        output_path = REPO_ROOT / ".agent-run/test-selector-junit.xml"
+        argv = [sys.executable, "-m", "pytest", "tests/backend/manual/test_validation_selector.py", "-q"]
+
+        updated = with_pytest_junitxml(argv, output_path)
+
+        self.assertEqual(updated[:-1], argv)
+        self.assertEqual(updated[-1], f"--junitxml={output_path}")
+
+    def test_runner_expands_changed_text_files_placeholder(self):
+        changed_paths = [
+            {"status": "M", "path": "docs/README.md"},
+            {"status": "M", "path": "apps/web/admin/src/assets/logo.png"},
+            {"status": "D", "path": "docs/deleted.md"},
+        ]
+
+        expanded, notes = expand_command_placeholders(
+            REPO_ROOT,
+            ["python", "ops/scripts/dev/check_text_encoding.py", "--skip-if-empty", "<changed-text-files>"],
+            changed_paths,
+        )
+
+        self.assertIn("docs/README.md", expanded)
+        self.assertNotIn("apps/web/admin/src/assets/logo.png", expanded)
+        self.assertNotIn("docs/deleted.md", expanded)
+        self.assertIn("expanded <changed-text-files> to 1 file(s)", notes)
+
+    def test_encoding_scan_skip_if_empty_prevents_accidental_full_repo_scan(self):
+        result = subprocess.run(
+            [sys.executable, "ops/scripts/dev/check_text_encoding.py", "--skip-if-empty"],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        self.assertIn("scanned=0", result.stdout)
+        self.assertIn("skipped=empty-input", result.stdout)
+
+    def test_runner_parses_junit_xml_testcase_results(self):
+        path = REPO_ROOT / ".agent-run/test-selector-sample-junit.xml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            """<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="sample" tests="3" failures="1" errors="0" skipped="1">
+  <testcase classname="tests.sample" name="test_passes" file="tests/sample.py" time="0.1" />
+  <testcase classname="tests.sample" name="test_fails" file="tests/sample.py" time="0.2">
+    <failure message="boom" />
+  </testcase>
+  <testcase classname="tests.sample" name="test_skips" file="tests/sample.py" time="0.0">
+    <skipped message="skip" />
+  </testcase>
+</testsuite>
+""",
+            encoding="utf-8",
+        )
+
+        parsed = parse_junit_xml(path, REPO_ROOT)
+
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed["tests"], 3)
+        self.assertEqual(parsed["passed"], 1)
+        self.assertEqual(parsed["failures"], 1)
+        self.assertEqual(parsed["skipped"], 1)
+        self.assertEqual([case["status"] for case in parsed["cases"]], ["passed", "failed", "skipped"])
+
+    def test_runner_redacts_absolute_junit_case_paths(self):
+        path = REPO_ROOT / ".agent-run/test-selector-absolute-junit.xml"
+        case_path = REPO_ROOT / "tests" / "sample.py"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            f"""<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="sample" tests="1" failures="0" errors="0" skipped="0">
+  <testcase classname="tests.sample" name="test_passes" file="{case_path}" time="0.1" />
+</testsuite>
+""",
+            encoding="utf-8",
+        )
+
+        parsed = parse_junit_xml(path, REPO_ROOT)
+
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed["cases"][0]["file"], "<repo>/tests/sample.py")
+
+    def test_profile_static_dry_run_executes_static_validation_target(self):
+        result = run_validation_profile(
+            "static",
+            "--dry-run",
+            "--history",
+            ".agent-run/test-selector-profile-static-history.jsonl",
+        )
+        payload = json.loads(result.stdout)
+
+        self.assertEqual(payload["profile"], "static")
+        self.assertEqual(payload["result"], "passed")
+        self.assertEqual([run["target_id"] for run in payload["target_runs"]], ["static.validation_selector"])
+        self.assertEqual(payload["target_runs"][0]["result"], "skipped")
+
+    def test_profile_selector_recommended_skips_review_targets_by_default(self):
+        result = run_validation_profile(
+            "selector-recommended",
+            "--paths",
+            "apps/web/admin/src/views/HomeworkSubmissions.vue",
+            "--dry-run",
+            "--history",
+            ".agent-run/test-selector-profile-recommended-history.jsonl",
+        )
+        payload = json.loads(result.stdout)
+        runs_by_id = {run["target_id"]: run for run in payload["target_runs"]}
+
+        self.assertEqual(payload["profile"], "selector-recommended")
+        self.assertEqual(payload["result"], "passed_with_deferred_review")
+        self.assertIn("frontend.admin.build", runs_by_id)
+        self.assertEqual(runs_by_id["frontend.admin.build"]["action"], "executed")
+        self.assertIn("admin.e2e.homework_comment_cover_tier4", runs_by_id)
+        self.assertEqual(runs_by_id["admin.e2e.homework_comment_cover_tier4"]["action"], "skipped")
+        self.assertIn("requires operator review", runs_by_id["admin.e2e.homework_comment_cover_tier4"]["reason"])
+        self.assertEqual(payload["deferred_targets"][0]["target_id"], "admin.e2e.homework_comment_cover_tier4")
+
+    def test_profile_forwards_selector_changed_paths_to_target_history(self):
+        history_path = ".agent-run/test-selector-profile-forward-history.jsonl"
+        changed_path = "apps/web/admin/src/views/HomeworkSubmissions.vue"
+        result = run_validation_profile(
+            "selector-recommended",
+            "--paths",
+            changed_path,
+            "--dry-run",
+            "--history",
+            history_path,
+        )
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["result"], "passed_with_deferred_review")
+
+        history_jsonl = REPO_ROOT / history_path
+        entries = [json.loads(line) for line in history_jsonl.read_text(encoding="utf-8").splitlines() if line.strip()]
+        build_entry = next(entry for entry in entries if entry["target_id"] == "frontend.admin.build")
+
+        self.assertEqual(build_entry["changed_paths"], [{"status": "M", "path": changed_path}])
+        self.assertEqual(
+            build_entry["changed_paths_signature"],
+            changed_paths_signature([{"status": "M", "path": changed_path}]),
+        )
+
+    def test_selector_uses_matching_structured_history_as_fresh_evidence(self):
+        changed_path = "docs/development/TEST_SUITE_MAP.md"
+        history_path = ".agent-run/test-selector-structured-history.jsonl"
+        changed_paths = [{"status": "M", "path": changed_path}]
+        record = {
+            "schema_version": 1,
+            "target_id": "static.validation_selector",
+            "result": "passed",
+            "failure_class": None,
+            "branch": "test",
+            "commit": "abc1234",
+            "ended_at": "2026-05-08T00:00:00Z",
+            "artifact_dir": "<repo>/.agent-run/logs/test",
+            "changed_paths": changed_paths,
+            "changed_paths_signature": changed_paths_signature(changed_paths),
+            "private_paths_redacted": True,
+        }
+        path = REPO_ROOT / history_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        payload = run_selector("--paths", changed_path, "--history", history_path)
+
+        target = recommendation(payload, "static.validation_selector")
+        self.assertEqual(target["history_status"], "fresh")
+        self.assertIn("latest structured run passed", target["history_reason"])
+        self.assertEqual(target["structured_history"]["commit"], "abc1234")
+
+    def test_registry_lint_passes_for_repository_registry(self):
+        issues = lint_registry(
+            REPO_ROOT,
+            "tests/TEST_SELECTION_TARGETS.json",
+            "docs/development/TEST_EXECUTION_LEDGER.md",
+        )
+
+        self.assertEqual(issues, [])
+
+    def test_registry_lint_rejects_unknown_fallback_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "static.sample",
+                            "category": "static-check",
+                            "risk": "static",
+                            "working_directory": ".",
+                            "commands": [{"label": "ok", "argv": ["python", "--version"]}],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [
+                        {
+                            "id": "broken",
+                            "if_any_path_matches": ["README.md"],
+                            "recommend": ["missing.target"],
+                        }
+                    ],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+
+        self.assertIn("broken: recommend references unknown target id: missing.target", issues)
+
+    def test_registry_lint_rejects_missing_literal_trigger_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "backend.sample",
+                            "category": "backend-pytest",
+                            "risk": "targeted",
+                            "working_directory": ".",
+                            "commands": [{"label": "pytest", "argv": ["python", "-m", "pytest", "tests/test_sample.py"]}],
+                            "triggers": {"paths": ["apps/backend/missing.py"], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+
+        self.assertIn("backend.sample: trigger path does not exist: apps/backend/missing.py", issues)
+
+    def test_registry_lint_rejects_missing_playwright_spec_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "apps/web/admin/package.json", "{}\n")
+            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "admin.e2e.sample",
+                            "category": "admin-playwright",
+                            "risk": "targeted",
+                            "working_directory": "apps/web/admin",
+                            "commands": [
+                                {
+                                    "label": "playwright",
+                                    "argv": ["npx.cmd", "playwright", "test", "missing.spec.js", "--project=chromium"],
+                                }
+                            ],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+
+        self.assertIn(
+            "admin.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-admin/missing.spec.js",
+            issues,
+        )
+
+    def test_registry_lint_rejects_missing_ledger_heading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "### Test ID: `other.target`\n")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "static.sample",
+                            "category": "static-check",
+                            "risk": "static",
+                            "working_directory": ".",
+                            "commands": [{"label": "ok", "argv": ["python", "--version"]}],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": "static.sample",
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+
+        self.assertIn("static.sample: ledger_id not found in ledger headings: static.sample", issues)
+
+    def test_selector_marks_structured_history_stale_for_different_diff_signature(self):
+        changed_path = "docs/development/TEST_SUITE_MAP.md"
+        history_path = ".agent-run/test-selector-structured-history-stale.jsonl"
+        recorded_paths = [{"status": "M", "path": "ops/scripts/dev/select_validation_targets.py"}]
+        record = {
+            "schema_version": 1,
+            "target_id": "static.validation_selector",
+            "result": "passed",
+            "failure_class": None,
+            "branch": "test",
+            "commit": "abc1234",
+            "ended_at": "2026-05-08T00:00:00Z",
+            "artifact_dir": "<repo>/.agent-run/logs/test",
+            "changed_paths": recorded_paths,
+            "changed_paths_signature": changed_paths_signature(recorded_paths),
+            "private_paths_redacted": True,
+        }
+        path = REPO_ROOT / history_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        payload = run_selector("--paths", changed_path, "--history", history_path)
+
+        target = recommendation(payload, "static.validation_selector")
+        self.assertEqual(target["history_status"], "stale")
+        self.assertIn("different changed-path snapshot", target["history_reason"])
+
+
+if __name__ == "__main__":
+    unittest.main()

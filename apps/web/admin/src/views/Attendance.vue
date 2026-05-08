@@ -11,12 +11,23 @@
           }}
         </p>
       </div>
+      <el-button plain @click="router.push('/students')">
+        返回学生管理
+      </el-button>
     </div>
 
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
       <el-card shadow="never" class="control-card">
+        <div class="attendance-calendar-panel">
+          <TeachingCalendar
+            :course="selectedCourse"
+            :selected-date="sessionForm.date"
+            @select-date="handleCalendarDateSelect"
+          />
+        </div>
+
         <div class="control-bar">
           <div class="control-form">
             <span class="control-label">记录为</span>
@@ -156,10 +167,12 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
 import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
+import TeachingCalendar from '@/components/TeachingCalendar.vue'
 import { useUserStore } from '@/stores/user'
 
 const STATUS_OPTIONS = [
@@ -174,6 +187,7 @@ const SESSION_REMARK_PATTERN = /^\[session=(\d+)\]\s*/i
 const AVATAR_COLORS = ['#2563eb', '#0f766e', '#ea580c', '#7c3aed', '#ca8a04', '#0f766e', '#be123c']
 
 const userStore = useUserStore()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -416,6 +430,15 @@ const refreshHistory = async () => {
   await loadAttendances()
   syncDraftsToCurrentSession()
   ElMessage.success('历史考勤已刷新')
+}
+
+const handleCalendarDateSelect = async dateKey => {
+  if (!dateKey) return
+  sessionForm.date = dateKey
+  sessionForm.sessionIndex = 1
+  await loadAttendances()
+  syncDraftsToCurrentSession()
+  ElMessage.success('已切换到日历所选课程日，可查看或调整当日考勤')
 }
 
 const updateDraft = (studentId, value) => {
@@ -668,6 +691,14 @@ watch(
 .control-card :deep(.el-card__body) {
   display: grid;
   gap: 16px;
+}
+
+.attendance-calendar-panel {
+  min-width: 0;
+  border: 1px solid #dbe4f0;
+  border-radius: var(--wa-radius-lg, 12px);
+  padding: 14px;
+  background: #f8fafc;
 }
 
 .control-bar {

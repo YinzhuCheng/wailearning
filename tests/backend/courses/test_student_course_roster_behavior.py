@@ -108,7 +108,7 @@ def _teacher_and_class(client: TestClient) -> dict:
 
 
 def test_student_sees_course_only_when_rules_satisfied(client: TestClient):
-    """课程列表与 ensure_course_access 一致：仅有班级、无选课且无花名册匹配时不可见课程。"""
+    """Student login repairs same-class roster drift and exposes required courses."""
     ctx = _teacher_and_class(client)
     db = SessionLocal()
     try:
@@ -128,10 +128,30 @@ def test_student_sees_course_only_when_rules_satisfied(client: TestClient):
     h = login_api(client, stu_username, "sp")
     r = client.get("/api/subjects", headers=h)
     assert r.status_code == 200
-    assert ctx["course_id"] not in {item["id"] for item in r.json()}
+    assert ctx["course_id"] in {item["id"] for item in r.json()}
 
     r2 = client.get(f"/api/subjects/{ctx['course_id']}", headers=h)
-    assert r2.status_code == 403
+    assert r2.status_code == 200
+
+    db = SessionLocal()
+    try:
+        roster = (
+            db.query(Student)
+            .filter(Student.student_no == stu_username, Student.class_id == ctx["class_id"])
+            .first()
+        )
+        assert roster is not None
+        assert (
+            db.query(CourseEnrollment)
+            .filter(
+                CourseEnrollment.student_id == roster.id,
+                CourseEnrollment.subject_id == ctx["course_id"],
+            )
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
 
 
 def test_homework_submit_after_course_created_then_roster_added(client: TestClient):
@@ -225,7 +245,7 @@ def test_teacher_student_count_matches_course_enrollment_rows(client: TestClient
 
 
 def test_student_username_mismatch_student_no_cannot_submit(client: TestClient):
-    """学号与登录用户名不一致：应返回 4xx 且提示与「花名册 / 学号」相关，不应 500。"""
+    """A student account with a unique username gets its own same-class roster row."""
     ctx = _teacher_and_class(client)
     db = SessionLocal()
     try:
@@ -276,12 +296,29 @@ def test_student_username_mismatch_student_no_cannot_submit(client: TestClient):
 
     h = login_api(client, login_username, "sp")
     r = client.post(f"/api/homeworks/{hw_id}/submission", headers=h, json={"content": "x"})
-    assert r.status_code == 404
-    assert "花名册" in r.json().get("detail", "") or "学号" in r.json().get("detail", "")
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        generated_roster = (
+            db.query(Student)
+            .filter(Student.student_no == login_username, Student.class_id == ctx["class_id"])
+            .first()
+        )
+        original_roster = (
+            db.query(Student)
+            .filter(Student.student_no == f"roster_no_{ctx['suffix']}", Student.class_id == ctx["class_id"])
+            .first()
+        )
+        assert generated_roster is not None
+        assert original_roster is not None
+        assert generated_roster.id != original_roster.id
+    finally:
+        db.close()
 
 
 def test_student_user_class_set_but_no_roster_row(client: TestClient):
-    """仅有学生账号与 class_id、无 Student 行：课程列表为空。"""
+    """A student user with class_id but no roster row is repaired on login."""
     ctx = _teacher_and_class(client)
     db = SessionLocal()
     try:
@@ -301,7 +338,27 @@ def test_student_user_class_set_but_no_roster_row(client: TestClient):
     h = login_api(client, no_roster_username, "sp")
     r = client.get("/api/subjects", headers=h)
     assert r.status_code == 200
-    assert r.json() == []
+    assert ctx["course_id"] in {item["id"] for item in r.json()}
+
+    db = SessionLocal()
+    try:
+        roster = (
+            db.query(Student)
+            .filter(Student.student_no == no_roster_username, Student.class_id == ctx["class_id"])
+            .first()
+        )
+        assert roster is not None
+        assert (
+            db.query(CourseEnrollment)
+            .filter(
+                CourseEnrollment.student_id == roster.id,
+                CourseEnrollment.subject_id == ctx["course_id"],
+            )
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
 
 
 def test_duplicate_student_no_across_classes_prepare_does_not_move_roster(client: TestClient):

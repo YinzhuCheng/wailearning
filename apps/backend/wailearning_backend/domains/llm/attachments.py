@@ -6,8 +6,10 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import subprocess
 import tempfile
+import uuid
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -24,26 +26,61 @@ from PIL import Image, ImageFile, UnidentifiedImageError
 from apps.backend.wailearning_backend.attachments import get_attachment_file_path
 from apps.backend.wailearning_backend.core.config import settings
 
-def _unrar_tool_path() -> Optional[str]:
-    import shutil
+def _rar_extractor_tool_path() -> Optional[tuple[str, str]]:
+    unrar_tool = shutil.which("unrar") or shutil.which("unrar-free")
+    if unrar_tool:
+        return "unrar", unrar_tool
+    bsdtar_tool = shutil.which("bsdtar")
+    if bsdtar_tool:
+        return "tar", bsdtar_tool
+    tar_tool = shutil.which("tar")
+    if tar_tool:
+        try:
+            proc = subprocess.run(
+                [tar_tool, "--version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            proc = None
+        output = (proc.stdout if proc else b"").decode("utf-8", errors="replace").lower()
+        if "libarchive" in output or "bsdtar" in output:
+            return "tar", tar_tool
+    return None
 
-    return shutil.which("unrar") or shutil.which("unrar-free")
+
+def _unrar_tool_path() -> Optional[str]:
+    tool = _rar_extractor_tool_path()
+    return tool[1] if tool else None
 
 
 def _rar_read_member_bytes(archive_path: str, member_name: str) -> bytes:
-    """Extract one member via unrar/unrar-free (RAR5 solid archives; 7z cannot read these)."""
+    """Extract one RAR member via unrar/unrar-free or libarchive-backed tar."""
     import shutil
 
-    tool = _unrar_tool_path()
+    tool_info = _rar_extractor_tool_path()
+    tool = tool_info[1] if tool_info else None
     if not tool:
-        raise RuntimeError("未找到 unrar / unrar-free，无法解压 RAR。")
+        raise RuntimeError("未找到 unrar / unrar-free / tar，无法解压 RAR。")
     abs_arc = os.path.abspath(archive_path)
     norm_member = (member_name or "").replace("\\", "/")
-    tmp_dir = tempfile.mkdtemp(prefix="rar-one-")
+    if tool_info[0] == "tar":
+        tmp_path_obj = Path(tempfile.gettempdir()) / f"rar-one-{uuid.uuid4().hex}"
+        tmp_path_obj.mkdir(parents=True, exist_ok=False)
+        tmp_dir = str(tmp_path_obj)
+    else:
+        tmp_dir = tempfile.mkdtemp(prefix="rar-one-")
     try:
+        if tool_info[0] == "tar":
+            command = [tool, "-xf", abs_arc, "-C", tmp_dir, norm_member]
+            cwd = None
+        else:
+            command = [tool, "x", "-o+", "-y", abs_arc, norm_member]
+            cwd = tmp_dir
         proc = subprocess.run(
-            [tool, "x", "-o+", "-y", abs_arc, norm_member],
-            cwd=tmp_dir,
+            command,
+            cwd=cwd,
             capture_output=True,
             timeout=120,
         )
@@ -486,14 +523,14 @@ def _walk_rar_bytes(
     state: dict[str, Any],
 ) -> list[MaterialBlock]:
     """
-    RAR listing via rarfile; extraction via 7z stdout (RAR5 compatible, no unrar stub needed).
+    RAR listing via rarfile; extraction via unrar/unrar-free or libarchive-backed tar.
     """
     blocks: list[MaterialBlock] = []
     if depth > MAX_ZIP_DEPTH:
         state["skipped"].append({"path": root_path, "reason": "超过最大嵌套深度"})
         return blocks
-    if not _unrar_tool_path():
-        state["skipped"].append({"path": root_path, "reason": "RAR 解压需要安装 unrar 或 unrar-free"})
+    if not _rar_extractor_tool_path():
+        state["skipped"].append({"path": root_path, "reason": "RAR 解压需要安装 unrar、unrar-free 或 tar"})
         return blocks
     tmp_path: Optional[str] = None
     try:

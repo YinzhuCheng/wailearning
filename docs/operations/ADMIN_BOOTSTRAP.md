@@ -43,6 +43,23 @@ That bundle includes:
 
 This is useful for local development and E2E testing, but should usually be disabled in production.
 
+### Demo content depth for post-deploy smoke checks
+
+The required demo course is intentionally more substantial than a bare smoke fixture. It is meant to let an operator deploy the product, log in as teacher/student users, and inspect realistic course surfaces without manually authoring sample content first.
+
+Current required-course seed behavior:
+
+- The required course **数据挖掘** receives a built-in cover image when `subjects.cover_image_url` is empty, so course-selection cards and material banners exercise the cover rendering path.
+- Its material area is seeded as a multi-unit, multi-level outline rather than a single placeholder. The outline keeps the original three demo chapter nodes used by regression tests, then adds later units for data quality checks, standardization, EDA report writing, and classroom discussion notes.
+- Several Markdown course materials are placed under the chapter tree. They include a course-running checklist, Wine dataset field notes, environment FAQ, DataFrame quality-check lab notes, standardization board notes, an EDA report template, and a classroom discussion record.
+- The first homework remains the same assignment conceptually, but demo submissions are no longer one-line placeholders. The seed writes realistic Markdown submissions for `stu1` through `stu5`: some complete, some partial, and some with ordinary environment/configuration problems. This makes the teacher submission list, detail view, content preview, and LLM/manual grading surfaces look like a course that has already run for several weeks.
+
+Idempotency detail:
+
+- The demo seed inserts missing chapters/materials/submissions and refreshes seeded material bodies by title.
+- Existing homework submissions are not overwritten by the prefill helper, because a local deployment may already contain real student work. To see newly enriched submission samples in an existing database that already had the older short demo submissions, reset/recreate the demo database or delete only the old demo submission rows in a controlled local environment.
+- Course materials are matched by `subject_id + title`, so changing a seeded material title creates a new row instead of mutating the old one. Prefer appending or editing content under stable titles unless a new sample resource is intentionally desired.
+
 Current implementation context:
 
 - `main.py` creates tables, runs schema-update helpers, normalizes teacher/class and semester links, backfills homework grading data, reconciles student users and roster rows, and only then applies optional demo seeding

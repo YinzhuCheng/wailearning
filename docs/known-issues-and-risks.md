@@ -53,7 +53,7 @@ See [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WOR
 
 ## 5. CI definition location
 
-Reference pipeline YAML lives under [`ops/ci/`](../ops/ci/) (e.g. `pr-pipeline.yml`). There is **no** `.github/workflows/` directory in this repository snapshot — agents must not claim “GitHub Actions file X” unless added.
+Reference pipeline YAML lives under [`ops/ci/`](../ops/ci/) (e.g. `pr-pipeline.yml`). A lightweight GitHub Actions workflow now exists at [`.github/workflows/lightweight-validation.yml`](../.github/workflows/lightweight-validation.yml), but it is not a full validation matrix. It covers selector/tooling checks, quick backend `pytest`, and frontend builds. PostgreSQL-backed pytest, RAR-dependent attachment coverage, and Playwright E2E remain local/manual or future cloud-profile work unless a later workflow adds those environments.
 
 ---
 
