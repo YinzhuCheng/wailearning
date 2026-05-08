@@ -64,13 +64,30 @@ current task.
    directories, local credentials/tokens, and machine-specific logs belong only
    in ignored local files under `.agent-run/`. Do not copy those details into
    committed docs, tests, scripts, commit messages, PR text, or ledger rows.
-8. **Refresh handoff notes on request.** When the user says they are preparing
+8. **Keep environment dependencies local unless explicitly promoted.** Tools
+   copied into the working tree for agent convenience, including local
+   PostgreSQL binaries, RAR extractors, Playwright browser caches, virtualenvs,
+   npm dependencies, local databases, generated logs, screenshots, and upload
+   fixtures, must live under ignored paths such as `.agent-run/`, `.e2e-run/`,
+   `.venv/`, `node_modules/`, `uploads/`, or package-local artifact folders.
+   Do not commit them unless the task explicitly asks for a tracked,
+   cross-machine script/template and the file contains no private paths,
+   secrets, machine-generated logs, or binary runtime payloads.
+9. **Use the local VPN proxy before declaring network failure.** On this
+   workstation, dependency and GitHub traffic may require the local VPN HTTP
+   proxy at `http://127.0.0.1:7897`. When `pip`, `npm`, `npx`, Playwright
+   browser install, `git fetch`, or similar outbound commands fail with network
+   / socket / DNS errors, retry with `HTTP_PROXY`, `HTTPS_PROXY`, and
+   `ALL_PROXY` set to that proxy before treating the environment as offline.
+   Keep `NO_PROXY=localhost,127.0.0.1,::1` so local backend, Vite, PostgreSQL,
+   and Playwright traffic stays on loopback.
+10. **Refresh handoff notes on request.** When the user says they are preparing
    to hand off, replace stale content in the active local handoff document with
    the current problem statement, confirmed findings, touched files, remaining
    plan, validation state, branch/worktree context, and explicit warnings for
    the next agent. Assume the user may close the conversation immediately after
    that request and another agent system may continue from only those notes.
-9. **Verify the commit boundary.** Before committing, confirm that ignored local
+11. **Verify the commit boundary.** Before committing, confirm that ignored local
    notes are not tracked, scan committed changes for private path leaks, and run
    the narrowest useful static checks for the files touched. For validation
    selection, prefer

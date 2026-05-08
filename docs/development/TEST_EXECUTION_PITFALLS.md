@@ -2392,6 +2392,51 @@ If the same test passes when rerun serially with the same code and local mock
 LLM endpoint, treat the earlier `ECONNRESET` as local E2E orchestration
 contention rather than product behavior.
 
+### Pitfall: outbound dependency commands may need the local VPN proxy
+
+On this workstation, outbound dependency and repository commands can fail even
+when the network is usable through the local VPN proxy. Typical affected
+commands include:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm.cmd install
+npx.cmd playwright install chromium
+git fetch
+```
+
+Observed symptoms include socket permission errors, DNS/connection failures, or
+package managers reporting no matching package versions because they could not
+reach the index. Before recording the environment as offline, retry with the
+local HTTP proxy:
+
+```powershell
+$env:HTTP_PROXY='http://127.0.0.1:7897'
+$env:HTTPS_PROXY='http://127.0.0.1:7897'
+$env:ALL_PROXY='http://127.0.0.1:7897'
+$env:NO_PROXY='localhost,127.0.0.1,::1'
+```
+
+For npm, prefer environment variables first; if the process still ignores them,
+use a one-command scoped config rather than writing global npm state:
+
+```powershell
+npm.cmd --proxy=http://127.0.0.1:7897 --https-proxy=http://127.0.0.1:7897 install
+```
+
+Interpretation:
+
+- `NO_PROXY` is mandatory for local Playwright/FastAPI/Vite/PostgreSQL traffic;
+- do not commit machine-specific proxy logs or user-profile paths;
+- local helper tools used to make these retries work, such as copied RAR
+  extractors, local PostgreSQL binaries, virtualenvs, browser caches, and
+  generated logs, must stay under ignored paths such as `.agent-run/`,
+  `.e2e-run/`, `.venv/`, or `node_modules/`;
+- ignored local bootstrap scripts under `.agent-run/` may set this proxy by
+  default for this workstation;
+- if the proxy retry also fails, record both attempts and the exact failure mode
+  before treating the command as blocked.
+
 - It does not claim the product code is bug-free.
 - It does not claim all Windows environments need the exact same workarounds.
 - It does not claim the sandbox restrictions seen here will match CI or a developer's normal terminal.
