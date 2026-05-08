@@ -6,6 +6,7 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import uuid
@@ -26,14 +27,26 @@ from apps.backend.wailearning_backend.attachments import get_attachment_file_pat
 from apps.backend.wailearning_backend.core.config import settings
 
 def _rar_extractor_tool_path() -> Optional[tuple[str, str]]:
-    import shutil
-
     unrar_tool = shutil.which("unrar") or shutil.which("unrar-free")
     if unrar_tool:
         return "unrar", unrar_tool
-    tar_tool = shutil.which("bsdtar") or shutil.which("tar")
+    bsdtar_tool = shutil.which("bsdtar")
+    if bsdtar_tool:
+        return "tar", bsdtar_tool
+    tar_tool = shutil.which("tar")
     if tar_tool:
-        return "tar", tar_tool
+        try:
+            proc = subprocess.run(
+                [tar_tool, "--version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            proc = None
+        output = (proc.stdout if proc else b"").decode("utf-8", errors="replace").lower()
+        if "libarchive" in output or "bsdtar" in output:
+            return "tar", tar_tool
     return None
 
 
