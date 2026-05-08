@@ -27,7 +27,7 @@
         },
         {
           "label": "changed text encoding scan",
-          "argv": [".venv/Scripts/python.exe", "ops/scripts/dev/check_text_encoding.py", "<changed-text-files>"]
+          "argv": [".venv/Scripts/python.exe", "ops/scripts/dev/check_text_encoding.py", "--skip-if-empty", "<changed-text-files>"]
         }
       ],
       "triggers": {

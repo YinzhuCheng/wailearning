@@ -2804,6 +2804,56 @@ Fix patterns:
 Do not edit Playwright selectors, Vue components, or route code based solely on
 this `webServer` bootstrap failure.
 
+### Pitfall: Playwright preflight must cover seed-time backend dependencies, not only uvicorn startup
+
+The managed admin Playwright path can pass a shallow `uvicorn` import check and
+still fail before the first browser assertion when `globalSetup` calls
+`POST /api/e2e/dev/reset-scenario`.
+
+Observed cluster on the Windows `cursor/discussion-avatar-chat-ui-921d` branch:
+
+- the host only exposed Python 3.14, while the pinned `requirements.txt`
+  includes packages with known Python-3.14 install friction
+  (`pydantic==2.5.3` via `pydantic-core==2.14.6`, and
+  `psycopg2-binary==2.9.9` source-build risk without `pg_config`);
+- a locally smoke-capable Python 3.14 `.venv` was possible only after installing
+  compatible wheels, so "requirements installed" and "current venv works" were
+  not the same claim;
+- `bcrypt==5.0.0` with `passlib==1.7.4` caused the E2E seed password hashing
+  path to return `500`, even though the backend process itself had started;
+- the failed seed left the default file-backed Playwright SQLite database in the
+  temp directory, which can confuse the next diagnostic pass if the operator
+  assumes every rerun starts from a clean database.
+
+Fix pattern now encoded in `ops/scripts/dev/playwright_preflight.py`:
+
+```powershell
+.\.venv\Scripts\python.exe ops\scripts\dev\playwright_preflight.py --json
+```
+
+The preflight must check:
+
+- the selected `E2E_PYTHON` exists and can run;
+- Python version details are visible, with Python 3.14 recorded as local-smoke
+  usable only when dependencies are already installed;
+- known Python-3.14 requirement pins are surfaced in the JSON detail;
+- backend modules needed by startup and seed routes import successfully
+  (`uvicorn`, `fastapi`, `sqlalchemy`, `pydantic`, `pydantic_settings`, `jose`,
+  `passlib`, `multipart`, `httpx`);
+- `passlib` can hash a bcrypt password, catching the `bcrypt==5.0.0` /
+  `passlib==1.7.4` seed-500 class before Playwright launches;
+- the default Playwright SQLite file for `E2E_API_PORT` is visible in output so
+  a half-initialized local artifact is not mistaken for product state.
+
+Interpretation rule:
+
+- Missing Python, missing imports, or failing bcrypt smoke is a blocking
+  environment failure for managed Playwright.
+- Python 3.14 pin friction and an existing local SQLite file are diagnostic
+  details for local smoke, not automatic product failures. Use Python 3.11/3.12
+  for release-like validation, or document that the run used a specially
+  populated Python 3.14 environment.
+
 ### Pitfall: execution ledgers become misleading if they only record green runs
 
 The structured execution ledger lives at:

@@ -21,6 +21,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
@@ -28,7 +29,17 @@ from typing import Iterable
 
 DEFAULT_API_PORT = 8012
 DEFAULT_UI_PORT = 3012
-REQUIRED_BACKEND_MODULES = ("uvicorn", "fastapi", "sqlalchemy")
+REQUIRED_BACKEND_MODULES = (
+    "uvicorn",
+    "fastapi",
+    "sqlalchemy",
+    "pydantic",
+    "pydantic_settings",
+    "jose",
+    "passlib",
+    "multipart",
+    "httpx",
+)
 
 
 @dataclass(frozen=True)
@@ -165,11 +176,97 @@ def check_backend_imports(python_path: Path | None) -> Check:
 
     missing = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     if result.returncode == 0 and not missing:
-        return Check("backend-imports", "pass", "Python can import uvicorn, fastapi, and sqlalchemy")
+        return Check("backend-imports", "pass", "Python can import backend modules required for managed E2E startup and seed")
     detail = result.stderr.strip()
     if missing:
         detail = f"missing modules: {', '.join(missing)}"
     return Check("backend-imports", "fail", "Python is missing backend dependencies", detail)
+
+
+def python_probe(python_path: Path | None, code: str, timeout: int = 20) -> subprocess.CompletedProcess[str] | None:
+    if python_path is None:
+        return None
+    try:
+        return subprocess.run(
+            [str(python_path), "-c", code],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def check_python_version(python_path: Path | None) -> Check:
+    result = python_probe(
+        python_path,
+        "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')",
+    )
+    if result is None:
+        return Check("python-version", "fail", "cannot inspect Python version without a runnable E2E Python")
+    version = result.stdout.strip() or "unknown"
+    if result.returncode != 0:
+        return Check("python-version", "fail", "Python version probe failed", result.stderr.strip())
+    major_minor = tuple(int(part) for part in version.split(".")[:2] if part.isdigit())
+    if major_minor >= (3, 14):
+        return Check(
+            "python-version",
+            "pass",
+            f"E2E Python is {version}; usable for local smoke when dependencies are installed",
+            "Use Python 3.11/3.12 for release-like validation; current requirements pins may lack cp314 wheels.",
+        )
+    if major_minor < (3, 11):
+        return Check("python-version", "warn", f"E2E Python is {version}; expected Python 3.11/3.12 for current validation")
+    return Check("python-version", "pass", f"E2E Python is {version}")
+
+
+def check_pinned_requirements_python314(python_path: Path | None, repo_root: Path) -> Check:
+    result = python_probe(python_path, "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    if result is None or result.returncode != 0:
+        return Check("requirements-python-compat", "fail", "cannot inspect Python version for requirements compatibility")
+    version = result.stdout.strip()
+    if version != "3.14":
+        return Check("requirements-python-compat", "pass", "E2E Python is not 3.14; no Python-3.14 pin warning needed")
+    requirements = repo_root / "requirements.txt"
+    if not requirements.exists():
+        return Check("requirements-python-compat", "warn", "requirements.txt missing; cannot check Python 3.14 pin risks")
+    text = requirements.read_text(encoding="utf-8", errors="replace")
+    risky = []
+    if "pydantic==2.5.3" in text:
+        risky.append("pydantic==2.5.3 requires pydantic-core==2.14.6, which has no Python 3.14 wheel")
+    if "psycopg2-binary==2.9.9" in text:
+        risky.append("psycopg2-binary==2.9.9 may source-build on Python 3.14 and require pg_config")
+    if risky:
+        return Check(
+            "requirements-python-compat",
+            "pass",
+            "requirements.txt contains pins with known Python 3.14 install risk",
+            "; ".join(risky),
+        )
+    return Check("requirements-python-compat", "pass", "no known Python 3.14 pin risks found in requirements.txt")
+
+
+def check_password_hash_smoke(python_path: Path | None) -> Check:
+    code = (
+        "from passlib.context import CryptContext; "
+        "ctx=CryptContext(schemes=['bcrypt'], deprecated='auto'); "
+        "hashed=ctx.hash('test-playwright-seed-admin-password'); "
+        "print(hashed[:4])"
+    )
+    result = python_probe(python_path, code)
+    if result is None:
+        return Check("password-hash-smoke", "fail", "password hash smoke could not run")
+    if result.returncode == 0 and result.stdout.strip().startswith("$2"):
+        return Check("password-hash-smoke", "pass", "passlib bcrypt hash smoke passed for E2E seed-style password")
+    detail = (result.stderr or result.stdout).strip()
+    return Check(
+        "password-hash-smoke",
+        "fail",
+        "passlib bcrypt hash smoke failed; E2E reset-scenario may return 500",
+        detail,
+    )
 
 
 def check_command(name: str, command: str) -> Check:
@@ -186,6 +283,27 @@ def check_port(port: int) -> Check:
     if result == 0:
         return Check(f"port-{port}", "warn", f"127.0.0.1:{port} already accepts TCP connections")
     return Check(f"port-{port}", "pass", f"127.0.0.1:{port} appears free")
+
+
+def playwright_sqlite_path(api_port: int) -> Path:
+    return Path(tempfile.gettempdir()) / f"playwright_e2e_{api_port}.sqlite"
+
+
+def check_playwright_sqlite(api_port: int, repo_root: Path, include_private: bool) -> Check:
+    db_path = playwright_sqlite_path(api_port)
+    if not db_path.exists():
+        return Check("playwright-sqlite", "pass", f"default Playwright SQLite file is absent for port {api_port}")
+    shown = placeholder_path(repo_root, db_path, include_private)
+    try:
+        size = db_path.stat().st_size
+    except OSError as exc:
+        return Check("playwright-sqlite", "warn", f"default Playwright SQLite file exists but cannot be inspected: {shown}", str(exc))
+    return Check(
+        "playwright-sqlite",
+        "pass",
+        f"default Playwright SQLite file already exists: {shown}",
+        f"size={size}; if a previous reset-scenario failed, rerun with a fresh E2E_API_PORT or remove this local artifact after confirming no Playwright process is using it.",
+    )
 
 
 def playwright_external_servers_enabled() -> bool:
@@ -237,7 +355,10 @@ def main(argv: list[str]) -> int:
     if use_managed_web_server:
         python_check, python_path = check_python_exists(repo_root, args.include_private_paths)
         checks.append(python_check)
+        checks.append(check_python_version(python_path))
+        checks.append(check_pinned_requirements_python314(python_path, repo_root))
         checks.append(check_backend_imports(python_path))
+        checks.append(check_password_hash_smoke(python_path))
     else:
         python_path = None
         checks.append(
@@ -256,10 +377,36 @@ def main(argv: list[str]) -> int:
                 "managed webServer will not start the backend",
             )
         )
+        checks.append(
+            Check(
+                "python-version",
+                "warn",
+                "skipped because PLAYWRIGHT_USE_EXTERNAL_SERVERS is enabled",
+                "managed webServer will not start the backend",
+            )
+        )
+        checks.append(
+            Check(
+                "requirements-python-compat",
+                "warn",
+                "skipped because PLAYWRIGHT_USE_EXTERNAL_SERVERS is enabled",
+                "managed webServer will not start the backend",
+            )
+        )
+        checks.append(
+            Check(
+                "password-hash-smoke",
+                "warn",
+                "skipped because PLAYWRIGHT_USE_EXTERNAL_SERVERS is enabled",
+                "managed webServer will not run reset-scenario",
+            )
+        )
 
     api_port = int(os.environ.get("E2E_API_PORT", DEFAULT_API_PORT))
     ui_port = int(os.environ.get("E2E_UI_PORT", DEFAULT_UI_PORT))
     checks.extend([check_port(api_port), check_port(ui_port)])
+    if use_managed_web_server:
+        checks.append(check_playwright_sqlite(api_port, repo_root, args.include_private_paths))
 
     code = status_code(checks)
     payload = {

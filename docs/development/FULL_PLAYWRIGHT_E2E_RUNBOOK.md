@@ -62,6 +62,31 @@ python3 -m pip install -r requirements.txt
 
 Or set **`E2E_PYTHON=<path-to-venv-python>`** to a venv that already contains `uvicorn`, SQLAlchemy, etc. Symptom when wrong: webServer stderr shows **`No module named uvicorn`** (**Pitfall 11**).
 
+Before launching Playwright through the managed `webServer`, run the repository
+preflight from `<REPO_ROOT>`:
+
+```bash
+python ops/scripts/dev/playwright_preflight.py --json
+```
+
+On Windows, prefer the repository venv explicitly when it exists:
+
+```powershell
+.\.venv\Scripts\python.exe ops\scripts\dev\playwright_preflight.py --json
+```
+
+Treat failed checks for `e2e-python`, `backend-imports`, or
+`password-hash-smoke` as environment blockers. The hash smoke protects the
+`reset-scenario` seed path: `passlib==1.7.4` plus `bcrypt==5.0.0` can make seed
+password hashing return `500`; restore the repository-compatible
+`bcrypt==4.0.1` or otherwise prove the seed route works before debugging UI
+selectors.
+
+For release-like validation, prefer Python 3.11/3.12. Python 3.14 can be usable
+for local SQLite-backed smoke only after compatible backend wheels are already
+installed; the pinned `requirements.txt` set may not install unchanged because
+some pins can lack Python-3.14 wheels or require local build tools.
+
 ### Seed token and CI semantics
 
 Typical environment for a serious full run:

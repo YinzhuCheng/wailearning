@@ -34,6 +34,45 @@ from validation_history import (
 
 DEFAULT_REGISTRY = "tests/TEST_SELECTION_TARGETS.json"
 DEFAULT_ARTIFACT_ROOT = ".agent-run/logs"
+TEXT_EXTENSIONS = {
+    ".bat",
+    ".cjs",
+    ".conf",
+    ".css",
+    ".csv",
+    ".editorconfig",
+    ".env",
+    ".example",
+    ".gitignore",
+    ".html",
+    ".ini",
+    ".js",
+    ".json",
+    ".jsx",
+    ".md",
+    ".mjs",
+    ".ps1",
+    ".py",
+    ".rst",
+    ".service",
+    ".sh",
+    ".sql",
+    ".toml",
+    ".ts",
+    ".tsx",
+    ".txt",
+    ".vue",
+    ".xml",
+    ".yaml",
+    ".yml",
+}
+TEXT_FILENAMES = {
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "LICENSE",
+    "README.md",
+}
 RESULT_PASSED = "passed"
 RESULT_FAILED = "failed"
 RESULT_BLOCKED = "blocked"
@@ -102,6 +141,44 @@ def resolve_python_argv(repo_root: Path, argv: list[str]) -> tuple[list[str], li
         notes.append("configured repository venv interpreter was not found; using the current interpreter")
         return [sys.executable, *argv[1:]], notes
     return argv, notes
+
+
+def normalize_path(path: str) -> str:
+    return path.replace("\\", "/").strip("/")
+
+
+def is_text_path(path: str) -> bool:
+    candidate = Path(path)
+    return candidate.name in TEXT_FILENAMES or candidate.suffix in TEXT_EXTENSIONS
+
+
+def changed_text_files(repo_root: Path, changed_paths: list[dict[str, str]]) -> list[str]:
+    paths: list[str] = []
+    for item in changed_paths:
+        path = normalize_path(str(item.get("path") or ""))
+        status = str(item.get("status") or "M")
+        if not path or status.startswith("D") or not is_text_path(path):
+            continue
+        if (repo_root / path).exists():
+            paths.append(path)
+    return sorted(set(paths))
+
+
+def expand_command_placeholders(
+    repo_root: Path,
+    argv: list[str],
+    changed_paths: list[dict[str, str]],
+) -> tuple[list[str], list[str]]:
+    notes: list[str] = []
+    expanded: list[str] = []
+    for part in argv:
+        if part == "<changed-text-files>":
+            files = changed_text_files(repo_root, changed_paths)
+            expanded.extend(files)
+            notes.append(f"expanded <changed-text-files> to {len(files)} file(s)")
+        else:
+            expanded.append(part)
+    return expanded, notes
 
 
 def command_has_unresolved_placeholder(argv: list[str]) -> str | None:
@@ -413,6 +490,7 @@ def run_target(args: argparse.Namespace) -> int:
     failure_class: str | None = None
     notes: list[str] = []
 
+    changed_paths = git_worktree_changed_paths(repo_root)
     commands = list(target.get("commands", []))
     if not commands:
         overall_result = RESULT_BLOCKED
@@ -433,7 +511,9 @@ def run_target(args: argparse.Namespace) -> int:
 
     for index, command in enumerate(commands, start=1):
         raw_argv = [str(part) for part in command.get("argv", [])]
-        resolved_argv, resolve_notes = resolve_python_argv(repo_root, raw_argv)
+        expanded_argv, placeholder_notes = expand_command_placeholders(repo_root, raw_argv, changed_paths)
+        notes.extend(placeholder_notes)
+        resolved_argv, resolve_notes = resolve_python_argv(repo_root, expanded_argv)
         notes.extend(resolve_notes)
         label = str(command.get("label") or f"command-{index}")
         stdout_path = artifact_dir / f"{index:02d}-{sanitize(label)}-stdout.log"
@@ -521,7 +601,6 @@ def run_target(args: argparse.Namespace) -> int:
         "artifact_dir": repo_placeholder_path(repo_root, artifact_dir),
         "private_paths_redacted": True,
     }
-    changed_paths = git_worktree_changed_paths(repo_root)
     history_record = {
         "schema_version": 1,
         "target_id": args.target,

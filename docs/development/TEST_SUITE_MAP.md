@@ -15,6 +15,9 @@ For concrete historical execution records, use [TEST_EXECUTION_LEDGER.md](TEST_E
 
 For the current validation automation handoff, use
 [VALIDATION_AUTOMATION_HANDOFF_2026-05-08.md](VALIDATION_AUTOMATION_HANDOFF_2026-05-08.md).
+For the second-round infrastructure reflection and third-round improvement
+backlog, use
+[VALIDATION_INFRASTRUCTURE_REVIEW_2026-05-08.md](VALIDATION_INFRASTRUCTURE_REVIEW_2026-05-08.md).
 
 ## Top-Level Test Layout
 

@@ -346,9 +346,9 @@ python ops\scripts\dev\repo_line_health.py
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `1`
+**Pass count:** `2`
 
-**Run count:** `1`
+**Run count:** `2`
 
 **Runs:**
 
@@ -607,6 +607,7 @@ git diff --check
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Python helpers compiled; PowerShell UTF-8 helper ran with `-Quiet`; `safe_show_text.py --escape` produced escaped output for the encoding doc; `safe_write_text.py` wrote an ignored `.e2e-run` smoke file; selected files reported `scanned=8 decode_errors=0 suspicious=0`; `git diff --check` passed. | The audit intentionally scanned the newly added helpers and edited docs, not the whole repository. Whole-repo suspicious-marker scans may report historical hotspots and should be interpreted through `ENCODING_AND_MOJIBAKE_SAFETY.md`. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `13` files; encoding scan reported `scanned=13 decode_errors=0 suspicious=0`. | This run validated the new placeholder expansion path in `run_validation_target.py` and the `--skip-if-empty` guard in `check_text_encoding.py`, replacing the earlier unresolved-placeholder blocker for this target. |
 
 ### Test ID: `static.validation_selector`
 
@@ -659,9 +660,9 @@ python ops\scripts\dev\run_validation_target.py static.validation_selector --dry
 
 **Last run date:** `2026-05-08`
 
-**Pass count:** `6`
+**Pass count:** `7`
 
-**Run count:** `6`
+**Run count:** `7`
 
 **Runs:**
 
@@ -673,6 +674,7 @@ python ops\scripts\dev\run_validation_target.py static.validation_selector --dry
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v` | `passed` | Structured local validation history helper, selector, target runner, profile runner, and selector tests compiled; target registry parsed as valid JSON; `15` standard-library selector/runner/history/profile tests passed. | This run covered JSONL history writing, selector use of matching structured history as fresh evidence, stale classification when the structured history changed-path signature differs from the selector input, pytest JUnit XML argument injection, parsing testcase-level JUnit results, redaction of absolute testcase file paths from JUnit XML, static profile dry-runs, and selector-recommended profile skipping review-required targets by default. Ignored JSONL/XML/profile files under `.agent-run/` are local evidence only and are not committed. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v`; `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `python ops\scripts\dev\run_validation_profile.py static --dry-run --timeout-seconds 120`; `python ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Final handoff validation passed after adding the committed validation automation handoff document; `15` unittest cases passed; static target runner passed; static profile dry-run passed; worktree selector returned `non_full_validation.status=acceptable` and `unmatched_paths=[]`; diff whitespace check passed. | Current worktree still had no repository `.venv`, so runner smoke used the current Python interpreter and recorded the fallback in ignored artifacts. Worktree selector considered the new handoff document and validation tooling files and recommended only static targets. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe -m py_compile ops\scripts\dev\run_validation_target.py tests\backend\manual\test_validation_selector.py`; `.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v`; `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Runner and selector tests passed after adding Playwright preflight integration, `spawn EPERM` environment classification, UTF-8 JSON stdout, and focused unittest coverage; `17` unittest cases passed; static target runner passed; selector reported `non_full_validation.status=acceptable` and no unmatched paths; diff whitespace check passed. | The same session separately validated `admin.e2e.core_flows_smoke` through both direct Playwright and `run_validation_target.py`; see that target's ledger entry for the environment blocker and final green runs. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe -m py_compile ops\scripts\dev\check_text_encoding.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py ops\scripts\dev\playwright_preflight.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v`; `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Validation tooling compiled; target registry parsed; `19` selector/runner/profile unittest cases passed; static selector target passed; selector reported `non_full_validation.status=acceptable` and `unmatched_paths=[]`; diff whitespace check passed. | This run covered `passed_with_deferred_review` profile output, `deferred_targets`, `<changed-text-files>` expansion, and the encoding scan `--skip-if-empty` guard. A separate `static.encoding_text_tools` target row records the real placeholder expansion scan. |
 ## Known First-Version Limitations
 
 1. This first ledger version starts with the verified runs around commit `6a95aad`; it intentionally does not backfill older branch history from memory.

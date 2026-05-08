@@ -59,6 +59,12 @@ current task.
    committed documentation using repository-relative paths and placeholders such
    as `<repo>`, `<artifact-dir>`, `<local-port>`, `<local-postgres-bin>`, or
    `<local-browser-cache>`.
+   Prefer converting repeatable pitfalls into executable guardrails in the same
+   or a follow-up change: preflight checks, selector/runner rules, lint scripts,
+   tests, registry entries, or CI/profile steps. If a pitfall cannot reasonably
+   be automated yet, document the manual procedure and name the missing
+   automation point so a later agent can code it instead of rediscovering the
+   same failure.
 7. **Keep private machine details local.** Real user names, absolute home
    paths, browser cache paths, downloaded binary locations, local database
    directories, local credentials/tokens, and machine-specific logs belong only

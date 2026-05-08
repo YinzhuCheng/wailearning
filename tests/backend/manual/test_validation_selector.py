@@ -13,6 +13,7 @@ sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
 from validation_history import changed_paths_signature  # noqa: E402
 from run_validation_target import (
     RESULT_BLOCKED,
+    expand_command_placeholders,
     parse_junit_xml,
     target_needs_playwright_preflight,
     with_pytest_junitxml,
@@ -216,6 +217,37 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(updated[:-1], argv)
         self.assertEqual(updated[-1], f"--junitxml={output_path}")
 
+    def test_runner_expands_changed_text_files_placeholder(self):
+        changed_paths = [
+            {"status": "M", "path": "docs/README.md"},
+            {"status": "M", "path": "apps/web/admin/src/assets/logo.png"},
+            {"status": "D", "path": "docs/deleted.md"},
+        ]
+
+        expanded, notes = expand_command_placeholders(
+            REPO_ROOT,
+            ["python", "ops/scripts/dev/check_text_encoding.py", "--skip-if-empty", "<changed-text-files>"],
+            changed_paths,
+        )
+
+        self.assertIn("docs/README.md", expanded)
+        self.assertNotIn("apps/web/admin/src/assets/logo.png", expanded)
+        self.assertNotIn("docs/deleted.md", expanded)
+        self.assertIn("expanded <changed-text-files> to 1 file(s)", notes)
+
+    def test_encoding_scan_skip_if_empty_prevents_accidental_full_repo_scan(self):
+        result = subprocess.run(
+            [sys.executable, "ops/scripts/dev/check_text_encoding.py", "--skip-if-empty"],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        self.assertIn("scanned=0", result.stdout)
+        self.assertIn("skipped=empty-input", result.stdout)
+
     def test_runner_parses_junit_xml_testcase_results(self):
         path = REPO_ROOT / ".agent-run/test-selector-sample-junit.xml"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -290,11 +322,13 @@ class ValidationSelectorTests(unittest.TestCase):
         runs_by_id = {run["target_id"]: run for run in payload["target_runs"]}
 
         self.assertEqual(payload["profile"], "selector-recommended")
+        self.assertEqual(payload["result"], "passed_with_deferred_review")
         self.assertIn("frontend.admin.build", runs_by_id)
         self.assertEqual(runs_by_id["frontend.admin.build"]["action"], "executed")
         self.assertIn("admin.e2e.homework_comment_cover_tier4", runs_by_id)
         self.assertEqual(runs_by_id["admin.e2e.homework_comment_cover_tier4"]["action"], "skipped")
         self.assertIn("requires operator review", runs_by_id["admin.e2e.homework_comment_cover_tier4"]["reason"])
+        self.assertEqual(payload["deferred_targets"][0]["target_id"], "admin.e2e.homework_comment_cover_tier4")
 
     def test_selector_uses_matching_structured_history_as_fresh_evidence(self):
         changed_path = "docs/development/TEST_SUITE_MAP.md"

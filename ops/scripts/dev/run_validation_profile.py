@@ -20,6 +20,7 @@ from validation_history import DEFAULT_HISTORY
 
 
 RESULT_PASSED = "passed"
+RESULT_PASSED_WITH_DEFERRED_REVIEW = "passed_with_deferred_review"
 RESULT_FAILED = "failed"
 RESULT_BLOCKED = "blocked"
 RESULT_SKIPPED = "skipped"
@@ -156,6 +157,18 @@ def run_target(repo_root: Path, target_id: str, args: argparse.Namespace) -> tup
     return run_python_json(repo_root, target_args)
 
 
+def deferred_targets(target_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "target_id": str(run.get("target_id")),
+            "risk": run.get("risk"),
+            "reason": run.get("reason"),
+        }
+        for run in target_runs
+        if run.get("action") == "skipped" and run.get("reason") == "target requires operator review"
+    ]
+
+
 def profile_result(target_runs: list[dict[str, Any]], selection: dict[str, Any] | None) -> tuple[str, int]:
     non_full_status = None
     if selection:
@@ -172,6 +185,8 @@ def profile_result(target_runs: list[dict[str, Any]], selection: dict[str, Any] 
         return RESULT_BLOCKED, 2
     if not executed:
         return RESULT_SKIPPED, 0
+    if deferred_targets(target_runs):
+        return RESULT_PASSED_WITH_DEFERRED_REVIEW, 0
     return RESULT_PASSED, 0
 
 
@@ -215,6 +230,7 @@ def run_profile(args: argparse.Namespace) -> int:
 
     ended_at = utc_now()
     result, exit_code = profile_result(target_runs, selection)
+    deferred = deferred_targets(target_runs)
     profile = {
         "schema_version": 1,
         "profile": args.profile,
@@ -229,6 +245,7 @@ def run_profile(args: argparse.Namespace) -> int:
         "dry_run": args.dry_run,
         "selection": selection,
         "target_runs": target_runs,
+        "deferred_targets": deferred,
         "artifact_dir": repo_placeholder_path(repo_root, artifact_dir),
         "private_paths_redacted": True,
     }

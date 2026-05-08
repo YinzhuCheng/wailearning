@@ -130,11 +130,20 @@ test('copyText falls back to textarea when Clipboard API rejects and cleans up',
   assert.deepEqual(doc.created[0].range, [0, 3])
 })
 
-test('playwright_preflight reports missing backend Python as structured JSON', () => {
+test('playwright_preflight reports missing managed backend Python checks as structured JSON', () => {
+  const missingPython = path.join(repoRoot, '.agent-run', 'missing-e2e-python.exe')
   const result = spawnSync(
     process.env.PYTHON || 'python',
     ['ops/scripts/dev/playwright_preflight.py', '--json'],
-    { cwd: repoRoot, encoding: 'utf8' }
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        E2E_PYTHON: missingPython,
+        PLAYWRIGHT_USE_EXTERNAL_SERVERS: ''
+      }
+    }
   )
   assert.notEqual(result.status, 0)
   const payload = JSON.parse(result.stdout)
@@ -142,4 +151,8 @@ test('playwright_preflight reports missing backend Python as structured JSON', (
   assert.equal(statuses.get('playwright-config'), 'pass')
   assert.equal(statuses.get('vite-bin'), 'pass')
   assert.equal(statuses.get('e2e-python'), 'fail')
+  assert.equal(statuses.get('python-version'), 'fail')
+  assert.equal(statuses.get('requirements-python-compat'), 'fail')
+  assert.equal(statuses.get('backend-imports'), 'fail')
+  assert.equal(statuses.get('password-hash-smoke'), 'fail')
 })

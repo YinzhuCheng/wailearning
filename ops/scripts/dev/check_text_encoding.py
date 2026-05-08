@@ -165,6 +165,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("paths", nargs="*", help="Optional repo-relative files to scan instead of git ls-files.")
     parser.add_argument("--repo-root", default=".", help="Repository root. Defaults to current directory.")
     parser.add_argument(
+        "--skip-if-empty",
+        action="store_true",
+        help="When explicit paths are empty, scan no files instead of falling back to git ls-files.",
+    )
+    parser.add_argument(
         "--fail-on-suspicious",
         action="store_true",
         help="Return non-zero when suspicious mojibake markers are found.",
@@ -175,7 +180,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     repo_root = Path(args.repo_root).resolve()
-    paths = iter_candidate_paths(repo_root, args.paths)
+    if args.skip_if_empty and not args.paths:
+        paths = []
+    else:
+        paths = iter_candidate_paths(repo_root, args.paths)
     decode_errors, suspicious, scanned = scan_paths(repo_root, paths)
 
     for item in decode_errors:
@@ -187,10 +195,8 @@ def main(argv: list[str]) -> int:
             f"{finding.label} {finding.marker}"
         )
 
-    print(
-        f"scanned={scanned} decode_errors={len(decode_errors)} "
-        f"suspicious={len(suspicious)}"
-    )
+    skipped = " skipped=empty-input" if args.skip_if_empty and not args.paths else ""
+    print(f"scanned={scanned} decode_errors={len(decode_errors)} suspicious={len(suspicious)}{skipped}")
 
     if decode_errors:
         return 1

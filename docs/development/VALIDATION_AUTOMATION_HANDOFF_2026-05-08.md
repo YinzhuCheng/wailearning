@@ -166,3 +166,159 @@ Open environment note:
   The current `.venv` is sufficient for SQLite-backed Playwright smoke on this
   machine, but it is not a proof that the old pinned dependency set installs on
   Python 3.14.
+
+## Validation Infrastructure First-Round Guardrails
+
+The first follow-up round converted the Playwright lessons above into preflight
+checks and committed documentation guidance.
+
+`ops/scripts/dev/playwright_preflight.py` now checks more than the shallow
+backend startup imports:
+
+- `python-version` records the selected `E2E_PYTHON` version. Python 3.14 is
+  allowed for local smoke only when dependencies are already installed, and the
+  detail explicitly tells operators to prefer Python 3.11/3.12 for release-like
+  validation.
+- `requirements-python-compat` surfaces the known Python-3.14 install risk from
+  current pins (`pydantic==2.5.3` / `pydantic-core==2.14.6`, and
+  `psycopg2-binary==2.9.9`).
+- `backend-imports` now covers modules needed by startup and seed routes:
+  `uvicorn`, `fastapi`, `sqlalchemy`, `pydantic`, `pydantic_settings`, `jose`,
+  `passlib`, `multipart`, and `httpx`.
+- `password-hash-smoke` hashes a seed-style password with `passlib` + `bcrypt`
+  so the `bcrypt==5.0.0` / `passlib==1.7.4` reset-scenario 500 class is caught
+  before Playwright launches.
+- `playwright-sqlite` reports whether the default SQLite file for
+  `E2E_API_PORT` already exists. It does not fail the run by itself; it makes
+  persistent local state visible during triage.
+
+The Node diagnostic test in
+`tests/frontend/admin/markdown_latex_and_clipboard.test.mjs` now forces a
+missing `E2E_PYTHON` path and asserts structured failures for `e2e-python`,
+`python-version`, `requirements-python-compat`, `backend-imports`, and
+`password-hash-smoke`. This keeps the test deterministic even when the current
+worktree has a valid `.venv`.
+
+Docs updated in this round:
+
+- `docs/development/TEST_EXECUTION_PITFALLS.md` records the Python 3.14 pin
+  risk, bcrypt/passlib seed hashing failure, and leftover Playwright SQLite
+  artifact as one operational cluster.
+- `docs/development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md` now makes
+  `playwright_preflight.py --json` a managed-webServer prerequisite and explains
+  how to interpret hash-smoke and Python-version results.
+
+Validation performed for this first guardrail round:
+
+1. `.\.venv\Scripts\python.exe -m py_compile ops\scripts\dev\playwright_preflight.py`
+   - Passed.
+2. `.\.venv\Scripts\python.exe ops\scripts\dev\playwright_preflight.py --json`
+   - Passed with `exit_code: 0`; the current host reports Python `3.14.4`,
+     known pin-risk details, successful backend imports, successful
+     `password-hash-smoke`, and an existing default Playwright SQLite file.
+3. `node --test tests\frontend\admin\markdown_latex_and_clipboard.test.mjs`
+   - Passed: `10` tests.
+4. `git diff --check`
+   - Passed.
+
+## Validation Infrastructure Second-Round Reflection
+
+The second follow-up round did not add more runner behavior. It reviewed the
+current selector, target runner, profile runner, preflight, local JSONL history,
+and committed ledger boundaries, then captured the outcome in:
+
+- `docs/development/VALIDATION_INFRASTRUCTURE_REVIEW_2026-05-08.md`
+
+Main conclusion:
+
+- The current validation infrastructure is useful and should stay
+  change-scoped by default.
+- The main risk is now result ambiguity, not the absence of a selector. Agents
+  can still overclaim when a profile run passes only the cheap subset while
+  review-required, broad, full, skipped, or blocked targets remain unresolved.
+- Third-round work should prioritize making those states harder to misread,
+  especially `needs_review` profile output, unresolved command placeholders,
+  registry linting, and Playwright machine-readable result artifacts.
+
+Validation performed for the second reflection round:
+
+1. `.\.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json`
+   - Passed; reported `non_full_validation.status=acceptable` and
+     `unmatched_paths=[]`.
+2. `python -m json.tool tests\TEST_SELECTION_TARGETS.json`
+   - Passed.
+3. `.\.venv\Scripts\python.exe -m py_compile ops\scripts\dev\playwright_preflight.py`
+   - Passed.
+4. `node --test tests\frontend\admin\markdown_latex_and_clipboard.test.mjs`
+   - Passed: `10` tests.
+5. `.\.venv\Scripts\python.exe ops\scripts\dev\playwright_preflight.py --json`
+   - Passed with `exit_code: 0`.
+6. `.\.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+   - Passed.
+7. `.\.venv\Scripts\python.exe ops\scripts\dev\check_text_encoding.py <changed files>`
+   - Passed: `scanned=7 decode_errors=0 suspicious=0`.
+8. `git diff --check`
+   - Passed.
+
+Important second-round observation:
+
+- `static.encoding_text_tools` is still not fully self-service because its
+  registry command uses `<changed-text-files>`. The manual explicit-file
+  encoding scan above was used for this round. Removing that placeholder trap
+  is a high-priority third-round code change.
+
+## Validation Infrastructure Third-Round Automation
+
+The third follow-up round converted the highest-priority reflection items into
+code and policy.
+
+Implemented guardrails:
+
+- `ops/scripts/dev/run_validation_profile.py`
+  - returns `result=passed_with_deferred_review` when executed targets pass but
+    review-required targets were skipped by policy;
+  - includes `deferred_targets` in profile JSON so final handoffs can name what
+    remains unresolved instead of saying plain "passed".
+- `ops/scripts/dev/run_validation_target.py`
+  - expands `<changed-text-files>` from the current worktree changed-path
+    snapshot before command execution;
+  - excludes deleted files and non-text files from that expansion.
+- `ops/scripts/dev/check_text_encoding.py`
+  - supports `--skip-if-empty`, allowing placeholder expansion to produce an
+    intentional zero-file scan instead of falling back to all tracked files.
+- `tests/TEST_SELECTION_TARGETS.json`
+  - updated `static.encoding_text_tools` to use `--skip-if-empty
+    <changed-text-files>`.
+- `tests/backend/manual/test_validation_selector.py`
+  - covers placeholder expansion, empty encoding-scan behavior, and
+    `passed_with_deferred_review` profile output.
+- `AGENTS.md`
+  - now states that repeatable pitfalls should be converted into executable
+    guardrails when practical: preflight checks, selector/runner rules, lint
+    scripts, tests, registry entries, or CI/profile steps.
+
+Validation performed for the third automation round:
+
+1. `.\.venv\Scripts\python.exe -m py_compile ops\scripts\dev\check_text_encoding.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py ops\scripts\dev\playwright_preflight.py`
+   - Passed.
+2. `python -m json.tool tests\TEST_SELECTION_TARGETS.json`
+   - Passed.
+3. `.\.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v`
+   - Passed: `19` tests.
+4. `node --test tests\frontend\admin\markdown_latex_and_clipboard.test.mjs`
+   - Passed: `10` tests.
+5. `.\.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+   - Passed; runner expanded `<changed-text-files>` to `13` files and the
+     encoding scan reported `scanned=13 decode_errors=0 suspicious=0`.
+6. `.\.venv\Scripts\python.exe ops\scripts\dev\run_validation_profile.py selector-recommended --paths apps\web\admin\src\views\HomeworkSubmissions.vue --dry-run --timeout-seconds 120`
+   - Passed with `result=passed_with_deferred_review`; profile JSON listed
+     `admin.e2e.homework_comment_cover_tier4` under `deferred_targets`.
+7. `.\.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json`
+   - Passed; reported `non_full_validation.status=acceptable` and
+     `unmatched_paths=[]`.
+8. `git diff --check`
+   - Passed.
+9. `.\.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+   - Passed.
+10. `.\.venv\Scripts\python.exe ops\scripts\dev\playwright_preflight.py --json`
+    - Passed with `exit_code: 0`.
