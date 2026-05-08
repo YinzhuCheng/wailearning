@@ -187,9 +187,9 @@ npm.cmd run build
 
 **Last run date:** `2026-05-08`
 
-**Pass count:** `3`
+**Pass count:** `4`
 
-**Run count:** `3`
+**Run count:** `4`
 
 **Runs:**
 
@@ -198,6 +198,7 @@ npm.cmd run build
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `6a95aad` | `npm.cmd run build` | `passed` | Vite production build completed successfully. | Output included the known Vite CJS Node API deprecation warning and chunk-size warnings. Treat the warnings as follow-up optimization noise unless they change into build failures. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2378 modules transformed`, built in about 20 seconds. | Output again included the known Vite CJS Node API deprecation warning and chunk-size warnings for large bundles. No Vue, JS, CSS, or asset pipeline error was reported. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `npm.cmd run build` (after `npm.cmd install` in `apps/web/admin`) | `passed` | Admin SPA build succeeded after adjusting the homework table action column and button spacing in `apps/web/admin/src/views/Homework.vue`; the prior failure was an environment precondition issue because `vite` was missing until admin dependencies were installed. | Build was run from `apps/web/admin`. `npm install` added the local package dependencies needed for `vite build`. |
+| 2026-05-08 | `cursor/unify-student-identity-plan` | `a15800c` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 26 seconds. | Run from `<repo>/apps/web/admin` after student/admin user UI copy and import-form changes for canonical student identity binding. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 
 ### Test ID: `admin.e2e.learning_notes_attendance_cover_tier20`
 
@@ -490,11 +491,11 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 
 **Last result:** `passed`
 
-**Last run date:** `2026-05-07`
+**Last run date:** `2026-05-08`
 
-**Pass count:** `1`
+**Pass count:** `2`
 
-**Run count:** `2`
+**Run count:** `3`
 
 **Runs:**
 
@@ -502,6 +503,7 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q` | `failed` | `3 failed, 11 passed, 57 warnings in 42.83s` | The failures were stale test expectations: three tests still expected student accounts with class ids but missing or mismatched roster rows to remain unable to see/submit required-course work. Current product behavior intentionally repairs a same-class roster row from the student account during login and then syncs required-course enrollment. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q` | `passed` | `14 passed, 58 warnings in 42.98s` | Tests now assert the current repair contract: same-class student accounts receive or reuse a `Student` roster row and required-course enrollment during login/context preparation. |
+| 2026-05-08 | `cursor/unify-student-identity-plan` | `a15800c` | `.venv\Scripts\python.exe -m pytest tests\backend\auth\test_public_registration_validation.py tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py tests\backend\roster\test_roster_enroll_and_batch_class.py tests\backend\courses\test_student_course_roster_behavior.py tests\backend\points\test_points_routes.py tests\backend\files\test_files_attachment_download.py -q` | `passed` | `46 passed, 29 warnings in 214.35s` | Extended target set for canonical student identity binding through `users.student_id`: public registration binding guard, roster sync/backfill, admin batch class moves, student course/homework profile resolution, points self-service, and attachment ownership checks. The same pass also included `py_compile` for the changed backend modules and `git diff --check`; both passed. Warnings were existing Pydantic class-based config deprecations. |
 
 ### Test ID: `full.pytest.postgres`
 
