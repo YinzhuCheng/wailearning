@@ -1,8 +1,8 @@
 """Bidirectional sync between User (student accounts) and Student (roster rows).
 
-Ensures deployment seeds and admin CRUD stay aligned: student login accounts bind
-to canonical Student rows through users.student_id. Legacy username == student_no
-matching is still used as a recovery path.
+Ensures deployment seeds and admin CRUD stay aligned: every learner is a
+canonical Student row, and student login accounts bind through users.student_id.
+Username/student_no matching is limited to explicit repair/reconciliation.
 """
 
 from __future__ import annotations
@@ -36,23 +36,24 @@ def sync_student_user_from_roster_row(db: Session, student: Student) -> None:
     user = find_user_for_student(db, student)
 
     if not user:
-        db.add(
-            User(
-                username=student_no,
-                hashed_password=get_password_hash(student_no),
-                real_name=display_name,
-                role=UserRole.STUDENT.value,
-                class_id=student.class_id,
-                student_id=student.id,
-                is_active=True,
-            )
+        if db.query(User.id).filter(User.username == student_no).first():
+            # A same-username account exists but cannot be safely assigned to this
+            # Student. Leave it for audit/repair instead of masking drift or
+            # colliding with the global unique username constraint.
+            return
+        user = User(
+            username=student_no,
+            hashed_password=get_password_hash(student_no),
+            real_name=display_name,
+            role=UserRole.STUDENT.value,
+            class_id=student.class_id,
+            student_id=student.id,
+            is_active=True,
         )
+        db.add(user)
         db.flush()
         sync_student_course_enrollments(student, db)
-        linked = db.query(User).filter(User.username == student_no).first()
-        if linked:
-            linked.student_id = student.id
-            prepare_student_course_context(linked, db)
+        prepare_student_course_context(user, db)
         return
 
     if (user.role or "").strip() != UserRole.STUDENT.value:

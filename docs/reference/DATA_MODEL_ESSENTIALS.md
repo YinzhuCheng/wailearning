@@ -14,16 +14,16 @@
 |-------|-------|------|
 | `User` | `users` | `role` stores `UserRole` string; `class_id` nullable for staff |
 | `Class` | `classes` | |
-| `Student` | `students` | Canonical roster row; `student_no` may align with student user `username`, but `users.student_id` is the primary binding |
+| `Student` | `students` | Canonical learner business row; `student_no` is editable/display identity, while `users.student_id` is the account binding |
 | `CourseEnrollment` | `course_enrollments` | Unique `(subject_id, student_id)` |
 | `CourseEnrollmentBlock` | `course_enrollment_blocks` | Blocks auto re-sync |
 
 ### 1.1 Student roster ↔ student `User` alignment (implementation truth)
 
-The repository maintains **two persisted representations** of a learner:
+The repository maintains one learner business identity plus an optional login account:
 
-1. **`students`** — administrative / teaching roster (`Student`), including gender and contact fields.
-2. **`users`** where `role=student` — login account (`users.student_id` is the primary binding; `User.username == Student.student_no` remains a legacy recovery path).
+1. **`students`** — the canonical learner (`Student`), including class, gender, contact fields, parent code, and student-scoped business references.
+2. **`users`** where `role=student` — login account. It binds to the learner through `users.student_id`; `username` is not a relationship key.
 
 **Authoritative source for “who is in the class”:** the **`students` table** (plus `course_enrollments` for per-course views). Login accounts are **not** created through a separate CSV import on the Users screen; instead the backend **`reconcile_student_users_and_roster`** (`domains/roster/sync.py`) runs at application startup and is invoked again on **read/list admin surfaces** so transient drift self-heals:
 
@@ -32,14 +32,14 @@ The repository maintains **two persisted representations** of a learner:
 
 Additional implementation truth (May 2026):
 
-- **Student-role account creation paths** (`POST /api/users` for admin-created student users and `POST /api/auth/register` for public student registration when enabled) already call **`sync_student_roster_from_user_accounts(...)`**. That means a newly created student login should immediately have a matching `students` row; there is no longer a product expectation that an operator must "also" open 学生管理 and re-enter the same learner just to unlock quota- or discussion-related flows.
-- **Roster-first creation paths** (`POST /api/students`, batch roster import) still call **`sync_student_user_from_roster_row(...)`**, so the reverse direction remains true: adding a roster row should create/align the student login account.
-- **`prepare_student_course_context`** now acts as a final self-healing guard for legacy drift: if a student login reaches a quota / homework / discussion path and the matching roster row is still missing, it locally triggers the same user→roster sync helper before continuing. This keeps quota and course-access code from inventing a second "bound student" standard.
+- **Student-role account creation paths** (`POST /api/users` for admin-created student users and `POST /api/auth/register` for public student registration when enabled) call **`sync_student_roster_from_user_accounts(...)`**. A newly created student login should immediately have a `students` row and an explicit `users.student_id` binding.
+- **Student-management creation paths** (`POST /api/students`, batch student import) call **`sync_student_user_from_roster_row(...)`**. Adding a learner row should create/align the student login account and bind it through `users.student_id`.
+- **`prepare_student_course_context`** is a final guard for default/demo data that is missing the canonical row or binding. It may invoke the same user-to-Student sync helper before quota, homework, or discussion code continues, but normal feature code should still treat `users.student_id` as the account-to-learner contract.
 
 Effects for agents:
 
-- Do **not** expect `GET /api/users/student-candidates` or `POST /api/users/student-candidates/load` — those endpoints were removed when the admin UI dropped 「文件导入学生用户」; roster import remains on **学生管理** (`Students.vue`: 文件 / 粘贴导入).
-- `StudentResponse` (`api/schemas.py`) intentionally allows **`gender` default `MALE`** and **`class_id: Optional[int]`** so legacy rows with NULL ORM fields still serialize; `build_student_response` fills display placeholders (`无` / `—`) for empty names or student numbers.
+- Do **not** add a second student-import surface under user management. Student import belongs to student management and creates the canonical `Student` plus the bound login account.
+- `StudentResponse` (`api/schemas.py`) intentionally allows **`gender` default `MALE`** and **`class_id: Optional[int]`** so incomplete student profiles still serialize; `build_student_response` fills display placeholders for empty names or student numbers.
 - Permission checks on `GET/PUT/DELETE /api/students/{id}` treat **`class_id is None`** as “not yet assigned to a class shell” and **do not** 403 solely because `None not in class_ids` (that Python expression was a bug source).
 - For LLM quota / discussion billing, the effective identity is the resolved **`Student.id`** from this same binding chain. There is **no** separate pre-created "quota row" requirement; the global default quota policy applies automatically when no `LLMStudentTokenOverride` row exists.
 
@@ -48,7 +48,6 @@ Effects for agents:
 | Symptom | Likely cause | Mitigation |
 |---------|----------------|------------|
 | Element Plus **student form** shows two red fields immediately (性别 + 班级) | `StudentForm.vue` used `el-radio value="..."` instead of `label="..."`, so `v-model` never matched an option; combined with NULL `class_id` from API | Fixed radios; `clearValidate()` after `loadStudent()`; reconcile fills class when a matching user exists |
-| Playwright / strict tests fail looking for `users-open-student-import` | UI removed | Assert absence of 「文件导入学生用户」 or use `users-open-create` |
 | Slow admin **学生管理** list on huge DB | Full `reconcile_student_users_and_roster` scans all roster + student users each request | Acceptable for demo/small schools; for very large tenants consider moving reconcile to a background job + lighter incremental sync (not implemented here) |
 
 

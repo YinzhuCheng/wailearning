@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context, sync_student_course_enrollments
+from apps.backend.wailearning_backend.domains.courses.access import sync_student_course_enrollments
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import (
     Attendance,
@@ -108,7 +108,6 @@ def serialize_students(students: List[Student], db: Session) -> List[StudentResp
 
     class_ids = {student.class_id for student in students if student.class_id is not None}
     student_ids = {student.id for student in students if student.id is not None}
-    student_nos = {clean_text(student.student_no) for student in students if clean_text(student.student_no)}
 
     class_map = {}
     if class_ids:
@@ -116,7 +115,6 @@ def serialize_students(students: List[Student], db: Session) -> List[StudentResp
         class_map = {class_id: class_name for class_id, class_name in class_rows}
 
     bound_student_ids = set()
-    existing_usernames = set()
     if student_ids:
         bound_student_ids = {
             sid
@@ -125,19 +123,12 @@ def serialize_students(students: List[Student], db: Session) -> List[StudentResp
             .all()
             if sid is not None
         }
-    if student_nos:
-        existing_usernames = {
-            username
-            for (username,) in db.query(User.username)
-            .filter(User.role == UserRole.STUDENT.value, User.username.in_(student_nos))
-            .all()
-        }
 
     return [
         build_student_response(
             student,
             class_name=class_map.get(student.class_id),
-            has_user=student.id in bound_student_ids or clean_text(student.student_no) in existing_usernames,
+            has_user=student.id in bound_student_ids,
         )
         for student in students
     ]
@@ -350,9 +341,6 @@ def create_student(
         if existing.class_id:
             sync_student_course_enrollments(existing, db)
         sync_student_user_from_roster_row(db, existing)
-        linked = db.query(User).filter(User.username == existing.student_no).first()
-        if linked and linked.role == UserRole.STUDENT.value:
-            prepare_student_course_context(linked, db)
         db.commit()
         db.refresh(existing)
         return serialize_students([existing], db)[0]

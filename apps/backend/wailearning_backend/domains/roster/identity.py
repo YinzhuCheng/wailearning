@@ -34,12 +34,13 @@ def generate_student_no(db: Session) -> str:
         next_index += 1
 
 
-def get_bound_student_for_user(user: User, db: Session, *, bind_legacy: bool = True) -> Optional[Student]:
+def get_bound_student_for_user(user: User, db: Session, *, bind_legacy: bool = False) -> Optional[Student]:
     """
     Resolve the canonical Student row for a student-role User.
 
-    New data uses users.student_id. Legacy data is still recovered by
-    username/student_no and class_id, then backfilled into users.student_id.
+    Normal business code should resolve through users.student_id only. The
+    username/student_no fallback is reserved for explicit repair and bootstrap
+    paths that pass bind_legacy=True.
     """
     if (user.role or "").strip() != UserRole.STUDENT.value:
         return None
@@ -50,12 +51,13 @@ def get_bound_student_for_user(user: User, db: Session, *, bind_legacy: bool = T
         if student:
             if student.class_id and user.class_id != student.class_id:
                 user.class_id = student.class_id
-                if bind_legacy:
-                    db.flush()
+                db.flush()
             return student
         user.student_id = None
-        if bind_legacy:
-            db.flush()
+        db.flush()
+
+    if not bind_legacy:
+        return None
 
     username = clean_student_text(user.username)
     if not username:
@@ -113,26 +115,6 @@ def find_user_for_student(db: Session, student: Student) -> Optional[User]:
         return None
     candidates = query.all()
     return candidates[0] if len(candidates) == 1 else None
-
-
-def student_has_user(db: Session, student: Student) -> bool:
-    if (
-        student.id
-        and db.query(User.id)
-        .filter(User.role == UserRole.STUDENT.value, User.student_id == student.id)
-        .first()
-    ):
-        return True
-    student_no = clean_student_text(student.student_no)
-    if not student_no:
-        return False
-    query = db.query(User.id).filter(
-        User.role == UserRole.STUDENT.value,
-        User.username == student_no,
-    )
-    if student.class_id:
-        query = query.filter(User.class_id == student.class_id)
-    return query.first() is not None
 
 
 def backfill_student_user_bindings(db: Session) -> int:

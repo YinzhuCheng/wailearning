@@ -22,7 +22,7 @@ Stored on `users.role` as lowercase strings — see `apps/backend/wailearning_ba
 | `admin` | Full API access; bypasses most class-scoped filters; user/class/subject administration. |
 | `class_teacher` | Class-scoped visibility; union of courses in `user.class_id` plus courses where `Subject.teacher_id == user.id` — see `get_accessible_courses_query` in `domains/courses/access.py`. |
 | `teacher` | Courses where the user is the assigned subject teacher (`Subject.teacher_id`). |
-| `student` | Enrolled courses only; primary roster linkage via `users.student_id`, with `students.student_no == users.username` kept as legacy recovery. |
+| `student` | Enrolled courses only; learner identity is the bound `students.id` reached through `users.student_id`. |
 
 Parent-code flows (`/api/parent/*`) authenticate with a **different mechanism** than JWT staff/student users — see [../product/PARENT_PORTAL.md](../product/PARENT_PORTAL.md).
 

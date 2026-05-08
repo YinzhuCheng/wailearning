@@ -497,14 +497,15 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `1`
+**Pass count:** `2`
 
-**Run count:** `1`
+**Run count:** `2`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\security -q` | `passed` | `22 passed, 29 warnings in 89.54s` | Broad security target stayed green after tightening student identity resolution to default to explicit `users.student_id` and after preventing ambiguous roster sync from masking unbound same-username accounts. Warnings were existing Pydantic class-based config deprecations. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\security -q` | `passed` | `22 passed, 29 warnings in 77.86s` | Broad security target passed after changing `/api/users/{id}` class-update behavior to resolve canonical students through `users.student_id`/`get_bound_student_for_user`. Warnings were existing Pydantic class-based config deprecations. |
 
 ### Test ID: `backend.courses.student_course_roster_behavior`
@@ -537,22 +538,23 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 - Changes to required-course class linking, course enrollment blocks, roster enroll/sync endpoints, or homework submission authorization.
 - Any full PostgreSQL pytest run that reports failures in course/roster tests.
 
-**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+**Last branch:** `cursor/unify-student-identity-plan`
 
 **Last commit:** `this commit`
 
 **Last result:** `passed`
 
-**Last run date:** `2026-05-08`
+**Last run date:** `2026-05-09`
 
-**Pass count:** `3`
+**Pass count:** `4`
 
-**Run count:** `4`
+**Run count:** `5`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py tests\behavior\test_course_roster_homework_edge_behavior.py -q` | `passed` | `24 passed, 29 warnings in 108.83s` | Course/roster and behavior edge regressions stayed green after normal student profile resolution was limited to explicit `users.student_id`, with default/demo repair still available through `prepare_student_course_context`. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q` | `failed` | `3 failed, 11 passed, 57 warnings in 42.83s` | The failures were stale test expectations: three tests still expected student accounts with class ids but missing or mismatched roster rows to remain unable to see/submit required-course work. Current product behavior intentionally repairs a same-class roster row from the student account during login and then syncs required-course enrollment. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | PostgreSQL-backed local orchestrator: `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q` | `passed` | `14 passed, 58 warnings in 42.98s` | Tests now assert the current repair contract: same-class student accounts receive or reuse a `Student` roster row and required-course enrollment during login/context preparation. |
 | 2026-05-08 | `cursor/unify-student-identity-plan` | `a15800c` | `.venv\Scripts\python.exe -m pytest tests\backend\auth\test_public_registration_validation.py tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py tests\backend\roster\test_roster_enroll_and_batch_class.py tests\backend\courses\test_student_course_roster_behavior.py tests\backend\points\test_points_routes.py tests\backend\files\test_files_attachment_download.py -q` | `passed` | `46 passed, 29 warnings in 214.35s` | Extended target set for canonical student identity binding through `users.student_id`: public registration binding guard, roster sync/backfill, admin batch class moves, student course/homework profile resolution, points self-service, and attachment ownership checks. The same pass also included `py_compile` for the changed backend modules and `git diff --check`; both passed. Warnings were existing Pydantic class-based config deprecations. |
@@ -653,14 +655,15 @@ git diff --check
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `1`
+**Pass count:** `4`
 
-**Run count:** `1`
+**Run count:** `4`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | `Runner executed git diff --check and expanded <changed-text-files> to 11 files; encoding scan reported scanned=11 decode_errors=0 suspicious=0.` | Static text/whitespace validation passed for the student identity cleanup code, docs, ledger, and roster test changes. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Python helpers compiled; PowerShell UTF-8 helper ran with `-Quiet`; `safe_show_text.py --escape` produced escaped output for the encoding doc; `safe_write_text.py` wrote an ignored `.e2e-run` smoke file; selected files reported `scanned=8 decode_errors=0 suspicious=0`; `git diff --check` passed. | The audit intentionally scanned the newly added helpers and edited docs, not the whole repository. Whole-repo suspicious-marker scans may report historical hotspots and should be interpreted through `ENCODING_AND_MOJIBAKE_SAFETY.md`. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `13` files; encoding scan reported `scanned=13 decode_errors=0 suspicious=0`. | This run validated the new placeholder expansion path in `run_validation_target.py` and the `--skip-if-empty` guard in `check_text_encoding.py`, replacing the earlier unresolved-placeholder blocker for this target. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `6` files; encoding scan reported `scanned=6 decode_errors=0 suspicious=0`. | Static text/whitespace validation passed for the API, documentation, ledger, and roster test changes in the student identity binding update. |
@@ -706,14 +709,17 @@ git diff --check
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `3`
+**Pass count:** `5`
 
-**Run count:** `4`
+**Run count:** `8`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q` | `failed` | `1 failed, 10 passed, 29 warnings in 55.49s` | New `has_user` regression exposed that roster-to-user reconciliation still attempted to create a same-username student account when an existing unbound account could not be safely assigned, causing a unique username collision. Product code was tightened to skip ambiguous same-username creation and leave it for audit/repair. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q` | `failed` | `3 passed, 8 errors, 29 warnings in 41.07s` | Invalid validation run: this pytest process was launched in parallel with another pytest process that shared and reset the same SQLite test database, producing `no such table` setup errors. It was rerun sequentially below. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q` | `passed` | `11 passed, 29 warnings in 52.98s` | Focused roster/user API target passed sequentially after `has_user` was limited to explicit `users.student_id` bindings, ambiguous same-username reconciliation skipped unsafe account creation, and roster-first account creation stopped re-querying by username after insert. The same validation round also passed `py_compile` for the changed sync module. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q` | `passed` | `9 passed, 29 warnings in 35.66s` | Focused API target passed after allowing admin-created student users to omit `class_id`; the new case proves `/api/users` creates an unassigned canonical `Student` and binds it through `users.student_id`. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py tests\backend\roster\test_roster_enroll_and_batch_class.py tests\backend\roster\test_student_identity_audit.py -q` | `passed` | `35 passed, 29 warnings in 160.36s` | Extended roster regression passed after backend cleanup and validation-registry updates. The same validation round also passed `py_compile` for changed backend modules/tests and `ops/scripts/dev/lint_validation_registry.py`. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q` | `failed` | `1 failed, 9 passed, 29 warnings in 50.43s` | New PUT `/api/users/{id}` regression initially missed the `UserRole` import in the test file. Product code had already compiled; the test import was corrected before rerun. |
@@ -808,18 +814,20 @@ git diff --check
 
 **Last commit:** `this commit`
 
-**Last result:** `failed`
+**Last result:** `passed`
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `0`
+**Pass count:** `9`
 
-**Run count:** `1`
+**Run count:** `11`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py tests\backend\roster\test_student_identity_repair.py tests\backend\roster\test_student_identity_audit.py tests\backend\roster\test_students_batch_import_behavior.py -q` | `failed` | `1 failed, 22 passed, 7 errors, 29 warnings in 122.04s` | Invalid validation run: this extended pytest process was launched in parallel with another pytest process sharing the same SQLite test database, so table-drop/create races caused `no such table` setup errors. It was rerun sequentially below. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py tests\backend\roster\test_student_identity_repair.py tests\backend\roster\test_student_identity_audit.py tests\backend\roster\test_students_batch_import_behavior.py -q` | `passed` | `30 passed, 29 warnings in 140.44s` | Extended roster/default-data regression passed sequentially after normal feature identity resolution was restricted to explicit `users.student_id`, repair/audit paths retained explicit username/student-number recovery, ambiguous same-username roster sync stopped creating colliding accounts, and roster-first account creation stopped re-querying by username after insert. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py` | `failed` | `Validation registry lint failed: backend.roster.student_identity_repair ledger_id not found in ledger headings` | Expected registry/ledger coupling failure after adding the repair validation target before adding this ledger section. The section was added before running the repair pytest target. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_repair.py -q` | `passed` | `3 passed, 29 warnings in 16.22s` | Repair target passed after adding the thin default-data repair wrapper, the repair CLI, and repair-specific coverage for dry-run, apply, and ambiguity blocking. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py` | `passed` | `Validation registry lint passed.` | Registry lint passed after adding the `backend.roster.student_identity_repair` ledger section. |

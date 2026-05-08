@@ -144,7 +144,7 @@ def batch_set_user_class(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Move multiple student accounts to the same class (admin only). Syncs roster linkage via prepare_student_course_context."""
+    """Move student accounts and their bound canonical Student rows to one class."""
     if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="只有管理员可以批量调整班级")
 
@@ -199,9 +199,9 @@ def upsert_student_roster_from_student_users(
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    For admin: ensure Student roster rows exist for selected student accounts
-    (username -> student_no, same class as user.class_id). Creates missing rows
-    or refreshes the display name; then runs prepare_student_course_context.
+    For admin: ensure selected student accounts have canonical Student rows and
+    explicit users.student_id bindings. Username is used only as the initial
+    student_no for user-first accounts that do not yet have a Student row.
     """
     if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="只有管理员可以同步学生花名册")

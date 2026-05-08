@@ -371,6 +371,56 @@ def test_create_student_user_can_bind_existing_student_id_without_username_stude
         db.close()
 
 
+def test_students_list_has_user_only_uses_explicit_student_binding(client: TestClient):
+    h = _admin_headers(client)
+    suf = uuid.uuid4().hex[:8]
+    student_no = f"masked_no_{suf}"
+
+    db = SessionLocal()
+    try:
+        class_a = Class(name=f"HasUserBindingA_{suf}", grade=2026)
+        class_b = Class(name=f"HasUserBindingB_{suf}", grade=2026)
+        db.add_all([class_a, class_b])
+        db.flush()
+        st = Student(
+            name="Visible Student",
+            student_no=student_no,
+            gender=Gender.MALE,
+            class_id=class_a.id,
+        )
+        duplicate = Student(
+            name="Same Number Other Class",
+            student_no=student_no,
+            gender=Gender.MALE,
+            class_id=class_b.id,
+        )
+        db.add_all([st, duplicate])
+        db.flush()
+        sid = st.id
+        db.execute(
+            text(
+                """
+                INSERT INTO users (username, hashed_password, real_name, role, class_id, student_id, token_version, is_active)
+                VALUES (:username, :hashed_password, :real_name, :role, NULL, NULL, 0, 1)
+                """
+            ),
+            {
+                "username": student_no,
+                "hashed_password": get_password_hash("p"),
+                "real_name": "Unbound Same Number",
+                "role": UserRole.STUDENT.value,
+            },
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.get("/api/students", headers=h, params={"page": 1, "page_size": 1000, "search": student_no})
+    assert r.status_code == 200, r.text
+    row = next(item for item in r.json()["data"] if item["id"] == sid)
+    assert row["has_user"] is False
+
+
 def test_update_student_user_class_moves_bound_student_when_username_differs(client: TestClient):
     h = _admin_headers(client)
     suf = uuid.uuid4().hex[:8]

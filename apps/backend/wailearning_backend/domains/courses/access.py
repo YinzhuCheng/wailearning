@@ -64,18 +64,17 @@ def _pending_course_enrollment_subject_ids(db: Session, student_id: int) -> set[
 
 def prepare_student_course_context(user: User, db: Session) -> None:
     """
-    For student accounts: resolve the canonical Student row, backfill legacy
-    username/student_no bindings when possible, then ensure CourseEnrollment rows.
+    For student accounts: resolve the canonical Student row through
+    users.student_id, repair missing default-data bindings only when necessary,
+    then ensure CourseEnrollment rows.
     """
     if user.role != UserRole.STUDENT or not user.username:
         return
 
     student = get_student_profile_for_user(user, db)
     if not student:
-        # Legacy / drift recovery: some student-role users may exist before a matching
-        # roster row was created. Reuse the same user->roster sync path used by
-        # registration/admin creation so downstream quota/homework/discussion code sees
-        # one consistent "student account <-> Student row" contract.
+        # Default-data recovery: a student-role user may exist before its canonical
+        # Student row or explicit users.student_id binding has been created.
         from apps.backend.wailearning_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 
         sync_student_roster_from_user_accounts(db, [user.id])
@@ -87,8 +86,8 @@ def prepare_student_course_context(user: User, db: Session) -> None:
 
 
 def get_student_profile_for_user(user: User, db: Session) -> Optional[Student]:
-    """Canonical Student for this login, with legacy username/student_no fallback."""
-    return get_bound_student_for_user(user, db, bind_legacy=True)
+    """Canonical Student for this login, resolved through users.student_id."""
+    return get_bound_student_for_user(user, db)
 
 
 def get_accessible_courses_query(user: User, db: Session):

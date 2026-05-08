@@ -32,13 +32,10 @@ If you change router signatures, queue semantics, or worker startup, update this
 2. Subsequent requests send `Authorization: Bearer <token>`.
 3. Role checks use string values stored on `users.role` aligned with `UserRole` enum — `apps/backend/wailearning_backend/db/models.py` (`admin`, `class_teacher`, `teacher`, `student`).
 
-For **student** accounts, login is also a light repair point:
+For **student** accounts, login also finalizes canonical learner context:
 
 4. After successful login, the router caches the role/class decision **before** writing the login `operation_logs` row, then re-queries the user when needed and runs `prepare_student_course_context(...)`.
-5. `prepare_student_course_context(...)` may:
-   - reconcile a sole same-`student_no` roster row into the account class as a legacy compatibility path,
-   - create a missing roster row from the student account itself (`sync_student_roster_from_user_accounts`) when legacy drift left only the login account,
-   - and then sync required-course enrollments.
+5. `prepare_student_course_context(...)` resolves the bound `Student` through `users.student_id`, repairs missing default/demo bindings through `sync_student_roster_from_user_accounts` when needed, and then syncs required-course enrollments.
 
 This is important because student quota APIs, homework submission, and discussion LLM billing all depend on the resolved `Student.id`, not merely on `users.id`.
 
@@ -64,7 +61,7 @@ This is important because student quota APIs, homework submission, and discussio
 
 - **Which courses a user sees** — `get_accessible_courses_query` and related helpers in `domains/courses/access.py`:
   - **Admin**: all subjects.
-  - **Student**: subjects linked through `CourseEnrollment` after `prepare_student_course_context` reconciles roster vs account class when applicable.
+  - **Student**: subjects linked through `CourseEnrollment` for the canonical `Student` bound by `users.student_id`.
   - **Teacher**: subjects where `Subject.teacher_id == user.id`.
   - **Class teacher**: subjects whose legacy anchor `Subject.class_id == user.class_id`, **plus** any subject that has a `subject_class_links` row for that class, union subjects where the user is the assigned teacher (`Subject.teacher_id`).
 
@@ -72,7 +69,7 @@ This is important because student quota APIs, homework submission, and discussio
 
 ### Student roster coupling
 
-- `reconcile_student_users_and_roster` runs during app lifespan — `main.py` — and ties student login identities primarily through `users.student_id`, using `student_no == username` only as a legacy recovery path when an explicit binding is missing.
+- `reconcile_student_users_and_roster` runs during app lifespan — `main.py` — and ensures student login identities bind to canonical `Student` rows through `users.student_id`. It may recover default/demo data without a binding, but feature code should not treat `username` and `student_no` as the relationship.
 
 ---
 
