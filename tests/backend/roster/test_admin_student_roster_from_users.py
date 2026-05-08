@@ -87,6 +87,8 @@ def test_sync_from_users_creates_roster_and_matches_login(client: TestClient):
         )
         assert st is not None
         assert st.name == "花名册一号"
+        u = db.query(User).filter(User.id == uid).one()
+        assert u.student_id == st.id
     finally:
         db.close()
 
@@ -135,6 +137,52 @@ def test_sync_from_users_updates_display_name(client: TestClient):
     try:
         st = db.query(Student).filter(Student.student_no == "stu_roster_2").one()
         assert st.name == "新显示名"
+    finally:
+        db.close()
+
+
+def test_sync_from_users_reuses_explicit_student_binding_when_username_differs(client: TestClient):
+    db = SessionLocal()
+    try:
+        k = Class(name="BoundClass", grade=4)
+        db.add(k)
+        db.flush()
+        st = Student(
+            name="Old Name",
+            student_no="real_student_no",
+            gender=Gender.MALE,
+            class_id=k.id,
+        )
+        db.add(st)
+        db.flush()
+        u = User(
+            username="login_account_only",
+            hashed_password=get_password_hash("x"),
+            real_name="Bound Display",
+            role=UserRole.STUDENT.value,
+            class_id=k.id,
+            student_id=st.id,
+        )
+        db.add(u)
+        db.flush()
+        uid = u.id
+        sid = st.id
+        db.commit()
+    finally:
+        db.close()
+
+    ah = _admin_headers(client)
+    r = client.post("/api/users/student-roster/from-users", headers=ah, json={"user_ids": [uid]})
+    assert r.status_code == 200, r.text
+    assert r.json()["updated"] == 1
+    assert r.json()["created"] == 0
+
+    db = SessionLocal()
+    try:
+        st = db.query(Student).filter(Student.id == sid).one()
+        assert st.name == "Bound Display"
+        assert st.student_no == "real_student_no"
+        assert db.query(Student).filter(Student.student_no == "login_account_only").count() == 0
     finally:
         db.close()
 

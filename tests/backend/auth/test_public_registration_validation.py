@@ -92,3 +92,44 @@ def test_public_register_student_immediately_gets_bound_profile_and_quota_summar
     body = quota.json()
     assert body.get("daily_student_token_limit") is not None
     assert "quota_timezone" in body and "usage_date" in body
+
+
+def test_public_register_rejects_explicit_student_id_binding(client: TestClient, monkeypatch):
+    import uuid
+
+    from apps.backend.wailearning_backend.db.database import SessionLocal
+    from apps.backend.wailearning_backend.db.models import Class, Gender, Student
+
+    monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
+    from apps.backend.wailearning_backend.core.config import settings
+
+    monkeypatch.setattr(settings, "ALLOW_PUBLIC_REGISTRATION", True)
+
+    db = SessionLocal()
+    try:
+        klass = Class(name=f"PublicBindGuard_{uuid.uuid4().hex[:8]}", grade=2026)
+        db.add(klass)
+        db.flush()
+        student = Student(name="Existing", student_no=f"existing_{uuid.uuid4().hex[:8]}", gender=Gender.MALE, class_id=klass.id)
+        db.add(student)
+        db.flush()
+        class_id = klass.id
+        student_id = student.id
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.post(
+        "/api/auth/register",
+        json={
+            "username": f"public_bind_attempt_{uuid.uuid4().hex[:8]}",
+            "password": "ValidPass9!",
+            "real_name": "attacker",
+            "role": "student",
+            "class_id": class_id,
+            "student_id": student_id,
+        },
+    )
+
+    assert r.status_code == 403
+    assert "bind" in (r.json().get("detail") or "").lower()

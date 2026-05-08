@@ -15,7 +15,7 @@ from apps.backend.wailearning_backend.attachments import (
     save_attachment,
 )
 from apps.backend.wailearning_backend.core.auth import get_current_active_user
-from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http
+from apps.backend.wailearning_backend.domains.courses.access import ensure_course_access_http, get_student_profile_for_user
 from apps.backend.wailearning_backend.db.database import get_db
 from apps.backend.wailearning_backend.db.models import CourseMaterial, Homework, HomeworkAttempt, HomeworkSubmission, Notification, Subject, User, UserRole
 from apps.backend.wailearning_backend.api.routers.classes import get_accessible_class_ids
@@ -41,6 +41,7 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
         return True
 
     allowed_class_ids = set(get_accessible_class_ids(current_user, db))
+    current_student = get_student_profile_for_user(current_user, db) if current_user.role == UserRole.STUDENT else None
 
     homework = db.query(Homework).filter(Homework.attachment_url == attachment_url).first()
     if homework:
@@ -80,7 +81,7 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
     submission = db.query(HomeworkSubmission).filter(HomeworkSubmission.attachment_url == attachment_url).first()
     if submission:
         if current_user.role == UserRole.STUDENT:
-            return submission.student is not None and submission.student.student_no == current_user.username
+            return current_student is not None and submission.student_id == current_student.id
         if current_user.role == UserRole.ADMIN or submission.class_id in allowed_class_ids:
             if submission.subject_id:
                 try:
@@ -93,7 +94,7 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
     attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.attachment_url == attachment_url).first()
     if attempt:
         if current_user.role == UserRole.STUDENT:
-            return attempt.student is not None and attempt.student.student_no == current_user.username
+            return current_student is not None and attempt.student_id == current_student.id
         if current_user.role == UserRole.ADMIN or attempt.class_id in allowed_class_ids:
             if attempt.subject_id:
                 try:

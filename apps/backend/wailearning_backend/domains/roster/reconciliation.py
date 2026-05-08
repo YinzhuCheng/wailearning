@@ -1,4 +1,4 @@
-"""Sync Student roster rows from student User accounts (username = student_no, same class)."""
+"""Sync canonical Student rows from student User accounts."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context
+from apps.backend.wailearning_backend.domains.roster.identity import get_bound_student_for_user
 from apps.backend.wailearning_backend.db.models import Class, Gender, Student, User, UserRole
 from apps.backend.wailearning_backend.api.schemas import StudentRosterUpsertFromUsersError, StudentRosterUpsertFromUsersResponse
 
@@ -41,16 +42,6 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
                 )
             )
             continue
-        if not user.class_id:
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id,
-                    username=user.username,
-                    reason="学生账号未分配班级，无法写入花名册",
-                )
-            )
-            continue
-
         student_no = (user.username or "").strip()
         if not student_no:
             errors.append(
@@ -61,6 +52,32 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
             continue
 
         display_name = (user.real_name or "").strip() or student_no
+        bound_student = get_bound_student_for_user(user, db, bind_legacy=True)
+        if bound_student:
+            changed = False
+            if (bound_student.name or "").strip() != display_name:
+                bound_student.name = display_name
+                changed = True
+            if user.class_id and bound_student.class_id != user.class_id:
+                bound_student.class_id = user.class_id
+                changed = True
+            if not (bound_student.student_no or "").strip():
+                bound_student.student_no = student_no
+                changed = True
+            updated += 1 if changed else 0
+            skipped += 0 if changed else 1
+            prepare_student_course_context(user, db)
+            continue
+
+        if not user.class_id:
+            errors.append(
+                StudentRosterUpsertFromUsersError(
+                    user_id=user.id,
+                    username=user.username,
+                    reason="学生账号未分配班级，无法创建学生档案",
+                )
+            )
+            continue
 
         existing_same_class = (
             db.query(Student)
@@ -68,6 +85,7 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
             .first()
         )
         if existing_same_class:
+            user.student_id = existing_same_class.id
             if (existing_same_class.name or "").strip() != display_name:
                 existing_same_class.name = display_name
                 updated += 1
@@ -120,6 +138,7 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
                 .first()
             )
             if raced:
+                user.student_id = raced.id
                 if (raced.name or "").strip() != display_name:
                     raced.name = display_name
                     updated += 1
@@ -137,6 +156,7 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
             continue
 
         created += 1
+        user.student_id = roster.id
         prepare_student_course_context(user, db)
 
     return StudentRosterUpsertFromUsersResponse(

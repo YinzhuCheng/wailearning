@@ -34,6 +34,7 @@ from apps.backend.wailearning_backend.domains.roster.sync import (
     reconcile_student_users_and_roster,
     sync_student_user_from_roster_row,
 )
+from apps.backend.wailearning_backend.domains.roster.identity import generate_student_no
 
 
 router = APIRouter(prefix="/api/students", tags=["学生管理"])
@@ -56,7 +57,7 @@ CHINESE_DIGITS = {
 
 class BatchStudentItem(BaseModel):
     name: str
-    student_no: str
+    student_no: Optional[str] = None
     gender: Optional[str] = None
     class_id: Optional[int] = None
     class_name: Optional[str] = None
@@ -106,29 +107,37 @@ def serialize_students(students: List[Student], db: Session) -> List[StudentResp
         return []
 
     class_ids = {student.class_id for student in students if student.class_id is not None}
-    student_nos = {
-        clean_text(student.student_no)
-        for student in students
-        if clean_text(student.student_no)
-    }
+    student_ids = {student.id for student in students if student.id is not None}
+    student_nos = {clean_text(student.student_no) for student in students if clean_text(student.student_no)}
 
     class_map = {}
     if class_ids:
         class_rows = db.query(Class.id, Class.name).filter(Class.id.in_(class_ids)).all()
         class_map = {class_id: class_name for class_id, class_name in class_rows}
 
+    bound_student_ids = set()
     existing_usernames = set()
+    if student_ids:
+        bound_student_ids = {
+            sid
+            for (sid,) in db.query(User.student_id)
+            .filter(User.role == UserRole.STUDENT.value, User.student_id.in_(student_ids))
+            .all()
+            if sid is not None
+        }
     if student_nos:
         existing_usernames = {
             username
-            for (username,) in db.query(User.username).filter(User.username.in_(student_nos)).all()
+            for (username,) in db.query(User.username)
+            .filter(User.role == UserRole.STUDENT.value, User.username.in_(student_nos))
+            .all()
         }
 
     return [
         build_student_response(
             student,
             class_name=class_map.get(student.class_id),
-            has_user=clean_text(student.student_no) in existing_usernames,
+            has_user=student.id in bound_student_ids or clean_text(student.student_no) in existing_usernames,
         )
         for student in students
     ]
@@ -310,8 +319,10 @@ def create_student(
     if student_data.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权在该班级添加学生")
 
+    student_no = clean_text(student_data.student_no) or generate_student_no(db)
+
     existing = db.query(Student).filter(
-        Student.student_no == student_data.student_no,
+        Student.student_no == student_no,
         Student.class_id == student_data.class_id,
     ).first()
     if existing:
@@ -337,7 +348,7 @@ def create_student(
 
     student = Student(
         name=student_data.name,
-        student_no=student_data.student_no,
+        student_no=student_no,
         gender=student_data.gender,
         phone=student_data.phone,
         parent_phone=student_data.parent_phone,
@@ -394,12 +405,6 @@ def create_students_batch(
             failed_data.append({"row": row_number, "name": "", "student_no": student_no, "error": "缺少姓名"})
             continue
 
-        if not student_no:
-            message = f"第 {row_number} 行缺少学号"
-            errors.append(message)
-            failed_data.append({"row": row_number, "name": name, "student_no": "", "error": "缺少学号"})
-            continue
-
         try:
             raw_gender = clean_text(row.gender)
             if not raw_gender:
@@ -429,6 +434,9 @@ def create_students_batch(
             errors.append(f"第 {row_number} 行{exc}")
             failed_data.append({"row": row_number, "name": name, "student_no": student_no, "error": str(exc)})
             continue
+
+        if not student_no:
+            student_no = generate_student_no(db)
 
         student_key = (class_obj.id, student_no)
         if student_key in seen_student_keys:
@@ -580,6 +588,10 @@ def delete_student(
         raise HTTPException(status_code=403, detail="无权删除该学生")
 
     try:
+        db.query(User).filter(User.student_id == student_id).update(
+            {User.student_id: None, User.class_id: None, User.is_active: False},
+            synchronize_session=False,
+        )
         db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student_id).delete()
         submissions = db.query(HomeworkSubmission).filter(HomeworkSubmission.student_id == student_id).all()
         attempts = db.query(HomeworkAttempt).filter(HomeworkAttempt.student_id == student_id).all()

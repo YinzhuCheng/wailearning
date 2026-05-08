@@ -197,6 +197,94 @@ def test_post_students_omit_gender_defaults_to_male(client: TestClient):
     assert quota.json().get("daily_student_token_limit") is not None
 
 
+def test_post_students_without_student_no_generates_bound_student_account(client: TestClient):
+    h = _admin_headers(client)
+    suf = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        k = Class(name=f"AutoNo_{suf}", grade=2026)
+        db.add(k)
+        db.flush()
+        kid = k.id
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.post(
+        "/api/students",
+        headers=h,
+        json={
+            "name": "Auto Number",
+            "gender": "male",
+            "class_id": kid,
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["student_no"].startswith("SYS")
+    assert body["has_user"] is True
+
+    db = SessionLocal()
+    try:
+        st = db.query(Student).filter(Student.id == body["id"]).one()
+        u = db.query(User).filter(User.student_id == st.id).one()
+        assert u.role == "student"
+        assert u.username == st.student_no
+        assert u.class_id == kid
+    finally:
+        db.close()
+
+
+def test_create_student_user_can_bind_existing_student_id_without_username_student_no_match(client: TestClient):
+    h = _admin_headers(client)
+    suf = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        k = Class(name=f"BindExisting_{suf}", grade=2026)
+        db.add(k)
+        db.flush()
+        st = Student(
+            name="Canonical Student",
+            student_no=f"real_no_{suf}",
+            gender=Gender.MALE,
+            class_id=k.id,
+        )
+        db.add(st)
+        db.flush()
+        kid = k.id
+        sid = st.id
+        db.commit()
+    finally:
+        db.close()
+
+    username = f"login_only_{suf}"
+    r = client.post(
+        "/api/users",
+        headers=h,
+        json={
+            "username": username,
+            "password": "p",
+            "real_name": "Canonical Student",
+            "role": "student",
+            "student_id": sid,
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["student_id"] == sid
+    assert body["class_id"] == kid
+
+    db = SessionLocal()
+    try:
+        st = db.query(Student).filter(Student.id == sid).one()
+        u = db.query(User).filter(User.username == username).one()
+        assert u.student_id == sid
+        assert u.class_id == kid
+        assert st.student_no == f"real_no_{suf}"
+    finally:
+        db.close()
+
+
 def test_batch_students_row_without_gender_key_succeeds_as_male(client: TestClient):
     h = _admin_headers(client)
     suf = uuid.uuid4().hex[:8]

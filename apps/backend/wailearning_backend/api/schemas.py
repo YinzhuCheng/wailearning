@@ -29,6 +29,7 @@ class UserBase(BaseModel):
     real_name: str
     role: str = UserRole.TEACHER.value
     class_id: Optional[int] = None
+    student_id: Optional[int] = None
 
     @field_validator("role", mode="before")
     @classmethod
@@ -45,8 +46,8 @@ class UserCreate(UserBase):
     def _require_class_for_students(self):
         r = (self.role or "").strip()
         if r in (UserRole.STUDENT.value,):
-            if self.class_id is None:
-                raise ValueError("class_id is required for student accounts.")
+            if self.class_id is None and self.student_id is None:
+                raise ValueError("class_id or student_id is required for student accounts.")
         return self
 
 
@@ -55,6 +56,7 @@ class UserUpdate(BaseModel):
     real_name: Optional[str] = None
     role: Optional[str] = None
     class_id: Optional[int] = None
+    student_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 
@@ -444,7 +446,7 @@ class ClassResponse(BaseModel):
 
 class StudentBase(BaseModel):
     name: str
-    student_no: str
+    student_no: Optional[str] = None
     gender: Gender
     phone: Optional[str] = None
     parent_phone: Optional[str] = None

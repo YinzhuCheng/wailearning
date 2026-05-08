@@ -1,8 +1,8 @@
 """Bidirectional sync between User (student accounts) and Student (roster rows).
 
-Ensures deployment seeds and admin CRUD stay aligned: student login accounts have
-matching roster rows when possible, and roster rows get matching accounts with
-username == student_no (same class).
+Ensures deployment seeds and admin CRUD stay aligned: student login accounts bind
+to canonical Student rows through users.student_id. Legacy username == student_no
+matching is still used as a recovery path.
 """
 
 from __future__ import annotations
@@ -12,21 +12,28 @@ from sqlalchemy.orm import Session
 from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context, sync_student_course_enrollments
 from apps.backend.wailearning_backend.db.models import Student, User, UserRole
+from apps.backend.wailearning_backend.domains.roster.identity import (
+    backfill_student_user_bindings,
+    clean_student_text,
+    find_user_for_student,
+    generate_student_no,
+)
 from apps.backend.wailearning_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 
 
 def _clean(s: object | None) -> str:
-    return (str(s).strip() if s is not None else "").strip()
+    return clean_student_text(s)
 
 
 def sync_student_user_from_roster_row(db: Session, student: Student) -> None:
-    """Ensure a User row exists and matches this roster (username == student_no, same class). Does not commit."""
+    """Ensure a User row exists and is bound to this Student row. Does not commit."""
     student_no = _clean(student.student_no)
     if not student_no:
-        return
+        student.student_no = generate_student_no(db)
+        student_no = _clean(student.student_no)
 
     display_name = _clean(student.name) or student_no
-    user = db.query(User).filter(User.username == student_no).first()
+    user = find_user_for_student(db, student)
 
     if not user:
         db.add(
@@ -36,6 +43,7 @@ def sync_student_user_from_roster_row(db: Session, student: Student) -> None:
                 real_name=display_name,
                 role=UserRole.STUDENT.value,
                 class_id=student.class_id,
+                student_id=student.id,
                 is_active=True,
             )
         )
@@ -43,11 +51,14 @@ def sync_student_user_from_roster_row(db: Session, student: Student) -> None:
         sync_student_course_enrollments(student, db)
         linked = db.query(User).filter(User.username == student_no).first()
         if linked:
+            linked.student_id = student.id
             prepare_student_course_context(linked, db)
         return
 
     if (user.role or "").strip() != UserRole.STUDENT.value:
         user.role = UserRole.STUDENT.value
+    if user.student_id != student.id:
+        user.student_id = student.id
     if user.class_id != student.class_id:
         user.class_id = student.class_id
     if _clean(user.real_name) != display_name:
@@ -60,10 +71,9 @@ def sync_student_user_from_roster_row(db: Session, student: Student) -> None:
 
 
 def sync_student_users_from_roster(db: Session) -> None:
-    """For each roster row with student_no, align the corresponding User account."""
+    """For each roster row, align the bound User account."""
     for st in db.query(Student).all():
-        if _clean(st.student_no):
-            sync_student_user_from_roster_row(db, st)
+        sync_student_user_from_roster_row(db, st)
 
 
 def sync_roster_from_all_student_users(db: Session):
@@ -89,6 +99,7 @@ def reconcile_student_users_and_roster(db: Session) -> dict[str, int]:
     Does not commit.
     """
     db.flush()
+    backfill_student_user_bindings(db)
     res = sync_roster_from_all_student_users(db)
     sync_student_users_from_roster(db)
     return {

@@ -18,6 +18,7 @@ from apps.backend.wailearning_backend.core.permissions import can_manage_student
 from sqlalchemy import false as sql_false
 
 from apps.backend.wailearning_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
+from apps.backend.wailearning_backend.domains.courses.access import get_student_profile_for_user
 from datetime import datetime
 
 router = APIRouter(prefix="/api/points", tags=["积分系统"])
@@ -153,21 +154,11 @@ def get_my_points(
     if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=400, detail="仅学生可查看个人积分")
 
-    if not current_user.class_id:
-        raise HTTPException(status_code=400, detail="未分配班级")
-
-    student = (
-        db.query(Student)
-        .filter(
-            Student.class_id == current_user.class_id,
-            Student.student_no == current_user.username,
-        )
-        .first()
-    )
+    student = get_student_profile_for_user(current_user, db)
     if not student:
         raise HTTPException(
             status_code=404,
-            detail="未找到与当前登录账号学号一致的学生档案，请联系管理员。",
+            detail="未找到与当前账号绑定的学生档案，请联系管理员。",
         )
 
     sp = _ensure_student_point_row(db, student.id)
@@ -382,20 +373,13 @@ def exchange_item(
         if student.class_id not in accessible_class_ids:
             raise HTTPException(status_code=403, detail="无权为该学生兑换")
     else:
-        if current_user.role != UserRole.STUDENT or not current_user.class_id:
-            raise HTTPException(status_code=400, detail="仅学生可自助兑换，且需已分配班级。")
-        student = (
-            db.query(Student)
-            .filter(
-                Student.class_id == current_user.class_id,
-                Student.student_no == current_user.username,
-            )
-            .first()
-        )
+        if current_user.role != UserRole.STUDENT:
+            raise HTTPException(status_code=400, detail="仅学生可自助兑换。")
+        student = get_student_profile_for_user(current_user, db)
         if not student:
             raise HTTPException(
                 status_code=404,
-                detail="未找到与当前登录账号学号一致的学生档案，请联系管理员。",
+                detail="未找到与当前账号绑定的学生档案，请联系管理员。",
             )
         student_id = student.id
 

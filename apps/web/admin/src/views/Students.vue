@@ -46,7 +46,7 @@
         <template #title>课程花名册与选课</template>
         <p class="alert-body">
           选课名单与<strong>行政班花名册必须一致</strong>：只能给「本课程所属班级」里已有的学生加选课；请在<strong>课程管理</strong>中打开「从花名册进课」，使用「全班加入选课」或勾选后进课。
-          学生登录用户名须与<strong>学号</strong>一致才能交作业。可在此维护花名册：支持<strong>文件导入</strong>或<strong>粘贴批量导入</strong>；导入时「所属班级」可留空，将默认填入当前课程班级。
+          学生账号会与花名册学生档案绑定后用于交作业。可在此维护花名册：支持<strong>文件导入</strong>或<strong>粘贴批量导入</strong>；导入时「所属班级」可留空，将默认填入当前课程班级，学号可留空并由系统自动生成。
           若人数为 0 或新生进班后未出现在选课中，请先确认花名册中已有该生，再在课程管理中同步选课。
         </p>
       </el-alert>
@@ -203,10 +203,10 @@
         <el-alert type="info" :closable="false" class="file-import-alert">
           <template #title>格式说明</template>
           <p v-if="isAdminView" class="alert-body">
-            支持 <strong>Excel（.xlsx / .xls）</strong> 或 <strong>CSV</strong>。表头须包含列：<strong>姓名、性别、学号、所属班级</strong>（与模板一致）。导入时若发现新班级，仅管理员可自动创建班级。
+            支持 <strong>Excel（.xlsx / .xls）</strong> 或 <strong>CSV</strong>。表头须包含列：<strong>姓名、性别、学号、所属班级</strong>（与模板一致）；其中学号可留空，系统会自动生成。导入时若发现新班级，仅管理员可自动创建班级。
           </p>
           <p v-else class="alert-body">
-            支持 <strong>Excel</strong> 或 <strong>CSV</strong>；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）。仅管理员可创建登录账号；进课请在课程管理中打开「从花名册进课」。
+            支持 <strong>Excel</strong> 或 <strong>CSV</strong>；列为：姓名、性别、学号、所属班级（可留空，将使用当前课程班级）；学号也可留空，系统会自动生成。仅管理员可创建登录账号；进课请在课程管理中打开「从花名册进课」。
           </p>
         </el-alert>
 
@@ -239,7 +239,7 @@
         <el-alert type="info" :closable="false" class="paste-alert">
           <template #title>格式说明</template>
           <p class="alert-body">
-            每行一名学生，列为：<strong>姓名、性别、学号、所属班级</strong>，中间用 <strong>Tab</strong> 或<strong>英文逗号</strong>分隔（与 Excel 复制到记事本一致）。
+            每行一名学生，列为：<strong>姓名、性别、学号、所属班级</strong>，中间用 <strong>Tab</strong> 或<strong>英文逗号</strong>分隔（与 Excel 复制到记事本一致）；学号可留空。
             任课教师场景下「所属班级」可省略，将使用当前课程班级。表头行（以「姓名」开头）会自动跳过。
           </p>
         </el-alert>
@@ -697,11 +697,6 @@ const parseImportRows = (rows, options = {}) => {
 
     if (!gender) {
       errors.push(`第 ${rowNumber} 行“性别”仅支持 男/女`)
-      return
-    }
-
-    if (!studentNo) {
-      errors.push(`第 ${rowNumber} 行缺少“学号”`)
       return
     }
 

@@ -4,7 +4,7 @@
       <div>
         <h1 class="page-title">用户管理</h1>
         <p class="page-subtitle">
-          支持管理员、班主任、任课老师和学生四类用户。学生<strong>花名册</strong>是学生管理与选课的唯一权威来源；打开列表时会自动按学号与用户账号双向对齐（同名同班、初始密码为学号）。新建学生请在<strong>学生管理</strong>维护花名册，或使用<strong>批量调班</strong> / <strong>加入课程…</strong>调整已有学生账号。
+          支持管理员、班主任、任课老师和学生四类用户。学生账号会绑定到学生档案；花名册仍是学生管理与选课的权威来源，但系统不再要求用户名必须等于学号。新建学生请在<strong>学生管理</strong>维护花名册，或使用<strong>批量调班</strong> / <strong>加入课程…</strong>调整已有学生账号。
         </p>
       </div>
       <div class="page-actions">
@@ -140,7 +140,7 @@
       <el-alert type="info" :closable="false" class="batch-class-alert">
         <template #title>说明</template>
         <p class="batch-class-alert-body">
-          仅支持<strong>学生</strong>角色。将把所选账号的「所属班级」统一改到下方班级，并自动与<strong>学号相同</strong>的花名册记录对齐（含选课同步）。
+          仅支持<strong>学生</strong>角色。将把所选账号的「所属班级」统一改到下方班级，并自动同步它们绑定的花名册记录（含选课同步）。
         </p>
       </el-alert>
 
@@ -189,7 +189,7 @@
       <el-alert type="info" :closable="false" class="batch-class-alert">
         <template #title>说明</template>
         <p class="batch-class-alert-body">
-          仅处理已勾选且角色为<strong>学生</strong>的账号。花名册应与账号一致（用户名即学号）；将把所选学生加入下方课程的选课名单（须与本班花名册一致）。
+          仅处理已勾选且角色为<strong>学生</strong>的账号。将优先按已绑定的学生档案进课，未绑定时再按学号匹配花名册；最终仍需落到本班花名册中。
         </p>
       </el-alert>
       <el-form label-width="100px" class="batch-class-form">
@@ -238,7 +238,7 @@
       <el-alert v-if="resetPwdTarget" type="info" :closable="false" class="reset-pwd-alert">
         <template #title>规则说明</template>
         <p v-if="resetPwdTarget.role === 'student'" class="reset-pwd-alert-body">
-          学生默认新密码为<strong>用户名（学号）</strong>；也可在下方填写自定义密码。
+          学生默认新密码优先使用<strong>用户名</strong>；历史学生账号若仍与学号一致也会沿用该值。也可在下方填写自定义密码。
         </p>
         <p v-else-if="resetPwdTarget.role === 'admin'" class="reset-pwd-alert-body">
           重置<strong>管理员</strong>密码必须填写新密码。
@@ -342,7 +342,7 @@ const isDeleteDisabled = user => user.role === 'admin'
 
 const resetPwdPlaceholder = computed(() => {
   const r = resetPwdTarget.value?.role
-  if (r === 'student') return '留空则使用用户名（学号）作为新密码'
+  if (r === 'student') return '留空则使用用户名作为新密码'
   if (r === 'admin') return '必填'
   return '留空则使用默认 111111'
 })
@@ -474,23 +474,21 @@ const submitAddToCourse = async () => {
         page_size: 500
       })
     )
-    const noToId = new Map(
-      (rosterRows || []).map(r => [`${(r.student_no || '').trim()}`, r.id]).filter(([k]) => k)
-    )
+    const rosterById = new Map((rosterRows || []).map(r => [r.id, r.id]))
+    const noToId = new Map((rosterRows || []).map(r => [`${(r.student_no || '').trim()}`, r.id]).filter(([k]) => k))
     const studentIds = []
     const missingNames = []
     for (const u of batchSelectedStudents.value) {
-      const key = `${(u.username || '').trim()}`
-      const sid = noToId.get(key)
+      const sid = u.student_id && rosterById.has(u.student_id) ? u.student_id : noToId.get(`${(u.username || '').trim()}`)
       if (sid) {
         studentIds.push(sid)
-      } else if (key) {
-        missingNames.push(key)
+      } else if (u.real_name || u.username) {
+        missingNames.push(u.real_name || u.username)
       }
     }
     if (missingNames.length) {
       await ElMessageBox.alert(
-        `以下学号在课程所属班级的花名册中仍未找到，无法进课：\n${missingNames.slice(0, 15).join('、')}${
+        `以下学生账号在课程所属班级的花名册中仍未找到，无法进课：\n${missingNames.slice(0, 15).join('、')}${
           missingNames.length > 15 ? '…' : ''
         }`,
         '无法匹配花名册',

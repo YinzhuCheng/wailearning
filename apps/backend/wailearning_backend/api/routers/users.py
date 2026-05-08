@@ -42,6 +42,7 @@ from apps.backend.wailearning_backend.api.schemas import (
     UserUpdate,
 )
 from apps.backend.wailearning_backend.domains.courses.access import prepare_student_course_context, sync_student_course_enrollments
+from apps.backend.wailearning_backend.domains.roster.identity import get_bound_student_for_user
 from apps.backend.wailearning_backend.services.logging import LogService
 from apps.backend.wailearning_backend.core.permissions import is_admin
 
@@ -63,9 +64,9 @@ def validate_class_exists(class_id: Optional[int], db: Session) -> None:
         raise HTTPException(status_code=400, detail="班级不存在")
 
 
-def _require_class_id_for_student(role: str, class_id: Optional[int]) -> None:
-    if (role or "").strip() == UserRole.STUDENT.value and class_id is None:
-        raise HTTPException(status_code=400, detail="学生账号必须分配班级 (class_id)。")
+def _require_class_or_student_for_student(role: str, class_id: Optional[int], student_id: Optional[int] = None) -> None:
+    if (role or "").strip() == UserRole.STUDENT.value and class_id is None and student_id is None:
+        raise HTTPException(status_code=400, detail="学生账号必须分配班级或绑定学生档案。")
 
 
 def delete_user_homeworks(user_id: int, db: Session) -> None:
@@ -174,14 +175,22 @@ def batch_set_user_class(
             continue
         if user.class_id == payload.class_id:
             continue
+        roster = get_bound_student_for_user(user, db, bind_legacy=True)
+        if roster and roster.class_id != payload.class_id:
+            db.query(CourseEnrollment).filter(CourseEnrollment.student_id == roster.id).delete(
+                synchronize_session=False
+            )
+            roster.class_id = payload.class_id
+            db.flush()
+            sync_student_course_enrollments(roster, db)
         user.class_id = payload.class_id
         if user.username and (user.role or "").strip() == UserRole.STUDENT.value:
             prepare_student_course_context(user, db)
         updated += 1
 
-    moved_student_ids = [u.id for u in users if (u.role or "").strip() == UserRole.STUDENT.value and u.class_id]
-    if moved_student_ids:
-        sync_student_roster_from_user_accounts(db, moved_student_ids)
+    moved_user_ids = [u.id for u in users if (u.role or "").strip() == UserRole.STUDENT.value and u.class_id]
+    if moved_user_ids:
+        sync_student_roster_from_user_accounts(db, moved_user_ids)
 
     db.commit()
 
@@ -227,8 +236,19 @@ def create_user(
         raise HTTPException(status_code=400, detail="用户名已存在")
 
     managed_class_id = normalize_managed_class_id(user_data.role, user_data.class_id)
-    _require_class_id_for_student(user_data.role, managed_class_id)
+    _require_class_or_student_for_student(user_data.role, managed_class_id, user_data.student_id)
     validate_class_exists(managed_class_id, db)
+    linked_student = None
+    if user_data.student_id is not None:
+        linked_student = db.query(Student).filter(Student.id == user_data.student_id).first()
+        if not linked_student:
+            raise HTTPException(status_code=400, detail="绑定的学生不存在")
+        if user_data.role != UserRole.STUDENT.value:
+            raise HTTPException(status_code=400, detail="只有学生账号可以绑定学生档案")
+        existing_binding = db.query(User).filter(User.student_id == linked_student.id).first()
+        if existing_binding:
+            raise HTTPException(status_code=400, detail="该学生档案已绑定账号")
+        managed_class_id = linked_student.class_id
 
     user = User(
         username=user_data.username,
@@ -236,10 +256,11 @@ def create_user(
         real_name=user_data.real_name,
         role=user_data.role,
         class_id=managed_class_id,
+        student_id=linked_student.id if linked_student else None,
     )
     db.add(user)
     db.flush()
-    if user.role == UserRole.STUDENT.value and user.class_id:
+    if user.role == UserRole.STUDENT.value:
         sync_student_roster_from_user_accounts(db, [user.id])
     db.commit()
     db.refresh(user)
@@ -333,8 +354,9 @@ def update_user(
 
     requested_role_change = "role" in user_data.model_fields_set
     requested_class_change = "class_id" in user_data.model_fields_set
+    requested_student_binding_change = "student_id" in user_data.model_fields_set
 
-    if not is_admin(current_user) and (requested_role_change or requested_class_change):
+    if not is_admin(current_user) and (requested_role_change or requested_class_change or requested_student_binding_change):
         raise HTTPException(status_code=403, detail="无权修改权限或班级")
 
     next_role = user_data.role if requested_role_change else user.role
@@ -343,8 +365,30 @@ def update_user(
         if requested_class_change or next_role == UserRole.TEACHER.value
         else user.class_id
     )
-    _require_class_id_for_student(next_role, next_class_id)
+    _require_class_or_student_for_student(
+        next_role,
+        next_class_id,
+        user_data.student_id if requested_student_binding_change else user.student_id,
+    )
     validate_class_exists(next_class_id, db)
+    linked_student = None
+    if requested_student_binding_change:
+        if user_data.student_id is not None:
+            linked_student = db.query(Student).filter(Student.id == user_data.student_id).first()
+            if not linked_student:
+                raise HTTPException(status_code=400, detail="绑定的学生不存在")
+            if next_role != UserRole.STUDENT.value:
+                raise HTTPException(status_code=400, detail="只有学生账号可以绑定学生档案")
+            existing_binding = (
+                db.query(User)
+                .filter(User.student_id == linked_student.id, User.id != user.id)
+                .first()
+            )
+            if existing_binding:
+                raise HTTPException(status_code=400, detail="该学生档案已绑定账号")
+            next_class_id = linked_student.class_id
+        else:
+            linked_student = None
 
     changes = []
     if user_data.username is not None:
@@ -365,12 +409,24 @@ def update_user(
     if requested_role_change and is_admin(current_user) and user.role != next_role:
         changes.append(f"角色: {user.role} -> {next_role}")
         user.role = next_role
+        if next_role != UserRole.STUDENT.value and user.student_id is not None:
+            changes.append(f"学生档案ID: {user.student_id} -> None")
+            user.student_id = None
+
+    if requested_student_binding_change and is_admin(current_user):
+        old_student_id = user.student_id
+        user.student_id = linked_student.id if linked_student else None
+        changes.append(f"学生档案ID: {old_student_id} -> {user.student_id}")
+        if linked_student:
+            next_class_id = linked_student.class_id
 
     if is_admin(current_user) and user.class_id != next_class_id:
         changes.append(f"班级ID: {user.class_id} -> {next_class_id}")
-        if user.role == UserRole.STUDENT.value and user.username:
+        if user.role == UserRole.STUDENT.value:
             roster = (
-                db.query(Student)
+                db.query(Student).filter(Student.id == user.student_id).first()
+                if user.student_id
+                else db.query(Student)
                 .filter(Student.student_no == user.username, Student.class_id == user.class_id)
                 .first()
             )
@@ -388,7 +444,7 @@ def update_user(
         changes.append(f"状态: {user.is_active} -> {user_data.is_active}")
         user.is_active = user_data.is_active
 
-    if user.role == UserRole.STUDENT.value and user.username and user.class_id:
+    if user.role == UserRole.STUDENT.value and user.username:
         sync_student_roster_from_user_accounts(db, [user.id])
 
     db.commit()

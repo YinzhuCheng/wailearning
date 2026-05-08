@@ -29,6 +29,7 @@ from apps.backend.wailearning_backend.db.models import (
     CourseEnrollmentBlock,
     Gender,
     Homework,
+    HomeworkSubmission,
     Student,
     Subject,
     User,
@@ -244,8 +245,8 @@ def test_teacher_student_count_matches_course_enrollment_rows(client: TestClient
     assert row["student_count"] == len(r_students.json())
 
 
-def test_student_username_mismatch_student_no_cannot_submit(client: TestClient):
-    """A student account with a unique username gets its own same-class roster row."""
+def test_student_username_mismatch_uses_explicit_student_binding_for_submission(client: TestClient):
+    """A student account no longer needs username == student_no when it is bound to Student."""
     ctx = _teacher_and_class(client)
     db = SessionLocal()
     try:
@@ -272,6 +273,7 @@ def test_student_username_mismatch_student_no_cannot_submit(client: TestClient):
             real_name="王五",
             role=UserRole.STUDENT.value,
             class_id=ctx["class_id"],
+            student_id=st.id,
         )
         db.add(stu_user)
         db.flush()
@@ -300,19 +302,19 @@ def test_student_username_mismatch_student_no_cannot_submit(client: TestClient):
 
     db = SessionLocal()
     try:
-        generated_roster = (
-            db.query(Student)
-            .filter(Student.student_no == login_username, Student.class_id == ctx["class_id"])
-            .first()
-        )
         original_roster = (
             db.query(Student)
             .filter(Student.student_no == f"roster_no_{ctx['suffix']}", Student.class_id == ctx["class_id"])
             .first()
         )
-        assert generated_roster is not None
         assert original_roster is not None
-        assert generated_roster.id != original_roster.id
+        assert db.query(Student).filter(Student.student_no == login_username).count() == 0
+        assert (
+            db.query(HomeworkSubmission)
+            .filter(HomeworkSubmission.homework_id == hw_id, HomeworkSubmission.student_id == original_roster.id)
+            .first()
+            is not None
+        )
     finally:
         db.close()
 

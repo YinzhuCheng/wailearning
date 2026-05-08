@@ -73,7 +73,9 @@ def normalize_legacy_branding(value: str) -> str:
 def ensure_schema_updates() -> None:
     alter_statements = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id INTEGER REFERENCES students(id)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_student_id_unique ON users(student_id)",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS teacher_id INTEGER REFERENCES users(id)",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES classes(id)",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS semester_id INTEGER REFERENCES semesters(id)",
@@ -546,6 +548,7 @@ def ensure_schema_updates() -> None:
                 statement
                 .replace(" ADD COLUMN IF NOT EXISTS ", " ADD COLUMN ")
                 .replace(" INTEGER REFERENCES users(id)", " INTEGER")
+                .replace(" INTEGER REFERENCES students(id)", " INTEGER")
                 .replace(" INTEGER REFERENCES classes(id)", " INTEGER")
                 .replace(" INTEGER REFERENCES semesters(id)", " INTEGER")
                 .replace(" INTEGER REFERENCES subjects(id)", " INTEGER")

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from apps.backend.wailearning_backend.db.database import get_db
-from apps.backend.wailearning_backend.db.models import Class, Notification, OperationLog, User, UserRole
+from apps.backend.wailearning_backend.db.models import Class, Notification, OperationLog, Student, User, UserRole
 from apps.backend.wailearning_backend.attachments import delete_attachment_file_if_unreferenced, save_attachment
 from apps.backend.wailearning_backend.api.schemas import (
     ChangePasswordRequest,
@@ -241,11 +241,21 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     normalized_role = (user_data.role or "").strip()
     if normalized_role not in {UserRole.STUDENT.value}:
         raise HTTPException(status_code=403, detail="Public registration can only create student accounts.")
+    if user_data.student_id is not None:
+        raise HTTPException(status_code=403, detail="Public registration cannot bind an existing student profile.")
 
     if getattr(settings, "PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS", True):
         klass = db.query(Class).filter(Class.id == user_data.class_id).first()
         if not klass:
             raise HTTPException(status_code=400, detail="Invalid class_id: class does not exist.")
+
+    existing_student = (
+        db.query(Student)
+        .filter(Student.student_no == user_data.username, Student.class_id == user_data.class_id)
+        .first()
+    )
+    if existing_student and db.query(User).filter(User.student_id == existing_student.id).first():
+        raise HTTPException(status_code=400, detail="Student profile is already bound to an account.")
 
     hashed_password = get_password_hash(user_data.password)
     user = User(
@@ -253,11 +263,12 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         hashed_password=hashed_password,
         real_name=user_data.real_name,
         role=UserRole.STUDENT.value,
-        class_id=user_data.class_id
+        class_id=user_data.class_id,
+        student_id=existing_student.id if existing_student else None,
     )
     db.add(user)
     db.flush()
-    if user.role == UserRole.STUDENT.value and user.class_id:
+    if user.role == UserRole.STUDENT.value:
         sync_student_roster_from_user_accounts(db, [user.id])
     db.commit()
     db.refresh(user)

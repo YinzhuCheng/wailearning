@@ -14,7 +14,7 @@
       :closable="false"
       class="roster-tip"
       title="花名册说明"
-      description="维护班级花名册；保存后系统按学号与学生账号自动对齐（详见用户管理列表加载时的同步）。班主任/管理员可在用户管理中重置密码或调班。"
+      description="维护班级花名册；保存后系统会为学生账号建立绑定，学号可留空并由系统自动生成。班主任/管理员可在用户管理中重置密码或调班。"
     />
 
     <el-card shadow="never" v-loading="loading">
@@ -30,7 +30,7 @@
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="学号" prop="student_no">
+        <el-form-item label="学号（可空）" prop="student_no">
           <el-input v-model="form.student_no" maxlength="40" />
         </el-form-item>
 
@@ -133,7 +133,7 @@ const pageSubtitle = computed(() => {
 const rules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
-  student_no: [{ required: true, message: '请输入学号', trigger: 'blur' }],
+  student_no: [],
   class_id: [{ required: true, message: '请选择班级', trigger: 'change' }]
 }
 

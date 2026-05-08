@@ -117,35 +117,22 @@ def _ensure_homework_access(homework: Homework, current_user: User, db: Session)
 
 
 def _match_student_for_user(student_query, current_user: User) -> Optional[Student]:
-    """Map login user -> Student by student_no (must match user.username)."""
-    if not current_user.username:
+    """Map login user -> Student via canonical binding, constrained by the caller's query."""
+    student = get_student_profile_for_user(current_user, student_query.session)
+    if not student:
         return None
-    return student_query.filter(Student.student_no == current_user.username).first()
+    return student_query.filter(Student.id == student.id).first()
 
 
 def _resolve_student_for_user(homework: Homework, current_user: User, db: Session) -> Student:
     if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Only students can submit homework.")
 
-    if not current_user.username:
-        raise HTTPException(
-            status_code=404,
-            detail="学生账号缺少登录名，无法匹配花名册学号。请联系管理员。",
-        )
-
     roster = get_student_profile_for_user(current_user, db)
     if not roster:
-        same_no_other_class = (
-            db.query(Student).filter(Student.student_no == current_user.username).first()
-        )
-        if same_no_other_class:
-            raise HTTPException(
-                status_code=404,
-                detail="花名册中有相同学号，但所在班级与当前账号班级不一致。请管理员核对班级与学号。",
-            )
         raise HTTPException(
             status_code=404,
-            detail="未找到与当前账号匹配的花名册：请确认学号与登录用户名一致，且已在学生管理中录入本班。",
+            detail="未找到与当前账号绑定的学生档案，请联系管理员。",
         )
 
     if roster.class_id != homework.class_id:

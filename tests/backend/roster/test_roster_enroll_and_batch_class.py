@@ -203,6 +203,61 @@ def test_admin_batch_set_class_syncs_student_user(client: TestClient):
         db.close()
 
 
+def test_admin_batch_set_class_moves_bound_student_when_username_differs(client: TestClient):
+    suffix = "adm_bound"
+    db = SessionLocal()
+    try:
+        k1 = Class(name=f"A_{suffix}", grade=1)
+        k2 = Class(name=f"B_{suffix}", grade=1)
+        db.add_all([k1, k2])
+        db.flush()
+        st = Student(
+            name="Bound Move",
+            student_no=f"real_{suffix}",
+            gender=Gender.MALE,
+            class_id=k1.id,
+        )
+        db.add(st)
+        db.flush()
+        u = User(
+            username=f"login_{suffix}",
+            hashed_password=get_password_hash("p"),
+            real_name="Bound Move",
+            role=UserRole.STUDENT.value,
+            class_id=k1.id,
+            student_id=st.id,
+        )
+        db.add(u)
+        db.flush()
+        uid = u.id
+        sid = st.id
+        k2_id = k2.id
+        db.commit()
+    finally:
+        db.close()
+
+    ah = login_api(client, "adm", "a")
+    r = client.post(
+        "/api/users/batch-set-class",
+        headers=ah,
+        json={"user_ids": [uid], "class_id": k2_id},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["updated"] == 1
+    assert not r.json()["errors"]
+
+    db = SessionLocal()
+    try:
+        u2 = db.query(User).filter(User.id == uid).one()
+        st2 = db.query(Student).filter(Student.id == sid).one()
+        assert u2.student_id == sid
+        assert u2.class_id == k2_id
+        assert st2.class_id == k2_id
+        assert db.query(Student).filter(Student.student_no == f"login_{suffix}").count() == 0
+    finally:
+        db.close()
+
+
 def test_roster_enroll_forbidden_for_student(client: TestClient):
     ctx = _seed_teacher_course(client)
     db = SessionLocal()

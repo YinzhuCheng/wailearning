@@ -17,6 +17,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
+from apps.backend.wailearning_backend.domains.roster.identity import get_bound_student_for_user
 
 
 def subject_linked_class_ids(db: Session, subject_id: int) -> list[int]:
@@ -63,22 +64,11 @@ def _pending_course_enrollment_subject_ids(db: Session, student_id: int) -> set[
 
 def prepare_student_course_context(user: User, db: Session) -> None:
     """
-    For student accounts: align roster class with account class when unambiguous,
-    then ensure CourseEnrollment rows exist for all courses in that class.
-
-    Idempotent aside from one-time roster class_id correction when username matches
-    exactly one Student row in another class.
+    For student accounts: resolve the canonical Student row, backfill legacy
+    username/student_no bindings when possible, then ensure CourseEnrollment rows.
     """
-    if user.role != UserRole.STUDENT or not user.username or not user.class_id:
+    if user.role != UserRole.STUDENT or not user.username:
         return
-
-    roster_matches = db.query(Student).filter(Student.student_no == user.username).all()
-    if len(roster_matches) == 1:
-        st = roster_matches[0]
-        if st.class_id != user.class_id:
-            db.query(CourseEnrollment).filter(CourseEnrollment.student_id == st.id).delete(synchronize_session=False)
-            st.class_id = user.class_id
-            db.flush()
 
     student = get_student_profile_for_user(user, db)
     if not student:
@@ -97,14 +87,8 @@ def prepare_student_course_context(user: User, db: Session) -> None:
 
 
 def get_student_profile_for_user(user: User, db: Session) -> Optional[Student]:
-    """Roster student for this login: same class as the account and student_no == username."""
-    if not user.username or not user.class_id:
-        return None
-    return (
-        db.query(Student)
-        .filter(Student.student_no == user.username, Student.class_id == user.class_id)
-        .first()
-    )
+    """Canonical Student for this login, with legacy username/student_no fallback."""
+    return get_bound_student_for_user(user, db, bind_legacy=True)
 
 
 def get_accessible_courses_query(user: User, db: Session):

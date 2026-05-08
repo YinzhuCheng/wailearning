@@ -47,6 +47,7 @@ class User(Base):
     real_name = Column(String, nullable=False)
     role = Column(String, nullable=False, default=UserRole.TEACHER.value)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
+    student_id = Column(Integer, ForeignKey("students.id", use_alter=True), nullable=True, unique=True, index=True)
     avatar_url = Column(String, nullable=True)
     discussion_page_size = Column(Integer, nullable=True)
     token_version = Column(Integer, nullable=False, default=0)
@@ -54,7 +55,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     class_obj = relationship("Class", back_populates="teachers")
-    students = relationship("Student", back_populates="teacher")
+    students = relationship("Student", back_populates="teacher", foreign_keys="Student.teacher_id")
+    student_profile = relationship("Student", back_populates="user_account", foreign_keys=[student_id], uselist=False)
     courses = relationship("Subject", back_populates="teacher")
 
 
@@ -94,7 +96,8 @@ class Student(Base):
     )
 
     class_obj = relationship("Class", back_populates="students")
-    teacher = relationship("User", back_populates="students")
+    teacher = relationship("User", back_populates="students", foreign_keys=[teacher_id])
+    user_account = relationship("User", back_populates="student_profile", foreign_keys="User.student_id", uselist=False)
     scores = relationship("Score", back_populates="student")
     attendances = relationship("Attendance", back_populates="student")
     course_enrollments = relationship("CourseEnrollment", back_populates="student")
