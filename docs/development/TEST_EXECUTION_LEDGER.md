@@ -134,7 +134,7 @@ Avoid vague triggers such as "frontend changed" unless the target is genuinely b
 
 **Last branch:** `cursor/discussion-avatar-chat-ui-921d`
 
-**Last commit:** `this commit`
+**Last commit:** `6a95aad`
 
 **Last result:** `passed`
 
@@ -179,17 +179,17 @@ npm.cmd run build
 - Changes to frontend route definitions, shared API clients, or components used by E2E targets.
 - Changes that add or remove static assets consumed by the admin SPA.
 
-**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+**Last branch:** `cursor/unify-student-identity-plan`
 
 **Last commit:** `this commit`
 
 **Last result:** `passed`
 
-**Last run date:** `2026-05-08`
+**Last run date:** `2026-05-09`
 
-**Pass count:** `5`
+**Pass count:** `6`
 
-**Run count:** `5`
+**Run count:** `6`
 
 **Runs:**
 
@@ -200,6 +200,7 @@ npm.cmd run build
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `npm.cmd run build` (after `npm.cmd install` in `apps/web/admin`) | `passed` | Admin SPA build succeeded after adjusting the homework table action column and button spacing in `apps/web/admin/src/views/Homework.vue`; the prior failure was an environment precondition issue because `vite` was missing until admin dependencies were installed. | Build was run from `apps/web/admin`. `npm install` added the local package dependencies needed for `vite build`. |
 | 2026-05-08 | `cursor/unify-student-identity-plan` | `a15800c` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 26 seconds. | Run from `<repo>/apps/web/admin` after student/admin user UI copy and import-form changes for canonical student identity binding. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 | 2026-05-08 | `cursor/unify-student-identity-plan` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 29 seconds. | Run from `<repo>/apps/web/admin` after allowing student forms/imports to represent unassigned students. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 19 seconds. | Run from `<repo>/apps/web/admin` after allowing the user-management form to create student accounts without an assigned class. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 
 ### Test ID: `admin.e2e.learning_notes_attendance_cover_tier20`
 
@@ -613,6 +614,58 @@ git diff --check
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Python helpers compiled; PowerShell UTF-8 helper ran with `-Quiet`; `safe_show_text.py --escape` produced escaped output for the encoding doc; `safe_write_text.py` wrote an ignored `.e2e-run` smoke file; selected files reported `scanned=8 decode_errors=0 suspicious=0`; `git diff --check` passed. | The audit intentionally scanned the newly added helpers and edited docs, not the whole repository. Whole-repo suspicious-marker scans may report historical hotspots and should be interpreted through `ENCODING_AND_MOJIBAKE_SAFETY.md`. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `13` files; encoding scan reported `scanned=13 decode_errors=0 suspicious=0`. | This run validated the new placeholder expansion path in `run_validation_target.py` and the `--skip-if-empty` guard in `check_text_encoding.py`, replacing the earlier unresolved-placeholder blocker for this target. |
 
+### Test ID: `backend.roster.student_user_api_sync`
+
+**Category:** `backend-pytest`
+
+**Scope:** Focused roster/user API coverage for admin-created student users, canonical `Student` binding, unassigned student accounts, and user-to-roster synchronization. This target verifies `/api/users` creates and updates student accounts into the same `students + users.student_id` model used by student-management and import flows.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `tests/backend/roster/test_student_user_api_roster_sync.py`
+- `tests/backend/roster/test_admin_student_roster_from_users.py`
+- `apps/backend/wailearning_backend/api/routers/users.py`
+- `apps/backend/wailearning_backend/api/routers/students.py`
+- `apps/backend/wailearning_backend/api/schemas.py`
+- `apps/backend/wailearning_backend/domains/roster/reconciliation.py`
+- `apps/backend/wailearning_backend/domains/roster/sync.py`
+- `apps/backend/wailearning_backend/domains/roster/identity.py`
+
+**Retest triggers:**
+
+- Changes to `/api/users` create/update behavior for student-role users.
+- Changes to `UserCreate`, `UserUpdate`, or `UserResponse` student/class binding schemas.
+- Changes to `sync_student_roster_from_user_accounts` or `sync_student_user_from_roster_row`.
+- Changes to canonical `users.student_id` binding, unassigned student handling, or user-first student creation.
+- Changes to admin user-management UI that claims student users may be created before class assignment.
+
+**Last branch:** `cursor/unify-student-identity-plan`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-09`
+
+**Pass count:** `2`
+
+**Run count:** `2`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q` | `passed` | `9 passed, 29 warnings in 35.66s` | Focused API target passed after allowing admin-created student users to omit `class_id`; the new case proves `/api/users` creates an unassigned canonical `Student` and binds it through `users.student_id`. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py tests\backend\roster\test_roster_enroll_and_batch_class.py tests\backend\roster\test_student_identity_audit.py -q` | `passed` | `35 passed, 29 warnings in 160.36s` | Extended roster regression passed after backend cleanup and validation-registry updates. The same validation round also passed `py_compile` for changed backend modules/tests and `ops/scripts/dev/lint_validation_registry.py`. |
+
 ### Test ID: `backend.roster.student_identity_audit`
 
 **Category:** `backend-pytest`
@@ -651,9 +704,9 @@ git diff --check
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `1`
+**Pass count:** `4`
 
-**Run count:** `2`
+**Run count:** `5`
 
 **Runs:**
 
@@ -716,9 +769,9 @@ python ops\scripts\dev\run_validation_target.py static.validation_selector --dry
 
 **Last run date:** `2026-05-08`
 
-**Pass count:** `7`
+**Pass count:** `9`
 
-**Run count:** `7`
+**Run count:** `9`
 
 **Runs:**
 
@@ -731,6 +784,8 @@ python ops\scripts\dev\run_validation_target.py static.validation_selector --dry
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v`; `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `python ops\scripts\dev\run_validation_profile.py static --dry-run --timeout-seconds 120`; `python ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Final handoff validation passed after adding the committed validation automation handoff document; `15` unittest cases passed; static target runner passed; static profile dry-run passed; worktree selector returned `non_full_validation.status=acceptable` and `unmatched_paths=[]`; diff whitespace check passed. | Current worktree still had no repository `.venv`, so runner smoke used the current Python interpreter and recorded the fallback in ignored artifacts. Worktree selector considered the new handoff document and validation tooling files and recommended only static targets. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe -m py_compile ops\scripts\dev\run_validation_target.py tests\backend\manual\test_validation_selector.py`; `.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v`; `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Runner and selector tests passed after adding Playwright preflight integration, `spawn EPERM` environment classification, UTF-8 JSON stdout, and focused unittest coverage; `17` unittest cases passed; static target runner passed; selector reported `non_full_validation.status=acceptable` and no unmatched paths; diff whitespace check passed. | The same session separately validated `admin.e2e.core_flows_smoke` through both direct Playwright and `run_validation_target.py`; see that target's ledger entry for the environment blocker and final green runs. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe -m py_compile ops\scripts\dev\check_text_encoding.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py ops\scripts\dev\playwright_preflight.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v`; `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Validation tooling compiled; target registry parsed; `19` selector/runner/profile unittest cases passed; static selector target passed; selector reported `non_full_validation.status=acceptable` and `unmatched_paths=[]`; diff whitespace check passed. | This run covered `passed_with_deferred_review` profile output, `deferred_targets`, `<changed-text-files>` expansion, and the encoding scan `--skip-if-empty` guard. A separate `static.encoding_text_tools` target row records the real placeholder expansion scan. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py` | `passed` | Validation registry lint passed after adding `backend.roster.student_user_api_sync` and correcting roster audit target triggers. | This run validated registry structure and ledger ID references for the new user/roster API target. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py`; `git diff --check` | `passed` | Validation registry lint passed after correcting ledger metadata, and diff whitespace check passed. | This run verified the final registry/ledger state before committing the user-first unassigned student account change. |
 ## Known First-Version Limitations
 
 1. This first ledger version starts with the verified runs around commit `6a95aad`; it intentionally does not backfill older branch history from memory.

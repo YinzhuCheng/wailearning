@@ -288,6 +288,39 @@
       "notes": "If broader LLM grading, quota, or worker behavior changes, add LLM/homework behavior tests beyond this attachment-format target."
     },
     {
+      "id": "backend.roster.student_user_api_sync",
+      "category": "backend-pytest",
+      "risk": "targeted",
+      "description": "Focused roster/user API target for admin-created student users, canonical Student binding, unassigned student accounts, and user-to-roster synchronization.",
+      "working_directory": ".",
+      "coverage_tags": ["roster", "student-identity", "users-api", "backend-pytest"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/backend/roster/test_student_user_api_roster_sync.py", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/backend/roster/test_student_user_api_roster_sync.py",
+          "tests/backend/roster/test_admin_student_roster_from_users.py",
+          "apps/backend/wailearning_backend/api/routers/users.py",
+          "apps/backend/wailearning_backend/api/routers/students.py",
+          "apps/backend/wailearning_backend/api/schemas.py",
+          "apps/backend/wailearning_backend/domains/roster/reconciliation.py",
+          "apps/backend/wailearning_backend/domains/roster/sync.py",
+          "apps/backend/wailearning_backend/domains/roster/identity.py"
+        ],
+        "globs": [
+          "apps/backend/wailearning_backend/domains/roster/**",
+          "tests/backend/roster/test_student_user_api_roster_sync.py",
+          "tests/backend/roster/test_admin_student_roster_from_users.py"
+        ]
+      },
+      "ledger_id": "backend.roster.student_user_api_sync",
+      "notes": "Use when student accounts are created or edited through /api/users and must remain bound to canonical Student rows."
+    },
+    {
       "id": "backend.roster.student_identity_audit",
       "category": "backend-pytest",
       "risk": "targeted",

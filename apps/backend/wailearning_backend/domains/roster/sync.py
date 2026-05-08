@@ -81,7 +81,7 @@ def sync_roster_from_all_student_users(db: Session):
     ids = [
         uid
         for (uid,) in db.query(User.id)
-        .filter(User.role == UserRole.STUDENT.value, User.class_id.isnot(None))
+        .filter(User.role == UserRole.STUDENT.value)
         .all()
     ]
     if not ids:

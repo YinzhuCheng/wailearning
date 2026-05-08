@@ -371,6 +371,43 @@ def test_create_student_user_can_bind_existing_student_id_without_username_stude
         db.close()
 
 
+def test_admin_create_student_user_without_class_creates_unassigned_student_profile(client: TestClient):
+    h = _admin_headers(client)
+    suf = uuid.uuid4().hex[:8]
+    username = f"user_first_unassigned_{suf}"
+
+    r = client.post(
+        "/api/users",
+        headers=h,
+        json={
+            "username": username,
+            "password": "p",
+            "real_name": "User First Unassigned",
+            "role": "student",
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["role"] == "student"
+    assert body["class_id"] is None
+    assert body["student_id"] is not None
+
+    db = SessionLocal()
+    try:
+        st = db.query(Student).filter(Student.id == body["student_id"]).one()
+        u = db.query(User).filter(User.id == body["id"]).one()
+        assert st.name == "User First Unassigned"
+        assert st.student_no == username
+        assert st.class_id is None
+        assert u.student_id == st.id
+        assert u.class_id is None
+    finally:
+        db.close()
+
+    student_login = client.post("/api/auth/login", data={"username": username, "password": "p"})
+    assert student_login.status_code == 200, student_login.text
+
+
 def test_batch_students_row_without_gender_key_succeeds_as_male(client: TestClient):
     h = _admin_headers(client)
     suf = uuid.uuid4().hex[:8]

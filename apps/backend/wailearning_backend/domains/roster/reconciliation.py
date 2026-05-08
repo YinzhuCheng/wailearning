@@ -69,16 +69,6 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
             prepare_student_course_context(user, db)
             continue
 
-        if not user.class_id:
-            errors.append(
-                StudentRosterUpsertFromUsersError(
-                    user_id=user.id,
-                    username=user.username,
-                    reason="学生账号未分配班级，无法创建学生档案",
-                )
-            )
-            continue
-
         existing_same_class = (
             db.query(Student)
             .filter(Student.student_no == student_no, Student.class_id == user.class_id)
@@ -94,10 +84,11 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
             prepare_student_course_context(user, db)
             continue
 
+        conflict_query = db.query(Student).filter(Student.student_no == student_no)
         conflict = (
-            db.query(Student)
-            .filter(Student.student_no == student_no, Student.class_id != user.class_id)
-            .first()
+            conflict_query.filter(Student.class_id.isnot(None)).first()
+            if user.class_id is None
+            else conflict_query.filter(Student.class_id != user.class_id).first()
         )
         if conflict:
             errors.append(
@@ -109,8 +100,7 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
             )
             continue
 
-        class_obj = db.query(Class).filter(Class.id == user.class_id).first()
-        if not class_obj:
+        if user.class_id and not db.query(Class.id).filter(Class.id == user.class_id).first():
             errors.append(
                 StudentRosterUpsertFromUsersError(
                     user_id=user.id,

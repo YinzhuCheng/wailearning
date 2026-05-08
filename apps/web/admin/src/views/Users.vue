@@ -4,7 +4,7 @@
       <div>
         <h1 class="page-title">用户管理</h1>
         <p class="page-subtitle">
-          支持管理员、班主任、任课老师和学生四类用户。学生账号会绑定到学生档案；花名册仍是学生管理与选课的权威来源，但系统不再要求用户名必须等于学号。新建学生请在<strong>学生管理</strong>维护花名册，或使用<strong>批量调班</strong> / <strong>加入课程…</strong>调整已有学生账号。
+          支持管理员、班主任、任课老师和学生四类用户。学生账号会绑定到学生档案；可先创建未分班学生，再通过<strong>批量调班</strong> / <strong>加入课程…</strong>完成班级和选课调整。
         </p>
       </div>
       <div class="page-actions">
@@ -111,10 +111,10 @@
           <el-select
             v-model="form.class_id"
             data-testid="user-form-class-select"
-            :placeholder="form.role === 'student' ? '请选择班级' : '可选'"
+            :placeholder="form.role === 'student' ? '可选，留空为未分班' : '可选'"
             style="width: 100%"
             filterable
-            :clearable="form.role !== 'student'"
+            clearable
           >
             <el-option v-for="item in classes" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
@@ -317,9 +317,6 @@ const rules = computed(() => {
     password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
     real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
     role: [{ required: true, message: '请选择角色', trigger: 'change' }]
-  }
-  if (form.role === 'student') {
-    base.class_id = [{ required: true, message: '学生账号必须选择所属班级', trigger: 'change' }]
   }
   return base
 })

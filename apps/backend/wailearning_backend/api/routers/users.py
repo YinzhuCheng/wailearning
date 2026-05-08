@@ -64,11 +64,6 @@ def validate_class_exists(class_id: Optional[int], db: Session) -> None:
         raise HTTPException(status_code=400, detail="班级不存在")
 
 
-def _require_class_or_student_for_student(role: str, class_id: Optional[int], student_id: Optional[int] = None) -> None:
-    if (role or "").strip() == UserRole.STUDENT.value and class_id is None and student_id is None:
-        raise HTTPException(status_code=400, detail="学生账号必须分配班级或绑定学生档案。")
-
-
 def delete_user_homeworks(user_id: int, db: Session) -> None:
     homeworks = db.query(Homework).filter(Homework.created_by == user_id).all()
     for homework in homeworks:
@@ -236,7 +231,6 @@ def create_user(
         raise HTTPException(status_code=400, detail="用户名已存在")
 
     managed_class_id = normalize_managed_class_id(user_data.role, user_data.class_id)
-    _require_class_or_student_for_student(user_data.role, managed_class_id, user_data.student_id)
     validate_class_exists(managed_class_id, db)
     linked_student = None
     if user_data.student_id is not None:
@@ -364,11 +358,6 @@ def update_user(
         normalize_managed_class_id(next_role, user_data.class_id)
         if requested_class_change or next_role == UserRole.TEACHER.value
         else user.class_id
-    )
-    _require_class_or_student_for_student(
-        next_role,
-        next_class_id,
-        user_data.student_id if requested_student_binding_change else user.student_id,
     )
     validate_class_exists(next_class_id, db)
     linked_student = None

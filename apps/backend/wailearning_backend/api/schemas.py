@@ -42,14 +42,6 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
-    @model_validator(mode="after")
-    def _require_class_for_students(self):
-        r = (self.role or "").strip()
-        if r in (UserRole.STUDENT.value,):
-            if self.class_id is None and self.student_id is None:
-                raise ValueError("class_id or student_id is required for student accounts.")
-        return self
-
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
