@@ -5,6 +5,14 @@
         <h1 class="page-title">{{ pageTitle }}</h1>
         <p class="page-subtitle">{{ pageSubtitle }}</p>
       </div>
+      <div v-if="showStudentWorkflowActions" class="page-header-actions">
+        <el-button type="primary" plain @click="router.push('/scores')">
+          成绩管理
+        </el-button>
+        <el-button type="primary" plain @click="router.push('/attendance')">
+          考勤管理
+        </el-button>
+      </div>
     </div>
 
     <el-alert
@@ -389,6 +397,7 @@ const showEmpty = computed(() => {
 
 const emptyText = computed(() => (isClassTeacherView.value ? '当前班主任账号没有绑定班级。' : '请先选择一门课程。'))
 const showTeacherAlert = computed(() => !isAdminView.value && !isClassTeacherView.value && Boolean(selectedCourse.value))
+const showStudentWorkflowActions = computed(() => userStore.isTeacher)
 
 const cardTitle = computed(() => {
   if (isAdminView.value) {
@@ -1017,6 +1026,13 @@ watch(
   margin-bottom: 24px;
 }
 
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .page-title {
   margin: 0 0 8px;
   font-size: 28px;
@@ -1147,6 +1163,14 @@ watch(
   .card-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .page-header-actions {
+    justify-content: stretch;
+  }
+
+  .page-header-actions :deep(.el-button) {
+    flex: 1 1 140px;
   }
 
   .card-actions {

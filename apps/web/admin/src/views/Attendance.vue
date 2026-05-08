@@ -11,6 +11,9 @@
           }}
         </p>
       </div>
+      <el-button plain @click="router.push('/students')">
+        返回学生管理
+      </el-button>
     </div>
 
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
@@ -164,6 +167,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
@@ -183,6 +187,7 @@ const SESSION_REMARK_PATTERN = /^\[session=(\d+)\]\s*/i
 const AVATAR_COLORS = ['#2563eb', '#0f766e', '#ea580c', '#7c3aed', '#ca8a04', '#0f766e', '#be123c']
 
 const userStore = useUserStore()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)

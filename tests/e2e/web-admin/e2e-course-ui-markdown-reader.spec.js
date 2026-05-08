@@ -123,17 +123,21 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.locator('.material-read-title')).toBeVisible({ timeout: 15000 })
   })
 
-  test('teacher sidebar keeps calendar inside attendance and hides removed standalone pages', async ({ page }) => {
+  test('teacher sidebar groups student workflows under students and hides removed standalone pages', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await page.goto('/students')
     await expect(page.locator('.sidebar-menu .el-sub-menu__title').filter({ hasText: '日常教学' })).toHaveCount(0)
-    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '考勤管理' })).toBeVisible({
-      timeout: 15000
-    })
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '学生管理' })).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '考勤管理' })).toHaveCount(0)
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '成绩管理' })).toHaveCount(0)
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '学生作业一览' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '成绩管理' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '考勤管理' })).toBeVisible()
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '教学日历' })).toHaveCount(0)
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程资料' })).toBeVisible()
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程仪表盘' })).toHaveCount(0)
+    await expect(page.getByTestId('sidebar-notifications')).toBeVisible()
   })
 
   test('student sidebar has no 课程学习 wrapper; former children are top-level', async ({ page }) => {
@@ -145,7 +149,8 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '选课与进度' })).toBeVisible({
       timeout: 15000
     })
-    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程通知' })).toBeVisible()
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程通知' })).toHaveCount(0)
+    await expect(page.getByTestId('sidebar-notifications')).toBeVisible()
   })
 
   test('historical teaching-calendar deep link redirects to attendance with embedded TeachingCalendar', async ({ page }) => {

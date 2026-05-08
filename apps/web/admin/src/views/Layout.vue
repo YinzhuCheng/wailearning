@@ -67,6 +67,21 @@
               <span v-show="!isCollapsed" class="sidebar-footer__label">个人设置</span>
             </button>
           </el-tooltip>
+          <el-tooltip content="通知中心" placement="right" :disabled="!isCollapsed || isMobile">
+            <button
+              type="button"
+              class="sidebar-footer__btn"
+              :class="{ 'sidebar-footer__btn--active': route.path === '/notifications' }"
+              data-testid="sidebar-notifications"
+              @click="goNotifications"
+            >
+              <el-icon :size="18"><Bell /></el-icon>
+              <span v-show="!isCollapsed" class="sidebar-footer__label">通知中心</span>
+              <span v-if="!isCollapsed && headerUnreadCount > 0" class="sidebar-footer__badge">
+                {{ headerUnreadCount > 99 ? '99+' : headerUnreadCount }}
+              </span>
+            </button>
+          </el-tooltip>
           <el-tooltip content="退出登录" placement="right" :disabled="!isCollapsed || isMobile">
             <button type="button" class="sidebar-footer__btn sidebar-footer__btn--danger" data-testid="sidebar-logout" @click="sidebarLogout">
               <el-icon :size="18"><SwitchButton /></el-icon>
@@ -242,7 +257,6 @@ import {
   School,
   Setting,
   SwitchButton,
-  Trophy,
   User,
   UserFilled
 } from '@element-plus/icons-vue'
@@ -421,7 +435,7 @@ const pollNotificationSync = async () => {
         title: '新通知',
         message:
           unread > 0
-            ? `您有 ${unread} 条未读通知，请打开侧边栏「通知」或通知中心页面查看。`
+            ? `您有 ${unread} 条未读通知，请打开底部「通知中心」查看。`
             : '通知列表已更新。',
         type: unread > 0 ? 'info' : 'success',
         duration: 5200,
@@ -548,17 +562,15 @@ const homeworkMenuOpenIndices = computed(() => {
     if (p.startsWith('/semesters') || p.startsWith('/settings')) {
       open.push('admin-academic-config')
     }
-    if (p.startsWith('/notifications') || p.startsWith('/logs')) {
+    if (p.startsWith('/logs')) {
       open.push('admin-ops')
     }
     return open
   }
   if (userStore.isClassTeacher) {
     if (
-      p.startsWith('/attendance') ||
       p.startsWith('/students') ||
-      p.startsWith('/subjects') ||
-      p.startsWith('/notifications')
+      p.startsWith('/subjects')
     ) {
       return ['class-teaching']
     }
@@ -575,10 +587,8 @@ const classTeacherMenu = [
     label: '班级教学',
     icon: School,
     children: [
-      { path: '/attendance', label: '考勤管理', icon: Calendar },
       { path: '/students', label: '学生信息', icon: User },
-      { path: '/subjects', label: '课程信息', icon: Reading },
-      { path: '/notifications', label: '通知信息', icon: Bell }
+      { path: '/subjects', label: '课程信息', icon: Reading }
     ]
   }
 ]
@@ -586,11 +596,7 @@ const classTeacherMenu = [
 /** Flat menu: teacher routes are direct top-level entries for lower click depth. */
 const teacherMenu = [
   { path: '/students', label: '学生管理', icon: User },
-  { path: '/scores', label: '成绩管理', icon: Trophy },
-  { path: '/attendance', label: '考勤管理', icon: Calendar },
-  { path: '/notifications', label: '通知中心', icon: Bell },
   { path: '/homework', label: '作业管理', icon: Reading },
-  { path: '/homework/students', label: '学生作业一览', icon: DataAnalysis },
   { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/learning-notes', label: '学习笔记', icon: EditPen }
 ]
@@ -602,8 +608,7 @@ const studentMenu = [
   { path: '/homework', label: '课程作业', icon: Document },
   { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/learning-notes', label: '学习笔记', icon: EditPen },
-  { path: '/student-scores', label: '我的成绩', icon: Trophy },
-  { path: '/notifications', label: '课程通知', icon: Bell }
+  { path: '/student-scores', label: '我的成绩', icon: DataAnalysis }
 ]
 
 const adminMenu = [
@@ -627,7 +632,6 @@ const adminMenu = [
     label: '消息与审计',
     icon: Bell,
     children: [
-      { path: '/notifications', label: '消息与通知', icon: Bell },
       { path: '/logs', label: '操作日志', icon: Document }
     ]
   }
@@ -776,6 +780,13 @@ const handleCommand = command => {
 
 const goPersonalSettings = () => {
   router.push('/personal-settings')
+  if (isMobile.value) {
+    isCollapsed.value = true
+  }
+}
+
+const goNotifications = () => {
+  router.push('/notifications')
   if (isMobile.value) {
     isCollapsed.value = true
   }
@@ -962,6 +973,7 @@ watch(notificationSyncParams, () => {
 .sidebar-footer__btn {
   display: flex;
   width: 100%;
+  position: relative;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
@@ -1002,6 +1014,19 @@ watch(notificationSyncParams, () => {
 
 .sidebar-footer__label {
   white-space: nowrap;
+}
+
+.sidebar-footer__badge {
+  margin-left: auto;
+  min-width: 20px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  padding: 0 6px;
+  text-align: center;
 }
 
 .logo {
