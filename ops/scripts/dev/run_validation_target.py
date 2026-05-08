@@ -146,6 +146,10 @@ def with_pytest_junitxml(argv: list[str], output_path: Path) -> list[str]:
     return [*argv, f"--junitxml={output_path}"]
 
 
+def target_needs_playwright_preflight(target: dict[str, Any]) -> bool:
+    return target.get("category") == "admin-playwright"
+
+
 def parse_junit_xml(path: Path, repo_root: Path | None = None) -> dict[str, Any] | None:
     if not path.exists():
         return None
@@ -242,6 +246,37 @@ def redact_argv(repo_root: Path, argv: list[str]) -> list[str]:
     return redacted
 
 
+def make_command_record(
+    *,
+    repo_root: Path,
+    label: str,
+    execution_argv: list[str],
+    raw_argv: list[str],
+    working_directory: Path,
+    result: str,
+    failure_class: str | None,
+    return_code: int | None,
+    duration: float,
+    stdout_path: Path,
+    stderr_path: Path,
+    test_results: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "label": label,
+        "argv": redact_argv(repo_root, execution_argv),
+        "raw_argv": raw_argv,
+        "working_directory": repo_placeholder_path(repo_root, working_directory),
+        "result": result,
+        "failure_class": failure_class,
+        "return_code": return_code,
+        "duration_seconds": round(duration, 3),
+        "stdout": repo_placeholder_path(repo_root, stdout_path),
+        "stderr": repo_placeholder_path(repo_root, stderr_path),
+        "summary": summarize_stdout(stdout_path),
+        "test_results": test_results,
+    }
+
+
 def run_command(
     argv: list[str],
     cwd: Path,
@@ -275,7 +310,66 @@ def run_command(
     ended = utc_now()
     if completed.returncode == 0:
         return RESULT_PASSED, None, completed.returncode, (ended - started).total_seconds()
+    output_tail = ""
+    try:
+        output_tail = stdout_path.read_text(encoding="utf-8", errors="replace")[-2000:]
+    except OSError:
+        output_tail = ""
+    if "spawn EPERM" in output_tail:
+        return RESULT_BLOCKED, "environment", completed.returncode, (ended - started).total_seconds()
     return RESULT_FAILED, "product", completed.returncode, (ended - started).total_seconds()
+
+
+def run_playwright_preflight(
+    *,
+    repo_root: Path,
+    artifact_dir: Path,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    label = "playwright preflight"
+    stdout_path = artifact_dir / "00-playwright-preflight-stdout.log"
+    stderr_path = artifact_dir / "00-playwright-preflight-stderr.log"
+    argv = [
+        sys.executable,
+        "ops/scripts/dev/playwright_preflight.py",
+        "--json",
+        "--repo-root",
+        str(repo_root),
+    ]
+    result, failure_class, return_code, duration = run_command(
+        argv,
+        repo_root,
+        min(timeout_seconds, 60),
+        stdout_path,
+        stderr_path,
+    )
+
+    if return_code == 1:
+        result = RESULT_BLOCKED
+        failure_class = "environment"
+    elif return_code == 2:
+        result = RESULT_BLOCKED
+        failure_class = "environment"
+        existing = stderr_path.read_text(encoding="utf-8", errors="replace")
+        stderr_path.write_text(
+            existing
+            + "playwright preflight completed with warnings; confirm the environment before running this target\n",
+            encoding="utf-8",
+        )
+
+    return make_command_record(
+        repo_root=repo_root,
+        label=label,
+        execution_argv=argv,
+        raw_argv=argv,
+        working_directory=repo_root,
+        result=result,
+        failure_class=failure_class,
+        return_code=return_code,
+        duration=duration,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+    )
 
 
 def summarize_stdout(path: Path) -> str:
@@ -325,6 +419,18 @@ def run_target(args: argparse.Namespace) -> int:
         failure_class = "orchestrator"
         notes.append("target has no commands")
 
+    if target_needs_playwright_preflight(target) and not args.dry_run and commands:
+        preflight_record = run_playwright_preflight(
+            repo_root=repo_root,
+            artifact_dir=artifact_dir,
+            timeout_seconds=args.timeout_seconds,
+        )
+        command_records.append(preflight_record)
+        if preflight_record["result"] != RESULT_PASSED:
+            overall_result = preflight_record["result"]
+            failure_class = preflight_record["failure_class"]
+            commands = []
+
     for index, command in enumerate(commands, start=1):
         raw_argv = [str(part) for part in command.get("argv", [])]
         resolved_argv, resolve_notes = resolve_python_argv(repo_root, raw_argv)
@@ -365,20 +471,20 @@ def run_target(args: argparse.Namespace) -> int:
             test_results["path"] = repo_placeholder_path(repo_root, junit_path)
 
         command_records.append(
-            {
-                "label": label,
-                "argv": redact_argv(repo_root, execution_argv),
-                "raw_argv": raw_argv,
-                "working_directory": repo_placeholder_path(repo_root, working_directory),
-                "result": command_result,
-                "failure_class": command_failure_class,
-                "return_code": return_code,
-                "duration_seconds": round(duration, 3),
-                "stdout": repo_placeholder_path(repo_root, stdout_path),
-                "stderr": repo_placeholder_path(repo_root, stderr_path),
-                "summary": summarize_stdout(stdout_path),
-                "test_results": test_results,
-            }
+            make_command_record(
+                repo_root=repo_root,
+                label=label,
+                execution_argv=execution_argv,
+                raw_argv=raw_argv,
+                working_directory=working_directory,
+                result=command_result,
+                failure_class=command_failure_class,
+                return_code=return_code,
+                duration=duration,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                test_results=test_results,
+            )
         )
 
         if command_result == RESULT_SKIPPED and args.dry_run:
@@ -453,7 +559,7 @@ def run_target(args: argparse.Namespace) -> int:
         run["history"] = None
     (artifact_dir / "run.json").write_text(json.dumps(run, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     write_ledger_snippet(run, artifact_dir / "ledger-snippet.md")
-    print(json.dumps(run, ensure_ascii=False, indent=2))
+    sys.stdout.buffer.write((json.dumps(run, ensure_ascii=False, indent=2) + "\n").encode("utf-8", errors="replace"))
 
     if overall_result == RESULT_PASSED:
         return 0

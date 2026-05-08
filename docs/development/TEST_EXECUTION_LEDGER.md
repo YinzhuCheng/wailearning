@@ -245,15 +245,70 @@ npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --pro
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `1`
+**Pass count:** `2`
 
-**Run count:** `1`
+**Run count:** `2`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `6a95aad` | `npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium` | `passed` | `20 passed (1.1m)` | Run used the admin Playwright managed webServer flow from `<repo>/apps/web/admin`. Output included existing backend Pydantic warnings and Vite CJS API deprecation text. |
+
+### Test ID: `admin.e2e.core_flows_smoke`
+
+**Category:** `admin-playwright`
+
+**Scope:** Core admin Playwright smoke for the managed FastAPI + Vite + Chromium path. Covers stable login selectors, invalid login behavior, admin landing, student required-course card and homework list, teacher materials and notifications routes, admin user grid, class-teacher home, and student course-home rendering.
+
+**Canonical command:**
+
+```powershell
+npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium
+```
+
+**Working directory:** `<repo>/apps/web/admin`
+
+**Relevant paths:**
+
+- `tests/e2e/web-admin/e2e-core-flows-smoke.spec.js`
+- `tests/e2e/web-admin/global-setup.cjs`
+- `tests/e2e/web-admin/fixtures.cjs`
+- `apps/web/admin/playwright.config.cjs`
+- `apps/backend/wailearning_backend/api/routers/e2e_dev.py`
+- `apps/backend/wailearning_backend/core/auth.py`
+- `ops/scripts/dev/playwright_preflight.py`
+- `ops/scripts/dev/run_validation_target.py`
+
+**Retest triggers:**
+
+- Changes to Playwright global setup, fixtures, seed/reset helpers, seeded credentials, or API base helpers.
+- Changes to `apps/web/admin/playwright.config.cjs`, managed webServer startup, `E2E_PYTHON`, `E2E_DEV_SEED_TOKEN`, or port handling.
+- Changes to login, auth token handling, staff/student route guards, or first-load navigation.
+- Changes to `ops/scripts/dev/playwright_preflight.py` or runner behavior for `category: admin-playwright` targets.
+- Any claim that local Playwright infrastructure has been repaired after environment blockers.
+
+**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-08`
+
+**Pass count:** `3`
+
+**Run count:** `5`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `3ec0dcd` | `npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium` | `blocked` | `Error: spawn EPERM` | Plain sandbox execution could not spawn the managed uvicorn, Vite, and Chromium child processes. The same command needs the approved/elevated execution path in this Windows environment. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `3ec0dcd` | `npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium` | `failed` | `E2E seed failed (500): Internal Server Error` | Managed uvicorn and Vite started, but `reset-scenario` failed while hashing seeded passwords because the Python 3.14 local `.venv` had `bcrypt==5.0.0`, which is incompatible with `passlib==1.7.4` for the long E2E seed passwords. Restoring `bcrypt==4.0.1` fixed this environment issue. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `3ec0dcd` | `npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium` | `passed` | `10 passed (51.5s)` | First successful run after populating `.venv` with Python-3.14-compatible backend wheels, restoring `bcrypt==4.0.1`, and deleting the half-initialized Playwright SQLite file from the failed seed attempt. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `3ec0dcd` | `npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium` | `passed` | `10 passed (46.1s)` | Repeated direct Playwright smoke run through the approved/elevated execution path. Output included the known Vite CJS Node API deprecation warning. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `3ec0dcd` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py admin.e2e.core_flows_smoke --timeout-seconds 180` | `passed` | Runner preflight passed, then Playwright smoke reported `10 passed (49.1s)`. | This validated the new runner path: `run_validation_target.py` first ran `playwright_preflight.py --json`, then executed the Playwright target. Artifact paths were written under ignored `.agent-run/logs/` with private paths redacted. |
 
 ### Test ID: `static.repo_line_health`
 
@@ -300,6 +355,7 @@ python ops\scripts\dev\repo_line_health.py
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\repo_line_health.py` | `passed` | Total tracked text lines: `100981`; health text lines excluding generated/lock files: `97244`; documentation: `12754`; test code: `29161`; primary source: `52260`; tracked text files: `343`. | Command was rerun after staging the new script/docs so `git ls-files` included the intended commit contents. `py_compile` also passed for `ops/scripts/dev/repo_line_health.py`. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\repo_line_health.py` | `passed` | Total tracked text lines: `106756`; health text lines excluding generated/lock files: `103019`; documentation: `14327`; test code: `29601`; primary source: `52375`; tracked text files: `358`. | Command was rerun after updating the validation execution ledger and handoff document for Playwright preflight work. This is a metric target, not behavioral product validation. |
 
 ### Test ID: `backend.llm.attachment_formats`
 
@@ -603,9 +659,9 @@ python ops\scripts\dev\run_validation_target.py static.validation_selector --dry
 
 **Last run date:** `2026-05-08`
 
-**Pass count:** `5`
+**Pass count:** `6`
 
-**Run count:** `5`
+**Run count:** `6`
 
 **Runs:**
 
@@ -616,6 +672,7 @@ python ops\scripts\dev\run_validation_target.py static.validation_selector --dry
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120` | `passed` | Runner executed all three `static.validation_selector` commands: selector/runner compile passed, selector JSON smoke passed, nested runner dry-run smoke passed. | The runner used the current interpreter because `<repo>/.venv/Scripts/python.exe` was absent in this worktree, and recorded that fallback in ignored local artifacts. The generated `run.json` used `<repo>` and `<python>` placeholders instead of private absolute paths. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v` | `passed` | Structured local validation history helper, selector, target runner, profile runner, and selector tests compiled; target registry parsed as valid JSON; `15` standard-library selector/runner/history/profile tests passed. | This run covered JSONL history writing, selector use of matching structured history as fresh evidence, stale classification when the structured history changed-path signature differs from the selector input, pytest JUnit XML argument injection, parsing testcase-level JUnit results, redaction of absolute testcase file paths from JUnit XML, static profile dry-runs, and selector-recommended profile skipping review-required targets by default. Ignored JSONL/XML/profile files under `.agent-run/` are local evidence only and are not committed. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v`; `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `python ops\scripts\dev\run_validation_profile.py static --dry-run --timeout-seconds 120`; `python ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Final handoff validation passed after adding the committed validation automation handoff document; `15` unittest cases passed; static target runner passed; static profile dry-run passed; worktree selector returned `non_full_validation.status=acceptable` and `unmatched_paths=[]`; diff whitespace check passed. | Current worktree still had no repository `.venv`, so runner smoke used the current Python interpreter and recorded the fallback in ignored artifacts. Worktree selector considered the new handoff document and validation tooling files and recommended only static targets. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe -m py_compile ops\scripts\dev\run_validation_target.py tests\backend\manual\test_validation_selector.py`; `.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v`; `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Runner and selector tests passed after adding Playwright preflight integration, `spawn EPERM` environment classification, UTF-8 JSON stdout, and focused unittest coverage; `17` unittest cases passed; static target runner passed; selector reported `non_full_validation.status=acceptable` and no unmatched paths; diff whitespace check passed. | The same session separately validated `admin.e2e.core_flows_smoke` through both direct Playwright and `run_validation_target.py`; see that target's ledger entry for the environment blocker and final green runs. |
 ## Known First-Version Limitations
 
 1. This first ledger version starts with the verified runs around commit `6a95aad`; it intentionally does not backfill older branch history from memory.

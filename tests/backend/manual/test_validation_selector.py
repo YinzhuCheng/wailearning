@@ -11,7 +11,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SELECTOR = REPO_ROOT / "ops" / "scripts" / "dev" / "select_validation_targets.py"
 sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
 from validation_history import changed_paths_signature  # noqa: E402
-from run_validation_target import parse_junit_xml, with_pytest_junitxml  # noqa: E402
+from run_validation_target import (
+    RESULT_BLOCKED,
+    parse_junit_xml,
+    target_needs_playwright_preflight,
+    with_pytest_junitxml,
+)  # noqa: E402
 
 
 def run_selector(*args: str) -> dict:
@@ -175,6 +180,32 @@ class ValidationSelectorTests(unittest.TestCase):
             self.assertEqual(payload["result"], "blocked")
             self.assertEqual(payload["failure_class"], "environment")
             self.assertIn("pytest", payload["summary"])
+
+    def test_runner_detects_playwright_targets_for_preflight(self):
+        self.assertTrue(target_needs_playwright_preflight({"category": "admin-playwright"}))
+        self.assertFalse(target_needs_playwright_preflight({"category": "backend-pytest"}))
+
+    def test_runner_classifies_spawn_eperm_as_environment_block(self):
+        from run_validation_target import run_command
+
+        artifact_dir = REPO_ROOT / ".agent-run/test-selector-spawn-eperm"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        script = artifact_dir / "spawn_eperm.py"
+        stdout_path = artifact_dir / "stdout.log"
+        stderr_path = artifact_dir / "stderr.log"
+        script.write_text("print('Error: spawn EPERM')\nraise SystemExit(1)\n", encoding="utf-8")
+
+        result, failure_class, return_code, _duration = run_command(
+            [sys.executable, str(script)],
+            REPO_ROOT,
+            30,
+            stdout_path,
+            stderr_path,
+        )
+
+        self.assertEqual(result, RESULT_BLOCKED)
+        self.assertEqual(failure_class, "environment")
+        self.assertEqual(return_code, 1)
 
     def test_runner_adds_pytest_junitxml_argument_when_missing(self):
         output_path = REPO_ROOT / ".agent-run/test-selector-junit.xml"
