@@ -82,6 +82,100 @@ Interpretation guidance:
 
 Do not use line counts as a quality score by themselves. They are a trend signal: a sudden test-code drop, documentation shrink, primary-source spike, or lockfile-heavy increase should prompt a closer diff review.
 
+### Diff-based validation workflow
+
+The diff-based validation tools provide the repository's first standard
+incremental validation workflow. Use them after edits to decide what to run
+before reaching for full `pytest`, full Playwright, or PostgreSQL-heavy
+profiles.
+
+The workflow has three layers:
+
+- selector: recommend targets from changed paths;
+- target runner: execute one selected target and write local artifacts;
+- profile runner: execute a small named group of targets.
+
+Default agent loop:
+
+1. Review the changed-path recommendation from the repository root:
+
+   ```bash
+   python ops/scripts/dev/select_validation_targets.py --worktree
+   ```
+
+2. If the output is for automation or you need to inspect exact target IDs, use:
+
+   ```bash
+   python ops/scripts/dev/select_validation_targets.py --worktree --json
+   ```
+
+3. For documentation-only or validation-tooling changes, run the static profile
+   first:
+
+   ```bash
+   python ops/scripts/dev/run_validation_profile.py static --dry-run --timeout-seconds 120
+   ```
+
+   Use the real static target when you need observed evidence rather than a
+   profile smoke:
+
+   ```bash
+   python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120
+   ```
+
+4. For ordinary product or test changes, either run the target IDs shown by the
+   selector one by one, or use the selector-recommended profile:
+
+   ```bash
+   python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk targeted
+   ```
+
+5. If the selector recommends a review-required target, decide explicitly
+   whether the environment is ready. Browser targets generally need Node,
+   `node_modules`, Playwright browsers, clean ports, and a known backend/frontend
+   startup mode:
+
+   ```bash
+   python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk broad --include-review-targets
+   ```
+
+6. Read the final selector/profile status before claiming validation coverage:
+
+   - `acceptable`: static/targeted evidence is a reasonable first-pass result
+     for the current diff.
+   - `needs_review`: a broad or review-required target was recommended; either
+     run it or state why it was deferred.
+   - `not_sufficient`: targeted validation is not enough; address the blocker
+     or explicitly defer it as unresolved validation.
+
+This is a planning and evidence workflow, not a magic minimizer. The selector is
+conservative and path-based. It does not understand every semantic dependency in
+the product. If the diff touches high-risk behavior and the recommendation looks
+too narrow, run the broader target and update
+[`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json)
+when the gap is repeatable.
+
+Artifact and ledger rules:
+
+- `.agent-run/validation-history.jsonl` and `.agent-run/logs/` are ignored local
+  evidence. They can help the selector identify fresh local runs for the same
+  changed-path signature.
+- Do not commit `.agent-run/` artifacts.
+- Do not update [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md) for
+  selector output, dry-run planning, or commands that were only recommended.
+- Do update the ledger manually when an actual target run should become durable
+  project history. Review the generated `ledger-snippet.md` first and redact any
+  private machine details.
+- If a runner result is `blocked`, `timed out`, `interrupted`, or `skipped`, do
+  not summarize it as a pass. Record or hand off the unresolved validation
+  state.
+
+Windows note: prefer `.venv\Scripts\python.exe` when the repository virtual
+environment exists. If it does not, the runner falls back to the current Python
+and records that fallback in local artifacts; this is acceptable for selector
+smoke work but not proof that the full application dependency environment is
+ready.
+
 ### Diff-based validation target selection
 
 Use the validation selector when you need a conservative first pass for
@@ -354,7 +448,9 @@ Dual gate for `/api/e2e/dev/*` — see [E2E Seed and Environment](#e2e-seed-and-
 
 ### CI reference (cloud pipelines)
 
-This repository snapshot stores example pipeline YAML under [`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml) (branch pipeline siblings in the same directory). It runs:
+This repository stores example Alibaba DevOps-style pipeline YAML under
+[`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml) and sibling files. The
+PR pipeline runs:
 
 ```bash
 python3 -m pip install --upgrade pip
@@ -362,7 +458,33 @@ pip3 install -r requirements.txt
 python3 -m pytest -q
 ```
 
-There is **no** `.github/workflows/` directory here — do not assume GitHub Actions unless it is added to the tree later.
+The repository also has a lightweight GitHub Actions entrypoint at
+[`../../.github/workflows/lightweight-validation.yml`](../../.github/workflows/lightweight-validation.yml).
+It is intentionally a first cloud gate, not full validation. On pull requests it
+runs selector/tooling checks, emits a diff-based validation recommendation,
+runs quick backend `pytest`, and builds the admin and parent frontends.
+
+Current GitHub Actions scope:
+
+- validates selector scripts and `tests/TEST_SELECTION_TARGETS.json`;
+- runs `python -m unittest tests.backend.manual.test_validation_selector -v`;
+- uploads `validation-selection.json` for pull requests;
+- runs default quick backend `pytest`;
+- runs `npm ci` plus `npm run build` for `apps/web/admin` and
+  `apps/web/parent`.
+
+Current GitHub Actions non-goals:
+
+- no PostgreSQL service container yet;
+- no zero-skip backend guarantee;
+- no RAR/unrar environment provisioning;
+- no Playwright browser install or E2E run;
+- no automated execution of selector-recommended broad/full targets.
+
+Use this as the current compromise path: cloud catches cheap regressions and
+records selector recommendations, while PostgreSQL-backed pytest, RAR-dependent
+attachment coverage, and Playwright E2E remain local/manual or future
+cloud-profile work.
 
 Agents on Linux should prefer **`python3`** invocations to match CI even when local README examples historically showed `python` for Windows-oriented quick starts.
 

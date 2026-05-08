@@ -122,7 +122,38 @@ current task.
 
 ---
 
-## 6. Verification checklist after edits
+## 6. Diff-based validation workflow
+
+Use the diff selector as the default validation planning entrypoint after every
+non-trivial edit. It is advisory, not a replacement for engineering judgment,
+but it prevents agents from either running a full suite unnecessarily or
+claiming a narrow run when the diff asks for broader evidence.
+
+Basic loop from the repository root:
+
+1. Inspect the current recommendation:
+   `python ops/scripts/dev/select_validation_targets.py --worktree`
+2. If the output is easier to consume programmatically, rerun with `--json`.
+3. Run the recommended `static` and `targeted` targets directly, or use:
+   `python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk targeted`
+4. If the selector reports `needs_review`, decide whether to include the named
+   broad / review-required target now. Playwright targets usually require an
+   explicit browser-ready environment and may need `--include-review-targets`.
+5. If the selector reports `not_sufficient`, do not present targeted validation
+   as complete until the full/broad blocker is handled or explicitly deferred
+   in the final handoff.
+
+Runner artifacts and structured history live under ignored `.agent-run/`. They
+are useful local evidence, but they are not durable project history. Only update
+[`docs/development/TEST_EXECUTION_LEDGER.md`](docs/development/TEST_EXECUTION_LEDGER.md)
+after reviewing an actual run result; selector planning output alone is not a
+ledger entry. Detailed semantics, commands, and limitations are in
+[`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md)
+under "Diff-based validation workflow".
+
+---
+
+## 7. Verification checklist after edits
 
 1. **Backend:** targeted `pytest` for touched package (from repo root). See [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md).
 2. **LLM paths:** run nearest tests under `tests/backend/llm/` or homework folders; watch for HTTP mocking patterns.
@@ -131,16 +162,18 @@ current task.
 
 ---
 
-## 7. Naming honesty (avoid agent confusion)
+## 8. Naming honesty (avoid agent confusion)
 
 - **Product name:** README branding is **BIMSA-CLASS**; npm package may still show legacy names (`ddclass-frontend`) — treat as historical artifact unless migrating build metadata.
 - **`Subject` vs “course”:** ORM model `Subject` maps to user-facing “course” in much of the UI and `/api/subjects` routes.
 
 ---
 
-## 8. Where CI runs tests
+## 9. Where CI runs tests
 
-Cloud pipeline definition (Alibaba DevOps style YAML): [`ops/ci/pr-pipeline.yml`](ops/ci/pr-pipeline.yml) — uses `python3 -m pytest -q`. There is **no** `.github/workflows/` directory in this repository snapshot; do not assume GitHub Actions unless added later.
+Cloud pipeline definitions (Alibaba DevOps style YAML) live under [`ops/ci/`](ops/ci/); `pr-pipeline.yml` uses `python3 -m pytest -q`.
+
+GitHub Actions now has a lightweight entrypoint at [`.github/workflows/lightweight-validation.yml`](.github/workflows/lightweight-validation.yml). It runs selector/tooling checks, emits a diff-based validation recommendation for pull requests, runs quick backend `pytest`, and builds the admin and parent frontends. Treat it as the first cloud gate, not as full production-aligned validation. PostgreSQL-backed pytest, RAR-dependent attachment coverage, and Playwright E2E remain local/manual or future cloud-profile work unless a later workflow explicitly adds those environments.
 
 ---
 

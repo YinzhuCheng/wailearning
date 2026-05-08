@@ -33,6 +33,7 @@
       "triggers": {
         "paths": [
           ".gitignore",
+          ".github/workflows/",
           "AGENTS.md",
           "README.md",
           "docs/",
@@ -43,6 +44,8 @@
         ],
         "globs": [
           "*.md",
+          ".github/workflows/*.yml",
+          ".github/workflows/*.yaml",
           "docs/**/*.md",
           "docs/**/*.txt",
           "ops/scripts/dev/*.py",

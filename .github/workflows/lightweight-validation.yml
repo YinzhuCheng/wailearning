@@ -1,0 +1,109 @@
+name: Lightweight validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  python-static-and-quick-tests:
+    name: Python static and quick tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Validate selector tooling and registry
+        run: |
+          python -m py_compile \
+            ops/scripts/dev/validation_history.py \
+            ops/scripts/dev/select_validation_targets.py \
+            ops/scripts/dev/run_validation_target.py \
+            ops/scripts/dev/run_validation_profile.py \
+            tests/backend/manual/test_validation_selector.py
+          python -m json.tool tests/TEST_SELECTION_TARGETS.json >/dev/null
+          python -m unittest tests.backend.manual.test_validation_selector -v
+
+      - name: Emit diff-based validation recommendation
+        if: github.event_name == 'pull_request'
+        run: |
+          python ops/scripts/dev/select_validation_targets.py \
+            --base origin/${{ github.base_ref }} \
+            --head HEAD \
+            --json > validation-selection.json
+          python ops/scripts/dev/select_validation_targets.py \
+            --base origin/${{ github.base_ref }} \
+            --head HEAD
+
+      - name: Upload validation recommendation
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-selection
+          path: validation-selection.json
+
+      - name: Run quick backend pytest
+        run: python -m pytest -q
+
+  admin-frontend-build:
+    name: Admin frontend build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/admin/package-lock.json
+
+      - name: Install admin frontend dependencies
+        working-directory: apps/web/admin
+        run: npm ci
+
+      - name: Build admin frontend
+        working-directory: apps/web/admin
+        run: npm run build
+
+  parent-frontend-build:
+    name: Parent frontend build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/parent/package-lock.json
+
+      - name: Install parent frontend dependencies
+        working-directory: apps/web/parent
+        run: npm ci
+
+      - name: Build parent frontend
+        working-directory: apps/web/parent
+        run: npm run build

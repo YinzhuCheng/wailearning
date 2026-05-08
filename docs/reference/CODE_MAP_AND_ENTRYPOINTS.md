@@ -143,4 +143,8 @@ See [`architecture/REPOSITORY_STRUCTURE.md`](../architecture/REPOSITORY_STRUCTUR
 ## 9. Deliberately absent (do not grep forever)
 
 - **No Redis/Celery queue** in-repo for LLM grading — queue is SQL (`homework_grading_tasks`).
-- **No `.github/workflows/`** in this snapshot — CI may live entirely in external DevOps (`ops/ci/`).
+- **No full GitHub Actions validation matrix** yet. A lightweight workflow exists at
+  [`.github/workflows/lightweight-validation.yml`](../../.github/workflows/lightweight-validation.yml),
+  while external DevOps examples still live under [`ops/ci/`](../../ops/ci/).
+  PostgreSQL-backed pytest, RAR-dependent attachment coverage, and Playwright
+  E2E are not yet fully cloud-orchestrated.

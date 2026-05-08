@@ -93,6 +93,12 @@ influence future diff-based validation recommendations. If the selector output
 has unmatched paths for a real source change, either add a registry rule or
 choose a broader profile manually and document the reason.
 
+CI workflow changes under `.github/workflows/` are currently mapped to static
+text/tooling validation. That is enough for lightweight YAML and documentation
+edits, but changes that materially alter cloud test scope should also be
+reviewed against this map and the execution ledger so local and cloud validation
+expectations do not drift.
+
 ## Category Overview
 
 ### `tests/backend/`
