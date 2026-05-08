@@ -175,7 +175,7 @@
       "commands": [
         {
           "label": "build",
-          "argv": ["npm.cmd", "run", "build"]
+          "argv": ["npm", "run", "build"]
         }
       ],
       "triggers": {
@@ -236,7 +236,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-learning-notes-attendance-cover-tier20.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-learning-notes-attendance-cover-tier20.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -518,7 +518,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-discussion-cover-llm-tier3.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-discussion-cover-llm-tier3.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -548,7 +548,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-homework-comment-cover-tier4.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-homework-comment-cover-tier4.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -579,7 +579,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-core-flows-smoke.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-core-flows-smoke.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -609,7 +609,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-course-ui-markdown-reader.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-course-ui-markdown-reader.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -641,7 +641,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-docs-gap-tier15.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-docs-gap-tier15.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -664,7 +664,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "future-advanced-coverage.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "future-advanced-coverage.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -688,7 +688,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "future-advanced-coverage-2.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "future-advanced-coverage-2.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -712,7 +712,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-agent-followup-batch.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-agent-followup-batch.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -738,7 +738,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-agent-hazard-tier-15.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-agent-hazard-tier-15.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -765,7 +765,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-notification-header-sync-tier.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-notification-header-sync-tier.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -792,7 +792,7 @@
       "commands": [
         {
           "label": "playwright targeted",
-          "argv": ["npx.cmd", "playwright", "test", "e2e-notification-sync-deep-tier.spec.js", "--project=chromium"]
+          "argv": ["npx", "playwright", "test", "e2e-notification-sync-deep-tier.spec.js", "--project=chromium"]
         }
       ],
       "triggers": {
@@ -889,7 +889,7 @@
       "commands": [
         {
           "label": "full playwright",
-          "argv": ["npm.cmd", "run", "test:e2e"]
+          "argv": ["npm", "run", "test:e2e"]
         }
       ],
       "triggers": {

@@ -65,7 +65,7 @@ def check_playwright_command_target_exists(repo_root: Path, argv: list[str]) -> 
     issues: list[str] = []
     if len(argv) < 4:
         return issues
-    if argv[0] != "npx.cmd" or argv[1:3] != ["playwright", "test"]:
+    if argv[0] not in {"npx", "npx.cmd"} or argv[1:3] != ["playwright", "test"]:
         return issues
     for part in argv[3:]:
         if part.startswith("-"):
