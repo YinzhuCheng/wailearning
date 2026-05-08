@@ -546,9 +546,9 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `1`
+**Pass count:** `4`
 
-**Run count:** `2`
+**Run count:** `5`
 
 **Runs:**
 
@@ -612,6 +612,58 @@ git diff --check
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Python helpers compiled; PowerShell UTF-8 helper ran with `-Quiet`; `safe_show_text.py --escape` produced escaped output for the encoding doc; `safe_write_text.py` wrote an ignored `.e2e-run` smoke file; selected files reported `scanned=8 decode_errors=0 suspicious=0`; `git diff --check` passed. | The audit intentionally scanned the newly added helpers and edited docs, not the whole repository. Whole-repo suspicious-marker scans may report historical hotspots and should be interpreted through `ENCODING_AND_MOJIBAKE_SAFETY.md`. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `13` files; encoding scan reported `scanned=13 decode_errors=0 suspicious=0`. | This run validated the new placeholder expansion path in `run_validation_target.py` and the `--skip-if-empty` guard in `check_text_encoding.py`, replacing the earlier unresolved-placeholder blocker for this target. |
+
+### Test ID: `backend.roster.student_identity_audit`
+
+**Category:** `backend-pytest`
+
+**Scope:** Focused backend audit coverage for canonical `Student` identity and `users.student_id` migration prechecks. This target verifies the read-only audit report for clean bindings, students without accounts, student users without canonical students, safe legacy `username == student_no` binding candidates, duplicate student numbers, ambiguous user/student matches, invalid bindings, bound username/student-number mismatches, and unassigned students.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `apps/backend/wailearning_backend/domains/roster/audit.py`
+- `apps/backend/wailearning_backend/domains/roster/identity.py`
+- `ops/scripts/dev/audit_student_identity.py`
+- `tests/backend/roster/test_student_identity_audit.py`
+- `apps/backend/wailearning_backend/db/models.py`
+
+**Retest triggers:**
+
+- Changes to canonical student/user binding rules, especially `users.student_id`.
+- Changes to legacy recovery by `username == student_no`.
+- Changes to `Student.class_id`, unassigned student handling, or duplicate student-number constraints.
+- Changes to migration/audit scripts that inspect or repair student identity data.
+- Any branch that prepares automatic student identity data conversion.
+
+**Last branch:** `cursor/unify-student-identity-plan`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-09`
+
+**Pass count:** `1`
+
+**Run count:** `2`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py -q` | `failed` | `1 failed, 4 passed, 29 warnings in 23.62s` | The failed test attempted to seed a non-student user with the same `student_id` as an existing student user, which correctly violated the current `users.student_id` unique constraint. The fixture was adjusted to model invalid non-student binding on a different student and missing-student binding through direct SQL. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py -q` | `passed` | `5 passed, 29 warnings in 21.40s` | Focused audit target passed after adding `domains/roster/audit.py`, the read-only CLI wrapper, and coverage for clean, missing, legacy-candidate, duplicate, ambiguous, invalid, mismatch, and unassigned cases. Warnings were existing Pydantic class-based config deprecations. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py -q` | `passed` | `19 passed, 29 warnings in 77.55s` | Extended roster regression passed after adding the audit target and registry entry. The same validation round also passed `py_compile` for `domains/roster/audit.py`, `ops/scripts/dev/audit_student_identity.py`, and the new audit test; `ops/scripts/dev/lint_validation_registry.py` also passed. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py -q` | `passed` | `6 passed, 29 warnings in 23.83s` | Focused audit target was rerun after adding coverage for one canonical student with both an explicit bound account and a legacy username-match account candidate. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py -q` | `passed` | `20 passed, 29 warnings in 91.77s` | Final extended roster regression passed after adding the multiple-user-candidate audit case. The same validation round also passed `py_compile` for the changed audit module, CLI, and test file. |
 
 ### Test ID: `static.validation_selector`
 

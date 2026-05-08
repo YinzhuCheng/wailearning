@@ -288,6 +288,35 @@
       "notes": "If broader LLM grading, quota, or worker behavior changes, add LLM/homework behavior tests beyond this attachment-format target."
     },
     {
+      "id": "backend.roster.student_identity_audit",
+      "category": "backend-pytest",
+      "risk": "targeted",
+      "description": "Focused roster audit target for canonical Student identity and users.student_id migration prechecks.",
+      "working_directory": ".",
+      "coverage_tags": ["roster", "student-identity", "migration-precheck", "backend-pytest"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/backend/roster/test_student_identity_audit.py", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/backend/roster/test_student_identity_audit.py",
+          "apps/backend/wailearning_backend/domains/roster/audit.py",
+          "apps/backend/wailearning_backend/domains/roster/identity.py",
+          "ops/scripts/dev/audit_student_identity.py",
+          "apps/backend/wailearning_backend/db/models.py"
+        ],
+        "globs": [
+          "apps/backend/wailearning_backend/domains/roster/**",
+          "tests/backend/roster/**"
+        ]
+      },
+      "ledger_id": "backend.roster.student_identity_audit",
+      "notes": "Use before any student identity data migration or automatic repair. This target reports conflicts; it does not mutate data."
+    },
+    {
       "id": "backend.courses.student_course_roster_behavior",
       "category": "backend-pytest",
       "risk": "targeted",
