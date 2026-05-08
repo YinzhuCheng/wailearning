@@ -451,7 +451,7 @@ class StudentBase(BaseModel):
     phone: Optional[str] = None
     parent_phone: Optional[str] = None
     address: Optional[str] = None
-    class_id: int
+    class_id: Optional[int] = None
 
 
 class StudentCreate(StudentBase):
@@ -472,8 +472,8 @@ class StudentResponse(BaseModel):
     """
     Roster row exposed by read/list APIs.
 
-    Unlike `StudentCreate`, this tolerates legacy ORM rows where `gender` or `class_id`
-    were unset; serializers coerce defaults (see `students.router.build_student_response`).
+    Serializers coerce legacy/default values while preserving nullable class_id
+    for students that are not assigned to a class yet.
     """
 
     id: int

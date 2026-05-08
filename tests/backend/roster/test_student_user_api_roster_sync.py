@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import Class, Gender, Student, User
@@ -233,6 +234,91 @@ def test_post_students_without_student_no_generates_bound_student_account(client
         assert u.class_id == kid
     finally:
         db.close()
+
+
+def test_admin_can_create_unassigned_student_then_assign_class(client: TestClient):
+    h = _admin_headers(client)
+    suf = uuid.uuid4().hex[:8]
+
+    r = client.post(
+        "/api/students",
+        headers=h,
+        json={
+            "name": "Unassigned Student",
+            "gender": "male",
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["class_id"] is None
+    assert body["class_name"] is None
+    assert body["student_no"].startswith("SYS")
+    assert body["has_user"] is True
+
+    db = SessionLocal()
+    try:
+        student = db.query(Student).filter(Student.id == body["id"]).one()
+        user = db.query(User).filter(User.student_id == student.id).one()
+        klass = Class(name=f"AssignLater_{suf}", grade=2026)
+        db.add(klass)
+        db.flush()
+        sid = student.id
+        kid = klass.id
+        assert student.class_id is None
+        assert user.class_id is None
+        db.commit()
+    finally:
+        db.close()
+
+    listed = client.get("/api/students", headers=h, params={"page": 1, "page_size": 1000})
+    assert listed.status_code == 200, listed.text
+    rows = listed.json()["data"]
+    assert any(row["id"] == sid and row["class_id"] is None for row in rows)
+
+    moved = client.put(
+        f"/api/students/{sid}",
+        headers=h,
+        json={"class_id": kid},
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["class_id"] == kid
+
+    db = SessionLocal()
+    try:
+        student = db.query(Student).filter(Student.id == sid).one()
+        user = db.query(User).filter(User.student_id == sid).one()
+        assert student.class_id == kid
+        assert user.class_id == kid
+    finally:
+        db.close()
+
+
+def test_teacher_cannot_create_unassigned_student(client: TestClient):
+    suf = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        klass = Class(name=f"TeacherNoUnassigned_{suf}", grade=2026)
+        db.add(klass)
+        db.flush()
+        teacher = User(
+            username=f"teacher_no_unassigned_{suf}",
+            hashed_password=get_password_hash("teacher-pass"),
+            real_name="Teacher",
+            role="teacher",
+            class_id=None,
+        )
+        db.add(teacher)
+        db.commit()
+    finally:
+        db.close()
+
+    headers = login_api(client, f"teacher_no_unassigned_{suf}", "teacher-pass")
+    r = client.post(
+        "/api/students",
+        headers=headers,
+        json={"name": "No Class", "gender": "male"},
+    )
+    assert r.status_code == 403
 
 
 def test_create_student_user_can_bind_existing_student_id_without_username_student_no_match(client: TestClient):

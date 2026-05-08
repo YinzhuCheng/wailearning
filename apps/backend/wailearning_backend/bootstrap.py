@@ -76,6 +76,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id INTEGER REFERENCES students(id)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_student_id_unique ON users(student_id)",
+        "ALTER TABLE students ALTER COLUMN class_id DROP NOT NULL",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS teacher_id INTEGER REFERENCES users(id)",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES classes(id)",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS semester_id INTEGER REFERENCES semesters(id)",
@@ -542,6 +543,8 @@ def ensure_schema_updates() -> None:
         for statement in alter_statements:
             if engine.dialect.name != "sqlite":
                 connection.execute(text(statement))
+                continue
+            if "ALTER COLUMN" in statement:
                 continue
 
             sqlite_statement = (

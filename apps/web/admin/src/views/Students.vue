@@ -111,7 +111,7 @@
             <el-table-column prop="student_no" label="学号" min-width="180" />
             <el-table-column label="所属班级" min-width="180">
               <template #default="{ row }">
-                {{ row.class_name || '无' }}
+                {{ row.class_name || '未分班' }}
               </template>
             </el-table-column>
             <el-table-column label="账号状态" width="120">
@@ -700,7 +700,7 @@ const parseImportRows = (rows, options = {}) => {
       return
     }
 
-    if (!className) {
+    if (!className && !isAdminView.value) {
       errors.push(`第 ${rowNumber} 行缺少“所属班级”`)
       return
     }

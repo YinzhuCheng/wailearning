@@ -85,7 +85,7 @@ class Student(Base):
     phone = Column(String, nullable=True)
     parent_phone = Column(String, nullable=True)
     address = Column(String, nullable=True)
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
     teacher_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     parent_code = Column(String, unique=True, nullable=True, index=True)
     parent_code_expires = Column(DateTime(timezone=True), nullable=True)

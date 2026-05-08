@@ -37,8 +37,9 @@
         <el-form-item label="所属班级" prop="class_id">
           <el-select
             v-model="form.class_id"
-            placeholder="请选择班级"
+            placeholder="未分班"
             style="width: 100%"
+            clearable
             :disabled="isRosterMode && lockClassSelect"
           >
             <el-option
@@ -133,8 +134,7 @@ const pageSubtitle = computed(() => {
 const rules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
-  student_no: [],
-  class_id: [{ required: true, message: '请选择班级', trigger: 'change' }]
+  student_no: []
 }
 
 const fillForm = student => {
