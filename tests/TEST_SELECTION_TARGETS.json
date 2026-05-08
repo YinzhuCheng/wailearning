@@ -222,7 +222,7 @@
           "apps/web/admin/src/utils/clipboard.js"
         ]
       },
-      "ledger_id": null,
+      "ledger_id": "security.api_regression",
       "notes": "This target is intentionally cheaper than Playwright and should run before browser E2E for Markdown/LaTeX or copy-button changes."
     },
     {

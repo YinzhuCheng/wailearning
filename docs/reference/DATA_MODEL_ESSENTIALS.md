@@ -14,7 +14,7 @@
 |-------|-------|------|
 | `User` | `users` | `role` stores `UserRole` string; `class_id` nullable for staff |
 | `Class` | `classes` | |
-| `Student` | `students` | Roster row; `student_no` aligns with student user `username` |
+| `Student` | `students` | Canonical roster row; `student_no` may align with student user `username`, but `users.student_id` is the primary binding |
 | `CourseEnrollment` | `course_enrollments` | Unique `(subject_id, student_id)` |
 | `CourseEnrollmentBlock` | `course_enrollment_blocks` | Blocks auto re-sync |
 
@@ -23,7 +23,7 @@
 The repository maintains **two persisted representations** of a learner:
 
 1. **`students`** — administrative / teaching roster (`Student`), including gender and contact fields.
-2. **`users`** where `role=student` — login account (`User.username` **must equal** `Student.student_no` for the same class context).
+2. **`users`** where `role=student` — login account (`users.student_id` is the primary binding; `User.username == Student.student_no` remains a legacy recovery path).
 
 **Authoritative source for “who is in the class”:** the **`students` table** (plus `course_enrollments` for per-course views). Login accounts are **not** created through a separate CSV import on the Users screen; instead the backend **`reconcile_student_users_and_roster`** (`domains/roster/sync.py`) runs at application startup and is invoked again on **read/list admin surfaces** so transient drift self-heals:
 

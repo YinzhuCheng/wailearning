@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
 from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import Class, Gender, Student, User
+from apps.backend.wailearning_backend.db.models import Class, Gender, Student, User, UserRole
 from tests.scenarios.llm_scenario import ensure_admin, login_api
 
 
@@ -367,6 +367,58 @@ def test_create_student_user_can_bind_existing_student_id_without_username_stude
         assert u.student_id == sid
         assert u.class_id == kid
         assert st.student_no == f"real_no_{suf}"
+    finally:
+        db.close()
+
+
+def test_update_student_user_class_moves_bound_student_when_username_differs(client: TestClient):
+    h = _admin_headers(client)
+    suf = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        class_a = Class(name=f"MoveBoundA_{suf}", grade=2026)
+        class_b = Class(name=f"MoveBoundB_{suf}", grade=2026)
+        db.add_all([class_a, class_b])
+        db.flush()
+        student = Student(
+            name="Bound Class Move",
+            student_no=f"real_move_{suf}",
+            gender=Gender.MALE,
+            class_id=class_a.id,
+        )
+        db.add(student)
+        db.flush()
+        user = User(
+            username=f"login_move_{suf}",
+            hashed_password=get_password_hash("p"),
+            real_name="Bound Class Move",
+            role=UserRole.STUDENT.value,
+            class_id=class_a.id,
+            student_id=student.id,
+        )
+        db.add(user)
+        db.flush()
+        uid = user.id
+        sid = student.id
+        class_b_id = class_b.id
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.put(f"/api/users/{uid}", headers=h, json={"class_id": class_b_id})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["student_id"] == sid
+    assert body["class_id"] == class_b_id
+
+    db = SessionLocal()
+    try:
+        student = db.query(Student).filter(Student.id == sid).one()
+        user = db.query(User).filter(User.id == uid).one()
+        assert student.class_id == class_b_id
+        assert user.student_id == sid
+        assert user.class_id == class_b_id
+        assert db.query(Student).filter(Student.student_no == f"login_move_{suf}").count() == 0
     finally:
         db.close()
 

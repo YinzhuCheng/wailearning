@@ -36,7 +36,7 @@ For **student** accounts, login is also a light repair point:
 
 4. After successful login, the router caches the role/class decision **before** writing the login `operation_logs` row, then re-queries the user when needed and runs `prepare_student_course_context(...)`.
 5. `prepare_student_course_context(...)` may:
-   - reconcile a sole same-`student_no` roster row into the account class,
+   - reconcile a sole same-`student_no` roster row into the account class as a legacy compatibility path,
    - create a missing roster row from the student account itself (`sync_student_roster_from_user_accounts`) when legacy drift left only the login account,
    - and then sync required-course enrollments.
 
@@ -72,7 +72,7 @@ This is important because student quota APIs, homework submission, and discussio
 
 ### Student roster coupling
 
-- `reconcile_student_users_and_roster` runs during app lifespan — `main.py` — and ties student login identities to `students` rows where `student_no == username` within the same class when those rows exist.
+- `reconcile_student_users_and_roster` runs during app lifespan — `main.py` — and ties student login identities primarily through `users.student_id`, using `student_no == username` only as a legacy recovery path when an explicit binding is missing.
 
 ---
 

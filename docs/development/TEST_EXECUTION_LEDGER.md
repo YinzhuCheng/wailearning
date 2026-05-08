@@ -140,9 +140,9 @@ Avoid vague triggers such as "frontend changed" unless the target is genuinely b
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `2`
+**Pass count:** `3`
 
-**Run count:** `2`
+**Run count:** `4`
 
 **Runs:**
 
@@ -397,9 +397,9 @@ python ops\scripts\dev\repo_line_health.py
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `1`
+**Pass count:** `2`
 
-**Run count:** `1`
+**Run count:** `2`
 
 **Runs:**
 
@@ -456,6 +456,56 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `e7904f4` | Single PowerShell orchestrator: start local PostgreSQL binary, create role/db, set `TEST_DATABASE_URL`, run `.venv\Scripts\python.exe -m pytest tests\postgres -q` | `interrupted` | User intentionally interrupted the orchestrated run before a pytest result was observed. | Earlier setup confirmed a local PostgreSQL binary could initialize a throwaway data directory and direct `postgres.exe` could answer `SELECT version()` inside the same command lifecycle. Cross-command background process persistence was unreliable on this Windows sandbox, so the next run should use one orchestrator command/script. Local paths are recorded only in `.e2e-run/`. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | Local-only PowerShell orchestrator under `.e2e-run/`: start local PostgreSQL binary using a reused data directory, create role/db, set `TEST_DATABASE_URL`, run `.venv\Scripts\python.exe -m pytest tests\postgres -q` | `blocked` | PostgreSQL exited before readiness while recovering the reused data directory. | Local stderr showed crash recovery followed by `could not signal for checkpoint: Operation not permitted`. This is a Windows local runtime/data-directory recovery issue, not a pytest product result. Real local paths and logs are recorded only under `.e2e-run/`. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `4e765a9` | Local-only PowerShell orchestrator under `.e2e-run/`: create a fresh throwaway PostgreSQL data directory, start local PostgreSQL binary, create role/db, set `TEST_DATABASE_URL`, run `.venv\Scripts\python.exe -m pytest tests\postgres -q` | `passed` | `42 passed, 59 warnings in 94.79s` | The fresh data-directory path avoided the previous crash-recovery checkpoint failure. `initdb` still printed restricted-token and locale/text-search warnings after pytest output, but PostgreSQL was usable and the pytest package completed green. |
+
+### Test ID: `security.api_regression`
+
+**Category:** `security-pytest`
+
+**Scope:** Broad API security regression coverage for unauthenticated access, role boundaries, admin-only routes, IDOR edges, invalid tokens, and abuse cases. This target is recommended when auth, permission helpers, class/course access, or high-risk routers such as `/api/users` change.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\security -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `tests/security/test_security_regression.py`
+- `apps/backend/wailearning_backend/core/auth.py`
+- `apps/backend/wailearning_backend/api/routers/classes.py`
+- `apps/backend/wailearning_backend/domains/courses/access.py`
+- `apps/backend/wailearning_backend/api/routers/auth.py`
+- `apps/backend/wailearning_backend/api/routers/users.py`
+- `apps/backend/wailearning_backend/api/routers/homework.py`
+- `apps/backend/wailearning_backend/api/routers/llm_settings.py`
+- `apps/backend/wailearning_backend/api/routers/notifications.py`
+
+**Retest triggers:**
+
+- Changes to authentication, permission dependencies, or role boundary helpers.
+- Changes to `/api/users`, `/api/classes`, homework authorization, LLM admin routes, or notification visibility.
+- Changes that introduce or relax admin-only behavior, student self-service behavior, IDOR-sensitive resource lookup, or token validation.
+
+**Last branch:** `cursor/unify-student-identity-plan`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-09`
+
+**Pass count:** `1`
+
+**Run count:** `1`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\security -q` | `passed` | `22 passed, 29 warnings in 77.86s` | Broad security target passed after changing `/api/users/{id}` class-update behavior to resolve canonical students through `users.student_id`/`get_bound_student_for_user`. Warnings were existing Pydantic class-based config deprecations. |
 
 ### Test ID: `backend.courses.student_course_roster_behavior`
 
@@ -613,6 +663,7 @@ git diff --check
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Python helpers compiled; PowerShell UTF-8 helper ran with `-Quiet`; `safe_show_text.py --escape` produced escaped output for the encoding doc; `safe_write_text.py` wrote an ignored `.e2e-run` smoke file; selected files reported `scanned=8 decode_errors=0 suspicious=0`; `git diff --check` passed. | The audit intentionally scanned the newly added helpers and edited docs, not the whole repository. Whole-repo suspicious-marker scans may report historical hotspots and should be interpreted through `ENCODING_AND_MOJIBAKE_SAFETY.md`. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `13` files; encoding scan reported `scanned=13 decode_errors=0 suspicious=0`. | This run validated the new placeholder expansion path in `run_validation_target.py` and the `--skip-if-empty` guard in `check_text_encoding.py`, replacing the earlier unresolved-placeholder blocker for this target. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `6` files; encoding scan reported `scanned=6 decode_errors=0 suspicious=0`. | Static text/whitespace validation passed for the API, documentation, ledger, and roster test changes in the student identity binding update. |
 
 ### Test ID: `backend.roster.student_user_api_sync`
 
@@ -655,9 +706,9 @@ git diff --check
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `2`
+**Pass count:** `3`
 
-**Run count:** `2`
+**Run count:** `4`
 
 **Runs:**
 
@@ -665,6 +716,8 @@ git diff --check
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q` | `passed` | `9 passed, 29 warnings in 35.66s` | Focused API target passed after allowing admin-created student users to omit `class_id`; the new case proves `/api/users` creates an unassigned canonical `Student` and binds it through `users.student_id`. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py tests\backend\roster\test_roster_enroll_and_batch_class.py tests\backend\roster\test_student_identity_audit.py -q` | `passed` | `35 passed, 29 warnings in 160.36s` | Extended roster regression passed after backend cleanup and validation-registry updates. The same validation round also passed `py_compile` for changed backend modules/tests and `ops/scripts/dev/lint_validation_registry.py`. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q` | `failed` | `1 failed, 9 passed, 29 warnings in 50.43s` | New PUT `/api/users/{id}` regression initially missed the `UserRole` import in the test file. Product code had already compiled; the test import was corrected before rerun. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py -q` | `passed` | `16 passed, 29 warnings in 60.76s` | Focused roster/user API regression passed after single-user class updates were changed to resolve the canonical `Student` through `users.student_id`/`get_bound_student_for_user` instead of directly guessing by `username == student_no`. The same validation round also passed `py_compile` for `api/routers/users.py` and the changed test file, plus `git diff --check`. |
 
 ### Test ID: `backend.roster.student_identity_audit`
 
