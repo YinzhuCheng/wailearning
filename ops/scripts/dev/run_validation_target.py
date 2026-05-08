@@ -147,6 +147,31 @@ def normalize_path(path: str) -> str:
     return path.replace("\\", "/").strip("/")
 
 
+def normalize_changed_paths(changed_paths: list[dict[str, str]]) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for item in changed_paths:
+        raw_path = str(item.get("path") or "")
+        path = normalize_path(raw_path)
+        if not path:
+            continue
+        normalized.append(
+            {
+                "status": str(item.get("status") or "M"),
+                "path": path,
+            }
+        )
+    return normalized
+
+
+def resolve_changed_paths(repo_root: Path, args: argparse.Namespace) -> tuple[list[dict[str, str]], list[str]]:
+    if args.changed_paths_json:
+        parsed = json.loads(args.changed_paths_json)
+        if not isinstance(parsed, list):
+            raise ValueError("--changed-paths-json must decode to a list")
+        return normalize_changed_paths(parsed), ["using explicitly provided changed-path snapshot"]
+    return git_worktree_changed_paths(repo_root), []
+
+
 def is_text_path(path: str) -> bool:
     candidate = Path(path)
     return candidate.name in TEXT_FILENAMES or candidate.suffix in TEXT_EXTENSIONS
@@ -387,14 +412,57 @@ def run_command(
     ended = utc_now()
     if completed.returncode == 0:
         return RESULT_PASSED, None, completed.returncode, (ended - started).total_seconds()
-    output_tail = ""
-    try:
-        output_tail = stdout_path.read_text(encoding="utf-8", errors="replace")[-2000:]
-    except OSError:
-        output_tail = ""
-    if "spawn EPERM" in output_tail:
-        return RESULT_BLOCKED, "environment", completed.returncode, (ended - started).total_seconds()
+    output_tail = load_output_tail(stdout_path, stderr_path)
+    failure_class = infer_failure_class(argv, output_tail)
+    if failure_class == "environment":
+        return RESULT_BLOCKED, failure_class, completed.returncode, (ended - started).total_seconds()
     return RESULT_FAILED, "product", completed.returncode, (ended - started).total_seconds()
+
+
+def load_output_tail(stdout_path: Path, stderr_path: Path, max_chars: int = 4000) -> str:
+    parts: list[str] = []
+    for path in (stdout_path, stderr_path):
+        try:
+            parts.append(path.read_text(encoding="utf-8", errors="replace")[-max_chars:])
+        except OSError:
+            continue
+    return "\n".join(parts)
+
+
+def infer_failure_class(argv: list[str], output_tail: str) -> str:
+    text = output_tail.lower()
+    executable = str(argv[0]).lower() if argv else ""
+
+    environment_markers = (
+        "spawn eperm",
+        "address already in use",
+        "only one usage of each socket address",
+        "eaddrinuse",
+        "browser executable doesn't exist",
+        "failed to launch browser",
+        "please run the following command to download new browsers",
+        "playwright was just installed or updated",
+        "cannot find module",
+        "module not found",
+        "no module named",
+        "command not found",
+        "is not recognized as an internal or external command",
+        "connection refused",
+    )
+    if any(marker in text for marker in environment_markers):
+        return "environment"
+
+    if executable.endswith("npm.cmd") or executable.endswith("npx.cmd") or executable in {"npm", "npx", "node"}:
+        node_env_markers = (
+            "missing script:",
+            "could not determine executable to run",
+            "npm err! enoent",
+            "requires playwright",
+        )
+        if any(marker in text for marker in node_env_markers):
+            return "environment"
+
+    return "product"
 
 
 def run_playwright_preflight(
@@ -490,7 +558,8 @@ def run_target(args: argparse.Namespace) -> int:
     failure_class: str | None = None
     notes: list[str] = []
 
-    changed_paths = git_worktree_changed_paths(repo_root)
+    changed_paths, changed_path_notes = resolve_changed_paths(repo_root, args)
+    notes.extend(changed_path_notes)
     commands = list(target.get("commands", []))
     if not commands:
         overall_result = RESULT_BLOCKED
@@ -665,6 +734,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--no-history", action="store_true", help="Do not append a structured JSONL history record.")
     parser.add_argument("--timeout-seconds", type=int, default=900, help="Per-command timeout. Defaults to 900 seconds.")
     parser.add_argument("--dry-run", action="store_true", help="Resolve and record commands without executing them.")
+    parser.add_argument(
+        "--changed-paths-json",
+        help="Explicit JSON array of changed path objects, each with `path` and optional `status`. Defaults to the current worktree snapshot.",
+    )
     return parser.parse_args(argv)
 
 
@@ -676,6 +749,9 @@ def main(argv: list[str]) -> int:
         return 6
     except json.JSONDecodeError as exc:
         print(f"ERROR registry is not valid JSON: {exc}", file=sys.stderr)
+        return 6
+    except ValueError as exc:
+        print(f"ERROR {exc}", file=sys.stderr)
         return 6
 
 

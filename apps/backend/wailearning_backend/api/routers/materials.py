@@ -49,11 +49,70 @@ def _get_uncategorized_chapter(db: Session, subject_id: int) -> CourseMaterialCh
     return unc
 
 
+def _get_default_material_chapter(db: Session, subject_id: int) -> CourseMaterialChapter:
+    structured = (
+        db.query(CourseMaterialChapter)
+        .filter(
+            CourseMaterialChapter.subject_id == subject_id,
+            CourseMaterialChapter.is_uncategorized.is_(False),
+        )
+        .order_by(CourseMaterialChapter.sort_order.asc(), CourseMaterialChapter.id.asc())
+        .first()
+    )
+    if structured:
+        return structured
+    return _get_uncategorized_chapter(db, subject_id)
+
+
+def _chapter_match_score(chapter: CourseMaterialChapter, title: str, content: str) -> int:
+    chapter_title = (chapter.title or "").strip().lower()
+    haystack = f"{title} {content}".lower()
+    if not chapter_title or not haystack:
+        return 0
+
+    score = 0
+    if chapter_title in haystack:
+        score += max(len(chapter_title), 4) * 10
+
+    normalized = chapter_title.replace("：", " ").replace(":", " ").replace("-", " ")
+    for token in normalized.split():
+        if len(token) >= 2 and token in haystack:
+            score += len(token) * 6
+
+    for marker in ("第一", "第二", "第三", "第四", "第五", "第六", "1.1", "1.2", "2.1", "2.2", "3.1", "3.2"):
+        if marker in chapter_title and marker in haystack:
+            score += 24
+
+    return score
+
+
+def _infer_chapter_ids_for_material(db: Session, subject_id: int, title: str | None, content: str | None) -> list[int]:
+    chapters = (
+        db.query(CourseMaterialChapter)
+        .filter(
+            CourseMaterialChapter.subject_id == subject_id,
+            CourseMaterialChapter.is_uncategorized.is_(False),
+        )
+        .order_by(CourseMaterialChapter.sort_order.asc(), CourseMaterialChapter.id.asc())
+        .all()
+    )
+    if not chapters:
+        return [_get_uncategorized_chapter(db, subject_id).id]
+
+    title_text = (title or "").strip()
+    content_text = (content or "").strip()
+    scored = [(chapter.id, _chapter_match_score(chapter, title_text, content_text)) for chapter in chapters]
+    best_id, best_score = max(scored, key=lambda item: item[1], default=(chapters[0].id, 0))
+    if best_score > 0:
+        return [best_id]
+    return [chapters[0].id]
+
+
 def _validate_chapter_ids_exist(db: Session, subject_id: int, chapter_ids: Optional[List[int]]) -> None:
-    unc = _get_uncategorized_chapter(db, subject_id)
+    default_chapter = _get_default_material_chapter(db, subject_id)
     ids = list(chapter_ids) if chapter_ids else []
     if not ids:
-        ids = [unc.id]
+        ids = [default_chapter.id]
     seen = set()
     ordered_unique: List[int] = []
     for cid in ids:
@@ -114,10 +173,10 @@ def _apply_material_placements(
     subject_id: int,
     chapter_ids: Optional[List[int]],
 ) -> None:
-    unc = _get_uncategorized_chapter(db, subject_id)
+    default_chapter = _get_default_material_chapter(db, subject_id)
     ids = list(chapter_ids) if chapter_ids else []
     if not ids:
-        ids = [unc.id]
+        ids = [default_chapter.id]
 
     seen = set()
     ordered_unique: List[int] = []
@@ -242,6 +301,8 @@ def create_material(
     if not class_obj:
         raise HTTPException(status_code=404, detail="Class not found.")
 
+    effective_chapter_ids = list(data.chapter_ids) if data.chapter_ids else None
+
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
         linked = set(subject_linked_class_ids(db, course.id))
@@ -251,7 +312,10 @@ def create_material(
         elif course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
-        _validate_chapter_ids_exist(db, data.subject_id, data.chapter_ids)
+        if not effective_chapter_ids:
+            effective_chapter_ids = _infer_chapter_ids_for_material(db, data.subject_id, data.title, data.content)
+
+        _validate_chapter_ids_exist(db, data.subject_id, effective_chapter_ids)
 
     material = CourseMaterial(
         title=data.title,
@@ -271,7 +335,7 @@ def create_material(
             db,
             material_id=material.id,
             subject_id=data.subject_id,
-            chapter_ids=data.chapter_ids,
+            chapter_ids=effective_chapter_ids,
         )
 
     db.commit()

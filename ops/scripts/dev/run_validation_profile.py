@@ -154,6 +154,8 @@ def run_target(repo_root: Path, target_id: str, args: argparse.Namespace) -> tup
         target_args.append("--no-history")
     if args.dry_run:
         target_args.append("--dry-run")
+    if args.changed_paths_json:
+        target_args.extend(["--changed-paths-json", args.changed_paths_json])
     return run_python_json(repo_root, target_args)
 
 
@@ -198,6 +200,10 @@ def run_profile(args: argparse.Namespace) -> int:
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     targets, selection = target_ids_for_profile(repo_root, args.profile, args)
+    if selection and selection.get("changed_paths"):
+        args.changed_paths_json = json.dumps(selection["changed_paths"], ensure_ascii=False)
+    else:
+        args.changed_paths_json = None
     target_runs: list[dict[str, Any]] = []
 
     for target in targets:

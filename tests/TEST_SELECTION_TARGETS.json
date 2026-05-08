@@ -65,11 +65,15 @@
       "commands": [
         {
           "label": "compile selector",
-          "argv": [".venv/Scripts/python.exe", "-m", "py_compile", "ops/scripts/dev/select_validation_targets.py", "ops/scripts/dev/run_validation_target.py", "ops/scripts/dev/run_validation_profile.py", "ops/scripts/dev/validation_history.py", "tests/backend/manual/test_validation_selector.py"]
+          "argv": [".venv/Scripts/python.exe", "-m", "py_compile", "ops/scripts/dev/select_validation_targets.py", "ops/scripts/dev/run_validation_target.py", "ops/scripts/dev/run_validation_profile.py", "ops/scripts/dev/validation_history.py", "ops/scripts/dev/lint_validation_registry.py", "tests/backend/manual/test_validation_selector.py"]
         },
         {
           "label": "selector smoke",
           "argv": [".venv/Scripts/python.exe", "ops/scripts/dev/select_validation_targets.py", "--paths", "ops/scripts/dev/select_validation_targets.py", "tests/TEST_SELECTION_TARGETS.json", "--json"]
+        },
+        {
+          "label": "registry lint",
+          "argv": [".venv/Scripts/python.exe", "ops/scripts/dev/lint_validation_registry.py"]
         },
         {
           "label": "runner smoke",
@@ -82,6 +86,7 @@
           "ops/scripts/dev/run_validation_target.py",
           "ops/scripts/dev/run_validation_profile.py",
           "ops/scripts/dev/validation_history.py",
+          "ops/scripts/dev/lint_validation_registry.py",
           "tests/backend/manual/test_validation_selector.py",
           "tests/TEST_SELECTION_TARGETS.json",
           "docs/development/DEVELOPMENT_AND_TESTING.md",
@@ -94,6 +99,7 @@
           "ops/scripts/dev/run_validation_target.py",
           "ops/scripts/dev/run_validation_profile.py",
           "ops/scripts/dev/validation_history.py",
+          "ops/scripts/dev/lint_validation_registry.py",
           "tests/backend/manual/test_validation_selector.py",
           "tests/TEST_SELECTION_TARGETS.json"
         ]
@@ -331,7 +337,7 @@
           "tests/backend/homework/test_homework_llm_grading.py",
           "apps/backend/wailearning_backend/api/routers/homework.py",
           "apps/backend/wailearning_backend/llm_grading.py",
-          "apps/backend/wailearning_backend/llm_worker.py",
+          "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
           "apps/backend/wailearning_backend/api/schemas.py",
           "apps/backend/wailearning_backend/db/models.py"
         ],
@@ -421,7 +427,7 @@
           "apps/backend/wailearning_backend/domains/roster/reconciliation.py",
           "apps/backend/wailearning_backend/api/routers/homework.py",
           "apps/backend/wailearning_backend/api/routers/subjects.py",
-          "apps/backend/wailearning_backend/api/routers/roster.py"
+          "apps/backend/wailearning_backend/api/routers/students.py"
         ],
         "globs": [
           "apps/backend/wailearning_backend/domains/courses/**",
@@ -448,6 +454,12 @@
         "paths": [
           "tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py",
           "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
+          "apps/backend/wailearning_backend/api/routers/discussions.py",
+          "apps/backend/wailearning_backend/api/routers/homework.py",
+          "apps/backend/wailearning_backend/api/routers/materials.py",
+          "apps/backend/wailearning_backend/api/routers/students.py",
+          "apps/backend/wailearning_backend/api/routers/notifications.py",
+          "apps/backend/wailearning_backend/api/routers/llm_settings.py",
           "apps/backend/wailearning_backend/main.py",
           "apps/backend/wailearning_backend/core/config.py",
           "tests/e2e/web-admin/e2e-seed-headers.cjs",
@@ -480,7 +492,7 @@
         "paths": [
           "tests/security/test_security_regression.py",
           "apps/backend/wailearning_backend/core/auth.py",
-          "apps/backend/wailearning_backend/api/deps.py",
+          "apps/backend/wailearning_backend/api/routers/classes.py",
           "apps/backend/wailearning_backend/domains/courses/access.py",
           "apps/backend/wailearning_backend/api/routers/auth.py",
           "apps/backend/wailearning_backend/api/routers/users.py",
@@ -512,7 +524,7 @@
       "triggers": {
         "paths": [
           "tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js",
-          "apps/web/admin/src/views/Discussion.vue",
+          "apps/web/admin/src/components/CourseDiscussionPanel.vue",
           "apps/web/admin/src/views/MyCourses.vue",
           "apps/backend/wailearning_backend/api/routers/discussions.py",
           "apps/backend/wailearning_backend/llm_discussion.py",
@@ -634,17 +646,12 @@
       ],
       "triggers": {
         "paths": [
-          "tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js",
-          "apps/backend/wailearning_backend/api/routers/discussions.py",
-          "apps/backend/wailearning_backend/api/routers/homework.py",
-          "apps/backend/wailearning_backend/api/routers/llm_settings.py",
-          "apps/backend/wailearning_backend/api/routers/notifications.py",
-          "apps/backend/wailearning_backend/api/routers/e2e_dev.py"
+          "tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js"
         ],
         "globs": []
       },
       "ledger_id": null,
-      "notes": "Many assertions are API-heavy; consider moving future pure HTTP invariants to pytest when practical."
+      "notes": "Keep this for the spec itself or when validating the browser-managed end-to-end composition. Most pure HTTP invariants should prefer backend.e2e_dev.api_hazard_tier or behavior pytest targets first."
     },
     {
       "id": "admin.e2e.future_advanced_coverage_part1",
@@ -914,7 +921,7 @@
         "apps/backend/wailearning_backend/bootstrap.py",
         "apps/backend/wailearning_backend/core/config.py",
         "apps/backend/wailearning_backend/core/auth.py",
-        "apps/backend/wailearning_backend/api/deps.py",
+        "apps/backend/wailearning_backend/api/routers/classes.py",
         "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
         "apps/backend/wailearning_backend/db/models.py",
         "tests/conftest.py",

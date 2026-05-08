@@ -1,5 +1,5 @@
 <template>
-  <div class="learning-notes-page">
+  <div class="learning-notes-page" :class="`learning-notes-page--${materialPresentationStyle}`">
     <div class="page-header">
       <div>
         <h1 class="page-title">学习笔记</h1>
@@ -62,12 +62,13 @@
                 {{ formatDate(selectedNote.created_at) }}
               </p>
             </div>
-            <div class="note-detail-actions" v-if="canEditSelected">
-              <el-button @click="openEditDialog">编辑信息</el-button>
-              <el-button :type="selectedNote.visibility === 'course' ? 'warning' : 'success'" @click="toggleVisibility">
+            <div class="note-detail-actions">
+              <el-button type="primary" plain @click="discussionVisible = true">进入讨论区</el-button>
+              <el-button v-if="canEditSelected" @click="openEditDialog">编辑信息</el-button>
+              <el-button v-if="canEditSelected" :type="selectedNote.visibility === 'course' ? 'warning' : 'success'" @click="toggleVisibility">
                 {{ visibilityToggleLabel(selectedNote) }}
               </el-button>
-              <el-button type="danger" plain @click="deleteSelectedNote">删除</el-button>
+              <el-button v-if="canEditSelected" type="danger" plain @click="deleteSelectedNote">删除</el-button>
             </div>
           </div>
 
@@ -106,42 +107,50 @@
                 </div>
               </div>
             </aside>
-
-            <section class="note-discussion">
-              <div class="discussion-head">
-                <h3>讨论区</h3>
-                <span>{{ discussionScopeLabel(selectedNote) }}</span>
-              </div>
-              <el-skeleton v-if="discussionLoading" :rows="4" animated />
-              <div v-else class="discussion-list">
-                <el-empty v-if="!discussionRows.length" description="暂无讨论" />
-                <article v-for="row in discussionRows" :key="row.id" class="discussion-row" :class="{ 'is-assistant': row.message_kind === 'llm_assistant' }">
-                  <div class="discussion-row__meta">
-                    <strong>{{ row.message_kind === 'llm_assistant' ? '智能助教' : row.author_real_name || row.author_username }}</strong>
-                    <span>{{ formatDate(row.created_at) }}</span>
-                  </div>
-                  <p>{{ row.body }}</p>
-                </article>
-              </div>
-              <div class="discussion-compose">
-                <el-input
-                  v-model="discussionDraft"
-                  type="textarea"
-                  :rows="4"
-                  maxlength="8000"
-                  show-word-limit
-                  placeholder="写下问题、补充或整理想法。以 @LLM 开头或勾选智能助教可请求回复。"
-                />
-                <div class="discussion-compose__actions">
-                  <el-checkbox v-model="invokeLlm">请求智能助教回复</el-checkbox>
-                  <el-button type="primary" :loading="discussionSubmitting" @click="submitDiscussion">发表</el-button>
-                </div>
-              </div>
-            </section>
           </div>
         </template>
       </section>
     </div>
+
+    <el-drawer
+      v-model="discussionVisible"
+      title="笔记讨论区"
+      size="560px"
+      destroy-on-close
+      append-to-body
+    >
+      <template v-if="selectedNote">
+        <div class="discussion-head">
+          <h3>讨论区</h3>
+          <span>{{ discussionScopeLabel(selectedNote) }}</span>
+        </div>
+        <el-skeleton v-if="discussionLoading" :rows="4" animated />
+        <div v-else class="discussion-list">
+          <el-empty v-if="!discussionRows.length" description="暂无讨论" />
+          <article v-for="row in discussionRows" :key="row.id" class="discussion-row" :class="{ 'is-assistant': row.message_kind === 'llm_assistant' }">
+            <div class="discussion-row__meta">
+              <strong>{{ row.message_kind === 'llm_assistant' ? '智能助教' : row.author_real_name || row.author_username }}</strong>
+              <span>{{ formatDate(row.created_at) }}</span>
+            </div>
+            <p>{{ row.body }}</p>
+          </article>
+        </div>
+        <div class="discussion-compose">
+          <el-input
+            v-model="discussionDraft"
+            type="textarea"
+            :rows="4"
+            maxlength="8000"
+            show-word-limit
+            placeholder="写下问题、补充或整理想法。以 @LLM 开头或勾选智能助教可请求回复。"
+          />
+          <div class="discussion-compose__actions">
+            <el-checkbox v-model="invokeLlm">请求智能助教回复</el-checkbox>
+            <el-button type="primary" :loading="discussionSubmitting" @click="submitDiscussion">发表</el-button>
+          </div>
+        </div>
+      </template>
+    </el-drawer>
 
     <el-dialog v-model="noteDialogVisible" :title="editingNote ? '编辑笔记' : '新建学习笔记'" width="680px" destroy-on-close>
       <el-form label-width="112px">
@@ -216,10 +225,14 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onMounted, ref, watch } from 'vue'
+import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import {
+  getMaterialPresentationStyle,
+  MATERIAL_PRESENTATION_EVENT
+} from '@/utils/materialPresentation'
 import { useUserStore } from '@/stores/user'
 
 const NoteChapterNode = defineComponent({
@@ -283,6 +296,8 @@ const discussionLoading = ref(false)
 const discussionDraft = ref('')
 const invokeLlm = ref(false)
 const discussionSubmitting = ref(false)
+const discussionVisible = ref(false)
+const materialPresentationStyle = ref(getMaterialPresentationStyle())
 
 const noteDialogVisible = ref(false)
 const noteSubmitting = ref(false)
@@ -359,6 +374,7 @@ const loadNotes = async () => {
 
 const selectNote = async note => {
   selectedNote.value = await api.learningNotes.get(note.id)
+  discussionVisible.value = false
   await loadDiscussion()
 }
 
@@ -550,9 +566,22 @@ function formatDate(value) {
 
 watch(subjectFilter, loadNotes)
 
+const handleMaterialPresentationStyleChange = event => {
+  materialPresentationStyle.value = event?.detail || getMaterialPresentationStyle()
+}
+
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener(MATERIAL_PRESENTATION_EVENT, handleMaterialPresentationStyleChange)
+  }
   await userStore.fetchTeachingCourses(true)
   await loadNotes()
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener(MATERIAL_PRESENTATION_EVENT, handleMaterialPresentationStyleChange)
+  }
 })
 </script>
 
@@ -561,6 +590,17 @@ onMounted(async () => {
   display: grid;
   gap: 18px;
   min-width: 0;
+}
+
+.learning-notes-page--reader .note-card h2,
+.learning-notes-page--reader .chapter-node__title strong,
+.learning-notes-page--reader .outline-head h3 {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+}
+
+.learning-notes-page--compact .notes-layout,
+.learning-notes-page--compact .note-body-grid {
+  gap: 14px;
 }
 
 .page-header,
@@ -605,10 +645,11 @@ onMounted(async () => {
 .note-card {
   display: grid;
   gap: 8px;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid #e2e8f0;
-  border-radius: var(--wa-radius-md, 8px);
+  border-radius: 14px;
   cursor: pointer;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.03);
 }
 
 .note-card.is-active,
@@ -645,7 +686,7 @@ onMounted(async () => {
 }
 
 .note-detail-panel {
-  padding: 16px;
+  padding: 18px;
 }
 
 .note-body-grid {
@@ -657,7 +698,8 @@ onMounted(async () => {
 
 .note-outline,
 .note-discussion {
-  padding: 14px;
+  padding: 16px;
+  border-radius: 18px;
 }
 
 .outline-head {
@@ -675,7 +717,7 @@ onMounted(async () => {
 }
 
 .chapter-node {
-  padding-left: 12px;
+  padding-left: 14px;
   border-left: 2px solid #dbeafe;
 }
 
@@ -683,9 +725,14 @@ onMounted(async () => {
 .resource-row {
   display: grid;
   gap: 6px;
-  padding: 8px;
-  border-radius: var(--wa-radius-sm, 6px);
+  padding: 10px 12px;
+  border-radius: 12px;
   background: #f8fafc;
+}
+
+.chapter-node__title strong {
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .resource-row span,

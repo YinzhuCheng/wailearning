@@ -37,6 +37,18 @@
             />
             <p class="hint">默认 10；仅影响作业与资料讨论区的分页，可在 5～50 之间调整。</p>
           </el-form-item>
+          <el-form-item label="教材视图风格">
+            <el-radio-group v-model="profileForm.material_presentation_style" class="material-style-group">
+              <el-radio-button
+                v-for="option in materialPresentationOptions"
+                :key="option.value"
+                :label="option.value"
+              >
+                {{ option.label }}
+              </el-radio-button>
+            </el-radio-group>
+            <p class="hint">{{ currentMaterialPresentationDescription }}</p>
+          </el-form-item>
           <el-button type="primary" data-testid="personal-profile-save" :loading="profileSaving" @click="saveProfile">
             保存基本信息
           </el-button>
@@ -137,13 +149,19 @@ import { ElMessage } from 'element-plus'
 import api from '@/api'
 import AppearanceStylePanel from '@/components/AppearanceStylePanel.vue'
 import { fetchAttachmentBlobUrl, validateAttachmentFile } from '@/utils/attachments'
+import {
+  getMaterialPresentationStyle,
+  MATERIAL_PRESENTATION_OPTIONS,
+  setMaterialPresentationStyle
+} from '@/utils/materialPresentation'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 
 const profileForm = reactive({
   real_name: '',
-  discussion_page_size: 10
+  discussion_page_size: 10,
+  material_presentation_style: 'academic'
 })
 
 const profileSaving = ref(false)
@@ -192,11 +210,19 @@ const roleLabel = computed(
     }[userStore.userInfo?.role] || '—')
 )
 
+const materialPresentationOptions = MATERIAL_PRESENTATION_OPTIONS
+const currentMaterialPresentationDescription = computed(
+  () =>
+    materialPresentationOptions.find(option => option.value === profileForm.material_presentation_style)?.description ||
+    ''
+)
+
 const syncProfileForm = () => {
   profileForm.real_name = userStore.userInfo?.real_name || ''
   const d = userStore.userInfo?.discussion_page_size
   profileForm.discussion_page_size =
     d != null && Number.isFinite(Number(d)) && Number(d) >= 5 && Number(d) <= 50 ? Number(d) : 10
+  profileForm.material_presentation_style = getMaterialPresentationStyle()
 }
 
 watch(
@@ -228,6 +254,7 @@ const saveProfile = async () => {
       real_name: name,
       discussion_page_size: profileForm.discussion_page_size
     })
+    setMaterialPresentationStyle(profileForm.material_presentation_style)
     await userStore.refreshUserInfo()
     ElMessage.success('已保存')
   } finally {
@@ -405,6 +432,13 @@ onBeforeUnmount(() => {
 .pwd-form :deep(.el-text) {
   display: block;
   text-align: center;
+}
+
+.material-style-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
 }
 
 .profile-form > .el-button {

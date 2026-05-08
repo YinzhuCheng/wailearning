@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,10 +11,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SELECTOR = REPO_ROOT / "ops" / "scripts" / "dev" / "select_validation_targets.py"
 sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
+from lint_validation_registry import lint_registry  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
 from run_validation_target import (
     RESULT_BLOCKED,
     expand_command_placeholders,
+    infer_failure_class,
     parse_junit_xml,
     target_needs_playwright_preflight,
     with_pytest_junitxml,
@@ -75,6 +78,15 @@ def recommendation(payload: dict, target_id: str) -> dict:
         if item["id"] == target_id:
             return item
     raise AssertionError(f"{target_id} not recommended; got {recommendation_ids(payload)}")
+
+
+def write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def write_json(path: Path, payload: dict) -> None:
+    write_text(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
 
 
 class ValidationSelectorTests(unittest.TestCase):
@@ -144,6 +156,14 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(security["risk"], "broad")
         self.assertIn("security", security["coverage_tags"])
 
+    def test_discussion_router_prefers_pytest_hazard_tier_before_api_heavy_playwright(self):
+        payload = run_selector("--paths", "apps/backend/wailearning_backend/api/routers/discussions.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("backend.e2e_dev.api_hazard_tier", ids)
+        self.assertIn("admin.e2e.discussion_cover_llm_tier3", ids)
+        self.assertNotIn("admin.e2e.docs_gap_tier15", ids)
+
     def test_runner_dry_run_writes_redacted_run_record(self):
         history_path = ".agent-run/test-selector-history-dry-run.jsonl"
         result = run_validation_target("static.validation_selector", "--dry-run", "--history", history_path)
@@ -162,6 +182,30 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(last_history["target_id"], "static.validation_selector")
         self.assertEqual(last_history["result"], "skipped")
         self.assertTrue(last_history["private_paths_redacted"])
+
+    def test_runner_uses_explicit_changed_paths_for_history_attribution(self):
+        history_path = ".agent-run/test-selector-history-explicit-paths.jsonl"
+        changed_paths = [
+            {"status": "M", "path": "docs/development/TEST_SUITE_MAP.md"},
+            {"status": "??", "path": "notes/new-note.md"},
+        ]
+        result = run_validation_target(
+            "static.validation_selector",
+            "--dry-run",
+            "--history",
+            history_path,
+            "--changed-paths-json",
+            json.dumps(changed_paths),
+        )
+        payload = json.loads(result.stdout)
+
+        history_jsonl = REPO_ROOT / history_path
+        last_history = json.loads(history_jsonl.read_text(encoding="utf-8").splitlines()[-1])
+
+        self.assertEqual(payload["result"], "skipped")
+        self.assertEqual(last_history["changed_paths"], changed_paths)
+        self.assertEqual(last_history["changed_paths_signature"], changed_paths_signature(changed_paths))
+        self.assertIn("explicitly provided changed-path snapshot", payload["notes"])
 
     def test_runner_blocks_missing_pytest_as_environment_not_product_failure(self):
         result = run_validation_target(
@@ -207,6 +251,38 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(result, RESULT_BLOCKED)
         self.assertEqual(failure_class, "environment")
         self.assertEqual(return_code, 1)
+
+    def test_failure_classification_marks_port_collision_as_environment(self):
+        failure_class = infer_failure_class(
+            ["python", "-m", "uvicorn"],
+            "ERROR: [Errno 10048] Only one usage of each socket address is normally permitted\n",
+        )
+
+        self.assertEqual(failure_class, "environment")
+
+    def test_failure_classification_marks_missing_playwright_browser_as_environment(self):
+        failure_class = infer_failure_class(
+            ["npx.cmd", "playwright", "test"],
+            "browser executable doesn't exist at C:\\cache\\chromium\nPlease run the following command to download new browsers: npx playwright install\n",
+        )
+
+        self.assertEqual(failure_class, "environment")
+
+    def test_failure_classification_marks_missing_python_module_as_environment(self):
+        failure_class = infer_failure_class(
+            ["python", "-m", "pytest"],
+            "Traceback...\nModuleNotFoundError: No module named 'uvicorn'\n",
+        )
+
+        self.assertEqual(failure_class, "environment")
+
+    def test_failure_classification_leaves_assertion_failures_as_product(self):
+        failure_class = infer_failure_class(
+            ["python", "-m", "pytest"],
+            "E   AssertionError: expected 200 but got 500\n1 failed, 3 passed\n",
+        )
+
+        self.assertEqual(failure_class, "product")
 
     def test_runner_adds_pytest_junitxml_argument_when_missing(self):
         output_path = REPO_ROOT / ".agent-run/test-selector-junit.xml"
@@ -330,6 +406,30 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("requires operator review", runs_by_id["admin.e2e.homework_comment_cover_tier4"]["reason"])
         self.assertEqual(payload["deferred_targets"][0]["target_id"], "admin.e2e.homework_comment_cover_tier4")
 
+    def test_profile_forwards_selector_changed_paths_to_target_history(self):
+        history_path = ".agent-run/test-selector-profile-forward-history.jsonl"
+        changed_path = "apps/web/admin/src/views/HomeworkSubmissions.vue"
+        result = run_validation_profile(
+            "selector-recommended",
+            "--paths",
+            changed_path,
+            "--dry-run",
+            "--history",
+            history_path,
+        )
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["result"], "passed_with_deferred_review")
+
+        history_jsonl = REPO_ROOT / history_path
+        entries = [json.loads(line) for line in history_jsonl.read_text(encoding="utf-8").splitlines() if line.strip()]
+        build_entry = next(entry for entry in entries if entry["target_id"] == "frontend.admin.build")
+
+        self.assertEqual(build_entry["changed_paths"], [{"status": "M", "path": changed_path}])
+        self.assertEqual(
+            build_entry["changed_paths_signature"],
+            changed_paths_signature([{"status": "M", "path": changed_path}]),
+        )
+
     def test_selector_uses_matching_structured_history_as_fresh_evidence(self):
         changed_path = "docs/development/TEST_SUITE_MAP.md"
         history_path = ".agent-run/test-selector-structured-history.jsonl"
@@ -357,6 +457,134 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(target["history_status"], "fresh")
         self.assertIn("latest structured run passed", target["history_reason"])
         self.assertEqual(target["structured_history"]["commit"], "abc1234")
+
+    def test_registry_lint_passes_for_repository_registry(self):
+        issues = lint_registry(
+            REPO_ROOT,
+            "tests/TEST_SELECTION_TARGETS.json",
+            "docs/development/TEST_EXECUTION_LEDGER.md",
+        )
+
+        self.assertEqual(issues, [])
+
+    def test_registry_lint_rejects_unknown_fallback_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "static.sample",
+                            "category": "static-check",
+                            "risk": "static",
+                            "working_directory": ".",
+                            "commands": [{"label": "ok", "argv": ["python", "--version"]}],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [
+                        {
+                            "id": "broken",
+                            "if_any_path_matches": ["README.md"],
+                            "recommend": ["missing.target"],
+                        }
+                    ],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+
+        self.assertIn("broken: recommend references unknown target id: missing.target", issues)
+
+    def test_registry_lint_rejects_missing_literal_trigger_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "backend.sample",
+                            "category": "backend-pytest",
+                            "risk": "targeted",
+                            "working_directory": ".",
+                            "commands": [{"label": "pytest", "argv": ["python", "-m", "pytest", "tests/test_sample.py"]}],
+                            "triggers": {"paths": ["apps/backend/missing.py"], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+
+        self.assertIn("backend.sample: trigger path does not exist: apps/backend/missing.py", issues)
+
+    def test_registry_lint_rejects_missing_playwright_spec_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "apps/web/admin/package.json", "{}\n")
+            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "admin.e2e.sample",
+                            "category": "admin-playwright",
+                            "risk": "targeted",
+                            "working_directory": "apps/web/admin",
+                            "commands": [
+                                {
+                                    "label": "playwright",
+                                    "argv": ["npx.cmd", "playwright", "test", "missing.spec.js", "--project=chromium"],
+                                }
+                            ],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+
+        self.assertIn(
+            "admin.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-admin/missing.spec.js",
+            issues,
+        )
+
+    def test_registry_lint_rejects_missing_ledger_heading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "### Test ID: `other.target`\n")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "static.sample",
+                            "category": "static-check",
+                            "risk": "static",
+                            "working_directory": ".",
+                            "commands": [{"label": "ok", "argv": ["python", "--version"]}],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": "static.sample",
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+
+        self.assertIn("static.sample: ledger_id not found in ledger headings: static.sample", issues)
 
     def test_selector_marks_structured_history_stale_for_different_diff_signature(self):
         changed_path = "docs/development/TEST_SUITE_MAP.md"

@@ -54,6 +54,7 @@
         </el-menu>
 
         <div class="sidebar-footer">
+          <div v-show="!isCollapsed" class="sidebar-footer__section-title">账户</div>
           <el-tooltip content="个人设置" placement="right" :disabled="!isCollapsed || isMobile">
             <button
               type="button"
@@ -230,15 +231,18 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  Calendar,
   Collection,
   DataAnalysis,
   Document,
+  EditPen,
   Expand,
   Fold,
   Reading,
   School,
   Setting,
   SwitchButton,
+  Trophy,
   User,
   UserFilled
 } from '@element-plus/icons-vue'
@@ -571,7 +575,7 @@ const classTeacherMenu = [
     label: '班级教学',
     icon: School,
     children: [
-      { path: '/attendance', label: '考勤管理', icon: Collection },
+      { path: '/attendance', label: '考勤管理', icon: Calendar },
       { path: '/students', label: '学生信息', icon: User },
       { path: '/subjects', label: '课程信息', icon: Reading },
       { path: '/notifications', label: '通知信息', icon: Bell }
@@ -582,13 +586,13 @@ const classTeacherMenu = [
 /** Flat menu: teacher routes are direct top-level entries for lower click depth. */
 const teacherMenu = [
   { path: '/students', label: '学生管理', icon: User },
-  { path: '/scores', label: '成绩管理', icon: Collection },
-  { path: '/attendance', label: '考勤管理', icon: Collection },
+  { path: '/scores', label: '成绩管理', icon: Trophy },
+  { path: '/attendance', label: '考勤管理', icon: Calendar },
   { path: '/notifications', label: '通知中心', icon: Bell },
   { path: '/homework', label: '作业管理', icon: Reading },
-  { path: '/homework/students', label: '学生作业一览', icon: User },
+  { path: '/homework/students', label: '学生作业一览', icon: DataAnalysis },
   { path: '/materials', label: '课程资料', icon: Collection },
-  { path: '/learning-notes', label: '学习笔记', icon: Document }
+  { path: '/learning-notes', label: '学习笔记', icon: EditPen }
 ]
 
 /** Flat menu: student course routes are direct top-level entries for lower click depth. */
@@ -597,8 +601,8 @@ const studentMenu = [
   { path: '/course-home', label: '学习主页', icon: DataAnalysis },
   { path: '/homework', label: '课程作业', icon: Document },
   { path: '/materials', label: '课程资料', icon: Collection },
-  { path: '/learning-notes', label: '学习笔记', icon: Document },
-  { path: '/student-scores', label: '我的成绩', icon: Collection },
+  { path: '/learning-notes', label: '学习笔记', icon: EditPen },
+  { path: '/student-scores', label: '我的成绩', icon: Trophy },
   { path: '/notifications', label: '课程通知', icon: Bell }
 ]
 
@@ -613,7 +617,7 @@ const adminMenu = [
     label: '学期与配置',
     icon: Setting,
     children: [
-      { path: '/semesters', label: '学期管理', icon: Collection },
+      { path: '/semesters', label: '学期管理', icon: Calendar },
       { path: '/settings', label: '系统设置', icon: Setting }
     ]
   },
@@ -624,7 +628,7 @@ const adminMenu = [
     icon: Bell,
     children: [
       { path: '/notifications', label: '消息与通知', icon: Bell },
-      { path: '/logs', label: '操作日志', icon: Collection }
+      { path: '/logs', label: '操作日志', icon: Document }
     ]
   }
 ]
@@ -858,8 +862,13 @@ watch(notificationSyncParams, () => {
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--wa-sidebar-bg);
   color: #fff;
   transition: width 0.2s ease, transform 0.2s ease;
@@ -933,11 +942,21 @@ watch(notificationSyncParams, () => {
 
 .sidebar-footer {
   flex-shrink: 0;
-  padding: 8px 10px 14px;
+  padding: 10px 10px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(8, 15, 34, 0) 0%, rgba(8, 15, 34, 0.16) 14%, rgba(8, 15, 34, 0.38) 100%);
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.sidebar-footer__section-title {
+  padding: 0 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
 }
 
 .sidebar-footer__btn {
@@ -950,17 +969,19 @@ watch(notificationSyncParams, () => {
   padding: 10px 12px;
   border: none;
   border-radius: var(--wa-radius-lg);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.82);
   font-size: 14px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .sidebar-footer__btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .sidebar-footer__btn--active {

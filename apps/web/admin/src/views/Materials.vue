@@ -1,5 +1,5 @@
 <template>
-  <div class="materials-page">
+  <div class="materials-page" :class="`materials-page--${materialPresentationStyle}`">
     <div class="page-header">
       <div>
         <h1 class="page-title">课程资料</h1>
@@ -17,13 +17,13 @@
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
-      <div v-if="selectedCourse?.cover_image_url" class="course-cover-banner" data-testid="materials-course-cover-banner">
-        <el-image :src="selectedCourse.cover_image_url" fit="cover" class="course-cover-banner__img" />
-      </div>
       <div class="materials-layout">
         <aside class="chapter-sidebar" :class="{ 'chapter-sidebar--narrow': userStore.isStudent }">
           <div class="chapter-sidebar__head">
-            <span class="chapter-sidebar__title">章节</span>
+            <div class="chapter-sidebar__heading">
+              <span class="chapter-sidebar__eyebrow">教材目录</span>
+              <span class="chapter-sidebar__title">章节</span>
+            </div>
             <div class="chapter-sidebar__actions">
               <el-tooltip content="展开全部章节" placement="top">
                 <el-button
@@ -84,10 +84,15 @@
                 </el-icon>
               </button>
               <span v-else class="chapter-node-toggle-spacer" aria-hidden="true" />
-              <span class="tree-node-label" @dblclick.stop="onChapterLabelDblClick(data)">
-                {{ data.title }}
-                <el-tag v-if="data.is_uncategorized" size="small" type="info" class="tree-tag">默认</el-tag>
-              </span>
+              <button
+                type="button"
+                class="tree-node-label"
+                :class="{ 'tree-node-label--uncategorized': data.is_uncategorized }"
+                @click.stop="openChapterRead(data)"
+              >
+                <span class="tree-node-label__title">{{ displayChapterTitle(data) }}</span>
+                <el-tag v-if="data.is_uncategorized" size="small" type="info" class="tree-tag">资料库</el-tag>
+              </button>
               <span v-if="canManageChapters && !data.is_uncategorized" class="tree-node-actions" @click.stop>
                 <el-button link type="primary" size="small" @click="openRenameChapterDialog(data)">重命名</el-button>
                 <el-button link type="primary" size="small" @click="openAddChapterDialog(data.id)">子章节</el-button>
@@ -99,15 +104,22 @@
 
         <section class="materials-main">
           <div class="materials-toolbar">
-            <span class="muted-text" data-testid="materials-current-chapter">
-              当前章节：<strong>{{ currentChapterTitle }}</strong>
-            </span>
-            <el-button type="primary" text size="small" @click="openFirstMaterialReadInChapter">
-              打开本章首篇阅读
-            </el-button>
+            <div class="materials-toolbar__summary">
+              <span class="materials-toolbar__eyebrow">当前章节</span>
+              <strong data-testid="materials-current-chapter">{{ currentChapterTitle }}</strong>
+              <span class="materials-toolbar__count">{{ materials.length }} 篇资料</span>
+            </div>
+            <div class="materials-toolbar__actions">
+              <el-button type="primary" text size="small" @click="openFirstMaterialReadInChapter">
+                进入本章阅读
+              </el-button>
+              <el-button text size="small" @click="isMaterialShelfCollapsed = !isMaterialShelfCollapsed">
+                {{ isMaterialShelfCollapsed ? '展开资料列表' : '收起资料列表' }}
+              </el-button>
+            </div>
           </div>
 
-          <el-card shadow="never">
+          <el-card v-show="!isMaterialShelfCollapsed" shadow="never" class="materials-shelf-card">
             <DualHorizontalScroll target-selector=".materials-table-scroll">
               <div class="materials-table-scroll dual-scroll-target">
                 <el-table
@@ -336,7 +348,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Expand, Fold, Minus, Plus } from '@element-plus/icons-vue'
@@ -349,6 +361,10 @@ import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 import { normalizeContentFormat } from '@/utils/contentFormat'
+import {
+  getMaterialPresentationStyle,
+  MATERIAL_PRESENTATION_EVENT
+} from '@/utils/materialPresentation'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -373,6 +389,8 @@ const chapterTreeNodes = ref([])
 const selectedChapterId = ref(null)
 const treeRef = ref(null)
 const expandedChapterKeys = ref([])
+const isMaterialShelfCollapsed = ref(false)
+const materialPresentationStyle = ref(getMaterialPresentationStyle())
 const newChapterTitle = ref('')
 const chapterParentId = ref(null)
 const renameChapterId = ref(null)
@@ -421,6 +439,15 @@ const flattenTree = (nodes, depth = 0, acc = []) => {
   }
   return acc
 }
+
+const firstStructuredChapterId = nodes => {
+  for (const n of nodes || []) {
+    if (!n.is_uncategorized) return n.id
+  }
+  return nodes?.[0]?.id || null
+}
+
+const displayChapterTitle = data => (data?.is_uncategorized ? '资料库 / 未归档' : data?.title || '—')
 
 const collectChapterIds = nodes => {
   const ids = []
@@ -590,7 +617,7 @@ const loadChapterTree = async () => {
     chapterTreeNodes.value = res?.nodes || []
     if (!selectedChapterId.value) {
       selectedChapterId.value =
-        findUncategorizedId(chapterTreeNodes.value) || chapterTreeNodes.value[0]?.id || null
+        firstStructuredChapterId(chapterTreeNodes.value) || findUncategorizedId(chapterTreeNodes.value) || null
     }
     expandedChapterKeys.value = restoreExpandedChapterKeys(chapterTreeNodes.value)
     ensureSelectedChapterPathExpanded()
@@ -704,7 +731,7 @@ const resetForm = () => {
 const openCreateDialog = () => {
   editingMaterial.value = null
   resetForm()
-  const sid = selectedChapterId.value || findUncategorizedId(chapterTreeNodes.value)
+  const sid = selectedChapterId.value || firstStructuredChapterId(chapterTreeNodes.value) || findUncategorizedId(chapterTreeNodes.value)
   form.chapter_ids = sid ? [sid] : []
   dialogVisible.value = true
 }
@@ -849,6 +876,11 @@ const onChapterLabelDblClick = async data => {
   }
 }
 
+const openChapterRead = data => {
+  selectedChapterId.value = data.id
+  onChapterLabelDblClick(data)
+}
+
 const openAttachment = async row => {
   if (!row?.attachment_url) return
   await downloadAttachment(row.attachment_url, row.attachment_name)
@@ -980,6 +1012,9 @@ const submitExtraPlacement = async () => {
 }
 
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener(MATERIAL_PRESENTATION_EVENT, handleMaterialPresentationStyleChange)
+  }
   await loadChapterTree()
   await loadMaterials()
 })
@@ -987,8 +1022,9 @@ onMounted(async () => {
 watch(selectedCourse, async () => {
   selectedChapterId.value = null
   expandedChapterKeys.value = []
+  isMaterialShelfCollapsed.value = false
   await loadChapterTree()
-  selectedChapterId.value = findUncategorizedId(chapterTreeNodes.value)
+  selectedChapterId.value = firstStructuredChapterId(chapterTreeNodes.value) || findUncategorizedId(chapterTreeNodes.value)
   await loadMaterials()
 })
 
@@ -1001,11 +1037,50 @@ watch(selectedChapterId, () => {
   persistExpandedChapterKeys()
   loadMaterials()
 })
+
+const handleMaterialPresentationStyleChange = event => {
+  materialPresentationStyle.value = event?.detail || getMaterialPresentationStyle()
+}
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener(MATERIAL_PRESENTATION_EVENT, handleMaterialPresentationStyleChange)
+  }
+})
 </script>
 
 <style scoped>
 .materials-page {
   padding: 24px;
+}
+
+.materials-page--reader .chapter-sidebar,
+.materials-page--reader .materials-shelf-card {
+  border-radius: 22px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.04);
+}
+
+.materials-page--reader .tree-node-label {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  font-size: 16px;
+}
+
+.materials-page--compact .materials-layout {
+  gap: 14px;
+}
+
+.materials-page--compact .chapter-sidebar {
+  padding: 12px 14px 10px;
+}
+
+.materials-page--compact .chapter-tree :deep(.el-tree-node__content) {
+  min-height: 38px;
+}
+
+.materials-page--compact .tree-node-label {
+  min-height: 34px;
+  font-size: 14px;
+  font-family: inherit;
 }
 
 .page-header {
@@ -1032,33 +1107,19 @@ watch(selectedChapterId, () => {
   gap: 12px;
 }
 
-.course-cover-banner {
-  margin-bottom: 20px;
-  border-radius: var(--wa-radius-xl);
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  max-height: 200px;
-  background: #f1f5f9;
-}
-
-.course-cover-banner__img {
-  width: 100%;
-  height: 160px;
-  display: block;
-}
-
 .materials-layout {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   align-items: stretch;
 }
 
 .chapter-sidebar {
-  border-radius: var(--wa-radius-lg);
-  background: #fff;
-  padding: 12px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 16px 16px 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
   width: 100%;
   max-width: none;
 }
@@ -1071,12 +1132,27 @@ watch(selectedChapterId, () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.chapter-sidebar__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chapter-sidebar__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-transform: uppercase;
 }
 
 .chapter-sidebar__title {
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: #0f172a;
 }
 
@@ -1101,9 +1177,16 @@ watch(selectedChapterId, () => {
 
 .chapter-tree :deep(.el-tree-node__content) {
   height: auto;
-  min-height: 38px;
+  min-height: 44px;
   align-items: flex-start;
-  font-size: 16px;
+  padding: 2px 0;
+  font-size: 15px;
+  border-radius: 12px;
+  transition: background 0.16s ease;
+}
+
+.chapter-tree :deep(.el-tree-node__content:hover) {
+  background: rgba(37, 99, 235, 0.05);
 }
 
 .chapter-tree :deep(.el-tree-node__expand-icon) {
@@ -1150,13 +1233,34 @@ watch(selectedChapterId, () => {
 .tree-node-label {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   flex-wrap: wrap;
-  min-height: 38px;
-  padding-right: 8px;
-  font-size: 16px;
-  font-weight: 650;
-  line-height: 1.45;
+  min-height: 40px;
+  padding: 6px 8px 6px 0;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.55;
+  cursor: pointer;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", serif;
+}
+
+.tree-node-label__title {
+  display: inline-block;
+}
+
+.tree-node-label:hover .tree-node-label__title {
+  color: #1d4ed8;
+}
+
+.tree-node-label--uncategorized {
+  font-family: inherit;
+  font-weight: 500;
+  color: #475569;
 }
 
 .tree-tag {
@@ -1171,12 +1275,46 @@ watch(selectedChapterId, () => {
 }
 
 .materials-toolbar {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding: 0 4px;
+}
+
+.materials-toolbar__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  color: #0f172a;
+}
+
+.materials-toolbar__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.materials-toolbar__count {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.materials-toolbar__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.materials-shelf-card {
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
 }
 
 .materials-table-scroll {

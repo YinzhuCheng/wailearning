@@ -373,7 +373,7 @@ def reset_e2e_scenario(
     db.add(
         CourseMaterialSection(
             material_id=mat_disc.id,
-            chapter_id=unc.id,
+            chapter_id=ch_extra_a.id,
             sort_order=0,
         )
     )
