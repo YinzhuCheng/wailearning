@@ -111,7 +111,7 @@
               <span v-else class="muted-text">{{ row.attempt_count ? '待教师评分' : '未提交' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" :width="userStore.isStudent ? 200 : 280" align="center" header-align="center">
+          <el-table-column label="操作" :width="userStore.isStudent ? 220 : 340" align="center" header-align="center">
             <template #default="{ row }">
               <template v-if="userStore.isStudent">
                 <div class="wa-table-actions">
@@ -912,7 +912,7 @@ watch(selectedCourse, () => {
 }
 
 .homework-table-scroll :deep(.el-table) {
-  min-width: 1060px;
+  min-width: 1160px;
 }
 
 .wa-table-actions {
@@ -926,6 +926,18 @@ watch(selectedCourse, () => {
 
 .wa-table-actions :deep(.el-dropdown) {
   flex: 0 0 auto;
+}
+
+.wa-table-actions :deep(.el-button) {
+  flex: 0 0 auto;
+  min-width: 52px;
+  margin-left: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.wa-table-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .homework-empty-state {

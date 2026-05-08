@@ -181,15 +181,15 @@ npm.cmd run build
 
 **Last branch:** `cursor/discussion-avatar-chat-ui-921d`
 
-**Last commit:** `6a95aad`
+**Last commit:** `this commit`
 
 **Last result:** `passed`
 
-**Last run date:** `2026-05-07`
+**Last run date:** `2026-05-08`
 
-**Pass count:** `1`
+**Pass count:** `3`
 
-**Run count:** `1`
+**Run count:** `3`
 
 **Runs:**
 
@@ -197,6 +197,7 @@ npm.cmd run build
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `6a95aad` | `npm.cmd run build` | `passed` | Vite production build completed successfully. | Output included the known Vite CJS Node API deprecation warning and chunk-size warnings. Treat the warnings as follow-up optimization noise unless they change into build failures. |
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2378 modules transformed`, built in about 20 seconds. | Output again included the known Vite CJS Node API deprecation warning and chunk-size warnings for large bundles. No Vue, JS, CSS, or asset pipeline error was reported. |
+| 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `npm.cmd run build` (after `npm.cmd install` in `apps/web/admin`) | `passed` | Admin SPA build succeeded after adjusting the homework table action column and button spacing in `apps/web/admin/src/views/Homework.vue`; the prior failure was an environment precondition issue because `vite` was missing until admin dependencies were installed. | Build was run from `apps/web/admin`. `npm install` added the local package dependencies needed for `vite build`. |
 
 ### Test ID: `admin.e2e.learning_notes_attendance_cover_tier20`
 
@@ -615,7 +616,6 @@ python ops\scripts\dev\run_validation_target.py static.validation_selector --dry
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120` | `passed` | Runner executed all three `static.validation_selector` commands: selector/runner compile passed, selector JSON smoke passed, nested runner dry-run smoke passed. | The runner used the current interpreter because `<repo>/.venv/Scripts/python.exe` was absent in this worktree, and recorded that fallback in ignored local artifacts. The generated `run.json` used `<repo>` and `<python>` placeholders instead of private absolute paths. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v` | `passed` | Structured local validation history helper, selector, target runner, profile runner, and selector tests compiled; target registry parsed as valid JSON; `15` standard-library selector/runner/history/profile tests passed. | This run covered JSONL history writing, selector use of matching structured history as fresh evidence, stale classification when the structured history changed-path signature differs from the selector input, pytest JUnit XML argument injection, parsing testcase-level JUnit results, redaction of absolute testcase file paths from JUnit XML, static profile dry-runs, and selector-recommended profile skipping review-required targets by default. Ignored JSONL/XML/profile files under `.agent-run/` are local evidence only and are not committed. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `python -m py_compile ops\scripts\dev\validation_history.py ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py tests\backend\manual\test_validation_selector.py`; `python -m json.tool tests\TEST_SELECTION_TARGETS.json`; `python -m unittest tests.backend.manual.test_validation_selector -v`; `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`; `python ops\scripts\dev\run_validation_profile.py static --dry-run --timeout-seconds 120`; `python ops\scripts\dev\select_validation_targets.py --worktree --json`; `git diff --check` | `passed` | Final handoff validation passed after adding the committed validation automation handoff document; `15` unittest cases passed; static target runner passed; static profile dry-run passed; worktree selector returned `non_full_validation.status=acceptable` and `unmatched_paths=[]`; diff whitespace check passed. | Current worktree still had no repository `.venv`, so runner smoke used the current Python interpreter and recorded the fallback in ignored artifacts. Worktree selector considered the new handoff document and validation tooling files and recommended only static targets. |
-
 ## Known First-Version Limitations
 
 1. This first ledger version starts with the verified runs around commit `6a95aad`; it intentionally does not backfill older branch history from memory.

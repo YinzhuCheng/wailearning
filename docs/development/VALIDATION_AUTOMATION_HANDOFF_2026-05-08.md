@@ -1,185 +1,104 @@
-# LaTeX Copy And Rendering Handoff - 2026-05-08
+# Homework Table Button Layout Handoff - 2026-05-08
 
 This handoff replaces the previous validation automation handoff content for the
-current branch. The active follow-up is the Markdown + LaTeX authoring demo in
-the admin frontend.
+current branch. The active follow-up is the admin homework list action layout.
 
 ## Branch And Context
 
-- Worktree: the local checkout for branch `cursor/discussion-avatar-chat-ui-921d`
+- Worktree: `cursor/discussion-avatar-chat-ui-921d`
 - Branch: `cursor/discussion-avatar-chat-ui-921d`
-- User-provided screenshot is under `.agent-run/images/` in the local worktree
-  (`latex渲染坑.png` at investigation time).
-- `.agent-run/` is local-only and ignored. Do not commit screenshots or other
-  local evidence from that directory.
+- The user provided a screenshot showing the homework list action buttons in the
+  admin SPA. The `查看` and `删除` buttons were visibly clipped inside the
+  `操作` column.
+- `.agent-run/` is local-only and ignored. Do not commit screenshots, logs, or
+  other local evidence from that directory.
 
 ## User-Visible Problem
 
-The screenshot shows the admin authoring surface for Markdown + LaTeX content.
-Two symptoms are visible:
+The admin homework table in `apps/web/admin/src/views/Homework.vue` rendered the
+action buttons too tightly. In the screenshot:
 
-1. The `复制示例源码` button reports:
-   `复制失败：请手动展开「查看示例 Markdown 源码」选择文本`
-2. The fixed LaTeX demo renders inline math successfully, but multiline block
-   formulas are still displayed as source text:
-   - `$$ ... $$`
-   - `\[ ... \]`
+- the `查看` button label was clipped on the right;
+- the `删除` button label was clipped on the right;
+- the action area looked cramped and unstable inside the table cell.
 
-Important observation: KaTeX is not globally broken. The inline examples in the
-screenshot are already rendered as math. The failure is specific to multiline
-block delimiters after Markdown rendering.
+The issue is in the table layout and button spacing, not in homework routing or
+the underlying API.
 
 ## Relevant Files
 
-- `apps/web/admin/src/components/MarkdownLatexLiveDemo.vue`
-  - Owns the fixed demo card, copy button, insert button, and failure message.
-- `apps/web/admin/src/utils/markdownLatexDemo.js`
-  - Owns the canonical demo source shown in authoring surfaces.
-- `apps/web/admin/src/components/RichMarkdownDisplay.vue`
-  - Shared Markdown + KaTeX display component.
-- `apps/web/admin/src/components/FeedbackRichText.vue`
-  - Similar Markdown + KaTeX rendering path for feedback text.
-- `apps/web/admin/src/utils/markdownIt.js`
-  - Shared Markdown-it setup and delimiter placeholder handling.
-- `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js`
-  - Existing E2E coverage around the demo, editor preview, and posted discussion
-    Markdown/KaTeX rendering.
-- `docs/development/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md`
-  - Existing product/technical notes for Markdown/plain format and known LaTeX
-    delimiter pitfalls.
+- `apps/web/admin/src/views/Homework.vue`
+  - Owns the homework list table, action column, and table-level spacing.
+- `tests/TEST_SELECTION_TARGETS.json`
+  - Registry already maps this view to `frontend.admin.build` and the
+    homework-related Playwright tier.
+- `docs/development/TEST_EXECUTION_LEDGER.md`
+  - Execution record for the build and validation steps used in this pass.
+- `AGENTS.md`
+  - Updated with the change-scoped validation rule requested by the user.
 
-## Copy Failure Cause
+## Fix Implemented
 
-`MarkdownLatexLiveDemo.vue` currently attempts only the modern Clipboard API:
+`apps/web/admin/src/views/Homework.vue` was updated in three places:
 
-```js
-if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-  await navigator.clipboard.writeText(MARKDOWN_LATEX_EXAMPLE_MARKDOWN)
-} else {
-  throw new Error('no clipboard')
-}
-```
+1. The `操作` column width increased from `280` to `340` for staff rows and
+   from `200` to `220` for student rows.
+2. The table's minimum width increased from `1060px` to `1160px` to reduce
+   pressure on the right-side columns.
+3. The action button container now neutralizes the default adjacent button
+   margin and gives each button a stable `min-width` and padding, so the labels
+   remain fully visible.
 
-If `navigator.clipboard.writeText` is unavailable or rejects, the component
-immediately shows the manual-copy warning. There is no fallback copy path.
+These changes keep the action area readable without changing behavior or route
+flow.
 
-Likely browser-side triggers include:
+## Validation Policy Update
 
-- the page is not in a secure context (`https` or accepted localhost context);
-- browser permission policy blocks clipboard writes;
-- the Clipboard API exists but the write is rejected;
-- the app is embedded or launched in a context where clipboard is unavailable.
+`AGENTS.md` now includes a rule stating that, unless the user explicitly asks
+for a broader validation level, verification should stay change-scoped:
 
-The screenshot alone proves the UI reached the `catch` path. It does not prove
-which browser-side condition occurred. For implementation, that distinction is
-not critical because the app should still provide a fallback.
+- run the diff selector first;
+- run only the relevant static/targeted targets by default;
+- treat `needs_review` and `not_sufficient` as explicit review points;
+- do not use the default rule to ignore unmatched paths or high-risk gaps.
 
-## Rendering Failure Cause
+That rule is intentionally written to support incremental validation, not to
+justify under-testing.
 
-`RichMarkdownDisplay.vue` renders Markdown first via `renderCourseMarkdown(...)`,
-then calls KaTeX `renderMathInElement(...)` on the generated DOM.
+## Validation Performed
 
-`markdownIt.js` already protects escaped delimiters such as `\(`, `\)`, `\[`,
-and `\]` from Markdown-it's backslash escape behavior. That protection explains
-why inline `\(...\)` can render.
+1. `select_validation_targets.py --worktree`
+   - Result: `needs_review`
+   - Relevant targets found:
+     - `static.encoding_text_tools`
+     - `frontend.admin.build`
+     - `admin.e2e.homework_comment_cover_tier4`
+   - No unmatched paths.
+2. `python -m py_compile` / selector smoke / local selector history checks
+   - Already completed in the current branch history and reflected in the
+     execution ledger.
+3. `npm.cmd install` in `apps/web/admin`
+   - Required because the local admin package did not yet have `vite` available.
+4. `npm.cmd run build`
+   - Passed after install.
+5. `npx.cmd playwright test e2e-homework-comment-cover-tier4.spec.js --project=chromium`
+   - Blocked before browser assertions because the repository `.venv` is missing
+     `uvicorn`:
+     `No module named uvicorn`
 
-The remaining bug is multiline block math. The demo source contains blocks like:
+## Important Environment Note
 
-```markdown
-$$
-\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
-$$
-```
-
-and:
-
-```markdown
-\[
-\int_0^1 x^2\,dx=\frac{1}{3}
-\]
-```
-
-Markdown-it runs before KaTeX. With the current `breaks: true` Markdown-it setup,
-multiline formulas are converted into normal paragraph content with line breaks
-and DOM boundaries. KaTeX auto-render then scans the already-created DOM and
-does not reliably match an opening block delimiter with its closing delimiter
-across the generated `<br>` / node boundaries. The result is exactly what the
-screenshot shows: inline formulas render, but block formulas remain visible as
-raw source.
-
-## Initial Fix Plan
-
-1. Add a resilient copy helper for `MarkdownLatexLiveDemo.vue`.
-   - Keep `navigator.clipboard.writeText(...)` as the preferred path.
-   - If it is unavailable or rejects, fall back to a temporary `textarea`,
-     select its contents, and try `document.execCommand('copy')`.
-   - Keep the existing manual-copy warning only if both paths fail.
-   - Consider factoring the helper into a small local function in the component
-     first; no broad abstraction is needed unless another component already has
-     duplicate clipboard logic.
-
-2. Fix multiline block math before or during Markdown rendering.
-   - Preferred lightweight approach: in `renderCourseMarkdown(...)`, protect
-     complete multiline math blocks before calling `md.render(...)`, then
-     restore them into the HTML afterward so KaTeX sees continuous delimiters.
-   - Cover both `$$...$$` and `\[...\]` block delimiters.
-   - Keep the existing delimiter placeholder logic for inline `\(...\)` and
-     escaped block delimiters.
-   - Avoid enabling raw HTML in Markdown-it.
-
-3. Keep `RichMarkdownDisplay.vue` and `FeedbackRichText.vue` consistent.
-   - Both use `createCourseMarkdownIt` / `renderCourseMarkdown`.
-   - A fix in `markdownIt.js` should benefit both components without duplicating
-     rendering logic.
-
-4. Add focused tests.
-   - Unit-level or lightweight frontend utility test if there is an existing
-     pattern for `markdownIt.js`; otherwise rely on E2E coverage.
-   - Extend `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js` to
-     assert that the fixed demo contains rendered `.katex-display` for block
-     formulas, not only any `.katex` node.
-   - If clipboard is tested, stub clipboard failure and assert fallback behavior,
-     but do not require real OS clipboard access in CI.
-
-## Validation To Run After Fix
-
-Start with diff-based selection:
-
-```powershell
-python ops\scripts\dev\select_validation_targets.py --worktree
-```
-
-Likely useful checks:
-
-```powershell
-python -m json.tool tests\TEST_SELECTION_TARGETS.json
-npm.cmd run build
-```
-
-Run the admin frontend build from:
-
-```text
-apps\web\admin
-```
-
-If E2E infrastructure is available, run the targeted spec:
-
-```powershell
-npm.cmd run test:e2e -- tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js
-```
-
-If Playwright/browser startup fails because of local sandbox or missing browser
-runtime, record that as an environment limitation and at least complete the
-frontend build plus code inspection.
+The Playwright attempt did not reach product assertions. It failed while the
+managed backend process was starting. That means the browser test result is an
+environment block, not a regression verdict on the homework layout.
 
 ## Notes For Next Agent
 
-- Do not switch back to the forgot-password branch. The user explicitly said to
-  ignore that branch context.
-- Stay in `cursor/discussion-avatar-chat-ui-921d`.
-- Be careful when reading Chinese text through PowerShell: console output may
-  display valid UTF-8 as mojibake. Do not treat mojibake in shell output as proof
-  that tracked files are corrupt.
-- The prior lightweight validation workflow work was already committed and
-  pushed as `a1b840f Add lightweight validation workflow`. This handoff is for
-  the next LaTeX copy/rendering task, not for continuing validation automation.
+- Stay on `cursor/discussion-avatar-chat-ui-921d`.
+- Do not reuse the previous LaTeX copy/rendering handoff as if it still matches
+  the current task; it has been replaced with this homework layout context.
+- If you need browser verification for the homework action buttons, install or
+  provision the missing backend dependency in `.venv` first so Playwright can
+  start `uvicorn`.
+- The build is already green, and the validation ledger has been updated with
+  the observed result.

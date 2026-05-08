@@ -94,6 +94,15 @@ current task.
    [`ops/scripts/dev/select_validation_targets.py`](ops/scripts/dev/select_validation_targets.py)
    as the first pass, then run or explicitly defer the recommended targets based
    on task scope.
+12. **Default to change-scoped validation.** Unless the user explicitly requests
+   full-suite, release-quality, zero-skip, or another broader validation level,
+   verify only the samples, targets, and checks that are directly relevant to
+   the changed files and affected behavior. Use the diff selector first, run the
+   recommended static and targeted targets, inspect any `needs_review` or
+   `not_sufficient` status, and document any deliberately deferred broad/full
+   target in the final handoff. Do not use this default to ignore unmatched
+   product paths, high-risk behavior, or selector gaps; add a registry rule, run
+   a broader target, or explain the unresolved validation state.
 
 ---
 
