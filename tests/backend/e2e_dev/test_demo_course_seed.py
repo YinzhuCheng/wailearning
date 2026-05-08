@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import text
 
 from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
@@ -10,6 +12,7 @@ from apps.backend.wailearning_backend.core.auth import get_password_hash
 from apps.backend.wailearning_backend.main import app
 from apps.backend.wailearning_backend.db.models import (
     Class,
+    CourseDiscussionEntry,
     CourseEnrollment,
     CourseExamWeight,
     CourseGradeScheme,
@@ -18,7 +21,10 @@ from apps.backend.wailearning_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
     Homework,
+    HomeworkAttempt,
     HomeworkSubmission,
+    LearningNote,
+    LearningNoteDiscussionEntry,
     Student,
     Subject,
     User,
@@ -61,6 +67,10 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert course is not None
         assert course.weekly_schedule
         assert course.description
+        required_times = json.loads(course.course_times or "[]")
+        assert len(required_times) == 1
+        assert required_times[0]["weekly_schedule"] == "2@7,8"
+        assert course.course_start_at is not None and course.course_end_at is not None
 
         assert db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == course.id).first() is not None
         exam_w = db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == course.id).first()
@@ -69,6 +79,9 @@ def test_demo_seed_creates_teacher_students_course_homework():
 
         st1 = db.query(Student).filter(Student.student_no == "stu1").first()
         assert st1 and st1.phone
+        students_by_no = {
+            row.student_no: row for row in db.query(Student).filter(Student.class_id == course.class_id).all()
+        }
 
         root = (
             db.query(CourseMaterialChapter)
@@ -117,11 +130,24 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert (hw.rubric_staff_only or "").strip()
         assert hw.max_submissions == 3
         assert hw.due_date is not None
+        st1 = students_by_no["stu1"]
+        st1_attempts = (
+            db.query(HomeworkAttempt)
+            .filter(HomeworkAttempt.homework_id == hw.id, HomeworkAttempt.student_id == st1.id)
+            .order_by(HomeworkAttempt.submitted_at.asc(), HomeworkAttempt.id.asc())
+            .all()
+        )
+        assert len(st1_attempts) >= 2
+        assert st1_attempts[-1].prior_attempt_id == st1_attempts[-2].id
+        assert st1_attempts[-1].submission_mode == "revision"
+        assert db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == hw.id).count() >= 3
         llm = db.query(Subject).filter(Subject.name == "大语言模型").first()
         assert llm is not None
         assert llm.course_type == "elective"
+        llm_times = json.loads(llm.course_times or "[]")
+        assert len(llm_times) == 1
+        assert llm_times[0]["weekly_schedule"] == "4@8,9"
         assert db.query(CourseMaterial).filter(CourseMaterial.subject_id == llm.id).count() >= 1
-        assert db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == hw.id).count() >= 3
         req_cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == course.id).first()
         assert req_cfg is not None and req_cfg.is_enabled is True
         assert db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == req_cfg.id).count() >= 1
@@ -135,12 +161,24 @@ def test_demo_seed_creates_teacher_students_course_homework():
             .first()
         )
         assert llm_hw is not None and llm_hw.auto_grading_enabled is True
+        llm_submissions = db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == llm_hw.id).count()
+        assert llm_submissions >= 2
+        llm_enrolled_ids = {
+            row.student_id
+            for row in db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == llm.id).all()
+        }
+        assert students_by_no["stu1"].id in llm_enrolled_ids
+        assert students_by_no["stu3"].id in llm_enrolled_ids
+        assert students_by_no["stu5"].id in llm_enrolled_ids
 
         prob = db.query(Subject).filter(Subject.name == "初等概率论").first()
         assert prob is not None
         assert prob.course_type == "elective"
         assert prob.teacher_id == tpro.id
         assert "Bayes" in (prob.description or "")
+        prob_times = json.loads(prob.course_times or "[]")
+        assert len(prob_times) == 1
+        assert prob_times[0]["weekly_schedule"] == "3@3,4"
         assert db.query(CourseMaterial).filter(CourseMaterial.subject_id == prob.id).count() >= 1
         prob_hw = (
             db.query(Homework)
@@ -151,9 +189,6 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert prob_hw.auto_grading_enabled is True
         assert (prob_hw.rubric_staff_only or "").strip()
         assert (prob_hw.reference_answer or "").strip()
-        students_by_no = {
-            row.student_no: row for row in db.query(Student).filter(Student.class_id == course.class_id).all()
-        }
         enrolled_ids = {
             row.student_id
             for row in db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == prob.id).all()
@@ -167,6 +202,29 @@ def test_demo_seed_creates_teacher_students_course_homework():
         prob_cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == prob.id).first()
         assert prob_cfg is not None and prob_cfg.is_enabled is True
         assert db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == prob_cfg.id).count() >= 1
+
+        sys_user = db.query(User).filter(User.username == "__system_llm_assistant__").first()
+        assert sys_user is not None
+        for course_row, homework_row in ((course, hw), (llm, llm_hw), (prob, prob_hw)):
+            discussion_rows = (
+                db.query(CourseDiscussionEntry)
+                .filter(
+                    CourseDiscussionEntry.subject_id == course_row.id,
+                    CourseDiscussionEntry.target_type == "homework",
+                    CourseDiscussionEntry.target_id == homework_row.id,
+                )
+                .all()
+            )
+            assert len(discussion_rows) >= 3
+            assert any(row.message_kind == "llm_assistant" for row in discussion_rows)
+            assert any(row.llm_invocation for row in discussion_rows)
+
+        notes = db.query(LearningNote).all()
+        assert len(notes) >= 3
+        assert {note.subject_id for note in notes}.issuperset({course.id, llm.id, prob.id})
+        assert db.query(LearningNoteDiscussionEntry).filter(
+            LearningNoteDiscussionEntry.message_kind == "llm_assistant"
+        ).count() >= 2
     finally:
         db.close()
 

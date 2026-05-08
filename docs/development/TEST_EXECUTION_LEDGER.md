@@ -140,9 +140,9 @@ Avoid vague triggers such as "frontend changed" unless the target is genuinely b
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `3`
+**Pass count:** `5`
 
-**Run count:** `4`
+**Run count:** `6`
 
 **Runs:**
 
@@ -258,6 +258,61 @@ npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --pro
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `6a95aad` | `npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium` | `passed` | `20 passed (1.1m)` | Run used the admin Playwright managed webServer flow from `<repo>/apps/web/admin`. Output included existing backend Pydantic warnings and Vite CJS API deprecation text. |
 
+### Test ID: `backend.e2e_dev.demo_course_seed`
+
+**Category:** `backend-pytest`
+
+**Scope:** Focused backend coverage for default demo course seed data used by local installs and E2E reset helpers. This target verifies demo teachers, canonical student users and `Student` rows, required/elective courses, course LLM bindings, structured teaching calendar times, course materials, homework, prefilled submissions, multi-attempt homework history, course discussions with fake LLM assistant participation, and seeded student learning notes.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\backend\e2e_dev\test_demo_course_seed.py -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `apps/backend/wailearning_backend/domains/seed/demo.py`
+- `apps/backend/wailearning_backend/api/routers/e2e_dev.py`
+- `apps/backend/wailearning_backend/db/models.py`
+- `apps/backend/wailearning_backend/api/routers/discussions.py`
+- `apps/backend/wailearning_backend/api/routers/learning_notes.py`
+- `tests/backend/e2e_dev/test_demo_course_seed.py`
+- `tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py`
+
+**Retest triggers:**
+
+- Changes to default/demo seed data, seeded credentials, seeded courses, or E2E reset scenario behavior.
+- Changes to `Subject.course_times`, `weekly_schedule`, course calendar serialization, or subject response fields.
+- Changes to homework submissions, attempts, iteration history, or LLM grading summary refresh behavior.
+- Changes to course discussion or learning note models, routes, assistant-message serialization, or system LLM assistant user bootstrap.
+- Changes to canonical student/user binding that affect demo users or `reconcile_student_users_and_roster`.
+
+**Last branch:** `cursor/unify-student-identity-plan`
+
+**Last commit:** `this commit`
+
+**Last result:** `passed`
+
+**Last run date:** `2026-05-09`
+
+**Pass count:** `3`
+
+**Run count:** `4`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `python -m pytest tests/backend/e2e_dev/test_demo_course_seed.py -q` | `blocked` | `<system-python>: No module named pytest` | The default `python` on this machine did not have pytest installed. The intended backend test environment is the repository virtualenv; the target was rerun with `.venv\Scripts\python.exe` below. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests/backend/e2e_dev/test_demo_course_seed.py -q` | `passed` | `4 passed, 29 warnings in 25.65s` | Focused demo seed target passed after enriching default data with structured course times, course discussions, fake LLM assistant replies, student learning notes, LLM elective enrollments/submissions, and a multi-attempt homework history for `stu1`. Warnings were existing Pydantic class-based config deprecations. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m py_compile apps/backend/wailearning_backend/domains/seed/demo.py tests/backend/e2e_dev/test_demo_course_seed.py` | `passed` | `py_compile completed successfully.` | Compile-only check for the changed seed module and focused seed test. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py -q` | `passed` | `4 passed, 29 warnings in 22.54s` | Related LLM seed edge suite remained green after adding pre-enrolled LLM elective students and demo submissions. This guards fresh-preset binding, no-preset behavior, renamed-course quota display, and roster display-name sync. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests/backend/e2e_dev/test_demo_course_seed.py -q` | `passed` | `4 passed, 29 warnings in 20.20s` | Final rerun passed after correcting seeded `course_times` to the frontend calendar's canonical weekly schedule format (`2@7,8`, `4@8,9`, `3@3,4`) and removing obsolete plain-text weekly constants. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py -q` | `passed` | `4 passed, 29 warnings in 19.47s` | Final related LLM seed edge rerun remained green after the canonical teaching-calendar schedule fix. |
+
 ### Test ID: `admin.e2e.core_flows_smoke`
 
 **Category:** `admin-playwright`
@@ -291,7 +346,7 @@ npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium
 - Changes to `ops/scripts/dev/playwright_preflight.py` or runner behavior for `category: admin-playwright` targets.
 - Any claim that local Playwright infrastructure has been repaired after environment blockers.
 
-**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+**Last branch:** `cursor/unify-student-identity-plan`
 
 **Last commit:** `this commit`
 
@@ -347,7 +402,7 @@ python ops\scripts\dev\repo_line_health.py
 
 **Last result:** `passed`
 
-**Last run date:** `2026-05-07`
+**Last run date:** `2026-05-09`
 
 **Pass count:** `2`
 
@@ -655,9 +710,9 @@ git diff --check
 
 **Last run date:** `2026-05-07`
 
-**Pass count:** `4`
+**Pass count:** `5`
 
-**Run count:** `4`
+**Run count:** `5`
 
 **Runs:**
 
@@ -667,6 +722,7 @@ git diff --check
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | See canonical command block above. | `passed` | Python helpers compiled; PowerShell UTF-8 helper ran with `-Quiet`; `safe_show_text.py --escape` produced escaped output for the encoding doc; `safe_write_text.py` wrote an ignored `.e2e-run` smoke file; selected files reported `scanned=8 decode_errors=0 suspicious=0`; `git diff --check` passed. | The audit intentionally scanned the newly added helpers and edited docs, not the whole repository. Whole-repo suspicious-marker scans may report historical hotspots and should be interpreted through `ENCODING_AND_MOJIBAKE_SAFETY.md`. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `13` files; encoding scan reported `scanned=13 decode_errors=0 suspicious=0`. | This run validated the new placeholder expansion path in `run_validation_target.py` and the `--skip-if-empty` guard in `check_text_encoding.py`, replacing the earlier unresolved-placeholder blocker for this target. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `6` files; encoding scan reported `scanned=6 decode_errors=0 suspicious=0`. | Static text/whitespace validation passed for the API, documentation, ledger, and roster test changes in the student identity binding update. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `3` files; encoding scan reported `scanned=3 decode_errors=0 suspicious=0`. | Static text/whitespace validation passed for `domains/seed/demo.py`, `test_demo_course_seed.py`, and this ledger after the demo seed realism update. |
 
 ### Test ID: `backend.roster.student_user_api_sync`
 

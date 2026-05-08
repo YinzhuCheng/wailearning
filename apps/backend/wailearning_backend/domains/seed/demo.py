@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -23,16 +24,22 @@ from apps.backend.wailearning_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseExamWeight,
+    CourseDiscussionEntry,
     CourseGradeScheme,
     CourseLLMConfig,
     CourseLLMConfigEndpoint,
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    DiscussionLLMJob,
     Homework,
     HomeworkAttempt,
     HomeworkSubmission,
     LLMEndpointPreset,
+    LearningNote,
+    LearningNoteChapter,
+    LearningNoteDiscussionEntry,
+    LearningNoteResource,
     Semester,
     Student,
     Subject,
@@ -44,6 +51,7 @@ from apps.backend.wailearning_backend.llm_grading import refresh_submission_summ
 from apps.backend.wailearning_backend.domains.roster.sync import reconcile_student_users_and_roster
 
 _DEMO_PASSWORD = "111111"
+_SYSTEM_LLM_ASSISTANT_USERNAME = "__system_llm_assistant__"
 
 _DEMO_COURSE_COVER_DATA_URL = (
     "data:image/svg+xml;utf8,"
@@ -68,7 +76,7 @@ _LLM_COURSE_DESCRIPTION = (
     "全校默认选修示例：大语言模型基础与应用入门。完成本课需由学生在「我的课程」中自主选课；"
     "内容包含提示工程简介与一次实践作业。"
 )
-_LLM_WEEKLY = "每周四 15:00–17:00（选修，以教务通知为准）"
+_LLM_COURSE_TIMES = "4@8,9"
 _LLM_MATERIAL_TITLE = "【选修】大语言模型：课程说明与阅读材料"
 _LLM_MATERIAL_CONTENT = """## 欢迎选修「大语言模型」
 
@@ -95,6 +103,36 @@ _LLM_HOMEWORK_CONTENT = """请完成以下任务（建议 300–800 字或等价
 提交形式：纯文本或 Markdown 均可。"""
 _LLM_RUBRIC_TEXT = """总分 100。关注是否理解提示工程、模板结构是否清楚、风险意识是否到位；表达清晰即可，不必长篇。
 """
+_LLM_ELECTIVE_ENROLLED_STUDENT_NOS = ("stu1", "stu3", "stu5")
+_LLM_PREFILL_STUDENT_NOS = ("stu1", "stu3")
+_LLM_PREFILL_BODIES = (
+    """# 提示工程练习 - stu1
+
+我理解提示工程是把任务、背景、约束和输出格式写清楚，让模型更容易生成可检查的结果。
+
+## 新闻摘要提示模板
+
+请阅读下面这段新闻，并按以下格式输出：
+
+1. 事实要点：列出 3-5 条；
+2. 涉及主体：说明人物、机构或地点；
+3. 不确定信息：标出原文没有直接说明的部分；
+4. 一句话摘要：不超过 40 字。
+
+## 风险
+
+- 不能把模型生成内容当成事实来源，需要回看原文。
+- 模型可能遗漏数字、时间和责任主体，摘要后要人工核对。""",
+    """# 大语言模型入门作业 - stu3
+
+提示工程不是“让模型猜我想要什么”，而是把目标拆成模型能执行的步骤。我设计的模板会先给角色和任务，再给材料，最后规定输出结构。
+
+示例：
+
+> 你是课堂助教，请把新闻材料整理成面向高中生的 5 条要点，并指出哪些地方需要进一步查证。
+
+我认为风险主要有两点：第一是幻觉，第二是过度依赖。如果作业完全照搬模型输出，就可能没有真正理解材料。""",
+)
 
 _TEACHER_PRO_USERNAME = "teacher_pro"
 _TEACHER_PRO_PASSWORD = "teacher_pro"
@@ -106,7 +144,7 @@ _PROB_COURSE_DESCRIPTION = (
     "Bayes 公式与常见离散分布，强调计算与直觉并重。课堂鼓励使用 Markdown + LaTeX 书写推导。"
     "【演示】本课由独立教师账号 teacher_pro 授课，资料与作业含大量公式排版示例。"
 )
-_PROB_WEEKLY = "每周三 10:00–11:40（选修；教室与调课以教务系统为准）"
+_PROB_COURSE_TIMES = "3@3,4"
 _PROB_MATERIAL_TITLE = "【选修】初等概率论：导读、记号与核心公式"
 _PROB_MATERIAL_CONTENT = r"""## 课程说明（选修）
 
@@ -217,8 +255,7 @@ _PROB_PREFILL_BODIES = (
 )
 
 _TEACHER_DISPLAY_NAME = "李演示"
-_COURSE_WEEKLY_SCHEDULE = "每周二 14:00–16:00（教室以教务通知为准）"
-_COURSE_TIMES = "第1–16周；实验课与讨论课穿插安排，请关注课程群通知。"
+_COURSE_TIMES = "2@7,8"
 _COURSE_DESCRIPTION = (
     "数据挖掘入门与实践（演示课程）。涵盖 Python 数据分析基础、特征与可视化、"
     "简单预处理与经典数据集探索；平时作业与课堂表现结合考核。"
@@ -538,6 +575,256 @@ def _ensure_demo_course_cover(course: Subject) -> None:
     """Attach a simple built-in cover only when the course has no cover yet."""
     if not course.cover_image_url:
         course.cover_image_url = _DEMO_COURSE_COVER_DATA_URL
+
+
+def _demo_semester_start() -> datetime:
+    return datetime(2026, 3, 2, 0, 0, tzinfo=timezone.utc)
+
+
+def _demo_semester_end(weeks: int) -> datetime:
+    return _demo_semester_start() + timedelta(weeks=weeks, days=-1, hours=23, minutes=59, seconds=59)
+
+
+def _demo_course_times_json(weekly_schedule: str, weeks: int) -> str:
+    start_at = _demo_semester_start()
+    end_at = _demo_semester_end(weeks)
+    return json.dumps(
+        [
+            {
+                "weekly_schedule": weekly_schedule,
+                "course_start_at": start_at.isoformat(),
+                "course_end_at": end_at.isoformat(),
+            }
+        ],
+        ensure_ascii=False,
+    )
+
+
+def _ensure_demo_course_time(
+    course: Subject,
+    *,
+    weekly_schedule: str,
+    weeks: int,
+) -> None:
+    course.weekly_schedule = weekly_schedule
+    course.course_start_at = _demo_semester_start()
+    course.course_end_at = _demo_semester_end(weeks)
+    course.course_times = _demo_course_times_json(weekly_schedule, weeks)
+
+
+def _ensure_demo_llm_assistant_user(db: Session) -> User:
+    sys_user = db.query(User).filter(User.username == _SYSTEM_LLM_ASSISTANT_USERNAME).first()
+    if sys_user:
+        sys_user.real_name = "智能助教"
+        sys_user.role = UserRole.TEACHER.value
+        sys_user.is_active = False
+        return sys_user
+    sys_user = User(
+        username=_SYSTEM_LLM_ASSISTANT_USERNAME,
+        hashed_password=get_password_hash("__demo_llm_assistant__"),
+        real_name="智能助教",
+        role=UserRole.TEACHER.value,
+        is_active=False,
+    )
+    db.add(sys_user)
+    db.flush()
+    return sys_user
+
+
+def _user_by_username(db: Session, username: str) -> User | None:
+    return db.query(User).filter(User.username == username).first()
+
+
+def _ensure_course_discussion_entry(
+    db: Session,
+    *,
+    target_type: str,
+    target_id: int,
+    subject_id: int,
+    class_id: int,
+    author_user_id: int,
+    body: str,
+    message_kind: str = "human",
+    llm_invocation: bool = False,
+    created_at: datetime | None = None,
+) -> CourseDiscussionEntry:
+    exists = (
+        db.query(CourseDiscussionEntry)
+        .filter(
+            CourseDiscussionEntry.target_type == target_type,
+            CourseDiscussionEntry.target_id == target_id,
+            CourseDiscussionEntry.subject_id == subject_id,
+            CourseDiscussionEntry.class_id == class_id,
+            CourseDiscussionEntry.author_user_id == author_user_id,
+            CourseDiscussionEntry.body == body,
+        )
+        .first()
+    )
+    if exists:
+        return exists
+    entry = CourseDiscussionEntry(
+        target_type=target_type,
+        target_id=target_id,
+        subject_id=subject_id,
+        class_id=class_id,
+        author_user_id=author_user_id,
+        body=body,
+        body_format="markdown",
+        message_kind=message_kind,
+        llm_invocation=llm_invocation,
+        created_at=created_at or datetime.now(timezone.utc),
+    )
+    db.add(entry)
+    db.flush()
+    return entry
+
+
+def _ensure_demo_discussion_job(
+    db: Session,
+    *,
+    subject_id: int,
+    class_id: int,
+    target_type: str,
+    target_id: int,
+    requester: User,
+    requester_student_id: int | None,
+    user_entry: CourseDiscussionEntry,
+    assistant_entry: CourseDiscussionEntry,
+) -> None:
+    exists = (
+        db.query(DiscussionLLMJob)
+        .filter(
+            DiscussionLLMJob.user_entry_id == user_entry.id,
+            DiscussionLLMJob.assistant_entry_id == assistant_entry.id,
+        )
+        .first()
+    )
+    if exists:
+        exists.status = "success"
+        exists.error_message = None
+        exists.finished_at = assistant_entry.created_at
+        return
+    db.add(
+        DiscussionLLMJob(
+            subject_id=subject_id,
+            class_id=class_id,
+            target_type=target_type,
+            target_id=target_id,
+            requester_user_id=requester.id,
+            requester_student_id=requester_student_id,
+            user_entry_id=user_entry.id,
+            assistant_entry_id=assistant_entry.id,
+            status="success",
+            error_message=None,
+            created_at=user_entry.created_at,
+            finished_at=assistant_entry.created_at,
+        )
+    )
+
+
+def _ensure_learning_note(
+    db: Session,
+    *,
+    owner: User,
+    course: Subject,
+    title: str,
+    description: str,
+    resource_title: str,
+    resource_content: str,
+    visibility: str = "course",
+) -> LearningNote:
+    note = (
+        db.query(LearningNote)
+        .filter(
+            LearningNote.owner_user_id == owner.id,
+            LearningNote.subject_id == course.id,
+            LearningNote.title == title,
+        )
+        .first()
+    )
+    if not note:
+        note = LearningNote(
+            title=title,
+            description=description,
+            owner_user_id=owner.id,
+            subject_id=course.id,
+            visibility=visibility,
+            source_subject_id=course.id,
+            copied_materials=False,
+        )
+        db.add(note)
+        db.flush()
+    else:
+        note.description = description
+        note.visibility = visibility
+
+    chapter = (
+        db.query(LearningNoteChapter)
+        .filter(LearningNoteChapter.note_id == note.id, LearningNoteChapter.parent_id.is_(None))
+        .order_by(LearningNoteChapter.id.asc())
+        .first()
+    )
+    if not chapter:
+        chapter = LearningNoteChapter(note_id=note.id, title="课堂整理", sort_order=0)
+        db.add(chapter)
+        db.flush()
+
+    res = (
+        db.query(LearningNoteResource)
+        .filter(LearningNoteResource.note_id == note.id, LearningNoteResource.title == resource_title)
+        .first()
+    )
+    if not res:
+        db.add(
+            LearningNoteResource(
+                note_id=note.id,
+                chapter_id=chapter.id,
+                title=resource_title,
+                content=resource_content,
+                content_format="markdown",
+                sort_order=0,
+            )
+        )
+    else:
+        res.chapter_id = chapter.id
+        res.content = resource_content
+        res.content_format = "markdown"
+    return note
+
+
+def _ensure_learning_note_discussion_entry(
+    db: Session,
+    *,
+    note_id: int,
+    author_user_id: int,
+    body: str,
+    message_kind: str = "human",
+    llm_invocation: bool = False,
+    created_at: datetime | None = None,
+) -> LearningNoteDiscussionEntry:
+    exists = (
+        db.query(LearningNoteDiscussionEntry)
+        .filter(
+            LearningNoteDiscussionEntry.note_id == note_id,
+            LearningNoteDiscussionEntry.author_user_id == author_user_id,
+            LearningNoteDiscussionEntry.body == body,
+        )
+        .first()
+    )
+    if exists:
+        return exists
+    entry = LearningNoteDiscussionEntry(
+        note_id=note_id,
+        author_user_id=author_user_id,
+        body=body,
+        body_format="markdown",
+        message_kind=message_kind,
+        llm_invocation=llm_invocation,
+        created_at=created_at or datetime.now(timezone.utc),
+    )
+    db.add(entry)
+    db.flush()
+    return entry
 
 
 _HOMEWORK_TITLE = "数据挖掘第一次作业：Python 环境、NumPy/Pandas 基础与 Wine 数据探索"
@@ -1059,8 +1346,6 @@ def _seed_llm_elective_course(
             semester=semester.name if semester else None,
             course_type="elective",
             status="active",
-            weekly_schedule=_LLM_WEEKLY,
-            course_times="选修课：请自主选课；课次以教务与课程群通知为准。",
             description=_LLM_COURSE_DESCRIPTION,
         )
         db.add(course)
@@ -1070,9 +1355,13 @@ def _seed_llm_elective_course(
         course.course_type = "elective"
         course.class_id = None
         course.status = "active"
-        course.weekly_schedule = _LLM_WEEKLY
         course.description = _LLM_COURSE_DESCRIPTION
         print(f"Demo elective '{_LLM_COURSE_NAME}' already exists; refreshed fields.")
+    _ensure_demo_course_time(
+        course,
+        weekly_schedule=_LLM_COURSE_TIMES,
+        weeks=12,
+    )
 
     _ensure_demo_subject_llm_binding(
         db,
@@ -1083,6 +1372,12 @@ def _seed_llm_elective_course(
 
     _seed_demo_grade_weights(db, course=course)
     unc = _get_or_create_uncategorized_chapter(db, subject_id=course.id)
+    _ensure_elective_enrollments_for_student_nos(
+        db,
+        subject_id=course.id,
+        class_id=klass.id,
+        student_nos=_LLM_ELECTIVE_ENROLLED_STUDENT_NOS,
+    )
 
     mat = (
         db.query(CourseMaterial)
@@ -1143,6 +1438,20 @@ def _seed_llm_elective_course(
         hw.auto_grading_enabled = True
         hw.due_date = hw.due_date or due
 
+    hw_row = (
+        db.query(Homework)
+        .filter(Homework.subject_id == course.id, Homework.title == _LLM_HOMEWORK_TITLE)
+        .first()
+    )
+    _seed_prefilled_submissions_for_homework(
+        db,
+        homework_row=hw_row,
+        klass=klass,
+        student_nos=_LLM_PREFILL_STUDENT_NOS,
+        bodies=_LLM_PREFILL_BODIES,
+        log_label="demo LLM prefilled submissions (stu1, stu3)",
+    )
+
 
 def _seed_probability_elective_course(
     db: Session,
@@ -1170,11 +1479,6 @@ def _seed_probability_elective_course(
             semester=semester.name if semester else None,
             course_type="elective",
             status="active",
-            weekly_schedule=_PROB_WEEKLY,
-            course_times=(
-                "选修课：演示种子已为部分同学写入选课记录；其余同学需在「我的课程」自主选课。"
-                "平时作业与线上 LLM 批改演示相结合。"
-            ),
             description=_PROB_COURSE_DESCRIPTION,
         )
         db.add(course)
@@ -1184,13 +1488,13 @@ def _seed_probability_elective_course(
         course.course_type = "elective"
         course.class_id = None
         course.status = "active"
-        course.weekly_schedule = _PROB_WEEKLY
         course.description = _PROB_COURSE_DESCRIPTION
-        course.course_times = (
-            "选修课：演示种子已为部分同学写入选课记录；其余同学需在「我的课程」自主选课。"
-            "平时作业与线上 LLM 批改演示相结合。"
-        )
         print(f"Demo elective '{_PROB_COURSE_NAME}' already exists; refreshed fields.")
+    _ensure_demo_course_time(
+        course,
+        weekly_schedule=_PROB_COURSE_TIMES,
+        weeks=13,
+    )
 
     _ensure_demo_subject_llm_binding(
         db,
@@ -1596,6 +1900,370 @@ def _seed_demo_prefilled_homework_submissions(db: Session, *, homework_row: Home
     )
 
 
+def _ensure_additional_homework_attempt(
+    db: Session,
+    *,
+    homework_row: Homework | None,
+    klass: Class,
+    student_no: str,
+    content: str,
+    days_ago: int,
+    used_llm_assist: bool = False,
+) -> HomeworkAttempt | None:
+    if not homework_row:
+        return None
+    student = (
+        db.query(Student)
+        .filter(Student.class_id == klass.id, Student.student_no == student_no)
+        .first()
+    )
+    if not student:
+        return None
+    summary = (
+        db.query(HomeworkSubmission)
+        .filter(HomeworkSubmission.homework_id == homework_row.id, HomeworkSubmission.student_id == student.id)
+        .first()
+    )
+    if not summary:
+        submitted_at = datetime.now(timezone.utc) - timedelta(days=days_ago)
+        summary = HomeworkSubmission(
+            homework_id=homework_row.id,
+            student_id=student.id,
+            subject_id=homework_row.subject_id,
+            class_id=homework_row.class_id,
+            content=content,
+            content_format="markdown",
+            used_llm_assist=used_llm_assist,
+            submitted_at=submitted_at,
+            updated_at=submitted_at,
+        )
+        db.add(summary)
+        db.flush()
+
+    existing = (
+        db.query(HomeworkAttempt)
+        .filter(
+            HomeworkAttempt.homework_id == homework_row.id,
+            HomeworkAttempt.student_id == student.id,
+            HomeworkAttempt.content == content,
+        )
+        .first()
+    )
+    if existing:
+        return existing
+
+    prior = (
+        db.query(HomeworkAttempt)
+        .filter(
+            HomeworkAttempt.homework_id == homework_row.id,
+            HomeworkAttempt.student_id == student.id,
+            HomeworkAttempt.submission_summary_id == summary.id,
+        )
+        .order_by(HomeworkAttempt.submitted_at.desc(), HomeworkAttempt.id.desc())
+        .first()
+    )
+    submitted_at = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    attempt = HomeworkAttempt(
+        homework_id=homework_row.id,
+        student_id=student.id,
+        subject_id=homework_row.subject_id,
+        class_id=homework_row.class_id,
+        submission_summary_id=summary.id,
+        content=content,
+        content_format="markdown",
+        is_late=False,
+        counts_toward_final_score=True,
+        used_llm_assist=used_llm_assist,
+        submission_mode="revision" if prior else "full",
+        prior_attempt_id=prior.id if prior else None,
+        submitted_at=submitted_at,
+        updated_at=submitted_at,
+    )
+    db.add(attempt)
+    db.flush()
+    summary.latest_attempt_id = attempt.id
+    summary.content = content
+    summary.content_format = "markdown"
+    summary.used_llm_assist = bool(summary.used_llm_assist or used_llm_assist)
+    summary.submitted_at = submitted_at
+    summary.updated_at = submitted_at
+    refresh_submission_summary(db, summary)
+    return attempt
+
+
+def _seed_homework_discussion_demo(
+    db: Session,
+    *,
+    course: Subject | None,
+    homework_row: Homework | None,
+    klass: Class,
+    teacher: User | None,
+    student_user: User | None,
+    student: Student | None,
+    sys_user: User,
+    student_question: str,
+    assistant_reply: str,
+    teacher_reply: str,
+    offset_days: int,
+) -> None:
+    if not course or not homework_row or not teacher or not student_user or not student:
+        return
+    base = datetime.now(timezone.utc) - timedelta(days=offset_days)
+    user_entry = _ensure_course_discussion_entry(
+        db,
+        target_type="homework",
+        target_id=homework_row.id,
+        subject_id=course.id,
+        class_id=klass.id,
+        author_user_id=student_user.id,
+        body=student_question,
+        llm_invocation=True,
+        created_at=base,
+    )
+    assistant_entry = _ensure_course_discussion_entry(
+        db,
+        target_type="homework",
+        target_id=homework_row.id,
+        subject_id=course.id,
+        class_id=klass.id,
+        author_user_id=sys_user.id,
+        body=assistant_reply,
+        message_kind="llm_assistant",
+        created_at=base + timedelta(minutes=2),
+    )
+    _ensure_demo_discussion_job(
+        db,
+        subject_id=course.id,
+        class_id=klass.id,
+        target_type="homework",
+        target_id=homework_row.id,
+        requester=student_user,
+        requester_student_id=student.id,
+        user_entry=user_entry,
+        assistant_entry=assistant_entry,
+    )
+    _ensure_course_discussion_entry(
+        db,
+        target_type="homework",
+        target_id=homework_row.id,
+        subject_id=course.id,
+        class_id=klass.id,
+        author_user_id=teacher.id,
+        body=teacher_reply,
+        created_at=base + timedelta(hours=3),
+    )
+
+
+def _seed_demo_learning_notes(db: Session, *, klass: Class, sys_user: User) -> None:
+    courses = {row.name: row for row in db.query(Subject).all()}
+    users = {row.username: row for row in db.query(User).filter(User.username.in_(["stu1", "stu2", "stu3"])).all()}
+    teacher = _user_by_username(db, "teacher")
+
+    note1 = _ensure_learning_note(
+        db,
+        owner=users["stu1"],
+        course=courses[_COURSE_NAME],
+        title="Wine 数据集探索笔记",
+        description="stu1 对数据挖掘第一次作业的课堂笔记，包含字段观察和后续问题。",
+        resource_title="第1-3周整理：字段尺度和可视化",
+        resource_content="""## 已整理
+
+- `proline` 的数值尺度明显比其他字段大，后续建模前要考虑标准化。
+- `color_intensity` 和 `hue` 可以组合画散点图，观察类别差异。
+- 作业报告要写环境、代码、图表和文字解释，不能只贴截图。
+
+## 待确认
+
+还不确定相关性热力图是否适合放在第一次作业里，准备先用箱线图说明差异。""",
+    )
+    _ensure_learning_note_discussion_entry(
+        db,
+        note_id=note1.id,
+        author_user_id=users["stu1"].id,
+        body="@LLM 我想把这份笔记改成作业报告提纲，应该补哪几段？",
+        llm_invocation=True,
+        created_at=datetime.now(timezone.utc) - timedelta(days=3, hours=2),
+    )
+    _ensure_learning_note_discussion_entry(
+        db,
+        note_id=note1.id,
+        author_user_id=sys_user.id,
+        body="【智能助教】建议补三段：数据来源与样本规模、至少一张图表对应的观察结论、遇到的问题与处理方式。当前笔记已经有字段尺度观察，可以把它扩展成“为什么要标准化”的解释。",
+        message_kind="llm_assistant",
+        created_at=datetime.now(timezone.utc) - timedelta(days=3, hours=1, minutes=55),
+    )
+
+    note2 = _ensure_learning_note(
+        db,
+        owner=users["stu3"],
+        course=courses[_LLM_COURSE_NAME],
+        title="提示工程模板收集",
+        description="stu3 记录的大语言模型课程提示模板和风险清单。",
+        resource_title="新闻摘要 Prompt 草稿",
+        resource_content="""## 模板
+
+角色：你是课程助教。
+任务：把新闻整理成事实要点，不添加原文没有的信息。
+输出：事实要点、涉及主体、不确定信息、一句话摘要。
+
+## 风险
+
+- 事实核对要回到原文；
+- 时间、数字、人名容易被漏掉；
+- 不能把模型当作唯一资料来源。""",
+    )
+    _ensure_learning_note_discussion_entry(
+        db,
+        note_id=note2.id,
+        author_user_id=users["stu3"].id,
+        body="我准备把输出格式固定成四段，这样是不是会让模型更稳定？",
+        created_at=datetime.now(timezone.utc) - timedelta(days=2, hours=4),
+    )
+    _ensure_learning_note_discussion_entry(
+        db,
+        note_id=note2.id,
+        author_user_id=sys_user.id,
+        body="【智能助教】通常会更稳定。固定结构能减少遗漏，但也要给模型保留“原文信息不足时说明不足”的出口，避免为了填满格式而编造。",
+        message_kind="llm_assistant",
+        created_at=datetime.now(timezone.utc) - timedelta(days=2, hours=3, minutes=55),
+    )
+
+    if teacher:
+        note3 = _ensure_learning_note(
+            db,
+            owner=users["stu2"],
+            course=courses[_PROB_COURSE_NAME],
+            title="Bayes 公式课堂笔记",
+            description="stu2 对初等概率论第一次作业的公式整理。",
+            resource_title="全概率与 Bayes 的区别",
+            resource_content=r"""## 事件记号
+
+设 \(A\) 表示第一次测验及格，\(B\) 表示第二次测验及格。
+
+## 解题顺序
+
+1. 先用全概率公式算 \(P(B)\)；
+2. 再用 Bayes 公式算 \(P(A\mid B)\)；
+3. 最后解释“已知结果反推原因”的含义。""",
+        )
+        _ensure_learning_note_discussion_entry(
+            db,
+            note_id=note3.id,
+            author_user_id=teacher.id,
+            body="这份笔记可以再补一行事件树或表格，避免把 P(B|A) 和 P(A|B) 写反。",
+            created_at=datetime.now(timezone.utc) - timedelta(days=1, hours=5),
+        )
+
+
+def _seed_demo_runtime_activity(
+    db: Session,
+    *,
+    klass: Class,
+    required_course: Subject | None,
+    required_homework: Homework | None,
+) -> None:
+    sys_user = _ensure_demo_llm_assistant_user(db)
+    teacher = _user_by_username(db, "teacher")
+    teacher_pro = _user_by_username(db, _TEACHER_PRO_USERNAME)
+    students = {
+        row.student_no: row
+        for row in db.query(Student).filter(Student.class_id == klass.id).all()
+        if row.student_no
+    }
+    users = {
+        row.username: row
+        for row in db.query(User).filter(User.username.in_(["stu1", "stu2", "stu3", "stu5"])).all()
+    }
+
+    revision = """# 数据挖掘第一次作业提交 - stu1（二次修订）
+
+根据讨论区的提醒，我补充了 `proline` 的尺度问题和一张按类别比较的文字说明。
+
+## 新增观察
+
+`proline` 的数值范围明显更大，如果后续使用 KNN 或 K-Means，距离计算会被它主导，所以需要标准化。
+
+我还把 `color_intensity` 按类别做了均值比较，类别之间有差异，但不能只凭一个字段下结论。
+
+## 本次修订
+
+- 增加字段尺度解释；
+- 补充按类别均值观察；
+- 把“没有完成可视化”的说明改成后续计划。"""
+    _ensure_additional_homework_attempt(
+        db,
+        homework_row=required_homework,
+        klass=klass,
+        student_no="stu1",
+        content=revision,
+        days_ago=1,
+        used_llm_assist=True,
+    )
+
+    _seed_homework_discussion_demo(
+        db,
+        course=required_course,
+        homework_row=required_homework,
+        klass=klass,
+        teacher=teacher,
+        student_user=users.get("stu1"),
+        student=students.get("stu1"),
+        sys_user=sys_user,
+        student_question="@LLM 我已经写了 Wine 数据集的 `describe()`，但不知道怎么把图表和结论连起来。",
+        assistant_reply="【智能助教】可以按“图表观察 -> 可能解释 -> 作业结论”的顺序写。比如先说明 `proline` 的范围更大，再解释它可能影响距离类模型，最后说明后续建模前要标准化。",
+        teacher_reply="这条建议可以采纳。请大家注意：第一次作业不要求模型准确率，重点是把观察过程写清楚。",
+        offset_days=4,
+    )
+
+    llm_course = db.query(Subject).filter(Subject.name == _LLM_COURSE_NAME).first()
+    llm_hw = (
+        db.query(Homework)
+        .filter(Homework.subject_id == llm_course.id, Homework.title == _LLM_HOMEWORK_TITLE)
+        .first()
+        if llm_course
+        else None
+    )
+    _seed_homework_discussion_demo(
+        db,
+        course=llm_course,
+        homework_row=llm_hw,
+        klass=klass,
+        teacher=teacher,
+        student_user=users.get("stu3"),
+        student=students.get("stu3"),
+        sys_user=sys_user,
+        student_question="@LLM 我写新闻摘要 Prompt 时，是否应该要求模型输出“未知信息”？",
+        assistant_reply="【智能助教】建议保留“未知信息”或“需要查证”一栏。这样能提醒读者哪些结论来自原文，哪些需要进一步核对，减少模型为了完整输出而补充不存在信息的风险。",
+        teacher_reply="本周课堂会专门看几份 Prompt 模板。请把输出格式写得可检查，不要只写“请总结”。",
+        offset_days=3,
+    )
+
+    prob_course = db.query(Subject).filter(Subject.name == _PROB_COURSE_NAME).first()
+    prob_hw = (
+        db.query(Homework)
+        .filter(Homework.subject_id == prob_course.id, Homework.title == _PROB_HOMEWORK_TITLE)
+        .first()
+        if prob_course
+        else None
+    )
+    _seed_homework_discussion_demo(
+        db,
+        course=prob_course,
+        homework_row=prob_hw,
+        klass=klass,
+        teacher=teacher_pro or teacher,
+        student_user=users.get("stu2"),
+        student=students.get("stu2"),
+        sys_user=sys_user,
+        student_question="@LLM Bayes 题里我经常把 P(A|B) 和 P(B|A) 写反，有没有检查方法？",
+        assistant_reply="【智能助教】先用中文写清楚条件：竖线右边是“已知”。例如 P(A|B) 是“已知第二次及格，第一次也及格的概率”。写完后再代公式，可以减少方向写反。",
+        teacher_reply="建议大家先画事件树，再写公式。事件树能帮助确认条件概率方向。",
+        offset_days=2,
+    )
+
+    _seed_demo_learning_notes(db, klass=klass, sys_user=sys_user)
+
+
 def seed_demo_course_bundle(db: Session) -> None:
     """
     Idempotent seed: teacher `teacher`, teacher `teacher_pro`, class 人工智能1班, students stu1–stu5,
@@ -1730,8 +2398,6 @@ def seed_demo_course_bundle(db: Session) -> None:
             semester=semester.name if semester else None,
             course_type="required",
             status="active",
-            weekly_schedule=_COURSE_WEEKLY_SCHEDULE,
-            course_times=_COURSE_TIMES,
             description=_COURSE_DESCRIPTION,
         )
         db.add(course)
@@ -1741,10 +2407,13 @@ def seed_demo_course_bundle(db: Session) -> None:
         if semester and course.semester_id != semester.id:
             course.semester_id = semester.id
             course.semester = semester.name
-        course.weekly_schedule = _COURSE_WEEKLY_SCHEDULE
-        course.course_times = _COURSE_TIMES
         course.description = _COURSE_DESCRIPTION
         print(f"Demo course '{_COURSE_NAME}' already exists.")
+    _ensure_demo_course_time(
+        course,
+        weekly_schedule=_COURSE_TIMES,
+        weeks=16,
+    )
     _ensure_demo_course_cover(course)
 
     link_row = (
@@ -1822,6 +2491,8 @@ def seed_demo_course_bundle(db: Session) -> None:
     _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)
 
     _seed_probability_elective_course(db, teacher_pro=teacher_pro, klass=klass, semester=semester)
+
+    _seed_demo_runtime_activity(db, klass=klass, required_course=course, required_homework=hw)
 
     reconcile_student_users_and_roster(db)
     db.commit()
