@@ -64,7 +64,13 @@ current task.
    directories, local credentials/tokens, and machine-specific logs belong only
    in ignored local files under `.agent-run/`. Do not copy those details into
    committed docs, tests, scripts, commit messages, PR text, or ledger rows.
-8. **Verify the commit boundary.** Before committing, confirm that ignored local
+8. **Refresh handoff notes on request.** When the user says they are preparing
+   to hand off, replace stale content in the active local handoff document with
+   the current problem statement, confirmed findings, touched files, remaining
+   plan, validation state, branch/worktree context, and explicit warnings for
+   the next agent. Assume the user may close the conversation immediately after
+   that request and another agent system may continue from only those notes.
+9. **Verify the commit boundary.** Before committing, confirm that ignored local
    notes are not tracked, scan committed changes for private path leaks, and run
    the narrowest useful static checks for the files touched. For validation
    selection, prefer
