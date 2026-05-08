@@ -718,6 +718,64 @@ git diff --check
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py -q` | `passed` | `6 passed, 29 warnings in 23.83s` | Focused audit target was rerun after adding coverage for one canonical student with both an explicit bound account and a legacy username-match account candidate. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py -q` | `passed` | `20 passed, 29 warnings in 91.77s` | Final extended roster regression passed after adding the multiple-user-candidate audit case. The same validation round also passed `py_compile` for the changed audit module, CLI, and test file. |
 
+### Test ID: `backend.roster.student_identity_repair`
+
+**Category:** `backend-pytest`
+
+**Scope:** Focused backend repair coverage for default/new-system student account migration into canonical `Student` rows and explicit `users.student_id` bindings. This target verifies dry-run reporting, applying safe default-data repair, creating missing student accounts from Student rows, creating missing Student rows from student users, and blocking ambiguous duplicate-student-number repairs.
+
+**Canonical command:**
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_repair.py -q
+```
+
+**Working directory:** `<repo>`
+
+**Relevant paths:**
+
+- `apps/backend/wailearning_backend/domains/roster/repair.py`
+- `apps/backend/wailearning_backend/domains/roster/audit.py`
+- `apps/backend/wailearning_backend/domains/roster/identity.py`
+- `apps/backend/wailearning_backend/domains/roster/sync.py`
+- `apps/backend/wailearning_backend/domains/roster/reconciliation.py`
+- `ops/scripts/dev/repair_student_identity.py`
+- `tests/backend/roster/test_student_identity_repair.py`
+- `apps/backend/wailearning_backend/domains/seed/demo.py`
+- `apps/backend/wailearning_backend/bootstrap.py`
+
+**Retest triggers:**
+
+- Changes to default/demo student seed data.
+- Changes to `reconcile_student_users_and_roster` or user-to-roster repair behavior.
+- Changes to canonical student/user binding rules, especially legacy `username == student_no` recovery.
+- Changes to repair CLI output, dry-run/apply semantics, or ambiguity blocking.
+
+**Last branch:** `cursor/unify-student-identity-plan`
+
+**Last commit:** `this commit`
+
+**Last result:** `failed`
+
+**Last run date:** `2026-05-09`
+
+**Pass count:** `0`
+
+**Run count:** `1`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py` | `failed` | `Validation registry lint failed: backend.roster.student_identity_repair ledger_id not found in ledger headings` | Expected registry/ledger coupling failure after adding the repair validation target before adding this ledger section. The section was added before running the repair pytest target. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_repair.py -q` | `passed` | `3 passed, 29 warnings in 16.22s` | Repair target passed after adding the thin default-data repair wrapper, the repair CLI, and repair-specific coverage for dry-run, apply, and ambiguity blocking. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py` | `passed` | `Validation registry lint passed.` | Registry lint passed after adding the `backend.roster.student_identity_repair` ledger section. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py tests\backend\roster\test_student_user_api_roster_sync.py tests\backend\roster\test_admin_student_roster_from_users.py -q` | `passed` | `21 passed, 29 warnings in 96.65s` | Extended roster regression passed after tightening the legacy student lookup and adding the repair wrapper. The same run still covered audit and API sync behavior after the new default-data repair path landed. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q` | `passed` | `14 passed, 29 warnings in 73.41s` | Course/roster regression remained green after the repair wrapper and legacy lookup tightening. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120` | `passed` | `Validation target runner passed; static.selector commands all passed.` | Selector smoke remained green after the new repair target was registered. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | `Validation target runner passed; scanned=6 decode_errors=0 suspicious=0` | Encoding and whitespace checks passed for the changed docs, CLI, and backend source files. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\repo_line_health.py` | `passed` | `Repository line health metrics reported successfully.` | Repository health snapshot remained available after the repair additions. |
+
 ### Test ID: `static.validation_selector`
 
 **Category:** `static-check`

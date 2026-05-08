@@ -350,6 +350,39 @@
       "notes": "Use before any student identity data migration or automatic repair. This target reports conflicts; it does not mutate data."
     },
     {
+      "id": "backend.roster.student_identity_repair",
+      "category": "backend-pytest",
+      "risk": "targeted",
+      "description": "Focused roster repair target for default/new-system student account data migration into canonical Student plus users.student_id bindings.",
+      "working_directory": ".",
+      "coverage_tags": ["roster", "student-identity", "default-data-repair", "backend-pytest"],
+      "commands": [
+        {
+          "label": "pytest",
+          "argv": [".venv/Scripts/python.exe", "-m", "pytest", "tests/backend/roster/test_student_identity_repair.py", "-q"]
+        }
+      ],
+      "triggers": {
+        "paths": [
+          "tests/backend/roster/test_student_identity_repair.py",
+          "apps/backend/wailearning_backend/domains/roster/repair.py",
+          "apps/backend/wailearning_backend/domains/roster/audit.py",
+          "apps/backend/wailearning_backend/domains/roster/identity.py",
+          "apps/backend/wailearning_backend/domains/roster/sync.py",
+          "apps/backend/wailearning_backend/domains/roster/reconciliation.py",
+          "ops/scripts/dev/repair_student_identity.py",
+          "apps/backend/wailearning_backend/domains/seed/demo.py",
+          "apps/backend/wailearning_backend/bootstrap.py"
+        ],
+        "globs": [
+          "apps/backend/wailearning_backend/domains/roster/**",
+          "tests/backend/roster/test_student_identity_repair.py"
+        ]
+      },
+      "ledger_id": "backend.roster.student_identity_repair",
+      "notes": "Use after the audit target when the change can mutate Student/User identity data. The repair path is scoped to new-system/default data, not broad historical migrations."
+    },
+    {
       "id": "backend.courses.student_course_roster_behavior",
       "category": "backend-pytest",
       "risk": "targeted",

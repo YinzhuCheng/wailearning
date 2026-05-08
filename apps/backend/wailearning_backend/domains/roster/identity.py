@@ -106,6 +106,11 @@ def find_user_for_student(db: Session, student: Student) -> Optional[User]:
         same_class_user = query.filter(User.class_id == student.class_id).first()
         if same_class_user:
             return same_class_user
+        if student_no and db.query(Student.id).filter(Student.student_no == student_no).count() == 1:
+            classless_candidates = query.filter(User.class_id.is_(None)).all()
+            if len(classless_candidates) == 1:
+                return classless_candidates[0]
+        return None
     candidates = query.all()
     return candidates[0] if len(candidates) == 1 else None
 
