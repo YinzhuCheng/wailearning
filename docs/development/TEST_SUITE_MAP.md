@@ -103,6 +103,13 @@ the local artifacts. It intentionally does not update the committed ledger
 automatically. Use it when a selector recommendation should be turned into a
 local run record with stdout/stderr logs and a ledger snippet.
 
+Registry commands should use portable command names where practical. The runner
+normalizes `python` to the repository virtualenv when present, falls back to the
+current interpreter, and maps `npm`/`npm.cmd` plus `npx`/`npx.cmd` to the
+platform-appropriate executable. Plain `--dry-run` records the resolved plan
+without environment checks; use `--dry-run --preflight` when the goal is to
+prove that the selected tools are installed without executing the test command.
+
 The profile runner provides a small orchestration layer over the target runner.
 Its first profiles are `static` and `selector-recommended`. It defaults to
 running only static/targeted targets and skips targets that require explicit
@@ -117,7 +124,10 @@ CI workflow changes under `.github/workflows/` are currently mapped to static
 text/tooling validation. That is enough for lightweight YAML and documentation
 edits, but changes that materially alter cloud test scope should also be
 reviewed against this map and the execution ledger so local and cloud validation
-expectations do not drift.
+expectations do not drift. The lightweight GitHub Actions workflow keeps
+selector tooling, backend quick pytest, admin build, and parent build as
+separate jobs so infrastructure failures and product/test failures remain
+distinct in PR status.
 
 ## Category Overview
 

@@ -129,18 +129,80 @@ def git_value(repo_root: Path, args: list[str], default: str = "unknown") -> str
     return value or default
 
 
+def repo_python(repo_root: Path) -> Path | None:
+    for candidate in (repo_root / ".venv" / "Scripts" / "python.exe", repo_root / ".venv" / "bin" / "python"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def resolve_python_argv(repo_root: Path, argv: list[str]) -> tuple[list[str], list[str]]:
     notes: list[str] = []
     if not argv:
         return argv, notes
     first = argv[0].replace("\\", "/")
-    if first in {".venv/Scripts/python.exe", ".venv/bin/python"}:
-        configured = repo_root / argv[0]
-        if configured.exists():
+    first_lower = first.lower()
+    if first_lower in {".venv/scripts/python.exe", ".venv/bin/python", "python", "python.exe"}:
+        configured = repo_python(repo_root)
+        if configured is not None:
             return [str(configured), *argv[1:]], notes
-        notes.append("configured repository venv interpreter was not found; using the current interpreter")
+        if first_lower in {".venv/scripts/python.exe", ".venv/bin/python"}:
+            notes.append("configured repository venv interpreter was not found; using the current interpreter")
         return [sys.executable, *argv[1:]], notes
     return argv, notes
+
+
+def resolve_platform_command_argv(argv: list[str]) -> tuple[list[str], list[str]]:
+    notes: list[str] = []
+    if not argv:
+        return argv, notes
+    first = argv[0].lower()
+    platform_names = {
+        "npm": "npm.cmd" if os.name == "nt" else "npm",
+        "npm.cmd": "npm.cmd" if os.name == "nt" else "npm",
+        "npx": "npx.cmd" if os.name == "nt" else "npx",
+        "npx.cmd": "npx.cmd" if os.name == "nt" else "npx",
+    }
+    resolved = platform_names.get(first)
+    if resolved is None:
+        return argv, notes
+    if resolved != argv[0]:
+        notes.append(f"normalized command executable `{argv[0]}` to `{resolved}` for this platform")
+    return [resolved, *argv[1:]], notes
+
+
+def resolve_command_argv(repo_root: Path, argv: list[str]) -> tuple[list[str], list[str]]:
+    resolved, notes = resolve_python_argv(repo_root, argv)
+    if resolved != argv:
+        return resolved, notes
+    platform_resolved, platform_notes = resolve_platform_command_argv(argv)
+    return platform_resolved, [*notes, *platform_notes]
+
+
+def selected_python_has_module(python_executable: str, module: str) -> bool:
+    if Path(python_executable).resolve() == Path(sys.executable).resolve():
+        return importlib.util.find_spec(module) is not None
+    try:
+        result = subprocess.run(
+            [
+                python_executable,
+                "-c",
+                "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)",
+                module,
+            ],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def command_should_be_preflighted(args: argparse.Namespace) -> bool:
+    return not args.dry_run or args.preflight
 
 
 def normalize_path(path: str) -> str:
@@ -221,11 +283,12 @@ def classify_command_blocker(argv: list[str]) -> tuple[str, str] | None:
     if placeholder:
         return f"unresolved command placeholder {placeholder}", "orchestrator"
 
-    if len(argv) >= 3 and argv[1:3] == ["-m", "pytest"] and importlib.util.find_spec("pytest") is None:
+    if len(argv) >= 3 and argv[1:3] == ["-m", "pytest"] and not selected_python_has_module(argv[0], "pytest"):
         return "pytest is not importable in the selected Python interpreter", "environment"
 
     executable = argv[0]
-    if executable.endswith(".exe") or "/" in executable or "\\" in executable:
+    executable_lower = executable.lower()
+    if executable_lower.endswith((".exe", ".cmd", ".bat")) or "/" in executable or "\\" in executable:
         if not Path(executable).exists() and shutil.which(executable) is None:
             return f"executable not found: {executable}", "environment"
     elif shutil.which(executable) is None:
@@ -566,7 +629,7 @@ def run_target(args: argparse.Namespace) -> int:
         failure_class = "orchestrator"
         notes.append("target has no commands")
 
-    if target_needs_playwright_preflight(target) and not args.dry_run and commands:
+    if target_needs_playwright_preflight(target) and command_should_be_preflighted(args) and commands:
         preflight_record = run_playwright_preflight(
             repo_root=repo_root,
             artifact_dir=artifact_dir,
@@ -582,7 +645,7 @@ def run_target(args: argparse.Namespace) -> int:
         raw_argv = [str(part) for part in command.get("argv", [])]
         expanded_argv, placeholder_notes = expand_command_placeholders(repo_root, raw_argv, changed_paths)
         notes.extend(placeholder_notes)
-        resolved_argv, resolve_notes = resolve_python_argv(repo_root, expanded_argv)
+        resolved_argv, resolve_notes = resolve_command_argv(repo_root, expanded_argv)
         notes.extend(resolve_notes)
         label = str(command.get("label") or f"command-{index}")
         stdout_path = artifact_dir / f"{index:02d}-{sanitize(label)}-stdout.log"
@@ -590,7 +653,7 @@ def run_target(args: argparse.Namespace) -> int:
         junit_path = artifact_dir / f"{index:02d}-{sanitize(label)}-junit.xml"
         execution_argv = with_pytest_junitxml(resolved_argv, junit_path)
 
-        blocker = classify_command_blocker(execution_argv)
+        blocker = classify_command_blocker(execution_argv) if command_should_be_preflighted(args) else None
         if blocker:
             reason, blocker_class = blocker
             stdout_path.write_text("", encoding="utf-8")
@@ -734,6 +797,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--no-history", action="store_true", help="Do not append a structured JSONL history record.")
     parser.add_argument("--timeout-seconds", type=int, default=900, help="Per-command timeout. Defaults to 900 seconds.")
     parser.add_argument("--dry-run", action="store_true", help="Resolve and record commands without executing them.")
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="With --dry-run, also run command/environment preflight checks. Normal execution always preflights.",
+    )
     parser.add_argument(
         "--changed-paths-json",
         help="Explicit JSON array of changed path objects, each with `path` and optional `status`. Defaults to the current worktree snapshot.",

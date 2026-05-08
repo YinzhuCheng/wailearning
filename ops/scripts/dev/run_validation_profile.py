@@ -154,6 +154,8 @@ def run_target(repo_root: Path, target_id: str, args: argparse.Namespace) -> tup
         target_args.append("--no-history")
     if args.dry_run:
         target_args.append("--dry-run")
+    if args.preflight:
+        target_args.append("--preflight")
     if args.changed_paths_json:
         target_args.extend(["--changed-paths-json", args.changed_paths_json])
     return run_python_json(repo_root, target_args)
@@ -249,6 +251,7 @@ def run_profile(args: argparse.Namespace) -> int:
         "max_risk": args.max_risk,
         "include_review_targets": args.include_review_targets,
         "dry_run": args.dry_run,
+        "preflight": args.preflight,
         "selection": selection,
         "target_runs": target_runs,
         "deferred_targets": deferred,
@@ -272,6 +275,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--max-risk", choices=["static", "targeted", "broad", "full"], default="targeted")
     parser.add_argument("--include-review-targets", action="store_true", help="Run targets that declare requires_review_reason.")
     parser.add_argument("--dry-run", action="store_true", help="Record target commands without executing them.")
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="With --dry-run, also ask target runs to check command/environment blockers.",
+    )
     parser.add_argument("--worktree", action="store_true", help="Use the current worktree diff for selector-recommended. This is the default when --paths is omitted.")
     parser.add_argument("--paths", nargs="*", help="Explicit changed paths for selector-recommended profile.")
     return parser.parse_args(argv)

@@ -18,6 +18,7 @@ from run_validation_target import (
     expand_command_placeholders,
     infer_failure_class,
     parse_junit_xml,
+    resolve_command_argv,
     target_needs_playwright_preflight,
     with_pytest_junitxml,
 )  # noqa: E402
@@ -183,6 +184,38 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(last_history["result"], "skipped")
         self.assertTrue(last_history["private_paths_redacted"])
 
+    def test_runner_dry_run_does_not_preflight_missing_runtime_tools(self):
+        result = run_validation_target(
+            "frontend.admin.build",
+            "--dry-run",
+            "--history",
+            ".agent-run/test-selector-history-dry-run-no-preflight.jsonl",
+        )
+        payload = json.loads(result.stdout)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(payload["result"], "skipped")
+        self.assertEqual(payload["failure_class"], None)
+        self.assertEqual(payload["commands"][0]["result"], "skipped")
+
+    def test_runner_preflight_turns_dry_run_into_environment_check(self):
+        result = run_validation_target(
+            "frontend.admin.build",
+            "--dry-run",
+            "--preflight",
+            "--history",
+            ".agent-run/test-selector-history-dry-run-preflight.jsonl",
+            check=False,
+        )
+        payload = json.loads(result.stdout)
+
+        if result.returncode == 0:
+            self.assertEqual(payload["result"], "skipped")
+        else:
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(payload["result"], "blocked")
+            self.assertEqual(payload["failure_class"], "environment")
+
     def test_runner_uses_explicit_changed_paths_for_history_attribution(self):
         history_path = ".agent-run/test-selector-history-explicit-paths.jsonl"
         changed_paths = [
@@ -292,6 +325,20 @@ class ValidationSelectorTests(unittest.TestCase):
 
         self.assertEqual(updated[:-1], argv)
         self.assertEqual(updated[-1], f"--junitxml={output_path}")
+
+    def test_runner_normalizes_cross_platform_command_names(self):
+        npm_argv, _npm_notes = resolve_command_argv(REPO_ROOT, ["npm", "run", "build"])
+        npx_cmd_argv, _npx_notes = resolve_command_argv(REPO_ROOT, ["npx.cmd", "playwright", "test"])
+        python_argv, _python_notes = resolve_command_argv(REPO_ROOT, ["python", "-m", "py_compile"])
+
+        expected_npm = "npm.cmd" if sys.platform.startswith("win") else "npm"
+        expected_npx = "npx.cmd" if sys.platform.startswith("win") else "npx"
+        expected_python = REPO_ROOT / ".venv" / ("Scripts/python.exe" if sys.platform.startswith("win") else "bin/python")
+        if not expected_python.exists():
+            expected_python = Path(sys.executable)
+        self.assertEqual(npm_argv[0], expected_npm)
+        self.assertEqual(npx_cmd_argv[0], expected_npx)
+        self.assertEqual(Path(python_argv[0]).resolve(), expected_python.resolve())
 
     def test_runner_expands_changed_text_files_placeholder(self):
         changed_paths = [

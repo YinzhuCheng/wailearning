@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  python-static-and-quick-tests:
-    name: Python static and quick tests
+  python-selector-tooling:
+    name: Python selector tooling
     runs-on: ubuntu-latest
 
     steps:
@@ -37,6 +37,7 @@ jobs:
             ops/scripts/dev/select_validation_targets.py \
             ops/scripts/dev/run_validation_target.py \
             ops/scripts/dev/run_validation_profile.py \
+            ops/scripts/dev/lint_validation_registry.py \
             tests/backend/manual/test_validation_selector.py
           python -m json.tool tests/TEST_SELECTION_TARGETS.json >/dev/null
           python -m unittest tests.backend.manual.test_validation_selector -v
@@ -58,6 +59,25 @@ jobs:
         with:
           name: validation-selection
           path: validation-selection.json
+
+  backend-quick-pytest:
+    name: Backend quick pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
       - name: Run quick backend pytest
         run: python -m pytest -q

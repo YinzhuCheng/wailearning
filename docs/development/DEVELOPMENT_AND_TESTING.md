@@ -297,6 +297,9 @@ The runner is deliberately narrower than the selector:
 - it reads the same target registry as the selector;
 - it resolves the repository virtualenv Python when present, otherwise it uses
   the current interpreter and records that fallback in local artifacts;
+- it normalizes portable registry command names before execution: `python`
+  resolves to the repository virtualenv when available, `npm`/`npm.cmd` and
+  `npx`/`npx.cmd` resolve to the platform-appropriate executable;
 - it writes `<repo>/.agent-run/logs/<timestamp>-<target-id>/run.json`;
 - it writes `<repo>/.agent-run/logs/<timestamp>-<target-id>/ledger-snippet.md`;
 - it appends a compact structured record to
@@ -305,9 +308,12 @@ The runner is deliberately narrower than the selector:
 - for `python -m pytest` targets that do not already specify `--junitxml`, it
   adds an ignored JUnit XML artifact and records testcase-level totals and case
   statuses in `run.json` and structured history;
-- it classifies missing interpreters, missing pytest, missing npm/npx/browser
-  command, or unresolved command placeholders as `blocked` rather than product
-  failures;
+- for real execution, it classifies missing interpreters, missing pytest,
+  missing npm/npx/browser command, or unresolved command placeholders as
+  `blocked` rather than product failures;
+- `--dry-run` is planning-only and does not check whether runtime tools are
+  installed; add `--preflight` to a dry-run when the goal is to prove command
+  and environment readiness without running the product test command;
 - it does not provision PostgreSQL, install dependencies, install browsers, or
   mutate the committed execution ledger.
 
@@ -359,6 +365,8 @@ Profile safety defaults:
   `--include-review-targets` is passed.
 - `--dry-run` is useful for proving orchestration and artifact writing without
   executing the underlying commands.
+- `--dry-run --preflight` keeps the product commands unexecuted but still checks
+  command placeholders, Python module availability, and platform executables.
 - If selector output says `non_full_validation.status=not_sufficient`, the
   profile exits with code `4` even if the runnable subset passed or was skipped.
 
@@ -466,12 +474,20 @@ runs quick backend `pytest`, and builds the admin and parent frontends.
 
 Current GitHub Actions scope:
 
-- validates selector scripts and `tests/TEST_SELECTION_TARGETS.json`;
-- runs `python -m unittest tests.backend.manual.test_validation_selector -v`;
-- uploads `validation-selection.json` for pull requests;
-- runs default quick backend `pytest`;
-- runs `npm ci` plus `npm run build` for `apps/web/admin` and
+- `Python selector tooling`: validates selector scripts and
+  `tests/TEST_SELECTION_TARGETS.json`, runs
+  `python -m unittest tests.backend.manual.test_validation_selector -v`, and
+  uploads `validation-selection.json` for pull requests;
+- `Backend quick pytest`: runs default quick backend `pytest`;
+- `Admin frontend build`: runs `npm ci` plus `npm run build` for
+  `apps/web/admin`;
+- `Parent frontend build`: runs `npm ci` plus `npm run build` for
   `apps/web/parent`.
+
+Keep these jobs split. A selector/tooling failure means the validation
+infrastructure itself is unreliable; a backend pytest or frontend build failure
+means the product or test environment failed. Mixing them into one GitHub check
+makes red-check triage slower and obscures ownership.
 
 Current GitHub Actions non-goals:
 
@@ -485,6 +501,30 @@ Use this as the current compromise path: cloud catches cheap regressions and
 records selector recommendations, while PostgreSQL-backed pytest, RAR-dependent
 attachment coverage, and Playwright E2E remain local/manual or future
 cloud-profile work.
+
+### Remote CI wait policy
+
+Do not make remote CI polling the default blocking path for development work.
+After local, change-scoped validation has passed and the branch has been pushed,
+confirm that the GitHub Actions run was created, record the commit/run context
+in the handoff or task notes when useful, then continue with unrelated coding or
+review work.
+
+Wait synchronously for remote CI only when the result is the task itself or the
+next local decision depends on it, for example:
+
+- the user explicitly asked to fix red checks or verify a PR gate;
+- a previous remote failure is being diagnosed from logs;
+- the pushed fix changes CI, validation tooling, or a failing test path and the
+  remote result proves whether the root cause was actually removed;
+- the next code change would be different depending on the remote result.
+
+If the run enters a long backend `pytest`, frontend build, Playwright, or future
+PostgreSQL stage after the relevant failure point has passed, treat it as
+asynchronous validation unless the user requested a full green wait. Report the
+current run id, commit, and step, and return to productive work. If the remote
+run later fails, resume from the new logs and fix that failure as a separate
+iteration.
 
 Agents on Linux should prefer **`python3`** invocations to match CI even when local README examples historically showed `python` for Windows-oriented quick starts.
 
