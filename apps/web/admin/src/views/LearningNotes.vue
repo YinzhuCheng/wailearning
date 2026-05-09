@@ -1,156 +1,264 @@
 <template>
   <div class="learning-notes-page" :class="`learning-notes-page--${materialPresentationStyle}`">
-    <div class="page-header">
+    <section class="notes-hero">
       <div>
-        <h1 class="page-title">学习笔记</h1>
-        <p class="page-subtitle">
-          新建笔记默认仅本人可见；公开且关联课程时同课程用户可查看，公开但未关联课程时全员可查看。
+        <p class="notes-hero__eyebrow">课程知识库</p>
+        <h1>学习笔记</h1>
+        <p>
+          私有笔记只对本人可见；公开笔记可以面向同课程成员，未关联课程的公开笔记面向所有登录用户。
         </p>
       </div>
-      <div class="header-actions">
-        <el-button type="primary" @click="openCreateDialog">新建笔记</el-button>
-      </div>
-    </div>
+      <el-button type="primary" @click="openCreateDialog">新建笔记</el-button>
+    </section>
 
-    <el-tabs v-model="activeScope" class="notes-tabs" @tab-change="loadNotes">
-      <el-tab-pane label="我的笔记" name="mine" />
-      <el-tab-pane label="公开笔记" name="public" />
-    </el-tabs>
-
-    <div class="notes-layout">
-      <aside class="notes-list-panel">
-        <div class="notes-filter">
-          <el-select v-model="subjectFilter" clearable filterable placeholder="按课程筛选" @change="loadNotes">
+    <div class="notes-workspace">
+      <aside class="notes-library" aria-label="笔记列表">
+        <div class="notes-library__toolbar">
+          <el-tabs
+            v-model="activeScope"
+            class="notes-library__scope"
+            @tab-change="loadNotes"
+          >
+            <el-tab-pane label="我的笔记" name="mine" />
+            <el-tab-pane label="公开笔记" name="public" />
+          </el-tabs>
+          <el-select v-model="subjectFilter" clearable filterable placeholder="按课程筛选">
             <el-option v-for="course in courseOptions" :key="course.id" :label="course.name" :value="course.id" />
           </el-select>
         </div>
 
-        <el-skeleton v-if="loadingNotes" :rows="5" animated />
+        <el-skeleton v-if="loadingNotes" :rows="6" animated />
         <el-empty v-else-if="!notes.length" description="暂无学习笔记" />
-        <article
-          v-for="note in notes"
-          v-else
-          :key="note.id"
-          class="note-card"
-          :class="{ 'is-active': selectedNote?.id === note.id }"
-          @click="selectNote(note)"
-        >
-          <div class="note-card__head">
-            <h2>{{ note.title }}</h2>
-            <el-tag size="small" :type="note.visibility === 'course' ? 'success' : 'info'">
-              {{ noteVisibilityLabel(note) }}
-            </el-tag>
-          </div>
-          <p>{{ note.description || '暂无说明' }}</p>
-          <div class="note-card__meta">
-            <span>{{ note.subject_name || '未关联课程' }}</span>
-            <span>{{ note.owner_real_name || note.owner_username }}</span>
-            <span>{{ formatDate(note.updated_at || note.created_at) }}</span>
-          </div>
-        </article>
+        <div v-else class="notes-list">
+          <button
+            v-for="note in notes"
+            :key="note.id"
+            type="button"
+            class="note-card"
+            :class="{ 'note-card--active': selectedNote?.id === note.id }"
+            @click="selectNote(note)"
+          >
+            <span class="note-card__visibility">{{ noteVisibilityLabel(note) }}</span>
+            <strong>{{ note.title }}</strong>
+            <span class="note-card__desc">{{ note.description || '暂无说明' }}</span>
+            <span class="note-card__meta">
+              {{ note.subject_name || '未关联课程' }} · {{ formatDate(note.updated_at || note.created_at) }}
+            </span>
+          </button>
+        </div>
       </aside>
 
-      <section class="note-detail-panel">
-        <el-empty v-if="!selectedNote" description="选择一条笔记查看详情" />
-        <template v-else>
-          <div class="note-detail-head">
+      <template v-if="selectedNote">
+        <aside class="notes-outline" aria-label="笔记大纲">
+          <div class="notes-outline__head">
             <div>
-              <h2>{{ selectedNote.title }}</h2>
-              <p>
+              <span>笔记大纲</span>
+              <strong>{{ selectedNote.title }}</strong>
+            </div>
+            <el-dropdown v-if="canEditSelected" trigger="click">
+              <el-button text type="primary" size="small">添加</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="openChapterDialog(null)">顶层章节</el-dropdown-item>
+                  <el-dropdown-item :disabled="!activeChapterId" @click="openChapterDialog(activeChapterId)">
+                    子章节
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="openResourceDialog(activeChapterId)">资料条目</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+
+          <el-empty
+            v-if="!outlineRows.length"
+            description="暂无大纲内容"
+            class="notes-outline__empty"
+          />
+          <div v-else class="notes-outline__list">
+            <div
+              v-for="row in outlineRows"
+              :key="row.key"
+              class="outline-row"
+              :class="[
+                `outline-row--${row.type}`,
+                { 'outline-row--active': row.type === 'resource' && selectedResourceId === row.id }
+              ]"
+              :style="{ paddingLeft: `${12 + row.depth * 18}px` }"
+            >
+              <button
+                v-if="row.type === 'resource'"
+                type="button"
+                class="outline-row__main"
+                @click="selectResource(row.id)"
+              >
+                <span class="outline-row__index">{{ row.indexLabel }}</span>
+                <span class="outline-row__title">{{ row.title }}</span>
+              </button>
+              <div v-else class="outline-row__chapter">
+                <span class="outline-row__title">{{ row.title }}</span>
+                <span class="outline-row__count">{{ row.resourceCount }} 条</span>
+              </div>
+
+              <el-dropdown v-if="canEditSelected" trigger="click" class="outline-row__menu">
+                <button type="button" class="icon-text-button">操作</button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <template v-if="row.type === 'chapter'">
+                      <el-dropdown-item @click="openChapterDialog(row.id)">添加子章节</el-dropdown-item>
+                      <el-dropdown-item @click="openResourceDialog(row.id)">添加资料</el-dropdown-item>
+                      <el-dropdown-item @click="openChapterEditDialog(row.raw)">重命名</el-dropdown-item>
+                      <el-dropdown-item divided @click="deleteChapter(row.raw)">删除章节</el-dropdown-item>
+                    </template>
+                    <template v-else>
+                      <el-dropdown-item @click="openResourceEditDialog(row.raw)">编辑资料</el-dropdown-item>
+                      <el-dropdown-item divided @click="deleteResource(row.raw)">删除资料</el-dropdown-item>
+                    </template>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+        </aside>
+
+        <main class="note-reader">
+          <header class="note-reader__head">
+            <div>
+              <p class="note-reader__course">
                 {{ selectedNote.subject_name || '未关联课程' }} ·
                 {{ selectedNote.owner_real_name || selectedNote.owner_username }} ·
                 {{ formatDate(selectedNote.created_at) }}
               </p>
+              <h2>{{ selectedNote.title }}</h2>
+              <p v-if="selectedNote.description" class="note-reader__description">{{ selectedNote.description }}</p>
             </div>
-            <div class="note-detail-actions">
-              <el-button type="primary" plain @click="discussionVisible = true">进入讨论区</el-button>
+            <div class="note-reader__actions">
               <el-button v-if="canEditSelected" @click="openEditDialog">编辑信息</el-button>
-              <el-button v-if="canEditSelected" :type="selectedNote.visibility === 'course' ? 'warning' : 'success'" @click="toggleVisibility">
+              <el-button
+                v-if="canEditSelected"
+                :type="selectedNote.visibility === 'course' ? 'warning' : 'success'"
+                plain
+                @click="toggleVisibility"
+              >
                 {{ visibilityToggleLabel(selectedNote) }}
               </el-button>
               <el-button v-if="canEditSelected" type="danger" plain @click="deleteSelectedNote">删除</el-button>
             </div>
-          </div>
+          </header>
 
-          <div class="note-body-grid">
-            <aside class="note-outline">
-              <div class="outline-head">
-                <h3>笔记大纲</h3>
-                <el-button v-if="canEditSelected" text type="primary" size="small" @click="openChapterDialog(null)">
-                  添加章节
+          <article class="note-article">
+            <template v-if="selectedResource">
+              <div class="note-article__nav">
+                <el-button :disabled="!prevResource" @click="goResource(prevResource?.id)">上一篇</el-button>
+                <el-button :disabled="!nextResource" @click="goResource(nextResource?.id)">下一篇</el-button>
+                <el-button v-if="canEditSelected" type="primary" plain @click="openResourceEditDialog(selectedResource)">
+                  编辑正文
                 </el-button>
               </div>
-              <el-empty v-if="!selectedNote.chapters?.length && !selectedNote.loose_resources?.length" description="暂无大纲内容" />
-              <div v-else class="outline-tree">
-                <NoteChapterNode
-                  v-for="chapter in selectedNote.chapters"
-                  :key="chapter.id"
-                  :node="chapter"
-                  :can-edit="canEditSelected"
-                  @add-child="openChapterDialog"
-                  @edit-chapter="openChapterEditDialog"
-                  @delete-chapter="deleteChapter"
-                  @add-resource="openResourceDialog"
-                  @edit-resource="openResourceEditDialog"
-                  @delete-resource="deleteResource"
+              <p v-if="selectedResourcePath" class="note-article__breadcrumb">{{ selectedResourcePath }}</p>
+              <h1>{{ selectedResource.title }}</h1>
+              <div class="note-article__body">
+                <PlainOrMarkdownBlock
+                  :text="selectedResource.content"
+                  :format="selectedResource.content_format || 'markdown'"
+                  variant="student"
+                  empty-text="暂无正文"
                 />
-                <div v-if="selectedNote.loose_resources?.length" class="loose-resource-block">
-                  <h4>未归入章节</h4>
-                  <div v-for="resource in selectedNote.loose_resources" :key="resource.id" class="resource-row">
-                    <strong>{{ resource.title }}</strong>
-                    <span>{{ resource.content || resource.attachment_name || '暂无内容' }}</span>
-                    <div v-if="canEditSelected" class="row-actions">
-                      <el-button link type="primary" @click="openResourceEditDialog(resource)">编辑</el-button>
-                      <el-button link type="danger" @click="deleteResource(resource)">删除</el-button>
-                    </div>
-                  </div>
-                </div>
               </div>
-            </aside>
-          </div>
-        </template>
+              <section v-if="selectedResource.attachment_url" class="note-attachment">
+                <div>
+                  <strong>配套附件</strong>
+                  <span>{{ selectedResource.attachment_name || '附件' }}</span>
+                </div>
+                <el-button type="primary" link @click="downloadNoteAttachment(selectedResource)">
+                  下载附件
+                </el-button>
+              </section>
+            </template>
+            <el-empty
+              v-else
+              description="选择或添加一个资料条目后开始阅读"
+              class="note-article__empty"
+            >
+              <el-button v-if="canEditSelected" type="primary" @click="openResourceDialog(activeChapterId)">
+                添加资料条目
+              </el-button>
+            </el-empty>
+          </article>
+
+          <section class="note-discussion" aria-label="笔记讨论区">
+            <div class="note-discussion__head">
+              <div>
+                <span>笔记讨论</span>
+                <strong>{{ discussionScopeLabel(selectedNote) }}</strong>
+              </div>
+              <el-button text type="primary" @click="discussionComposerOpen = !discussionComposerOpen">
+                {{ discussionComposerOpen ? '收起输入' : '发表讨论' }}
+              </el-button>
+            </div>
+
+            <div v-if="discussionComposerOpen" class="note-discussion__composer">
+              <div class="discussion-compose-tabs">
+                <el-radio-group v-model="discussionDraftFormat" size="small">
+                  <el-radio-button label="markdown">Markdown</el-radio-button>
+                  <el-radio-button label="plain">纯文本</el-radio-button>
+                </el-radio-group>
+                <el-radio-group v-model="discussionComposeMode" size="small">
+                  <el-radio-button label="edit">编辑</el-radio-button>
+                  <el-radio-button label="preview" :disabled="discussionDraftFormat !== 'markdown'">预览</el-radio-button>
+                </el-radio-group>
+              </div>
+              <PlainOrMarkdownBlock
+                v-if="discussionComposeMode === 'preview' && discussionDraftFormat === 'markdown'"
+                :text="discussionDraft"
+                format="markdown"
+                variant="student"
+                empty-text="（空）"
+                class="discussion-preview"
+              />
+              <el-input
+                v-else
+                v-model="discussionDraft"
+                type="textarea"
+                :autosize="{ minRows: 4, maxRows: 10 }"
+                maxlength="8000"
+                show-word-limit
+                placeholder="写下问题、补充或整理想法。使用标准 Markdown/LaTeX 语法可渲染公式。"
+              />
+              <div class="note-discussion__composer-actions">
+                <el-checkbox v-model="invokeLlm">请求智能助教回复</el-checkbox>
+                <el-button type="primary" :loading="discussionSubmitting" @click="submitDiscussion">发表</el-button>
+              </div>
+            </div>
+
+            <el-skeleton v-if="discussionLoading" :rows="4" animated />
+            <div v-else class="note-discussion__list">
+              <el-empty v-if="!discussionRows.length" description="暂无讨论" />
+              <article
+                v-for="row in discussionRows"
+                :key="row.id"
+                class="discussion-row"
+                :class="{ 'discussion-row--assistant': row.message_kind === 'llm_assistant' }"
+              >
+                <div class="discussion-row__meta">
+                  <strong>{{ row.message_kind === 'llm_assistant' ? '智能助教' : row.author_real_name || row.author_username }}</strong>
+                  <span>{{ formatDate(row.created_at) }}</span>
+                </div>
+                <PlainOrMarkdownBlock
+                  :text="row.body"
+                  :format="row.body_format || 'markdown'"
+                  variant="student"
+                  empty-text="（空）"
+                />
+              </article>
+            </div>
+          </section>
+        </main>
+      </template>
+
+      <section v-else class="note-reader note-reader--empty">
+        <el-empty description="选择一条笔记查看正文、大纲和讨论" />
       </section>
     </div>
-
-    <el-drawer
-      v-model="discussionVisible"
-      title="笔记讨论区"
-      size="560px"
-      destroy-on-close
-      append-to-body
-    >
-      <template v-if="selectedNote">
-        <div class="discussion-head">
-          <h3>讨论区</h3>
-          <span>{{ discussionScopeLabel(selectedNote) }}</span>
-        </div>
-        <el-skeleton v-if="discussionLoading" :rows="4" animated />
-        <div v-else class="discussion-list">
-          <el-empty v-if="!discussionRows.length" description="暂无讨论" />
-          <article v-for="row in discussionRows" :key="row.id" class="discussion-row" :class="{ 'is-assistant': row.message_kind === 'llm_assistant' }">
-            <div class="discussion-row__meta">
-              <strong>{{ row.message_kind === 'llm_assistant' ? '智能助教' : row.author_real_name || row.author_username }}</strong>
-              <span>{{ formatDate(row.created_at) }}</span>
-            </div>
-            <p>{{ row.body }}</p>
-          </article>
-        </div>
-        <div class="discussion-compose">
-          <el-input
-            v-model="discussionDraft"
-            type="textarea"
-            :rows="4"
-            maxlength="8000"
-            show-word-limit
-            placeholder="写下问题、补充或整理想法。以 @LLM 开头或勾选智能助教可请求回复。"
-          />
-          <div class="discussion-compose__actions">
-            <el-checkbox v-model="invokeLlm">请求智能助教回复</el-checkbox>
-            <el-button type="primary" :loading="discussionSubmitting" @click="submitDiscussion">发表</el-button>
-          </div>
-        </div>
-      </template>
-    </el-drawer>
 
     <el-dialog v-model="noteDialogVisible" :title="editingNote ? '编辑笔记' : '新建学习笔记'" width="680px" destroy-on-close>
       <el-form label-width="112px">
@@ -179,7 +287,9 @@
           </el-form-item>
           <el-form-item label="复制内容">
             <el-checkbox v-model="noteForm.copy_chapters">复制章节树</el-checkbox>
-            <el-checkbox v-model="noteForm.copy_materials" :disabled="!noteForm.copy_chapters">连同章节下资料引用一起复制</el-checkbox>
+            <el-checkbox v-model="noteForm.copy_materials" :disabled="!noteForm.copy_chapters">
+              连同章节下资料引用一起复制
+            </el-checkbox>
           </el-form-item>
         </template>
       </el-form>
@@ -201,13 +311,22 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="resourceDialogVisible" :title="editingResource ? '编辑资料' : '添加资料'" width="760px" destroy-on-close>
+    <el-dialog v-model="resourceDialogVisible" :title="editingResource ? '编辑资料' : '添加资料'" width="860px" destroy-on-close>
       <el-form label-width="90px">
         <el-form-item label="资料名称">
           <el-input v-model="resourceForm.title" maxlength="200" show-word-limit />
         </el-form-item>
-        <el-form-item label="内容">
-          <el-input v-model="resourceForm.content" type="textarea" :rows="8" />
+        <el-form-item label="正文">
+          <MarkdownEditorPanel
+            v-model="resourceForm.content"
+            v-model:content-format="resourceForm.content_format"
+            :show-format-toggle="true"
+            :compact-demo="true"
+            :min-rows="7"
+            :max-rows="18"
+            placeholder="支持 Markdown、LaTeX（$...$ / $$...$$ / \\(...\\) / \\[...\\]）、图片和代码块"
+            hint="保存后正文会在笔记阅读区按同样规则渲染。"
+          />
         </el-form-item>
         <el-form-item label="附件名称">
           <el-input v-model="resourceForm.attachment_name" />
@@ -225,64 +344,18 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
+import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
+import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
+import { downloadAttachment } from '@/utils/attachments'
 import {
   getMaterialPresentationStyle,
   MATERIAL_PRESENTATION_EVENT
 } from '@/utils/materialPresentation'
 import { useUserStore } from '@/stores/user'
-
-const NoteChapterNode = defineComponent({
-  name: 'NoteChapterNode',
-  props: {
-    node: { type: Object, required: true },
-    canEdit: { type: Boolean, default: false }
-  },
-  emits: ['add-child', 'edit-chapter', 'delete-chapter', 'add-resource', 'edit-resource', 'delete-resource'],
-  setup(props, { emit }) {
-    const renderResource = resource =>
-      h('div', { class: 'resource-row' }, [
-        h('strong', resource.title),
-        h('span', resource.content || resource.attachment_name || '暂无内容'),
-        props.canEdit
-          ? h('div', { class: 'row-actions' }, [
-              h('button', { type: 'button', onClick: () => emit('edit-resource', resource) }, '编辑'),
-              h('button', { type: 'button', onClick: () => emit('delete-resource', resource) }, '删除')
-            ])
-          : null
-      ])
-    return () =>
-      h('div', { class: 'chapter-node' }, [
-        h('div', { class: 'chapter-node__title' }, [
-          h('strong', props.node.title),
-          props.canEdit
-            ? h('div', { class: 'row-actions' }, [
-                h('button', { type: 'button', onClick: () => emit('add-child', props.node.id) }, '子章节'),
-                h('button', { type: 'button', onClick: () => emit('add-resource', props.node.id) }, '资料'),
-                h('button', { type: 'button', onClick: () => emit('edit-chapter', props.node) }, '编辑'),
-                h('button', { type: 'button', onClick: () => emit('delete-chapter', props.node) }, '删除')
-              ])
-            : null
-        ]),
-        ...(props.node.resources || []).map(renderResource),
-        ...(props.node.children || []).map(child =>
-          h(NoteChapterNode, {
-            node: child,
-            canEdit: props.canEdit,
-            onAddChild: id => emit('add-child', id),
-            onEditChapter: node => emit('edit-chapter', node),
-            onDeleteChapter: node => emit('delete-chapter', node),
-            onAddResource: id => emit('add-resource', id),
-            onEditResource: resource => emit('edit-resource', resource),
-            onDeleteResource: resource => emit('delete-resource', resource)
-          })
-        )
-      ])
-  }
-})
 
 const userStore = useUserStore()
 
@@ -290,13 +363,16 @@ const activeScope = ref('mine')
 const subjectFilter = ref(null)
 const notes = ref([])
 const selectedNote = ref(null)
+const selectedResourceId = ref(null)
 const loadingNotes = ref(false)
 const discussionRows = ref([])
 const discussionLoading = ref(false)
 const discussionDraft = ref('')
+const discussionDraftFormat = ref('markdown')
+const discussionComposeMode = ref('edit')
+const discussionComposerOpen = ref(false)
 const invokeLlm = ref(false)
 const discussionSubmitting = ref(false)
-const discussionVisible = ref(false)
 const materialPresentationStyle = ref(getMaterialPresentationStyle())
 
 const noteDialogVisible = ref(false)
@@ -317,20 +393,20 @@ const resourceForm = ref(defaultResourceForm())
 const courseOptions = computed(() => userStore.teachingCourses || [])
 const canEditSelected = computed(() => selectedNote.value?.owner_user_id === userStore.userInfo?.id)
 
-function noteVisibilityLabel(note) {
-  if (note?.visibility !== 'course') return '仅本人可见'
-  return note.subject_id ? '同课程公开' : '全员公开'
-}
+const outlineRows = computed(() => buildOutlineRows(selectedNote.value))
+const resourceRows = computed(() => outlineRows.value.filter(row => row.type === 'resource'))
+const selectedResource = computed(() => resourceRows.value.find(row => row.id === selectedResourceId.value)?.raw || null)
+const selectedResourceRow = computed(() => resourceRows.value.find(row => row.id === selectedResourceId.value) || null)
+const selectedResourcePath = computed(() => selectedResourceRow.value?.path || '')
+const activeChapterId = computed(() => selectedResourceRow.value?.chapterId || firstChapterId(selectedNote.value))
 
-function visibilityToggleLabel(note) {
-  if (note?.visibility === 'course') return '取消公开'
-  return note?.subject_id ? '公开到同课程' : '公开给全员'
-}
-
-function discussionScopeLabel(note) {
-  if (note?.visibility !== 'course') return '仅本人和智能助教'
-  return note.subject_id ? '同课程用户可参与' : '全员可参与'
-}
+const currentResourceIndex = computed(() => resourceRows.value.findIndex(row => row.id === selectedResourceId.value))
+const prevResource = computed(() => (currentResourceIndex.value > 0 ? resourceRows.value[currentResourceIndex.value - 1] : null))
+const nextResource = computed(() =>
+  currentResourceIndex.value >= 0 && currentResourceIndex.value < resourceRows.value.length - 1
+    ? resourceRows.value[currentResourceIndex.value + 1]
+    : null
+)
 
 function defaultNoteForm() {
   return {
@@ -354,6 +430,103 @@ function defaultResourceForm() {
   }
 }
 
+function buildOutlineRows(note) {
+  if (!note) return []
+  const rows = []
+  let resourceIndex = 0
+
+  const walk = (chapters, depth = 0, path = []) => {
+    for (const chapter of chapters || []) {
+      const chapterPath = [...path, chapter.title]
+      rows.push({
+        key: `chapter-${chapter.id}`,
+        type: 'chapter',
+        id: chapter.id,
+        raw: chapter,
+        title: chapter.title,
+        depth,
+        path: chapterPath.join(' / '),
+        resourceCount: countResources(chapter)
+      })
+      for (const resource of chapter.resources || []) {
+        resourceIndex += 1
+        rows.push({
+          key: `resource-${resource.id}`,
+          type: 'resource',
+          id: resource.id,
+          raw: resource,
+          title: resource.title,
+          depth: depth + 1,
+          chapterId: chapter.id,
+          path: chapterPath.join(' / '),
+          indexLabel: String(resourceIndex).padStart(2, '0')
+        })
+      }
+      walk(chapter.children || [], depth + 1, chapterPath)
+    }
+  }
+
+  walk(note.chapters || [])
+
+  for (const resource of note.loose_resources || []) {
+    resourceIndex += 1
+    rows.push({
+      key: `resource-${resource.id}`,
+      type: 'resource',
+      id: resource.id,
+      raw: resource,
+      title: resource.title,
+      depth: 0,
+      chapterId: null,
+      path: '未归入章节',
+      indexLabel: String(resourceIndex).padStart(2, '0')
+    })
+  }
+
+  return rows
+}
+
+function countResources(chapter) {
+  let count = (chapter.resources || []).length
+  for (const child of chapter.children || []) {
+    count += countResources(child)
+  }
+  return count
+}
+
+function firstChapterId(note) {
+  const first = (note?.chapters || [])[0]
+  return first?.id || null
+}
+
+function ensureResourceSelection(preferredId = selectedResourceId.value) {
+  const rows = resourceRows.value
+  if (!rows.length) {
+    selectedResourceId.value = null
+    return
+  }
+  if (preferredId && rows.some(row => row.id === preferredId)) {
+    selectedResourceId.value = preferredId
+    return
+  }
+  selectedResourceId.value = rows[0].id
+}
+
+function noteVisibilityLabel(note) {
+  if (note?.visibility !== 'course') return '仅本人可见'
+  return note.subject_id ? '同课程公开' : '全员公开'
+}
+
+function visibilityToggleLabel(note) {
+  if (note?.visibility === 'course') return '取消公开'
+  return note?.subject_id ? '公开到同课程' : '公开给全员'
+}
+
+function discussionScopeLabel(note) {
+  if (note?.visibility !== 'course') return '仅本人和智能助教'
+  return note.subject_id ? '同课程用户可参与' : '全员可参与'
+}
+
 const loadNotes = async () => {
   loadingNotes.value = true
   try {
@@ -366,6 +539,8 @@ const loadNotes = async () => {
     notes.value = result?.data || []
     if (selectedNote.value && !notes.value.some(item => item.id === selectedNote.value.id)) {
       selectedNote.value = null
+      selectedResourceId.value = null
+      discussionRows.value = []
     }
   } finally {
     loadingNotes.value = false
@@ -374,21 +549,32 @@ const loadNotes = async () => {
 
 const selectNote = async note => {
   selectedNote.value = await api.learningNotes.get(note.id)
-  discussionVisible.value = false
+  ensureResourceSelection()
+  discussionComposerOpen.value = false
   await loadDiscussion()
 }
 
-const reloadSelectedNote = async () => {
+const reloadSelectedNote = async (preferredResourceId = selectedResourceId.value) => {
   if (!selectedNote.value) return
   selectedNote.value = await api.learningNotes.get(selectedNote.value.id)
+  ensureResourceSelection(preferredResourceId)
   await loadNotes()
+}
+
+const selectResource = id => {
+  selectedResourceId.value = id
+}
+
+const goResource = id => {
+  if (!id) return
+  selectResource(id)
 }
 
 const loadDiscussion = async () => {
   if (!selectedNote.value) return
   discussionLoading.value = true
   try {
-    const result = await api.learningNotes.discussion(selectedNote.value.id, { page: 1, page_size: 100 })
+    const result = await api.learningNotes.discussion(selectedNote.value.id, { page: 1, page_size: 20 })
     discussionRows.value = result?.data || []
   } finally {
     discussionLoading.value = false
@@ -438,6 +624,7 @@ const submitNoteForm = async () => {
       selectedNote.value = await api.learningNotes.create(payload)
       activeScope.value = 'mine'
     }
+    ensureResourceSelection()
     noteDialogVisible.value = false
     await loadNotes()
     await loadDiscussion()
@@ -461,13 +648,14 @@ const deleteSelectedNote = async () => {
   await ElMessageBox.confirm('删除后无法恢复，确认删除这条学习笔记？', '删除学习笔记', { type: 'warning' })
   await api.learningNotes.delete(selectedNote.value.id)
   selectedNote.value = null
+  selectedResourceId.value = null
   discussionRows.value = []
   await loadNotes()
 }
 
 const openChapterDialog = parentId => {
   editingChapter.value = null
-  chapterParentId.value = parentId
+  chapterParentId.value = parentId || null
   chapterForm.value = { title: '' }
   chapterDialogVisible.value = true
 }
@@ -485,6 +673,7 @@ const submitChapterForm = async () => {
     selectedNote.value = await api.learningNotes.updateChapter(selectedNote.value.id, editingChapter.value.id, {
       title: chapterForm.value.title
     })
+    ensureResourceSelection()
   } else {
     await api.learningNotes.createChapter(selectedNote.value.id, {
       title: chapterForm.value.title,
@@ -498,11 +687,12 @@ const submitChapterForm = async () => {
 const deleteChapter = async chapter => {
   await ElMessageBox.confirm('删除章节后，章节下资料会变为未归入章节。确认继续？', '删除章节', { type: 'warning' })
   selectedNote.value = await api.learningNotes.deleteChapter(selectedNote.value.id, chapter.id)
+  ensureResourceSelection()
 }
 
 const openResourceDialog = chapterId => {
   editingResource.value = null
-  resourceChapterId.value = chapterId
+  resourceChapterId.value = chapterId || null
   resourceForm.value = defaultResourceForm()
   resourceDialogVisible.value = true
 }
@@ -521,15 +711,23 @@ const openResourceEditDialog = resource => {
 }
 
 const submitResourceForm = async () => {
-  if (!selectedNote.value || !resourceForm.value.title.trim()) return
+  if (!selectedNote.value || !resourceForm.value.title.trim()) {
+    ElMessage.warning('请填写资料名称')
+    return
+  }
   const payload = {
     ...resourceForm.value,
     chapter_id: resourceChapterId.value
   }
   if (editingResource.value) {
     selectedNote.value = await api.learningNotes.updateResource(selectedNote.value.id, editingResource.value.id, payload)
+    ensureResourceSelection(editingResource.value.id)
   } else {
+    const beforeIds = new Set(resourceRows.value.map(row => row.id))
     selectedNote.value = await api.learningNotes.createResource(selectedNote.value.id, payload)
+    const nextRows = buildOutlineRows(selectedNote.value).filter(row => row.type === 'resource')
+    const created = nextRows.find(row => !beforeIds.has(row.id))
+    ensureResourceSelection(created?.id)
   }
   resourceDialogVisible.value = false
 }
@@ -537,6 +735,7 @@ const submitResourceForm = async () => {
 const deleteResource = async resource => {
   await ElMessageBox.confirm('确认删除这条笔记资料？', '删除资料', { type: 'warning' })
   selectedNote.value = await api.learningNotes.deleteResource(selectedNote.value.id, resource.id)
+  ensureResourceSelection()
 }
 
 const submitDiscussion = async () => {
@@ -545,16 +744,24 @@ const submitDiscussion = async () => {
   try {
     await api.learningNotes.createDiscussion(selectedNote.value.id, {
       body: discussionDraft.value,
-      body_format: 'markdown',
+      body_format: discussionDraftFormat.value,
       invoke_llm: invokeLlm.value || discussionDraft.value.trim().startsWith('@LLM')
     })
     discussionDraft.value = ''
+    discussionDraftFormat.value = 'markdown'
+    discussionComposeMode.value = 'edit'
     invokeLlm.value = false
+    discussionComposerOpen.value = false
     await loadDiscussion()
     ElMessage.success('已发表')
   } finally {
     discussionSubmitting.value = false
   }
+}
+
+const downloadNoteAttachment = resource => {
+  if (!resource?.attachment_url) return
+  downloadAttachment(resource.attachment_url, resource.attachment_name)
 }
 
 function formatDate(value) {
@@ -565,6 +772,12 @@ function formatDate(value) {
 }
 
 watch(subjectFilter, loadNotes)
+
+watch(discussionDraftFormat, value => {
+  if (value !== 'markdown') {
+    discussionComposeMode.value = 'edit'
+  }
+})
 
 const handleMaterialPresentationStyleChange = event => {
   materialPresentationStyle.value = event?.detail || getMaterialPresentationStyle()
@@ -590,205 +803,476 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 18px;
   min-width: 0;
+  color: #172033;
 }
 
-.learning-notes-page--reader .note-card h2,
-.learning-notes-page--reader .chapter-node__title strong,
-.learning-notes-page--reader .outline-head h3 {
-  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
-}
-
-.learning-notes-page--compact .notes-layout,
-.learning-notes-page--compact .note-body-grid {
-  gap: 14px;
-}
-
-.page-header,
-.note-detail-head,
-.discussion-head,
-.discussion-compose__actions {
+.notes-hero {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 18px;
+  padding: 20px 24px;
+  border: 1px solid #dbe4f0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
 }
 
-.notes-layout {
+.notes-hero__eyebrow,
+.note-reader__course,
+.notes-outline__head span,
+.note-discussion__head span {
+  margin: 0;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.notes-hero h1 {
+  margin: 4px 0 8px;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.notes-hero p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.notes-workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 320px) minmax(260px, 360px) minmax(0, 1fr);
   gap: 18px;
+  align-items: start;
   min-width: 0;
 }
 
-.notes-list-panel,
-.note-detail-panel,
-.note-outline,
-.note-discussion {
+.notes-library,
+.notes-outline,
+.note-reader {
   min-width: 0;
   border: 1px solid #dbe4f0;
-  border-radius: var(--wa-radius-lg, 12px);
+  border-radius: 18px;
   background: #fff;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.04);
 }
 
-.notes-list-panel {
+.notes-library,
+.notes-outline {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 118px);
+  overflow: auto;
+}
+
+.notes-library {
+  padding: 14px;
+}
+
+.notes-library__toolbar {
   display: grid;
   gap: 10px;
-  align-content: start;
-  padding: 12px;
+  margin-bottom: 12px;
 }
 
-.notes-filter :deep(.el-select) {
+.notes-library__toolbar :deep(.el-select),
+.notes-library__scope {
   width: 100%;
+}
+
+.notes-library__scope :deep(.el-tabs__header) {
+  margin: 0;
+}
+
+.notes-list {
+  display: grid;
+  gap: 10px;
 }
 
 .note-card {
   display: grid;
-  gap: 8px;
+  gap: 7px;
+  width: 100%;
   padding: 14px;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
 }
 
-.note-card.is-active,
-.note-card:hover {
+.note-card:hover,
+.note-card--active {
   border-color: #2563eb;
-  background: #eff6ff;
+  background: #f1f6ff;
 }
 
-.note-card__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
+.note-card:hover {
+  transform: translateY(-1px);
 }
 
-.note-card h2,
-.note-detail-head h2,
-.outline-head h3,
-.discussion-head h3 {
-  margin: 0;
+.note-card strong {
+  font-size: 15px;
+  line-height: 1.35;
 }
 
-.note-card p,
-.note-detail-head p {
-  margin: 0;
-  color: #64748b;
+.note-card__visibility {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 700;
 }
 
+.note-card__desc,
 .note-card__meta {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
   color: #64748b;
   font-size: 12px;
+  line-height: 1.55;
 }
 
-.note-detail-panel {
-  padding: 18px;
+.notes-outline {
+  padding: 14px;
 }
 
-.note-body-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.note-outline,
-.note-discussion {
-  padding: 16px;
-  border-radius: 18px;
-}
-
-.outline-head {
+.notes-outline__head {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  align-items: center;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
-.outline-tree,
-.chapter-node {
+.notes-outline__head strong {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+.notes-outline__empty {
+  padding: 28px 0;
+}
+
+.notes-outline__list {
   display: grid;
-  gap: 10px;
+  gap: 4px;
 }
 
-.chapter-node {
-  padding-left: 14px;
-  border-left: 2px solid #dbeafe;
+.outline-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding-top: 4px;
+  padding-right: 8px;
+  padding-bottom: 4px;
+  border-radius: 10px;
 }
 
-.chapter-node__title,
-.resource-row {
-  display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #f8fafc;
+.outline-row--chapter {
+  color: #475569;
 }
 
-.chapter-node__title strong {
-  font-size: 15px;
+.outline-row--resource:hover,
+.outline-row--active {
+  background: #eff6ff;
+}
+
+.outline-row__main,
+.outline-row__chapter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.outline-row__main {
+  cursor: pointer;
+}
+
+.outline-row__index {
+  flex: 0 0 auto;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.outline-row__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
   line-height: 1.5;
 }
 
-.resource-row span,
-.discussion-row p {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.outline-row--chapter .outline-row__title {
+  font-weight: 800;
 }
 
-.row-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.outline-row__count {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 11px;
 }
 
-.row-actions button {
+.outline-row__menu {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.outline-row:hover .outline-row__menu {
+  opacity: 1;
+}
+
+.icon-text-button {
   border: 0;
   background: transparent;
   color: #2563eb;
   cursor: pointer;
-  padding: 0;
+  font-size: 12px;
 }
 
-.discussion-list {
+.note-reader {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.note-reader--empty {
+  min-height: 440px;
+  place-items: center;
+}
+
+.note-reader__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.note-reader__head h2 {
+  margin: 6px 0;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.note-reader__description {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.note-reader__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.note-article {
+  display: grid;
+  gap: 14px;
+  min-height: 360px;
+}
+
+.note-article__nav {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.note-article__breadcrumb {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.note-article h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1.25;
+}
+
+.note-article__body {
+  max-width: 920px;
+  color: #243044;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.note-article__body :deep(.rich-md) {
+  font-size: 16px;
+  line-height: 1.85;
+}
+
+.note-article__body :deep(.rich-md h1),
+.note-article__body :deep(.rich-md h2),
+.note-article__body :deep(.rich-md h3) {
+  margin-top: 1.1em;
+}
+
+.note-article__body :deep(.katex-display) {
+  padding: 8px 0;
+}
+
+.note-article__empty {
+  align-self: center;
+}
+
+.note-attachment {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  max-width: 920px;
+  padding: 14px 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: #eff6ff;
+}
+
+.note-attachment div {
+  display: grid;
+  gap: 4px;
+}
+
+.note-attachment span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.note-discussion {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.note-discussion__head,
+.note-discussion__composer-actions,
+.discussion-row__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.note-discussion__head strong {
+  display: block;
+  margin-top: 4px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.note-discussion__composer {
   display: grid;
   gap: 10px;
-  max-height: 440px;
-  overflow: auto;
-  margin: 12px 0;
-}
-
-.discussion-row {
-  padding: 10px;
-  border-radius: var(--wa-radius-md, 8px);
+  padding: 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
   background: #f8fafc;
 }
 
-.discussion-row.is-assistant {
+.discussion-compose-tabs {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.discussion-preview {
+  min-height: 120px;
+  padding: 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.note-discussion__list {
+  display: grid;
+  gap: 10px;
+}
+
+.discussion-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.discussion-row--assistant {
+  border-color: #a5f3fc;
   background: #ecfeff;
 }
 
 .discussion-row__meta {
-  display: flex;
-  gap: 10px;
+  justify-content: flex-start;
   color: #64748b;
   font-size: 12px;
 }
 
-.discussion-compose {
-  display: grid;
-  gap: 10px;
+.learning-notes-page--reader .note-article h1,
+.learning-notes-page--reader .note-reader__head h2,
+.learning-notes-page--reader .notes-outline__head strong {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
 }
 
-@media (max-width: 960px) {
-  .notes-layout,
-  .note-body-grid {
+.learning-notes-page--compact .notes-workspace {
+  gap: 14px;
+}
+
+.learning-notes-page--compact .note-article__body,
+.learning-notes-page--compact .note-article__body :deep(.rich-md) {
+  font-size: 15px;
+}
+
+@media (max-width: 1280px) {
+  .notes-workspace {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  }
+
+  .notes-outline {
+    position: static;
+    grid-column: 1 / -1;
+    max-height: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .notes-hero,
+  .note-reader__head {
+    flex-direction: column;
+  }
+
+  .notes-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .notes-library,
+  .notes-outline {
+    position: static;
+    max-height: none;
+  }
+
+  .note-article h1 {
+    font-size: 23px;
   }
 }
 </style>

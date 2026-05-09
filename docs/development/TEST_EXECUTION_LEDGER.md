@@ -28,6 +28,7 @@ The ledger does **not** replace `TEST_SUITE_MAP.md`, `TEST_EXECUTION_PITFALLS.md
 8. **Do not use this ledger to avoid all verification.** It helps choose a smaller starting set. It does not make stale test evidence valid after touched code or dependencies change.
 9. **Prefer target-level entries over raw command spam.** A test target can have a canonical command and multiple observed commands. If a command variation proves the same invariant, record it under the existing target unless the setup or coverage is materially different.
 10. **If a test target is renamed or split, do not silently edit history.** Add a note explaining the new target id, keep old run rows readable, and add a successor pointer.
+11. **Maintain both detailed and summary ledgers.** This file is the detailed source of truth for target metadata, strict `Test ID` headings, counters, and run rows used by validation tooling and future agents. `TEST_EXECUTION_SUMMARY.md` is a concise human scan aid and may omit low-level command output, warnings, setup details, and repeated rows. Only observed executions should appear in either file, and any summary entry must point back to the detailed target when one exists.
 
 ## Counting Semantics
 
@@ -179,7 +180,7 @@ npm.cmd run build
 - Changes to frontend route definitions, shared API clients, or components used by E2E targets.
 - Changes that add or remove static assets consumed by the admin SPA.
 
-**Last branch:** `cursor/unify-student-identity-plan`
+**Last branch:** `cursor/beautify-ui`
 
 **Last commit:** `this commit`
 
@@ -187,9 +188,9 @@ npm.cmd run build
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `6`
+**Pass count:** `7`
 
-**Run count:** `6`
+**Run count:** `7`
 
 **Runs:**
 
@@ -201,6 +202,7 @@ npm.cmd run build
 | 2026-05-08 | `cursor/unify-student-identity-plan` | `a15800c` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 26 seconds. | Run from `<repo>/apps/web/admin` after student/admin user UI copy and import-form changes for canonical student identity binding. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 | 2026-05-08 | `cursor/unify-student-identity-plan` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 29 seconds. | Run from `<repo>/apps/web/admin` after allowing student forms/imports to represent unassigned students. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 19 seconds. | Run from `<repo>/apps/web/admin` after allowing the user-management form to create student accounts without an assigned class. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 18-20 seconds. | Run from `<repo>/apps/web/admin` after the learning-notes workspace UI rewrite and Markdown/KaTeX rendering hookup. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 
 ### Test ID: `admin.e2e.learning_notes_attendance_cover_tier20`
 
@@ -240,23 +242,24 @@ npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --pro
 - Changes to admin SPA routing around `/teaching-calendar`, `/attendance`, `/learning-notes`, or course entry.
 - Changes to Playwright global setup, E2E seed/reset helpers, seeded credentials, or API base helpers.
 
-**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+**Last branch:** `cursor/beautify-ui`
 
-**Last commit:** `6a95aad`
+**Last commit:** `this commit`
 
-**Last result:** `passed`
+**Last result:** `timed out`
 
-**Last run date:** `2026-05-07`
+**Last run date:** `2026-05-09`
 
 **Pass count:** `2`
 
-**Run count:** `2`
+**Run count:** `3`
 
 **Runs:**
 
 | Date | Branch | Commit | Command | Result | Summary | Notes |
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `6a95aad` | `npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium` | `passed` | `20 passed (1.1m)` | Run used the admin Playwright managed webServer flow from `<repo>/apps/web/admin`. Output included existing backend Pydantic warnings and Vite CJS API deprecation text. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium` | `timed out` | Playwright reported all 20 test bodies `ok`, but the command exceeded the local timeout while the managed webServer was cleaning up. | Run from `<repo>/apps/web/admin` after the learning-notes workspace UI rewrite. This matches the known local Playwright cleanup issue; ports `8012` and `3012` had no remaining listeners afterward. A prior attempt exposed a stale UI-semantic mismatch after replacing tabs with segmented controls; the final rerun happened after restoring the tab semantics expected by this target. |
 
 ### Test ID: `backend.e2e_dev.demo_course_seed`
 
