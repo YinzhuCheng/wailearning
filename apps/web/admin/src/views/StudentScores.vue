@@ -204,29 +204,48 @@ watch(
 <style scoped>
 .student-scores-page {
   padding: 24px;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  min-width: 0;
 }
 
 .page-header {
-  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+  text-align: center;
 }
 
 .page-title {
   margin: 0 0 8px;
   font-size: 28px;
-  color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .page-subtitle {
   margin: 0;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .toolbar-card {
   margin-bottom: 16px;
+  border-radius: var(--wa-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  background: color-mix(in srgb, var(--wa-color-surface) 90%, var(--wa-color-bg-soft));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--wa-color-text) 4%, transparent);
 }
 
 .composition-card {
   margin-bottom: 20px;
+  border-radius: var(--wa-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  box-shadow: var(--wa-shadow-surface);
+}
+
+.student-scores-page > :deep(.el-card:not(.toolbar-card):not(.composition-card)) {
+  border-radius: var(--wa-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .scheme-row {
@@ -246,16 +265,22 @@ watch(
 .subsection-title {
   margin: 20px 0 12px;
   font-size: 16px;
-  color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .hint {
   margin: 0 0 16px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: 14px;
 }
 
 .appeal-form {
   max-width: 560px;
+}
+
+@media (max-width: 768px) {
+  .student-scores-page {
+    padding: 16px;
+  }
 }
 </style>

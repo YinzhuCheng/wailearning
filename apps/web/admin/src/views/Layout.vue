@@ -1102,8 +1102,19 @@ watch(notificationSyncParams, () => {
   margin: 6px 0;
   border-radius: var(--wa-radius-lg);
   color: rgba(255, 255, 255, 0.82);
+  min-height: 48px;
   transform-origin: left center;
   transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.sidebar-menu :deep(.el-menu-item .el-icon),
+.sidebar-menu :deep(.el-sub-menu__title .el-icon) {
+  width: 22px;
+  height: 22px;
+  margin-right: 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .sidebar-menu :deep(.el-menu-item:hover) {
@@ -1115,6 +1126,14 @@ watch(notificationSyncParams, () => {
 .sidebar-menu :deep(.el-menu-item.is-active) {
   background: var(--wa-sidebar-active-bg);
   color: #fff;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--wa-color-primary-600) 22%, transparent);
+}
+
+.sidebar-menu :deep(.el-menu-item.is-active .el-icon),
+.sidebar-menu :deep(.el-sub-menu__title:hover .el-icon),
+.sidebar-menu :deep(.el-menu-item:hover .el-icon) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item.is-active) {
@@ -1125,6 +1144,7 @@ watch(notificationSyncParams, () => {
   margin: 6px 0;
   border-radius: var(--wa-radius-lg);
   color: rgba(255, 255, 255, 0.82);
+  min-height: 48px;
   transform-origin: left center;
   transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
@@ -1145,12 +1165,16 @@ watch(notificationSyncParams, () => {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--wa-border-subtle);
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(10px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.86)),
+    color-mix(in srgb, var(--wa-color-primary-50) 18%, #fff);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--wa-color-text) 5%, transparent);
 }
 
 .header-left {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 18px;
   min-width: 0;
@@ -1158,11 +1182,14 @@ watch(notificationSyncParams, () => {
 
 .context-chip {
   display: flex;
+  flex: 0 1 320px;
+  min-width: 0;
   align-items: center;
   gap: 10px;
   max-width: 100%;
   border-radius: 999px;
-  background: var(--wa-color-primary-50);
+  border: 1px solid color-mix(in srgb, var(--wa-color-primary-200) 64%, transparent);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 86%, #fff);
   padding: 8px 14px;
   color: var(--wa-color-primary-700);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
@@ -1179,6 +1206,7 @@ watch(notificationSyncParams, () => {
 }
 
 .context-chip__label {
+  flex: 0 0 auto;
   color: var(--wa-color-text-muted);
 }
 
@@ -1201,8 +1229,13 @@ watch(notificationSyncParams, () => {
   color: var(--wa-color-text-muted);
 }
 
+.context-chip :deep(.el-tag) {
+  flex: 0 0 auto;
+}
+
 .header-right {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 12px;
   min-width: 0;

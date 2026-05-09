@@ -881,6 +881,8 @@ watch(
   padding: 24px;
   min-width: 0;
   overflow-x: hidden;
+  width: min(100%, 1180px);
+  margin: 0 auto;
 }
 
 .page-header {
@@ -889,7 +891,7 @@ watch(
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 22px;
   min-width: 0;
 }
 
@@ -906,10 +908,12 @@ watch(
 }
 
 .quota-card {
-  width: 100%;
-  max-width: 560px;
-  margin-bottom: 16px;
+  width: min(100%, 560px);
+  margin-bottom: 0;
   min-width: 0;
+  border-radius: var(--wa-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 82%, transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .quota-global {
@@ -1059,6 +1063,9 @@ watch(
   margin-bottom: 20px;
   min-width: 0;
   overflow: hidden;
+  border-radius: var(--wa-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .elective-catalog-card :deep(.el-card__body) {
@@ -1185,9 +1192,10 @@ watch(
 
 .course-section {
   background: #fff;
-  border-radius: var(--wa-radius-2xl);
-  padding: 24px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  border-radius: var(--wa-radius-lg);
+  padding: 22px;
+  box-shadow: var(--wa-shadow-surface);
   margin-bottom: 20px;
   min-width: 0;
   overflow: hidden;
@@ -1244,12 +1252,13 @@ watch(
 }
 
 .course-card {
-  border: 1px solid #e2e8f0;
-  border-radius: var(--wa-radius-xl);
-  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 88%, transparent);
+  border-radius: var(--wa-radius-lg);
+  padding: 18px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background:
+    linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--wa-color-primary-50) 26%, #fff) 100%);
   min-width: 0;
   overflow: hidden;
 }
@@ -1262,7 +1271,9 @@ watch(
 
 .course-card-selected {
   border-color: #2563eb;
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.15);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--wa-color-primary-500) 28%, transparent),
+    0 12px 24px rgba(37, 99, 235, 0.15);
 }
 
 .course-card-muted {
