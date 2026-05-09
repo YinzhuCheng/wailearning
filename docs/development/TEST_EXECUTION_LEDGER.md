@@ -188,9 +188,9 @@ npm.cmd run build
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `7`
+**Pass count:** `8`
 
-**Run count:** `7`
+**Run count:** `8`
 
 **Runs:**
 
@@ -203,6 +203,7 @@ npm.cmd run build
 | 2026-05-08 | `cursor/unify-student-identity-plan` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 29 seconds. | Run from `<repo>/apps/web/admin` after allowing student forms/imports to represent unassigned students. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 19 seconds. | Run from `<repo>/apps/web/admin` after allowing the user-management form to create student accounts without an assigned class. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 | 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 18-20 seconds. | Run from `<repo>/apps/web/admin` after the learning-notes workspace UI rewrite and Markdown/KaTeX rendering hookup. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 26 seconds. | Run from `<repo>/apps/web/admin` after follow-up learning-notes layout tuning for the 1280px three-column workspace and duplicate Markdown title suppression. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 
 ### Test ID: `admin.e2e.learning_notes_attendance_cover_tier20`
 

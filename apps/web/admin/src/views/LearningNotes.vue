@@ -158,7 +158,7 @@
               <h1>{{ selectedResource.title }}</h1>
               <div class="note-article__body">
                 <PlainOrMarkdownBlock
-                  :text="selectedResource.content"
+                  :text="selectedResourceBody"
                   :format="selectedResource.content_format || 'markdown'"
                   variant="student"
                   empty-text="暂无正文"
@@ -398,6 +398,7 @@ const resourceRows = computed(() => outlineRows.value.filter(row => row.type ===
 const selectedResource = computed(() => resourceRows.value.find(row => row.id === selectedResourceId.value)?.raw || null)
 const selectedResourceRow = computed(() => resourceRows.value.find(row => row.id === selectedResourceId.value) || null)
 const selectedResourcePath = computed(() => selectedResourceRow.value?.path || '')
+const selectedResourceBody = computed(() => stripDuplicateMarkdownTitle(selectedResource.value))
 const activeChapterId = computed(() => selectedResourceRow.value?.chapterId || firstChapterId(selectedNote.value))
 
 const currentResourceIndex = computed(() => resourceRows.value.findIndex(row => row.id === selectedResourceId.value))
@@ -428,6 +429,20 @@ function defaultResourceForm() {
     attachment_name: '',
     attachment_url: ''
   }
+}
+
+function stripDuplicateMarkdownTitle(resource) {
+  if (!resource?.content || resource.content_format === 'plain') return resource?.content || ''
+  const title = (resource.title || '').trim()
+  if (!title) return resource.content
+  const lines = String(resource.content).split(/\r?\n/)
+  let index = 0
+  while (index < lines.length && !lines[index].trim()) index += 1
+  const first = lines[index]?.trim() || ''
+  if (first === `# ${title}`) {
+    return [...lines.slice(0, index), ...lines.slice(index + 1)].join('\n').replace(/^\s+/, '')
+  }
+  return resource.content
 }
 
 function buildOutlineRows(note) {
@@ -842,7 +857,7 @@ onBeforeUnmount(() => {
 
 .notes-workspace {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(260px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 280px) minmax(220px, 280px) minmax(470px, 1fr);
   gap: 18px;
   align-items: start;
   min-width: 0;
@@ -1109,7 +1124,7 @@ onBeforeUnmount(() => {
 }
 
 .note-article__body {
-  max-width: 920px;
+  width: min(100%, 860px);
   color: #243044;
   font-size: 16px;
   line-height: 1.8;
@@ -1139,7 +1154,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 14px;
   align-items: center;
-  max-width: 920px;
+  width: min(100%, 860px);
   padding: 14px 16px;
   border: 1px solid #bfdbfe;
   border-radius: 14px;
@@ -1243,7 +1258,7 @@ onBeforeUnmount(() => {
   font-size: 15px;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1180px) {
   .notes-workspace {
     grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   }
@@ -1252,6 +1267,16 @@ onBeforeUnmount(() => {
     position: static;
     grid-column: 1 / -1;
     max-height: none;
+  }
+}
+
+@media (max-width: 1380px) and (min-width: 1181px) {
+  .note-reader__head {
+    flex-direction: column;
+  }
+
+  .note-reader__actions {
+    justify-content: flex-start;
   }
 }
 
