@@ -98,9 +98,9 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await page.goto(`/materials/read/${s.material_discussion_id}`)
-    await expect(page.getByRole('button', { name: '返回章节目录' })).toBeVisible({ timeout: 25000 })
-    await expect(page.getByRole('button', { name: '上一篇' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '下一篇' })).toBeVisible()
+    await expect(page.getByTestId('material-read-back')).toBeVisible({ timeout: 25000 })
+    await expect(page.getByTestId('material-read-prev')).toBeVisible()
+    await expect(page.getByTestId('material-read-next')).toBeVisible()
     await expect(page.locator('.material-read-title')).toContainText(`E2E讨论资料_${s.suffix}`, {
       timeout: 15000
     })
@@ -185,11 +185,13 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const dlg = page.getByRole('dialog', { name: '资料详情' })
     await expect(dlg).toBeVisible({ timeout: 20000 })
     const stamp = Date.now()
+    await dlg.getByRole('button', { name: '写回复' }).click()
     const textarea = dlg.locator('.discussion-input textarea')
-    await expect(dlg.getByRole('button', { name: '查看 Markdown + LaTeX 示例' })).toBeVisible({ timeout: 15000 })
+    const demoToggle = dlg.getByTestId('discussion-markdown-demo-toggle')
+    await expect(demoToggle).toBeVisible({ timeout: 15000 })
     await expect(dlg.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
-    const fmtBar = dlg.locator('.discussion-format-bar')
-    await expect(fmtBar.getByRole('radio', { name: 'Markdown' })).toBeChecked({ timeout: 5000 })
+    const composerToolbar = dlg.locator('.discussion-composer-toolbar')
+    await expect(composerToolbar.getByRole('radio', { name: 'Markdown' })).toBeChecked({ timeout: 5000 })
     await textarea.fill([
       `md-material-${stamp}`,
       '',
@@ -199,6 +201,7 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
       '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}',
       '$$'
     ].join('\n'))
+    await composerToolbar.getByText('预览', { exact: true }).click()
     await expect(dlg.getByTestId('discussion-markdown-preview').locator('.katex').first()).toBeVisible({
       timeout: 15000
     })
@@ -206,11 +209,12 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
       timeout: 15000
     })
     await expect(dlg.getByTestId('discussion-markdown-preview')).not.toContainText('$$')
-    await dlg.getByRole('button', { name: '查看 Markdown + LaTeX 示例' }).click()
+    await demoToggle.click()
     await expect(dlg.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 15000 })
     await dlg.getByTestId('discussion-submit').click()
     const row = dlg.locator('.discussion-row').filter({ hasText: `md-material-${stamp}` })
     await expect(row).toBeVisible({ timeout: 15000 })
+    await row.locator('.discussion-row__body').click()
     await expect(row.locator('.katex').first()).toBeVisible({ timeout: 15000 })
     await expect(row.locator('.katex-display').first()).toBeVisible({ timeout: 15000 })
     await expect(row).not.toContainText('$$')

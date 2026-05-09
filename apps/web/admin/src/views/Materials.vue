@@ -17,8 +17,24 @@
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
 
     <template v-else>
-      <div class="materials-layout">
-        <aside class="chapter-sidebar" :class="{ 'chapter-sidebar--narrow': userStore.isStudent }">
+      <div
+        v-if="selectedCourse.cover_image_url"
+        class="materials-course-cover"
+        data-testid="materials-course-cover-banner"
+      >
+        <el-image
+          :src="selectedCourse.cover_image_url"
+          fit="cover"
+          class="materials-course-cover__image"
+        />
+      </div>
+
+      <div class="materials-layout" :class="{ 'materials-layout--outline-collapsed': isChapterSidebarCollapsed }">
+        <aside
+          v-show="!isChapterSidebarCollapsed"
+          class="chapter-sidebar"
+          :class="{ 'chapter-sidebar--narrow': userStore.isStudent }"
+        >
           <div class="chapter-sidebar__head">
             <div class="chapter-sidebar__heading">
               <span class="chapter-sidebar__eyebrow">教材目录</span>
@@ -45,6 +61,17 @@
                   aria-label="收起全部章节"
                   data-testid="materials-collapse-all-chapters"
                   @click="collapseAllChapters"
+                />
+              </el-tooltip>
+              <el-tooltip content="收起教材目录" placement="top">
+                <el-button
+                  class="chapter-outline-btn"
+                  text
+                  circle
+                  :icon="Fold"
+                  aria-label="收起教材目录"
+                  data-testid="materials-collapse-chapter-sidebar"
+                  @click="isChapterSidebarCollapsed = true"
                 />
               </el-tooltip>
               <el-button v-if="canManageChapters" text type="primary" size="small" @click="openAddChapterDialog(null)">根章节</el-button>
@@ -105,6 +132,17 @@
         <section class="materials-main">
           <div class="materials-toolbar">
             <div class="materials-toolbar__summary">
+              <el-tooltip v-if="isChapterSidebarCollapsed" content="展开教材目录" placement="top">
+                <el-button
+                  class="chapter-outline-btn materials-toolbar__outline-toggle"
+                  text
+                  circle
+                  :icon="Expand"
+                  aria-label="展开教材目录"
+                  data-testid="materials-expand-chapter-sidebar"
+                  @click="isChapterSidebarCollapsed = false"
+                />
+              </el-tooltip>
               <span class="materials-toolbar__eyebrow">当前章节</span>
               <strong data-testid="materials-current-chapter">{{ currentChapterTitle }}</strong>
               <span class="materials-toolbar__count">{{ materials.length }} 篇资料</span>
@@ -389,6 +427,7 @@ const chapterTreeNodes = ref([])
 const selectedChapterId = ref(null)
 const treeRef = ref(null)
 const expandedChapterKeys = ref([])
+const isChapterSidebarCollapsed = ref(false)
 const isMaterialShelfCollapsed = ref(false)
 const materialPresentationStyle = ref(getMaterialPresentationStyle())
 const newChapterTitle = ref('')
@@ -1052,12 +1091,14 @@ onBeforeUnmount(() => {
 <style scoped>
 .materials-page {
   padding: 24px;
+  min-width: 0;
+  color: var(--wa-color-text);
 }
 
 .materials-page--reader .chapter-sidebar,
 .materials-page--reader .materials-shelf-card {
-  border-radius: 22px;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.04);
+  border-radius: var(--wa-radius-xl);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .materials-page--reader .tree-node-label {
@@ -1089,22 +1130,40 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 24px;
+  padding: 0 4px;
 }
 
 .page-title {
   margin: 0 0 8px;
   font-size: 28px;
-  color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .page-subtitle {
   margin: 0;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
 }
 
 .header-actions {
   display: flex;
   gap: 12px;
+}
+
+.materials-course-cover {
+  width: min(100%, 1180px);
+  height: clamp(132px, 18vw, 220px);
+  margin: 0 auto 18px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 76%, transparent);
+  border-radius: var(--wa-radius-xl);
+  background: var(--wa-color-surface);
+  box-shadow: var(--wa-shadow-object);
+}
+
+.materials-course-cover__image {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .materials-layout {
@@ -1114,12 +1173,28 @@ onBeforeUnmount(() => {
   align-items: stretch;
 }
 
+.materials-layout--outline-collapsed {
+  gap: 12px;
+}
+
 .chapter-sidebar {
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: var(--wa-radius-lg);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--wa-color-surface) 96%, var(--wa-color-primary-50)) 0%,
+      var(--wa-color-surface) 46%,
+      color-mix(in srgb, var(--wa-color-bg-soft) 88%, var(--wa-color-accent-50)) 100%
+    ) padding-box,
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--wa-color-primary-500) 28%, transparent) 0%,
+      color-mix(in srgb, var(--wa-color-accent-600) 18%, transparent) 55%,
+      color-mix(in srgb, var(--wa-color-primary-300) 12%, transparent) 100%
+    ) border-box;
   padding: 16px 16px 12px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+  border: 1px solid transparent;
+  box-shadow: var(--wa-shadow-object);
   width: 100%;
   max-width: none;
 }
@@ -1134,6 +1209,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--wa-border-subtle) 78%, transparent);
 }
 
 .chapter-sidebar__heading {
@@ -1145,15 +1222,15 @@ onBeforeUnmount(() => {
 .chapter-sidebar__eyebrow {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #64748b;
+  letter-spacing: 0;
+  color: var(--wa-color-primary-600);
   text-transform: uppercase;
 }
 
 .chapter-sidebar__title {
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .chapter-sidebar__actions {
@@ -1168,11 +1245,11 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  color: #2563eb;
+  color: var(--wa-color-primary-600);
 }
 
 .chapter-outline-btn:hover {
-  background: #eff6ff;
+  background: color-mix(in srgb, var(--wa-color-primary-50) 82%, #fff);
 }
 
 .chapter-tree :deep(.el-tree-node__content) {
@@ -1186,7 +1263,12 @@ onBeforeUnmount(() => {
 }
 
 .chapter-tree :deep(.el-tree-node__content:hover) {
-  background: rgba(37, 99, 235, 0.05);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 72%, transparent);
+}
+
+.chapter-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
+  background: color-mix(in srgb, var(--wa-color-primary-50) 86%, #fff);
+  box-shadow: inset 3px 0 0 var(--wa-color-primary-600);
 }
 
 .chapter-tree :deep(.el-tree-node__expand-icon) {
@@ -1205,12 +1287,12 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(37, 99, 235, 0.22);
+  border: 1px solid color-mix(in srgb, var(--wa-color-primary-500) 24%, transparent);
   border-radius: 7px;
-  background: rgba(239, 246, 255, 0.84);
-  color: #2563eb;
+  background: color-mix(in srgb, var(--wa-color-primary-50) 84%, #fff);
+  color: var(--wa-color-primary-600);
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--wa-color-text) 8%, transparent);
   transition:
     background 0.16s ease,
     border-color 0.16s ease,
@@ -1219,14 +1301,14 @@ onBeforeUnmount(() => {
 }
 
 .chapter-node-toggle:hover {
-  background: #dbeafe;
-  border-color: rgba(37, 99, 235, 0.38);
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.16);
+  background: color-mix(in srgb, var(--wa-color-primary-100) 82%, #fff);
+  border-color: color-mix(in srgb, var(--wa-color-primary-500) 38%, transparent);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--wa-color-primary-600) 16%, transparent);
   transform: scale(1.08);
 }
 
 .chapter-node-toggle:focus-visible {
-  outline: 2px solid rgba(37, 99, 235, 0.36);
+  outline: 2px solid color-mix(in srgb, var(--wa-color-primary-500) 36%, transparent);
   outline-offset: 2px;
 }
 
@@ -1240,7 +1322,7 @@ onBeforeUnmount(() => {
   padding: 6px 8px 6px 0;
   border: none;
   background: transparent;
-  color: #0f172a;
+  color: var(--wa-color-text);
   text-align: left;
   font-size: 15px;
   font-weight: 600;
@@ -1254,13 +1336,13 @@ onBeforeUnmount(() => {
 }
 
 .tree-node-label:hover .tree-node-label__title {
-  color: #1d4ed8;
+  color: var(--wa-color-primary-700);
 }
 
 .tree-node-label--uncategorized {
   font-family: inherit;
   font-weight: 500;
-  color: #475569;
+  color: var(--wa-color-text-soft);
 }
 
 .tree-tag {
@@ -1281,7 +1363,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 4px;
+  padding: 0 4px 2px;
 }
 
 .materials-toolbar__summary {
@@ -1289,19 +1371,23 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
-  color: #0f172a;
+  color: var(--wa-color-text);
+}
+
+.materials-toolbar__outline-toggle {
+  margin-right: 2px;
 }
 
 .materials-toolbar__eyebrow {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #64748b;
+  letter-spacing: 0;
+  color: var(--wa-color-primary-600);
   text-transform: uppercase;
 }
 
 .materials-toolbar__count {
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: 13px;
 }
 
@@ -1312,9 +1398,9 @@ onBeforeUnmount(() => {
 }
 
 .materials-shelf-card {
-  border-radius: 18px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  border-radius: var(--wa-radius-xl);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .materials-table-scroll {
@@ -1340,7 +1426,7 @@ onBeforeUnmount(() => {
 }
 
 .muted-text {
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: 13px;
 }
 
@@ -1363,10 +1449,12 @@ onBeforeUnmount(() => {
 
   .chapter-sidebar__head {
     align-items: flex-start;
+    flex-direction: column;
   }
 
   .chapter-sidebar__actions {
     flex-wrap: wrap;
+    justify-content: flex-start;
   }
 }
 </style>

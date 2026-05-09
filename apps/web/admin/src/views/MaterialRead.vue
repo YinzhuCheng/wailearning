@@ -1,10 +1,27 @@
 <template>
   <div class="material-read-page" :class="`material-read-page--${materialPresentationStyle}`" v-loading="loading">
-    <div class="material-read-layout" v-if="material">
-      <aside class="material-read-outline">
+    <div
+      class="material-read-layout"
+      :class="{ 'material-read-layout--outline-collapsed': isOutlineCollapsed }"
+      v-if="material"
+    >
+      <aside v-show="!isOutlineCollapsed" class="material-read-outline">
         <div class="material-read-outline__head">
-          <span class="material-read-outline__eyebrow">教材目录</span>
-          <strong>{{ currentChapterTitle }}</strong>
+          <div class="material-read-outline__heading">
+            <span class="material-read-outline__eyebrow">教材目录</span>
+            <strong>{{ currentChapterTitle }}</strong>
+          </div>
+          <el-tooltip content="收起教材目录" placement="top">
+            <el-button
+              class="material-read-outline__toggle"
+              text
+              circle
+              :icon="Fold"
+              aria-label="收起教材目录"
+              data-testid="material-read-collapse-outline"
+              @click="isOutlineCollapsed = true"
+            />
+          </el-tooltip>
         </div>
         <div class="material-read-outline__list">
           <section
@@ -38,9 +55,20 @@
 
       <section class="material-read-main">
         <div class="material-read-toolbar">
-          <el-button @click="goBack">返回目录</el-button>
-          <el-button :disabled="!prevEntry" @click="goPrev">上一篇</el-button>
-          <el-button :disabled="!nextEntry" @click="goNext">下一篇</el-button>
+          <el-tooltip v-if="isOutlineCollapsed" content="展开教材目录" placement="top">
+            <el-button
+              class="material-read-outline__toggle"
+              text
+              circle
+              :icon="Expand"
+              aria-label="展开教材目录"
+              data-testid="material-read-expand-outline"
+              @click="isOutlineCollapsed = false"
+            />
+          </el-tooltip>
+          <el-button data-testid="material-read-back" @click="goBack">返回目录</el-button>
+          <el-button data-testid="material-read-prev" :disabled="!prevEntry" @click="goPrev">上一篇</el-button>
+          <el-button data-testid="material-read-next" :disabled="!nextEntry" @click="goNext">下一篇</el-button>
         </div>
 
         <el-alert
@@ -109,6 +137,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Expand, Fold } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import CourseDiscussionPanel from '@/components/CourseDiscussionPanel.vue'
@@ -133,6 +162,7 @@ const sequence = ref([])
 const materialPresentationStyle = ref(getMaterialPresentationStyle())
 const outlineTree = ref([])
 const discussionSection = ref(null)
+const isOutlineCollapsed = ref(false)
 
 const flattenChaptersDfs = (nodes, depth = 0) => {
   const out = []
@@ -317,14 +347,22 @@ onBeforeUnmount(() => {
 <style scoped>
 .material-read-page {
   padding: 24px;
+  min-width: 0;
+  color: var(--wa-color-text);
 }
 
 .material-read-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
-  gap: 24px;
+  gap: 20px;
   max-width: 1560px;
   margin: 0 auto;
+  align-items: start;
+}
+
+.material-read-layout--outline-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1180px;
 }
 
 .material-read-outline {
@@ -334,25 +372,61 @@ onBeforeUnmount(() => {
   max-height: calc(100vh - 40px);
   overflow: auto;
   padding: 18px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  border: 1px solid transparent;
+  border-radius: var(--wa-radius-lg);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--wa-color-surface) 96%, var(--wa-color-primary-50)) 0%,
+      var(--wa-color-surface) 46%,
+      color-mix(in srgb, var(--wa-color-bg-soft) 88%, var(--wa-color-accent-50)) 100%
+    ) padding-box,
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--wa-color-primary-500) 28%, transparent) 0%,
+      color-mix(in srgb, var(--wa-color-accent-600) 18%, transparent) 55%,
+      color-mix(in srgb, var(--wa-color-primary-300) 12%, transparent) 100%
+    ) border-box;
+  box-shadow: var(--wa-shadow-object);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--wa-color-primary-300) 70%, transparent) transparent;
 }
 
 .material-read-outline__head {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--wa-border-subtle) 78%, transparent);
+}
+
+.material-read-outline__heading {
+  display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 14px;
+  min-width: 0;
 }
 
 .material-read-outline__eyebrow {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--wa-color-primary-600);
+}
+
+.material-read-outline__toggle {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  color: var(--wa-color-primary-600);
+}
+
+.material-read-outline__toggle:hover {
+  background: color-mix(in srgb, var(--wa-color-primary-50) 82%, #fff);
 }
 
 .material-read-outline__list {
@@ -371,8 +445,8 @@ onBeforeUnmount(() => {
   padding: 0 4px;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #64748b;
+  letter-spacing: 0;
+  color: var(--wa-color-text-muted);
 }
 
 .material-read-outline__item {
@@ -385,24 +459,26 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 12px;
   background: transparent;
-  color: #334155;
+  color: var(--wa-color-text-soft);
   text-align: left;
   cursor: pointer;
+  transition: background 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
 }
 
 .material-read-outline__item:hover {
-  background: rgba(37, 99, 235, 0.06);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 72%, transparent);
 }
 
 .material-read-outline__item--active {
-  background: rgba(37, 99, 235, 0.1);
-  color: #0f172a;
+  background: color-mix(in srgb, var(--wa-color-primary-50) 86%, #fff);
+  color: var(--wa-color-text);
+  box-shadow: inset 3px 0 0 var(--wa-color-primary-600);
 }
 
 .material-read-outline__index {
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--wa-color-primary-600);
 }
 
 .material-read-outline__title {
@@ -411,33 +487,41 @@ onBeforeUnmount(() => {
 
 .material-read-main {
   min-width: 0;
+  display: grid;
+  gap: 16px;
 }
 
 .material-read-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 16px;
+  justify-content: flex-end;
+  width: min(100%, 920px);
+  justify-self: center;
 }
 
 .material-read-breadcrumb {
-  margin-bottom: 16px;
+  width: min(100%, 920px);
+  justify-self: center;
 }
 
 .material-read-body {
+  width: min(100%, 920px);
+  justify-self: center;
   padding: 24px 28px;
-  border-radius: var(--wa-radius-lg);
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  border-radius: var(--wa-radius-xl);
+  background: var(--wa-color-surface);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .material-read-title {
   margin: 0 0 16px;
-  font-size: 1.65rem;
+  font-size: clamp(24px, 2.1vw, 30px);
   font-weight: 700;
-  color: #0f172a;
+  color: var(--wa-color-text);
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .material-read-actions {
@@ -452,7 +536,7 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   padding: 0;
-  color: #1d4ed8;
+  color: var(--wa-color-primary-700);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -461,11 +545,11 @@ onBeforeUnmount(() => {
 .material-read-actions__divider {
   width: 1px;
   height: 14px;
-  background: #cbd5e1;
+  background: var(--wa-border-strong);
 }
 
 .material-read-actions__hint {
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: 13px;
 }
 
@@ -475,14 +559,15 @@ onBeforeUnmount(() => {
 
 .material-read-meta {
   margin: 0 0 18px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: 13px;
 }
 
 .material-read-prose {
-  color: #0f172a;
+  color: var(--wa-color-text-soft);
   font-size: 16px;
   line-height: 1.9;
+  overflow-wrap: anywhere;
 }
 
 .material-read-prose :deep(h1),
@@ -507,39 +592,43 @@ onBeforeUnmount(() => {
 .material-read-prose :deep(blockquote) {
   margin: 1.2em 0;
   padding: 0.85em 1em;
-  border-left: 3px solid #cbd5e1;
-  background: #f8fafc;
-  color: #334155;
+  border-left: 3px solid var(--wa-border-strong);
+  background: var(--wa-color-bg-soft);
+  color: var(--wa-color-text-soft);
 }
 
 .material-read-note {
-  margin-top: 18px;
+  width: min(100%, 920px);
+  justify-self: center;
   padding: 16px 18px;
-  border: 1px dashed #dbe3ee;
-  border-radius: 14px;
-  background: #fbfdff;
+  border: 1px solid color-mix(in srgb, var(--wa-color-primary-200) 84%, transparent);
+  border-radius: var(--wa-radius-xl);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 82%, #fff);
 }
 
 .material-read-note__title {
   display: block;
   margin-bottom: 6px;
-  color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .material-read-note__body {
   margin: 0 0 8px;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: 14px;
 }
 
 .material-read-discussion {
-  margin-top: 24px;
+  width: min(100%, 920px);
+  justify-self: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--wa-border-subtle);
   scroll-margin-top: 24px;
 }
 
 .material-read-page--reader .material-read-body {
-  border-radius: 22px;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.04);
+  border-radius: var(--wa-radius-2xl);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .material-read-page--reader .material-read-title,
@@ -569,11 +658,30 @@ onBeforeUnmount(() => {
 @media (max-width: 960px) {
   .material-read-layout {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .material-read-outline {
     position: static;
     max-height: none;
+    padding: 16px;
+  }
+
+  .material-read-toolbar,
+  .material-read-breadcrumb,
+  .material-read-body,
+  .material-read-note,
+  .material-read-discussion {
+    width: 100%;
+  }
+
+  .material-read-body {
+    padding: 20px;
+  }
+
+  .material-read-title {
+    font-size: 24px;
+    line-height: 1.28;
   }
 }
 </style>

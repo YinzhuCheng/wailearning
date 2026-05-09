@@ -387,7 +387,7 @@ watch(selectedCourse, () => {
   --sch-radius: 12px;
   --sch-radius-sm: 8px;
   --sch-gap: 16px;
-  --sch-border: var(--wa-border-subtle);
+  --sch-border: color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
   --sch-surface: var(--wa-color-surface);
   --sch-muted: var(--wa-color-text-muted);
   --sch-text: var(--wa-color-text);
@@ -396,23 +396,26 @@ watch(selectedCourse, () => {
   --sch-row-bg: var(--wa-color-bg-soft);
 
   padding: 24px;
-  max-width: 1100px;
+  width: min(100%, 1180px);
+  max-width: 1180px;
+  margin: 0 auto;
 }
 
 .page-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: center;
   gap: var(--sch-gap);
-  margin-bottom: var(--sch-gap);
+  margin-bottom: 28px;
+  text-align: center;
 }
 
 .page-title {
   margin: 0;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--sch-text);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .page-subtitle {
@@ -424,29 +427,30 @@ watch(selectedCourse, () => {
 
 /* 统一卡片外壳 */
 .panel-card {
-  padding: 18px 20px;
+  padding: 20px;
   border: 1px solid var(--sch-border);
   border-radius: var(--sch-radius);
   background: var(--sch-surface);
   margin-bottom: var(--sch-gap);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .panel-card--overview {
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .panel-card--homework {
-  border-color: #bfdbfe;
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.06);
-  background: linear-gradient(180deg, #fafbff 0%, #fff 48%);
+  border-color: color-mix(in srgb, var(--wa-color-primary-200) 82%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--wa-color-primary-50) 52%, #fff) 0%, #fff 52%);
 }
 
 .panel-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .panel-header__titles {
@@ -455,21 +459,20 @@ watch(selectedCourse, () => {
 
 .panel-title {
   margin: 0;
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--sch-text);
   line-height: 1.35;
 }
 
 .panel-desc {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--sch-muted);
-  line-height: 1.45;
+  display: none;
 }
 
 .panel-link {
+  align-self: flex-start;
   flex-shrink: 0;
+  padding-left: 0;
   font-weight: 500;
 }
 
@@ -489,10 +492,10 @@ watch(selectedCourse, () => {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 16px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: var(--sch-row-bg);
   border-radius: var(--sch-radius-sm);
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--sch-border);
 }
 
 .meta-item {
@@ -556,10 +559,10 @@ watch(selectedCourse, () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--sch-radius-sm);
   background: var(--sch-row-bg);
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--sch-border);
 }
 
 .schedule-row__title {
@@ -588,7 +591,7 @@ watch(selectedCourse, () => {
   align-items: flex-start;
   gap: 12px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--sch-border);
   border-radius: var(--sch-radius-sm);
   background: var(--sch-surface);
@@ -598,18 +601,18 @@ watch(selectedCourse, () => {
 }
 
 .item-row:hover {
-  border-color: #cbd5e1;
-  background: #fafbfc;
+  border-color: color-mix(in srgb, var(--wa-color-primary-300) 42%, var(--sch-border));
+  background: color-mix(in srgb, var(--wa-color-primary-50) 38%, #fff);
 }
 
 .item-row--homework {
-  border-color: #dbeafe;
-  background: var(--sch-accent-soft);
+  border-color: color-mix(in srgb, var(--wa-color-primary-200) 80%, transparent);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 72%, #fff);
 }
 
 .item-row--homework:hover {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: color-mix(in srgb, var(--wa-color-primary-400) 52%, transparent);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 86%, #fff);
 }
 
 .item-row__icon {
@@ -620,7 +623,7 @@ watch(selectedCourse, () => {
 }
 
 .item-row__icon--muted {
-  color: #94a3b8;
+  color: var(--wa-color-text-muted);
 }
 
 .item-row__main {
@@ -649,7 +652,7 @@ watch(selectedCourse, () => {
 
 .material-outline {
   margin-bottom: 12px;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--sch-border);
   border-radius: var(--sch-radius-sm);
   background:
@@ -671,8 +674,14 @@ watch(selectedCourse, () => {
 .material-outline__actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+.material-outline__actions :deep(.el-button) {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 7px;
 }
 
 .material-outline__list {
@@ -753,7 +762,7 @@ watch(selectedCourse, () => {
 }
 
 .empty-inline {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: 13px;
   color: var(--sch-muted);
   line-height: 1.5;
@@ -784,11 +793,6 @@ watch(selectedCourse, () => {
   .overview-meta {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .material-outline__head {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .material-outline__item {

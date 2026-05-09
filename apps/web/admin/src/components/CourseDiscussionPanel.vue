@@ -160,7 +160,13 @@
             </div>
 
             <div v-if="draftFormat === 'markdown'" class="discussion-md-toolbar">
-              <el-button type="primary" link size="small" @click="toggleMarkdownDemo">
+              <el-button
+                type="primary"
+                link
+                size="small"
+                data-testid="discussion-markdown-demo-toggle"
+                @click="toggleMarkdownDemo"
+              >
                 {{ showMarkdownDemo ? '隐藏 Markdown + LaTeX 示例' : '查看 Markdown + LaTeX 示例' }}
               </el-button>
               <span class="discussion-md-toolbar__hint">预览会在同一区域切换显示。</span>

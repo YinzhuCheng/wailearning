@@ -119,6 +119,35 @@ function escapeRegex(text) {
   return `${text || ''}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+async function expandDiscussionComposer(scope) {
+  if (await scope.getByTestId('discussion-llm-toggle').isVisible().catch(() => false)) {
+    return
+  }
+  const section = scope.locator('.discussion-composer-section').first()
+  await expect(section).toBeVisible({ timeout: 15000 })
+  const toggle = section.getByRole('button', { name: '写回复' })
+  if (await toggle.isVisible({ timeout: 15000 }).catch(() => false)) {
+    await toggle.click()
+  }
+  await expect(section.locator('.discussion-composer-body')).toBeVisible({ timeout: 15000 })
+}
+
+async function findDiscussionRowAcrossPages(page, text) {
+  const row = page.locator('.discussion-row').filter({ hasText: text })
+  for (let i = 0; i < 4; i++) {
+    if (await row.first().isVisible().catch(() => false)) {
+      return row.first()
+    }
+    const next = page.locator('.discussion-list-section .el-pagination').getByRole('button', { name: '下一页' })
+    if (!(await next.isEnabled().catch(() => false))) {
+      break
+    }
+    await next.click()
+  }
+  await expect(row.first()).toBeVisible({ timeout: 20000 })
+  return row.first()
+}
+
 test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () => {
   test.beforeEach(async ({}, testInfo) => {
     const s = await resetE2eScenario()
@@ -267,6 +296,7 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
     const s = scenario()
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submit`, { waitUntil: 'load', timeout: 60000 })
+    await expandDiscussionComposer(page)
     await page.getByTestId('discussion-llm-toggle').click()
     await page.locator('.discussion-input textarea').fill('@LLM\n')
     await page.getByTestId('discussion-submit').click()
@@ -307,6 +337,7 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
     })
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submit`, { waitUntil: 'load', timeout: 60000 })
+    await expandDiscussionComposer(page)
     await page.getByTestId('discussion-llm-toggle').click()
     await page.locator('.discussion-input textarea').fill('')
     await page.locator('.discussion-input textarea').fill(`@LLM\nslow-ui-${Date.now()}`)
@@ -332,15 +363,21 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
     }
     await login(page, s.teacher_own.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submissions`, { waitUntil: 'load', timeout: 60000 })
-    await page.locator('.discussion-card .el-pagination .btn-next').click()
-    const longRow = page.locator('.discussion-row').filter({ hasText: `pg-long-${stamp}-10` })
-    await expect(longRow).toBeVisible({ timeout: 20000 })
+    const longRow = await findDiscussionRowAcrossPages(page, `pg-long-${stamp}-10`)
     await expect(longRow.locator('.discussion-row__text')).toContainText('...')
     await longRow.locator('.discussion-row__body').click()
     await expect(longRow.locator('.discussion-row__text')).toContainText('L4', { timeout: 10000 })
-    await page.locator('.discussion-card .el-pagination .btn-prev').click()
-    await page.locator('.discussion-card .el-pagination .btn-next').click()
-    const longRow2 = page.locator('.discussion-row').filter({ hasText: `pg-long-${stamp}-10` })
+    const pager = page.locator('.discussion-list-section .el-pagination')
+    const prev = pager.getByRole('button', { name: '上一页' })
+    const next = pager.getByRole('button', { name: '下一页' })
+    if (await prev.isEnabled().catch(() => false)) {
+      await prev.click()
+      await next.click()
+    } else {
+      await next.click()
+      await prev.click()
+    }
+    const longRow2 = page.locator('.discussion-row').filter({ hasText: `pg-long-${stamp}-10` }).first()
     await expect(longRow2.locator('.discussion-row__text')).toContainText('...')
   })
 
@@ -368,11 +405,13 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
     await page.goto('/materials', { waitUntil: 'load', timeout: 60000 })
     const row = page.locator('.el-table__body tbody tr').filter({ hasText: `E2E讨论资料_${s.suffix}` }).first()
     await row.click()
-    await expect(page.locator('.el-dialog').getByTestId('discussion-llm-toggle')).toBeVisible({ timeout: 15000 })
-    await expect(page.locator('.el-dialog .discussion-row__body').filter({ hasText: `mat-plain-${stamp}` })).toBeVisible({
+    const dlg = page.getByRole('dialog', { name: '资料详情' })
+    await expandDiscussionComposer(dlg)
+    await expect(dlg.getByTestId('discussion-llm-toggle')).toBeVisible({ timeout: 15000 })
+    await expect(dlg.locator('.discussion-row__body').filter({ hasText: `mat-plain-${stamp}` })).toBeVisible({
       timeout: 45000
     })
-    await expect(page.locator('.el-dialog .discussion-row__body').filter({ hasText: '【资料助教】' })).toBeVisible({
+    await expect(dlg.locator('.discussion-row__body').filter({ hasText: '【资料助教】' })).toBeVisible({
       timeout: 45000
     })
   })
@@ -434,6 +473,7 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
     const s = scenario()
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submit`, { waitUntil: 'load', timeout: 60000 })
+    await expandDiscussionComposer(page)
     await page.getByTestId('discussion-llm-toggle').click()
     await page.locator('.discussion-input textarea').fill('@LLM\n@ta hello')
     await expect(page.locator('.el-message--warning').filter({ hasText: '不支持 @' })).toBeVisible({

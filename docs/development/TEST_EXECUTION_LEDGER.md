@@ -133,7 +133,7 @@ Avoid vague triggers such as "frontend changed" unless the target is genuinely b
 - Changes to course access helpers used by learning-note public visibility.
 - Changes to DB reset or schema bootstrap behavior that can affect focused backend tests.
 
-**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+**Last branch:** `cursor/beautify-ui`
 
 **Last commit:** `6a95aad`
 
@@ -188,9 +188,9 @@ npm.cmd run build
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `8`
+**Pass count:** `10`
 
-**Run count:** `8`
+**Run count:** `10`
 
 **Runs:**
 
@@ -204,6 +204,112 @@ npm.cmd run build
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 19 seconds. | Run from `<repo>/apps/web/admin` after allowing the user-management form to create student accounts without an assigned class. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 | 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 18-20 seconds. | Run from `<repo>/apps/web/admin` after the learning-notes workspace UI rewrite and Markdown/KaTeX rendering hookup. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
 | 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 26 seconds. | Run from `<repo>/apps/web/admin` after follow-up learning-notes layout tuning for the 1280px three-column workspace and duplicate Markdown title suppression. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 22 seconds. | Run from `<repo>/apps/web/admin` after learning-notes, materials, material-reader, course-home, and discussion UI polish plus Playwright selector updates. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npm.cmd run build` | `passed` | Vite production build completed successfully; `2380 modules transformed`, built in about 22 seconds. | Run from `<repo>/apps/web/admin` after restoring the materials course-cover banner and stabilizing the discussion-cover Playwright target for the collapsed discussion composer. Output included the known Vite CJS Node API deprecation warning and chunk-size warnings; no Vue, JS, CSS, or asset pipeline error was reported. |
+
+### Test ID: `admin.e2e.course_ui_markdown_reader`
+
+**Category:** `admin-playwright`
+
+**Scope:** Targeted admin Playwright suite for student course UI, Markdown/LaTeX demos, material reader navigation, materials layout, sidebar active-state mapping, and course-related redirect behavior.
+
+**Canonical command:**
+
+```powershell
+npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium
+```
+
+**Working directory:** `<repo>/apps/web/admin`
+
+**Relevant paths:**
+
+- `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js`
+- `tests/e2e/web-admin/fixtures.cjs`
+- `apps/web/admin/playwright.config.cjs`
+- `apps/web/admin/src/views/Materials.vue`
+- `apps/web/admin/src/views/MaterialRead.vue`
+- `apps/web/admin/src/views/StudentCourseHome.vue`
+- `apps/web/admin/src/components/CourseDiscussionPanel.vue`
+- `apps/web/admin/src/router/index.js`
+
+**Retest triggers:**
+
+- Changes to material list, material detail dialog, material reader route, or material reader navigation controls.
+- Changes to discussion composer Markdown/LaTeX preview, demo toggle behavior, row expansion, or posted Markdown rendering.
+- Changes to admin sidebar active-route mapping, course student UI, or `/teaching-calendar` redirect behavior.
+- Changes to Playwright global setup, E2E seed/reset helpers, seeded credentials, or admin webServer setup.
+
+**Last branch:** `cursor/beautify-ui`
+
+**Last commit:** `this commit`
+
+**Last result:** `timed out`
+
+**Last run date:** `2026-05-09`
+
+**Pass count:** `0`
+
+**Run count:** `2`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium -g "material detail discussion keeps demo collapsed"` | `timed out` | The single targeted Playwright test body reported `ok` in about 6 seconds, but the command exceeded the local timeout while the managed webServer was cleaning up. | Run from `<repo>/apps/web/admin` after updating the test to match the collapsed discussion composer, preview-mode toggle, and long-row expansion behavior. Output included the known Vite CJS API deprecation text from the managed frontend server. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium` | `timed out` | All 12 Playwright test bodies reported `ok`, but the command exceeded the local timeout while the managed webServer was cleaning up. | Run from `<repo>/apps/web/admin` after materials/material-reader/course-home UI polish and selector stabilization. Earlier attempts exposed stale selector expectations around material reader buttons and discussion preview flow; the final rerun reached `ok` for all test bodies before cleanup timeout. |
+
+### Test ID: `admin.e2e.discussion_cover_llm_tier3`
+
+**Category:** `admin-playwright`
+
+**Scope:** Targeted admin Playwright suite for discussion LLM assistant controls, long-body preview expansion/collapse, discussion pagination reset behavior, material-dialog discussion flow, and course cover API/UI surfaces.
+
+**Canonical command:**
+
+```powershell
+npx.cmd playwright test e2e-discussion-cover-llm-tier3.spec.js --project=chromium
+```
+
+**Working directory:** `<repo>/apps/web/admin`
+
+**Relevant paths:**
+
+- `tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js`
+- `tests/e2e/web-admin/fixtures.cjs`
+- `apps/web/admin/playwright.config.cjs`
+- `apps/web/admin/src/components/CourseDiscussionPanel.vue`
+- `apps/web/admin/src/views/HomeworkSubmission.vue`
+- `apps/web/admin/src/views/HomeworkSubmissions.vue`
+- `apps/web/admin/src/views/Materials.vue`
+- `apps/web/admin/src/views/MyCourses.vue`
+- `apps/web/admin/src/views/Subjects.vue`
+
+**Retest triggers:**
+
+- Changes to `CourseDiscussionPanel.vue`, discussion row truncation/expansion, discussion pagination, LLM composer behavior, or posted assistant polling.
+- Changes to homework submission/submissions pages that host course discussions.
+- Changes to materials detail dialog discussion behavior.
+- Changes to course cover upload/display behavior in course catalog, course cards, or materials page banners.
+- Changes to Playwright global setup, E2E seed/reset helpers, seeded credentials, mock LLM helpers, or admin webServer setup.
+
+**Last branch:** `cursor/beautify-ui`
+
+**Last commit:** `this commit`
+
+**Last result:** `timed out`
+
+**Last run date:** `2026-05-09`
+
+**Pass count:** `0`
+
+**Run count:** `2`
+
+**Runs:**
+
+| Date | Branch | Commit | Command | Result | Summary | Notes |
+|------|--------|--------|---------|--------|---------|-------|
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npx.cmd playwright test e2e-discussion-cover-llm-tier3.spec.js --project=chromium -g "10 pagination"` | `timed out` | The single pagination Playwright test body reported `ok` in about 5 seconds, but the command exceeded the local timeout while the managed webServer was cleaning up. | Run from `<repo>/apps/web/admin` after updating pagination selectors to target the discussion-list pager rather than assuming a fixed page. Output included the known Vite CJS API deprecation text from the managed frontend server. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `npx.cmd playwright test e2e-discussion-cover-llm-tier3.spec.js --project=chromium` | `timed out` | All 15 Playwright test bodies reported `ok`, but the command exceeded the local timeout while the managed webServer was cleaning up. | Run from `<repo>/apps/web/admin` after preserving the materials course-cover banner, adapting discussion tests to the collapsed composer, and stabilizing discussion pager selectors. Earlier attempts exposed stale composer and banner assumptions; the final rerun reached `ok` for all test bodies before cleanup timeout. |
 
 ### Test ID: `admin.e2e.learning_notes_attendance_cover_tier20`
 
@@ -408,9 +514,9 @@ python ops\scripts\dev\repo_line_health.py
 
 **Last run date:** `2026-05-09`
 
-**Pass count:** `2`
+**Pass count:** `3`
 
-**Run count:** `2`
+**Run count:** `3`
 
 **Runs:**
 
@@ -418,6 +524,7 @@ python ops\scripts\dev\repo_line_health.py
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-07 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\repo_line_health.py` | `passed` | Total tracked text lines: `100981`; health text lines excluding generated/lock files: `97244`; documentation: `12754`; test code: `29161`; primary source: `52260`; tracked text files: `343`. | Command was rerun after staging the new script/docs so `git ls-files` included the intended commit contents. `py_compile` also passed for `ops/scripts/dev/repo_line_health.py`. |
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\repo_line_health.py` | `passed` | Total tracked text lines: `106756`; health text lines excluding generated/lock files: `103019`; documentation: `14327`; test code: `29601`; primary source: `52375`; tracked text files: `358`. | Command was rerun after updating the validation execution ledger and handoff document for Playwright preflight work. This is a metric target, not behavioral product validation. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `python ops\scripts\dev\repo_line_health.py` | `passed` | Total tracked text lines: `112955`; health text lines excluding generated/lock files: `109218`; documentation: `15256`; test code: `31002`; primary source: `55316`; tracked text files: `369`. | Metric command was run after UI polish and validation-ledger updates. This is a repository health snapshot, not behavioral product validation. |
 
 ### Test ID: `backend.llm.attachment_formats`
 
@@ -448,7 +555,7 @@ python ops\scripts\dev\repo_line_health.py
 - Changes to committed RAR fixtures or fixture-generation assumptions.
 - Changes to environment provisioning rules for `unrar`, `unrar-free`, `tar`, or `bsdtar`.
 
-**Last branch:** `cursor/discussion-avatar-chat-ui-921d`
+**Last branch:** `cursor/beautify-ui`
 
 **Last commit:** `e7904f4`
 
@@ -712,11 +819,11 @@ git diff --check
 
 **Last result:** `passed`
 
-**Last run date:** `2026-05-07`
+**Last run date:** `2026-05-09`
 
-**Pass count:** `5`
+**Pass count:** `6`
 
-**Run count:** `5`
+**Run count:** `6`
 
 **Runs:**
 
@@ -727,6 +834,7 @@ git diff --check
 | 2026-05-08 | `cursor/discussion-avatar-chat-ui-921d` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `13` files; encoding scan reported `scanned=13 decode_errors=0 suspicious=0`. | This run validated the new placeholder expansion path in `run_validation_target.py` and the `--skip-if-empty` guard in `check_text_encoding.py`, replacing the earlier unresolved-placeholder blocker for this target. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `6` files; encoding scan reported `scanned=6 decode_errors=0 suspicious=0`. | Static text/whitespace validation passed for the API, documentation, ledger, and roster test changes in the student identity binding update. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120` | `passed` | Runner executed `git diff --check` and expanded `<changed-text-files>` to `3` files; encoding scan reported `scanned=3 decode_errors=0 suspicious=0`. | Static text/whitespace validation passed for `domains/seed/demo.py`, `test_demo_course_seed.py`, and this ledger after the demo seed realism update. |
+| 2026-05-09 | `cursor/beautify-ui` | `this commit` | `git diff --check`; `python ops\scripts\dev\check_text_encoding.py apps\web\admin\src\views\LearningNotes.vue apps\web\admin\src\views\Materials.vue apps\web\admin\src\views\MaterialRead.vue apps\web\admin\src\views\StudentCourseHome.vue apps\web\admin\src\components\CourseDiscussionPanel.vue tests\e2e\web-admin\e2e-course-ui-markdown-reader.spec.js tests\e2e\web-admin\e2e-discussion-cover-llm-tier3.spec.js docs\development\TEST_EXECUTION_LEDGER.md docs\development\TEST_EXECUTION_SUMMARY.md` | `passed` | Diff whitespace check passed; encoding scan reported `scanned=9 decode_errors=0 suspicious=0`. | Static text/whitespace validation passed after UI polish, Playwright selector updates, and ledger/summary updates. Git also reported the existing `MaterialRead.vue` CRLF-to-LF line-ending warning; no whitespace or encoding failure was reported. |
 
 ### Test ID: `backend.roster.student_user_api_sync`
 
