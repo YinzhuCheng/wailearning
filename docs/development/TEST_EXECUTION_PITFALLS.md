@@ -2804,6 +2804,55 @@ Fix patterns:
 Do not edit Playwright selectors, Vue components, or route code based solely on
 this `webServer` bootstrap failure.
 
+### Pitfall: Playwright managed `webServer` can hang during Windows teardown after all tests report `ok`
+
+On the Windows `cursor/beautify-ui` branch, targeted admin Playwright specs
+reported every browser test body as `ok`, but the outer CLI process did not exit
+before the local timeout. This is not a passing validation result.
+
+Confirmed evidence from a focused rerun with Playwright webServer debug enabled:
+
+```text
+ok 1 ... material detail discussion keeps demo collapsed ...
+pw:webserver Terminating the WebServer
+```
+
+The command then hung before logging `Terminated the WebServer`. Port checks
+after timeout showed no listener on `8012` or `3012`, which points at the
+Playwright managed-server cleanup wait path rather than a UI assertion failure.
+Disabling the real grading worker with `E2E_USE_REAL_WORKER=false` did not make
+the managed `webServer` command exit reliably.
+
+Fix/workaround now available for local Windows validation:
+
+```powershell
+cd apps\web\admin
+$env:E2E_USE_REAL_WORKER='false'
+npm.cmd run test:e2e:external -- e2e-course-ui-markdown-reader.spec.js --project=chromium
+```
+
+`test:e2e:external` runs `scripts/playwright-external-runner.cjs`. The runner
+starts the FastAPI API and Vite UI itself, waits for health checks, invokes
+Playwright with `PLAYWRIGHT_USE_EXTERNAL_SERVERS=true`, and then kills only the
+processes it started with a bounded cleanup path.
+
+Observed successful reruns:
+
+- `npm.cmd run test:e2e:external -- e2e-course-ui-markdown-reader.spec.js --project=chromium`
+  exited `0` with `12 passed (54.2s)`.
+- `npm.cmd run test:e2e:external -- e2e-discussion-cover-llm-tier3.spec.js --project=chromium`
+  exited `0` with `15 passed (1.2m)`.
+- Post-run checks found no remaining listeners on ports `8012` or `3012`.
+
+Additional guardrail: if using Playwright's own `DEBUG=pw:webserver`, ensure the
+backend child process does not inherit `DEBUG=pw:webserver` as its application
+`DEBUG` setting. The admin Playwright config now forces managed server child
+environments to `DEBUG=false` for that reason.
+
+Do not rewrite UI selectors or business code based solely on this cleanup hang.
+Use the external runner when a true local Windows pass/fail exit status is
+needed.
+
 ### Pitfall: Playwright preflight must cover seed-time backend dependencies, not only uvicorn startup
 
 The managed admin Playwright path can pass a shallow `uvicorn` import check and

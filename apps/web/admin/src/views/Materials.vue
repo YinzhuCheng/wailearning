@@ -39,6 +39,7 @@
             <div class="chapter-sidebar__heading">
               <span class="chapter-sidebar__eyebrow">教材目录</span>
               <span class="chapter-sidebar__title">章节</span>
+              <span class="chapter-sidebar__meta">{{ chapterSummaryText }}</span>
             </div>
             <div class="chapter-sidebar__actions">
               <el-tooltip content="展开全部章节" placement="top">
@@ -74,7 +75,7 @@
                   @click="isChapterSidebarCollapsed = true"
                 />
               </el-tooltip>
-              <el-button v-if="canManageChapters" text type="primary" size="small" @click="openAddChapterDialog(null)">根章节</el-button>
+              <el-button v-if="canManageChapters" type="primary" plain size="small" @click="openAddChapterDialog(null)">根章节</el-button>
             </div>
           </div>
           <el-skeleton v-if="treeLoading" :rows="6" animated />
@@ -143,9 +144,11 @@
                   @click="isChapterSidebarCollapsed = false"
                 />
               </el-tooltip>
-              <span class="materials-toolbar__eyebrow">当前章节</span>
-              <strong data-testid="materials-current-chapter">{{ currentChapterTitle }}</strong>
-              <span class="materials-toolbar__count">{{ materials.length }} 篇资料</span>
+              <div class="materials-toolbar__text">
+                <span class="materials-toolbar__eyebrow">当前章节</span>
+                <strong data-testid="materials-current-chapter">{{ currentChapterTitle }}</strong>
+                <span class="materials-toolbar__count">{{ materials.length }} 篇资料</span>
+              </div>
             </div>
             <div class="materials-toolbar__actions">
               <el-button type="primary" text size="small" @click="openFirstMaterialReadInChapter">
@@ -158,6 +161,13 @@
           </div>
 
           <el-card v-show="!isMaterialShelfCollapsed" shadow="never" class="materials-shelf-card">
+            <div class="materials-shelf-card__head">
+              <div>
+                <span class="materials-toolbar__eyebrow">资料列表</span>
+                <strong>{{ currentChapterTitle }}</strong>
+              </div>
+              <span>{{ materials.length }} 篇</span>
+            </div>
             <DualHorizontalScroll target-selector=".materials-table-scroll">
               <div class="materials-table-scroll dual-scroll-target">
                 <el-table
@@ -497,6 +507,17 @@ const collectChapterIds = nodes => {
   return ids
 }
 
+const countStructuredChapters = nodes => {
+  let total = 0
+  for (const n of nodes || []) {
+    if (!n.is_uncategorized) {
+      total += 1
+    }
+    total += countStructuredChapters(n.children)
+  }
+  return total
+}
+
 const topLevelChapterIds = nodes => (nodes || []).map(n => n.id).filter(Boolean)
 
 const findChapterPath = (nodes, targetId, path = []) => {
@@ -612,6 +633,15 @@ const currentChapterTitle = computed(() => {
   const flat = flattenTree(chapterTreeNodes.value)
   const row = flat.find(x => x.id === selectedChapterId.value)
   return row?.title || '—'
+})
+
+const chapterSummaryText = computed(() => {
+  const total = countStructuredChapters(chapterTreeNodes.value)
+  const expanded = expandedChapterKeys.value.length
+  if (!total) {
+    return '暂无章节'
+  }
+  return `${total} 个章节 · 已展开 ${Math.min(expanded, total)} 个`
 })
 
 const findUncategorizedId = nodes => {
@@ -1192,7 +1222,7 @@ onBeforeUnmount(() => {
       color-mix(in srgb, var(--wa-color-accent-600) 18%, transparent) 55%,
       color-mix(in srgb, var(--wa-color-primary-300) 12%, transparent) 100%
     ) border-box;
-  padding: 16px 16px 12px;
+  padding: 16px 18px 12px;
   border: 1px solid transparent;
   box-shadow: var(--wa-shadow-object);
   width: 100%;
@@ -1208,7 +1238,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   padding-bottom: 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--wa-border-subtle) 78%, transparent);
 }
@@ -1216,7 +1246,8 @@ onBeforeUnmount(() => {
 .chapter-sidebar__heading {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .chapter-sidebar__eyebrow {
@@ -1233,17 +1264,26 @@ onBeforeUnmount(() => {
   color: var(--wa-color-text);
 }
 
+.chapter-sidebar__meta {
+  font-size: 12px;
+  color: var(--wa-color-text-muted);
+}
+
 .chapter-sidebar__actions {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wa-color-surface) 82%, var(--wa-color-primary-50));
 }
 
 .chapter-outline-btn {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   color: var(--wa-color-primary-600);
 }
@@ -1252,9 +1292,16 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--wa-color-primary-50) 82%, #fff);
 }
 
+.chapter-sidebar__actions :deep(.el-button--primary.is-plain) {
+  margin-left: 4px;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--wa-color-primary-600) 10%, transparent);
+}
+
 .chapter-tree :deep(.el-tree-node__content) {
   height: auto;
-  min-height: 44px;
+  min-height: 40px;
   align-items: flex-start;
   padding: 2px 0;
   font-size: 15px;
@@ -1269,6 +1316,11 @@ onBeforeUnmount(() => {
 .chapter-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
   background: color-mix(in srgb, var(--wa-color-primary-50) 86%, #fff);
   box-shadow: inset 3px 0 0 var(--wa-color-primary-600);
+}
+
+.chapter-tree :deep(.el-tree-node__children) {
+  border-left: 1px solid color-mix(in srgb, var(--wa-border-subtle) 72%, transparent);
+  margin-left: 12px;
 }
 
 .chapter-tree :deep(.el-tree-node__expand-icon) {
@@ -1318,8 +1370,8 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
   gap: 6px;
   flex-wrap: wrap;
-  min-height: 40px;
-  padding: 6px 8px 6px 0;
+  min-height: 36px;
+  padding: 5px 8px 5px 0;
   border: none;
   background: transparent;
   color: var(--wa-color-text);
@@ -1354,6 +1406,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex-shrink: 0;
   gap: 2px;
+  padding-top: 4px;
 }
 
 .materials-toolbar {
@@ -1363,15 +1416,25 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 4px 2px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 76%, transparent);
+  border-radius: var(--wa-radius-lg);
+  background: color-mix(in srgb, var(--wa-color-surface) 88%, var(--wa-color-bg-soft));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--wa-color-text) 4%, transparent);
 }
 
 .materials-toolbar__summary {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   color: var(--wa-color-text);
+}
+
+.materials-toolbar__text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .materials-toolbar__outline-toggle {
@@ -1395,12 +1458,42 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .materials-shelf-card {
-  border-radius: var(--wa-radius-xl);
+  border-radius: var(--wa-radius-lg);
   border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
   box-shadow: var(--wa-shadow-surface);
+}
+
+.materials-shelf-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--wa-border-subtle) 78%, transparent);
+}
+
+.materials-shelf-card__head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.materials-shelf-card__head strong {
+  font-size: 17px;
+  color: var(--wa-color-text);
+}
+
+.materials-shelf-card__head > span {
+  flex: 0 0 auto;
+  color: var(--wa-color-text-muted);
+  font-size: 13px;
 }
 
 .materials-table-scroll {

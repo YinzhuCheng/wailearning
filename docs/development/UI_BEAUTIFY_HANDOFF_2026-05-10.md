@@ -217,8 +217,41 @@ Important validation interpretation:
 
 ## Playwright Cleanup Timeout Finding
 
-The cleanup timeout appears to be a Playwright managed-server teardown issue,
-not a direct UI assertion failure.
+Update after follow-up triage on 2026-05-10: the timeout is confirmed as a
+Playwright managed-server teardown issue on Windows, not a direct UI assertion
+failure. With `DEBUG=pw:webserver`, a focused rerun reached the final test `ok`
+line and then stopped at:
+
+```text
+pw:webserver Terminating the WebServer
+```
+
+It never reached `Terminated the WebServer` before the outer command timeout.
+Disabling the real grading worker did not fix the managed `webServer` hang.
+
+A Windows-local workaround is now available:
+
+```powershell
+cd apps\web\admin
+$env:E2E_USE_REAL_WORKER='false'
+npm.cmd run test:e2e:external -- e2e-course-ui-markdown-reader.spec.js --project=chromium
+```
+
+This runner starts the API and Vite itself, runs Playwright with
+`PLAYWRIGHT_USE_EXTERNAL_SERVERS=true`, then kills only the processes it
+started. It bypasses Playwright's managed `webServer` teardown path.
+
+Observed successful reruns after adding the runner:
+
+- `npm.cmd run test:e2e:external -- e2e-course-ui-markdown-reader.spec.js --project=chromium`
+  - `12 passed (54.2s)`, command exited `0`.
+- `npm.cmd run test:e2e:external -- e2e-discussion-cover-llm-tier3.spec.js --project=chromium`
+  - `15 passed (1.2m)`, command exited `0`.
+- Post-run port checks showed no listeners on `8012` or `3012`.
+
+The original plain `npx.cmd playwright test ...` managed-server path may still
+hang locally on Windows until Playwright's teardown behavior or the local
+process topology changes.
 
 Relevant config:
 
@@ -227,22 +260,24 @@ Relevant config:
     `PLAYWRIGHT_USE_EXTERNAL_SERVERS=true`.
   - Backend default port: `8012`
   - Frontend default port: `3012`
-  - Backend command on Windows is a chained `cmd` command:
-    `set ... && cd /d <repo> && <python> -m uvicorn ...`
-  - Frontend command on Windows is also a chained command:
-    `set ... && cd /d <adminRoot> && node <viteBin> ...`
+  - Windows managed-server commands now use Playwright `cwd` and `env` fields
+    instead of embedding `set ... && cd ...` chains in the command string.
+  - Managed-server child environments force `DEBUG=false` so Playwright
+    diagnostic `DEBUG=pw:webserver` does not leak into the backend Pydantic
+    boolean `DEBUG` setting.
   - `reuseExistingServer` is true locally because it is set to `!process.env.CI`.
   - `ENABLE_LLM_GRADING_WORKER` is true by default unless
     `E2E_USE_REAL_WORKER=false`.
 
 Likely causes:
 
-- On Windows, Playwright has to clean up a process tree started through `cmd`
-  chains rather than a simple direct process.
+- On Windows, Playwright 1.59 managed `webServer` force-kills the spawned
+  process tree and then awaits the spawned process `close` event.
+- In this repo's local Windows run, the ports and child server processes can be
+  gone while Playwright is still waiting inside managed teardown.
 - `cmd.exe`, `python -m uvicorn`, `node vite`, Vite file watchers, Uvicorn
-  tasks, and backend worker tasks may not all terminate promptly.
-- The real grading worker can keep polling/background tasks alive and delay API
-  shutdown.
+  tasks, and inherited stdio handles can all make process close semantics less
+  deterministic.
 - Local `reuseExistingServer: true` can make ownership less deterministic if a
   server is already listening before the test starts.
 
@@ -272,30 +307,19 @@ Run those checks before and after a timed-out Playwright command.
 Recommended isolation runs:
 
 ```powershell
-$env:PLAYWRIGHT_USE_EXTERNAL_SERVERS='true'
-npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium
-```
-
-Use this after manually starting the backend and frontend. If the command exits
-cleanly in external-server mode, the problem is almost certainly Playwright
-managed-server teardown.
-
-Also try:
-
-```powershell
 $env:E2E_USE_REAL_WORKER='false'
-npx.cmd playwright test e2e-course-ui-markdown-reader.spec.js --project=chromium
+npm.cmd run test:e2e:external -- e2e-course-ui-markdown-reader.spec.js --project=chromium
 ```
 
-If disabling the real worker makes managed-server cleanup reliable, inspect the
-backend worker shutdown path before changing UI tests.
+Use this Windows-local runner when the managed `webServer` path reports all
+test bodies as `ok` but the CLI times out while cleaning up.
 
 Recommended durable fixes:
 
-- Replace Windows `webServer.command` chains with an explicit launcher script
-  that records child PIDs and kills the full process tree on exit.
-- Add a guarded global teardown or runner-level cleanup that only kills
-  processes known to belong to the current test run.
+- Use `npm.cmd run test:e2e:external -- <playwright args>` for local Windows
+  validation when a real process exit status is required.
+- Keep the runner-level cleanup guarded so it only kills processes spawned by
+  the current runner.
 - Consider making deterministic local validation opt out of
   `reuseExistingServer`.
 - Consider defaulting UI E2E to `E2E_USE_REAL_WORKER=false` unless a target

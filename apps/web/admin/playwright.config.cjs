@@ -45,6 +45,7 @@ const dualJwt = ['1', 'true', 'yes', 'on'].includes(
 )
 
 const apiEnv = {
+  DEBUG: 'false',
   E2E_DEV_SEED_ENABLED: 'true',
   E2E_DEV_SEED_TOKEN: process.env.E2E_DEV_SEED_TOKEN,
   E2E_DEV_REQUIRE_ADMIN_JWT: dualJwt ? 'true' : 'false',
@@ -60,20 +61,10 @@ function quoteWindowsArg(value) {
   return `"${String(value).replace(/"/g, '\\"')}"`
 }
 
-function buildWindowsEnvPrefix(env) {
-  return Object.entries(env)
-    .map(([key, value]) => `set "${key}=${value}"`)
-    .join(' && ')
-}
-
 function buildApiCommand() {
   if (isWindows) {
     const pythonExe = process.env.E2E_PYTHON || path.join(repoRoot, '.venv', 'Scripts', 'python.exe')
-    return [
-      buildWindowsEnvPrefix(apiEnv),
-      `cd /d ${quoteWindowsArg(repoRoot)}`,
-      `${quoteWindowsArg(pythonExe)} -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port ${E2E_API_PORT}`
-    ].join(' && ')
+    return `${quoteWindowsArg(pythonExe)} -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port ${E2E_API_PORT}`
   }
   const defaultVenvPython = path.join(repoRoot, '.venv', 'bin', 'python')
   const pythonExe =
@@ -86,13 +77,34 @@ function buildApiCommand() {
 
 function buildUiCommand() {
   if (isWindows) {
-    return [
-      `set "VITE_PROXY_TARGET=${apiBase}"`,
-      `cd /d ${quoteWindowsArg(adminRoot)}`,
-      `node ${quoteWindowsArg(viteBin)} --host 127.0.0.1 --port ${E2E_UI_PORT}`
-    ].join(' && ')
+    return `node ${quoteWindowsArg(viteBin)} --host 127.0.0.1 --port ${E2E_UI_PORT}`
   }
   return `bash -lc 'cd "${adminRoot}" && exec env VITE_PROXY_TARGET=${apiBase} node "${viteBin}" --host 127.0.0.1 --port ${E2E_UI_PORT}'`
+}
+
+function buildApiServerConfig() {
+  return {
+    command: buildApiCommand(),
+    cwd: repoRoot,
+    env: apiEnv,
+    url: `${apiBase}/api/health`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000
+  }
+}
+
+function buildUiServerConfig() {
+  return {
+    command: buildUiCommand(),
+    cwd: adminRoot,
+    env: {
+      DEBUG: 'false',
+      VITE_PROXY_TARGET: apiBase
+    },
+    url: `http://127.0.0.1:${E2E_UI_PORT}/`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000
+  }
 }
 
 /**
@@ -112,21 +124,6 @@ module.exports = defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure'
   },
-  webServer: useExternalServers
-    ? undefined
-    : [
-        {
-          command: buildApiCommand(),
-          url: `${apiBase}/api/health`,
-          reuseExistingServer: !process.env.CI,
-          timeout: 120_000
-        },
-        {
-          command: buildUiCommand(),
-          url: `http://127.0.0.1:${E2E_UI_PORT}/`,
-          reuseExistingServer: !process.env.CI,
-          timeout: 120_000
-        }
-      ],
+  webServer: useExternalServers ? undefined : [buildApiServerConfig(), buildUiServerConfig()],
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
 })

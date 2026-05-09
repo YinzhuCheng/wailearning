@@ -178,8 +178,10 @@ const flattenChaptersDfs = (nodes, depth = 0) => {
 
 const buildSequence = async () => {
   const course = userStore.selectedCourse
-  if (!course?.id || !course.class_id) {
+  const classId = course?.class_id || material.value?.class_id
+  if (!course?.id || !classId) {
     sequence.value = []
+    outlineTree.value = []
     return
   }
   const treeRes = await api.materialChapters.tree({ subject_id: course.id })
@@ -189,7 +191,7 @@ const buildSequence = async () => {
   for (const ch of chapters) {
     const rows = await loadAllPages(pager =>
       api.materials.list({
-        class_id: course.class_id,
+        class_id: classId,
         subject_id: course.id,
         chapter_id: ch.id,
         ...pager
@@ -222,6 +224,28 @@ const buildSequence = async () => {
   }
   sequence.value = seq
   outlineTree.value = outline
+}
+
+const ensureCurrentMaterialInSequence = () => {
+  if (!material.value || sequence.value.some(x => String(x.id) === String(material.value.id))) {
+    return
+  }
+  const placement = material.value.placements?.[0]
+  const fallbackChapterTitle = placement?.chapter_title || '当前章节'
+  const entry = {
+    id: material.value.id,
+    title: material.value.title,
+    chapterTitle: fallbackChapterTitle,
+    chapterId: placement?.chapter_id || material.value.chapter_id || null,
+    indexLabel: '01'
+  }
+  sequence.value = [entry]
+  outlineTree.value = [{
+    id: entry.chapterId || 'current',
+    title: fallbackChapterTitle,
+    depth: 0,
+    entries: [entry]
+  }]
 }
 
 const currentIndex = computed(() => sequence.value.findIndex(x => String(x.id) === String(route.params.id)))
@@ -278,10 +302,13 @@ const loadMaterial = async () => {
     }
     try {
       await buildSequence()
+      ensureCurrentMaterialInSequence()
     } catch (seqErr) {
       console.error(seqErr)
       ElMessage.warning('章节导航加载失败，仍可阅读正文')
       sequence.value = []
+      outlineTree.value = []
+      ensureCurrentMaterialInSequence()
     }
   } catch (e) {
     console.error(e)
@@ -353,9 +380,9 @@ onBeforeUnmount(() => {
 
 .material-read-layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 20px;
-  max-width: 1560px;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 22px;
+  max-width: 1280px;
   margin: 0 auto;
   align-items: start;
 }
@@ -370,8 +397,9 @@ onBeforeUnmount(() => {
   top: 20px;
   align-self: start;
   max-height: calc(100vh - 40px);
+  min-height: 132px;
   overflow: auto;
-  padding: 18px 16px;
+  padding: 16px 14px;
   border: 1px solid transparent;
   border-radius: var(--wa-radius-lg);
   background:
@@ -432,7 +460,7 @@ onBeforeUnmount(() => {
 .material-read-outline__list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .material-read-outline__chapter {
@@ -451,11 +479,11 @@ onBeforeUnmount(() => {
 
 .material-read-outline__item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
   align-items: start;
   width: 100%;
-  padding: 10px 12px;
+  padding: 9px 10px;
   border: none;
   border-radius: 12px;
   background: transparent;
@@ -488,25 +516,31 @@ onBeforeUnmount(() => {
 .material-read-main {
   min-width: 0;
   display: grid;
-  gap: 16px;
+  gap: 14px;
+  align-content: start;
 }
 
 .material-read-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   justify-content: flex-end;
-  width: min(100%, 920px);
+  width: min(100%, 860px);
   justify-self: center;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 76%, transparent);
+  border-radius: var(--wa-radius-lg);
+  background: color-mix(in srgb, var(--wa-color-surface) 90%, var(--wa-color-bg-soft));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--wa-color-text) 4%, transparent);
 }
 
 .material-read-breadcrumb {
-  width: min(100%, 920px);
+  width: min(100%, 860px);
   justify-self: center;
 }
 
 .material-read-body {
-  width: min(100%, 920px);
+  width: min(100%, 860px);
   justify-self: center;
   padding: 24px 28px;
   border-radius: var(--wa-radius-xl);
@@ -598,7 +632,7 @@ onBeforeUnmount(() => {
 }
 
 .material-read-note {
-  width: min(100%, 920px);
+  width: min(100%, 860px);
   justify-self: center;
   padding: 16px 18px;
   border: 1px solid color-mix(in srgb, var(--wa-color-primary-200) 84%, transparent);
@@ -619,7 +653,7 @@ onBeforeUnmount(() => {
 }
 
 .material-read-discussion {
-  width: min(100%, 920px);
+  width: min(100%, 860px);
   justify-self: center;
   padding-top: 8px;
   border-top: 1px solid var(--wa-border-subtle);
@@ -637,9 +671,9 @@ onBeforeUnmount(() => {
 }
 
 .material-read-page--compact .material-read-layout {
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr);
   gap: 18px;
-  max-width: 1440px;
+  max-width: 1180px;
 }
 
 .material-read-page--compact .material-read-outline {
