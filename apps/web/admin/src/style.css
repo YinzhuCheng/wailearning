@@ -34,7 +34,10 @@
   --wa-color-text-soft: #334155;
   --wa-color-text-muted: #64748b;
   --wa-color-text-subtle: #94a3b8;
-  --wa-sidebar-bg: linear-gradient(180deg, #0f172a 0%, #132238 100%);
+  --wa-sidebar-bg-start: #0f172a;
+  --wa-sidebar-bg-end: #1e3a8a;
+  --wa-sidebar-bg: linear-gradient(90deg, #0f172a 0%, #1e3a8a 100%);
+  --wa-sidebar-footer-bg: linear-gradient(90deg, rgba(2, 6, 23, 0.44) 0%, rgba(15, 23, 42, 0.24) 100%);
   --wa-sidebar-active-bg: linear-gradient(90deg, var(--wa-color-primary-600) 0%, var(--wa-color-primary-500) 100%);
   --wa-focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.18);
   --wa-font-size-xs: 12px;
@@ -91,7 +94,10 @@ html[data-wa-theme='green'] {
   --wa-color-accent-100: #dbeafe;
   --wa-color-accent-600: #2563eb;
   --wa-color-accent-700: #1d4ed8;
-  --wa-sidebar-bg: linear-gradient(180deg, #052e2b 0%, #0f3f36 100%);
+  --wa-sidebar-bg-start: #052e2b;
+  --wa-sidebar-bg-end: #065f46;
+  --wa-sidebar-bg: linear-gradient(90deg, #052e2b 0%, #065f46 100%);
+  --wa-sidebar-footer-bg: linear-gradient(90deg, rgba(2, 44, 34, 0.5) 0%, rgba(15, 63, 54, 0.26) 100%);
   --wa-focus-ring: 0 0 0 3px rgba(5, 150, 105, 0.18);
 }
 
@@ -111,7 +117,10 @@ html[data-wa-theme='warm'] {
   --wa-color-accent-600: #0d9488;
   --wa-color-accent-700: #0f766e;
   --wa-color-bg: #f8fafc;
-  --wa-sidebar-bg: linear-gradient(180deg, #111827 0%, #134e4a 100%);
+  --wa-sidebar-bg-start: #111827;
+  --wa-sidebar-bg-end: #134e4a;
+  --wa-sidebar-bg: linear-gradient(90deg, #111827 0%, #134e4a 100%);
+  --wa-sidebar-footer-bg: linear-gradient(90deg, rgba(12, 10, 9, 0.48) 0%, rgba(19, 78, 74, 0.26) 100%);
   --wa-sidebar-active-bg: linear-gradient(90deg, #d97706 0%, #0d9488 100%);
   --wa-focus-ring: 0 0 0 3px rgba(234, 88, 12, 0.18);
 }
@@ -131,7 +140,10 @@ html[data-wa-theme='grayscale'] {
   --wa-color-accent-100: #ede9fe;
   --wa-color-accent-600: #7c3aed;
   --wa-color-accent-700: #6d28d9;
-  --wa-sidebar-bg: linear-gradient(180deg, #111827 0%, #1f2937 100%);
+  --wa-sidebar-bg-start: #111827;
+  --wa-sidebar-bg-end: #334155;
+  --wa-sidebar-bg: linear-gradient(90deg, #111827 0%, #334155 100%);
+  --wa-sidebar-footer-bg: linear-gradient(90deg, rgba(3, 7, 18, 0.5) 0%, rgba(31, 41, 55, 0.28) 100%);
   --wa-focus-ring: 0 0 0 3px rgba(71, 85, 105, 0.2);
 }
 

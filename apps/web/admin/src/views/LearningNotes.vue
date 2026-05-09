@@ -1,18 +1,26 @@
 <template>
   <div class="learning-notes-page" :class="`learning-notes-page--${materialPresentationStyle}`">
-    <section class="notes-hero">
-      <div>
-        <p class="notes-hero__eyebrow">课程知识库</p>
-        <h1>学习笔记</h1>
-        <p>
-          私有笔记只对本人可见；公开笔记可以面向同课程成员，未关联课程的公开笔记面向所有登录用户。
-        </p>
-      </div>
-      <el-button type="primary" @click="openCreateDialog">新建笔记</el-button>
-    </section>
+    <div class="notes-workspace" :class="{ 'notes-workspace--side-collapsed': notesSideCollapsed }">
+      <div class="notes-side" v-show="!notesSideCollapsed">
+        <div class="notes-side__head">
+          <div>
+            <p class="notes-side__eyebrow">课程知识库</p>
+            <h1>学习笔记</h1>
+          </div>
+          <div class="notes-side__head-actions">
+            <el-button type="primary" size="small" @click="openCreateDialog">新建笔记</el-button>
+            <el-button
+              class="notes-side__collapse"
+              :icon="ArrowLeft"
+              circle
+              size="small"
+              aria-label="收起笔记侧栏"
+              title="收起笔记侧栏"
+              @click="notesSideCollapsed = true"
+            />
+          </div>
+        </div>
 
-    <div class="notes-workspace">
-      <div class="notes-side">
         <aside class="notes-library" aria-label="笔记列表">
           <div class="notes-library__toolbar">
             <el-tabs
@@ -124,7 +132,16 @@
       <template v-if="selectedNote">
         <main class="note-reader">
           <header class="note-reader__head">
-            <div>
+            <el-button
+              v-if="notesSideCollapsed"
+              class="note-reader__side-open"
+              :icon="ArrowRight"
+              circle
+              aria-label="展开笔记侧栏"
+              title="展开笔记侧栏"
+              @click="notesSideCollapsed = false"
+            />
+            <div class="note-reader__title">
               <p class="note-reader__course">
                 {{ selectedNote.subject_name || '未关联课程' }} ·
                 {{ selectedNote.owner_real_name || selectedNote.owner_username }} ·
@@ -258,6 +275,15 @@
       </template>
 
       <section v-else class="note-reader note-reader--empty">
+        <el-button
+          v-if="notesSideCollapsed"
+          class="note-reader__side-open note-reader__side-open--empty"
+          :icon="ArrowRight"
+          circle
+          aria-label="展开笔记侧栏"
+          title="展开笔记侧栏"
+          @click="notesSideCollapsed = false"
+        />
         <el-empty description="选择一条笔记查看正文、大纲和讨论" />
       </section>
     </div>
@@ -348,6 +374,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
@@ -376,6 +403,7 @@ const discussionComposerOpen = ref(false)
 const invokeLlm = ref(false)
 const discussionSubmitting = ref(false)
 const materialPresentationStyle = ref(getMaterialPresentationStyle())
+const notesSideCollapsed = ref(false)
 
 const noteDialogVisible = ref(false)
 const noteSubmitting = ref(false)
@@ -818,28 +846,14 @@ onBeforeUnmount(() => {
 <style scoped>
 .learning-notes-page {
   display: grid;
-  gap: 18px;
   min-width: 0;
   color: #172033;
   max-width: 1520px;
   margin: 0 auto;
 }
 
-.notes-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 22px 24px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: var(--wa-radius-xl);
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 251, 255, 0.94) 58%, rgba(236, 253, 245, 0.48) 100%);
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.055);
-}
-
-.notes-hero__eyebrow,
 .note-reader__course,
+.notes-side__eyebrow,
 .notes-outline__head span,
 .note-discussion__head span {
   margin: 0;
@@ -849,37 +863,86 @@ onBeforeUnmount(() => {
   letter-spacing: 0;
 }
 
-.notes-hero h1 {
-  margin: 4px 0 8px;
-  font-size: 24px;
-  line-height: 1.25;
-}
-
-.notes-hero p {
-  margin: 0;
-  color: #64748b;
-  line-height: 1.7;
-}
-
 .notes-workspace {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 16px 20px;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
   min-width: 0;
 }
 
+.notes-workspace--side-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.notes-workspace--side-collapsed .note-reader {
+  min-height: calc(100vh - 96px);
+}
+
 .notes-side {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
   position: sticky;
-  top: 16px;
+  top: clamp(18px, 8vh, 72px);
   align-self: start;
+  max-height: calc(100vh - 96px);
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid transparent;
+  border-radius: var(--wa-radius-lg);
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--wa-color-primary-500) 30%, transparent) 0%,
+      color-mix(in srgb, var(--wa-color-accent-600) 20%, transparent) 54%,
+      color-mix(in srgb, var(--wa-color-primary-300) 14%, transparent) 100%
+    ) border-box;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
+}
+
+.notes-side__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.notes-side__head h1 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.notes-side__head-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.notes-side__collapse,
+.note-reader__side-open {
+  color: var(--wa-color-primary-600);
+  border-color: color-mix(in srgb, var(--wa-color-primary-500) 26%, transparent);
+  background: color-mix(in srgb, var(--wa-color-primary-50) 72%, #fff);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--wa-color-primary-600) 12%, transparent);
+}
+
+.notes-side__collapse:hover,
+.notes-side__collapse:focus-visible,
+.note-reader__side-open:hover,
+.note-reader__side-open:focus-visible {
+  color: var(--wa-color-primary-700);
+  border-color: color-mix(in srgb, var(--wa-color-primary-500) 38%, transparent);
+  background: #fff;
 }
 
 .notes-library,
-.notes-outline,
 .note-reader {
   min-width: 0;
   border: 1px solid rgba(148, 163, 184, 0.26);
@@ -889,12 +952,22 @@ onBeforeUnmount(() => {
 }
 
 .notes-library {
-  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.notes-outline {
+  min-width: 0;
+  padding: 14px 0 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .notes-list,
 .notes-outline__list {
-  max-height: min(360px, calc(50vh - 120px));
+  max-height: min(310px, calc(45vh - 116px));
   overflow: auto;
   padding-right: 2px;
 }
@@ -968,10 +1041,6 @@ onBeforeUnmount(() => {
   color: #64748b;
   font-size: 12px;
   line-height: 1.55;
-}
-
-.notes-outline {
-  padding: 16px;
 }
 
 .notes-outline__head {
@@ -1085,6 +1154,7 @@ onBeforeUnmount(() => {
 }
 
 .note-reader--empty {
+  position: relative;
   min-height: 440px;
   place-items: center;
 }
@@ -1096,6 +1166,23 @@ onBeforeUnmount(() => {
   gap: 16px;
   padding-bottom: 18px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.note-reader__title {
+  min-width: 0;
+  flex: 1;
+}
+
+.note-reader__side-open {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.note-reader__side-open--empty {
+  position: absolute;
+  top: 22px;
+  left: 22px;
+  margin-top: 0;
 }
 
 .note-reader__head h2 {
@@ -1291,7 +1378,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1180px) {
   .notes-workspace {
-    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
   }
 }
 
@@ -1310,16 +1397,15 @@ onBeforeUnmount(() => {
     gap: 14px;
   }
 
-  .notes-hero,
   .note-reader__head {
     flex-direction: column;
   }
 
-  .notes-hero {
-    padding: 20px;
+  .notes-workspace {
+    grid-template-columns: 1fr;
   }
 
-  .notes-workspace {
+  .notes-workspace--side-collapsed {
     grid-template-columns: 1fr;
   }
 

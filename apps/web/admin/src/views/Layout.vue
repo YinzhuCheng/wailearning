@@ -93,6 +93,7 @@
     </el-aside>
 
     <button
+      v-if="!isMobile"
       type="button"
       class="sidebar-edge-handle"
       :class="{
@@ -953,20 +954,25 @@ watch(notificationSyncParams, () => {
 
 .sidebar-footer {
   flex-shrink: 0;
-  padding: 10px 10px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(8, 15, 34, 0) 0%, rgba(8, 15, 34, 0.16) 14%, rgba(8, 15, 34, 0.38) 100%);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  margin: 0 10px 12px;
+  padding: 10px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--wa-radius-md);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.015) 100%),
+    var(--wa-sidebar-footer-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .sidebar-footer__section-title {
-  padding: 0 12px 4px;
+  padding: 0 8px 5px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.56);
   text-transform: uppercase;
 }
 
@@ -978,26 +984,24 @@ watch(notificationSyncParams, () => {
   justify-content: flex-start;
   gap: 10px;
   margin: 0;
-  padding: 10px 12px;
+  padding: 9px 8px;
   border: none;
-  border-radius: var(--wa-radius-lg);
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: max(var(--wa-radius-xs), calc(var(--wa-radius-md) - 3px));
+  background: transparent;
   color: rgba(255, 255, 255, 0.82);
   font-size: 14px;
   cursor: pointer;
   text-align: left;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
 .sidebar-footer__btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .sidebar-footer__btn--active {
-  background: var(--wa-sidebar-active-bg);
+  background: color-mix(in srgb, var(--wa-color-primary-500) 26%, rgba(255, 255, 255, 0.1));
   color: #fff;
 }
 
@@ -1010,6 +1014,13 @@ watch(notificationSyncParams, () => {
   justify-content: center;
   padding-left: 8px;
   padding-right: 8px;
+}
+
+.sidebar-body:has(.el-menu--collapse) .sidebar-footer {
+  margin-left: 8px;
+  margin-right: 8px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 .sidebar-footer__label {

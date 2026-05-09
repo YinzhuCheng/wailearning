@@ -378,12 +378,18 @@ function applyTransparency(root, mode) {
 function applySidebar(root, primary, config) {
   if (config.primary === 'amber') {
     const accent = colorScales[config.accent] || colorScales.teal
-    root.style.setProperty('--wa-sidebar-bg', `linear-gradient(180deg, #111827 0%, ${accent[900]} 100%)`)
+    root.style.setProperty('--wa-sidebar-bg-start', '#111827')
+    root.style.setProperty('--wa-sidebar-bg-end', accent[900])
+    root.style.setProperty('--wa-sidebar-bg', `linear-gradient(90deg, #111827 0%, ${accent[900]} 100%)`)
+    root.style.setProperty('--wa-sidebar-footer-bg', `linear-gradient(90deg, rgba(12, 10, 9, 0.48) 0%, ${accent[900]}42 100%)`)
     root.style.setProperty('--wa-sidebar-active-bg', `linear-gradient(90deg, ${primary[600]} 0%, ${accent[600]} 100%)`)
     return
   }
 
-  root.style.setProperty('--wa-sidebar-bg', `linear-gradient(180deg, ${primary[900]} 0%, ${primary[900]} 100%)`)
+  root.style.setProperty('--wa-sidebar-bg-start', primary[900])
+  root.style.setProperty('--wa-sidebar-bg-end', primary[800])
+  root.style.setProperty('--wa-sidebar-bg', `linear-gradient(90deg, ${primary[900]} 0%, ${primary[800]} 100%)`)
+  root.style.setProperty('--wa-sidebar-footer-bg', `linear-gradient(90deg, rgba(2, 6, 23, 0.44) 0%, ${primary[900]}38 100%)`)
   root.style.setProperty('--wa-sidebar-active-bg', `linear-gradient(90deg, ${primary[700]} 0%, ${primary[500]} 100%)`)
 }
 
