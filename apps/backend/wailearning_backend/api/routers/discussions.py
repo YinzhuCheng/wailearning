@@ -23,7 +23,7 @@ from apps.backend.wailearning_backend.api.schemas import (
 
 router = APIRouter(prefix="/api/discussions", tags=["课程讨论"])
 
-DEFAULT_PAGE_SIZE = 10
+DEFAULT_PAGE_SIZE = 5
 MIN_PAGE_SIZE = 5
 MAX_PAGE_SIZE = 50
 MAX_BODY_LEN = 8000

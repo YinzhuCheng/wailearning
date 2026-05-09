@@ -70,7 +70,7 @@ class ProfileSelfUpdate(BaseModel):
         default=None,
         ge=5,
         le=50,
-        description="Replies per page in homework/material discussions; omit to leave unchanged; null clears to default 10.",
+        description="Replies per page in homework/material discussions; omit to leave unchanged; null clears to default 5.",
     )
 
     @field_validator("real_name")

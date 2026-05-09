@@ -35,7 +35,7 @@
               controls-position="right"
               data-testid="personal-discussion-page-size"
             />
-            <p class="hint">默认 10；仅影响作业与资料讨论区的分页，可在 5～50 之间调整。</p>
+            <p class="hint">默认 5；仅影响作业与资料讨论区的分页，可在 5～50 之间调整。</p>
           </el-form-item>
           <el-form-item label="教材视图风格">
             <el-radio-group v-model="profileForm.material_presentation_style" class="material-style-group">
@@ -160,7 +160,7 @@ const userStore = useUserStore()
 
 const profileForm = reactive({
   real_name: '',
-  discussion_page_size: 10,
+  discussion_page_size: 5,
   material_presentation_style: 'academic'
 })
 
@@ -221,7 +221,7 @@ const syncProfileForm = () => {
   profileForm.real_name = userStore.userInfo?.real_name || ''
   const d = userStore.userInfo?.discussion_page_size
   profileForm.discussion_page_size =
-    d != null && Number.isFinite(Number(d)) && Number(d) >= 5 && Number(d) <= 50 ? Number(d) : 10
+    d != null && Number.isFinite(Number(d)) && Number(d) >= 5 && Number(d) <= 50 ? Number(d) : 5
   profileForm.material_presentation_style = getMaterialPresentationStyle()
 }
 

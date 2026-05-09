@@ -2,10 +2,22 @@
   <el-card shadow="never" class="discussion-card">
     <template #header>
       <div class="discussion-head">
-        <span>讨论区</span>
-        <el-text v-if="canUseDiscussion" type="info" size="small">
-          实名讨论，每页 {{ effectivePageSize }} 条回复
-        </el-text>
+        <div class="discussion-head__main">
+          <span class="discussion-head__title">讨论区</span>
+          <el-text v-if="canUseDiscussion" type="info" size="small">
+            实名讨论，每页 {{ effectivePageSize }} 条回复
+          </el-text>
+        </div>
+        <el-button
+          v-if="canUseDiscussion"
+          text
+          type="primary"
+          size="small"
+          class="discussion-head__toggle"
+          @click="discussionCollapsed = !discussionCollapsed"
+        >
+          {{ discussionCollapsed ? '展开' : '收起' }}
+        </el-button>
       </div>
     </template>
 
@@ -17,158 +29,193 @@
       show-icon
     />
 
-    <template v-else>
+    <template v-else-if="!discussionCollapsed">
       <div v-loading="loading" class="discussion-body">
-        <div v-if="!entries.length && !loading" class="muted-text">暂无讨论，发表第一条回复吧。</div>
-        <div
-          v-for="row in entries"
-          :key="row.id"
-          class="discussion-row"
-          :class="{ 'discussion-row--assistant': row.message_kind === 'llm_assistant' }"
-        >
-          <div class="discussion-row__main">
-            <DiscussionAuthorAvatar
-              :avatar-url="row.author_avatar_url"
-              :name="displayAuthorName(row)"
-              :role="row.author_role"
-              :message-kind="row.message_kind"
-            />
-            <div class="discussion-row__content">
-              <div class="discussion-row__meta">
-                <span
-                  class="discussion-row__name"
-                  :class="{ 'discussion-row__name--assistant': row.message_kind === 'llm_assistant' }"
-                >
-                  {{ displayAuthorName(row) }}
-                </span>
-                <el-tag
-                  v-if="row.message_kind !== 'llm_assistant'"
-                  size="small"
-                  effect="plain"
-                  class="discussion-row__role-tag"
-                >
-                  {{ roleLabel(row.author_role) }}
-                </el-tag>
-                <el-tag
-                  v-if="row.llm_invocation"
-                  type="warning"
-                  size="small"
-                  effect="plain"
-                  class="discussion-row__llm-tag"
-                >
-                  调用智能助教
-                </el-tag>
-                <span class="discussion-row__time">{{ formatTime(row.created_at) }}</span>
-              </div>
-              <div
-                class="discussion-row__body"
-                :class="{
-                  'discussion-row__body--clickable': isTruncated(row.body) && !isExpanded(row.id)
-                }"
-                @click="onBodyClick(row)"
-              >
-                <div
-                  class="discussion-row__text"
-                  :class="{ 'discussion-row__text--block': shouldRenderRichBody(row) }"
-                >
-                  <PlainOrMarkdownBlock
-                    v-if="shouldRenderRichBody(row)"
-                    :text="row.body"
-                    :format="row.body_format"
-                    variant="student"
-                  />
-                  <template v-else>{{ collapsedBodyPreview(row) }}</template>
+        <section class="discussion-list-section" aria-label="讨论列表">
+          <div v-if="!entries.length && !loading" class="muted-text">暂无讨论，发表第一条回复吧。</div>
+          <div
+            v-for="row in entries"
+            :key="row.id"
+            class="discussion-row"
+            :class="{ 'discussion-row--assistant': row.message_kind === 'llm_assistant' }"
+          >
+            <div class="discussion-row__main">
+              <DiscussionAuthorAvatar
+                :avatar-url="row.author_avatar_url"
+                :name="displayAuthorName(row)"
+                :role="row.author_role"
+                :message-kind="row.message_kind"
+              />
+              <div class="discussion-row__content">
+                <div class="discussion-row__meta">
+                  <span
+                    class="discussion-row__name"
+                    :class="{ 'discussion-row__name--assistant': row.message_kind === 'llm_assistant' }"
+                  >
+                    {{ displayAuthorName(row) }}
+                  </span>
+                  <el-tag
+                    v-if="row.message_kind !== 'llm_assistant'"
+                    size="small"
+                    effect="plain"
+                    class="discussion-row__role-tag"
+                  >
+                    {{ roleLabel(row.author_role) }}
+                  </el-tag>
+                  <el-tag
+                    v-if="row.llm_invocation"
+                    type="warning"
+                    size="small"
+                    effect="plain"
+                    class="discussion-row__llm-tag"
+                  >
+                    调用智能助教
+                  </el-tag>
+                  <span class="discussion-row__time">{{ formatTime(row.created_at) }}</span>
                 </div>
-                <button
-                  v-if="isTruncated(row.body) && isExpanded(row.id)"
-                  type="button"
-                  class="discussion-row__collapse-btn"
-                  @click.stop="collapseRow(row.id)"
+                <div
+                  class="discussion-row__body"
+                  :class="{
+                    'discussion-row__body--clickable': isTruncated(row.body) && !isExpanded(row.id)
+                  }"
+                  @click="onBodyClick(row)"
                 >
-                  收起
-                </button>
-              </div>
-              <div v-if="canDelete(row)" class="discussion-row__actions">
-                <el-button type="danger" link size="small" @click="removeEntry(row)">删除</el-button>
+                  <div
+                    class="discussion-row__text"
+                    :class="{ 'discussion-row__text--block': shouldRenderRichBody(row) }"
+                  >
+                    <PlainOrMarkdownBlock
+                      v-if="shouldRenderRichBody(row)"
+                      :text="row.body"
+                      :format="row.body_format"
+                      variant="student"
+                    />
+                    <template v-else>{{ collapsedBodyPreview(row) }}</template>
+                  </div>
+                  <button
+                    v-if="isTruncated(row.body) && isExpanded(row.id)"
+                    type="button"
+                    class="discussion-row__collapse-btn"
+                    @click.stop="collapseRow(row.id)"
+                  >
+                    收起
+                  </button>
+                </div>
+                <div v-if="canDelete(row)" class="discussion-row__actions">
+                  <el-button type="danger" link size="small" @click="removeEntry(row)">删除</el-button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <el-pagination
-          v-if="total > effectivePageSize"
-          v-model:current-page="page"
-          class="discussion-pager"
-          :page-size="effectivePageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          small
-          @current-change="loadList"
-        />
-
-        <div v-if="canInvokeLlm" class="discussion-llm-bar">
-          <el-button
-            size="small"
-            :type="llmMode ? 'primary' : 'default'"
-            plain
-            data-testid="discussion-llm-toggle"
-            @click="toggleLlmMode"
-          >
-            请 LLM 回复
-          </el-button>
-          <el-text v-if="llmMode" type="info" size="small">
-            {{ llmModeHint }}
-          </el-text>
-        </div>
-        <div class="discussion-format-bar">
-          <span class="discussion-format-bar__label">回复格式</span>
-          <el-radio-group v-model="draftFormat" size="small">
-            <el-radio-button label="markdown">Markdown</el-radio-button>
-            <el-radio-button label="plain">纯文本</el-radio-button>
-          </el-radio-group>
-        </div>
-        <div v-if="draftFormat === 'markdown'" class="discussion-md-toolbar">
-          <el-button type="primary" link size="small" @click="toggleMarkdownDemo">
-            {{ showMarkdownDemo ? '隐藏 Markdown + LaTeX 示例' : '查看 Markdown + LaTeX 示例' }}
-          </el-button>
-          <span class="discussion-md-toolbar__hint">编辑区下方会实时显示渲染预览。</span>
-        </div>
-        <div v-if="draftFormat === 'markdown' && showMarkdownDemo" class="discussion-md-demo-wrap">
-          <MarkdownLatexLiveDemo
-            compact
-            :show-insert="true"
-            :show-source-collapse="false"
-            title="Markdown + LaTeX 示例"
-            subtitle="回复格式为 Markdown 时显示：以下为固定演示渲染效果，可复制或插入后再撰写正文。"
-            @insert="appendDraftSnippet"
+          <el-pagination
+            v-if="total > effectivePageSize"
+            v-model:current-page="page"
+            class="discussion-pager"
+            :page-size="effectivePageSize"
+            :total="total"
+            layout="total, prev, pager, next"
+            small
+            @current-change="loadList"
           />
-        </div>
-        <el-input
-          v-model="draft"
-          type="textarea"
-          :rows="3"
-          maxlength="8000"
-          show-word-limit
-          :placeholder="inputPlaceholder"
-          class="discussion-input"
-        />
-        <template v-if="draftFormat === 'markdown'">
-          <div class="discussion-preview-label">回复预览</div>
-          <div class="discussion-preview" data-testid="discussion-markdown-preview">
-            <RichMarkdownDisplay :markdown="draft" variant="student" empty-text="（空）" />
+        </section>
+
+        <section class="discussion-composer-section" aria-label="发表回复">
+          <div class="discussion-composer-head">
+            <div>
+              <strong>回复</strong>
+              <el-text v-if="!composerExpanded" type="info" size="small">展开后编辑内容</el-text>
+            </div>
+            <el-button text type="primary" size="small" @click="toggleComposer">
+              {{ composerExpanded ? '收起回复框' : '写回复' }}
+            </el-button>
           </div>
-        </template>
-        <el-button
-          type="primary"
-          :loading="posting"
-          :disabled="!draft.trim()"
-          data-testid="discussion-submit"
-          @click="submit"
-        >
-          {{ llmMode ? '发送（调用智能助教）' : '发表回复' }}
-        </el-button>
+
+          <div v-if="composerExpanded" class="discussion-composer-body">
+            <div class="discussion-composer-toolbar">
+              <el-radio-group v-model="composerMode" size="small">
+                <el-radio-button label="edit">编辑</el-radio-button>
+                <el-radio-button label="preview">预览</el-radio-button>
+              </el-radio-group>
+              <span class="discussion-format-bar__label">回复格式</span>
+              <el-radio-group v-model="draftFormat" size="small">
+                <el-radio-button label="markdown">Markdown</el-radio-button>
+                <el-radio-button label="plain">纯文本</el-radio-button>
+              </el-radio-group>
+            </div>
+
+            <div v-if="canInvokeLlm" class="discussion-llm-bar">
+              <el-button
+                size="small"
+                :type="llmMode ? 'primary' : 'default'"
+                plain
+                data-testid="discussion-llm-toggle"
+                @click="toggleLlmMode"
+              >
+                请 LLM 回复
+              </el-button>
+              <el-text v-if="llmMode" type="info" size="small">
+                {{ llmModeHint }}
+              </el-text>
+            </div>
+
+            <div v-if="draftFormat === 'markdown'" class="discussion-md-toolbar">
+              <el-button type="primary" link size="small" @click="toggleMarkdownDemo">
+                {{ showMarkdownDemo ? '隐藏 Markdown + LaTeX 示例' : '查看 Markdown + LaTeX 示例' }}
+              </el-button>
+              <span class="discussion-md-toolbar__hint">预览会在同一区域切换显示。</span>
+            </div>
+            <div v-if="draftFormat === 'markdown' && showMarkdownDemo" class="discussion-md-demo-wrap">
+              <MarkdownLatexLiveDemo
+                compact
+                :show-insert="true"
+                :show-source-collapse="false"
+                title="Markdown + LaTeX 示例"
+                subtitle="回复格式为 Markdown 时显示：以下为固定演示渲染效果，可复制或插入后再撰写正文。"
+                @insert="appendDraftSnippet"
+              />
+            </div>
+
+            <el-input
+              v-if="composerMode === 'edit'"
+              v-model="draft"
+              type="textarea"
+              :rows="4"
+              maxlength="8000"
+              show-word-limit
+              :placeholder="inputPlaceholder"
+              class="discussion-input"
+            />
+            <div v-else class="discussion-preview" data-testid="discussion-markdown-preview">
+              <PlainOrMarkdownBlock
+                :text="draft"
+                :format="draftFormat"
+                variant="student"
+                empty-text="（空）"
+              />
+            </div>
+
+            <div class="discussion-composer-actions">
+              <el-button
+                type="primary"
+                :loading="posting"
+                :disabled="!draft.trim()"
+                data-testid="discussion-submit"
+                @click="submit"
+              >
+                {{ llmMode ? '发送（调用智能助教）' : '发表回复' }}
+              </el-button>
+              <el-button @click="composerExpanded = false">取消</el-button>
+            </div>
+          </div>
+        </section>
       </div>
     </template>
+
+    <div v-else class="discussion-collapsed">
+      <span>{{ total }} 条回复</span>
+      <span>每页 {{ effectivePageSize }} 条</span>
+    </div>
   </el-card>
 </template>
 
@@ -180,7 +227,6 @@ import api from '@/api'
 import DiscussionAuthorAvatar from '@/components/DiscussionAuthorAvatar.vue'
 import MarkdownLatexLiveDemo from '@/components/MarkdownLatexLiveDemo.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
-import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
 import { normalizeContentFormat } from '@/utils/contentFormat'
 
@@ -229,9 +275,9 @@ const canUseDiscussion = computed(() => {
 
 const effectivePageSize = computed(() => {
   const raw = userStore.userInfo?.discussion_page_size
-  const n = raw != null ? Number(raw) : 10
+  const n = raw != null ? Number(raw) : 5
   if (Number.isFinite(n) && n >= 5 && n <= 50) return n
-  return 10
+  return 5
 })
 
 const loading = ref(false)
@@ -243,6 +289,9 @@ const draft = ref('')
 const draftFormat = ref('markdown')
 const showMarkdownDemo = ref(false)
 const llmMode = ref(false)
+const discussionCollapsed = ref(false)
+const composerExpanded = ref(false)
+const composerMode = ref('edit')
 /** entry id -> expanded full body */
 const expandedEntryIds = ref(new Set())
 
@@ -510,6 +559,13 @@ const toggleMarkdownDemo = () => {
   showMarkdownDemo.value = !showMarkdownDemo.value
 }
 
+const toggleComposer = () => {
+  composerExpanded.value = !composerExpanded.value
+  if (composerExpanded.value) {
+    composerMode.value = 'edit'
+  }
+}
+
 const submit = async () => {
   const text = draft.value.trim()
   if (!text || !canUseDiscussion.value) return
@@ -536,6 +592,8 @@ const submit = async () => {
     draftFormat.value = 'markdown'
     showMarkdownDemo.value = false
     llmMode.value = false
+    composerMode.value = 'edit'
+    composerExpanded.value = false
     const lastPage = Math.max(1, Math.ceil((total.value + 1) / effectivePageSize.value))
     page.value = lastPage
     await loadList()
@@ -613,8 +671,77 @@ loadList()
   gap: 8px;
 }
 
+.discussion-head__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.discussion-head__title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.discussion-head__toggle {
+  flex-shrink: 0;
+}
+
 .discussion-body {
   min-height: 80px;
+}
+
+.discussion-list-section {
+  padding-bottom: 12px;
+}
+
+.discussion-composer-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.discussion-composer-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.discussion-composer-head > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.discussion-composer-body {
+  margin-top: 10px;
+}
+
+.discussion-composer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.discussion-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.discussion-collapsed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .discussion-row {
@@ -743,14 +870,6 @@ loadList()
   margin-top: 8px;
 }
 
-.discussion-format-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-}
-
 .discussion-md-demo-wrap {
   margin-top: 10px;
 }
@@ -774,18 +893,13 @@ loadList()
 }
 
 .discussion-input {
-  margin: 12px 0;
-}
-
-.discussion-preview-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
+  margin-top: 10px;
 }
 
 .discussion-preview {
-  margin: 6px 0 12px;
-  padding: 10px 12px;
+  min-height: 96px;
+  margin-top: 10px;
+  padding: 12px 14px;
   border: 1px dashed #dbe3ee;
   border-radius: 10px;
   background: #fafbfc;

@@ -55,11 +55,11 @@
         <article class="material-read-body">
           <h1 class="material-read-title">{{ material.title }}</h1>
           <div class="material-read-actions">
-            <button type="button" class="material-read-actions__link" @click="discussionVisible = true">
+            <button type="button" class="material-read-actions__link" @click="scrollToDiscussion">
               进入讨论区
             </button>
             <span class="material-read-actions__divider" aria-hidden="true" />
-            <span class="material-read-actions__hint">讨论和提问放到侧边，不打断正文阅读。</span>
+            <span class="material-read-actions__hint">讨论区在正文下方，可边读边提问。</span>
             <el-button
               v-if="material.attachment_url"
               class="material-read-actions__attachment"
@@ -89,26 +89,19 @@
             {{ material.attachment_name || '下载附件' }}
           </el-button>
         </section>
+
+        <section ref="discussionSection" class="material-read-discussion" aria-label="资料讨论区">
+          <CourseDiscussionPanel
+            target-type="material"
+            :target-id="material.id"
+            :subject-id="material.subject_id"
+            :class-id="material.class_id"
+            :discussion-requires-context="material.discussion_requires_context"
+            :is-student="userStore.isStudent"
+          />
+        </section>
       </section>
     </div>
-
-    <el-drawer
-      v-model="discussionVisible"
-      title="资料讨论区"
-      size="560px"
-      destroy-on-close
-      append-to-body
-    >
-      <CourseDiscussionPanel
-        v-if="material"
-        target-type="material"
-        :target-id="material.id"
-        :subject-id="material.subject_id"
-        :class-id="material.class_id"
-        :discussion-requires-context="material.discussion_requires_context"
-        :is-student="userStore.isStudent"
-      />
-    </el-drawer>
   </div>
 </template>
 
@@ -139,7 +132,7 @@ const material = ref(null)
 const sequence = ref([])
 const materialPresentationStyle = ref(getMaterialPresentationStyle())
 const outlineTree = ref([])
-const discussionVisible = ref(false)
+const discussionSection = ref(null)
 
 const flattenChaptersDfs = (nodes, depth = 0) => {
   const out = []
@@ -236,7 +229,6 @@ const loadMaterial = async () => {
   loading.value = true
   try {
     const row = await api.materials.get(id)
-    discussionVisible.value = false
     const subjectId = row.subject_id != null ? Number(row.subject_id) : null
     // Deep links (and Playwright flows that clear localStorage) may not have selected_course
     // matching this material; sync from teaching/enrollment list when possible.
@@ -293,6 +285,10 @@ const downloadAttach = () => {
   downloadAttachment(material.value.attachment_url, material.value.attachment_name)
 }
 
+const scrollToDiscussion = () => {
+  discussionSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 watch(
   () => route.params.id,
   () => {
@@ -327,7 +323,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   gap: 24px;
-  max-width: 1280px;
+  max-width: 1560px;
   margin: 0 auto;
 }
 
@@ -536,6 +532,11 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+.material-read-discussion {
+  margin-top: 24px;
+  scroll-margin-top: 24px;
+}
+
 .material-read-page--reader .material-read-body {
   border-radius: 22px;
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.04);
@@ -549,6 +550,7 @@ onBeforeUnmount(() => {
 .material-read-page--compact .material-read-layout {
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 18px;
+  max-width: 1440px;
 }
 
 .material-read-page--compact .material-read-outline {

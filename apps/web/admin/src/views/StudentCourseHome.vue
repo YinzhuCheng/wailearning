@@ -153,7 +153,7 @@
               </template>
               <ul v-else class="item-list">
                 <li v-for="item in materialsPreview" :key="item.id">
-                  <button class="item-row" type="button" @click="router.push('/materials')">
+                  <button class="item-row" type="button" @click="openMaterialRead(item)">
                     <el-icon class="item-row__icon item-row__icon--muted"><Document /></el-icon>
                     <span class="item-row__main">
                       <span class="item-row__title">{{ item.title }}</span>
@@ -283,6 +283,14 @@ const expandMaterialOutline = () => {
 
 const collapseMaterialOutline = () => {
   materialOutlineExpandedIds.value = []
+}
+
+const openMaterialRead = item => {
+  if (!item?.id) {
+    router.push('/materials')
+    return
+  }
+  router.push({ name: 'MaterialRead', params: { id: item.id } })
 }
 
 const formatCourseTimeTitle = courseTime =>
