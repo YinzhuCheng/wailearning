@@ -697,10 +697,15 @@ watch(
   padding: 24px;
   min-width: 0;
   overflow-x: hidden;
+  width: min(100%, 1180px);
+  margin: 0 auto;
 }
 
 .users-page :deep(.el-card) {
   min-width: 0;
+  border-radius: var(--wa-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .users-page :deep(.el-card__body) {
@@ -736,16 +741,18 @@ watch(
 .page-title {
   margin: 0 0 8px;
   font-size: 28px;
-  color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .page-subtitle {
   margin: 0;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
+  line-height: 1.6;
 }
 
 .batch-class-alert {
   margin-bottom: 16px;
+  border-radius: var(--wa-radius-lg);
 }
 
 .batch-class-alert-body {

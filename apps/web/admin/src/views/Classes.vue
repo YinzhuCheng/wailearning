@@ -149,6 +149,47 @@ onMounted(() => {
 
 <style scoped>
 .classes {
-  padding: 20px;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  padding: 24px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 28px;
+  color: var(--wa-color-text);
+}
+
+.table-container {
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  border-radius: var(--wa-radius-lg);
+  background: var(--wa-color-surface);
+  box-shadow: var(--wa-shadow-surface);
+}
+
+.table-container :deep(.el-table) {
+  min-width: 900px;
+}
+
+@media (max-width: 768px) {
+  .classes {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

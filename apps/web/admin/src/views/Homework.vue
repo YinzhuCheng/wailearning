@@ -805,6 +805,10 @@ watch(selectedCourse, () => {
 <style scoped>
 .homework-page {
   padding: 24px;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .page-header {
@@ -820,12 +824,12 @@ watch(selectedCourse, () => {
 .page-title {
   margin: 0 0 8px;
   font-size: var(--wa-font-size-stat);
-  color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .page-subtitle {
   margin: 0;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
   font-size: var(--wa-font-size-md);
 }
 
@@ -898,6 +902,9 @@ watch(selectedCourse, () => {
 
 .homework-list-card {
   overflow: hidden;
+  border-radius: var(--wa-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .homework-list-card :deep(.el-card__body) {

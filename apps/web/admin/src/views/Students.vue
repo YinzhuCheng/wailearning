@@ -1003,10 +1003,15 @@ watch(
   padding: 24px;
   min-width: 0;
   overflow-x: hidden;
+  width: min(100%, 1180px);
+  margin: 0 auto;
 }
 
 .students-page :deep(.el-card) {
   min-width: 0;
+  border-radius: var(--wa-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  box-shadow: var(--wa-shadow-surface);
 }
 
 .students-page :deep(.el-card__body) {
@@ -1031,20 +1036,23 @@ watch(
 .page-title {
   margin: 0 0 8px;
   font-size: 28px;
-  color: #0f172a;
+  color: var(--wa-color-text);
 }
 
 .page-subtitle {
   margin: 0;
-  color: #64748b;
+  color: var(--wa-color-text-muted);
+  line-height: 1.6;
 }
 
 .info-alert {
   margin-bottom: 20px;
+  border-radius: var(--wa-radius-lg);
 }
 
 .admin-class-filter-alert {
   margin-bottom: 16px;
+  border-radius: var(--wa-radius-lg);
 }
 
 .card-header-block {
