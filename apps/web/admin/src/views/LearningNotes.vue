@@ -12,44 +12,44 @@
     </section>
 
     <div class="notes-workspace">
-      <aside class="notes-library" aria-label="笔记列表">
-        <div class="notes-library__toolbar">
-          <el-tabs
-            v-model="activeScope"
-            class="notes-library__scope"
-            @tab-change="loadNotes"
-          >
-            <el-tab-pane label="我的笔记" name="mine" />
-            <el-tab-pane label="公开笔记" name="public" />
-          </el-tabs>
-          <el-select v-model="subjectFilter" clearable filterable placeholder="按课程筛选">
-            <el-option v-for="course in courseOptions" :key="course.id" :label="course.name" :value="course.id" />
-          </el-select>
-        </div>
+      <div class="notes-side">
+        <aside class="notes-library" aria-label="笔记列表">
+          <div class="notes-library__toolbar">
+            <el-tabs
+              v-model="activeScope"
+              class="notes-library__scope"
+              @tab-change="loadNotes"
+            >
+              <el-tab-pane label="我的笔记" name="mine" />
+              <el-tab-pane label="公开笔记" name="public" />
+            </el-tabs>
+            <el-select v-model="subjectFilter" clearable filterable placeholder="按课程筛选">
+              <el-option v-for="course in courseOptions" :key="course.id" :label="course.name" :value="course.id" />
+            </el-select>
+          </div>
 
-        <el-skeleton v-if="loadingNotes" :rows="6" animated />
-        <el-empty v-else-if="!notes.length" description="暂无学习笔记" />
-        <div v-else class="notes-list">
-          <button
-            v-for="note in notes"
-            :key="note.id"
-            type="button"
-            class="note-card"
-            :class="{ 'note-card--active': selectedNote?.id === note.id }"
-            @click="selectNote(note)"
-          >
-            <span class="note-card__visibility">{{ noteVisibilityLabel(note) }}</span>
-            <strong>{{ note.title }}</strong>
-            <span class="note-card__desc">{{ note.description || '暂无说明' }}</span>
-            <span class="note-card__meta">
-              {{ note.subject_name || '未关联课程' }} · {{ formatDate(note.updated_at || note.created_at) }}
-            </span>
-          </button>
-        </div>
-      </aside>
+          <el-skeleton v-if="loadingNotes" :rows="6" animated />
+          <el-empty v-else-if="!notes.length" description="暂无学习笔记" />
+          <div v-else class="notes-list">
+            <button
+              v-for="note in notes"
+              :key="note.id"
+              type="button"
+              class="note-card"
+              :class="{ 'note-card--active': selectedNote?.id === note.id }"
+              @click="selectNote(note)"
+            >
+              <span class="note-card__visibility">{{ noteVisibilityLabel(note) }}</span>
+              <strong>{{ note.title }}</strong>
+              <span class="note-card__desc">{{ note.description || '暂无说明' }}</span>
+              <span class="note-card__meta">
+                {{ note.subject_name || '未关联课程' }} · {{ formatDate(note.updated_at || note.created_at) }}
+              </span>
+            </button>
+          </div>
+        </aside>
 
-      <template v-if="selectedNote">
-        <aside class="notes-outline" aria-label="笔记大纲">
+        <aside v-if="selectedNote" class="notes-outline" aria-label="笔记大纲">
           <div class="notes-outline__head">
             <div>
               <span>笔记大纲</span>
@@ -119,7 +119,9 @@
             </div>
           </div>
         </aside>
+      </div>
 
+      <template v-if="selectedNote">
         <main class="note-reader">
           <header class="note-reader__head">
             <div>
@@ -819,6 +821,8 @@ onBeforeUnmount(() => {
   gap: 18px;
   min-width: 0;
   color: #172033;
+  max-width: 1520px;
+  margin: 0 auto;
 }
 
 .notes-hero {
@@ -826,10 +830,12 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 20px 24px;
-  border: 1px solid #dbe4f0;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
+  padding: 22px 24px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: var(--wa-radius-xl);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 251, 255, 0.94) 58%, rgba(236, 253, 245, 0.48) 100%);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.055);
 }
 
 .notes-hero__eyebrow,
@@ -857,32 +863,40 @@ onBeforeUnmount(() => {
 
 .notes-workspace {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(220px, 280px) minmax(470px, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 16px 20px;
   align-items: start;
   min-width: 0;
+}
+
+.notes-side {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  position: sticky;
+  top: 16px;
+  align-self: start;
 }
 
 .notes-library,
 .notes-outline,
 .note-reader {
   min-width: 0;
-  border: 1px solid #dbe4f0;
-  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: var(--wa-radius-xl);
   background: #fff;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.04);
-}
-
-.notes-library,
-.notes-outline {
-  position: sticky;
-  top: 16px;
-  max-height: calc(100vh - 118px);
-  overflow: auto;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.045);
 }
 
 .notes-library {
-  padding: 14px;
+  padding: 16px;
+}
+
+.notes-list,
+.notes-outline__list {
+  max-height: min(360px, calc(50vh - 120px));
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .notes-library__toolbar {
@@ -910,23 +924,28 @@ onBeforeUnmount(() => {
   gap: 7px;
   width: 100%;
   padding: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: var(--wa-radius-lg);
   background: #fff;
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .note-card:hover,
 .note-card--active {
   border-color: #2563eb;
-  background: #f1f6ff;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
 }
 
 .note-card:hover {
   transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.1);
+}
+
+.note-card--active {
+  box-shadow: inset 3px 0 0 #2563eb;
 }
 
 .note-card strong {
@@ -952,7 +971,7 @@ onBeforeUnmount(() => {
 }
 
 .notes-outline {
-  padding: 14px;
+  padding: 16px;
 }
 
 .notes-outline__head {
@@ -995,7 +1014,7 @@ onBeforeUnmount(() => {
 
 .outline-row--resource:hover,
 .outline-row--active {
-  background: #eff6ff;
+  background: #eef6ff;
 }
 
 .outline-row__main,
@@ -1060,8 +1079,9 @@ onBeforeUnmount(() => {
 
 .note-reader {
   display: grid;
-  gap: 16px;
-  padding: 18px;
+  gap: 18px;
+  padding: 22px 24px;
+  min-height: calc(100vh - 168px);
 }
 
 .note-reader--empty {
@@ -1074,8 +1094,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
 }
 
 .note-reader__head h2 {
@@ -1101,6 +1121,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 14px;
   min-height: 360px;
+  justify-items: center;
 }
 
 .note-article__nav {
@@ -1108,15 +1129,19 @@ onBeforeUnmount(() => {
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+  width: min(100%, 920px);
+  justify-self: center;
 }
 
 .note-article__breadcrumb {
+  width: min(100%, 920px);
   margin: 0;
   color: #64748b;
   font-size: 13px;
 }
 
 .note-article h1 {
+  width: min(100%, 920px);
   margin: 0;
   color: #0f172a;
   font-size: 28px;
@@ -1124,7 +1149,7 @@ onBeforeUnmount(() => {
 }
 
 .note-article__body {
-  width: min(100%, 860px);
+  width: min(100%, 920px);
   color: #243044;
   font-size: 16px;
   line-height: 1.8;
@@ -1133,6 +1158,7 @@ onBeforeUnmount(() => {
 .note-article__body :deep(.rich-md) {
   font-size: 16px;
   line-height: 1.85;
+  overflow-wrap: anywhere;
 }
 
 .note-article__body :deep(.rich-md h1),
@@ -1143,6 +1169,9 @@ onBeforeUnmount(() => {
 
 .note-article__body :deep(.katex-display) {
   padding: 8px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .note-article__empty {
@@ -1154,7 +1183,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 14px;
   align-items: center;
-  width: min(100%, 860px);
+  width: min(100%, 920px);
   padding: 14px 16px;
   border: 1px solid #bfdbfe;
   border-radius: 14px;
@@ -1174,6 +1203,8 @@ onBeforeUnmount(() => {
 .note-discussion {
   display: grid;
   gap: 12px;
+  width: min(100%, 920px);
+  justify-self: center;
   padding-top: 16px;
   border-top: 1px solid #e2e8f0;
 }
@@ -1228,7 +1259,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 12px 14px;
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border-radius: var(--wa-radius-lg);
   background: #fff;
 }
 
@@ -1262,15 +1293,9 @@ onBeforeUnmount(() => {
   .notes-workspace {
     grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   }
-
-  .notes-outline {
-    position: static;
-    grid-column: 1 / -1;
-    max-height: none;
-  }
 }
 
-@media (max-width: 1380px) and (min-width: 1181px) {
+@media (max-width: 1380px) and (min-width: 861px) {
   .note-reader__head {
     flex-direction: column;
   }
@@ -1281,23 +1306,56 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 860px) {
+  .learning-notes-page {
+    gap: 14px;
+  }
+
   .notes-hero,
   .note-reader__head {
     flex-direction: column;
+  }
+
+  .notes-hero {
+    padding: 20px;
   }
 
   .notes-workspace {
     grid-template-columns: 1fr;
   }
 
-  .notes-library,
-  .notes-outline {
+  .notes-side {
     position: static;
     max-height: none;
+    overflow: visible;
+  }
+
+  .notes-list,
+  .notes-outline__list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 
   .note-article h1 {
     font-size: 23px;
+  }
+
+  .note-reader {
+    padding: 18px;
+    min-height: 0;
+  }
+
+  .note-article {
+    justify-items: stretch;
+  }
+
+  .note-article__nav,
+  .note-article__breadcrumb,
+  .note-article h1,
+  .note-article__body,
+  .note-attachment,
+  .note-discussion {
+    width: 100%;
   }
 }
 </style>
