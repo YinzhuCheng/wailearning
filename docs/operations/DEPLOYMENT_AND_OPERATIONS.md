@@ -110,6 +110,17 @@ sudo -u postgres psql \
   -f /tmp/init_db.sql
 ```
 
+`ops/scripts/init_db.sql` is intentionally idempotent for the common first-host
+bootstrap path:
+
+- creates the PostgreSQL login role when missing,
+- rotates that role password to the supplied `db_password`,
+- creates the target database when missing,
+- grants database and schema privileges for future tables/sequences.
+
+The script now refuses to run when `db_name`, `db_user`, or `db_password` were
+not passed via `psql -v ...`, so avoid calling it as a bare `psql -f`.
+
 ## Deployment Scripts
 
 Primary scripts:
@@ -129,7 +140,7 @@ Implementation notes that matter operationally:
 - frontend deployment builds from `apps/web/admin` and syncs `dist/` into `${ADMIN_WEB_ROOT}`
 - parent deployment builds from `apps/web/parent` and syncs `dist/` into `${PARENT_WEB_ROOT}`
 - both frontend deploy scripts also refresh the nginx site file from `ops/nginx/courseeval.example*.conf`
-- `post_deploy_check.sh` always verifies local backend health and, when `APP_URL` points at a public origin, also checks the public `/health` and derived `/api/health` path unless `PUBLIC_API_HEALTH_URL` overrides it explicitly
+- `post_deploy_check.sh` always verifies local backend health; public `/health` is skipped by default and only runs when `APP_URL` or `API_HEALTH_URL` is set. When the public health URL is exactly `${APP_URL}/health`, the script also checks the derived `/api/health` path unless `PUBLIC_API_HEALTH_URL` overrides it explicitly
 - `redeploy.sh` and `pull_and_deploy.sh` resolve `REPO_DIR` through `ops/scripts/lib/deploy_repo_dir.sh`: they prefer `/opt/courseeval/source` when it is a git clone and only fall back to the script-adjacent checkout when that preferred path is absent
 
 Recommended full deploy:
@@ -137,6 +148,12 @@ Recommended full deploy:
 ```bash
 sudo bash ops/scripts/deploy_all.sh
 sudo bash ops/scripts/post_deploy_check.sh
+```
+
+To include public checks in the final step:
+
+```bash
+sudo APP_URL=https://courseeval.example bash ops/scripts/post_deploy_check.sh
 ```
 
 ## Git-Based Server Updates
@@ -198,7 +215,7 @@ After deployment:
 
 - check `systemctl status courseeval-backend`,
 - run `curl http://127.0.0.1:8001/health`,
-- run `bash ops/scripts/post_deploy_check.sh` (or set `APP_URL=https://...` so it also checks the public `/health` and `/api/health` paths),
+- run `bash ops/scripts/post_deploy_check.sh` for local health, or set `APP_URL=https://...` so it also checks the public `/health` and `/api/health` paths,
 - run `sudo nginx -t`,
 - verify the admin frontend loads,
 - verify the parent portal loads,

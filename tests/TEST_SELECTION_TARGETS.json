@@ -55,6 +55,7 @@
                     "ops/scripts/dev/safe_show_text.py",
                     "ops/scripts/dev/safe_write_text.py",
                     "ops/scripts/dev/check_text_encoding.py",
+                    "ops/scripts/init_db.sql",
                     "ops/scripts/"
                 ],
                 "globs": [
@@ -65,6 +66,7 @@
                     "docs/**/*.md",
                     "docs/**/*.txt",
                     "ops/scripts/*.sh",
+                    "ops/scripts/*.sql",
                     "ops/scripts/dev/*.py",
                     "ops/scripts/*.ps1",
                     "ops/scripts/windows/*.ps1"

@@ -4,12 +4,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/../.." && pwd -P)}"
 
-APP_URL="${APP_URL:-https://courseeval.example}"
-API_HEALTH_URL="${API_HEALTH_URL:-${APP_URL}/health}"
+APP_URL="${APP_URL:-}"
+API_HEALTH_URL="${API_HEALTH_URL:-}"
 # When the public check is ${APP_URL}/health, also hit Nginx /api/health (unless overridden).
 PUBLIC_API_HEALTH_URL="${PUBLIC_API_HEALTH_URL:-}"
 _app_url="${APP_URL%/}"
-if [[ -z "${PUBLIC_API_HEALTH_URL}" && "${API_HEALTH_URL}" == "${_app_url}/health" ]]; then
+if [[ -z "${API_HEALTH_URL}" && -n "${_app_url}" ]]; then
+  API_HEALTH_URL="${_app_url}/health"
+fi
+if [[ -z "${PUBLIC_API_HEALTH_URL}" && -n "${_app_url}" && "${API_HEALTH_URL}" == "${_app_url}/health" ]]; then
   PUBLIC_API_HEALTH_URL="${_app_url}/api/health"
 fi
 BACKEND_SERVICE="${BACKEND_SERVICE:-courseeval-backend}"
@@ -50,15 +53,20 @@ else
 fi
 echo
 
-echo "==> public health (${API_HEALTH_URL})"
-# Follow HTTP->HTTPS redirects so a 301 from certbot-managed nginx is not a false failure.
-if curl -fsSL "${API_HEALTH_URL}"; then
-  :
+if [[ -n "${API_HEALTH_URL}" ]]; then
+  echo "==> public health (${API_HEALTH_URL})"
+  # Follow HTTP->HTTPS redirects so a 301 from certbot-managed nginx is not a false failure.
+  if curl -fsSL "${API_HEALTH_URL}"; then
+    :
+  else
+    echo "Public health check failed. If you use HTTPS only, set API_HEALTH_URL to https://.../health" >&2
+    exit 1
+  fi
+  echo
 else
-  echo "Public health check failed. If you use HTTPS only, set API_HEALTH_URL to https://.../health" >&2
-  exit 1
+  echo "==> public health skipped (set APP_URL or API_HEALTH_URL to enable)"
+  echo
 fi
-echo
 
 if [[ -n "${PUBLIC_API_HEALTH_URL}" ]]; then
   echo "==> public API health (${PUBLIC_API_HEALTH_URL})"

@@ -1,3 +1,20 @@
+\echo 'CourseEval PostgreSQL bootstrap: create or update the login role, create the database if missing, and grant schema defaults.'
+\echo 'Required psql variables: -v db_name=<database> -v db_user=<role> -v db_password=<strong-password>'
+\if :{?db_name}
+\else
+\echo 'Missing required variable: db_name'
+\quit 1
+\endif
+\if :{?db_user}
+\else
+\echo 'Missing required variable: db_user'
+\quit 1
+\endif
+\if :{?db_password}
+\else
+\echo 'Missing required variable: db_password'
+\quit 1
+\endif
 \set ON_ERROR_STOP on
 
 SELECT format(

@@ -86,7 +86,7 @@ Executable surfaces (`*.py`, CI YAML, shell) should not reference the legacy pat
 ## nginx / production static assets
 
 - Admin vs parent base paths: [../operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md).
-- After upgrade, run post-deploy checks from `ops/scripts/post_deploy_check.sh` if available in your environment.
+- After upgrade, run `ops/scripts/post_deploy_check.sh`; it always checks local backend health, and public checks are enabled only when `APP_URL` or `API_HEALTH_URL` is set.
 - If `redeploy.sh` appears to finish but the site still serves old assets, confirm the script used the intended `REPO_DIR` clone and did not run with `SKIP_GIT=1` against stale source.
 - If the public health endpoint differs from the default `APP_URL -> /api/health` derivation, override `PUBLIC_API_HEALTH_URL` before rerunning `post_deploy_check.sh`.
 

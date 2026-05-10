@@ -147,6 +147,14 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_init_db_sql_maps_to_static_encoding_target(self):
+        payload = run_selector("--paths", "ops/scripts/init_db.sql")
+
+        ids = recommendation_ids(payload)
+        self.assertEqual(ids, {"static.encoding_text_tools"})
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_security_sensitive_path_recommends_security_and_full_postgres_context(self):
         payload = run_selector("--paths", "apps/backend/courseeval_backend/core/auth.py")
 
