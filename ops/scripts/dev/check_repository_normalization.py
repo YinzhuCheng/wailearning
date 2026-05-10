@@ -51,6 +51,7 @@ HISTORICAL_PATHS = {
 ALLOWED_WARNING_PATHS = {
     "AGENTS.md",
     "docs/development/HISTORICAL_CODE_CLEANUP.md",
+    "ops/scripts/dev/check_repository_normalization.py",
 }
 
 TEXT_EXTENSIONS = {
