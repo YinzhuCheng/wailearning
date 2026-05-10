@@ -22,6 +22,18 @@ def _apply_course_scope(subject_id: Optional[int], current_user: User, db: Sessi
     return selected_course
 
 
+def _course_scoped_score_query(db: Session, selected_course: Optional[Subject], class_ids: list[int]):
+    if selected_course:
+        return db.query(Score).filter(Score.subject_id == selected_course.id)
+    return apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
+
+
+def _course_scoped_attendance_query(db: Session, selected_course: Optional[Subject], class_ids: list[int]):
+    if selected_course:
+        return db.query(Attendance).filter(Attendance.subject_id == selected_course.id)
+    return apply_class_id_filter(db.query(Attendance), Attendance.class_id, class_ids)
+
+
 @router.get("/stats", response_model=DashboardStats)
 def get_dashboard_stats(
     semester: Optional[str] = None,
@@ -46,18 +58,14 @@ def get_dashboard_stats(
         total_students = total_students_query.count()
     total_classes = len(class_ids)
 
-    score_query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
+    score_query = _course_scoped_score_query(db, selected_course, class_ids)
     if semester:
         score_query = score_query.filter(Score.semester == semester)
-    if selected_course:
-        score_query = score_query.filter(Score.subject_id == selected_course.id)
 
     total_scores = score_query.count()
     avg_score = round(score_query.with_entities(func.avg(Score.score)).scalar() or 0, 2)
 
-    attendance_query = apply_class_id_filter(db.query(Attendance), Attendance.class_id, class_ids)
-    if selected_course:
-        attendance_query = attendance_query.filter(Attendance.subject_id == selected_course.id)
+    attendance_query = _course_scoped_attendance_query(db, selected_course, class_ids)
 
     latest_attendance_date = attendance_query.with_entities(func.max(Attendance.date)).scalar()
     if latest_attendance_date:
@@ -116,14 +124,15 @@ def get_class_rankings(
         Score.class_id,
         func.avg(Score.score).label("avg_score"),
     )
-    query = apply_class_id_filter(query, Score.class_id, class_ids)
+    if selected_course:
+        query = query.filter(Score.subject_id == selected_course.id)
+    else:
+        query = apply_class_id_filter(query, Score.class_id, class_ids)
 
     if semester:
         query = query.filter(Score.semester == semester)
     if exam_type:
         query = query.filter(Score.exam_type == exam_type)
-    if selected_course:
-        query = query.filter(Score.subject_id == selected_course.id)
 
     results = query.group_by(Score.class_id).order_by(func.avg(Score.score).desc()).all()
 
@@ -161,7 +170,10 @@ def get_student_rankings(
         Score.student_id,
         func.avg(Score.score).label("avg_score"),
     )
-    query = apply_class_id_filter(query, Score.class_id, class_ids)
+    if selected_course:
+        query = query.filter(Score.subject_id == selected_course.id)
+    else:
+        query = apply_class_id_filter(query, Score.class_id, class_ids)
 
     if class_id:
         if class_id not in class_ids:
@@ -171,8 +183,6 @@ def get_student_rankings(
         query = query.filter(Score.semester == semester)
     if exam_type:
         query = query.filter(Score.exam_type == exam_type)
-    if selected_course:
-        query = query.filter(Score.subject_id == selected_course.id)
 
     results = query.group_by(Score.student_id).order_by(func.avg(Score.score).desc()).limit(limit).all()
 
@@ -209,7 +219,9 @@ def get_subject_rankings(
             raise HTTPException(status_code=403, detail="You do not have access to this class.")
         class_ids = [class_id]
 
-    query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
+    query = db.query(Score).filter(Score.subject_id == selected_course.id)
+    if class_id:
+        query = query.filter(Score.class_id == class_id)
     if semester:
         query = query.filter(Score.semester == semester)
     if exam_type:
@@ -241,11 +253,9 @@ def get_score_trends(
 ):
     selected_course = _apply_course_scope(subject_id, current_user, db)
     class_ids = get_accessible_class_ids(current_user, db)
-    query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
+    query = _course_scoped_score_query(db, selected_course, class_ids)
     if semester:
         query = query.filter(Score.semester == semester)
-    if selected_course:
-        query = query.filter(Score.subject_id == selected_course.id)
 
     scores = query.all()
     exam_types = {}
@@ -279,12 +289,13 @@ def get_subject_analysis(
         func.min(Score.score).label("min_score"),
         func.count(Score.id).label("count"),
     )
-    query = apply_class_id_filter(query, Score.class_id, class_ids)
+    if selected_course:
+        query = query.filter(Score.subject_id == selected_course.id)
+    else:
+        query = apply_class_id_filter(query, Score.class_id, class_ids)
 
     if semester:
         query = query.filter(Score.semester == semester)
-    if selected_course:
-        query = query.filter(Score.subject_id == selected_course.id)
 
     results = query.group_by(Score.subject_id).all()
     analysis = []

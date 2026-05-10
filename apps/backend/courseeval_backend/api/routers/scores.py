@@ -14,7 +14,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     subject_linked_class_ids,
 )
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.db.models import CourseExamWeight, CourseGradeScheme, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.db.models import CourseEnrollment, CourseExamWeight, CourseGradeScheme, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
 from apps.backend.courseeval_backend.core.permissions import is_student
 from apps.backend.courseeval_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.courseeval_backend.domains.scores.composition import OTHER_DAILY_EXAM_TYPE, build_composition_for_student, get_scheme_dto, upsert_scheme
@@ -130,18 +130,21 @@ def get_scores(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    class_ids = get_accessible_class_ids(current_user, db)
-    query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
+    if subject_id:
+        ensure_course_access_http(subject_id, current_user, db)
+        query = db.query(Score).filter(Score.subject_id == subject_id)
+    else:
+        class_ids = get_accessible_class_ids(current_user, db)
+        query = apply_class_id_filter(db.query(Score), Score.class_id, class_ids)
 
     if class_id:
-        if class_id not in class_ids:
-            raise HTTPException(status_code=403, detail="You do not have access to this class.")
+        if not subject_id:
+            class_ids = get_accessible_class_ids(current_user, db)
+            if class_id not in class_ids:
+                raise HTTPException(status_code=403, detail="You do not have access to this class.")
         query = query.filter(Score.class_id == class_id)
     if student_id:
         query = query.filter(Score.student_id == student_id)
-    if subject_id:
-        ensure_course_access_http(subject_id, current_user, db)
-        query = query.filter(Score.subject_id == subject_id)
     if semester:
         query = query.filter(Score.semester == semester)
     if exam_type:
@@ -368,10 +371,14 @@ def get_student_score_composition(
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
-    class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id not in class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this student.")
     ensure_course_access_http(subject_id, current_user, db)
+    if not db.query(CourseEnrollment).filter(
+        CourseEnrollment.subject_id == subject_id,
+        CourseEnrollment.student_id == student_id,
+    ).first():
+        class_ids = get_accessible_class_ids(current_user, db)
+        if student.class_id not in class_ids:
+            raise HTTPException(status_code=403, detail="You do not have access to this student.")
     return ScoreCompositionResponse(
         **build_composition_for_student(
             db, student_id=student_id, subject_id=subject_id, semester=semester, student_name=student.name
@@ -457,13 +464,14 @@ def list_score_grade_appeals(
     if is_student(current_user):
         raise HTTPException(status_code=403, detail="仅教师可查看申诉列表。")
     q = db.query(ScoreGradeAppeal).join(Subject, Subject.id == ScoreGradeAppeal.subject_id)
-    class_ids = get_accessible_class_ids(current_user, db)
-    if not class_ids:
-        return []
-    q = q.filter(Subject.class_id.in_(class_ids))
     if subject_id is not None:
         ensure_course_access_http(subject_id, current_user, db)
         q = q.filter(ScoreGradeAppeal.subject_id == subject_id)
+    else:
+        class_ids = get_accessible_class_ids(current_user, db)
+        if not class_ids:
+            return []
+        q = q.filter(Subject.class_id.in_(class_ids))
     if status:
         q = q.filter(ScoreGradeAppeal.status == status)
     rows = q.order_by(ScoreGradeAppeal.created_at.desc()).limit(200).all()

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from apps.backend.courseeval_backend.db.database import SessionLocal
 from apps.backend.courseeval_backend.core.auth import get_password_hash
-from apps.backend.courseeval_backend.db.models import Homework, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.db.models import CourseEnrollment, Homework, Score, Student, Subject, User, UserRole
 from apps.backend.courseeval_backend.main import app
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
@@ -184,6 +184,87 @@ def test_dashboard_stats_subject_id_counts_enrollments_not_class_roster(client: 
     r = client.get("/api/dashboard/stats", headers=th, params={"subject_id": ctx["subject_id"]})
     assert r.status_code == 200, r.text
     assert r.json()["total_students"] == 1
+
+
+def test_teacher_course_scoped_scores_do_not_require_class_link_visibility(client: TestClient):
+    """Course-owned score/dashboard reads must not be reduced to class-id-only access."""
+    ensure_admin()
+    db = SessionLocal()
+    try:
+        from apps.backend.courseeval_backend.db.models import Class
+
+        cls = Class(name="pytest-elective-score-class", grade=2026)
+        db.add(cls)
+        db.flush()
+        teacher = User(
+            username="pytest_score_teacher",
+            hashed_password=get_password_hash("score-pass"),
+            real_name="Score Teacher",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(teacher)
+        db.flush()
+        student_user = User(
+            username="pytest_score_student",
+            hashed_password=get_password_hash("student-pass"),
+            real_name="Score Student",
+            role=UserRole.STUDENT.value,
+            class_id=cls.id,
+        )
+        db.add(student_user)
+        db.flush()
+        student = Student(name="Score Student", student_no=student_user.username, class_id=cls.id)
+        db.add(student)
+        db.flush()
+        course = Subject(
+            name="pytest-score-elective",
+            teacher_id=teacher.id,
+            class_id=None,
+            course_type="elective",
+            status="active",
+        )
+        db.add(course)
+        db.flush()
+        db.add(
+            CourseEnrollment(
+                subject_id=course.id,
+                student_id=student.id,
+                class_id=cls.id,
+                enrollment_type="elective",
+                can_remove=True,
+            )
+        )
+        db.add(
+            Score(
+                student_id=student.id,
+                subject_id=course.id,
+                class_id=cls.id,
+                score=88,
+                exam_type="midterm",
+                semester="2026-spring",
+            )
+        )
+        db.commit()
+        ctx = {"subject_id": course.id, "student_id": student.id}
+    finally:
+        db.close()
+
+    headers = login_api(client, "pytest_score_teacher", "score-pass")
+
+    scores = client.get("/api/scores", headers=headers, params={"subject_id": ctx["subject_id"]})
+    assert scores.status_code == 200, scores.text
+    assert scores.json()["total"] == 1
+
+    stats = client.get("/api/dashboard/stats", headers=headers, params={"subject_id": ctx["subject_id"]})
+    assert stats.status_code == 200, stats.text
+    assert stats.json()["total_scores"] == 1
+
+    ranking = client.get(f"/api/dashboard/rankings/subjects/{ctx['subject_id']}", headers=headers)
+    assert ranking.status_code == 200, ranking.text
+    assert ranking.json()[0]["student_id"] == ctx["student_id"]
+
+
+def test_users_list_returns_page_for_admin(client: TestClient):
     ensure_admin()
     headers = login_api(client, "pytest_admin", "pytest_admin_pass")
     resp = client.get("/api/users", params={"page": 1, "page_size": 5}, headers=headers)

@@ -3,8 +3,12 @@
 ## Branch And Scope
 
 - Branch: `cursor/repository-normalization`
-- Latest pushed commit before this local round: `84a8bce095058929a6188b0cbe2fbd3f17ef3187`
-- Current worktree: dirty with local, uncommitted documentation-governance and backend/test fixes
+- Pushed baseline before this follow-up: `445e85f docs: normalize governance and fix backend access regressions`
+- Follow-up prepared in this local round: small subject-scoped score/dashboard
+  access fix plus this handoff update. Check the current branch tip with
+  `git log -1 --oneline` after commit/push.
+- Previous baseline before the documentation-governance/backend-fix round:
+  `84a8bce095058929a6188b0cbe2fbd3f17ef3187`
 - Main workstream in this round:
   - continue repository-normalization / docs-as-governance alignment;
   - fix the failing `Backend quick pytest` line that likely explains the GitHub `3/4` check state around the lightweight validation workflow.
@@ -184,6 +188,40 @@ Passed after fixes:
   - passed; `79 passed, 1 skipped`
 - `.\.venv\Scripts\python.exe -m pytest -q tests/postgres tests/security`
   - passed; postgres slice skipped locally as expected, security slice passed
+- Follow-up on 2026-05-10 after remote CI was confirmed green:
+  - local `.\.venv\Scripts\python.exe -m pytest -q` was stopped rather than
+    chased further because the remote check was already green and the local run
+    had created residual concurrent pytest processes against the shared SQLite
+    file;
+  - residual local pytest processes were identified and stopped before
+    continuing;
+  - quick subject-scoped teacher-route audit found remaining class-id-first
+    filtering in score/dashboard reads;
+  - fixed course-scoped reads in
+    [apps/backend/courseeval_backend/api/routers/scores.py](../../apps/backend/courseeval_backend/api/routers/scores.py)
+    and
+    [apps/backend/courseeval_backend/api/routers/dashboard.py](../../apps/backend/courseeval_backend/api/routers/dashboard.py)
+    so `subject_id` requests that pass `ensure_course_access_http(...)` are not
+    reduced to class-id-only visibility;
+  - added
+    `tests/backend/integration/test_core_api_surface.py::test_teacher_course_scoped_scores_do_not_require_class_link_visibility`.
+  - `python -m py_compile apps\backend\courseeval_backend\api\routers\scores.py apps\backend\courseeval_backend\api\routers\dashboard.py tests\backend\integration\test_core_api_surface.py`
+    passed.
+  - `.\.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q`
+    passed; `15 passed, 29 warnings`.
+  - `python ops\scripts\dev\check_repository_normalization.py`
+    passed; `scanned=382 stale=0 missing_required_paths=0`.
+  - `python ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+    passed; `scanned=4 decode_errors=0 suspicious=0`.
+  - `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+    passed.
+  - `git diff --check` passed.
+  - `python ops\scripts\dev\select_validation_targets.py --worktree` passed
+    and conservatively recommended `full.pytest.postgres` for backend router
+    changes via fallback `backend-source-conservative`; that expensive local
+    profile was not rerun because remote validation for the prior branch state
+    had already been confirmed green and this follow-up was covered by targeted
+    integration/score tests plus static checks.
 
 ### Full-suite progression evidence
 
@@ -214,10 +252,11 @@ repository root, but the failing frontier was pushed far back:
 
 ## Known Failures / Incomplete Verification
 
-- A fresh end-to-end rerun of `.\.venv\Scripts\python.exe -m pytest -q` from
-  the repository root has **not yet been observed to complete green** after the
-  final `materials.py` + `material_flow.py` fixes, because the last full rerun
-  was aborted by the user.
+- Remote validation was confirmed green by the user after commit `445e85f`.
+  Local full-suite reruns in this worktree were intentionally not pursued
+  further after they were interrupted and left duplicate pytest processes
+  sharing `.pytest_tmp/test.sqlite`; the local cleanup step stopped those
+  residual processes.
 - Running isolated discussion behavior files (`tests/behavior/test_discussion_api_behavior.py`
   and `tests/behavior/test_discussion_api_advanced_behavior.py`) can expose
   noisy SQLite reset/setup failures (`no such table ...`, intermittent FK/logging
@@ -225,19 +264,22 @@ repository root, but the failing frontier was pushed far back:
   ordered full `pytest --maxfail=1` runs.
   Treat that as a separate test-reset stability problem unless it also appears
   in the ordered full suite.
-- The current worktree is uncommitted and unpushed. There is no new commit hash
-  for this round yet.
+- The documentation-governance and backend/test fixes from the prior round are
+  now
+  committed and pushed as
+  `445e85f docs: normalize governance and fix backend access regressions`.
 
 ## Risks
 
-- The biggest remaining risk is that a later full-suite failure still exists
-  after the now-fixed `materials/class_teacher` frontier; the suite has not yet
-  been rerun to completion after the final change.
+- Remote validation is the current full-suite signal for the prior round. Local
+  SQLite full-suite runs remain sensitive to concurrent pytest processes sharing
+  `.pytest_tmp/test.sqlite`.
 - The repeated pattern “teacher-owned subject-scoped route denied before
-  `ensure_course_access_http(...)`” likely still deserves a broader grep audit
-  across remaining routers, even though the major surfaces fixed in this round
-  were `files`, `homework`, `attendance`, `notifications`, `materials`, and
-  `discussions`.
+  `ensure_course_access_http(...)`” has now also been audited quickly across
+  score/dashboard surfaces and fixed there. Remaining risk is lower, but future
+  router changes should still preserve the rule: when a route is explicitly
+  scoped by `subject_id`, validate course access before applying class-only
+  filters.
 - Several local line-ending warnings remain in `git diff --check` output as
   non-blocking CRLF/LF working-copy warnings, not semantic diff errors.
 - Isolated SQLite reset noise around discussion behavior files suggests there
@@ -248,38 +290,29 @@ repository root, but the failing frontier was pushed far back:
 
 ### Immediate next round
 
-1. Rerun the full backend quick suite from the repository root:
-   `.\.venv\Scripts\python.exe -m pytest -q`
-2. If it fails, keep the current method:
-   - rerun `.\.venv\Scripts\python.exe -m pytest -q --maxfail=1`
-   - fix the new first failure
-   - record whether it is:
-     - an old test contract that still assumes `Subject.class_id` fallback;
-     - another subject-scoped teacher-access bug;
-     - a real new product regression;
-     - or an isolated test-reset / SQLite harness issue.
-3. After the suite is green, rerun the selector/governance checks once more:
+1. Rerun the selector/governance checks after this follow-up change:
    - `python ops/scripts/dev/check_repository_normalization.py`
    - `python ops/scripts/dev/run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
    - `python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120`
    - `git diff --check`
-4. Only after backend quick pytest is green, return to the broader
-   repository-normalization mainline and continue the docs/ops audit.
+2. If broader confidence is required locally, run one pytest process only and
+   delete `.pytest_tmp/test.sqlite` first if table-exists/no-such-table errors
+   recur.
+3. Return to the broader repository-normalization mainline and continue the
+   docs/ops audit.
 
 ### Suggested next governance batch after the suite is green
 
-1. Audit whether any remaining subject-scoped teacher routes still gate on
-   `get_accessible_class_ids(...)` before course access.
-2. Revisit [docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md](../reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md)
+1. Revisit [docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md](../reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md)
    and add the same router-ordering rule currently only recorded in the pitfalls
    doc.
-3. Recheck deployment governance alignment for:
+2. Recheck deployment governance alignment for:
    - `setup_server.sh`
    - `redeploy.sh`
    - `pull_and_deploy.sh`
    - `post_deploy_check.sh`
    - systemd/nginx/env docs
-4. Consider whether the isolated discussion-file SQLite reset failures deserve a
+3. Consider whether the isolated discussion-file SQLite reset failures deserve a
    dedicated test-harness hardening batch.
 
 ## Long-Term Plan
