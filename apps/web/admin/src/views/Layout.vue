@@ -18,7 +18,7 @@
       <div class="logo">
         <div class="logo-main">
           <div class="logo-icon">
-            <el-icon :size="22"><School /></el-icon>
+            <img :src="courseEvalMark" alt="" class="logo-mark" />
           </div>
           <div v-if="!isCollapsed" class="logo-texts">
             <h2>{{ userStore.systemSettings?.system_name || 'CourseEval' }}</h2>
@@ -263,6 +263,7 @@ import {
 } from '@element-plus/icons-vue'
 
 import api from '@/api'
+import courseEvalMark from '@/assets/brand/courseeval-mark.svg'
 import { useUserStore } from '@/stores/user'
 import { fetchAttachmentBlobUrl } from '@/utils/attachments'
 import { filterCoursesByClassId, resolveClassTeacherClassId, resolveClassTeacherClassName } from '@/utils/classTeacher'
@@ -1063,6 +1064,13 @@ watch(notificationSyncParams, () => {
   border-radius: var(--wa-radius-lg);
   background: color-mix(in srgb, var(--wa-color-primary-500) 22%, transparent);
   color: var(--wa-color-primary-300);
+}
+
+.logo-mark {
+  width: 34px;
+  height: 34px;
+  display: block;
+  border-radius: 10px;
 }
 
 .logo-texts h2 {

@@ -2,6 +2,7 @@
   <div class="login-container">
     <div class="login-header">
       <div class="logo">🎓</div>
+      <img :src="courseEvalMark" alt="CourseEval" class="brand-logo" />
       <h1>Parent Portal</h1>
       <p class="subtitle">CourseEval</p>
     </div>
@@ -45,6 +46,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Key } from '@element-plus/icons-vue'
 import api from '@/api'
+import courseEvalMark from '@/assets/brand/courseeval-mark.svg'
 
 const router = useRouter()
 const formRef = ref()
@@ -110,6 +112,19 @@ const handleLogin = async () => {
 .logo {
   font-size: 64px;
   margin-bottom: 10px;
+}
+
+.brand-logo {
+  width: 72px;
+  height: 72px;
+  display: block;
+  margin: 0 auto 12px;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22);
+}
+
+.login-header > .logo {
+  display: none;
 }
 
 .login-header h1 {

@@ -2,8 +2,8 @@
   <div class="login-container" :class="{ 'has-background': hasBackground }" :style="backgroundStyle" data-testid="login-page">
     <div class="login-card" data-testid="login-panel">
       <div class="login-header">
-        <div v-if="settings.system_logo" class="logo-container">
-          <img :src="settings.system_logo" alt="Logo" class="system-logo" />
+        <div class="logo-container">
+          <img :src="settings.system_logo || courseEvalLogo" alt="CourseEval" class="system-logo" />
         </div>
         <h1 class="system-name">{{ settings.system_name }}</h1>
         <p class="system-desc">{{ settings.system_intro }}</p>
@@ -93,6 +93,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
 
+import courseEvalLogo from '@/assets/brand/courseeval-logo.svg'
 import { normalizeSystemSettings } from '@/utils/branding'
 import { useUserStore } from '@/stores/user'
 import api from '@/api'
