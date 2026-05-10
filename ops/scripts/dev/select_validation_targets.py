@@ -17,6 +17,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import csv
 import fnmatch
 import json
 import re
@@ -35,7 +36,7 @@ from validation_history import (
 
 
 DEFAULT_REGISTRY = "tests/TEST_SELECTION_TARGETS.json"
-DEFAULT_LEDGER = "docs/development/TEST_EXECUTION_LEDGER.md"
+DEFAULT_LEDGER = "docs/development/testing/test-execution-targets.csv"
 RISK_ORDER = {
     "static": 0,
     "targeted": 1,
@@ -150,6 +151,24 @@ def parse_ledger(repo_root: Path, ledger_path: str) -> dict[str, dict[str, str]]
     path = repo_root / ledger_path
     if not path.exists():
         return {}
+
+    if path.suffix.lower() == ".csv":
+        entries: dict[str, dict[str, str]] = {}
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                test_id = str(row.get("test_id") or "").strip()
+                if not test_id:
+                    continue
+                entries[test_id] = {
+                    "last_branch": str(row.get("last_branch") or "").strip(),
+                    "last_commit": str(row.get("last_commit") or "").strip(),
+                    "last_result": str(row.get("last_result") or "").strip(),
+                    "last_run_date": str(row.get("last_run_date") or "").strip(),
+                    "pass_count": str(row.get("pass_count") or "").strip(),
+                    "run_count": str(row.get("run_count") or "").strip(),
+                }
+        return entries
 
     text = path.read_text(encoding="utf-8")
     entries: dict[str, dict[str, str]] = {}

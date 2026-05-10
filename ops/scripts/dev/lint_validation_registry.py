@@ -8,6 +8,7 @@ broken entry.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from pathlib import Path
@@ -15,7 +16,7 @@ from typing import Any
 
 
 DEFAULT_REGISTRY = "tests/TEST_SELECTION_TARGETS.json"
-DEFAULT_LEDGER = "docs/development/TEST_EXECUTION_LEDGER.md"
+DEFAULT_LEDGER = "docs/development/testing/test-execution-targets.csv"
 ALLOWED_RISKS = {"static", "targeted", "broad", "full"}
 ALLOWED_CATEGORIES = {
     "static-check",
@@ -42,6 +43,13 @@ def load_json(path: Path) -> dict[str, Any]:
 def parse_ledger_ids(path: Path) -> set[str]:
     if not path.exists():
         return set()
+    if path.suffix.lower() == ".csv":
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            return {
+                str(row.get("test_id") or "").strip()
+                for row in csv.DictReader(handle)
+                if str(row.get("test_id") or "").strip()
+            }
     ids: set[str] = set()
     prefix = "### Test ID: `"
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -128,7 +136,7 @@ def lint_registry(repo_root: Path, registry_path: str, ledger_path: str) -> list
         if ledger_id is not None and not isinstance(ledger_id, str):
             issues.append(f"{target_id}: ledger_id must be a string or null")
         if isinstance(ledger_id, str) and ledger_id not in ledger_ids:
-            issues.append(f"{target_id}: ledger_id not found in ledger headings: {ledger_id}")
+            issues.append(f"{target_id}: ledger_id not found in ledger: {ledger_id}")
 
         commands = target.get("commands")
         if not isinstance(commands, list) or not commands:

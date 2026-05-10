@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SELECTOR = REPO_ROOT / "ops" / "scripts" / "dev" / "select_validation_targets.py"
 sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
 from lint_validation_registry import lint_registry  # noqa: E402
+from select_validation_targets import parse_ledger  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
 from run_validation_target import (
     RESULT_BLOCKED,
@@ -241,8 +242,35 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("explicitly provided changed-path snapshot", payload["notes"])
 
     def test_runner_blocks_missing_pytest_as_environment_not_product_failure(self):
+        write_json(
+            REPO_ROOT / ".agent-run/test-selector-missing-module-registry.json",
+            {
+                "targets": [
+                    {
+                        "id": "static.missing_module_probe",
+                        "category": "static-check",
+                        "risk": "static",
+                        "working_directory": ".",
+                        "commands": [
+                            {
+                                "label": "missing module",
+                                "argv": [
+                                    "python",
+                                    "-m",
+                                    "module_that_should_not_exist_for_runner_probe",
+                                ],
+                            }
+                        ],
+                        "triggers": {"paths": [], "globs": []},
+                        "ledger_id": None,
+                    }
+                ]
+            },
+        )
         result = run_validation_target(
-            "backend.learning_notes.api",
+            "static.missing_module_probe",
+            "--registry",
+            ".agent-run/test-selector-missing-module-registry.json",
             "--artifact-root",
             ".agent-run/test-selector-runner-logs",
             "--history",
@@ -251,13 +279,10 @@ class ValidationSelectorTests(unittest.TestCase):
         )
         payload = json.loads(result.stdout)
 
-        if result.returncode == 0:
-            self.assertEqual(payload["result"], "passed")
-        else:
-            self.assertEqual(result.returncode, 2)
-            self.assertEqual(payload["result"], "blocked")
-            self.assertEqual(payload["failure_class"], "environment")
-            self.assertIn("pytest", payload["summary"])
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(payload["result"], "blocked")
+        self.assertEqual(payload["failure_class"], "environment")
+        self.assertIn("module", payload["summary"].lower())
 
     def test_runner_detects_playwright_targets_for_preflight(self):
         self.assertTrue(target_needs_playwright_preflight({"category": "admin-playwright"}))
@@ -509,8 +534,53 @@ class ValidationSelectorTests(unittest.TestCase):
         issues = lint_registry(
             REPO_ROOT,
             "tests/TEST_SELECTION_TARGETS.json",
-            "docs/development/TEST_EXECUTION_LEDGER.md",
+            "docs/development/testing/test-execution-targets.csv",
         )
+
+        self.assertEqual(issues, [])
+
+    def test_selector_parses_csv_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(
+                root / "docs/development/testing/test-execution-targets.csv",
+                "\n".join(
+                    [
+                        "test_id,last_branch,last_commit,last_result,last_run_date,pass_count,run_count",
+                        "static.sample,test-branch,abc1234,passed,2026-05-10,2,3",
+                        "",
+                    ]
+                ),
+            )
+
+            parsed = parse_ledger(root, "docs/development/testing/test-execution-targets.csv")
+
+        self.assertEqual(parsed["static.sample"]["last_result"], "passed")
+        self.assertEqual(parsed["static.sample"]["pass_count"], "2")
+
+    def test_registry_lint_accepts_csv_ledger_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\nstatic.sample\n")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "static.sample",
+                            "category": "static-check",
+                            "risk": "static",
+                            "working_directory": ".",
+                            "commands": [{"label": "ok", "argv": ["python", "--version"]}],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": "static.sample",
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
 
         self.assertEqual(issues, [])
 
@@ -607,7 +677,7 @@ class ValidationSelectorTests(unittest.TestCase):
             issues,
         )
 
-    def test_registry_lint_rejects_missing_ledger_heading(self):
+    def test_registry_lint_rejects_missing_ledger_id(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "### Test ID: `other.target`\n")
@@ -631,7 +701,7 @@ class ValidationSelectorTests(unittest.TestCase):
 
             issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
 
-        self.assertIn("static.sample: ledger_id not found in ledger headings: static.sample", issues)
+        self.assertIn("static.sample: ledger_id not found in ledger: static.sample", issues)
 
     def test_selector_marks_structured_history_stale_for_different_diff_signature(self):
         changed_path = "docs/development/TEST_SUITE_MAP.md"

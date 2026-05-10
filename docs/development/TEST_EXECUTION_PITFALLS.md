@@ -2656,10 +2656,11 @@ This is a test semantics pitfall, not a reason to remove the login-time repair b
 
 ### Ledger interpretation
 
-Record environment failures and interruptions in `TEST_EXECUTION_LEDGER.md`:
+Record environment failures and interruptions in
+[`testing/test-execution-runs.csv`](testing/test-execution-runs.csv):
 
-- increment `Run count` for started validation attempts that were blocked or interrupted;
-- increment `Pass count` only for actual passed test runs;
+- increment `run_count` in `test-execution-targets.csv` for started validation attempts that were blocked or interrupted;
+- increment `pass_count` only for actual passed test runs;
 - record whether a skip was eliminated by provisioning the missing condition;
 - store exact local paths and downloaded tool locations only in ignored `.e2e-run/` handoff notes.
 
@@ -2908,16 +2909,21 @@ Interpretation rule:
 The structured execution ledger lives at:
 
 ```text
-<repo-root>/docs/development/TEST_EXECUTION_LEDGER.md
+<repo-root>/docs/development/testing/test-execution-targets.csv
+<repo-root>/docs/development/testing/test-execution-runs.csv
 ```
 
-It is meant to help agents avoid reflexively rerunning every suite when a narrow change only touches known surfaces. The ledger becomes actively harmful if failed, blocked, timed-out, skipped, or interrupted validation attempts are omitted from the `Run count`.
+`TEST_EXECUTION_LEDGER.md` is only the stable Markdown entry point. The CSV
+tables are meant to help agents avoid reflexively rerunning every suite when a
+narrow change only touches known surfaces. The ledger becomes actively harmful
+if failed, blocked, timed-out, skipped, or interrupted validation attempts are
+omitted from `run_count` and the append-only run table.
 
 Fix pattern:
 
 - record every observed validation attempt that was started for a target, including blocked Playwright runs and environment failures;
-- increment `Run count` for blocked/failed/timed-out/interrupted/skipped attempts;
-- increment `Pass count` only for `Result: passed`;
+- increment `run_count` for blocked/failed/timed-out/interrupted/skipped attempts;
+- increment `pass_count` only for `result=passed`;
 - keep committed command rows repository-relative (`<repo>`, `<repo>/apps/web/admin`, `<python-with-requirements>`);
 - put machine-specific paths, user profile names, browser cache paths, local database files, and exact private working directories in `.e2e-run/local-private-paths.md` or another ignored `.e2e-run/` note;
 - do not backfill historical pass counts from memory or branch names.

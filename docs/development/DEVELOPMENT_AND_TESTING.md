@@ -161,11 +161,11 @@ Artifact and ledger rules:
   evidence. They can help the selector identify fresh local runs for the same
   changed-path signature.
 - Do not commit `.agent-run/` artifacts.
-- Do not update [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md) for
-  selector output, dry-run planning, or commands that were only recommended.
-- Do update the ledger manually when an actual target run should become durable
-  project history. Review the generated `ledger-snippet.md` first and redact any
-  private machine details.
+- Do not update [`testing/test-execution-runs.csv`](testing/test-execution-runs.csv)
+  for selector output, dry-run planning, or commands that were only recommended.
+- Do update the CSV ledger manually when an actual target run should become
+  durable project history. Review the generated `ledger-snippet.md` first and
+  redact any private machine details.
 - If a runner result is `blocked`, `timed out`, `interrupted`, or `skipped`, do
   not summarize it as a pass. Record or hand off the unresolved validation
   state.
@@ -215,9 +215,9 @@ Inputs:
 - the machine-readable registry is
   [`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json);
 - the script also parses target-level history from
-  [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md) so recommendations can
-  show the last observed result, last commit, and pass/run count when a ledger
-  entry exists;
+  [`testing/test-execution-targets.csv`](testing/test-execution-targets.csv) so
+  recommendations can show the last observed result, last commit, and pass/run
+  count when a ledger entry exists;
 - unless `--no-history` is supplied, the script also reads ignored structured
   local history from `<repo>/.agent-run/validation-history.jsonl`. Structured
   history is treated as fresh evidence only when its changed-path signature
@@ -267,7 +267,8 @@ Operational rules:
 - `history_status=blocked` means the latest structured runner evidence for the
   current changed-path snapshot was blocked by environment or orchestration
   preflight. Treat it as unresolved validation, not a product pass or fail.
-- Record only tests that actually ran in `TEST_EXECUTION_LEDGER.md`. Selector
+- Record only tests that actually ran in
+  [`testing/test-execution-runs.csv`](testing/test-execution-runs.csv). Selector
   output and `--paths` smoke runs are planning/discovery, not observed test
   execution.
 
@@ -329,10 +330,12 @@ Exit codes:
 
 Treat runner artifacts as local evidence. If a run should become durable project
 history, review the generated `ledger-snippet.md`, redact any private details if
-needed, and then update [`TEST_EXECUTION_LEDGER.md`](TEST_EXECUTION_LEDGER.md)
+needed, and then update
+[`testing/test-execution-runs.csv`](testing/test-execution-runs.csv) and
+[`testing/test-execution-targets.csv`](testing/test-execution-targets.csv)
 manually with the observed result.
 
-Structured history is a machine-readable local companion to the Markdown
+Structured history is a machine-readable local companion to the committed CSV
 ledger, not a replacement for it. It records target id, result, failure class,
 artifact pointers, changed paths, a changed-path signature, and parsed test
 artifact summaries when available so the selector can tell whether a local run
@@ -390,9 +393,10 @@ Known first-version limitations:
   Playwright `test(...)` case level. The runner can now record pytest JUnit XML
   case summaries, but the selector still uses target-level history for
   sufficiency decisions.
-- Markdown ledger parsing is intentionally shallow: it extracts the strict
-  `Last result`, `Last commit`, `Pass count`, and `Run count` fields. The
-  machine-readable registry remains the source for selection rules.
+- CSV ledger parsing is intentionally shallow: it extracts `last_result`,
+  `last_commit`, `pass_count`, and `run_count` from
+  [`testing/test-execution-targets.csv`](testing/test-execution-targets.csv).
+  The machine-readable registry remains the source for selection rules.
 - Python `fnmatch` treats `**` as a glob pattern, not as a full gitignore-style
   recursive operator with every edge case. When writing registry rules, include
   both one-level and recursive patterns if both are required, for example
@@ -814,7 +818,11 @@ Operational rules for agents:
 - If an attachment test skips because a RAR extractor is absent, install `unrar` / `unrar-free` or provide a compatible `tar` / `bsdtar` fallback, then rerun the attachment suite so the RAR cases execute.
 - If Playwright skips or aborts because Node, browser binaries, or subprocess permissions are missing, install the missing runtime or rerun in an approved execution context before claiming full browser coverage.
 - If a test is conditionally skipped for seed-data, service, browser, or database state, create the required condition at least once during the full validation cycle. A skip may remain documented as a fast-loop profile, but it must not be the final proof for the affected code path.
-- Record the environment work and any blocked/interrupted attempts in `TEST_EXECUTION_LEDGER.md`. Use committed docs with placeholders such as `<repo>`, `<local-postgres-bin>`, and `<local-browser-cache>`; put real machine paths only in ignored `.e2e-run/` notes.
+- Record the environment work and any blocked/interrupted attempts in
+  [`testing/test-execution-runs.csv`](testing/test-execution-runs.csv). Use
+  committed docs with placeholders such as `<repo>`, `<local-postgres-bin>`,
+  and `<local-browser-cache>`; put real machine paths only in ignored
+  `.e2e-run/` notes.
 
 This policy intentionally raises the bar for "full suite" claims. SQLite-only pytest, Playwright discovery, or a target that skipped due to missing dependencies can still be useful for iteration, but they are not complete evidence that the skipped behavior works.
 
