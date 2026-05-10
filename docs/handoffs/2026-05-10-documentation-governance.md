@@ -648,9 +648,9 @@ repository root, but the failing frontier was pushed far back:
 
 1. Validate `ops/scripts/set-password.sh` with `bash -n` on Linux/CI or during
    the next deployment-host check, because local Windows Bash is unavailable.
-2. Treat the operator-script governance and repo-local skill bridge work as the
-   completed first batch. The next substantial repository-normalization task is
-   the second planned batch: harden local test and governance ergonomics.
+2. Treat the operator-script governance, repo-local skill bridge, local pytest
+   guardrail, schema governance guardrail, and API-surface governance guardrail
+   as the completed repository-normalization sweep for this branch.
 3. If broader backend confidence is required locally later, run one pytest
    process only and delete `.pytest_tmp/test.sqlite` first if
    table-exists/no-such-table errors recur. Use
@@ -699,16 +699,15 @@ evidence, and handoff notes.
    subject-scoped teacher access in both docs and tests. This step should reduce
    future false bug hunts and make repository-normalization work faster without
    weakening validation honesty.
-   Current follow-up started this step with
+   Current follow-up covered the first useful slice of this step with
    `ops/scripts/dev/pytest_sqlite_guard.py`, a read-only guardrail that reports
-   active pytest processes and shared SQLite file state before cleanup.
-   The next guardrail in this batch is
+   active pytest processes and shared SQLite file state before cleanup;
    `ops/scripts/dev/check_schema_governance.py`, paired with the
    `skills/data-migration-audit/SKILL.md` entrypoint for schema-repair and
-   no-Alembic upgrade work.
-   API-surface work now has the same lightweight pattern through
+   no-Alembic upgrade work; and
    `ops/scripts/dev/check_api_surface_governance.py` and
-   `skills/api-surface-audit/SKILL.md`. This is still not a checked-in OpenAPI
+   `skills/api-surface-audit/SKILL.md` for route/client/doc drift. This is
+   still not a checked-in OpenAPI
    export; the generated/static API reference remains a future follow-up.
 
 ### Code as documentation
@@ -778,12 +777,15 @@ evidence, and handoff notes.
 ### Skills and scriptability
 
 - Keep `skills/repository-normalization` focused on executable governance work.
-- Strong skill candidates still include:
-  - UTF-8 / mojibake-safe editing
-  - permission audit
-  - deployment upgrade checks
-  - data migration audit
-  - docs/code consistency checks
+- Repo-local skills now cover the recurring governance workflows found in this
+  branch: repository normalization, validation selection, UTF-8 safe editing,
+  permission audit, deployment governance, local test triage, data migration
+  audit, and API surface audit.
+- Remaining automation candidates are narrower:
+  - generated or checked-in OpenAPI reference export,
+  - formal migration/Alembic workflow,
+  - machine-readable permission matrix beyond the current security tests,
+  - deeper docs/code consistency checks for feature-specific docs.
 - Prefer scripts over prose when a rule can be automatically checked.
 - For schema-repair or no-Alembic upgrade work, start with
   `skills/data-migration-audit/SKILL.md` and
