@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SELECTOR = REPO_ROOT / "ops" / "scripts" / "dev" / "select_validation_targets.py"
 sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
 from lint_validation_registry import lint_registry  # noqa: E402
+from check_operator_scripts import check_scripts as check_operator_scripts  # noqa: E402
+from check_repo_skills import check_repo_skills  # noqa: E402
 from select_validation_targets import parse_ledger  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
 from run_validation_target import (
@@ -147,13 +150,38 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_repo_local_skill_change_is_static_text_governance(self):
+        payload = run_selector("--paths", "skills/validation-selection/SKILL.md")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.repo_local_skills", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_init_db_sql_maps_to_static_encoding_target(self):
         payload = run_selector("--paths", "ops/scripts/init_db.sql")
 
         ids = recommendation_ids(payload)
-        self.assertEqual(ids, {"static.encoding_text_tools"})
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.operator_scripts_governance", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_operator_script_change_selects_static_governance_target(self):
+        payload = run_selector("--paths", "ops/scripts/deploy_frontend.sh")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.operator_scripts_governance", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+        target = recommendation(payload, "static.operator_scripts_governance")
+        self.assertEqual(target["risk"], "static")
+        self.assertIn("operator-scripts", target["coverage_tags"])
 
     def test_security_sensitive_path_recommends_security_and_full_postgres_context(self):
         payload = run_selector("--paths", "apps/backend/courseeval_backend/core/auth.py")
@@ -567,6 +595,45 @@ class ValidationSelectorTests(unittest.TestCase):
         )
 
         self.assertEqual(issues, [])
+
+    def test_operator_script_governance_check_passes_for_repository_scripts(self):
+        self.assertEqual(check_operator_scripts(REPO_ROOT), [])
+
+    def test_operator_script_governance_check_detects_frontend_backend_restart_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(REPO_ROOT / "ops", root / "ops")
+            deploy_frontend = root / "ops/scripts/deploy_frontend.sh"
+            text = deploy_frontend.read_text(encoding="utf-8")
+            deploy_frontend.write_text(text + "\nsystemctl restart courseeval-backend.service\n", encoding="utf-8")
+
+            issues = check_operator_scripts(root)
+
+        self.assertIn(
+            "ops/scripts/deploy_frontend.sh: frontend-only deploy must not restart the backend service",
+            issues,
+        )
+
+    def test_repo_local_skill_check_passes_for_repository_skills(self):
+        self.assertEqual(check_repo_skills(REPO_ROOT), [])
+
+    def test_repo_local_skill_check_detects_todo_placeholder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill_dir = root / "skills/sample-skill"
+            skill_dir.mkdir(parents=True)
+            write_text(
+                skill_dir / "SKILL.md",
+                "---\nname: sample-skill\ndescription: Use this for a realistic sample skill validation case.\n---\n\nTODO\n",
+            )
+            write_text(
+                skill_dir / "agents/openai.yaml",
+                'interface:\n  display_name: "Sample Skill"\n  short_description: "Sample skill metadata."\n  default_prompt: "Use this sample skill."\n',
+            )
+
+            issues = check_repo_skills(root)
+
+        self.assertIn("skills/sample-skill/SKILL.md: contains TODO placeholder", issues)
 
     def test_selector_parses_csv_ledger(self):
         with tempfile.TemporaryDirectory() as tmp:

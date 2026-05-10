@@ -51,6 +51,7 @@
                     "AGENTS.md",
                     "README.md",
                     "docs/",
+                    "skills/",
                     "ops/scripts/windows/set-utf8-session.ps1",
                     "ops/scripts/dev/safe_show_text.py",
                     "ops/scripts/dev/safe_write_text.py",
@@ -65,6 +66,8 @@
                     ".github/workflows/*.yaml",
                     "docs/**/*.md",
                     "docs/**/*.txt",
+                    "skills/**/SKILL.md",
+                    "skills/**/agents/*.yaml",
                     "ops/scripts/*.sh",
                     "ops/scripts/*.sql",
                     "ops/scripts/dev/*.py",
@@ -97,6 +100,7 @@
                         "ops/scripts/dev/run_validation_target.py",
                         "ops/scripts/dev/run_validation_profile.py",
                         "ops/scripts/dev/validation_history.py",
+                        "ops/scripts/dev/check_repo_skills.py",
                         "ops/scripts/dev/lint_validation_registry.py",
                         "tests/backend/manual/test_validation_selector.py"
                     ]
@@ -135,6 +139,7 @@
                     "ops/scripts/dev/run_validation_target.py",
                     "ops/scripts/dev/run_validation_profile.py",
                     "ops/scripts/dev/validation_history.py",
+                    "ops/scripts/dev/check_repo_skills.py",
                     "ops/scripts/dev/lint_validation_registry.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
@@ -161,6 +166,64 @@
             },
             "ledger_id": "static.validation_selector",
             "notes": "First-version target; add a ledger entry after this selector is first committed and observed."
+        },
+        {
+            "id": "static.operator_scripts_governance",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Cross-platform static governance checks for production operator scripts, deployment helpers, and database bootstrap SQL.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "operator-scripts",
+                "deployment",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile operator script check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/check_operator_scripts.py"
+                    ]
+                },
+                {
+                    "label": "operator script governance",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_operator_scripts.py"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "ops/scripts/deploy_all.sh",
+                    "ops/scripts/deploy_backend.sh",
+                    "ops/scripts/deploy_frontend.sh",
+                    "ops/scripts/deploy_parent_portal.sh",
+                    "ops/scripts/example_safe_upgrade_aliyun.sh",
+                    "ops/scripts/init_db.sql",
+                    "ops/scripts/post_deploy_check.sh",
+                    "ops/scripts/pull_and_deploy.sh",
+                    "ops/scripts/redeploy.sh",
+                    "ops/scripts/reset_user_password.sh",
+                    "ops/scripts/set-password.sh",
+                    "ops/scripts/setup_server.sh",
+                    "ops/scripts/lib/deploy_repo_dir.sh",
+                    "ops/scripts/lib/git_sync_server.sh",
+                    "ops/scripts/dev/check_operator_scripts.py",
+                    "docs/operations/DEPLOYMENT_AND_OPERATIONS.md",
+                    "docs/development/GIT_WORKFLOW.md"
+                ],
+                "globs": [
+                    "ops/scripts/*.sh",
+                    "ops/scripts/*.sql",
+                    "ops/scripts/lib/*.sh"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "This target does not execute Bash or contact services. Use it as a governance guardrail before Linux-only syntax/runtime checks."
         },
         {
             "id": "static.repo_line_health",
@@ -196,6 +259,50 @@
             },
             "ledger_id": "static.repo_line_health",
             "notes": "Recommended when repository layout, tracking policy, or line-health tooling changes."
+        },
+        {
+            "id": "static.repo_local_skills",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Static validation for repo-local CourseEval skills and their lightweight agent metadata.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "skills",
+                "agent-governance",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile skill check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/check_repo_skills.py"
+                    ]
+                },
+                {
+                    "label": "repo-local skill check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_repo_skills.py"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "skills/",
+                    "ops/scripts/dev/check_repo_skills.py",
+                    "AGENTS.md",
+                    "docs/README.md"
+                ],
+                "globs": [
+                    "skills/**/SKILL.md",
+                    "skills/**/agents/*.yaml"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "This intentionally avoids external PyYAML so skill sanity checks run in the normal repo environment."
         },
         {
             "id": "backend.learning_notes.api",

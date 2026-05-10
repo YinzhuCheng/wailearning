@@ -6,6 +6,26 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 ---
 
+## 0. Repository governance philosophy
+
+CourseEval treats **code as documentation** and **documentation as governance**.
+
+- **Code as documentation:** implementation is normally the source of truth.
+  When documentation conflicts with code, update the documentation to match the
+  current implementation unless the task explicitly asks for a product fix.
+  If the documentation describes a more coherent intended rule, or records
+  planned behavior that has not been implemented yet, update or add code and
+  tests instead, and keep the docs explicit about current vs intended behavior.
+- **Documentation as governance:** durable repository rules, operational
+  workflows, and repeated agent procedures belong in committed documentation.
+  When a workflow is common, fragile, or repeatedly rediscovered, prefer an
+  executable script or repo-local skill over prose alone.
+  Create or update repo-local skills whenever recurring workflows would help
+  future agents act consistently; do this as needed during normal development,
+  not only during dedicated documentation passes.
+
+---
+
 ## 1. Non-negotiable rules
 
 1. **Code is the source of truth.** If docs disagree with code, update docs (unless explicitly tasked to fix product bugs).
@@ -137,11 +157,30 @@ current task.
 | In-process LLM worker | [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](docs/architecture/ASYNC_TASKS_AND_WORKERS.md) |
 | Known gaps / risks | [`docs/known-issues-and-risks.md`](docs/known-issues-and-risks.md) |
 | Operational playbook | [`docs/agent-playbook.md`](docs/agent-playbook.md) |
-| Repo-local skills | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) |
+| Repo-local skills | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md) |
 
 ---
 
-## 4. grep keywords (fast navigation)
+## 4. Repo-local skills
+
+Use these skills as executable process memory for common agent tasks. Update
+them when a repeated workflow becomes stable enough to encode.
+When a workflow becomes common, fragile, or repeatedly useful, add or revise a
+repo-local skill as part of the same governance cycle, preferably backed by a
+script when the workflow can be automated.
+
+| Skill | Use when |
+|-------|----------|
+| [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) | Aligning docs, scripts, ops templates, package paths, service names, validation ledgers, or agent guidance with current implementation truth |
+| [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md) | Choosing, running, or documenting change-scoped validation targets and selector output |
+| [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md) | Editing multilingual or encoding-sensitive files from Windows PowerShell |
+| [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md) | Reviewing or changing authorization, role boundaries, course access, parent-code flows, or sensitive API behavior |
+| [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md) | Changing deployment scripts, ops docs, `.env.production`, nginx/systemd templates, or server Git deploy wrappers |
+| [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md) | Diagnosing local pytest, SQLite, Playwright, port, process, dependency, or Windows test-environment hazards |
+
+---
+
+## 5. grep keywords (fast navigation)
 
 | Intent | Keywords / symbols |
 |--------|---------------------|
@@ -157,7 +196,7 @@ current task.
 
 ---
 
-## 5. High-risk modules (touch with a trace plan)
+## 6. High-risk modules (touch with a trace plan)
 
 1. **`apps/backend/courseeval_backend/llm_grading.py`** — quotas, retries, attachment extraction, effective-score aggregation, worker orchestration.
 2. **`apps/backend/courseeval_backend/domains/courses/access.py`** — enrollment visibility; impacts every role.
@@ -167,7 +206,7 @@ current task.
 
 ---
 
-## 6. Diff-based validation workflow
+## 7. Diff-based validation workflow
 
 Use the diff selector as the default validation planning entrypoint after every
 non-trivial edit. It is advisory, not a replacement for engineering judgment,
@@ -198,7 +237,7 @@ under "Diff-based validation workflow".
 
 ---
 
-## 7. Verification checklist after edits
+## 8. Verification checklist after edits
 
 1. **Backend:** targeted `pytest` for touched package (from repo root). See [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md).
 2. **LLM paths:** run nearest tests under `tests/backend/llm/` or homework folders; watch for HTTP mocking patterns.
@@ -210,7 +249,7 @@ under "Diff-based validation workflow".
 
 ---
 
-## 8. Naming honesty (avoid agent confusion)
+## 9. Naming honesty (avoid agent confusion)
 
 - **Product name:** README branding is **CourseEval**; npm package may still show legacy names (`courseeval-admin`) — treat as historical artifact unless migrating build metadata.
 - **`Subject` vs “course”:** ORM model `Subject` maps to user-facing “course” in much of the UI and `/api/subjects` routes.
@@ -218,7 +257,7 @@ under "Diff-based validation workflow".
 
 ---
 
-## 9. Where CI runs tests
+## 10. Where CI runs tests
 
 Cloud pipeline definitions (Alibaba DevOps style YAML) live under [`ops/ci/`](ops/ci/); `pr-pipeline.yml` uses `python3 -m pytest -q`.
 

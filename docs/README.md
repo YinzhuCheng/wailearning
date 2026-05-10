@@ -20,6 +20,11 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
 | [`architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), mapping, pitfalls |
 | [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Repeatable workflow for code-as-docs / docs-as-governance passes |
+| [`../skills/validation-selection/SKILL.md`](../skills/validation-selection/SKILL.md) | Change-scoped validation selection and honest validation reporting |
+| [`../skills/utf8-safe-editing/SKILL.md`](../skills/utf8-safe-editing/SKILL.md) | UTF-8-safe editing for multilingual / PowerShell-sensitive files |
+| [`../skills/permission-audit/SKILL.md`](../skills/permission-audit/SKILL.md) | Backend authorization, role-boundary, and course-access audit workflow |
+| [`../skills/deployment-governance/SKILL.md`](../skills/deployment-governance/SKILL.md) | Deployment script, env template, nginx/systemd, and ops-doc governance |
+| [`../skills/local-test-triage/SKILL.md`](../skills/local-test-triage/SKILL.md) | Local pytest / SQLite / Playwright / process hazard triage |
 
 ---
 
@@ -78,6 +83,14 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 ## 4. Documentation principles
 
 - These files describe the **current implementation** in this repository.
+- CourseEval treats **code as documentation** and **documentation as
+  governance**: implementation usually wins when docs conflict with code, while
+  durable rules and repeated workflows should be written into docs, scripts, or
+  repo-local skills.
+- Whenever a workflow becomes common, fragile, or repeatedly useful, create or
+  update a repo-local skill as needed so future agents can execute it
+  consistently; prefer adding a supporting script when the workflow can be
+  automated.
 - If behavior changes in code, update these documents in the same change set.
 - Contributors, including LLM agents, are expected to read the task-relevant documents before changing code, tests, structure, or deployment assets.
 - The documentation set is part of the implementation surface, not optional commentary.

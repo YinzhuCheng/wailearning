@@ -139,6 +139,19 @@ Primary scripts:
 - `ops/scripts/redeploy.sh`
 - `ops/scripts/pull_and_deploy.sh`
 
+Operator-script governance:
+
+- `ops/scripts/dev/check_operator_scripts.py` performs cross-platform static
+  checks for deployment script contracts that are easy to break during
+  maintenance: Bash entry headers, frontend deploys using `npm ci`, frontend
+  deploys not restarting the backend service, backend deploys preserving shared
+  uploads, `post_deploy_check.sh` keeping public health checks opt-in, explicit
+  Git refspec fetches, and `init_db.sql` fail-fast variable handling.
+- The diff selector recommends `static.operator_scripts_governance` for
+  `ops/scripts/*.sh`, `ops/scripts/*.sql`, and helper-script changes. It is not
+  a substitute for running the scripts on Linux, but it is the default cheap
+  guardrail before handoff.
+
 Implementation notes that matter operationally:
 
 - `deploy_backend.sh` creates `${APP_ROOT}/shared/uploads` and non-destructively syncs any legacy `${SOURCE_DIR}/uploads/` content there when present, leaving the old directory in place for manual cleanup

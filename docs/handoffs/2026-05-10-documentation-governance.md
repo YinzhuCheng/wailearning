@@ -4,20 +4,25 @@
 
 - Branch: `cursor/repository-normalization`
 - Pushed baseline before this follow-up: `445e85f docs: normalize governance and fix backend access regressions`
-- Follow-up prepared in this local round: small subject-scoped score/dashboard
-  access fix plus this handoff update. Check the current branch tip with
-  `git log -1 --oneline` after commit/push.
+- Local follow-up prepared after the latest pushed baseline:
+  - operator-script governance guardrail and selector coverage;
+  - repo-local skill set for recurring agent workflows;
+  - explicit code-as-docs / docs-as-governance rules in the entry docs;
+  - this handoff refresh for commit/push.
+  Check the current branch tip with `git log -1 --oneline` after commit/push.
 - Previous baseline before the documentation-governance/backend-fix round:
   `84a8bce095058929a6188b0cbe2fbd3f17ef3187`
-- Main workstream in this round:
-  - continue repository-normalization / docs-as-governance alignment;
-  - fix the failing `Backend quick pytest` line that likely explains the GitHub `3/4` check state around the lightweight validation workflow.
+- Main workstream in this follow-up:
+  - finish the first repository-normalization governance batch;
+  - bridge into the second batch by making recurring workflows scriptable and
+    skill-backed.
 
 This handoff intentionally replaces the earlier same-file content. The active
 context is no longer the Playwright-selector cleanup pass; it is now:
 
 1. documentation / ops / governance normalization, and
-2. systematic `pytest --maxfail=1` bug fixing until the quick backend suite is green.
+2. repo-local agent workflow capture through scripts, validation targets, and
+   skills.
 
 ## Completed
 
@@ -66,6 +71,49 @@ context is no longer the Playwright-selector cleanup pass; it is now:
   `ops/scripts/*.sh` diffs map to `static.encoding_text_tools`.
 - Updated `tests/backend/manual/test_validation_selector.py` to cover the new
   `.env.production` placeholder-expansion behavior.
+- Latest operator-script governance follow-up:
+  - added `ops/scripts/dev/check_operator_scripts.py`, a cross-platform static
+    check for production operator-script contracts;
+  - expanded that check to cover setup-server first-run instructions,
+    full-stack deploy composition, password-reset/admin-create semantics,
+    safe-upgrade restore points, bootstrap invocation, and shared
+    `post_deploy_check.sh` usage in addition to the first pass's frontend,
+    backend, health-check, Git-sync, and `init_db.sql` contracts;
+  - added `static.operator_scripts_governance` to
+    `tests/TEST_SELECTION_TARGETS.json` so `ops/scripts/*.sh`,
+    `ops/scripts/*.sql`, helper-script, and deployment-doc changes get a
+    script-specific static guardrail in addition to encoding checks;
+  - updated `tests/backend/manual/test_validation_selector.py` to assert
+    operator-script and `init_db.sql` selector behavior, plus direct
+    check-script regression coverage for the no-backend-restart frontend
+    deploy rule;
+  - documented the new guardrail in
+    `docs/operations/DEPLOYMENT_AND_OPERATIONS.md` and
+    `docs/development/GIT_WORKFLOW.md`.
+- First-to-second-round bridge task:
+  - added the repository governance philosophy to `AGENTS.md`: CourseEval treats
+    code as documentation and documentation as governance;
+  - made the repo-local skill rule explicit in `AGENTS.md` and
+    `docs/README.md`: whenever a workflow becomes common, fragile, or
+    repeatedly useful, create or update a repo-local skill as needed, preferably
+    with a supporting script when the workflow can be automated;
+  - added repo-local skills for common agent workflows:
+    `skills/validation-selection/SKILL.md`,
+    `skills/utf8-safe-editing/SKILL.md`,
+    `skills/permission-audit/SKILL.md`,
+    `skills/deployment-governance/SKILL.md`, and
+    `skills/local-test-triage/SKILL.md`;
+  - kept the existing `skills/repository-normalization/SKILL.md` as the broad
+    docs/code governance skill;
+  - indexed all repo-local skills from `AGENTS.md` and `docs/README.md`.
+  - added `ops/scripts/dev/check_repo_skills.py` and
+    `static.repo_local_skills` so repo-local skill changes have a PyYAML-free
+    sanity check in the normal validation selector flow.
+  - counted repository text lines using `ops/scripts/dev/repo_line_health.py`:
+    tracked files report `total_text_lines=115833` and
+    `health_text_lines_excluding_generated_or_lock=112096`; current working
+    tree including untracked files reports `total_text_lines=159102` and
+    `health_text_lines_excluding_generated_or_lock=155365`.
 
 ### Deploy script behavior
 
@@ -191,6 +239,7 @@ fallback logic:
 - `apps/backend/courseeval_backend/api/routers/users.py`
 - `docs/architecture/CONFIGURATION_REFERENCE.md`
 - `docs/architecture/TROUBLESHOOTING.md`
+- `docs/README.md`
 - `docs/development/GIT_WORKFLOW.md`
 - `docs/development/TEST_EXECUTION_PITFALLS.md`
 - `docs/handoffs/2026-05-10-documentation-governance.md`
@@ -202,8 +251,14 @@ fallback logic:
 - `ops/scripts/deploy_backend.sh`
 - `ops/scripts/set-password.sh`
 - `ops/scripts/dev/check_repository_normalization.py`
+- `ops/scripts/dev/check_repo_skills.py`
 - `ops/scripts/dev/check_text_encoding.py`
 - `ops/scripts/dev/run_validation_target.py`
+- `skills/deployment-governance/SKILL.md`
+- `skills/local-test-triage/SKILL.md`
+- `skills/permission-audit/SKILL.md`
+- `skills/utf8-safe-editing/SKILL.md`
+- `skills/validation-selection/SKILL.md`
 - `tests/TEST_SELECTION_TARGETS.json`
 - `tests/backend/courses/test_course_access_student_enrollment.py`
 - `tests/backend/courses/test_student_course_catalog_behavior.py`
@@ -402,6 +457,72 @@ Passed after fixes:
   - `bash -n ops/scripts/set-password.sh` could not run on this workstation:
     the `bash` command resolves to the Windows WSL installer prompt, so this is
     an environment block rather than a script syntax result.
+- Operator-script validation-selection follow-up:
+  - `python ops\scripts\dev\check_operator_scripts.py` passed;
+    `Operator script governance check passed. checked=14`.
+  - `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+  - `python -m py_compile ops\scripts\dev\check_operator_scripts.py` passed.
+  - `python ops\scripts\dev\select_validation_targets.py --paths ops/scripts/deploy_frontend.sh --json`
+    recommended `static.encoding_text_tools` and
+    `static.operator_scripts_governance`, with no unmatched paths.
+  - `python -m unittest tests.backend.manual.test_validation_selector -v`
+    passed; `40 tests OK`.
+  - `python ops\scripts\dev\lint_validation_registry.py` passed.
+  - `python ops\scripts\dev\select_validation_targets.py --worktree --json`
+    reported acceptable static-only recommendations:
+    `static.encoding_text_tools`, `static.operator_scripts_governance`, and
+    `static.validation_selector`.
+  - `python ops\scripts\dev\run_validation_target.py static.operator_scripts_governance --timeout-seconds 120`
+    passed.
+  - `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+    passed.
+  - `python ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+    passed; `scanned=4 decode_errors=0 suspicious=0`.
+  - `python ops\scripts\dev\check_repository_normalization.py` passed;
+    `scanned=382 stale=0 missing_required_paths=0`.
+  - First-round hardening continuation:
+    - `python ops\scripts\dev\check_operator_scripts.py` passed after the
+      rule expansion; `Operator script governance check passed. checked=14`.
+    - `python -m unittest tests.backend.manual.test_validation_selector -v`
+      passed; `42 tests OK`.
+    - `python -m py_compile ops\scripts\dev\check_operator_scripts.py tests\backend\manual\test_validation_selector.py`
+      passed.
+    - `python ops\scripts\dev\select_validation_targets.py --paths ops/scripts/redeploy.sh --json`
+      recommended `static.encoding_text_tools` and
+      `static.operator_scripts_governance`, with no unmatched paths.
+- Repo-local skills / bridge-task validation:
+  - `python ops\scripts\dev\check_repo_skills.py` passed.
+  - `python -m py_compile ops\scripts\dev\check_repo_skills.py tests\backend\manual\test_validation_selector.py`
+    passed.
+  - `python -m unittest tests.backend.manual.test_validation_selector -v`
+    passed; `45 tests OK`.
+  - `python ops\scripts\dev\select_validation_targets.py --worktree --json`
+    reported acceptable static-only recommendations:
+    `static.encoding_text_tools`, `static.operator_scripts_governance`,
+    `static.repo_local_skills`, and `static.validation_selector`; no unmatched
+    paths.
+  - `python ops\scripts\dev\run_validation_target.py static.repo_local_skills --timeout-seconds 120`
+    passed; `Repo-local skill check passed.`
+  - `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+    passed.
+  - `python ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+    passed; latest run scanned `19` changed text files with
+    `decode_errors=0` and `suspicious=0`.
+  - `python ops\scripts\dev\run_validation_target.py static.operator_scripts_governance --timeout-seconds 120`
+    passed; `Operator script governance check passed. checked=14`.
+  - `python ops\scripts\dev\check_repository_normalization.py` passed;
+    `scanned=382 stale=0 missing_required_paths=0`.
+  - `python ops\scripts\dev\repo_line_health.py --json` reported tracked
+    repository text totals: `total_text_files=380`,
+    `total_text_lines=115833`, and
+    `health_text_lines_excluding_generated_or_lock=112096`.
+  - `python ops\scripts\dev\repo_line_health.py --json --include-untracked`
+    reported current working-tree text totals including untracked new files:
+    `total_text_files=1163`, `total_text_lines=159102`, and
+    `health_text_lines_excluding_generated_or_lock=155365`.
+  - `git diff --check` passed except for the non-blocking working-copy warning
+    that `tests/TEST_SELECTION_TARGETS.json` will be converted from CRLF to LF
+    the next time Git touches it.
 
 ### Full-suite progression evidence
 
@@ -432,6 +553,10 @@ repository root, but the failing frontier was pushed far back:
 
 ## Known Failures / Incomplete Verification
 
+- This local follow-up did not run product backend/frontend suites because the
+  current diff is governance docs, validation tooling, operator-script static
+  checks, and repo-local skills. The selector reported static-only validation
+  as acceptable for the current worktree after the relevant targets were run.
 - Remote validation was confirmed green by the user after commit `445e85f`.
   Local full-suite reruns in this worktree were intentionally not pursued
   further after they were interrupted and left duplicate pytest processes
@@ -453,6 +578,10 @@ repository root, but the failing frontier was pushed far back:
   selector recommends them for release-quality evidence because `main.py` and
   `bootstrap.py` are shared startup surfaces, but the user asked not to spend
   time on broad local validation while remote validation was already green.
+- `skill-creator`'s bundled `quick_validate.py` was not used for the new
+  repo-local skills because this environment lacks PyYAML. The repository now
+  has `ops/scripts/dev/check_repo_skills.py` and `static.repo_local_skills` as
+  the PyYAML-free validation path for these skills.
 
 ## Risks
 
@@ -473,6 +602,9 @@ repository root, but the failing frontier was pushed far back:
 - Bash script syntax cannot currently be checked locally with `bash -n` because
   WSL/Bash is unavailable in this shell. Validate `ops/scripts/set-password.sh`
   on a Linux deployment host or CI shell before relying on it operationally.
+- The next commit should include the currently untracked `skills/*` and
+  `ops/scripts/dev/check_*` files. Confirm with `git status --short` before
+  pushing so repo-local skill indexes do not point at missing files.
 
 ## Recommended Next Steps
 
@@ -480,14 +612,14 @@ repository root, but the failing frontier was pushed far back:
 
 1. Validate `ops/scripts/set-password.sh` with `bash -n` on Linux/CI or during
    the next deployment-host check, because local Windows Bash is unavailable.
-2. Treat the repo-local first-run / deployment bootstrap governance pass as
-   complete after the `.env.production`, `init_db.sql`, `post_deploy_check.sh`,
-   frontend-deploy, and upgrade-example alignments, and move to the first
-   remaining repository-normalization step: operator script and
-   validation-selection normalization.
+2. Treat the operator-script governance and repo-local skill bridge work as the
+   completed first batch. The next substantial repository-normalization task is
+   the second planned batch: harden local test and governance ergonomics.
 3. If broader backend confidence is required locally later, run one pytest
    process only and delete `.pytest_tmp/test.sqlite` first if
    table-exists/no-such-table errors recur.
+4. Continue turning recurring local hazards into scripts, selector rules, or
+   repo-local skills when they become common enough to encode.
 
 ### Suggested next governance batch after the suite is green
 
@@ -630,7 +762,10 @@ git diff --check
 python ops/scripts/dev/check_repository_normalization.py
 python ops/scripts/dev/select_validation_targets.py --worktree
 python ops/scripts/dev/run_validation_target.py static.encoding_text_tools --timeout-seconds 120
+python ops/scripts/dev/run_validation_target.py static.operator_scripts_governance --timeout-seconds 120
+python ops/scripts/dev/run_validation_target.py static.repo_local_skills --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120
+python ops/scripts/dev/repo_line_health.py --json
 .\.venv\Scripts\python.exe -m pytest -q --maxfail=1
 .\.venv\Scripts\python.exe -m pytest -q
 ```
