@@ -2,6 +2,25 @@
 
 ## Completed
 
+- Followed the recommended next batch and cleaned the known E2E mojibake
+  selector hotspots in:
+  - `tests/e2e/web-admin/e2e-scenario-resilience.spec.js`
+  - `tests/e2e/web-admin/e2e-llm-hard-scenarios.spec.js`
+- Added `check_repository_normalization.py` to
+  `.github/workflows/lightweight-validation.yml` so the lightweight selector
+  tooling job now fails on active retired-name drift.
+- Added explicit validation selector targets for the two affected Playwright
+  specs:
+  - `admin.e2e.llm_hard_scenarios`
+  - `admin.e2e.scenario_resilience`
+- Repaired the stale Users/Roster table assumptions that made
+  `e2e-scenario-resilience.spec.js` fail under accumulated SQLite rows:
+  setup-only row picking now uses existing API helpers for batch class moves
+  and roster enrollment, while the tests still assert final backend state and
+  page recovery.
+- Updated the stale student elective migration case to match the current
+  backend contract: electives are school-wide self-enroll, and stale UI submit
+  should record the student's migrated `class_id`.
 - Continued the repository normalization line on `cursor/repository-normalization`.
 - Confirmed that several apparent mojibake hits in `README.md`, `AGENTS.md`,
   and `docs/README.md` are PowerShell display artifacts when viewed through
@@ -27,14 +46,29 @@
 - `docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`
 - `docs/development/TEST_EXECUTION_PITFALLS.md`
 - `docs/handoffs/2026-05-10-documentation-governance.md`
+- `.github/workflows/lightweight-validation.yml`
 - `ops/scripts/dev/check_repository_normalization.py`
 - `ops/scripts/dev/check_text_encoding.py`
 - `ops/scripts/setup_git_remotes.ps1`
 - `tests/TEST_SELECTION_TARGETS.json`
+- `tests/e2e/web-admin/e2e-scenario-resilience.spec.js`
+- `tests/e2e/web-admin/e2e-llm-hard-scenarios.spec.js`
 - `skills/repository-normalization/SKILL.md`
 
 ## Verification
 
+- `python ops/scripts/dev/check_text_encoding.py --fail-on-suspicious tests/e2e/web-admin/e2e-scenario-resilience.spec.js tests/e2e/web-admin/e2e-llm-hard-scenarios.spec.js .github/workflows/lightweight-validation.yml tests/TEST_SELECTION_TARGETS.json` - passed; `scanned=4 decode_errors=0 suspicious=0`.
+- `python -m py_compile ops/scripts/dev/validation_history.py ops/scripts/dev/select_validation_targets.py ops/scripts/dev/run_validation_target.py ops/scripts/dev/run_validation_profile.py ops/scripts/dev/lint_validation_registry.py ops/scripts/dev/check_repository_normalization.py tests/backend/manual/test_validation_selector.py` - passed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v` - passed; 36 tests OK.
+- `python ops/scripts/dev/lint_validation_registry.py` - passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree` - passed with every changed path matched. It reports `non_full_validation.status=needs_review` because `admin.e2e.scenario_resilience` is intentionally broad.
+- `npx.cmd playwright test e2e-llm-hard-scenarios.spec.js --project=chromium --list` from `apps/web/admin` - passed; discovered 12 tests.
+- `npx.cmd playwright test e2e-scenario-resilience.spec.js --project=chromium --list` from `apps/web/admin` - passed; discovered 31 tests.
+- Managed `npx.cmd playwright test e2e-llm-hard-scenarios.spec.js --project=chromium` from `apps/web/admin` ran all 12 tests to `ok`, then timed out after 900s during managed webServer cleanup; a post-run port check showed no listeners on 8012/3012.
+- `E2E_USE_REAL_WORKER=false npm.cmd run test:e2e:external -- e2e-llm-hard-scenarios.spec.js --project=chromium` from `apps/web/admin` - passed; 12 passed in 2.5m.
+- Initial external `e2e-scenario-resilience.spec.js` run exposed four stale Users/Roster UI setup failures (`27 passed, 4 failed`) matching documented Pitfalls 68, 72, and 73. After replacing those setup paths with API helpers and updating the elective migration assertion, the full rerun passed.
+- `E2E_USE_REAL_WORKER=false npm.cmd run test:e2e:external -- e2e-scenario-resilience.spec.js --project=chromium -g "stale roster dialog|duplicate stale teacher|stale student elective page|admin stale batch-class"` from `apps/web/admin` - passed; 4 passed in 1.0m.
+- `E2E_USE_REAL_WORKER=false npm.cmd run test:e2e:external -- e2e-scenario-resilience.spec.js --project=chromium` from `apps/web/admin` - passed; 31 passed in 6.6m.
 - `python -m py_compile ops/scripts/dev/check_text_encoding.py ops/scripts/dev/check_repository_normalization.py` - passed.
 - `python ops/scripts/dev/check_repository_normalization.py` - passed; `scanned=376 stale=0 missing_required_paths=0`.
 - `python ops/scripts/dev/check_text_encoding.py --fail-on-suspicious <changed files>` - passed; `scanned=11 decode_errors=0 suspicious=0`.
@@ -49,13 +83,15 @@
 
 ## Known Failures
 
-- No verification command failed in this batch.
-- A future whole-repository suspicious-marker scan with `--fail-on-suspicious`
-  is expected to report existing E2E selector/assertion hotspots in:
-  - `tests/e2e/web-admin/e2e-scenario-resilience.spec.js`
-  - `tests/e2e/web-admin/e2e-llm-hard-scenarios.spec.js`
-- These were not fixed in this batch because selector repairs need targeted
-  Playwright validation and should not be bundled with documentation governance.
+- No product assertion failures remain in the affected Playwright specs.
+- The two previously known E2E selector/assertion hotspots were repaired. A
+  full repository suspicious-marker scan may still report older intentionally
+  historical notes or unrelated test strings; classify any future hit before
+  deleting text.
+- The managed Playwright webServer runner can finish test bodies and still time
+  out during cleanup in this Windows session. The external runner completed the
+  affected specs cleanly and is the preferred local validation path for this
+  batch.
 
 ## Risks
 
@@ -69,17 +105,13 @@
 
 ## Recommended Next Batch
 
-1. Do a dedicated E2E text-selector cleanup for the two known mojibake hotspots,
-   with the affected Playwright specs run afterward:
-   - `tests/e2e/web-admin/e2e-scenario-resilience.spec.js`
-   - `tests/e2e/web-admin/e2e-llm-hard-scenarios.spec.js`
-2. Add `check_repository_normalization.py` to the lightweight validation path
-   after confirming the current allowlist is not noisy on fresh clones.
-3. Continue docs/code alignment for data migration and permission governance in
+1. Watch the next GitHub lightweight-validation run to confirm the new
+   repository-normalization check is quiet on a fresh clone.
+2. Continue docs/code alignment for data migration and permission governance in
    a separate, behavior-aware batch. Do not mix that with broad copyediting.
-4. Audit whether deployment docs, ops templates, and `CONFIGURATION_REFERENCE`
+3. Audit whether deployment docs, ops templates, and `CONFIGURATION_REFERENCE`
    still agree on every service name, env var, upload path, and health check.
-5. Update this handoff again if any validation command fails or if a planned
+4. Update this handoff again if any validation command fails or if a planned
    item needs to move into the long-term plan.
 
 ## Long-Term Plan

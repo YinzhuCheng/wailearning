@@ -38,8 +38,10 @@ jobs:
             ops/scripts/dev/run_validation_target.py \
             ops/scripts/dev/run_validation_profile.py \
             ops/scripts/dev/lint_validation_registry.py \
+            ops/scripts/dev/check_repository_normalization.py \
             tests/backend/manual/test_validation_selector.py
           python -m json.tool tests/TEST_SELECTION_TARGETS.json >/dev/null
+          python ops/scripts/dev/check_repository_normalization.py
           python -m unittest tests.backend.manual.test_validation_selector -v
 
       - name: Emit diff-based validation recommendation

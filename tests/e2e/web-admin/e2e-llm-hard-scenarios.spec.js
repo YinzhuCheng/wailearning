@@ -303,7 +303,7 @@ async function openHomeworkEditDialog(page, title) {
 async function configureHomeworkLimitPresetViaUi(page, title, preset) {
   await openHomeworkEditDialog(page, title)
   await page.getByTestId('homework-llm-routing-mode').click()
-  await page.getByRole('option', { name: /浠呬娇鐢ㄤ笅鏂瑰嬀閫夌殑璇剧▼绔偣棰勮/ }).click()
+  await page.getByRole('option', { name: /仅使用下方勾选的课程端点预设/ }).click()
   await page.getByTestId('homework-llm-preset-multi').click()
   await page.getByRole('option', { name: new RegExp(`${escapeRegex(preset.name)} \\(#${preset.id}\\)`) }).click()
   await page.getByTestId('homework-form-save').click()

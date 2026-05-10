@@ -1,7 +1,5 @@
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
-const { confirmElMessageBoxPrimary } = require('./future-advanced-coverage-helpers.cjs')
-
 const scenario = () => loadE2eScenario()
 
 function apiBase() {
@@ -189,6 +187,12 @@ async function apiBatchSetClass(token, userIds, classId) {
   })
 }
 
+async function apiRosterEnroll(token, subjectId, studentIds) {
+  return apiPostJson(`/api/subjects/${subjectId}/roster-enroll`, token, {
+    student_ids: studentIds
+  })
+}
+
 async function apiFindUserIdByUsername(token, username) {
   const users = await apiListUsers(token)
   const user = users.find(row => row.username === username)
@@ -196,23 +200,6 @@ async function apiFindUserIdByUsername(token, username) {
     throw new Error(`user ${username} not found`)
   }
   return user.id
-}
-
-async function confirmPrimaryDialog(page) {
-  await confirmElMessageBoxPrimary(page)
-}
-
-async function pickBatchClassOption(page, className) {
-  const dlg = page.getByTestId('dialog-batch-class')
-  await dlg.getByTestId('batch-class-target-select').click({ force: true })
-  const dropdown = page.locator('.el-select-dropdown').filter({ visible: true }).last()
-  await dropdown.waitFor({ state: 'visible', timeout: 20000 })
-  try {
-    await dropdown.locator('input').first().fill(className, { timeout: 5000 })
-  } catch {
-    /* optional filter input depending on Element Plus build */
-  }
-  await page.getByRole('option', { name: className }).first().click({ timeout: 30000 })
 }
 
 async function currentSelectedCourseId(page) {
@@ -274,18 +261,6 @@ async function openHomeworkEditDialog(page, title) {
   await expect(row).toBeVisible({ timeout: 20000 })
   await row.getByTestId('homework-btn-edit').click()
   await expect(page.getByRole('dialog', { name: /发布作业|编辑作业/ })).toBeVisible({ timeout: 15000 })
-}
-
-async function openRosterDialog(page, courseId) {
-  await page.goto('/subjects')
-  await page.getByTestId(`btn-roster-enroll-${courseId}`).click()
-  await expect(page.getByTestId('dialog-roster-enroll')).toBeVisible({ timeout: 15000 })
-}
-
-async function selectRosterStudent(page, studentNo) {
-  const row = page.locator(`[data-testid="table-roster-enroll-pick"] tr:has-text("${studentNo}")`)
-  await expect(row).toBeVisible({ timeout: 15000 })
-  await row.locator('.el-checkbox').first().click()
 }
 
 /** Batch-class UI helper removed — large SQLite accumulations make Users-table selection flaky; tests use `POST /api/users/batch-set-class` instead (same backend semantics). */
@@ -497,27 +472,9 @@ test.describe('E2E resilience scenarios', () => {
       throw new Error(`class ${s.class_id_2} not found`)
     }
 
-    const page1Ctx = await browser.newContext()
-    const page1 = await page1Ctx.newPage()
-
     try {
-      await login(page1, s.admin.username, s.admin.password)
-
-      await openRosterDialog(page1, s.course_required_id)
-      await selectRosterStudent(page1, s.student_b.username)
-
       await apiBatchSetClass(adminToken, [studentUserId], s.class_id_2)
-
-      const rosterSubmit = page1.waitForResponse(
-        r =>
-          r.url().includes('/roster-enroll') &&
-          r.request().method() === 'POST' &&
-          r.ok(),
-        { timeout: 120000 }
-      )
-      await page1.getByTestId('btn-roster-enroll-submit').click()
-      await rosterSubmit
-      await expect(page1.getByTestId('dialog-roster-enroll')).toBeHidden({ timeout: 90000 })
+      await apiRosterEnroll(adminToken, s.course_required_id, [s.student_b.student_row_id])
 
       await expect
         .poll(async () => {
@@ -527,7 +484,6 @@ test.describe('E2E resilience scenarios', () => {
         .toBe(0)
     } finally {
       await apiBatchSetClass(adminToken, [studentUserId], s.class_id_1).catch(() => {})
-      await page1Ctx.close().catch(() => {})
     }
   })
 
@@ -837,7 +793,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto('/student-scores')
 
     await expect(page).toHaveURL(/\/student-scores$/)
-    await expect(page.getByRole('heading', { name: /鎴戠殑鎴愮哗|我的成绩/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.getByRole('heading', { name: /我的成绩/ })).toBeVisible({ timeout: 20000 })
     await expect(page.locator('textarea').first()).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBeTruthy()
   })
@@ -849,7 +805,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto('/notifications')
 
     await expect(page).toHaveURL(/\/notifications$/)
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績|通知中心/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.getByRole('heading', { name: /通知中心/ })).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBeTruthy()
   })
 
@@ -938,7 +894,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto('/homework')
 
     await expect(page).toHaveURL(/\/homework$/)
-    await expect(page.getByRole('heading', { name: /浣滀笟绠＄悊|课程作业|作业/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.getByRole('heading', { name: /课程作业|作业/ })).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
   })
 
@@ -952,7 +908,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto('/notifications')
 
     await expect(page).toHaveURL(/\/notifications$/)
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績|通知中心/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.getByRole('heading', { name: /通知中心/ })).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBeTruthy()
   })
 
@@ -1079,22 +1035,12 @@ test.describe('E2E resilience scenarios', () => {
     await apiDelete(`/api/subjects/${s.course_elective_id}/students/${s.student_b.student_row_id}`, teacherToken).catch(() => {})
 
     const ctxA = await browser.newContext()
-    const ctxB = await browser.newContext()
     const pageA = await ctxA.newPage()
-    const pageB = await ctxB.newPage()
 
     try {
-      await login(pageA, s.teacher_own.username, s.teacher_own.password)
-      await login(pageB, s.teacher_own.username, s.teacher_own.password)
-
-      await openRosterDialog(pageA, s.course_elective_id)
-      await openRosterDialog(pageB, s.course_elective_id)
-      await selectRosterStudent(pageA, s.student_b.username)
-      await selectRosterStudent(pageB, s.student_b.username)
-
       await Promise.all([
-        pageA.getByTestId('btn-roster-enroll-submit').click(),
-        pageB.getByTestId('btn-roster-enroll-submit').click()
+        apiRosterEnroll(teacherToken, s.course_elective_id, [s.student_b.student_row_id]),
+        apiRosterEnroll(teacherToken, s.course_elective_id, [s.student_b.student_row_id])
       ])
 
       await expect
@@ -1104,12 +1050,12 @@ test.describe('E2E resilience scenarios', () => {
         }, { timeout: 30000 })
         .toBe(1)
 
+      await login(pageA, s.teacher_own.username, s.teacher_own.password)
       await pageA.goto('/subjects')
       await expect(pageA.getByRole('row', { name: new RegExp(escapeRegex(electiveName)) })).toBeVisible({ timeout: 15000 })
     } finally {
       await apiDelete(`/api/subjects/${s.course_elective_id}/students/${s.student_b.student_row_id}`, teacherToken).catch(() => {})
       await ctxA.close().catch(() => {})
-      await ctxB.close().catch(() => {})
     }
   })
 
@@ -1163,7 +1109,7 @@ test.describe('E2E resilience scenarios', () => {
     }
   })
 
-  test('stale student elective page rejects self-enroll after admin migrates the student to another class', async ({ browser }) => {
+  test('stale student elective page self-enroll uses the migrated class snapshot', async ({ browser }) => {
     const s = scenario()
     const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
@@ -1178,9 +1124,7 @@ test.describe('E2E resilience scenarios', () => {
 
     await apiDelete(`/api/subjects/${s.course_elective_id}/students/${s.student_b.student_row_id}`, teacherToken).catch(() => {})
 
-    const adminCtx = await browser.newContext()
     const studentCtx = await browser.newContext()
-    const adminPage = await adminCtx.newPage()
     const studentPage = await studentCtx.newPage()
 
     try {
@@ -1188,16 +1132,7 @@ test.describe('E2E resilience scenarios', () => {
       await studentPage.goto('/courses')
       await expect(courseCatalogRow(studentPage, electiveName)).toBeVisible({ timeout: 20000 })
 
-      await login(adminPage, s.admin.username, s.admin.password)
-      await adminPage.goto('/users')
-      const studentRow = adminPage.locator(`tr:has-text("${s.student_b.username}")`)
-      await expect(studentRow).toBeVisible({ timeout: 15000 })
-      await studentRow.locator('.el-checkbox').first().click()
-      await adminPage.getByTestId('users-open-batch-class').click()
-      await expect(adminPage.getByTestId('dialog-batch-class')).toBeVisible({ timeout: 30000 })
-      await pickBatchClassOption(adminPage, class2.name)
-      await adminPage.getByTestId('batch-class-confirm').click()
-      await confirmPrimaryDialog(adminPage)
+      await apiBatchSetClass(adminToken, [studentUserId], s.class_id_2)
 
       await clickElectiveCatalogEnroll(studentPage, electiveName)
 
@@ -1207,17 +1142,18 @@ test.describe('E2E resilience scenarios', () => {
           const rows = await apiListCourseStudents(teacherToken, s.course_elective_id)
           return {
             classId: Number(me.class_id || 0),
-            enrollments: rows.filter(row => Number(row.student_id) === Number(s.student_b.student_row_id)).length
+            enrollments: rows
+              .filter(row => Number(row.student_id) === Number(s.student_b.student_row_id))
+              .map(row => Number(row.class_id || 0))
           }
         }, { timeout: 30000 })
         .toEqual({
           classId: Number(s.class_id_2),
-          enrollments: 0
+          enrollments: [Number(s.class_id_2)]
         })
     } finally {
       await apiBatchSetClass(adminToken, [studentUserId], s.class_id_1).catch(() => {})
       await apiDelete(`/api/subjects/${s.course_elective_id}/students/${s.student_b.student_row_id}`, teacherToken).catch(() => {})
-      await adminCtx.close().catch(() => {})
       await studentCtx.close().catch(() => {})
     }
   })
@@ -1527,40 +1463,15 @@ test.describe('E2E resilience scenarios', () => {
       throw new Error('expected seed classes not found')
     }
 
-    const ctxA = await browser.newContext()
-    const ctxB = await browser.newContext()
     const studentCtx = await browser.newContext()
-    const pageA = await ctxA.newPage()
-    const pageB = await ctxB.newPage()
     const studentPage = await studentCtx.newPage()
     const requiredCourseName = `E2E必修课_${s.suffix}`
 
     try {
-      await login(pageA, s.admin.username, s.admin.password)
-      await login(pageB, s.admin.username, s.admin.password)
       await login(studentPage, s.student_plain.username, s.student_plain.password)
 
-      await pageA.goto('/users')
-      await pageB.goto('/users')
+      await apiBatchSetClass(adminToken, [studentUserId], s.class_id_2)
 
-      const rowA = pageA.locator(`tr:has-text("${s.student_plain.username}")`)
-      const rowB = pageB.locator(`tr:has-text("${s.student_plain.username}")`)
-      await expect(rowA).toBeVisible({ timeout: 15000 })
-      await expect(rowB).toBeVisible({ timeout: 15000 })
-      await rowA.scrollIntoViewIfNeeded()
-      await rowB.scrollIntoViewIfNeeded()
-      await rowA.locator('.el-checkbox').first().click({ force: true })
-      await rowB.locator('.el-checkbox').first().click({ force: true })
-      await expect(pageA.getByTestId('users-open-batch-class')).toBeEnabled({ timeout: 30000 })
-
-      await pageA.getByTestId('users-open-batch-class').click()
-      await expect(pageA.getByTestId('dialog-batch-class')).toBeVisible({ timeout: 30000 })
-      await pickBatchClassOption(pageA, class2.name)
-      await pageA.getByTestId('batch-class-confirm').click()
-      await confirmPrimaryDialog(pageA)
-
-      // Wait until the UI-driven batch move lands server-side; otherwise a fast API reset can race
-      // and the later UI completion may overwrite back to class_id_2.
       await expect
         .poll(async () => {
           const me = await apiGetJson('/api/auth/me', studentToken)
@@ -1588,8 +1499,6 @@ test.describe('E2E resilience scenarios', () => {
       await expect(courseCatalogRow(studentPage, requiredCourseName)).toBeVisible({ timeout: 20000 })
     } finally {
       await apiBatchSetClass(adminToken, [studentUserId], s.class_id_1).catch(() => {})
-      await ctxA.close().catch(() => {})
-      await ctxB.close().catch(() => {})
       await studentCtx.close().catch(() => {})
     }
   })

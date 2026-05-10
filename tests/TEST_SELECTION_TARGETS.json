@@ -1020,6 +1020,78 @@
             "notes": "Keep this for the spec itself or when validating the browser-managed end-to-end composition. Most pure HTTP invariants should prefer backend.e2e_dev.api_hazard_tier or behavior pytest targets first."
         },
         {
+            "id": "admin.e2e.llm_hard_scenarios",
+            "category": "admin-playwright",
+            "risk": "targeted",
+            "description": "Targeted admin Playwright suite for hard LLM homework scenarios, preset routing, quota edges, and repaired regrade flows.",
+            "working_directory": "apps/web/admin",
+            "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+            "coverage_tags": [
+                "admin-playwright",
+                "homework",
+                "llm",
+                "routing"
+            ],
+            "commands": [
+                {
+                    "label": "playwright targeted",
+                    "argv": [
+                        "npx",
+                        "playwright",
+                        "test",
+                        "e2e-llm-hard-scenarios.spec.js",
+                        "--project=chromium"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/e2e/web-admin/e2e-llm-hard-scenarios.spec.js",
+                    "apps/web/admin/src/views/Homework.vue",
+                    "apps/backend/courseeval_backend/api/routers/llm_settings.py",
+                    "apps/backend/courseeval_backend/llm_grading.py"
+                ],
+                "globs": []
+            },
+            "ledger_id": null,
+            "notes": "Use for browser-visible LLM routing and quota scenarios; pair with backend homework/LLM pytest for API-heavy implementation changes."
+        },
+        {
+            "id": "admin.e2e.scenario_resilience",
+            "category": "admin-playwright",
+            "risk": "broad",
+            "description": "Broad admin Playwright resilience suite for stale state recovery, concurrent edits, enroll/drop idempotency, notifications, and appeal races.",
+            "working_directory": "apps/web/admin",
+            "requires_review_reason": "High-cost browser tier with concurrency coverage; run when resilience selectors or the covered stale-state invariants change.",
+            "coverage_tags": [
+                "admin-playwright",
+                "concurrency",
+                "homework",
+                "notifications",
+                "course-access"
+            ],
+            "commands": [
+                {
+                    "label": "playwright targeted",
+                    "argv": [
+                        "npx",
+                        "playwright",
+                        "test",
+                        "e2e-scenario-resilience.spec.js",
+                        "--project=chromium"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/e2e/web-admin/e2e-scenario-resilience.spec.js"
+                ],
+                "globs": []
+            },
+            "ledger_id": null,
+            "notes": "Do not use as a cheap default for unrelated changes. Prefer narrower backend behavior tests when a browser stale-state path is not involved."
+        },
+        {
             "id": "admin.e2e.future_advanced_coverage_part1",
             "category": "admin-playwright",
             "risk": "broad",
