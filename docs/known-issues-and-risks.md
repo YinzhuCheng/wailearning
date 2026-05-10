@@ -95,7 +95,18 @@ and `python ops/scripts/dev/check_api_surface_governance.py`. This is a static
 router/client/doc drift check only; it does not replace a generated OpenAPI
 reference or API regression tests.
 
-## 9. How to add new entries
+## 9. Repository normalization notes
+
+These are not product defects, but they are recurring traps for future
+cleanup passes.
+
+| Issue | Detail |
+|-------|--------|
+| Dated reports live in `docs/reports/` | Historical audit and restructure reports were moved out of active architecture/development folders. When editing one, update `docs/README.md`, `AGENTS.md`, and the report index together. |
+| Web favicon uses public SVG assets | Both SPAs now read `/courseeval-mark.svg` from `public/`. If the favicon changes again, update both `apps/web/*/public/` copies and rerun both frontend builds. |
+| Root-local runtime artifacts are not source layout | `__pycache__/`, `.pytest_cache/`, `.pytest_tmp/`, `node_modules/`, `dist/`, and `.agent-run/` are working artifacts or ignored paths. Do not normalize them into committed source structure. |
+
+## 10. How to add new entries
 
 Use this template in PR descriptions before promoting to this file:
 
