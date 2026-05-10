@@ -34,12 +34,22 @@ Use the repository scripts rather than hand-building the environment:
 sudo bash ops/scripts/setup_server.sh
 ```
 
+Useful bootstrap overrides:
+
+- `APP_ROOT=/opt/courseeval` changes the application root created by `setup_server.sh`.
+- `WEB_ROOT=/var/www/courseeval.example` changes where the admin and parent SPA directories are created.
+- `APP_USER=courseeval` changes the system user/group created for the service.
+
 Then prepare the production env file:
 
 ```bash
 sudo install -m 640 .env.production /opt/courseeval/shared/.env.production
 sudo nano /opt/courseeval/shared/.env.production
 ```
+
+The tracked [`.env.production`](../../.env.production) template now uses current
+CourseEval names, domains, and production-oriented defaults. It is still a
+template: replace every `CHANGE_ME` value before the first deploy.
 
 ## Required Production Settings
 
@@ -114,11 +124,13 @@ Primary scripts:
 
 Implementation notes that matter operationally:
 
-- `deploy_backend.sh` creates `${APP_ROOT}/shared/uploads` and migrates legacy `uploads/` content there when present
+- `deploy_backend.sh` creates `${APP_ROOT}/shared/uploads` and non-destructively syncs any legacy `${SOURCE_DIR}/uploads/` content there when present, leaving the old directory in place for manual cleanup
 - backend deployment installs `ops/systemd/courseeval-backend.service` and restarts `courseeval-backend.service`
 - frontend deployment builds from `apps/web/admin` and syncs `dist/` into `${ADMIN_WEB_ROOT}`
 - parent deployment builds from `apps/web/parent` and syncs `dist/` into `${PARENT_WEB_ROOT}`
 - both frontend deploy scripts also refresh the nginx site file from `ops/nginx/courseeval.example*.conf`
+- `post_deploy_check.sh` always verifies local backend health and, when `APP_URL` points at a public origin, also checks the public `/health` and derived `/api/health` path unless `PUBLIC_API_HEALTH_URL` overrides it explicitly
+- `redeploy.sh` and `pull_and_deploy.sh` resolve `REPO_DIR` through `ops/scripts/lib/deploy_repo_dir.sh`: they prefer `/opt/courseeval/source` when it is a git clone and only fall back to the script-adjacent checkout when that preferred path is absent
 
 Recommended full deploy:
 
@@ -136,13 +148,27 @@ cd /opt/courseeval/source
 sudo GIT_BRANCH=main GIT_REMOTE=origin bash ops/scripts/redeploy.sh
 ```
 
+What `redeploy.sh` does:
+
+1. Resolves `REPO_DIR` with a production-first preference for `/opt/courseeval/source`.
+2. Fetches the exact remote branch refspec instead of trusting an older local remote-tracking ref.
+3. Optionally backs up database/shared data before deployment.
+4. Deploys either the full stack or only the admin SPA, depending on flags.
+5. Runs `post_deploy_check.sh` against local health and, when configured, the public URL.
+
+Use `pull_and_deploy.sh` when you are already in the intended server clone and want a shorter Git-sync-plus-full-deploy wrapper without the extra `SKIP_GIT` / `FRONTEND_ONLY` branching used by `redeploy.sh`.
+
 Useful variants:
 
+- `REPO_DIR=/opt/courseeval/source` when the active server clone is not at the default path.
+- `DD_DEFAULT_REPO_DIR=/opt/courseeval/source` when you want to change the preferred auto-detected production clone path without editing the helper.
 - `GIT_RESET_WORKTREE_BEFORE_FETCH=1` when local server edits are blocking checkout.
 - `SAFE_BACKUP_BEFORE_DEPLOY=1` when you want a pre-upgrade database and shared-data backup.
 - `GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0` when you want fail-fast behavior instead of auto-stash.
+- `SKIP_GIT=1` when the desired source tree is already staged into `REPO_DIR` and you explicitly do not want `redeploy.sh` to fetch or checkout anything.
 - `FRONTEND_ONLY=1` when you intentionally want only the admin SPA rebuilt and deployed.
 - `APP_URL=https://...` when you want the post-deploy public check to hit a specific public hostname.
+- `PUBLIC_API_HEALTH_URL=https://.../api/health` when public API health should not be derived from `APP_URL`.
 
 ## Safe Upgrade Principles
 
@@ -162,7 +188,7 @@ Before deploying the CourseEval normalization line to a database that predates t
 
 - `users.student_id` is populated for active student login accounts that should participate in quota, homework, discussion, and course enrollment flows. The runtime reconciliation path may repair default/demo drift, but feature code should not rely on `username == student_no` as a relationship.
 - Required courses have `subject_class_links` rows for each administrative class that should auto-enroll. Student and class-teacher course access no longer falls back to `subjects.class_id`; that column remains a primary/display anchor for compatibility-heavy rows.
-- Upload files are present under the effective `UPLOADS_DIR` / `${APP_ROOT}/shared/uploads` path. The deployment script can migrate a legacy `uploads/` directory when it is still colocated with the deployment root, but operators should verify attachment URLs before cutting over.
+- Upload files are present under the effective `UPLOADS_DIR` / `${APP_ROOT}/shared/uploads` path. The deployment script now copies any legacy `${SOURCE_DIR}/uploads/` content into the shared path when found, but leaves the old directory untouched; operators should still verify attachment URLs before cutting over and remove the legacy tree deliberately later.
 - System settings in the database already contain the intended CourseEval branding. Frontend normalization no longer rewrites stored legacy brand text at render time.
 - Service and Nginx names match the current templates: `courseeval-backend.service` and `ops/nginx/courseeval.example*.conf`.
 
@@ -172,6 +198,7 @@ After deployment:
 
 - check `systemctl status courseeval-backend`,
 - run `curl http://127.0.0.1:8001/health`,
+- run `bash ops/scripts/post_deploy_check.sh` (or set `APP_URL=https://...` so it also checks the public `/health` and `/api/health` paths),
 - run `sudo nginx -t`,
 - verify the admin frontend loads,
 - verify the parent portal loads,

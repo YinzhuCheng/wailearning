@@ -24,6 +24,7 @@ from apps.backend.courseeval_backend.db.models import (
     ScoreGradeAppeal,
     Student,
     Subject,
+    SubjectClassLink,
     User,
     UserRole,
 )
@@ -103,6 +104,13 @@ def _seed_class_move_context() -> dict[str, int]:
         course_a = Subject(name=f"required-a-{uid}", teacher_id=teacher.id, class_id=klass_a.id, course_type="required", status="active")
         course_b = Subject(name=f"required-b-{uid}", teacher_id=teacher.id, class_id=klass_b.id, course_type="required", status="active")
         db.add_all([course_a, course_b])
+        db.flush()
+        db.add_all(
+            [
+                SubjectClassLink(subject_id=course_a.id, class_id=klass_a.id, enrollment_mode="all_in_class"),
+                SubjectClassLink(subject_id=course_b.id, class_id=klass_b.id, enrollment_mode="all_in_class"),
+            ]
+        )
         db.flush()
 
         student = Student(name="Move Student", student_no=f"move_{uid}", class_id=klass_a.id)
@@ -553,6 +561,8 @@ def test_c10_batch_import_retry_keeps_one_student_and_one_required_enrollment(cl
         db.flush()
         course = Subject(name=f"batch-course-{uid}", teacher_id=teacher.id, class_id=klass.id, course_type="required", status="active")
         db.add(course)
+        db.flush()
+        db.add(SubjectClassLink(subject_id=course.id, class_id=klass.id, enrollment_mode="all_in_class"))
         db.commit()
         class_id = int(klass.id)
         course_id = int(course.id)

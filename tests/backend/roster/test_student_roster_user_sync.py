@@ -10,7 +10,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
 )
 from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
 from apps.backend.courseeval_backend.main import app
-from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Student, Subject, SubjectClassLink, User, UserRole
 from apps.backend.courseeval_backend.domains.roster.sync import (
     reconcile_student_users_and_roster,
 )
@@ -99,8 +99,16 @@ def test_prepare_student_course_context_reuses_pending_enrollment_rows():
         student = Student(name="Sync Stu", student_no="sync_stu", class_id=klass.id)
         db.add(student)
         db.flush()
-        db.add(Subject(name="required-a", class_id=klass.id, course_type="required"))
-        db.add(Subject(name="required-b", class_id=klass.id, course_type="required"))
+        course_a = Subject(name="required-a", class_id=klass.id, course_type="required")
+        course_b = Subject(name="required-b", class_id=klass.id, course_type="required")
+        db.add_all([course_a, course_b])
+        db.flush()
+        db.add_all(
+            [
+                SubjectClassLink(subject_id=course_a.id, class_id=klass.id, enrollment_mode="all_in_class"),
+                SubjectClassLink(subject_id=course_b.id, class_id=klass.id, enrollment_mode="all_in_class"),
+            ]
+        )
         db.flush()
 
         prepare_student_course_context(user, db)

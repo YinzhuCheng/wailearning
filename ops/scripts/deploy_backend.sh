@@ -16,6 +16,7 @@ APP_USER="${APP_USER:-courseeval}"
 SERVICE_FILE="/etc/systemd/system/courseeval-backend.service"
 PYTHON_BIN="${PYTHON_BIN:-}"
 SHARED_UPLOADS_DIR="${SHARED_DIR}/uploads"
+LEGACY_UPLOADS_DIR="${SOURCE_DIR}/uploads"
 
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
   echo "System user '${APP_USER}' does not exist. Run ops/scripts/setup_server.sh first."
@@ -67,6 +68,12 @@ fi
 if [[ -z "${PYTHON_BIN}" ]]; then
   echo "Could not find a supported Python interpreter (>= 3.8)."
   exit 1
+fi
+
+if [[ -d "${LEGACY_UPLOADS_DIR}" ]]; then
+  echo "Syncing legacy uploads from ${LEGACY_UPLOADS_DIR} into ${SHARED_UPLOADS_DIR}"
+  rsync -a "${LEGACY_UPLOADS_DIR}/" "${SHARED_UPLOADS_DIR}/"
+  echo "Legacy uploads were copied into ${SHARED_UPLOADS_DIR}; the old directory was left in place for manual cleanup."
 fi
 
 echo "Using Python interpreter: ${PYTHON_BIN}"

@@ -94,9 +94,6 @@ def _ensure_homework_access(homework: Homework, current_user: User, db: Session)
         db.commit()
 
     allowed_class_ids = get_accessible_class_ids(current_user, db)
-    if current_user.role != UserRole.ADMIN and homework.class_id not in allowed_class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this homework.")
-
     if homework.subject_id:
         course_row = db.query(Subject).filter(Subject.id == homework.subject_id).first()
         if (
@@ -112,6 +109,8 @@ def _ensure_homework_access(homework: Homework, current_user: User, db: Session)
         if current_user.role == UserRole.STUDENT:
             _resolve_student_for_user(homework, current_user, db)
         ensure_course_access_http(homework.subject_id, current_user, db)
+    elif current_user.role != UserRole.ADMIN and homework.class_id not in allowed_class_ids:
+        raise HTTPException(status_code=403, detail="You do not have access to this homework.")
 
     return homework
 
@@ -595,19 +594,20 @@ def get_homeworks(
     query = db.query(Homework)
     allowed_class_ids = get_accessible_class_ids(current_user, db)
 
-    if current_user.role != UserRole.ADMIN:
-        if not allowed_class_ids:
-            return HomeworkListResponse(total=0, data=[])
-        query = query.filter(Homework.class_id.in_(allowed_class_ids))
-
-    if class_id:
-        if current_user.role != UserRole.ADMIN and class_id not in allowed_class_ids:
-            return HomeworkListResponse(total=0, data=[])
-        query = query.filter(Homework.class_id == class_id)
-
     if subject_id:
         ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Homework.subject_id == subject_id)
+
+    if current_user.role != UserRole.ADMIN:
+        if subject_id is None and not allowed_class_ids:
+            return HomeworkListResponse(total=0, data=[])
+        if subject_id is None:
+            query = query.filter(Homework.class_id.in_(allowed_class_ids))
+
+    if class_id:
+        if current_user.role != UserRole.ADMIN and subject_id is None and class_id not in allowed_class_ids:
+            return HomeworkListResponse(total=0, data=[])
+        query = query.filter(Homework.class_id == class_id)
 
     total = query.count()
     homeworks = query.order_by(desc(Homework.created_at)).offset((page - 1) * page_size).limit(page_size).all()
@@ -646,8 +646,6 @@ def batch_update_late_submission_policy(
         raise HTTPException(status_code=403, detail="Only teachers can update homework.")
 
     allowed_class_ids = get_accessible_class_ids(current_user, db)
-    if current_user.role != UserRole.ADMIN and not allowed_class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to any classes.")
 
     ids = list(dict.fromkeys(payload.homework_ids))
     rows = db.query(Homework).filter(Homework.id.in_(ids)).all()
@@ -659,18 +657,15 @@ def batch_update_late_submission_policy(
         hw = found.get(hid)
         if not hw:
             continue
-        if current_user.role != UserRole.ADMIN and hw.class_id not in allowed_class_ids:
-            forbidden.append(hid)
-            continue
         if hw.subject_id:
             try:
                 ensure_course_access_http(hw.subject_id, current_user, db)
-            except ValueError:
+            except HTTPException:
                 forbidden.append(hid)
                 continue
-            except PermissionError:
-                forbidden.append(hid)
-                continue
+        elif current_user.role != UserRole.ADMIN and hw.class_id not in allowed_class_ids:
+            forbidden.append(hid)
+            continue
         if payload.allow_late_submission is not None:
             hw.allow_late_submission = payload.allow_late_submission
         if payload.late_submission_affects_score is not None:
@@ -795,17 +790,17 @@ def create_homework(
         raise HTTPException(status_code=403, detail="Only teachers can create homework.")
 
     allowed_class_ids = get_accessible_class_ids(current_user, db)
-    if current_user.role != UserRole.ADMIN and data.class_id not in allowed_class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this class.")
-
-    class_obj = db.query(Class).filter(Class.id == data.class_id).first()
-    if not class_obj:
-        raise HTTPException(status_code=404, detail="Class not found.")
 
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
         if course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
+    elif current_user.role != UserRole.ADMIN and data.class_id not in allowed_class_ids:
+        raise HTTPException(status_code=403, detail="You do not have access to this class.")
+
+    class_obj = db.query(Class).filter(Class.id == data.class_id).first()
+    if not class_obj:
+        raise HTTPException(status_code=404, detail="Class not found.")
 
     homework = Homework(
         title=data.title,

@@ -27,6 +27,7 @@ from apps.backend.courseeval_backend.db.models import (
     Gender,
     Student,
     Subject,
+    SubjectClassLink,
     User,
     UserRole,
 )
@@ -248,6 +249,13 @@ def test_elective_excluded_from_teacher_bulk_sync_enrollments(client: TestClient
         )
         db.add_all([req, el])
         db.flush()
+        db.add(
+            SubjectClassLink(
+                subject_id=req.id,
+                class_id=klass.id,
+                enrollment_mode="all_in_class",
+            )
+        )
         rid, eid, tid = req.id, el.id, t.id
         sid1, sid2 = s1.id, s2.id
         db.commit()

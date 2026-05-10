@@ -43,66 +43,40 @@ def _has_attachment_access(current_user: User, attachment_url: str, db: Session)
     allowed_class_ids = set(get_accessible_class_ids(current_user, db))
     current_student = get_student_profile_for_user(current_user, db) if current_user.role == UserRole.STUDENT else None
 
+    def _has_subject_or_class_scope(subject_id: Optional[int], class_id: Optional[int]) -> bool:
+        if current_user.role == UserRole.ADMIN:
+            return True
+        if subject_id:
+            try:
+                ensure_course_access_http(subject_id, current_user, db)
+            except HTTPException:
+                return False
+            return True
+        return class_id in allowed_class_ids
+
     homework = db.query(Homework).filter(Homework.attachment_url == attachment_url).first()
     if homework:
-        if current_user.role == UserRole.ADMIN or homework.class_id in allowed_class_ids:
-            if homework.subject_id:
-                try:
-                    ensure_course_access_http(homework.subject_id, current_user, db)
-                except HTTPException:
-                    return False
-            return True
-        return False
+        return _has_subject_or_class_scope(homework.subject_id, homework.class_id)
 
     material = db.query(CourseMaterial).filter(CourseMaterial.attachment_url == attachment_url).first()
     if material:
-        if current_user.role == UserRole.ADMIN or material.class_id in allowed_class_ids:
-            if material.subject_id:
-                try:
-                    ensure_course_access_http(material.subject_id, current_user, db)
-                except HTTPException:
-                    return False
-            return True
-        return False
+        return _has_subject_or_class_scope(material.subject_id, material.class_id)
 
     notification = db.query(Notification).filter(Notification.attachment_url == attachment_url).first()
     if notification:
-        if current_user.role == UserRole.ADMIN:
-            return True
-        if notification.class_id and notification.class_id not in allowed_class_ids:
-            return False
-        if notification.subject_id:
-            try:
-                ensure_course_access_http(notification.subject_id, current_user, db)
-            except HTTPException:
-                return False
-        return True
+        return _has_subject_or_class_scope(notification.subject_id, notification.class_id)
 
     submission = db.query(HomeworkSubmission).filter(HomeworkSubmission.attachment_url == attachment_url).first()
     if submission:
         if current_user.role == UserRole.STUDENT:
             return current_student is not None and submission.student_id == current_student.id
-        if current_user.role == UserRole.ADMIN or submission.class_id in allowed_class_ids:
-            if submission.subject_id:
-                try:
-                    ensure_course_access_http(submission.subject_id, current_user, db)
-                except HTTPException:
-                    return False
-            return True
-        return False
+        return _has_subject_or_class_scope(submission.subject_id, submission.class_id)
 
     attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.attachment_url == attachment_url).first()
     if attempt:
         if current_user.role == UserRole.STUDENT:
             return current_student is not None and attempt.student_id == current_student.id
-        if current_user.role == UserRole.ADMIN or attempt.class_id in allowed_class_ids:
-            if attempt.subject_id:
-                try:
-                    ensure_course_access_http(attempt.subject_id, current_user, db)
-                except HTTPException:
-                    return False
-            return True
-        return False
+        return _has_subject_or_class_scope(attempt.subject_id, attempt.class_id)
 
     subject_cover = db.query(Subject).filter(Subject.cover_image_url == attachment_url).first()
     if subject_cover:

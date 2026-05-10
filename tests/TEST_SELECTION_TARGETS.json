@@ -45,6 +45,7 @@
             ],
             "triggers": {
                 "paths": [
+                    ".env.production",
                     ".gitignore",
                     ".github/workflows/",
                     "AGENTS.md",
@@ -58,10 +59,12 @@
                 ],
                 "globs": [
                     "*.md",
+                    ".env.production",
                     ".github/workflows/*.yml",
                     ".github/workflows/*.yaml",
                     "docs/**/*.md",
                     "docs/**/*.txt",
+                    "ops/scripts/*.sh",
                     "ops/scripts/dev/*.py",
                     "ops/scripts/*.ps1",
                     "ops/scripts/windows/*.ps1"

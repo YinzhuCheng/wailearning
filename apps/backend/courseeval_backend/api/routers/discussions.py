@@ -76,9 +76,10 @@ def _ensure_course_instance(
     course = ensure_course_access_http(subject_id, current_user, db)
     if course.class_id is not None and int(course.class_id) != int(class_id):
         raise HTTPException(status_code=400, detail="class_id does not match this course instance.")
-    allowed = get_accessible_class_ids(current_user, db)
-    if current_user.role != UserRole.ADMIN and int(class_id) not in allowed:
-        raise HTTPException(status_code=403, detail="You do not have access to this class.")
+    if not is_course_instructor(current_user, course):
+        allowed = get_accessible_class_ids(current_user, db)
+        if current_user.role != UserRole.ADMIN and int(class_id) not in allowed:
+            raise HTTPException(status_code=403, detail="You do not have access to this class.")
     return course
 
 
@@ -90,11 +91,11 @@ def _ensure_homework_discussion_scope(
     current_user: User,
     db: Session,
 ) -> None:
-    _ensure_course_instance(subject_id=subject_id, class_id=class_id, current_user=current_user, db=db)
     if homework.subject_id is None or int(homework.subject_id) != int(subject_id):
         raise HTTPException(status_code=400, detail="subject_id does not match this homework.")
     if int(homework.class_id) != int(class_id):
         raise HTTPException(status_code=400, detail="class_id does not match this homework.")
+    _ensure_course_instance(subject_id=int(homework.subject_id), class_id=int(homework.class_id), current_user=current_user, db=db)
 
 
 def _ensure_material_discussion_scope(
@@ -105,11 +106,11 @@ def _ensure_material_discussion_scope(
     current_user: User,
     db: Session,
 ) -> None:
-    _ensure_course_instance(subject_id=subject_id, class_id=class_id, current_user=current_user, db=db)
     if material.subject_id is None or int(material.subject_id) != int(subject_id):
         raise HTTPException(status_code=400, detail="subject_id does not match this material.")
     if int(material.class_id) != int(class_id):
         raise HTTPException(status_code=400, detail="class_id does not match this material.")
+    _ensure_course_instance(subject_id=int(material.subject_id), class_id=int(material.class_id), current_user=current_user, db=db)
 
 
 def _can_delete_entry(entry: CourseDiscussionEntry, current_user: User, db: Session) -> bool:

@@ -217,19 +217,20 @@ def get_materials(
     query = db.query(CourseMaterial)
     allowed_class_ids = get_accessible_class_ids(current_user, db)
 
-    if current_user.role != UserRole.ADMIN:
-        if not allowed_class_ids:
-            return CourseMaterialListResponse(total=0, data=[])
-        query = query.filter(CourseMaterial.class_id.in_(allowed_class_ids))
-
-    if class_id:
-        if current_user.role != UserRole.ADMIN and class_id not in allowed_class_ids:
-            return CourseMaterialListResponse(total=0, data=[])
-        query = query.filter(CourseMaterial.class_id == class_id)
-
     if subject_id:
         ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(CourseMaterial.subject_id == subject_id)
+
+    if current_user.role != UserRole.ADMIN:
+        if subject_id is None and not allowed_class_ids:
+            return CourseMaterialListResponse(total=0, data=[])
+        if subject_id is None:
+            query = query.filter(CourseMaterial.class_id.in_(allowed_class_ids))
+
+    if class_id:
+        if current_user.role != UserRole.ADMIN and subject_id is None and class_id not in allowed_class_ids:
+            return CourseMaterialListResponse(total=0, data=[])
+        query = query.filter(CourseMaterial.class_id == class_id)
 
     if chapter_id is not None:
         ch = db.query(CourseMaterialChapter).filter(CourseMaterialChapter.id == chapter_id).first()
@@ -273,12 +274,12 @@ def get_material(
     if not material:
         raise HTTPException(status_code=404, detail="Material not found.")
 
-    allowed_class_ids = get_accessible_class_ids(current_user, db)
-    if current_user.role != UserRole.ADMIN and material.class_id not in allowed_class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this material.")
-
     if material.subject_id:
         ensure_course_access_http(material.subject_id, current_user, db)
+    else:
+        allowed_class_ids = get_accessible_class_ids(current_user, db)
+        if current_user.role != UserRole.ADMIN and material.class_id not in allowed_class_ids:
+            raise HTTPException(status_code=403, detail="You do not have access to this material.")
 
     return _serialize_material(db, material)
 
@@ -292,10 +293,6 @@ def create_material(
 ):
     if not can_publish_materials(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can publish materials.")
-
-    allowed_class_ids = get_accessible_class_ids(current_user, db)
-    if current_user.role != UserRole.ADMIN and data.class_id not in allowed_class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this class.")
 
     class_obj = db.query(Class).filter(Class.id == data.class_id).first()
     if not class_obj:
@@ -316,6 +313,11 @@ def create_material(
             effective_chapter_ids = _infer_chapter_ids_for_material(db, data.subject_id, data.title, data.content)
 
         _validate_chapter_ids_exist(db, data.subject_id, effective_chapter_ids)
+    else:
+        if current_user.role != UserRole.ADMIN:
+            allowed_class_ids = get_accessible_class_ids(current_user, db)
+            if data.class_id not in allowed_class_ids:
+                raise HTTPException(status_code=403, detail="You do not have access to this class.")
 
     material = CourseMaterial(
         title=data.title,
@@ -370,15 +372,15 @@ def update_material(
     if not material:
         raise HTTPException(status_code=404, detail="Material not found.")
 
-    allowed_class_ids = get_accessible_class_ids(current_user, db)
-    if current_user.role != UserRole.ADMIN and material.class_id not in allowed_class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this material.")
+    if material.subject_id:
+        ensure_course_access_http(material.subject_id, current_user, db)
+    else:
+        allowed_class_ids = get_accessible_class_ids(current_user, db)
+        if current_user.role != UserRole.ADMIN and material.class_id not in allowed_class_ids:
+            raise HTTPException(status_code=403, detail="You do not have access to this material.")
 
     if current_user.role != UserRole.ADMIN and material.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can only edit your own materials.")
-
-    if material.subject_id:
-        ensure_course_access_http(material.subject_id, current_user, db)
 
     old_attachment_url = material.attachment_url
 

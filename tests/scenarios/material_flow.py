@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from apps.backend.courseeval_backend.core.auth import get_password_hash
 from apps.backend.courseeval_backend.db.database import SessionLocal
-from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, CourseMaterialChapter, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, CourseMaterialChapter, Student, Subject, SubjectClassLink, User, UserRole
 from tests.scenarios.llm_scenario import login_api
 
 
@@ -57,6 +57,13 @@ def make_subject_with_roster(
         )
         db.add(course)
         db.flush()
+        db.add(
+            SubjectClassLink(
+                subject_id=course.id,
+                class_id=klass.id,
+                enrollment_mode="all_in_class",
+            )
+        )
 
         if enroll_student:
             db.add(

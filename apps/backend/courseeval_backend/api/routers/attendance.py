@@ -54,6 +54,25 @@ def _serialize_attendance(attendance: Attendance) -> AttendanceResponse:
     )
 
 
+def _has_subject_or_class_access(
+    current_user: User,
+    db: Session,
+    *,
+    class_id: Optional[int],
+    subject_id: Optional[int],
+    class_error_detail: str,
+) -> set[int]:
+    class_ids = set(get_accessible_class_ids(current_user, db))
+    if current_user.role == UserRole.ADMIN:
+        return class_ids
+    if subject_id:
+        ensure_course_access_http(subject_id, current_user, db)
+        return class_ids
+    if class_id not in class_ids:
+        raise HTTPException(status_code=403, detail=class_error_detail)
+    return class_ids
+
+
 @router.get("", response_model=AttendanceListResponse)
 def get_attendances(
     class_id: Optional[int] = None,
@@ -68,20 +87,21 @@ def get_attendances(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    class_ids = get_accessible_class_ids(current_user, db)
-    query = apply_class_id_filter(db.query(Attendance), Attendance.class_id, class_ids)
+    class_ids = set(get_accessible_class_ids(current_user, db))
+    if subject_id:
+        ensure_course_access_http(subject_id, current_user, db)
+        query = db.query(Attendance).filter(Attendance.subject_id == subject_id)
+    else:
+        query = apply_class_id_filter(db.query(Attendance), Attendance.class_id, list(class_ids))
 
     if class_id:
-        if class_id not in class_ids:
+        if subject_id is None and class_id not in class_ids:
             raise HTTPException(status_code=403, detail="You do not have access to this class.")
         query = query.filter(Attendance.class_id == class_id)
     if student_id:
         query = query.filter(Attendance.student_id == student_id)
     if student_name:
         query = query.join(Student, Attendance.student_id == Student.id).filter(Student.name.contains(student_name))
-    if subject_id:
-        ensure_course_access_http(subject_id, current_user, db)
-        query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
         try:
             start_dt = _parse_attendance_query_boundary(start_date, end_of_day=False)
@@ -109,9 +129,13 @@ def create_attendance(
     current_user: User = Depends(get_current_active_user),
 ):
     _ensure_attendance_write_access(current_user)
-    class_ids = get_accessible_class_ids(current_user, db)
-    if attendance_data.class_id not in class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this class.")
+    _has_subject_or_class_access(
+        current_user,
+        db,
+        class_id=attendance_data.class_id,
+        subject_id=attendance_data.subject_id,
+        class_error_detail="You do not have access to this class.",
+    )
 
     student = db.query(Student).filter(Student.id == attendance_data.student_id).first()
     if not student or student.class_id != attendance_data.class_id:
@@ -161,9 +185,13 @@ def update_attendance(
     if not attendance:
         raise HTTPException(status_code=404, detail="Attendance not found.")
 
-    class_ids = get_accessible_class_ids(current_user, db)
-    if attendance.class_id not in class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this attendance record.")
+    _has_subject_or_class_access(
+        current_user,
+        db,
+        class_id=attendance.class_id,
+        subject_id=attendance.subject_id,
+        class_error_detail="You do not have access to this attendance record.",
+    )
 
     if attendance_data.status is not None:
         attendance.status = attendance_data.status
@@ -186,9 +214,13 @@ def delete_attendance(
     if not attendance:
         raise HTTPException(status_code=404, detail="Attendance not found.")
 
-    class_ids = get_accessible_class_ids(current_user, db)
-    if attendance.class_id not in class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this attendance record.")
+    _has_subject_or_class_access(
+        current_user,
+        db,
+        class_id=attendance.class_id,
+        subject_id=attendance.subject_id,
+        class_error_detail="You do not have access to this attendance record.",
+    )
 
     db.delete(attendance)
     db.commit()
@@ -204,13 +236,16 @@ def get_class_attendance_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    class_ids = get_accessible_class_ids(current_user, db)
-    if class_id not in class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this class.")
+    _has_subject_or_class_access(
+        current_user,
+        db,
+        class_id=class_id,
+        subject_id=subject_id,
+        class_error_detail="You do not have access to this class.",
+    )
 
     query = db.query(Attendance).filter(Attendance.class_id == class_id)
     if subject_id:
-        ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
         try:
@@ -253,7 +288,6 @@ async def create_attendances_batch(
     if not attendances_list:
         return {"success": 0, "failed": 0, "errors": ["No valid attendance data found."]}
 
-    class_ids = get_accessible_class_ids(current_user, db)
     results = []
     errors = []
 
@@ -263,13 +297,22 @@ async def create_attendances_batch(
             continue
 
         class_id = attendance_data.get("class_id")
-        if class_id not in class_ids:
-            errors.append(f"Row {index}: no access to the selected class.")
-            continue
-
         student_no = attendance_data.get("student_no")
         if not student_no:
             errors.append(f"Row {index}: missing student number.")
+            continue
+
+        subject_id = attendance_data.get("subject_id")
+        try:
+            _has_subject_or_class_access(
+                current_user,
+                db,
+                class_id=class_id,
+                subject_id=subject_id,
+                class_error_detail="You do not have access to this class.",
+            )
+        except HTTPException:
+            errors.append(f"Row {index}: no access to the selected class.")
             continue
 
         student = db.query(Student).filter(Student.student_no == student_no, Student.class_id == class_id).first()
@@ -277,7 +320,6 @@ async def create_attendances_batch(
             errors.append(f"Row {index}: student not found in the selected class.")
             continue
 
-        subject_id = attendance_data.get("subject_id")
         if subject_id:
             course = db.query(Subject).filter(Subject.id == subject_id).first()
             if not course:
@@ -358,16 +400,17 @@ async def create_class_attendance_batch(
     if not class_id or not attendance_date:
         return {"success": 0, "failed": 1, "errors": ["Missing class_id or date."]}
 
-    class_ids = get_accessible_class_ids(current_user, db)
-    if class_id not in class_ids:
-        return {"success": 0, "failed": 1, "errors": ["No access to the selected class."]}
-
     if subject_id:
-        course = db.query(Subject).filter(Subject.id == subject_id).first()
-        if not course:
-            return {"success": 0, "failed": 1, "errors": ["Course not found."]}
+        try:
+            course = ensure_course_access_http(subject_id, current_user, db)
+        except HTTPException:
+            return {"success": 0, "failed": 1, "errors": ["No access to the selected course."]}
         if course.class_id and course.class_id != class_id:
             return {"success": 0, "failed": 1, "errors": ["Course does not belong to the selected class."]}
+    else:
+        class_ids = set(get_accessible_class_ids(current_user, db))
+        if class_id not in class_ids:
+            return {"success": 0, "failed": 1, "errors": ["No access to the selected class."]}
 
     try:
         attendance_date = _parse_attendance_date(attendance_date)
@@ -418,13 +461,16 @@ def get_student_attendance_stats(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
 
-    class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id not in class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this student.")
+    _has_subject_or_class_access(
+        current_user,
+        db,
+        class_id=student.class_id,
+        subject_id=subject_id,
+        class_error_detail="You do not have access to this student.",
+    )
 
     query = db.query(Attendance).filter(Attendance.student_id == student_id)
     if subject_id:
-        ensure_course_access_http(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)
     if start_date:
         try:

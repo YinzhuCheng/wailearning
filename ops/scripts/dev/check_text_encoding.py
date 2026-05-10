@@ -40,6 +40,7 @@ TEXT_EXTENSIONS = {
     ".md",
     ".mjs",
     ".ps1",
+    ".production",
     ".py",
     ".rst",
     ".service",

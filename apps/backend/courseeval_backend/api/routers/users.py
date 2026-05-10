@@ -170,6 +170,9 @@ def batch_set_user_class(
             continue
         if user.class_id == payload.class_id:
             continue
+        if user.student_id is None and user.username:
+            sync_student_roster_from_user_accounts(db, [user.id])
+            db.flush()
         roster = get_bound_student_for_user(user, db)
         if roster and roster.class_id != payload.class_id:
             db.query(CourseEnrollment).filter(CourseEnrollment.student_id == roster.id).delete(

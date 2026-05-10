@@ -28,7 +28,7 @@ If code adds a field to `Settings`, update this document in the same change set.
 | `SECRET_KEY` | Placeholder string in repo default | JWT signing; **must** be a long random value when `APP_ENV` is production or `REQUIRE_STRONG_SECRETS=true`. |
 | `ALGORITHM` | `HS256` | JWT algorithm. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` (24h) | JWT lifetime. |
-| `UPLOADS_DIR` | `""` | Optional override for upload root; empty uses package convention / bootstrap paths. |
+| `UPLOADS_DIR` | `""` | Optional override for upload root; empty falls back to repo-local `uploads/`, while the production systemd template pins `/opt/courseeval/shared/uploads`. |
 
 ---
 
@@ -58,7 +58,7 @@ If code adds a field to `Settings`, update this document in the same change set.
 
 | Variable | Notes |
 |----------|-------|
-| `FRONTEND_ADMIN_BASE_URL` | Optional absolute origin for links in notifications (e.g. password reset). Empty → relative `/users?...` paths in messages. |
+| `FRONTEND_ADMIN_BASE_URL` | Optional absolute admin origin for links in notifications (for example `https://www.courseeval.example`). Empty means relative `/users?...` paths in messages. |
 
 ---
 
@@ -85,7 +85,7 @@ If code adds a field to `Settings`, update this document in the same change set.
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `ENABLE_LLM_GRADING_WORKER` | `true` | Master switch for in-process worker thread. |
-| `LLM_GRADING_WORKER_LEADER` | `true` | If true, only leader process runs worker (safe for gunicorn multi-worker). If false, **every** process with worker enabled drains the DB queue — acceptable for single-uvicorn dev, risky if duplicated accidentally in production. |
+| `LLM_GRADING_WORKER_LEADER` | `true` | If true, only leader process runs worker (safe for gunicorn multi-worker). If false, **every** process with worker enabled drains the DB queue; acceptable for single-uvicorn dev, risky if duplicated accidentally in production. |
 | `LLM_GRADING_WORKER_POLL_SECONDS` | `2` | Poll interval for queued tasks. |
 | `LLM_GRADING_TASK_STALE_SECONDS` | `600` | Reclaim stuck `processing` tasks. |
 | `DEFAULT_LLM_API_KEY` | `""` | When non-empty, bootstrap inserts (once) the built-in `"gpt-5.4"` preset row and immediately runs **live** text + vision connectivity checks against the vendor URL using a **bundled PNG probe** (equivalent to validating with a small logo image). On success the preset is marked validated and active. When empty, the preset row is still inserted but stays `pending` / inactive until an administrator validates through the UI or sets this variable and restarts. Never commit real keys. |
@@ -109,13 +109,13 @@ Never enable in production. `model_validator` rejects `E2E_DEV_SEED_ENABLED` whe
 |----------|---------|-------|
 | `E2E_DEV_SEED_ENABLED` | `false` | When true **and** non-production, `/api/e2e/*` routes are exposed (still check `expose_e2e_dev_api()`). |
 | `E2E_DEV_SEED_TOKEN` | `""` | Shared secret header `X-E2E-Seed-Token` for seed endpoints. |
-| `E2E_DEV_REQUIRE_ADMIN_JWT` | `false` | When true, powerful `/api/e2e/dev/*` routes also require `Authorization: Bearer` for an admin user. Playwright config defaults this to true for managed subprocesses — see `apps/web/admin/playwright.config.cjs`. |
+| `E2E_DEV_REQUIRE_ADMIN_JWT` | `false` | When true, powerful `/api/e2e/dev/*` routes also require `Authorization: Bearer` for an admin user. Playwright config defaults this to true for managed subprocesses; see `apps/web/admin/playwright.config.cjs`. |
 | `E2E_DEV_ADMIN_USERNAME` | `""` | Credentials helper for automation (paired with password). |
 | `E2E_DEV_ADMIN_PASSWORD` | `""` | |
 
 ---
 
-## Frontend dev (Vite) — not in `Settings`
+## Frontend dev (Vite) - not in `Settings`
 
 These are **client** environment variables read by Vite:
 
@@ -125,12 +125,12 @@ These are **client** environment variables read by Vite:
 | `VITE_PROXY_TARGET` | `http://127.0.0.1:8001` | same | Backend for `/api` proxy. |
 | `VITE_APP_BASE_PATH` | `/` | `/` | SPA base path for deployments under subpaths. |
 
-Playwright additionally defines `E2E_API_PORT` / `E2E_UI_PORT` (defaults **8012** / **3012**) inside `apps/web/admin/playwright.config.cjs` for managed test servers — see [../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+Playwright additionally defines `E2E_API_PORT` / `E2E_UI_PORT` (defaults **8012** / **3012**) inside `apps/web/admin/playwright.config.cjs` for managed test servers; see [../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 
 ---
 
 ## Related documents
 
-- Operational env templates and nginx layout — [../operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md)
-- Bootstrap ordering — [../operations/ADMIN_BOOTSTRAP.md](../operations/ADMIN_BOOTSTRAP.md)
-- Business impact of LLM settings — [../product/LLM_HOMEWORK_GUIDE.md](../product/LLM_HOMEWORK_GUIDE.md)
+- Operational env templates and nginx layout - [../operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md)
+- Bootstrap ordering - [../operations/ADMIN_BOOTSTRAP.md](../operations/ADMIN_BOOTSTRAP.md)
+- Business impact of LLM settings - [../product/LLM_HOMEWORK_GUIDE.md](../product/LLM_HOMEWORK_GUIDE.md)

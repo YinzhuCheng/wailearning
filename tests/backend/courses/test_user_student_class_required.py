@@ -1,4 +1,4 @@
-"""Admin create/update: student role requires class_id."""
+"""Admin create/update: student role may be unassigned or class-bound."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def test_create_student_without_class_400(client: TestClient):
+def test_create_student_without_class_200_for_admin(client: TestClient):
     h = login_api(client, "adm", "a")
     r = client.post(
         "/api/users",
@@ -60,7 +60,21 @@ def test_create_student_without_class_400(client: TestClient):
             "role": "student",
         },
     )
-    assert r.status_code in (400, 422)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["class_id"] is None
+    assert body["student_id"] is not None
+
+    db = SessionLocal()
+    try:
+        student = db.query(Student).filter(Student.id == body["student_id"]).one()
+        user = db.query(User).filter(User.username == "no_class_stu").one()
+        assert student.student_no == "no_class_stu"
+        assert student.class_id is None
+        assert user.student_id == student.id
+        assert user.class_id is None
+    finally:
+        db.close()
 
 
 def test_create_student_with_class_200(client: TestClient):

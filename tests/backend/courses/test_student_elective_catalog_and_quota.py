@@ -16,6 +16,7 @@ from apps.backend.courseeval_backend.db.models import (
     LLMStudentTokenOverride,
     Student,
     Subject,
+    SubjectClassLink,
     User,
     UserRole,
 )
@@ -91,6 +92,13 @@ def _seed_student_and_elective(client: TestClient):
         )
         db.add_all([el_same, el_other, req])
         db.flush()
+        db.add(
+            SubjectClassLink(
+                subject_id=req.id,
+                class_id=kid,
+                enrollment_mode="all_in_class",
+            )
+        )
         eid, oid, rid = el_same.id, el_other.id, req.id
         db.commit()
     finally:

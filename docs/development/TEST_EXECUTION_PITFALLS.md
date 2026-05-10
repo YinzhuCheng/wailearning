@@ -2968,3 +2968,30 @@ Implementation consequence:
 - Update payload handling must distinguish "field omitted" from `"subject_id": null`; otherwise a user cannot clear a note's course binding and publish it to all authenticated users.
 
 Verification pattern: after editing `api/routers/learning_notes.py`, run targeted Python compilation and grep for the obsolete validator/error text before claiming the visibility semantics are fixed.
+
+### Pitfall: subject-scoped teacher access must not be blocked by an empty class-id set first
+
+The recurring regression pattern in this repository is:
+
+1. a teacher legitimately owns a course through `Subject.teacher_id`;
+2. the route also computes `get_accessible_class_ids(...)`;
+3. the code rejects the request because the derived class-id set is empty or does not contain the record's `class_id`;
+4. the request never reaches `ensure_course_access_http(subject_id, ...)`, even though that course access check would have allowed the teacher.
+
+This broke multiple surfaces during the repository-normalization line:
+
+- basename attachment download in `api/routers/files.py`;
+- homework batch late-submission and batch regrade flows in `api/routers/homework.py`;
+- attendance create/list/update/batch flows in `api/routers/attendance.py`.
+
+Safe rule:
+
+- for records that already carry a meaningful `subject_id`, check course access first with `ensure_course_access_http(...)`;
+- use class-id filtering only for records that are truly class-scoped and have no course context;
+- do not treat an empty `get_accessible_class_ids(...)` result as an automatic teacher denial when the route is fundamentally course-owned.
+
+Verification pattern:
+
+- seed a `teacher` user with `Subject.teacher_id = teacher.id` and `Subject.class_id = <class>`;
+- do **not** rely on `subject_class_links` or teacher `user.class_id` unless the scenario is explicitly class-scoped;
+- confirm that teacher-owned subject operations still work for attachments, homework batch operations, and attendance writes after the change.

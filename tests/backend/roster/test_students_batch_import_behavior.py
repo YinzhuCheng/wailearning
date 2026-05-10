@@ -19,7 +19,7 @@ from sqlalchemy import text
 from apps.backend.courseeval_backend.core.auth import get_password_hash
 from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
 from apps.backend.courseeval_backend.main import app
-from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Gender, Student, Subject, SubjectClassLink, User, UserRole
 from tests.scenarios.llm_scenario import ensure_admin, login_api
 
 
@@ -153,6 +153,14 @@ def test_new_student_batch_only_enrolls_required_courses_not_electives(client: T
             status="active",
         )
         db.add_all([req, el])
+        db.flush()
+        db.add(
+            SubjectClassLink(
+                subject_id=req.id,
+                class_id=k.id,
+                enrollment_mode="all_in_class",
+            )
+        )
         db.flush()
         rid, eid, kid = req.id, el.id, k.id
         db.commit()

@@ -71,7 +71,7 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
             or_(Notification.target_user_id.is_(None), Notification.target_user_id == current_user.id)
         )
 
-    if current_user.role != UserRole.ADMIN:
+    if current_user.role != UserRole.ADMIN and subject_id is None:
         if class_ids:
             query = query.filter(or_(Notification.class_id.is_(None), Notification.class_id.in_(class_ids)))
         else:
@@ -195,12 +195,12 @@ def get_notification(
     if (notification.notification_kind or "") == "password_reset_request" and current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
-    class_ids = get_accessible_class_ids(current_user, db)
-    if current_user.role != UserRole.ADMIN and notification.class_id and notification.class_id not in class_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this notification.")
-
     if notification.subject_id:
         ensure_course_access_http(notification.subject_id, current_user, db)
+    else:
+        class_ids = get_accessible_class_ids(current_user, db)
+        if current_user.role != UserRole.ADMIN and notification.class_id and notification.class_id not in class_ids:
+            raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
     if current_user.role == UserRole.STUDENT:
         prepare_student_course_context(current_user, db)
@@ -228,18 +228,19 @@ def create_notification(
     if not is_admin_or_teacher(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can publish notifications.")
 
-    class_ids = get_accessible_class_ids(current_user, db)
     if data.class_id:
         class_obj = db.query(Class).filter(Class.id == data.class_id).first()
         if not class_obj:
             raise HTTPException(status_code=404, detail="Class not found.")
-        if not is_admin(current_user) and data.class_id not in class_ids:
-            raise HTTPException(status_code=403, detail="You can only publish notifications for accessible classes.")
 
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
         if data.class_id and course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
+    elif data.class_id:
+        class_ids = get_accessible_class_ids(current_user, db)
+        if not is_admin(current_user) and data.class_id not in class_ids:
+            raise HTTPException(status_code=403, detail="You can only publish notifications for accessible classes.")
 
     kind = (data.notification_kind or "general").strip()
     if kind == "password_reset_request":
@@ -289,19 +290,20 @@ def update_notification(
     if not is_admin(current_user) and notification.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can only edit your own notifications.")
 
-    class_ids = get_accessible_class_ids(current_user, db)
     if data.class_id is not None and data.class_id != 0:
         class_obj = db.query(Class).filter(Class.id == data.class_id).first()
         if not class_obj:
             raise HTTPException(status_code=404, detail="Class not found.")
-        if not is_admin(current_user) and data.class_id not in class_ids:
-            raise HTTPException(status_code=403, detail="You can only publish notifications for accessible classes.")
 
     if data.subject_id is not None:
         course = ensure_course_access_http(data.subject_id, current_user, db)
         target_class_id = notification.class_id if data.class_id is None else data.class_id
         if target_class_id and course.class_id and course.class_id != target_class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
+    elif data.class_id is not None and data.class_id != 0:
+        class_ids = get_accessible_class_ids(current_user, db)
+        if not is_admin(current_user) and data.class_id not in class_ids:
+            raise HTTPException(status_code=403, detail="You can only publish notifications for accessible classes.")
 
     if data.title is not None:
         notification.title = data.title

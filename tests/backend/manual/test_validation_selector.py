@@ -368,6 +368,7 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_runner_expands_changed_text_files_placeholder(self):
         changed_paths = [
             {"status": "M", "path": "docs/README.md"},
+            {"status": "M", "path": ".env.production"},
             {"status": "M", "path": "apps/web/admin/src/assets/logo.png"},
             {"status": "D", "path": "docs/deleted.md"},
         ]
@@ -379,9 +380,10 @@ class ValidationSelectorTests(unittest.TestCase):
         )
 
         self.assertIn("docs/README.md", expanded)
+        self.assertIn(".env.production", expanded)
         self.assertNotIn("apps/web/admin/src/assets/logo.png", expanded)
         self.assertNotIn("docs/deleted.md", expanded)
-        self.assertIn("expanded <changed-text-files> to 1 file(s)", notes)
+        self.assertIn("expanded <changed-text-files> to 2 file(s)", notes)
 
     def test_encoding_scan_skip_if_empty_prevents_accidental_full_repo_scan(self):
         result = subprocess.run(

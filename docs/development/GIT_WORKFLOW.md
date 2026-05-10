@@ -38,6 +38,14 @@ sudo GIT_BRANCH=<branch> GIT_REMOTE=origin bash ops/scripts/redeploy.sh
 
 This is safer than manually mixing `fetch`, `checkout`, and deploy commands on a live server.
 
+Practical deploy notes:
+
+- `redeploy.sh` prefers `REPO_DIR=/opt/courseeval/source` and fetches an explicit remote refspec before checkout/reset.
+- Set `SAFE_BACKUP_BEFORE_DEPLOY=1` when you want the script to capture a PostgreSQL dump plus shared files before it deploys.
+- Set `GIT_RESET_WORKTREE_BEFORE_FETCH=1` only when you intentionally want the server script to discard local tracked edits after saving a patch backup.
+- Set `GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0` when you want checkout conflicts to fail immediately instead of auto-stashing.
+- Use `pull_and_deploy.sh` only when you want the simpler “sync current server clone to branch, then full deploy” wrapper and do not need `redeploy.sh`'s `SKIP_GIT` / `FRONTEND_ONLY` controls.
+
 ## Updating From Upstream
 
 If you track an upstream repository:
