@@ -83,6 +83,12 @@ UI and APIs may show **latest attempt content** while numeric grade reflects **e
 
 ---
 
+For schema-governance work, start with
+[`skills/data-migration-audit/SKILL.md`](../skills/data-migration-audit/SKILL.md)
+and `python ops/scripts/dev/check_schema_governance.py`. This is a static
+guardrail only; it does not replace PostgreSQL-backed validation for
+production upgrade claims.
+
 ## 9. How to add new entries
 
 Use this template in PR descriptions before promoting to this file:

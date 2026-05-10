@@ -296,6 +296,27 @@ fallback logic:
   - passed
 - `git diff --check`
   - passed repeatedly; only CRLF warnings remain for tracked working-copy line-ending normalization on `.env.production` and `tests/TEST_SELECTION_TARGETS.json`
+- Follow-up schema-governance batch:
+  - `python ops/scripts/dev/check_schema_governance.py`
+    - passed
+  - `python -m json.tool tests\TEST_SELECTION_TARGETS.json`
+    - passed
+  - `python ops/scripts/dev/select_validation_targets.py --paths ops/scripts/dev/check_schema_governance.py --json`
+    - passed; selector now recommends `static.schema_governance`
+  - `python ops/scripts/dev/run_validation_target.py static.schema_governance --timeout-seconds 120`
+    - passed
+  - `python -m unittest tests.backend.manual.test_validation_selector -v`
+    - passed
+  - `python ops/scripts/dev/run_validation_target.py static.repo_local_skills --timeout-seconds 120`
+    - passed
+  - `python ops/scripts/dev/run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+    - passed
+  - `python ops/scripts/dev/check_repository_normalization.py`
+    - passed
+  - `git diff --check`
+    - passed; the only warning was Git noting CRLF normalization for `tests/TEST_SELECTION_TARGETS.json`
+- `bash -n ops/scripts/set-password.sh`
+  - blocked on this machine because Bash/WSL is unavailable in the Windows shell environment; keep this as an explicit environment gap, not as a validated script check
 
 ### Frontend build checks
 
@@ -672,6 +693,10 @@ evidence, and handoff notes.
    Current follow-up started this step with
    `ops/scripts/dev/pytest_sqlite_guard.py`, a read-only guardrail that reports
    active pytest processes and shared SQLite file state before cleanup.
+   The next guardrail in this batch is
+   `ops/scripts/dev/check_schema_governance.py`, paired with the
+   `skills/data-migration-audit/SKILL.md` entrypoint for schema-repair and
+   no-Alembic upgrade work.
 
 ### Code as documentation
 
@@ -748,6 +773,9 @@ evidence, and handoff notes.
   - API regression audit
   - docs/code consistency checks
 - Prefer scripts over prose when a rule can be automatically checked.
+- For schema-repair or no-Alembic upgrade work, start with
+  `skills/data-migration-audit/SKILL.md` and
+  `python ops/scripts/dev/check_schema_governance.py`.
 
 ## Do Not Revert
 
@@ -776,6 +804,7 @@ python ops/scripts/dev/run_validation_target.py static.encoding_text_tools --tim
 python ops/scripts/dev/run_validation_target.py static.operator_scripts_governance --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.local_test_guardrails --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.repo_local_skills --timeout-seconds 120
+python ops/scripts/dev/run_validation_target.py static.schema_governance --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120
 python ops/scripts/dev/pytest_sqlite_guard.py
 python ops/scripts/dev/repo_line_health.py --json

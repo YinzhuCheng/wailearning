@@ -25,6 +25,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`../skills/permission-audit/SKILL.md`](../skills/permission-audit/SKILL.md) | Backend authorization, role-boundary, and course-access audit workflow |
 | [`../skills/deployment-governance/SKILL.md`](../skills/deployment-governance/SKILL.md) | Deployment script, env template, nginx/systemd, and ops-doc governance |
 | [`../skills/local-test-triage/SKILL.md`](../skills/local-test-triage/SKILL.md) | Local pytest / SQLite / Playwright / process hazard triage |
+| [`../skills/data-migration-audit/SKILL.md`](../skills/data-migration-audit/SKILL.md) | Schema repair, migration audit, and no-Alembic data-governance workflow |
 
 ---
 

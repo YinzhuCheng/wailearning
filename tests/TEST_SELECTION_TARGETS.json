@@ -305,6 +305,64 @@
             "notes": "This intentionally avoids external PyYAML so skill sanity checks run in the normal repo environment."
         },
         {
+            "id": "static.schema_governance",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Static governance checks for CourseEval ORM model, bootstrap.ensure_schema_updates compatibility DDL, and no-Alembic schema documentation anchors.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "schema-governance",
+                "data-migration",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile schema governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/check_schema_governance.py",
+                        "tests/backend/manual/test_validation_selector.py"
+                    ]
+                },
+                {
+                    "label": "schema governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_schema_governance.py"
+                    ]
+                },
+                {
+                    "label": "selector unittest coverage",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "unittest",
+                        "tests.backend.manual.test_validation_selector",
+                        "-v"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "ops/scripts/dev/check_schema_governance.py",
+                    "skills/data-migration-audit/SKILL.md",
+                    "apps/backend/courseeval_backend/db/models.py",
+                    "apps/backend/courseeval_backend/bootstrap.py",
+                    "docs/reference/DATA_MODEL_ESSENTIALS.md",
+                    "docs/operations/ADMIN_BOOTSTRAP.md",
+                    "docs/known-issues-and-risks.md",
+                    "tests/backend/manual/test_validation_selector.py"
+                ],
+                "globs": [
+                    "skills/data-migration-audit/**"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "This is a static governance guardrail. It does not replace PostgreSQL-backed migration or schema validation for release-quality claims."
+        },
+        {
             "id": "static.local_test_guardrails",
             "category": "static-check",
             "risk": "static",

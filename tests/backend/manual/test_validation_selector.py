@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
 from lint_validation_registry import lint_registry  # noqa: E402
 from check_operator_scripts import check_scripts as check_operator_scripts  # noqa: E402
 from check_repo_skills import check_repo_skills  # noqa: E402
+from check_schema_governance import check_schema_governance  # noqa: E402
 from pytest_sqlite_guard import is_pytest_process  # noqa: E402
 from select_validation_targets import parse_ledger  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
@@ -167,6 +168,15 @@ class ValidationSelectorTests(unittest.TestCase):
         ids = recommendation_ids(payload)
         self.assertIn("static.encoding_text_tools", ids)
         self.assertIn("static.local_test_guardrails", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_schema_governance_change_selects_schema_static_target(self):
+        payload = run_selector("--paths", "ops/scripts/dev/check_schema_governance.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.schema_governance", ids)
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
@@ -644,6 +654,9 @@ class ValidationSelectorTests(unittest.TestCase):
             issues = check_repo_skills(root)
 
         self.assertIn("skills/sample-skill/SKILL.md: contains TODO placeholder", issues)
+
+    def test_schema_governance_check_passes_for_repository_schema_contract(self):
+        self.assertEqual(check_schema_governance(REPO_ROOT), [])
 
     def test_pytest_sqlite_guard_detects_pytest_command_but_not_current_process(self):
         self.assertTrue(
