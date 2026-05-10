@@ -158,6 +158,25 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(security["risk"], "broad")
         self.assertIn("security", security["coverage_tags"])
 
+    def test_score_dashboard_routes_select_precise_course_scope_target(self):
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/api/routers/scores.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("backend.scores.dashboard_course_scope", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["unmatched_paths"], [])
+
+        target = recommendation(payload, "backend.scores.dashboard_course_scope")
+        self.assertEqual(target["risk"], "targeted")
+        self.assertIn("course-access", target["coverage_tags"])
+
+    def test_core_api_surface_selects_score_dashboard_target(self):
+        payload = run_selector("--paths", "tests/backend/integration/test_core_api_surface.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("backend.scores.dashboard_course_scope", ids)
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_discussion_router_prefers_pytest_hazard_tier_before_api_heavy_playwright(self):
         payload = run_selector("--paths", "apps/backend/courseeval_backend/api/routers/discussions.py")
 

@@ -568,6 +568,49 @@
             "notes": "Course access and roster changes often have broad effects. Consider behavior/security tests and PostgreSQL full validation for larger changes."
         },
         {
+            "id": "backend.scores.dashboard_course_scope",
+            "category": "backend-pytest",
+            "risk": "targeted",
+            "description": "Focused score/dashboard API target for subject-scoped teacher visibility, score composition, grade appeals, and course-owned dashboard stats/rankings.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "scores",
+                "dashboard",
+                "course-access",
+                "backend-pytest"
+            ],
+            "commands": [
+                {
+                    "label": "pytest",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "pytest",
+                        "tests/backend/integration/test_core_api_surface.py",
+                        "tests/backend/scores/test_score_composition.py",
+                        "-q"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/backend/integration/test_core_api_surface.py",
+                    "tests/backend/scores/test_score_composition.py",
+                    "apps/backend/courseeval_backend/api/routers/dashboard.py",
+                    "apps/backend/courseeval_backend/api/routers/scores.py",
+                    "apps/backend/courseeval_backend/domains/scores/composition.py",
+                    "apps/backend/courseeval_backend/domains/scores/appeals.py",
+                    "apps/backend/courseeval_backend/domains/courses/access.py"
+                ],
+                "globs": [
+                    "tests/backend/scores/**",
+                    "apps/backend/courseeval_backend/domains/scores/**"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "Use this before full PostgreSQL fallback for bounded score/dashboard route changes. Escalate to security or full PostgreSQL validation for shared course-access helper, schema, or auth changes."
+        },
+        {
             "id": "backend.homework.llm_grading",
             "category": "backend-pytest",
             "risk": "targeted",

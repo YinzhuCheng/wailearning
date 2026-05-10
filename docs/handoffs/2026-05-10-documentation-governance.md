@@ -43,6 +43,16 @@ context is no longer the Playwright-selector cleanup pass; it is now:
   with a new pitfall documenting the recurring regression pattern:
   subject-scoped teacher actions must not be denied just because a derived
   class-id set is empty before course access is checked.
+- Follow-up governance update after `daec193`:
+  - documented the subject-scoped route ordering rule in
+    [docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md](../reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md);
+  - added `backend.scores.dashboard_course_scope` to
+    [tests/TEST_SELECTION_TARGETS.json](../../tests/TEST_SELECTION_TARGETS.json)
+    so bounded `scores.py` / `dashboard.py` router changes map to focused
+    integration/score pytest before broad PostgreSQL fallback;
+  - updated
+    [tests/backend/manual/test_validation_selector.py](../../tests/backend/manual/test_validation_selector.py)
+    to assert the new selector behavior.
 
 ### Governance tooling
 
@@ -125,6 +135,7 @@ fallback logic:
 - `docs/development/TEST_EXECUTION_PITFALLS.md`
 - `docs/handoffs/2026-05-10-documentation-governance.md`
 - `docs/operations/DEPLOYMENT_AND_OPERATIONS.md`
+- `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`
 - `ops/scripts/deploy_backend.sh`
 - `ops/scripts/dev/check_repository_normalization.py`
 - `ops/scripts/dev/check_text_encoding.py`
@@ -222,6 +233,24 @@ Passed after fixes:
     profile was not rerun because remote validation for the prior branch state
     had already been confirmed green and this follow-up was covered by targeted
     integration/score tests plus static checks.
+- Follow-up selector governance after documenting the route-ordering rule:
+  - `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+  - `python ops\scripts\dev\select_validation_targets.py --paths apps/backend/courseeval_backend/api/routers/scores.py --json`
+    now recommends only `backend.scores.dashboard_course_scope`, with no
+    `full.pytest.postgres` fallback and no unmatched paths.
+  - `python ops\scripts\dev\select_validation_targets.py --paths apps/backend/courseeval_backend/api/routers/dashboard.py --json`
+    now recommends only `backend.scores.dashboard_course_scope`, with no
+    `full.pytest.postgres` fallback and no unmatched paths.
+  - `python -m unittest tests.backend.manual.test_validation_selector -v`
+    passed; `38 tests OK`.
+  - `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+    passed.
+  - `python ops\scripts\dev\check_repository_normalization.py`
+    passed; `scanned=382 stale=0 missing_required_paths=0`.
+  - `python ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+    passed; `scanned=3 decode_errors=0 suspicious=0`.
+  - `.\.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q`
+    passed; `16 passed, 29 warnings`.
 
 ### Full-suite progression evidence
 

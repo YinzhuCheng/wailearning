@@ -48,6 +48,43 @@ Key symbols:
 
 ---
 
+### Subject-scoped route ordering rule
+
+When a FastAPI route is explicitly scoped by `subject_id` / course id, validate
+that course first:
+
+```python
+course = ensure_course_access_http(subject_id, current_user, db)
+```
+
+Only apply `get_accessible_class_ids(...)`, `apply_class_id_filter(...)`, or
+`Subject.class_id.in_(...)` as the primary authorization filter for class-wide
+routes that do **not** have a course scope. Do not return `[]` or raise `403`
+just because the derived class-id set is empty before checking course access.
+
+Why this matters:
+
+- `teacher` users often own courses through `Subject.teacher_id` without having
+  a `user.class_id`.
+- `class_teacher` users may see courses through `subject_class_links`.
+- elective courses may have `Subject.class_id = None` and still contain valid
+  `CourseEnrollment` rows.
+- score, dashboard, homework, material, notification, attendance, discussion,
+  and file-download surfaces all need course-owned access to work even when a
+  class-only filter would be empty.
+
+Safe pattern:
+
+1. If `subject_id` is present, call `ensure_course_access_http(...)`.
+2. Build the query from the course/subject predicate, for example
+   `Score.subject_id == subject_id`.
+3. Apply optional `class_id` filters only as additional narrowing, not as the
+   initial permission gate.
+4. For no-`subject_id` list endpoints, keep class-wide filtering via
+   `get_accessible_class_ids(...)` / `apply_class_id_filter(...)`.
+
+---
+
 ## 4. Homework & grading (patterns)
 
 Homework routers (`api/routers/homework.py`) generally:
