@@ -1,5 +1,11 @@
 # Documentation Governance Handoff
 
+This is the canonical handoff for the `cursor/repository-normalization`
+workstream. Keep this file as the single uploadable / shareable handoff entry
+for this line. Do not create or maintain a second `.agent-run/HANDOFF.md`; use
+ignored `.agent-run/` files only for private local paths, logs, and temporary
+artifacts that must not be committed or uploaded.
+
 ## Branch And Scope
 
 - Branch: `cursor/repository-normalization`
