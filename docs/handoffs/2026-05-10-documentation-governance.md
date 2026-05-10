@@ -608,9 +608,9 @@ repository root, but the failing frontier was pushed far back:
 - Bash script syntax cannot currently be checked locally with `bash -n` because
   WSL/Bash is unavailable in this shell. Validate `ops/scripts/set-password.sh`
   on a Linux deployment host or CI shell before relying on it operationally.
-- The next commit should include the currently untracked `skills/*` and
-  `ops/scripts/dev/check_*` files. Confirm with `git status --short` before
-  pushing so repo-local skill indexes do not point at missing files.
+- The earlier untracked `skills/*` and `ops/scripts/dev/check_*` follow-up has
+  been committed and pushed. Keep using `git status --short` before pushing so
+  repo-local skill indexes do not point at missing files.
 
 ## Recommended Next Steps
 
@@ -623,7 +623,9 @@ repository root, but the failing frontier was pushed far back:
    the second planned batch: harden local test and governance ergonomics.
 3. If broader backend confidence is required locally later, run one pytest
    process only and delete `.pytest_tmp/test.sqlite` first if
-   table-exists/no-such-table errors recur.
+   table-exists/no-such-table errors recur. Use
+   `python ops/scripts/dev/pytest_sqlite_guard.py` before deleting or reusing
+   the shared SQLite file.
 4. Continue turning recurring local hazards into scripts, selector rules, or
    repo-local skills when they become common enough to encode.
 
@@ -667,6 +669,9 @@ evidence, and handoff notes.
    subject-scoped teacher access in both docs and tests. This step should reduce
    future false bug hunts and make repository-normalization work faster without
    weakening validation honesty.
+   Current follow-up started this step with
+   `ops/scripts/dev/pytest_sqlite_guard.py`, a read-only guardrail that reports
+   active pytest processes and shared SQLite file state before cleanup.
 
 ### Code as documentation
 
@@ -769,8 +774,10 @@ python ops/scripts/dev/check_repository_normalization.py
 python ops/scripts/dev/select_validation_targets.py --worktree
 python ops/scripts/dev/run_validation_target.py static.encoding_text_tools --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.operator_scripts_governance --timeout-seconds 120
+python ops/scripts/dev/run_validation_target.py static.local_test_guardrails --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.repo_local_skills --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120
+python ops/scripts/dev/pytest_sqlite_guard.py
 python ops/scripts/dev/repo_line_health.py --json
 .\.venv\Scripts\python.exe -m pytest -q --maxfail=1
 .\.venv\Scripts\python.exe -m pytest -q

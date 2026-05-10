@@ -305,6 +305,63 @@
             "notes": "This intentionally avoids external PyYAML so skill sanity checks run in the normal repo environment."
         },
         {
+            "id": "static.local_test_guardrails",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Static validation for local test-environment guardrails that diagnose pytest SQLite, process, and harness hazards without mutating local state.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "local-test-triage",
+                "pytest-sqlite",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile local test guard",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/pytest_sqlite_guard.py",
+                        "tests/backend/manual/test_validation_selector.py"
+                    ]
+                },
+                {
+                    "label": "pytest sqlite guard json smoke",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/pytest_sqlite_guard.py",
+                        "--json"
+                    ]
+                },
+                {
+                    "label": "selector unittest coverage",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "unittest",
+                        "tests.backend.manual.test_validation_selector",
+                        "-v"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "ops/scripts/dev/pytest_sqlite_guard.py",
+                    "skills/local-test-triage/SKILL.md",
+                    "docs/development/DEVELOPMENT_AND_TESTING.md",
+                    "docs/development/TEST_EXECUTION_PITFALLS.md",
+                    "docs/known-issues-and-risks.md",
+                    "tests/backend/manual/test_validation_selector.py"
+                ],
+                "globs": [
+                    "ops/scripts/dev/pytest_sqlite_guard.py"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "This guardrail is read-only. It reports active pytest processes and the shared SQLite file state; it does not kill processes or delete test.sqlite."
+        },
+        {
             "id": "backend.learning_notes.api",
             "category": "backend-pytest",
             "risk": "targeted",

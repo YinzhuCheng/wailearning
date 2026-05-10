@@ -2506,10 +2506,14 @@ Corrupted shared sqlite files and parallel writers remain hazards — keep the d
 
 ### Mitigation playbook
 
-1. Stop all pytest processes touching the repo.
-2. Delete `<repository-root>/.pytest_tmp/test.sqlite` (path placeholder: adjust if `PYTEST_DEBUG_TEMPROOT` overrides temp behavior on Windows).
-3. Re-run a **single** failing test file with `python3 -m pytest path/to/test.py -q`.
-4. If failures persist, force Postgres throwaway DB via `TEST_DATABASE_URL` (see `ops/scripts/dev/provision_postgres_pytest.sh` mention in `tests/conftest.py`).
+1. Run `python ops/scripts/dev/pytest_sqlite_guard.py` from the repository root.
+   The command is read-only; it reports active pytest processes and the shared
+   SQLite file state without deleting anything.
+2. Stop all pytest processes touching the repo if the guardrail reports
+   `status=warn`.
+3. Delete `<repository-root>/.pytest_tmp/test.sqlite` (path placeholder: adjust if `PYTEST_DEBUG_TEMPROOT` overrides temp behavior on Windows).
+4. Re-run a **single** failing test file with `python3 -m pytest path/to/test.py -q`.
+5. If failures persist, force Postgres throwaway DB via `TEST_DATABASE_URL` (see `ops/scripts/dev/provision_postgres_pytest.sh` mention in `tests/conftest.py`).
 
 ### Evidence note
 

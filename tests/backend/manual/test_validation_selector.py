@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
 from lint_validation_registry import lint_registry  # noqa: E402
 from check_operator_scripts import check_scripts as check_operator_scripts  # noqa: E402
 from check_repo_skills import check_repo_skills  # noqa: E402
+from pytest_sqlite_guard import is_pytest_process  # noqa: E402
 from select_validation_targets import parse_ledger  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
 from run_validation_target import (
@@ -157,6 +158,15 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("static.encoding_text_tools", ids)
         self.assertIn("static.repo_local_skills", ids)
         self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_local_test_guard_change_is_static_selector_governance(self):
+        payload = run_selector("--paths", "ops/scripts/dev/pytest_sqlite_guard.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.local_test_guardrails", ids)
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
@@ -634,6 +644,20 @@ class ValidationSelectorTests(unittest.TestCase):
             issues = check_repo_skills(root)
 
         self.assertIn("skills/sample-skill/SKILL.md: contains TODO placeholder", issues)
+
+    def test_pytest_sqlite_guard_detects_pytest_command_but_not_current_process(self):
+        self.assertTrue(
+            is_pytest_process(
+                {"pid": "999", "name": "python.exe", "command": "python -m pytest tests -q"},
+                current_pid=123,
+            )
+        )
+        self.assertFalse(
+            is_pytest_process(
+                {"pid": "123", "name": "python.exe", "command": "python ops/scripts/dev/pytest_sqlite_guard.py"},
+                current_pid=123,
+            )
+        )
 
     def test_selector_parses_csv_ledger(self):
         with tempfile.TemporaryDirectory() as tmp:

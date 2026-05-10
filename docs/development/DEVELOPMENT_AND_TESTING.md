@@ -176,6 +176,32 @@ and records that fallback in local artifacts; this is acceptable for selector
 smoke work but not proof that the full application dependency environment is
 ready.
 
+### Local pytest SQLite guardrail
+
+Default pytest runs use a repository-local SQLite file when no PostgreSQL test
+URL is configured. Before deleting or reusing `.pytest_tmp/test.sqlite` after an
+interrupted run, use the read-only guardrail:
+
+```bash
+python ops/scripts/dev/pytest_sqlite_guard.py
+python ops/scripts/dev/pytest_sqlite_guard.py --json
+```
+
+For preflight scripts that should stop when another pytest process is already
+running, use:
+
+```bash
+python ops/scripts/dev/pytest_sqlite_guard.py --fail-on-active-pytest
+```
+
+Interpretation:
+
+- `status=pass` means the guardrail did not detect another pytest process.
+- `status=warn` means it found an active pytest-like process; stop that process
+  before deleting or reusing the shared SQLite file.
+- The script is diagnostic only. It does not kill processes and does not delete
+  `.pytest_tmp/test.sqlite`.
+
 ### Diff-based validation target selection
 
 Use the validation selector when you need a conservative first pass for

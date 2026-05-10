@@ -31,7 +31,11 @@ See [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WOR
 
 **Risk:** Interrupted runs or partially applied DDL can leave the file in a state where later tests fail with missing tables or FK errors until the file is deleted.
 
-**Mitigation documented:** delete `<repo-root>/.pytest_tmp/test.sqlite` when bizarre `no such table` errors appear after supposedly resetting schema.
+**Mitigation documented:** run `python ops/scripts/dev/pytest_sqlite_guard.py`
+first, stop any active pytest process it reports, then delete
+`<repo-root>/.pytest_tmp/test.sqlite` when bizarre `no such table` errors
+appear after supposedly resetting schema. The guardrail is read-only; it does
+not kill processes or delete the file.
 
 ### 3.2 `ensure_schema_updates()` vs empty/partial metadata — mitigated (2026-05)
 
