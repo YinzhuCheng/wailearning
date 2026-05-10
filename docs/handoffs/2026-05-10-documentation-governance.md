@@ -317,6 +317,15 @@ fallback logic:
     - passed; the only warning was Git noting CRLF normalization for `tests/TEST_SELECTION_TARGETS.json`
 - `bash -n ops/scripts/set-password.sh`
   - blocked on this machine because Bash/WSL is unavailable in the Windows shell environment; keep this as an explicit environment gap, not as a validated script check
+- Follow-up API-surface batch:
+  - `python ops/scripts/dev/check_api_surface_governance.py`
+    - passed
+  - `python ops/scripts/dev/run_validation_target.py static.api_surface_governance --timeout-seconds 120`
+    - passed
+  - `python ops/scripts/dev/run_validation_target.py static.repo_local_skills --timeout-seconds 120`
+    - passed
+  - `python -m json.tool tests\TEST_SELECTION_TARGETS.json`
+    - passed
 
 ### Frontend build checks
 
@@ -697,6 +706,10 @@ evidence, and handoff notes.
    `ops/scripts/dev/check_schema_governance.py`, paired with the
    `skills/data-migration-audit/SKILL.md` entrypoint for schema-repair and
    no-Alembic upgrade work.
+   API-surface work now has the same lightweight pattern through
+   `ops/scripts/dev/check_api_surface_governance.py` and
+   `skills/api-surface-audit/SKILL.md`. This is still not a checked-in OpenAPI
+   export; the generated/static API reference remains a future follow-up.
 
 ### Code as documentation
 
@@ -770,12 +783,14 @@ evidence, and handoff notes.
   - permission audit
   - deployment upgrade checks
   - data migration audit
-  - API regression audit
   - docs/code consistency checks
 - Prefer scripts over prose when a rule can be automatically checked.
 - For schema-repair or no-Alembic upgrade work, start with
   `skills/data-migration-audit/SKILL.md` and
   `python ops/scripts/dev/check_schema_governance.py`.
+- For FastAPI router, frontend API client, or route-contract work, start with
+  `skills/api-surface-audit/SKILL.md` and
+  `python ops/scripts/dev/check_api_surface_governance.py`.
 
 ## Do Not Revert
 
@@ -805,6 +820,7 @@ python ops/scripts/dev/run_validation_target.py static.operator_scripts_governan
 python ops/scripts/dev/run_validation_target.py static.local_test_guardrails --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.repo_local_skills --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.schema_governance --timeout-seconds 120
+python ops/scripts/dev/run_validation_target.py static.api_surface_governance --timeout-seconds 120
 python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120
 python ops/scripts/dev/pytest_sqlite_guard.py
 python ops/scripts/dev/repo_line_health.py --json

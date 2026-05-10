@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SELECTOR = REPO_ROOT / "ops" / "scripts" / "dev" / "select_validation_targets.py"
 sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
 from lint_validation_registry import lint_registry  # noqa: E402
+from check_api_surface_governance import check_api_surface_governance  # noqa: E402
 from check_operator_scripts import check_scripts as check_operator_scripts  # noqa: E402
 from check_repo_skills import check_repo_skills  # noqa: E402
 from check_schema_governance import check_schema_governance  # noqa: E402
@@ -177,6 +178,15 @@ class ValidationSelectorTests(unittest.TestCase):
         ids = recommendation_ids(payload)
         self.assertIn("static.encoding_text_tools", ids)
         self.assertIn("static.schema_governance", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_api_surface_governance_change_selects_api_static_target(self):
+        payload = run_selector("--paths", "ops/scripts/dev/check_api_surface_governance.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.api_surface_governance", ids)
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
@@ -657,6 +667,9 @@ class ValidationSelectorTests(unittest.TestCase):
 
     def test_schema_governance_check_passes_for_repository_schema_contract(self):
         self.assertEqual(check_schema_governance(REPO_ROOT), [])
+
+    def test_api_surface_governance_check_passes_for_repository_api_contract(self):
+        self.assertEqual(check_api_surface_governance(REPO_ROOT), [])
 
     def test_pytest_sqlite_guard_detects_pytest_command_but_not_current_process(self):
         self.assertTrue(

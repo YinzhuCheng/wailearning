@@ -363,6 +363,67 @@
             "notes": "This is a static governance guardrail. It does not replace PostgreSQL-backed migration or schema validation for release-quality claims."
         },
         {
+            "id": "static.api_surface_governance",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Static governance checks for FastAPI router registration, router prefixes, frontend API client bases, and API-surface documentation anchors.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "api-surface",
+                "frontend-api-client",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile API surface governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/check_api_surface_governance.py",
+                        "tests/backend/manual/test_validation_selector.py"
+                    ]
+                },
+                {
+                    "label": "API surface governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_api_surface_governance.py"
+                    ]
+                },
+                {
+                    "label": "selector unittest coverage",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "unittest",
+                        "tests.backend.manual.test_validation_selector",
+                        "-v"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "ops/scripts/dev/check_api_surface_governance.py",
+                    "skills/api-surface-audit/SKILL.md",
+                    "apps/backend/courseeval_backend/main.py",
+                    "apps/backend/courseeval_backend/api/schemas.py",
+                    "apps/web/admin/src/api/index.js",
+                    "apps/web/parent/src/api/index.js",
+                    "docs/reference/CODE_MAP_AND_ENTRYPOINTS.md",
+                    "docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md",
+                    "docs/development/DEVELOPMENT_AND_TESTING.md",
+                    "tests/backend/manual/test_validation_selector.py"
+                ],
+                "globs": [
+                    "apps/backend/courseeval_backend/api/routers/*.py",
+                    "skills/api-surface-audit/**"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "This is a static guardrail for route/client/doc drift. It is not a complete OpenAPI export or a substitute for API regression tests."
+        },
+        {
             "id": "static.local_test_guardrails",
             "category": "static-check",
             "risk": "static",

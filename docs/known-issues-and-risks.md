@@ -89,6 +89,12 @@ and `python ops/scripts/dev/check_schema_governance.py`. This is a static
 guardrail only; it does not replace PostgreSQL-backed validation for
 production upgrade claims.
 
+For API-surface work, start with
+[`skills/api-surface-audit/SKILL.md`](../skills/api-surface-audit/SKILL.md)
+and `python ops/scripts/dev/check_api_surface_governance.py`. This is a static
+router/client/doc drift check only; it does not replace a generated OpenAPI
+reference or API regression tests.
+
 ## 9. How to add new entries
 
 Use this template in PR descriptions before promoting to this file:
