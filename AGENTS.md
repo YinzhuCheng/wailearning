@@ -13,8 +13,9 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 3. **Package boundary:** canonical backend import root is `apps.backend.courseeval_backend`. Do not add alternate top-level packages or rename this casually — see [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md).
 4. **Never weaken `/api/e2e/dev/*` gates** without reading [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md) E2E sections — production still mounts the router but handlers return **404** unless `expose_e2e_dev_api()` is true (`main.py`).
 5. **Frontend hiding ≠ authorization.** Every sensitive mutation must be enforced in FastAPI routers / domain helpers (`domains/courses/access.py`, homework routers, etc.).
-6. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
-7. **Local agent workspace:** `.agent-run/` is the ignored, local-only workspace for handoffs, private absolute paths, temporary orchestrators, logs, screenshots, and validation planning notes. Read it when continuing work on this machine, especially `.agent-run/local-private-paths.md` and `.agent-run/validation-automation-upgrade-outline.md` if present. Never commit `.agent-run/` contents. Older local notes may still say `.e2e-run/`; in this worktree that role has been superseded by `.agent-run/` while `.e2e-run/` remains ignored for compatibility.
+6. **Do not revive removed legacy fallbacks.** Student identity resolves through `users.student_id`; course/class access resolves through `CourseEnrollment` and `subject_class_links`. Do not reintroduce `wailearning_backend`, `Subject.class_id` access fallbacks, or username/student-number guessing as normal feature behavior.
+7. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
+8. **Local agent workspace:** `.agent-run/` is the ignored, local-only workspace for handoffs, private absolute paths, temporary orchestrators, logs, screenshots, and validation planning notes. Read it when continuing work on this machine, especially `.agent-run/local-private-paths.md` and `.agent-run/validation-automation-upgrade-outline.md` if present. Never commit `.agent-run/` contents. Older local notes may still say `.e2e-run/`; in this worktree that role has been superseded by `.agent-run/` while `.e2e-run/` remains ignored for compatibility.
 
 ---
 
@@ -204,6 +205,7 @@ under "Diff-based validation workflow".
 
 - **Product name:** README branding is **CourseEval**; npm package may still show legacy names (`courseeval-admin`) — treat as historical artifact unless migrating build metadata.
 - **`Subject` vs “course”:** ORM model `Subject` maps to user-facing “course” in much of the UI and `/api/subjects` routes.
+- **Historical names:** `wailearning_backend`, `ddclass`, old deployment service names, and old domain examples are not current implementation names. If you find them outside intentionally historical notes or test ledgers, update the docs/code path rather than expanding compatibility.
 
 ---
 

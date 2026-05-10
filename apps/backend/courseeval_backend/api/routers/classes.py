@@ -1,6 +1,6 @@
 from typing import List
 
-from sqlalchemy import false as sql_false
+from sqlalchemy import false as sql_false, select
 from sqlalchemy.orm import Query
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
 from apps.backend.courseeval_backend.domains.courses.access import get_accessible_class_ids_from_courses
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.db.models import Class, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.db.models import Class, Student, Subject, SubjectClassLink, User, UserRole
 from apps.backend.courseeval_backend.api.schemas import ClassCreate, ClassResponse, ClassUpdate
 
 
@@ -150,7 +150,15 @@ def delete_class(
     if students > 0:
         raise HTTPException(status_code=400, detail="This class still contains students and cannot be deleted.")
 
-    courses = db.query(Subject).filter(Subject.class_id == class_id).count()
+    linked_subject_ids = (
+        select(SubjectClassLink.subject_id)
+        .filter(SubjectClassLink.class_id == class_id)
+    )
+    courses = (
+        db.query(Subject)
+        .filter((Subject.class_id == class_id) | (Subject.id.in_(linked_subject_ids)))
+        .count()
+    )
     if courses > 0:
         raise HTTPException(
             status_code=400,

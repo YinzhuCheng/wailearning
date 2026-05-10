@@ -156,6 +156,16 @@ When upgrading a live system:
 
 Do not treat a clean `git status` or a single public URL response as proof that deployment finished.
 
+### CourseEval normalization prechecks
+
+Before deploying the CourseEval normalization line to a database that predates the package/branding cleanup, confirm these invariants or run a dry deployment against a restored backup:
+
+- `users.student_id` is populated for active student login accounts that should participate in quota, homework, discussion, and course enrollment flows. The runtime reconciliation path may repair default/demo drift, but feature code should not rely on `username == student_no` as a relationship.
+- Required courses have `subject_class_links` rows for each administrative class that should auto-enroll. Student and class-teacher course access no longer falls back to `subjects.class_id`; that column remains a primary/display anchor for compatibility-heavy rows.
+- Upload files are present under the effective `UPLOADS_DIR` / `${APP_ROOT}/shared/uploads` path. The deployment script can migrate a legacy `uploads/` directory when it is still colocated with the deployment root, but operators should verify attachment URLs before cutting over.
+- System settings in the database already contain the intended CourseEval branding. Frontend normalization no longer rewrites stored legacy brand text at render time.
+- Service and Nginx names match the current templates: `courseeval-backend.service` and `ops/nginx/courseeval.example*.conf`.
+
 ## Validation Checklist
 
 After deployment:

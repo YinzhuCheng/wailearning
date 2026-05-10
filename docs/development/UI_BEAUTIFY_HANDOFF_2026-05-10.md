@@ -1,5 +1,10 @@
 # Course Learning UI Beautify Handoff - 2026-05-10
 
+> Historical handoff: this file records the completed `cursor/beautify-ui`
+> UI workstream and its validation notes. Current repository-governance work
+> continues on `cursor/repository-normalization`; do not treat the branch and
+> worktree names below as current checkout instructions.
+
 This handoff records the current state of the `cursor/beautify-ui` workstream
 after the course-learning UI beautification pass. It is intended for the next
 agent to continue without rediscovering the same layout, validation, and

@@ -412,6 +412,9 @@ def update_user(
     if is_admin(current_user) and user.class_id != next_class_id:
         changes.append(f"班级ID: {user.class_id} -> {next_class_id}")
         if user.role == UserRole.STUDENT.value:
+            if user.student_id is None:
+                sync_student_roster_from_user_accounts(db, [user.id])
+                db.flush()
             roster = get_bound_student_for_user(user, db)
             if roster:
                 db.query(CourseEnrollment).filter(CourseEnrollment.student_id == roster.id).delete(

@@ -32,6 +32,7 @@ from apps.backend.courseeval_backend.db.models import (
     HomeworkSubmission,
     Student,
     Subject,
+    SubjectClassLink,
     User,
     UserRole,
 )
@@ -96,6 +97,14 @@ def _teacher_and_class(client: TestClient) -> dict:
             status="active",
         )
         db.add(course)
+        db.flush()
+        db.add(
+            SubjectClassLink(
+                subject_id=course.id,
+                class_id=klass.id,
+                enrollment_mode="all_in_class",
+            )
+        )
         db.commit()
         return {
             "suffix": suffix,
@@ -383,6 +392,13 @@ def test_duplicate_student_no_across_classes_prepare_does_not_move_roster(client
         course_a = Subject(name=f"课A_{suffix}", class_id=ka.id, course_type="required", status="active")
         db.add(course_a)
         db.flush()
+        db.add(
+            SubjectClassLink(
+                subject_id=course_a.id,
+                class_id=ka.id,
+                enrollment_mode="all_in_class",
+            )
+        )
         user = User(
             username=shared_no,
             hashed_password="x",
@@ -487,6 +503,13 @@ def test_admin_user_class_change_triggers_enrollment_sync(client: TestClient):
         )
         db.add(course2)
         db.flush()
+        db.add(
+            SubjectClassLink(
+                subject_id=course2.id,
+                class_id=klass2.id,
+                enrollment_mode="all_in_class",
+            )
+        )
         stu = User(
             username=st.student_no,
             hashed_password=get_password_hash("sp"),
@@ -729,6 +752,13 @@ def test_get_homework_list_for_student_submission_map_consistent(client: TestCli
         )
         db.add_all([hw_ok, course_b])
         db.flush()
+        db.add(
+            SubjectClassLink(
+                subject_id=course_b.id,
+                class_id=klass_b.id,
+                enrollment_mode="all_in_class",
+            )
+        )
         hw_other = Homework(
             title="他班作业",
             content="c",

@@ -112,6 +112,40 @@ def test_required_course_two_classes_auto_enrolls_each_class_roster(client: Test
         db.close()
 
 
+def test_delete_class_rejects_non_primary_subject_class_link(client: TestClient):
+    suffix = uuid.uuid4().hex[:10]
+    admin_user = f"adm_del_{suffix}"
+    _seed_admin(admin_user, "pw123456")
+    h = _login(client, admin_user, "pw123456")
+
+    c1 = client.post("/api/classes", headers=h, json={"name": f"DelA-{suffix}", "grade": 1})
+    c2 = client.post("/api/classes", headers=h, json={"name": f"DelB-{suffix}", "grade": 1})
+    assert c1.status_code == c2.status_code == 200
+    id1 = c1.json()["id"]
+    id2 = c2.json()["id"]
+
+    created = client.post(
+        "/api/subjects",
+        headers=h,
+        json={
+            "name": f"DeleteGuard-{suffix}",
+            "course_type": "required",
+            "status": "active",
+            "class_links": [
+                {"class_id": id1, "enrollment_mode": "all_in_class"},
+                {"class_id": id2, "enrollment_mode": "roster_subset"},
+            ],
+            "course_times": [],
+        },
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["class_id"] == id1
+
+    deleted = client.delete(f"/api/classes/{id2}", headers=h)
+    assert deleted.status_code == 400
+    assert "courses assigned" in deleted.json().get("detail", "")
+
+
 def test_elective_create_rejects_class_binding(client: TestClient):
     suffix = uuid.uuid4().hex[:10]
     admin_user = f"adm_el_{suffix}"
