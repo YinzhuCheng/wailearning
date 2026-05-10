@@ -74,6 +74,40 @@ context is no longer the Playwright-selector cleanup pass; it is now:
   `${SHARED_DIR}/uploads/` when present, while the old tree is intentionally
   left in place for explicit later cleanup.
 
+### Deployment / ops normalization audit
+
+- Rechecked the current deployment scripts against
+  [docs/operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md)
+  and [docs/development/GIT_WORKFLOW.md](../development/GIT_WORKFLOW.md):
+  - `ops/scripts/setup_server.sh`
+  - `ops/scripts/redeploy.sh`
+  - `ops/scripts/pull_and_deploy.sh`
+  - `ops/scripts/post_deploy_check.sh`
+  - `ops/scripts/deploy_backend.sh`
+  - `ops/scripts/deploy_frontend.sh`
+  - `ops/scripts/deploy_parent_portal.sh`
+  - `ops/scripts/deploy_all.sh`
+  - `ops/scripts/lib/deploy_repo_dir.sh`
+  - `ops/scripts/lib/git_sync_server.sh`
+  - `ops/systemd/courseeval-backend.service`
+  - `ops/nginx/courseeval.example.conf`
+  - `ops/nginx/courseeval.example.http.conf`
+- Confirmed the docs match the current operational shape:
+  `/opt/courseeval/source`, `/opt/courseeval/shared/.env.production`,
+  `/opt/courseeval/shared/uploads`, `/var/www/courseeval.example/admin`,
+  `/var/www/courseeval.example/parent`, `courseeval-backend.service`,
+  local backend health on `127.0.0.1:8001`, public `/health`, and derived
+  public `/api/health`.
+- Confirmed the Git deploy wrappers are documented with the active behavior:
+  production-first `REPO_DIR` resolution, explicit remote refspec fetch,
+  `SAFE_BACKUP_BEFORE_DEPLOY`, `GIT_RESET_WORKTREE_BEFORE_FETCH`,
+  `GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT`, `SKIP_GIT`, `FRONTEND_ONLY`, and
+  `APP_URL` / `PUBLIC_API_HEALTH_URL`.
+- Confirmed apparent mojibake in PowerShell-rendered output was a console
+  decoding artifact, not repository file corruption: UTF-8 reads and
+  `check_text_encoding.py` reported no suspicious text in the checked ops/docs
+  files.
+
 ### Backend bug fixes found while chasing `pytest -q`
 
 The following are real implementation fixes, not just test updates:
@@ -251,6 +285,23 @@ Passed after fixes:
     passed; `scanned=3 decode_errors=0 suspicious=0`.
   - `.\.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q`
     passed; `16 passed, 29 warnings`.
+- Deployment / ops normalization audit follow-up:
+  - `python ops\scripts\dev\check_text_encoding.py AGENTS.md docs\operations\DEPLOYMENT_AND_OPERATIONS.md docs\development\GIT_WORKFLOW.md ops\scripts\lib\deploy_repo_dir.sh ops\scripts\lib\git_sync_server.sh`
+    passed; `scanned=5 decode_errors=0 suspicious=0`.
+  - `python ops\scripts\dev\select_validation_targets.py --worktree`
+    passed before the handoff edit and reported no changed paths.
+  - No deploy behavior was changed in this audit batch; the only planned diff
+    is this handoff note unless later validation finds active drift.
+  - After this handoff update, `python ops\scripts\dev\check_repository_normalization.py`
+    passed; `scanned=382 stale=0 missing_required_paths=0`.
+  - `python ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+    passed; `scanned=1 decode_errors=0 suspicious=0`.
+  - `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+    passed.
+  - `python ops\scripts\dev\select_validation_targets.py --worktree`
+    recommended only `static.encoding_text_tools` for the docs-only handoff
+    diff.
+  - `git diff --check` passed.
 
 ### Full-suite progression evidence
 
@@ -332,17 +383,14 @@ repository root, but the failing frontier was pushed far back:
 
 ### Suggested next governance batch after the suite is green
 
-1. Revisit [docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md](../reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md)
-   and add the same router-ordering rule currently only recorded in the pitfalls
-   doc.
-2. Recheck deployment governance alignment for:
-   - `setup_server.sh`
-   - `redeploy.sh`
-   - `pull_and_deploy.sh`
-   - `post_deploy_check.sh`
-   - systemd/nginx/env docs
-3. Consider whether the isolated discussion-file SQLite reset failures deserve a
+1. Consider whether the isolated discussion-file SQLite reset failures deserve a
    dedicated test-harness hardening batch.
+2. Continue the repository-normalization audit with configuration/bootstrap
+   governance, especially `.env.production`, `core/config.py`,
+   `bootstrap.py`, `ops/scripts/init_db.sql`, and
+   [docs/operations/ADMIN_BOOTSTRAP.md](../operations/ADMIN_BOOTSTRAP.md).
+3. Keep deployment governance on a maintenance watchlist, but the 2026-05-10
+   audit found no active script/doc contradiction requiring a behavior change.
 
 ## Long-Term Plan
 
