@@ -187,6 +187,13 @@ clean for the selected files. The repository has known historical hotspots, so a
 whole-repo suspicious-marker failure may be useful for dedicated cleanup work
 but too noisy for unrelated feature branches.
 
+The suspicious-marker list includes common Windows/CP936 mojibake fragments
+seen in this repository. When the script reports a marker in an E2E selector or
+assertion, do not rewrite it casually: first confirm whether the literal is a
+real product string, stale selector fallback, or intentionally broad regular
+expression. Repair selector text in a dedicated change with the affected
+Playwright target, not as a side effect of documentation cleanup.
+
 ### Git output settings that can help
 
 When an agent or maintainer repeatedly reads paths or commit messages containing

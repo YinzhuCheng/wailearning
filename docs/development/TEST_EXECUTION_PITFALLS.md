@@ -852,9 +852,9 @@ The reliable approach in a restricted Windows automation environment was:
    example `<artifact-dir>/data-clean`, with local trust auth.
 5. Run PostgreSQL on a non-production loopback port, for example
    `127.0.0.1:15432`.
-6. Create a clearly disposable database such as `wailearning_uiux_audit`.
+6. Create a clearly disposable database such as `courseeval_uiux_audit`.
 7. Start the backend with:
-   - `DATABASE_URL=postgresql://postgres@127.0.0.1:15432/wailearning_uiux_audit`
+   - `DATABASE_URL=postgresql://postgres@127.0.0.1:15432/courseeval_uiux_audit`
    - `E2E_DEV_SEED_ENABLED=true`
    - `E2E_DEV_SEED_TOKEN=<test token>`
    - `INIT_DEFAULT_DATA=false`

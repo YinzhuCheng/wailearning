@@ -68,6 +68,23 @@ SUSPICIOUS_MARKERS = {
     "\u00c3": "latin1-utf8-marker-A-tilde",
     "\u00c2": "latin1-utf8-marker-A-circumflex",
     "\u951f\u65a4\u62f7": "common-Chinese-mojibake-marker",
+    "\u9200": "cp936-mojibake-marker",
+    "\u920e": "cp936-mojibake-marker",
+    "\u920b": "cp936-mojibake-marker",
+    "\u6ec3": "cp936-mojibake-marker",
+    "\u7ddf": "cp936-mojibake-marker",
+    "\u7ead": "cp936-mojibake-marker",
+    "\u6e2e": "cp936-mojibake-marker",
+    "\u6e03": "cp936-mojibake-marker",
+    "\u6de2": "cp936-mojibake-marker",
+    "\u6402": "cp936-mojibake-marker",
+    "\u8e47": "cp936-mojibake-marker",
+    "\u7025": "cp936-mojibake-marker",
+    "\u721c": "cp936-mojibake-marker",
+    "\u9422": "cp936-mojibake-marker",
+    "\u7ee0": "cp936-mojibake-marker",
+    "\u608a": "cp936-mojibake-marker",
+    "\u0431\u043a": "mojibake-dash-marker",
 }
 
 

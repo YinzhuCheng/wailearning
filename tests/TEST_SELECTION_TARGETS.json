@@ -53,7 +53,8 @@
                     "ops/scripts/windows/set-utf8-session.ps1",
                     "ops/scripts/dev/safe_show_text.py",
                     "ops/scripts/dev/safe_write_text.py",
-                    "ops/scripts/dev/check_text_encoding.py"
+                    "ops/scripts/dev/check_text_encoding.py",
+                    "ops/scripts/"
                 ],
                 "globs": [
                     "*.md",
@@ -62,6 +63,7 @@
                     "docs/**/*.md",
                     "docs/**/*.txt",
                     "ops/scripts/dev/*.py",
+                    "ops/scripts/*.ps1",
                     "ops/scripts/windows/*.ps1"
                 ]
             },

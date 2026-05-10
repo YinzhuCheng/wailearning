@@ -77,5 +77,5 @@ If you change:
 
 ## Historical / naming honesty
 
-- Package directory historically referenced as “wailearning” / “dd-class” in ops paths — deployment docs preserve server paths; code namespace is `apps.backend.courseeval_backend`.
+- Retired pre-CourseEval names should appear only in historical notes, append-only test ledgers, or explicit "do not restore" warnings. Current code namespace is `apps.backend.courseeval_backend`; current deployment templates use `courseeval-backend.service` and `ops/nginx/courseeval.example*.conf`.
 - “Subject” in models often corresponds to user-facing “course” in UI copy — when debugging enrollment, grep both `Subject` and route `/api/subjects`.

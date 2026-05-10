@@ -2,7 +2,7 @@
 
 **Purpose:** File-level orientation for agents — **what exists and where**, aligned to the **current tree** (not aspirational architecture).
 
-**Naming:** Product branding uses **CourseEval**; legacy strings (`dd-class`, `wailearning`) may appear in ops paths — treat as historical unless migrating.
+**Naming:** Product branding uses **CourseEval**. Retired pre-CourseEval names should appear only in historical notes, append-only test ledgers, or explicit "do not restore" warnings; current ops paths and code use CourseEval names.
 
 ---
 

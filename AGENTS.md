@@ -110,6 +110,11 @@ current task.
    target in the final handoff. Do not use this default to ignore unmatched
    product paths, high-risk behavior, or selector gaps; add a registry rule, run
    a broader target, or explain the unresolved validation state.
+13. **Run repository-normalization guardrails for docs/governance work.** When
+   touching docs, ops templates, package paths, or historical cleanup, run
+   `python ops/scripts/dev/check_repository_normalization.py` before handoff.
+   Treat findings outside historical notes and CSV ledgers as active drift that
+   needs either a code/doc fix or an explicit risk note.
 
 ---
 
@@ -132,6 +137,7 @@ current task.
 | In-process LLM worker | [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](docs/architecture/ASYNC_TASKS_AND_WORKERS.md) |
 | Known gaps / risks | [`docs/known-issues-and-risks.md`](docs/known-issues-and-risks.md) |
 | Operational playbook | [`docs/agent-playbook.md`](docs/agent-playbook.md) |
+| Repo-local skills | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) |
 
 ---
 
@@ -198,6 +204,9 @@ under "Diff-based validation workflow".
 2. **LLM paths:** run nearest tests under `tests/backend/llm/` or homework folders; watch for HTTP mocking patterns.
 3. **Frontend:** `npm run build` inside affected SPA (`apps/web/admin` or `apps/web/parent`) when changing TS/Vue.
 4. **Docs:** update CONFIGURATION_REFERENCE / CORE_BUSINESS_FLOWS / pitfalls when behavior or defaults shift.
+5. **Repository normalization:** for docs, ops, package, or naming changes, run
+   `python ops/scripts/dev/check_repository_normalization.py` and explain any
+   allowed historical hits.
 
 ---
 

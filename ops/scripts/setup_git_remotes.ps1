@@ -3,7 +3,7 @@ param(
     [string]$GitHubRepoUrl,
 
     [string]$GitHubUpstreamUrl = "https://github.com/joyapple/CourseEval.git",
-    [string]$GiteeUpstreamUrl = "https://gitee.com/joyapple2020/dd-class.git"
+    [string]$GiteeUpstreamUrl = "https://gitee.com/joyapple2020/CourseEval.git"
 )
 
 $ErrorActionPreference = "Stop"

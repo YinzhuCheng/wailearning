@@ -19,6 +19,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`known-issues-and-risks.md`](known-issues-and-risks.md) | Open risks, “待人工确认”, CI location honesty |
 | [`DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
 | [`architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), mapping, pitfalls |
+| [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Repeatable workflow for code-as-docs / docs-as-governance passes |
 
 ---
 
@@ -81,6 +82,11 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 - Contributors, including LLM agents, are expected to read the task-relevant documents before changing code, tests, structure, or deployment assets.
 - The documentation set is part of the implementation surface, not optional commentary.
 - For database-related tests and “zero-skip” full `pytest` claims, see the **full regression prerequisites** in [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md).
+- Large structured ledgers belong in CSV/JSON/YAML; Markdown should link to
+  them and explain interpretation rules. The current test execution ledgers
+  live under [development/testing/](development/testing/).
+- For repository naming, package, service, and ops-template normalization
+  checks, run `python ops/scripts/dev/check_repository_normalization.py`.
 
 ---
 
