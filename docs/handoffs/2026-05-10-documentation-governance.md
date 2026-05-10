@@ -482,9 +482,9 @@ repository root, but the failing frontier was pushed far back:
    the next deployment-host check, because local Windows Bash is unavailable.
 2. Treat the repo-local first-run / deployment bootstrap governance pass as
    complete after the `.env.production`, `init_db.sql`, `post_deploy_check.sh`,
-   frontend-deploy, and upgrade-example alignments, and move to the second
-   repository-normalization step: operator script and validation-selection
-   normalization.
+   frontend-deploy, and upgrade-example alignments, and move to the first
+   remaining repository-normalization step: operator script and
+   validation-selection normalization.
 3. If broader backend confidence is required locally later, run one pytest
    process only and delete `.pytest_tmp/test.sqlite` first if
    table-exists/no-such-table errors recur.
@@ -505,24 +505,13 @@ repository root, but the failing frontier was pushed far back:
 Future agents should treat the following as the durable backlog for the
 repository-normalization / docs-governance line.
 
-### Three-step repository-normalization path
+### Two-step repository-normalization path
 
 Use this as the execution order for the next repository-normalization rounds.
 Keep each step as a small, reviewable batch with matching docs, tests, selector
 evidence, and handoff notes.
 
-1. **Finish first-run and deployment bootstrap governance.**
-   Continue from the `INIT_ADMIN_*` / `INIT_DEFAULT_DATA` fix and audit the
-   remaining first-run edges: `ops/scripts/init_db.sql`, `.env.production`,
-   production env examples, systemd/nginx templates, deploy health checks, and
-   credential-touching operator scripts. The goal is that a fresh deployment can
-   be bootstrapped from current docs without relying on retired names, stale
-   paths, or ambiguous first-admin behavior. For each change, run
-   `check_repository_normalization.py`, `static.encoding_text_tools`,
-   `static.validation_selector`, `git diff --check`, and the narrowest relevant
-   bootstrap/backend pytest. Validate Bash scripts on Linux/CI when local
-   Windows Bash is unavailable.
-2. **Normalize operator scripts and validation selection.**
+1. **Normalize operator scripts and validation selection.**
    Sweep `ops/scripts/` for scripts that look official but still contain
    one-off command blobs, hardcoded legacy names, unsafe defaults, or docs that
    overstate what the script can do. Keep script semantics and operations docs
@@ -531,7 +520,7 @@ evidence, and handoff notes.
    bootstrap, router, and governance-tooling diffs map to precise static or
    targeted checks before falling back to broad/full targets. Preserve
    high-risk fallbacks, but make their reason and deferral status explicit.
-3. **Harden local test and governance ergonomics.**
+2. **Harden local test and governance ergonomics.**
    Convert repeated local pitfalls into guardrails: prevent or clearly diagnose
    concurrent pytest processes sharing `.pytest_tmp/test.sqlite`; document or
    automate per-run SQLite cleanup; keep `.agent-run/` artifacts and private
