@@ -63,5 +63,3 @@ fi
 
 nginx -t
 systemctl reload nginx
-
-systemctl restart courseeval-backend.service

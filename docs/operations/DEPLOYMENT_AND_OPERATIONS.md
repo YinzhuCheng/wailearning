@@ -140,6 +140,7 @@ Implementation notes that matter operationally:
 - frontend deployment builds from `apps/web/admin` and syncs `dist/` into `${ADMIN_WEB_ROOT}`
 - parent deployment builds from `apps/web/parent` and syncs `dist/` into `${PARENT_WEB_ROOT}`
 - both frontend deploy scripts also refresh the nginx site file from `ops/nginx/courseeval.example*.conf`
+- frontend-only deploy scripts reload nginx after publishing static assets, but they do not restart `courseeval-backend.service`
 - `post_deploy_check.sh` always verifies local backend health; public `/health` is skipped by default and only runs when `APP_URL` or `API_HEALTH_URL` is set. When the public health URL is exactly `${APP_URL}/health`, the script also checks the derived `/api/health` path unless `PUBLIC_API_HEALTH_URL` overrides it explicitly
 - `redeploy.sh` and `pull_and_deploy.sh` resolve `REPO_DIR` through `ops/scripts/lib/deploy_repo_dir.sh`: they prefer `/opt/courseeval/source` when it is a git clone and only fall back to the script-adjacent checkout when that preferred path is absent
 
@@ -155,6 +156,10 @@ To include public checks in the final step:
 ```bash
 sudo APP_URL=https://courseeval.example bash ops/scripts/post_deploy_check.sh
 ```
+
+If the public `/health` endpoint is not simply `${APP_URL}/health`, call the
+script with `API_HEALTH_URL=https://.../health` directly and optionally set
+`PUBLIC_API_HEALTH_URL=https://.../api/health` for the proxied API probe.
 
 ## Git-Based Server Updates
 
@@ -183,8 +188,9 @@ Useful variants:
 - `SAFE_BACKUP_BEFORE_DEPLOY=1` when you want a pre-upgrade database and shared-data backup.
 - `GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0` when you want fail-fast behavior instead of auto-stash.
 - `SKIP_GIT=1` when the desired source tree is already staged into `REPO_DIR` and you explicitly do not want `redeploy.sh` to fetch or checkout anything.
-- `FRONTEND_ONLY=1` when you intentionally want only the admin SPA rebuilt and deployed.
+- `FRONTEND_ONLY=1` when you intentionally want only the admin SPA rebuilt and deployed; this path reloads nginx but does not restart the backend service.
 - `APP_URL=https://...` when you want the post-deploy public check to hit a specific public hostname.
+- `API_HEALTH_URL=https://.../health` when the public `/health` check should target an explicit URL instead of deriving it from `APP_URL`.
 - `PUBLIC_API_HEALTH_URL=https://.../api/health` when public API health should not be derived from `APP_URL`.
 
 ## Safe Upgrade Principles

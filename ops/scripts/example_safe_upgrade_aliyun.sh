@@ -90,12 +90,12 @@ echo "==> 10. Run bootstrap/schema sync against existing database"
 echo "==> 11. Build frontend assets"
 (
   cd "${SOURCE_DIR}/apps/web/admin"
-  npm install
+  npm ci
   npm run build
 )
 (
   cd "${SOURCE_DIR}/apps/web/parent"
-  npm install
+  npm ci
   npm run build
 )
 
@@ -108,7 +108,7 @@ systemctl start "${APP_SERVICE}"
 systemctl --no-pager --full status "${APP_SERVICE}" || true
 
 echo "==> 14. Basic post-upgrade checks"
-curl -fsS http://127.0.0.1:8001/health >/dev/null
+bash "${SOURCE_DIR}/ops/scripts/post_deploy_check.sh"
 
 cat <<EOF
 Upgrade completed.
