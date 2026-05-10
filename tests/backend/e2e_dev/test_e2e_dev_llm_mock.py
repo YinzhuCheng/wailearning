@@ -9,12 +9,12 @@ from urllib.parse import urlparse
 import httpx
 from fastapi.testclient import TestClient
 
-from apps.backend.wailearning_backend.core.config import settings
-from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.llm_grading import RetryableLLMError, worker_manager
-from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import HomeworkGradingTask, LLMEndpointPreset
-from apps.backend.wailearning_backend.bootstrap import _backfill_default_llm_groups_for_existing_configs
+from apps.backend.courseeval_backend.core.config import settings
+from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.llm_grading import RetryableLLMError, worker_manager
+from apps.backend.courseeval_backend.main import app
+from apps.backend.courseeval_backend.db.models import HomeworkGradingTask, LLMEndpointPreset
+from apps.backend.courseeval_backend.bootstrap import _backfill_default_llm_groups_for_existing_configs
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
@@ -215,7 +215,7 @@ def test_e2e_worker_status_and_control():
 
     ctx = make_grading_course_with_homework()
     student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
-    with mock.patch("apps.backend.wailearning_backend.llm_grading._request_grade_from_endpoint", side_effect=RetryableLLMError("worker-test-boom")):
+    with mock.patch("apps.backend.courseeval_backend.llm_grading._request_grade_from_endpoint", side_effect=RetryableLLMError("worker-test-boom")):
         sub = client.post(
             f"/api/homeworks/{ctx['homework_id']}/submission",
             headers=student_headers,

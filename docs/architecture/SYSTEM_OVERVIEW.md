@@ -2,7 +2,7 @@
 
 ## What the System Does
 
-BIMSA-CLASS is a multi-role teaching-management platform for classroom administration, academic records, homework workflows, course materials, notifications, and parent access. It is designed to work as a normal school-management system even when LLM features are disabled, while also supporting course-level AI-assisted grading when configured.
+CourseEval is a multi-role teaching-management platform for classroom administration, academic records, homework workflows, course materials, notifications, and parent access. It is designed to work as a normal school-management system even when LLM features are disabled, while also supporting course-level AI-assisted grading when configured.
 
 ## Major Capability Areas
 
@@ -15,7 +15,7 @@ BIMSA-CLASS is a multi-role teaching-management platform for classroom administr
 
 ### Roles (`UserRole`)
 
-Stored on `users.role` as lowercase strings — see `apps/backend/wailearning_backend/db/models.py`:
+Stored on `users.role` as lowercase strings — see `apps/backend/courseeval_backend/db/models.py`:
 
 | Role value | Typical capability surface |
 |------------|----------------------------|
@@ -90,13 +90,13 @@ The implementation details are documented in [../product/LLM_HOMEWORK_GUIDE.md](
 
 ### Backend
 
-- FastAPI application in `apps/backend/wailearning_backend/`
-- Canonical Python import root `apps.backend.wailearning_backend`
-- API-facing contracts and route modules under `apps/backend/wailearning_backend/api/`
-- Shared auth, config, and permission primitives under `apps/backend/wailearning_backend/core/`
-- SQLAlchemy engine/session/models under `apps/backend/wailearning_backend/db/`
-- Business-domain helpers under `apps/backend/wailearning_backend/domains/`
-- Cross-cutting operational helpers under `apps/backend/wailearning_backend/services/`
+- FastAPI application in `apps/backend/courseeval_backend/`
+- Canonical Python import root `apps.backend.courseeval_backend`
+- API-facing contracts and route modules under `apps/backend/courseeval_backend/api/`
+- Shared auth, config, and permission primitives under `apps/backend/courseeval_backend/core/`
+- SQLAlchemy engine/session/models under `apps/backend/courseeval_backend/db/`
+- Business-domain helpers under `apps/backend/courseeval_backend/domains/`
+- Cross-cutting operational helpers under `apps/backend/courseeval_backend/services/`
 - SQLAlchemy models and bootstrap migrations
 - PostgreSQL as the primary database
 - In-process grading worker controlled by configuration
@@ -141,7 +141,7 @@ The detailed repository boundary rules are documented in [REPOSITORY_STRUCTURE.m
 
 ## Backend Route Groups
 
-Router registration order is visible in `apps/backend/wailearning_backend/main.py` (`app.include_router(...)`). Prefixes below match the `APIRouter(prefix=...)` declarations in `api/routers/*.py`.
+Router registration order is visible in `apps/backend/courseeval_backend/main.py` (`app.include_router(...)`). Prefixes below match the `APIRouter(prefix=...)` declarations in `api/routers/*.py`.
 
 **Core product**
 

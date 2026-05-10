@@ -18,7 +18,7 @@ It is written for both human contributors and LLM coding agents. Read it before:
 
 The repository no longer uses a root-level `app/` compatibility package. The canonical backend import namespace is now:
 
-- `apps.backend.wailearning_backend`
+- `apps.backend.courseeval_backend`
 
 That namespace is not a suggestion or an alias. It is the real package boundary and should be treated as the only authoritative backend import root.
 
@@ -30,7 +30,7 @@ repo/
     __init__.py
     backend/
       __init__.py
-      wailearning_backend/         canonical FastAPI backend package
+      courseeval_backend/         canonical FastAPI backend package
     web/
       admin/                       admin SPA and Playwright config
       parent/                      parent-facing SPA
@@ -73,7 +73,7 @@ The repository contains multiple applications and therefore keeps application co
 
 That is intentional:
 
-- `apps/backend/wailearning_backend/` is the backend Python application package
+- `apps/backend/courseeval_backend/` is the backend Python application package
 - `apps/web/admin/` is the admin web application
 - `apps/web/parent/` is the parent-facing web application
 
@@ -88,21 +88,21 @@ That ambiguity is no longer acceptable. Agents should not recreate it.
 
 The canonical backend import root is:
 
-- `apps.backend.wailearning_backend`
+- `apps.backend.courseeval_backend`
 
 Examples:
 
-- `from apps.backend.wailearning_backend.core.config import settings`
-- `from apps.backend.wailearning_backend.db.database import SessionLocal`
-- `from apps.backend.wailearning_backend.api.schemas import UserResponse`
-- `from apps.backend.wailearning_backend.api.routers import auth`
-- `python -m apps.backend.wailearning_backend.bootstrap`
-- `python -m uvicorn apps.backend.wailearning_backend.main:app`
+- `from apps.backend.courseeval_backend.core.config import settings`
+- `from apps.backend.courseeval_backend.db.database import SessionLocal`
+- `from apps.backend.courseeval_backend.api.schemas import UserResponse`
+- `from apps.backend.courseeval_backend.api.routers import auth`
+- `python -m apps.backend.courseeval_backend.bootstrap`
+- `python -m uvicorn apps.backend.courseeval_backend.main:app`
 
 Do not add:
 
 - `from app...`
-- `from wailearning_backend...`
+- `from courseeval_backend...`
 - path hacks that depend on manual `PYTHONPATH` edits
 - new compatibility forwarding packages
 
@@ -117,12 +117,12 @@ The reason for using the full namespace instead of a shorter alias is practical:
 
 The backend package lives in:
 
-- `apps/backend/wailearning_backend/`
+- `apps/backend/courseeval_backend/`
 
 Within that package, the current structural intent is:
 
 ```text
-apps/backend/wailearning_backend/
+apps/backend/courseeval_backend/
   __init__.py
   main.py                          FastAPI app assembly and process entrypoint
   bootstrap.py                     bootstrap and repair entrypoint
@@ -178,8 +178,8 @@ For deeper backend-package guidance, read [BACKEND_PACKAGE_STRUCTURE.md](BACKEND
 
 The backend process entrypoints are:
 
-- app server: `apps.backend.wailearning_backend.main:app`
-- bootstrap module: `python -m apps.backend.wailearning_backend.bootstrap`
+- app server: `apps.backend.courseeval_backend.main:app`
+- bootstrap module: `python -m apps.backend.courseeval_backend.bootstrap`
 
 These entrypoints are referenced by:
 
@@ -294,9 +294,9 @@ When adding or moving files, use these rules:
 2. If a file belongs to one application, keep it under that app's subtree.
 3. If a file is deployment-only, keep it under `ops/`.
 4. If a file is test-only, keep it under `tests/` unless pytest itself requires a repository-level location. **Test-corpus maintenance scripts** (not pytest modules) belong in `tests/devtools/` — do not recreate a generic top-level `tools/` directory for them.
-5. If a file defines HTTP contracts or route registration, prefer `apps/backend/wailearning_backend/api/`.
-6. If a file defines shared backend configuration, auth, or permission logic, prefer `apps/backend/wailearning_backend/core/`.
-7. If a file defines engine, session, Base, or SQLAlchemy models, prefer `apps/backend/wailearning_backend/db/`.
+5. If a file defines HTTP contracts or route registration, prefer `apps/backend/courseeval_backend/api/`.
+6. If a file defines shared backend configuration, auth, or permission logic, prefer `apps/backend/courseeval_backend/core/`.
+7. If a file defines engine, session, Base, or SQLAlchemy models, prefer `apps/backend/courseeval_backend/db/`.
 8. Do not create new compatibility packages or duplicate namespaces to save a few import edits.
 
 ## Near-Term Cleanup Direction
@@ -309,7 +309,7 @@ Interpretation of current state:
 - the backend package root is now reserved primarily for entrypoints and a shrinking set of still-heavy orchestration modules
 - the main remaining structural debt is concentrated in large modules such as `llm_grading.py`, `llm_discussion.py`, and `bootstrap.py`
 
-The next structural steps should focus on domain extraction inside `apps/backend/wailearning_backend/`, especially around:
+The next structural steps should focus on domain extraction inside `apps/backend/courseeval_backend/`, especially around:
 
 - LLM grading,
 - route-heavy homework flows,

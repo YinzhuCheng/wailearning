@@ -9,12 +9,12 @@ from unittest import mock
 import httpx
 from fastapi.testclient import TestClient
 
-from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.llm_grading import claim_grading_tasks_batch, process_grading_task
-from apps.backend.wailearning_backend.domains.llm.token_quota import (
+from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.llm_grading import claim_grading_tasks_batch, process_grading_task
+from apps.backend.courseeval_backend.domains.llm.token_quota import (
     resolve_max_parallel_grading_tasks,
 )
-from apps.backend.wailearning_backend.db.models import Homework, HomeworkGradingTask
+from apps.backend.courseeval_backend.db.models import Homework, HomeworkGradingTask
 from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework, make_multi_student_scenario
 
 

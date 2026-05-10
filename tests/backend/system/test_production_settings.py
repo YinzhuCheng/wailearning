@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from apps.backend.wailearning_backend.core.config import Settings
+from apps.backend.courseeval_backend.core.config import Settings
 
 
 def test_production_rejects_default_secret_key():
@@ -23,7 +23,7 @@ def test_production_rejects_default_database_url():
         Settings(
             APP_ENV="production",
             SECRET_KEY="x" * 40 + "-unique-production-secret-value",
-            DATABASE_URL="postgresql://ddclass:change-me@127.0.0.1:5432/ddclass",
+            DATABASE_URL="postgresql://courseeval:change-me@127.0.0.1:5432/courseeval",
         )
     assert "DATABASE_URL" in str(exc.value) or "database" in str(exc.value).lower()
 

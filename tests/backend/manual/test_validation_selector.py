@@ -92,7 +92,7 @@ def write_json(path: Path, payload: dict) -> None:
 
 class ValidationSelectorTests(unittest.TestCase):
     def test_learning_notes_backend_path_selects_precise_backend_and_playwright_targets(self):
-        payload = run_selector("--paths", "apps/backend/wailearning_backend/api/routers/learning_notes.py")
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/api/routers/learning_notes.py")
 
         ids = recommendation_ids(payload)
         self.assertIn("backend.learning_notes.api", ids)
@@ -107,7 +107,7 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("learning-notes", backend_target["coverage_tags"])
 
     def test_unmapped_backend_source_escalates_to_full_postgres(self):
-        payload = run_selector("--paths", "apps/backend/wailearning_backend/unknown_new_module.py")
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/unknown_new_module.py")
 
         self.assertEqual(recommendation_ids(payload), {"full.pytest.postgres"})
         self.assertEqual(payload["non_full_validation"]["status"], "not_sufficient")
@@ -147,7 +147,7 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["unmatched_paths"], [])
 
     def test_security_sensitive_path_recommends_security_and_full_postgres_context(self):
-        payload = run_selector("--paths", "apps/backend/wailearning_backend/core/auth.py")
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/core/auth.py")
 
         ids = recommendation_ids(payload)
         self.assertIn("security.api_regression", ids)
@@ -158,7 +158,7 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("security", security["coverage_tags"])
 
     def test_discussion_router_prefers_pytest_hazard_tier_before_api_heavy_playwright(self):
-        payload = run_selector("--paths", "apps/backend/wailearning_backend/api/routers/discussions.py")
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/api/routers/discussions.py")
 
         ids = recommendation_ids(payload)
         self.assertIn("backend.e2e_dev.api_hazard_tier", ids)

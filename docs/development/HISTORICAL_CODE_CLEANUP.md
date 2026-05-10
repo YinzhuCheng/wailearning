@@ -47,13 +47,13 @@ This pass intentionally focused on low-risk historical noise, not broad compatib
 
 A shared helper now owns the logic that removes the UI-only `@LLM` first line before content is sent or interpreted:
 
-- historical location: `apps/backend/wailearning_backend/discussion_llm_ui.py`
-- current location: `apps/backend/wailearning_backend/domains/llm/discussion_ui.py`
+- historical location: `apps/backend/courseeval_backend/discussion_llm_ui.py`
+- current location: `apps/backend/courseeval_backend/domains/llm/discussion_ui.py`
 
 The following modules previously carried their own duplicate regex + helper:
 
-- `apps/backend/wailearning_backend/llm_discussion.py`
-- `apps/backend/wailearning_backend/api/routers/discussions.py`
+- `apps/backend/courseeval_backend/llm_discussion.py`
+- `apps/backend/courseeval_backend/api/routers/discussions.py`
 
 This is the preferred cleanup pattern when two runtime paths still need the same behavior: deduplicate first, delete only the repeated implementation.
 
@@ -61,19 +61,19 @@ This is the preferred cleanup pattern when two runtime paths still need the same
 
 The sweep removed imports that were no longer read by runtime code from these modules:
 
-- `apps/backend/wailearning_backend/bootstrap.py`
-- `apps/backend/wailearning_backend/llm_grading.py`
-- historical location: `apps/backend/wailearning_backend/llm_group_routing.py`
-- historical location: `apps/backend/wailearning_backend/services.py`
-- `apps/backend/wailearning_backend/api/routers/homework.py`
-- `apps/backend/wailearning_backend/api/routers/logs.py`
-- `apps/backend/wailearning_backend/api/routers/semesters.py`
-- `apps/backend/wailearning_backend/api/routers/users.py`
+- `apps/backend/courseeval_backend/bootstrap.py`
+- `apps/backend/courseeval_backend/llm_grading.py`
+- historical location: `apps/backend/courseeval_backend/llm_group_routing.py`
+- historical location: `apps/backend/courseeval_backend/services.py`
+- `apps/backend/courseeval_backend/api/routers/homework.py`
+- `apps/backend/courseeval_backend/api/routers/logs.py`
+- `apps/backend/courseeval_backend/api/routers/semesters.py`
+- `apps/backend/courseeval_backend/api/routers/users.py`
 
 Current structure note:
 
-- the old `llm_group_routing.py` logic now lives in `apps/backend/wailearning_backend/domains/llm/routing.py`
-- the old `services.py` log helper now lives in `apps/backend/wailearning_backend/services/logging.py`
+- the old `llm_group_routing.py` logic now lives in `apps/backend/courseeval_backend/domains/llm/routing.py`
+- the old `services.py` log helper now lives in `apps/backend/courseeval_backend/services/logging.py`
 
 This class of cleanup is high-signal and low-risk because it reduces false search hits and makes real dependencies easier to inspect.
 
@@ -99,7 +99,7 @@ Verification performed in the same change set:
 
 - Full **`python3 -m pytest tests/`** on **SQLite** (default `tests/conftest.py`): **389 passed,
   43 skipped** (PostgreSQL-only modules + `test_r3`).
-- Full pytest with **`TEST_DATABASE_URL=postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all`**
+- Full pytest with **`TEST_DATABASE_URL=postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all`**
   after `pg_ctlcluster 16 main start` and `bash ops/scripts/dev/provision_postgres_pytest.sh`:
   **432 passed, 0 skipped**.
 - **`tests/backend/llm/test_llm_attachment_formats.py`** RAR cases now read committed archives under
@@ -113,7 +113,7 @@ Verification performed in the same change set:
 Several areas still look historical but were not deleted in this pass because they likely continue to serve existing data or operational compatibility:
 
 - course schedule fallback logic in `api/routers/subjects.py`
-- attachment directory fallback logic in `wailearning_backend/attachments.py`
+- attachment directory fallback logic in `courseeval_backend/attachments.py`
 - deployment-time upload migration logic in `ops/scripts/deploy_backend.sh`
 - branding normalization and bootstrap migration helpers
 - legacy document-format extraction in `domains/llm/attachments.py`
@@ -314,7 +314,7 @@ These are candidates for later cleanup, but only with stronger verification than
 
 Files:
 
-- `apps/backend/wailearning_backend/api/routers/subjects.py`
+- `apps/backend/courseeval_backend/api/routers/subjects.py`
 - `apps/web/admin/src/components/CourseSchedulePicker.vue`
 
 Why it still exists:
@@ -332,7 +332,7 @@ Removal precondition:
 
 File:
 
-- `apps/backend/wailearning_backend/attachments.py`
+- `apps/backend/courseeval_backend/attachments.py`
 
 Why it still exists:
 

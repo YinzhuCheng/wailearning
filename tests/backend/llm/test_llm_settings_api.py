@@ -10,11 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
-from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.llm_grading import VISION_TEST_IMAGE_DATA_URL
-from apps.backend.wailearning_backend.db.models import (
+from apps.backend.courseeval_backend.core.auth import get_password_hash
+from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
+from apps.backend.courseeval_backend.main import app
+from apps.backend.courseeval_backend.llm_grading import VISION_TEST_IMAGE_DATA_URL
+from apps.backend.courseeval_backend.db.models import (
     Class,
     CourseEnrollment,
     LLMEndpointPreset,
@@ -30,7 +30,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -141,11 +141,11 @@ def test_duplicate_preset_name_400(client: TestClient, admin_headers):
 
 
 @mock.patch(
-    "apps.backend.wailearning_backend.api.routers.llm_settings.validate_vision_connectivity",
+    "apps.backend.courseeval_backend.api.routers.llm_settings.validate_vision_connectivity",
     return_value=(True, "vision ok"),
 )
 @mock.patch(
-    "apps.backend.wailearning_backend.api.routers.llm_settings.validate_text_connectivity",
+    "apps.backend.courseeval_backend.api.routers.llm_settings.validate_text_connectivity",
     return_value=(True, "text ok"),
 )
 def test_validate_marks_validated(mock_txt, mock_vis, client: TestClient, admin_headers):
@@ -171,11 +171,11 @@ def test_validate_marks_validated(mock_txt, mock_vis, client: TestClient, admin_
 
 
 @mock.patch(
-    "apps.backend.wailearning_backend.api.routers.llm_settings.validate_vision_connectivity",
+    "apps.backend.courseeval_backend.api.routers.llm_settings.validate_vision_connectivity",
     return_value=(True, "vision ok"),
 )
 @mock.patch(
-    "apps.backend.wailearning_backend.api.routers.llm_settings.validate_text_connectivity",
+    "apps.backend.courseeval_backend.api.routers.llm_settings.validate_text_connectivity",
     return_value=(True, "text ok"),
 )
 def test_get_put_course_config(_, __, client: TestClient, admin_headers, teacher_headers, teacher_course_context):

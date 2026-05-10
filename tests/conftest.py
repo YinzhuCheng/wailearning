@@ -46,7 +46,7 @@ _sqlite_url = "sqlite:///" + _tmp.resolve().as_posix()
 def _default_postgres_pytest_url() -> str:
     """URL used by ops/scripts/dev/provision_postgres_pytest.sh (throwaway CI/local DB)."""
     return (
-        "postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all"
+        "postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all"
     )
 
 
@@ -69,13 +69,13 @@ def _tcp_postgres_reachable(url: str) -> bool:
 
 
 def _auto_pick_postgres_test_url() -> str | None:
-    """If WAILEARNING_AUTO_PG_TESTS is set and Postgres probe URL answers, use it.
+    """If COURSEEVAL_AUTO_PG_TESTS is set and Postgres probe URL answers, use it.
 
     Eliminates skips on ``tests/postgres/*`` and ``test_r3`` without requiring
     every developer to manually export TEST_DATABASE_URL after running
     ``ops/scripts/dev/provision_postgres_pytest.sh``.
     """
-    raw = os.environ.get("WAILEARNING_AUTO_PG_TESTS", "").strip().lower()
+    raw = os.environ.get("COURSEEVAL_AUTO_PG_TESTS", "").strip().lower()
     if raw not in {"1", "true", "yes", "on"}:
         return None
     candidate = _default_postgres_pytest_url()
@@ -85,9 +85,9 @@ def _auto_pick_postgres_test_url() -> str | None:
         import psycopg2  # noqa: PLC0415
 
         psycopg2.connect(
-            dbname="wailearning_pytest_all",
-            user="wailearning_test",
-            password="wailearning_test",
+            dbname="courseeval_pytest_all",
+            user="courseeval_test",
+            password="courseeval_test",
             host="127.0.0.1",
             port=5432,
             connect_timeout=2,
@@ -115,8 +115,8 @@ _DEFAULT_WORKER_LEADER = os.environ["LLM_GRADING_WORKER_LEADER"] == "true"
 
 @pytest.fixture(autouse=True)
 def _reset_worker_and_e2e_settings():
-    from apps.backend.wailearning_backend.core.config import settings
-    from apps.backend.wailearning_backend.llm_grading import worker_manager
+    from apps.backend.courseeval_backend.core.config import settings
+    from apps.backend.courseeval_backend.llm_grading import worker_manager
 
     worker_manager.stop()
     settings.ENABLE_LLM_GRADING_WORKER = _DEFAULT_ENABLE_WORKER

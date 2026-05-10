@@ -18,7 +18,7 @@ See [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WOR
 
 | Issue | Detail |
 |-------|--------|
-| Legacy npm identifiers | Admin `package.json` may still show historical package names (`ddclass-frontend`) while README branding is BIMSA-CLASS — cosmetic unless publishing packages. |
+| Legacy npm identifiers | Admin `package.json` may still show historical package names (`courseeval-admin`) while README branding is CourseEval — cosmetic unless publishing packages. |
 | External bookmarks to removed `tools/testing/` | Narrative docs may still **mention** the old path when explaining migrations; actionable code/config must not reference it. Canonical utility location: `tests/devtools/audit_test_redundancy.py`. See [architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md). |
 
 ---
@@ -39,7 +39,7 @@ See [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WOR
 
 **Root cause:** `reset_test_database_schema()` invoked `Base.metadata.create_all()` before guaranteed ORM mapper registration when test modules imported only `db.database` + `main` without pulling `db.models`.
 
-**Fix:** `tests/db_reset.py` now imports `apps.backend.wailearning_backend.db.models` at the beginning of `reset_test_database_schema()`.
+**Fix:** `tests/db_reset.py` now imports `apps.backend.courseeval_backend.db.models` at the beginning of `reset_test_database_schema()`.
 
 **Residual risks:** corrupted `.pytest_tmp/test.sqlite` files or concurrent pytest processes sharing that path — still require deletion / isolation when suspected.
 

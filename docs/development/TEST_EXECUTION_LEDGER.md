@@ -91,8 +91,8 @@ Every target should list `Retest triggers`. These are not exhaustive, but they h
 
 Use concrete repository-relative paths and stable symbols. Good examples:
 
-- `apps/backend/wailearning_backend/api/routers/learning_notes.py`
-- `apps/backend/wailearning_backend/api/routers/attendance.py`
+- `apps/backend/courseeval_backend/api/routers/learning_notes.py`
+- `apps/backend/courseeval_backend/api/routers/attendance.py`
 - `tests/e2e/web-admin/fixtures.cjs`
 - `apps/web/admin/playwright.config.cjs`
 - `apps/web/admin/src/views/LearningNotes.vue`
@@ -119,10 +119,10 @@ Avoid vague triggers such as "frontend changed" unless the target is genuinely b
 **Relevant paths:**
 
 - `tests/backend/learning_notes/test_learning_notes_api.py`
-- `apps/backend/wailearning_backend/api/routers/learning_notes.py`
-- `apps/backend/wailearning_backend/api/routers/attendance.py`
-- `apps/backend/wailearning_backend/api/schemas.py`
-- `apps/backend/wailearning_backend/db/models.py`
+- `apps/backend/courseeval_backend/api/routers/learning_notes.py`
+- `apps/backend/courseeval_backend/api/routers/attendance.py`
+- `apps/backend/courseeval_backend/api/schemas.py`
+- `apps/backend/courseeval_backend/db/models.py`
 - `tests/scenarios/llm_scenario.py`
 
 **Retest triggers:**
@@ -336,9 +336,9 @@ npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --pro
 - `apps/web/admin/src/views/MyCourses.vue`
 - `apps/web/admin/src/views/StudentCourseHome.vue`
 - `apps/web/admin/src/router/index.js`
-- `apps/backend/wailearning_backend/api/routers/learning_notes.py`
-- `apps/backend/wailearning_backend/api/routers/attendance.py`
-- `apps/backend/wailearning_backend/api/routers/e2e_dev.py`
+- `apps/backend/courseeval_backend/api/routers/learning_notes.py`
+- `apps/backend/courseeval_backend/api/routers/attendance.py`
+- `apps/backend/courseeval_backend/api/routers/e2e_dev.py`
 
 **Retest triggers:**
 
@@ -384,11 +384,11 @@ npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --pro
 
 **Relevant paths:**
 
-- `apps/backend/wailearning_backend/domains/seed/demo.py`
-- `apps/backend/wailearning_backend/api/routers/e2e_dev.py`
-- `apps/backend/wailearning_backend/db/models.py`
-- `apps/backend/wailearning_backend/api/routers/discussions.py`
-- `apps/backend/wailearning_backend/api/routers/learning_notes.py`
+- `apps/backend/courseeval_backend/domains/seed/demo.py`
+- `apps/backend/courseeval_backend/api/routers/e2e_dev.py`
+- `apps/backend/courseeval_backend/db/models.py`
+- `apps/backend/courseeval_backend/api/routers/discussions.py`
+- `apps/backend/courseeval_backend/api/routers/learning_notes.py`
 - `tests/backend/e2e_dev/test_demo_course_seed.py`
 - `tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py`
 
@@ -418,7 +418,7 @@ npx.cmd playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --pro
 |------|--------|--------|---------|--------|---------|-------|
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `python -m pytest tests/backend/e2e_dev/test_demo_course_seed.py -q` | `blocked` | `<system-python>: No module named pytest` | The default `python` on this machine did not have pytest installed. The intended backend test environment is the repository virtualenv; the target was rerun with `.venv\Scripts\python.exe` below. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests/backend/e2e_dev/test_demo_course_seed.py -q` | `passed` | `4 passed, 29 warnings in 25.65s` | Focused demo seed target passed after enriching default data with structured course times, course discussions, fake LLM assistant replies, student learning notes, LLM elective enrollments/submissions, and a multi-attempt homework history for `stu1`. Warnings were existing Pydantic class-based config deprecations. |
-| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m py_compile apps/backend/wailearning_backend/domains/seed/demo.py tests/backend/e2e_dev/test_demo_course_seed.py` | `passed` | `py_compile completed successfully.` | Compile-only check for the changed seed module and focused seed test. |
+| 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m py_compile apps/backend/courseeval_backend/domains/seed/demo.py tests/backend/e2e_dev/test_demo_course_seed.py` | `passed` | `py_compile completed successfully.` | Compile-only check for the changed seed module and focused seed test. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py -q` | `passed` | `4 passed, 29 warnings in 22.54s` | Related LLM seed edge suite remained green after adding pre-enrolled LLM elective students and demo submissions. This guards fresh-preset binding, no-preset behavior, renamed-course quota display, and roster display-name sync. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests/backend/e2e_dev/test_demo_course_seed.py -q` | `passed` | `4 passed, 29 warnings in 20.20s` | Final rerun passed after correcting seeded `course_times` to the frontend calendar's canonical weekly schedule format (`2@7,8`, `4@8,9`, `3@3,4`) and removing obsolete plain-text weekly constants. |
 | 2026-05-09 | `cursor/unify-student-identity-plan` | `this commit` | `.venv\Scripts\python.exe -m pytest tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py -q` | `passed` | `4 passed, 29 warnings in 19.47s` | Final related LLM seed edge rerun remained green after the canonical teaching-calendar schedule fix. |
@@ -443,8 +443,8 @@ npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium
 - `tests/e2e/web-admin/global-setup.cjs`
 - `tests/e2e/web-admin/fixtures.cjs`
 - `apps/web/admin/playwright.config.cjs`
-- `apps/backend/wailearning_backend/api/routers/e2e_dev.py`
-- `apps/backend/wailearning_backend/core/auth.py`
+- `apps/backend/courseeval_backend/api/routers/e2e_dev.py`
+- `apps/backend/courseeval_backend/core/auth.py`
 - `ops/scripts/dev/playwright_preflight.py`
 - `ops/scripts/dev/run_validation_target.py`
 
@@ -544,9 +544,9 @@ python ops\scripts\dev\repo_line_health.py
 
 - `tests/backend/llm/test_llm_attachment_formats.py`
 - `tests/fixtures/llm_rar/`
-- `apps/backend/wailearning_backend/domains/llm/attachments.py`
-- `apps/backend/wailearning_backend/attachment_compliance.py`
-- `apps/backend/wailearning_backend/llm_grading.py`
+- `apps/backend/courseeval_backend/domains/llm/attachments.py`
+- `apps/backend/courseeval_backend/attachment_compliance.py`
+- `apps/backend/courseeval_backend/llm_grading.py`
 
 **Retest triggers:**
 
@@ -582,7 +582,7 @@ python ops\scripts\dev\repo_line_health.py
 **Canonical command:**
 
 ```powershell
-$env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:<local-port>/wailearning_pytest_all'
+$env:TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:<local-port>/courseeval_pytest_all'
 .venv\Scripts\python.exe -m pytest tests\postgres -q
 ```
 
@@ -640,14 +640,14 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 **Relevant paths:**
 
 - `tests/security/test_security_regression.py`
-- `apps/backend/wailearning_backend/core/auth.py`
-- `apps/backend/wailearning_backend/api/routers/classes.py`
-- `apps/backend/wailearning_backend/domains/courses/access.py`
-- `apps/backend/wailearning_backend/api/routers/auth.py`
-- `apps/backend/wailearning_backend/api/routers/users.py`
-- `apps/backend/wailearning_backend/api/routers/homework.py`
-- `apps/backend/wailearning_backend/api/routers/llm_settings.py`
-- `apps/backend/wailearning_backend/api/routers/notifications.py`
+- `apps/backend/courseeval_backend/core/auth.py`
+- `apps/backend/courseeval_backend/api/routers/classes.py`
+- `apps/backend/courseeval_backend/domains/courses/access.py`
+- `apps/backend/courseeval_backend/api/routers/auth.py`
+- `apps/backend/courseeval_backend/api/routers/users.py`
+- `apps/backend/courseeval_backend/api/routers/homework.py`
+- `apps/backend/courseeval_backend/api/routers/llm_settings.py`
+- `apps/backend/courseeval_backend/api/routers/notifications.py`
 
 **Retest triggers:**
 
@@ -691,11 +691,11 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 **Relevant paths:**
 
 - `tests/backend/courses/test_student_course_roster_behavior.py`
-- `apps/backend/wailearning_backend/domains/courses/access.py`
-- `apps/backend/wailearning_backend/domains/roster/reconciliation.py`
-- `apps/backend/wailearning_backend/api/routers/auth.py`
-- `apps/backend/wailearning_backend/api/routers/homework.py`
-- `apps/backend/wailearning_backend/api/routers/subjects.py`
+- `apps/backend/courseeval_backend/domains/courses/access.py`
+- `apps/backend/courseeval_backend/domains/roster/reconciliation.py`
+- `apps/backend/courseeval_backend/api/routers/auth.py`
+- `apps/backend/courseeval_backend/api/routers/homework.py`
+- `apps/backend/courseeval_backend/api/routers/subjects.py`
 
 **Retest triggers:**
 
@@ -735,7 +735,7 @@ $env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@
 **Canonical command:**
 
 ```powershell
-$env:TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:<local-port>/wailearning_pytest_all'
+$env:TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:<local-port>/courseeval_pytest_all'
 .venv\Scripts\python.exe -m pytest tests -q
 ```
 
@@ -854,12 +854,12 @@ git diff --check
 
 - `tests/backend/roster/test_student_user_api_roster_sync.py`
 - `tests/backend/roster/test_admin_student_roster_from_users.py`
-- `apps/backend/wailearning_backend/api/routers/users.py`
-- `apps/backend/wailearning_backend/api/routers/students.py`
-- `apps/backend/wailearning_backend/api/schemas.py`
-- `apps/backend/wailearning_backend/domains/roster/reconciliation.py`
-- `apps/backend/wailearning_backend/domains/roster/sync.py`
-- `apps/backend/wailearning_backend/domains/roster/identity.py`
+- `apps/backend/courseeval_backend/api/routers/users.py`
+- `apps/backend/courseeval_backend/api/routers/students.py`
+- `apps/backend/courseeval_backend/api/schemas.py`
+- `apps/backend/courseeval_backend/domains/roster/reconciliation.py`
+- `apps/backend/courseeval_backend/domains/roster/sync.py`
+- `apps/backend/courseeval_backend/domains/roster/identity.py`
 
 **Retest triggers:**
 
@@ -909,11 +909,11 @@ git diff --check
 
 **Relevant paths:**
 
-- `apps/backend/wailearning_backend/domains/roster/audit.py`
-- `apps/backend/wailearning_backend/domains/roster/identity.py`
+- `apps/backend/courseeval_backend/domains/roster/audit.py`
+- `apps/backend/courseeval_backend/domains/roster/identity.py`
 - `ops/scripts/dev/audit_student_identity.py`
 - `tests/backend/roster/test_student_identity_audit.py`
-- `apps/backend/wailearning_backend/db/models.py`
+- `apps/backend/courseeval_backend/db/models.py`
 
 **Retest triggers:**
 
@@ -961,15 +961,15 @@ git diff --check
 
 **Relevant paths:**
 
-- `apps/backend/wailearning_backend/domains/roster/repair.py`
-- `apps/backend/wailearning_backend/domains/roster/audit.py`
-- `apps/backend/wailearning_backend/domains/roster/identity.py`
-- `apps/backend/wailearning_backend/domains/roster/sync.py`
-- `apps/backend/wailearning_backend/domains/roster/reconciliation.py`
+- `apps/backend/courseeval_backend/domains/roster/repair.py`
+- `apps/backend/courseeval_backend/domains/roster/audit.py`
+- `apps/backend/courseeval_backend/domains/roster/identity.py`
+- `apps/backend/courseeval_backend/domains/roster/sync.py`
+- `apps/backend/courseeval_backend/domains/roster/reconciliation.py`
 - `ops/scripts/dev/repair_student_identity.py`
 - `tests/backend/roster/test_student_identity_repair.py`
-- `apps/backend/wailearning_backend/domains/seed/demo.py`
-- `apps/backend/wailearning_backend/bootstrap.py`
+- `apps/backend/courseeval_backend/domains/seed/demo.py`
+- `apps/backend/courseeval_backend/bootstrap.py`
 
 **Retest triggers:**
 
@@ -1017,7 +1017,7 @@ The selector is advisory. It does not run pytest, Playwright, PostgreSQL, or fro
 
 ```powershell
 .venv\Scripts\python.exe -m py_compile ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py ops\scripts\dev\validation_history.py tests\backend\manual\test_validation_selector.py
-.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths apps\backend\wailearning_backend\api\routers\learning_notes.py
+.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths apps\backend\courseeval_backend\api\routers\learning_notes.py
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths ops\scripts\dev\select_validation_targets.py tests\TEST_SELECTION_TARGETS.json --json
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json
 python -m unittest tests.backend.manual.test_validation_selector -v

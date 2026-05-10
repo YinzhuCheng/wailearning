@@ -78,6 +78,32 @@ sets:
 - `PYTHONIOENCODING=utf-8`;
 - `LESSCHARSET=utf-8`.
 
+### Executable PowerShell rule
+
+When a Windows PowerShell session is about to inspect or edit a multilingual
+repository file, use this command first:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe-text-workflow.ps1 -Path <repo-relative-path>
+```
+
+Example:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe-text-workflow.ps1 `
+  -Path apps\web\admin\src\views\Layout.vue -StartLine 1 -EndLine 120
+```
+
+What this rule enforces:
+
+1. Enter a UTF-8-oriented session with `set-utf8-session.ps1`.
+2. Display the target file through `safe_show_text.py`.
+3. Run `check_text_encoding.py` on that exact path.
+4. Only then make patch-based edits or an intentional full-file write.
+
+Use `-Escape` when terminal rendering is still suspicious and
+`-FailOnSuspicious` when the selected file is expected to be clean.
+
 Interpretation rules:
 
 - This reduces mojibake in many PowerShell sessions, but it does not prove that

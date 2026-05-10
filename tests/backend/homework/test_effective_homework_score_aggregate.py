@@ -8,10 +8,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.db.models import Homework, HomeworkAttempt, HomeworkGradingTask
-from apps.backend.wailearning_backend.llm_grading import process_grading_task
-from apps.backend.wailearning_backend.main import app
+from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.db.models import Homework, HomeworkAttempt, HomeworkGradingTask
+from apps.backend.courseeval_backend.llm_grading import process_grading_task
+from apps.backend.courseeval_backend.main import app
 from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, login_api, make_grading_course_with_homework, patch_httpx_post
 
 
@@ -20,7 +20,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield

@@ -32,7 +32,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [architecture/MAINTAINER_AGENT_GUIDE.md](architecture/MAINTAINER_AGENT_GUIDE.md) | **Grep keywords**, risky modules, test expectations for agents |
 | [architecture/TROUBLESHOOTING.md](architecture/TROUBLESHOOTING.md) | Symptom-first links into pitfalls and ops docs |
 | [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md) | Source vs artifact; import namespace contract |
-| [architecture/BACKEND_PACKAGE_STRUCTURE.md](architecture/BACKEND_PACKAGE_STRUCTURE.md) | Layer model inside `wailearning_backend` |
+| [architecture/BACKEND_PACKAGE_STRUCTURE.md](architecture/BACKEND_PACKAGE_STRUCTURE.md) | Layer model inside `courseeval_backend` |
 | [architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) | Structural migration rationale |
 | [architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), movement mapping, validation notes |
 | [operations/DEPLOYMENT_AND_OPERATIONS.md](operations/DEPLOYMENT_AND_OPERATIONS.md) | Production layout, nginx, systemd, env templates |

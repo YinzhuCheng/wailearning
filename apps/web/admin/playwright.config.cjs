@@ -64,7 +64,7 @@ function quoteWindowsArg(value) {
 function buildApiCommand() {
   if (isWindows) {
     const pythonExe = process.env.E2E_PYTHON || path.join(repoRoot, '.venv', 'Scripts', 'python.exe')
-    return `${quoteWindowsArg(pythonExe)} -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port ${E2E_API_PORT}`
+    return `${quoteWindowsArg(pythonExe)} -m uvicorn apps.backend.courseeval_backend.main:app --host 127.0.0.1 --port ${E2E_API_PORT}`
   }
   const defaultVenvPython = path.join(repoRoot, '.venv', 'bin', 'python')
   const pythonExe =
@@ -72,7 +72,7 @@ function buildApiCommand() {
   const apiEnvString = Object.entries(apiEnv)
     .map(([key, value]) => `${key}=${JSON.stringify(String(value))}`)
     .join(' ')
-  return `bash -lc 'cd "${repoRoot}" && exec env ${apiEnvString} "${pythonExe}" -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port ${E2E_API_PORT}'`
+  return `bash -lc 'cd "${repoRoot}" && exec env ${apiEnvString} "${pythonExe}" -m uvicorn apps.backend.courseeval_backend.main:app --host 127.0.0.1 --port ${E2E_API_PORT}'`
 }
 
 function buildUiCommand() {

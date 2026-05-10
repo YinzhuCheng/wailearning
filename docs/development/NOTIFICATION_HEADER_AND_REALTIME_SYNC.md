@@ -16,7 +16,7 @@ This document ties together the Vue layout, the lightweight sync API, the `notif
 ### Authoritative state
 
 - `GET /api/notifications` (and list variants) return `is_read` per row for the current user.
-- `GET /api/notifications/sync-status` returns `{ total, unread_count, latest_updated_at }` with the **same visibility rules** as the list endpoint (`_visible_notifications_query` in `apps/backend/wailearning_backend/api/routers/notifications.py`).
+- `GET /api/notifications/sync-status` returns `{ total, unread_count, latest_updated_at }` with the **same visibility rules** as the list endpoint (`_visible_notifications_query` in `apps/backend/courseeval_backend/api/routers/notifications.py`).
 
 ### Client refresh triggers
 
@@ -36,7 +36,7 @@ This document ties together the Vue layout, the lightweight sync API, the `notif
 | Default poll interval export | `apps/web/admin/src/utils/notificationSync.js` (`DEFAULT_NOTIFICATION_POLL_INTERVAL_MS`, default `12_000`) |
 | List UI + publish | `apps/web/admin/src/views/Notifications.vue` |
 | Sync API | `apps/web/admin/src/api/index.js` → `api.notifications.syncStatus` |
-| Backend sync | `GET /api/notifications/sync-status` in `apps/backend/wailearning_backend/api/routers/notifications.py` |
+| Backend sync | `GET /api/notifications/sync-status` in `apps/backend/courseeval_backend/api/routers/notifications.py` |
 
 ## UX details
 

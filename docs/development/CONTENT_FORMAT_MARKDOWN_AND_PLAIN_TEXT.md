@@ -24,7 +24,7 @@ The database stores the flag on the row so API consumers and LLM pipelines can b
 | `learning_note_resources` | `content_format` | Owner-editable learning-note resources, including course material snapshots copied into a note |
 | `learning_note_discussion_entries` | `body_format` | Learning-note discussion messages and assistant replies |
 
-Schema migrations are applied via `ensure_schema_updates()` in `apps/backend/wailearning_backend/bootstrap.py` using `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... DEFAULT 'markdown'`.
+Schema migrations are applied via `ensure_schema_updates()` in `apps/backend/courseeval_backend/bootstrap.py` using `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ... DEFAULT 'markdown'`.
 
 ## API contracts (Pydantic)
 
@@ -37,7 +37,7 @@ Schema migrations are applied via `ensure_schema_updates()` in `apps/backend/wai
 - `NotificationBase` / `NotificationUpdate` / `NotificationResponse`: `content_format`.
 - `CourseMaterialBase` / `CourseMaterialUpdate` / `CourseMaterialResponse`: `content_format`.
 
-Normalization helper: `apps/backend/wailearning_backend/domains/text_content_format.py` (`normalize_content_format`).
+Normalization helper: `apps/backend/courseeval_backend/domains/text_content_format.py` (`normalize_content_format`).
 
 ## LLM grading behavior (critical)
 
@@ -92,9 +92,9 @@ They assert round-trip persistence for homework update + student submission, dis
 
 ## Pitfalls encountered while implementing (agent-oriented)
 
-1. **Pydantic model accidentally deleted mid-edit**  
-   During a large `schemas.py` edit, `class HomeworkCreate(HomeworkBase): pass` was dropped, leaving only `HomeworkUpdate`. Symptom: `ImportError: cannot import name 'HomeworkCreate'` when importing `apps.backend.wailearning_backend.main` or any router that imports schemas.  
-   **Fix:** restore `HomeworkCreate` immediately after `HomeworkBase`. Run `python3 -c "from apps.backend.wailearning_backend.api.schemas import HomeworkCreate"` as a quick gate.
+1. **Pydantic model accidentally deleted mid-edit**
+   During a large `schemas.py` edit, `class HomeworkCreate(HomeworkBase): pass` was dropped, leaving only `HomeworkUpdate`. Symptom: `ImportError: cannot import name 'HomeworkCreate'` when importing `apps.backend.courseeval_backend.main` or any router that imports schemas.
+   **Fix:** restore `HomeworkCreate` immediately after `HomeworkBase`. Run `python3 -c "from apps.backend.courseeval_backend.api.schemas import HomeworkCreate"` as a quick gate.
 
 2. **SQLite bootstrap ordering**  
    `ALTER TABLE course_materials ADD COLUMN ...` must exist for databases that already have `course_materials` from earlier releases. The migration list in `bootstrap.py` is append-only; if a new `ALTER` is missing, production SQLite can start but ORM loads may fail when selecting unknown columns depending on SQLAlchemy version and reflection—prefer adding the `ALTER TABLE ... IF NOT EXISTS` alongside the model field.

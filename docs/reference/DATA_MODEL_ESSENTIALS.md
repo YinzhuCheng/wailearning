@@ -2,7 +2,7 @@
 
 **Audience:** Agents needing table/field grounding without reading all 800+ lines of `models.py` first.
 
-**Authoritative source:** `apps/backend/wailearning_backend/db/models.py`.
+**Authoritative source:** `apps/backend/courseeval_backend/db/models.py`.
 
 **Schema repair:** additive columns and compatibility DDL live in `bootstrap.py` (`ensure_schema_updates()`). There is **no separate Alembic migration tree** in this repository snapshot — agents rely on `ensure_schema_updates` + `Base.metadata.create_all`.
 

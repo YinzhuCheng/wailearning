@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
+from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
 from fastapi.testclient import TestClient
 
-from apps.backend.wailearning_backend.main import app
+from apps.backend.courseeval_backend.main import app
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
@@ -15,7 +15,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
 
@@ -77,8 +77,8 @@ def test_student_cannot_duplicate_appeal():
     assert sub.status_code == 200, sub.text
     sub_id = sub.json()["id"]
 
-    from apps.backend.wailearning_backend.llm_grading import process_grading_task
-    from apps.backend.wailearning_backend.db.models import HomeworkGradingTask
+    from apps.backend.courseeval_backend.llm_grading import process_grading_task
+    from apps.backend.courseeval_backend.db.models import HomeworkGradingTask
     from unittest import mock
     import httpx
     from tests.scenarios.llm_scenario import json_llm_response

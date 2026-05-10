@@ -44,7 +44,7 @@ Rationale:
 The UI observations in this pass came from real Playwright screenshots against:
 
 - admin frontend: `apps/web/admin`;
-- backend entrypoint: `apps.backend.wailearning_backend.main:app`;
+- backend entrypoint: `apps.backend.courseeval_backend.main:app`;
 - database: a disposable local PostgreSQL database;
 - seed route: `POST /api/e2e/dev/reset-scenario`;
 - roles observed: admin, teacher, and student;
@@ -633,7 +633,7 @@ Interpretation guidance:
   fixed-width grid/table implementation before changing global layout;
 - if the desktop sidebar handle case fails, inspect `Layout.vue` state
   separation between `isCollapsed` and `isSidebarHidden`, plus the persisted
-  `wailearning-admin-sidebar-state` localStorage key;
+  `courseeval-admin-sidebar-state` localStorage key;
 - this maintained spec complements PostgreSQL-backed screenshot audits. It is a
   fast guard for the responsive layout contract, not a replacement for real
   browser observation when continuing the larger UI/UX optimization task.
@@ -651,7 +651,7 @@ Implemented behavior:
   completely, allowing the main content container to start at the viewport edge;
 - clicking the same edge handle restores the sidebar to the expanded state;
 - desktop sidebar preference is persisted in localStorage under
-  `wailearning-admin-sidebar-state`, with values conceptually matching
+  `courseeval-admin-sidebar-state`, with values conceptually matching
   `expanded`, `collapsed`, and `hidden`;
 - mobile users keep the overlay drawer behavior from the responsive repair pass;
 - on mobile, the same edge handle opens or closes the drawer and never reserves
@@ -712,7 +712,7 @@ Implemented behavior:
   visible and is not a true collapsed outline;
 - "expand all" uses all chapter ids from the current tree;
 - per-course outline state is persisted in localStorage under
-  `wailearning-materials-expanded-chapters:<subject-id>`.
+  `courseeval-materials-expanded-chapters:<subject-id>`.
 
 Validation:
 
@@ -764,7 +764,7 @@ Implementation details:
   contract;
 - the node-level toggle updates `expandedChapterKeys`, calls
   `syncTreeExpandedState()`, and persists the result under the same
-  `wailearning-materials-expanded-chapters:<subject-id>` localStorage key used
+  `courseeval-materials-expanded-chapters:<subject-id>` localStorage key used
   by the expand-all/collapse-all buttons;
 - the per-node button exposes `aria-label`, `title`, and a stable
   `data-testid="materials-chapter-toggle-<chapter-id>"` hook.
@@ -969,7 +969,7 @@ Runtime behavior:
   `neutral`, `gray`, and `grey` are normalized before application;
 - system settings may provide `admin_theme`, `theme`, `theme_color`, or
   `color_theme`;
-- `localStorage.wailearning-admin-theme` can temporarily override the system
+- `localStorage.courseeval-admin-theme` can temporarily override the system
   setting for inspection or local audit work.
 
 Important boundary:
@@ -1059,12 +1059,12 @@ full reload.
 
 Files:
 
-- `apps/backend/wailearning_backend/db/models.py`;
-- `apps/backend/wailearning_backend/api/schemas.py`;
-- `apps/backend/wailearning_backend/api/routers/appearance.py`;
-- `apps/backend/wailearning_backend/api/routers/settings.py`;
-- `apps/backend/wailearning_backend/bootstrap.py`;
-- `apps/backend/wailearning_backend/main.py`.
+- `apps/backend/courseeval_backend/db/models.py`;
+- `apps/backend/courseeval_backend/api/schemas.py`;
+- `apps/backend/courseeval_backend/api/routers/appearance.py`;
+- `apps/backend/courseeval_backend/api/routers/settings.py`;
+- `apps/backend/courseeval_backend/bootstrap.py`;
+- `apps/backend/courseeval_backend/main.py`.
 
 New table:
 
@@ -2091,7 +2091,7 @@ only on `LLMGlobalQuotaPolicy` (singleton row `id=1`). `course_id` / `subject_id
 and student quota snapshots remain **attribution only**; they do not define independent daily
 token pools.
 
-**Migration path:** `apps.backend.wailearning_backend.bootstrap.ensure_schema_updates()` runs at
+**Migration path:** `apps.backend.courseeval_backend.bootstrap.ensure_schema_updates()` runs at
 API startup (`main.py`). On PostgreSQL it executes `ALTER TABLE course_llm_configs DROP COLUMN IF
 EXISTS` for the legacy columns plus the older `daily_student_token_limit` /
 `daily_course_token_limit` names. On SQLite it attempts the same drops in a try/except loop

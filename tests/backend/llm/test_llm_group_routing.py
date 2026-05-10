@@ -13,18 +13,18 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
-from apps.backend.wailearning_backend.llm_grading import (
+from apps.backend.courseeval_backend.core.auth import get_password_hash
+from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
+from apps.backend.courseeval_backend.llm_grading import (
     _collect_grading_endpoints_for_config,
     process_grading_task,
     queue_grading_task,
     validate_text_connectivity,
     validate_vision_connectivity,
 )
-from apps.backend.wailearning_backend.domains.llm.routing import _GroupState
-from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import (
+from apps.backend.courseeval_backend.domains.llm.routing import _GroupState
+from apps.backend.courseeval_backend.main import app
+from apps.backend.courseeval_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseLLMConfig,
@@ -49,7 +49,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -364,7 +364,7 @@ def test_flat_legacy_routing_when_no_group_rows():
 
 def test_validate_endpoint_order_text_before_vision():
     """validate_endpoint_connectivity：先发纯文本请求，再发多模态请求。"""
-    from apps.backend.wailearning_backend import llm_grading
+    from apps.backend.courseeval_backend import llm_grading
 
     received: list[str] = []
 
@@ -385,8 +385,8 @@ def test_validate_endpoint_order_text_before_vision():
 
 
 def test_backfill_assigns_group_id_to_endpoints():
-    from apps.backend.wailearning_backend.bootstrap import _backfill_default_llm_groups_for_existing_configs
-    from apps.backend.wailearning_backend.db.models import CourseLLMConfig, CourseLLMConfigEndpoint, LLMGroup
+    from apps.backend.courseeval_backend.bootstrap import _backfill_default_llm_groups_for_existing_configs
+    from apps.backend.courseeval_backend.db.models import CourseLLMConfig, CourseLLMConfigEndpoint, LLMGroup
 
     ensure_admin()
     from tests.scenarios.llm_scenario import make_grading_course_with_homework
@@ -422,7 +422,7 @@ def test_backfill_assigns_group_id_to_endpoints():
 
 
 def test_admin_validate_calls_text_then_vision_in_order(client: TestClient):
-    from apps.backend.wailearning_backend.api.routers import llm_settings
+    from apps.backend.courseeval_backend.api.routers import llm_settings
 
     call_order: list[str] = []
 
@@ -444,7 +444,7 @@ def test_admin_validate_calls_text_then_vision_in_order(client: TestClient):
     assert c.status_code == 200, c.text
     pid = c.json()["id"]
 
-    from apps.backend.wailearning_backend.llm_grading import VISION_TEST_IMAGE_DATA_URL
+    from apps.backend.courseeval_backend.llm_grading import VISION_TEST_IMAGE_DATA_URL
 
     _b = VISION_TEST_IMAGE_DATA_URL.split("base64,", 1)[1]
     import base64 as _b64

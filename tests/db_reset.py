@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.db.database import Base, engine
+from apps.backend.courseeval_backend.db.database import Base, engine
 
 
 def reset_test_database_schema() -> None:
@@ -23,7 +23,7 @@ def reset_test_database_schema() -> None:
     ``Base.metadata`` incomplete and cause ``ensure_schema_updates()`` to fail
     with ``no such table: course_llm_configs`` on SQLite.
     """
-    import apps.backend.wailearning_backend.db.models  # noqa: F401 — register mappers
+    import apps.backend.courseeval_backend.db.models  # noqa: F401 — register mappers
 
     if engine.dialect.name == "sqlite":
         with engine.begin() as conn:

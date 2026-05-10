@@ -12,10 +12,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
-from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import Subject, User, UserRole
+from apps.backend.courseeval_backend.core.auth import get_password_hash
+from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
+from apps.backend.courseeval_backend.main import app
+from apps.backend.courseeval_backend.db.models import Subject, User, UserRole
 from tests.scenarios.llm_scenario import login_api, make_grading_course_with_homework
 from tests.scenarios.material_flow import headers_for
 
@@ -25,7 +25,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -222,7 +222,7 @@ def test_behavior_discussion_llm_resolves_student_without_subject_anchor_class(c
         db.commit()
         student_user = db.query(User).filter(User.id == ctx["student_user_id"]).first()
         assert student_user is not None
-        from apps.backend.wailearning_backend.llm_discussion import resolve_student_for_discussion_llm
+        from apps.backend.courseeval_backend.llm_discussion import resolve_student_for_discussion_llm
 
         student = resolve_student_for_discussion_llm(db, student_user, class_id=ctx["class_id"])
         assert student.id == ctx["student_id"]
@@ -231,7 +231,7 @@ def test_behavior_discussion_llm_resolves_student_without_subject_anchor_class(c
 
 
 def test_behavior_discussion_llm_quota_exempt_roles_helper():
-    from apps.backend.wailearning_backend.llm_discussion import discussion_llm_user_is_quota_exempt
+    from apps.backend.courseeval_backend.llm_discussion import discussion_llm_user_is_quota_exempt
 
     assert discussion_llm_user_is_quota_exempt(User(role=UserRole.ADMIN.value)) is True
     assert discussion_llm_user_is_quota_exempt(User(role=UserRole.TEACHER.value)) is True

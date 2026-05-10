@@ -10,8 +10,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.db.database import SessionLocal, engine
-from apps.backend.wailearning_backend.domains.llm.token_quota import get_or_create_global_quota_policy
+from apps.backend.courseeval_backend.db.database import SessionLocal, engine
+from apps.backend.courseeval_backend.domains.llm.token_quota import get_or_create_global_quota_policy
 
 pytestmark = pytest.mark.skipif(
     engine.dialect.name != "postgresql",

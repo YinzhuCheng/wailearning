@@ -390,11 +390,11 @@ const bulkQuotaForm = reactive({
 })
 
 const form = ref({
-  system_name: 'BIMSA-CLASS 大学生教学管理系统',
+  system_name: 'CourseEval',
   login_background: '',
   system_logo: '',
-  system_intro: '面向大学生的教学管理系统',
-  copyright: '(c) 2026 BIMSA-CLASS',
+  system_intro: 'Teaching management platform',
+  copyright: '(c) 2026 CourseEval',
   use_bing_background: true,
   appearance_default_preset: 'professional-blue'
 })
@@ -469,11 +469,11 @@ const fetchSettings = async () => {
         : item.setting_value
     })
     form.value = {
-      system_name: settingsData.system_name || 'BIMSA-CLASS 大学生教学管理系统',
+      system_name: settingsData.system_name || 'CourseEval',
       login_background: settingsData.login_background || '',
       system_logo: settingsData.system_logo || '',
-      system_intro: settingsData.system_intro || '面向大学生的教学管理系统',
-      copyright: settingsData.copyright || '(c) 2026 BIMSA-CLASS',
+      system_intro: settingsData.system_intro || 'Teaching management platform',
+      copyright: settingsData.copyright || '(c) 2026 CourseEval',
       use_bing_background: settingsData.use_bing_background === 'true',
       appearance_default_preset: settingsData.appearance_default_preset || 'professional-blue'
     }

@@ -28,8 +28,8 @@ Why this is mandatory:
 
 Before running commands, understand the repository boundary rules in [../architecture/REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md). In particular:
 
-- the canonical backend package lives in `apps/backend/wailearning_backend/`,
-- the canonical backend import root is `apps.backend.wailearning_backend`,
+- the canonical backend package lives in `apps/backend/courseeval_backend/`,
+- the canonical backend import root is `apps.backend.courseeval_backend`,
 - the root `conftest.py` is intentionally repository-scoped,
 - Windows launcher scripts live in `../../ops/scripts/windows/`.
 
@@ -39,7 +39,7 @@ Before running commands, understand the repository boundary rules in [../archite
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-python -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port 8001 --reload
+python -m uvicorn apps.backend.courseeval_backend.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 Optional Windows convenience launcher:
@@ -76,7 +76,7 @@ Interpretation guidance:
 
 - `documentation` includes `docs/`, root `README.md`, root `AGENTS.md`, and Markdown/Text/RST files under app, ops, or tests folders.
 - `test_code` includes `tests/backend/`, `tests/behavior/`, `tests/e2e/`, `tests/postgres/`, `tests/security/`, `tests/scenarios/`, plus repository pytest bootstrapping files.
-- `primary_source` includes `apps/backend/wailearning_backend/`, `apps/web/admin/src/`, and `apps/web/parent/src/`.
+- `primary_source` includes `apps/backend/courseeval_backend/`, `apps/web/admin/src/`, and `apps/web/parent/src/`.
 - `tooling` includes repository maintenance utilities such as `ops/scripts/` and `tests/devtools/`.
 - `generated_or_lock` is separated so files such as `package-lock.json` do not distort the main health trend.
 
@@ -194,7 +194,7 @@ python ops/scripts/dev/select_validation_targets.py --base origin/main
 python ops/scripts/dev/select_validation_targets.py --base origin/main --head HEAD --json
 python ops/scripts/dev/select_validation_targets.py --staged
 python ops/scripts/dev/select_validation_targets.py --worktree
-python ops/scripts/dev/select_validation_targets.py --paths apps/backend/wailearning_backend/api/routers/learning_notes.py
+python ops/scripts/dev/select_validation_targets.py --paths apps/backend/courseeval_backend/api/routers/learning_notes.py
 ```
 
 Windows agents should use the venv interpreter when available:
@@ -396,8 +396,8 @@ Known first-version limitations:
 - Python `fnmatch` treats `**` as a glob pattern, not as a full gitignore-style
   recursive operator with every edge case. When writing registry rules, include
   both one-level and recursive patterns if both are required, for example
-  `apps/backend/wailearning_backend/*.py` and
-  `apps/backend/wailearning_backend/**/*.py`.
+  `apps/backend/courseeval_backend/*.py` and
+  `apps/backend/courseeval_backend/**/*.py`.
 - This tool is not a replacement for reading task-scoped docs. It makes the
   first recommendation easier to audit; it does not understand every semantic
   dependency in the application.
@@ -436,7 +436,7 @@ ops\scripts\windows\start-parent-frontend.bat
 
 ## Key Development Settings
 
-The canonical list of **all** `Settings` fields, defaults, and related Vite variables is in [../architecture/CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md) (kept in sync with [`apps/backend/wailearning_backend/core/config.py`](../../apps/backend/wailearning_backend/core/config.py)).
+The canonical list of **all** `Settings` fields, defaults, and related Vite variables is in [../architecture/CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md) (kept in sync with [`apps/backend/courseeval_backend/core/config.py`](../../apps/backend/courseeval_backend/core/config.py)).
 
 Quick reminders for developers running locally:
 
@@ -721,7 +721,7 @@ Further test-authoring lessons from the tier-4 stress E2E pass are recorded in t
 
 ### Recommendations for new test samples (E2E and API)
 
-- **Confirm the contract first**: path, verb, query-vs-body shape, and Pydantic bounds should align with `apps/backend/wailearning_backend/api/routers/*.py` and `apps/backend/wailearning_backend/api/schemas.py`, and should mirror the admin client in `apps/web/admin/src/api` when in doubt.
+- **Confirm the contract first**: path, verb, query-vs-body shape, and Pydantic bounds should align with `apps/backend/courseeval_backend/api/routers/*.py` and `apps/backend/courseeval_backend/api/schemas.py`, and should mirror the admin client in `apps/web/admin/src/api` when in doubt.
 - **Assert server state before UI**: use `page.request`, shared `apiGetJson`, or `expect.poll` on an API predicate, then reload or widen locators for the UI.
 - **Prefer stable hooks**: `data-testid`, course context helpers such as `enterSeededRequiredCourse`, and explicit `waitForResponse` registration before clicks are safer, especially for Element Plus dialogs and batch actions.
 - **Concurrency**: prefer API-only parallel storms when the UI disables controls; avoid `Promise.all` on clicks that may be no-ops when disabled (see Pitfall 22).
@@ -818,11 +818,11 @@ Operational rules for agents:
 
 This policy intentionally raises the bar for "full suite" claims. SQLite-only pytest, Playwright discovery, or a target that skipped due to missing dependencies can still be useful for iteration, but they are not complete evidence that the skipped behavior works.
 
-If you only run `pytest` on the default SQLite configuration, note that `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` is skipped unless the dialect is PostgreSQL (unless you set **`WAILEARNING_AUTO_PG_TESTS=1`** after provisioning the standard throwaway DB — see below). That guard asserts `information_schema` shows **no** legacy token-limit or course-level quota-policy columns on `course_llm_configs` (including removed `quota_timezone`, `estimated_chars_per_token`, `estimated_image_tokens`). Full PostgreSQL-only assertions require `TEST_DATABASE_URL` (or auto-pick) pointing at a live Postgres instance with migrated schema. This does not replace the default workflow for most changes; it matters when validating schema-level regressions.
+If you only run `pytest` on the default SQLite configuration, note that `tests/behavior/test_regression_llm_quota_behavior.py::test_r3_course_llm_config_columns_no_legacy_token_limits` is skipped unless the dialect is PostgreSQL (unless you set **`COURSEEVAL_AUTO_PG_TESTS=1`** after provisioning the standard throwaway DB — see below). That guard asserts `information_schema` shows **no** legacy token-limit or course-level quota-policy columns on `course_llm_configs` (including removed `quota_timezone`, `estimated_chars_per_token`, `estimated_image_tokens`). Full PostgreSQL-only assertions require `TEST_DATABASE_URL` (or auto-pick) pointing at a live Postgres instance with migrated schema. This does not replace the default workflow for most changes; it matters when validating schema-level regressions.
 
 **PostgreSQL local smoke (Linux example):** Install Postgres, then either:
 
-1. **Idempotent helper (recommended):** run `bash ops/scripts/dev/provision_postgres_pytest.sh` as a user who may `sudo -u postgres psql` (creates role `wailearning_test`, database `wailearning_pytest_all`, password `wailearning_test` by default; override with `WAILEARNING_PYTEST_DB_*` env vars documented in the script). Then either export the printed `TEST_DATABASE_URL`, **or** run pytest with **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects that URL when TCP + credentials succeed (no manual export).
+1. **Idempotent helper (recommended):** run `bash ops/scripts/dev/provision_postgres_pytest.sh` as a user who may `sudo -u postgres psql` (creates role `courseeval_test`, database `courseeval_pytest_all`, password `courseeval_test` by default; override with `WAILEARNING_PYTEST_DB_*` env vars documented in the script). Then either export the printed `TEST_DATABASE_URL`, **or** run pytest with **`COURSEEVAL_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects that URL when TCP + credentials succeed (no manual export).
 
 2. **Manual:** create a dedicated empty database and user, export `TEST_DATABASE_URL=postgresql+psycopg2://USER:PASSWORD@127.0.0.1:5432/DBNAME`, then run `python3 -m pytest`.
 
@@ -835,16 +835,16 @@ CI machines and anyone publishing “green full-suite” results should install 
 
 ```bash
 # Option A — explicit URL (works on all platforms once Postgres listens on TCP)
-export TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all'
+export TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all'
 python3 -m pytest tests/
 
 # Option B — Linux/macOS: auto-pick the same URL when the probe DB answers (after provision script)
-WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/
+COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/
 ```
 
 That executes **`tests/postgres/`** (dialect guards, LLM schema guards, and the additive **quota / constraint hazard** module described below), **`tests/behavior/test_regression_llm_quota_behavior.py::test_r3_...`** (`information_schema`), and the RAR-based attachment tests (when a supported RAR extractor is available).
 
-**Skip counts (reference):** On **SQLite** with **`unrar`** (or `unrar-free`) on `PATH` but **without** `TEST_DATABASE_URL` / auto-Postgres, expect the PostgreSQL-only modules and `test_r3` to skip (the latest full-suite report recorded **43 skipped**). If **`unrar` is missing**, attachment-format tests may add extra skips depending on fixture/tool availability. With **`WAILEARNING_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, the target is **0 skipped**; the latest documented Postgres-forced full tree recorded **466 passed, 0 skipped** in [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md). Do not memorize the `passed` integer as a permanent constant.
+**Skip counts (reference):** On **SQLite** with **`unrar`** (or `unrar-free`) on `PATH` but **without** `TEST_DATABASE_URL` / auto-Postgres, expect the PostgreSQL-only modules and `test_r3` to skip (the latest full-suite report recorded **43 skipped**). If **`unrar` is missing**, attachment-format tests may add extra skips depending on fixture/tool availability. With **`COURSEEVAL_AUTO_PG_TESTS=1`** (or `TEST_DATABASE_URL` set) against a live Postgres, the target is **0 skipped**; the latest documented Postgres-forced full tree recorded **466 passed, 0 skipped** in [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md). Do not memorize the `passed` integer as a permanent constant.
 
 The **SQLite-only `passed` integer** is not a permanent constant as new tests land in the default collection; rely on **skip classes** and the **Postgres 0-skip** matrix instead of memorizing a single `passed` tally. Historical rows below may still show **389/432** from an earlier May 2026 pass; newer rows in the coverage matrix show **423/466** after additional tests landed.
 
@@ -854,7 +854,7 @@ Default `pytest` without Postgres or **`unrar`** remains valid for fast loops bu
 
 1. **PostgreSQL + throwaway DB:** `sudo apt-get install -y postgresql postgresql-contrib` → `sudo pg_ctlcluster 16 main start` (version may differ) → `bash <REPO_ROOT>/ops/scripts/dev/provision_postgres_pytest.sh` (requires `sudo -u postgres`).
 2. **RAR extractors:** `sudo apt-get install -y unrar rar` (or `unrar-free` where `unrar` is unavailable).
-3. **pytest:** `python3 -m pip install -r <REPO_ROOT>/requirements.txt` then `cd <REPO_ROOT> && WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` → expect **0 skipped** when steps 1–2 succeeded; consult [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) for the latest representative `passed` count.
+3. **pytest:** `python3 -m pip install -r <REPO_ROOT>/requirements.txt` then `cd <REPO_ROOT> && COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` → expect **0 skipped** when steps 1–2 succeeded; consult [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) for the latest representative `passed` count.
 4. **Node + Playwright (apt, not `nvm`):** `sudo apt-get install -y nodejs npm` — on Ubuntu 24.04 this typically yields **Node 18.x** and **npm 9.x**, sufficient for `<REPO_ROOT>/apps/web/admin/package.json`.
 5. **Admin deps + browser:** `cd <REPO_ROOT>/apps/web/admin && npm ci && npx playwright install chromium`.
 6. **E2E run:** Use **`E2E_PYTHON`** pointing at an interpreter that has **`uvicorn`** on `PYTHONPATH` (repository **`.venv`** if present, else **`/usr/bin/python3`** after `pip install -r requirements.txt`). Example smoke:
@@ -929,8 +929,8 @@ Fix for tests: prefer explicit `query(...).one()` then attribute mutation, or us
 **2d. Round-1 hardening (P0/P1 follow-ups from security audit, code changes)**
 
 - **`/api/e2e/*` router access:** `e2e_dev.router` is **always** registered in `main.py` so pytest and tooling can toggle ``E2E_DEV_SEED_ENABLED`` at runtime without reloading the app. Every route on that router depends on ``require_e2e_dev_api_exposed`` (`api/routers/e2e_dev.py`), which raises **404** unless ``settings.expose_e2e_dev_api()`` is true. In production, ``expose_e2e_dev_api()`` is always false; ``Settings`` still rejects ``E2E_DEV_SEED_ENABLED`` with production ``APP_ENV`` at parse time. Regression coverage: `tests/backend/test_settings_e2e_router_gate.py`.
-- **Attachment download by basename:** `apps/backend/wailearning_backend/api/routers/files.py::download_attachment_by_stored_name` resolves every **authorized** candidate URL to an on-disk path; if more than one **distinct** resolved path exists for the same basename, the handler returns **403** instead of picking an arbitrary row (mitigates basename collision widening access while still allowing multiple DB rows that reference the same physical file). Collisions are logged at warning level.
-- **LLM worker executor:** `apps/backend/wailearning_backend/llm_grading.py` `_WorkerManager._run` pairs each `Future` with its `task_id`; on `fut.result()` failure it calls `_mark_task_failed_from_worker_executor` so tasks do not stick in `processing` until stale reclaim. Exceptions use `logging` instead of bare `print`.
+- **Attachment download by basename:** `apps/backend/courseeval_backend/api/routers/files.py::download_attachment_by_stored_name` resolves every **authorized** candidate URL to an on-disk path; if more than one **distinct** resolved path exists for the same basename, the handler returns **403** instead of picking an arbitrary row (mitigates basename collision widening access while still allowing multiple DB rows that reference the same physical file). Collisions are logged at warning level.
+- **LLM worker executor:** `apps/backend/courseeval_backend/llm_grading.py` `_WorkerManager._run` pairs each `Future` with its `task_id`; on `fut.result()` failure it calls `_mark_task_failed_from_worker_executor` so tasks do not stick in `processing` until stale reclaim. Exceptions use `logging` instead of bare `print`.
 - **Concurrent mark-all-read:** `POST /api/notifications/mark-all-read` uses dialect-specific `INSERT .. ON CONFLICT DO UPDATE` on `notification_reads(notification_id, user_id)` for PostgreSQL and SQLite so parallel mark-all-read / mark-read cannot hit `IntegrityError` on the unique index. Regression: `tests/behavior/test_complex_regression_roundtrip_behavior.py::test_c7b_concurrent_dual_mark_all_read_no_integrity_errors`.
 
 #### 3. Agent “worries” and residual coverage gaps (explicit, not a bug list)
@@ -982,13 +982,13 @@ The table immediately below is a **historical representative run** from an earli
 
 | Configuration | Command pattern | Outcome (representative) | Wall-clock order of magnitude |
 |---------------|-----------------|---------------------------|--------------------------------|
-| **Default SQLite** (no `TEST_DATABASE_URL`, no `WAILEARNING_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | Historical: **389 passed**, **43 skipped** when **`unrar`** was present; newer report: **423 passed**, **43 skipped** | ~8 minutes on a typical cloud CPU |
-| **PostgreSQL** (`TEST_DATABASE_URL` **or** `WAILEARNING_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | Historical: **432 passed**, **0 skipped**; newer report: **466 passed**, **0 skipped** when **`unrar`** + Postgres were provisioned | ~9.5 minutes on a typical cloud CPU |
+| **Default SQLite** (no `TEST_DATABASE_URL`, no `COURSEEVAL_AUTO_PG_TESTS`) | `cd <REPO_ROOT> && python3 -m pytest tests/ -q` | Historical: **389 passed**, **43 skipped** when **`unrar`** was present; newer report: **423 passed**, **43 skipped** | ~8 minutes on a typical cloud CPU |
+| **PostgreSQL** (`TEST_DATABASE_URL` **or** `COURSEEVAL_AUTO_PG_TESTS=1` after `ops/scripts/dev/provision_postgres_pytest.sh`) | `export TEST_DATABASE_URL='postgresql+psycopg2://…'` or `COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` | Historical: **432 passed**, **0 skipped**; newer report: **466 passed**, **0 skipped** when **`unrar`** + Postgres were provisioned | ~9.5 minutes on a typical cloud CPU |
 
 Interpretation for agents:
 
 - The **skip class** is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
-- **Zero-skip CI:** install **`unrar`** (or `unrar-free`), run **`ops/scripts/dev/provision_postgres_pytest.sh`**, then set **`WAILEARNING_AUTO_PG_TESTS=1`** (Linux agents) or **`TEST_DATABASE_URL`** explicitly (portable).
+- **Zero-skip CI:** install **`unrar`** (or `unrar-free`), run **`ops/scripts/dev/provision_postgres_pytest.sh`**, then set **`COURSEEVAL_AUTO_PG_TESTS=1`** (Linux agents) or **`TEST_DATABASE_URL`** explicitly (portable).
 
 **Not executed in the same session:** a full `npx playwright test` over **all** `tests/e2e/web-admin/*.spec.js` files (that run is hours-wide and belongs in a dedicated CI job). What **was** executed after the PostgreSQL pytest pass is the **additive** hazard file only:
 
@@ -999,7 +999,7 @@ CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-postgres-ha
 
 Outcome: **15 passed** (API + light UI checks for LLM global vs course boundaries).
 
-**Machine re-check (same agent session, after adding ``test_e2e_dev_api_hazard_tier.py``):** `python3 -m pytest tests/` on default SQLite reported **389 passed, 43 skipped** (~8m24s); `WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/` reported **432 passed, 0 skipped** (~9m58s) when the throwaway Postgres from ``ops/scripts/dev/provision_postgres_pytest.sh`` was present and **`unrar`** was installed.
+**Machine re-check (same agent session, after adding ``test_e2e_dev_api_hazard_tier.py``):** `python3 -m pytest tests/` on default SQLite reported **389 passed, 43 skipped** (~8m24s); `COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/` reported **432 passed, 0 skipped** (~9m58s) when the throwaway Postgres from ``ops/scripts/dev/provision_postgres_pytest.sh`` was present and **`unrar`** was installed.
 
 **Playwright CLI pitfall observed:** `npx playwright test ... -q` may fail with `error: unknown option '-q'` on some Playwright versions bundled with the repo. Prefer **no `-q`** flag, or use `PLAYWRIGHT_HTML_REPORT=0` / reporter flags documented upstream for your installed version.
 
@@ -1098,7 +1098,7 @@ CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-agent-hazar
 
 5. **Parallel `mark-all-read`:** After the server-side upsert hardening (Round-4 continuation), issuing **two concurrent** `POST /api/notifications/mark-all-read` from the same student token should both return **200** and leave `sync-status.unread_count === 0`. If either request fails with `IntegrityError` in logs, that is a **regression** in the batch upsert path, not a flake.
 
-6. **Playwright scripts must match real admin LLM quota routes:** An early draft of `e2e-agent-hazard-tier-15.spec.js` called `POST /api/llm-settings/admin/quota-overrides/students`, which **does not exist** (HTTP **404**). The repository exposes **`PUT /api/llm-settings/admin/students/{student_id}/quota-override`** for a single student and **`POST /api/llm-settings/admin/quota-overrides/bulk`** for scoped bulk updates (`LLMQuotaBulkOverrideRequest`). Before writing E2E against admin quota mutations, run `rg "quota-override" apps/backend/wailearning_backend/api/routers/llm_settings.py` and copy the exact path + verb from the router.
+6. **Playwright scripts must match real admin LLM quota routes:** An early draft of `e2e-agent-hazard-tier-15.spec.js` called `POST /api/llm-settings/admin/quota-overrides/students`, which **does not exist** (HTTP **404**). The repository exposes **`PUT /api/llm-settings/admin/students/{student_id}/quota-override`** for a single student and **`POST /api/llm-settings/admin/quota-overrides/bulk`** for scoped bulk updates (`LLMQuotaBulkOverrideRequest`). Before writing E2E against admin quota mutations, run `rg "quota-override" apps/backend/courseeval_backend/api/routers/llm_settings.py` and copy the exact path + verb from the router.
 
 ##### D3. “Worries” from this pass (planning signals, not confirmed defects)
 

@@ -255,7 +255,7 @@ Full pytest (separate from Playwright; complementary):
 
 ```bash
 cd <REPO_ROOT>
-WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/
+COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/
 ```
 
 See [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) for PostgreSQL provision script and zero-skip expectations.

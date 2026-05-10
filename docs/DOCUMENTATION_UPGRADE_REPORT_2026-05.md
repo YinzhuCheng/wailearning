@@ -10,7 +10,7 @@ This report satisfies the “final output” requirement for the documentation s
 
 | Area | Current ground truth |
 |------|---------------------|
-| Product shell | FastAPI backend package `apps.backend.wailearning_backend`; Vue 3 admin + parent SPAs under `apps/web/*`. |
+| Product shell | FastAPI backend package `apps.backend.courseeval_backend`; Vue 3 admin + parent SPAs under `apps/web/*`. |
 | HTTP surface | Routers included explicitly from `main.py` (see [`reference/CODE_MAP_AND_ENTRYPOINTS.md`](reference/CODE_MAP_AND_ENTRYPOINTS.md)). |
 | Persistence | SQLAlchemy models in `db/models.py`; startup uses `create_all` + `bootstrap.ensure_schema_updates()` (no Alembic tree in-repo snapshot). |
 | AuthZ | JWT staff/student users + separate parent-code flows; course scope primarily `domains/courses/access.py`; coarse role helpers in `core/permissions.py`. |

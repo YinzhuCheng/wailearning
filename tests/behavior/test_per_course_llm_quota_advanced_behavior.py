@@ -16,9 +16,9 @@ from unittest import mock
 import httpx
 from fastapi.testclient import TestClient
 
-from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.llm_grading import ensure_course_llm_config, process_grading_task
-from apps.backend.wailearning_backend.db.models import (
+from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.llm_grading import ensure_course_llm_config, process_grading_task
+from apps.backend.courseeval_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseLLMConfig,

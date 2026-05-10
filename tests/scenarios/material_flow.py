@@ -7,9 +7,9 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.db.models import Class, CourseEnrollment, CourseMaterialChapter, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.core.auth import get_password_hash
+from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, CourseMaterialChapter, Student, Subject, User, UserRole
 from tests.scenarios.llm_scenario import login_api
 
 

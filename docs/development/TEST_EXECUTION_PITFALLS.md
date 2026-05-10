@@ -35,7 +35,7 @@ If you skip this checklist, you may spend time debugging the shell, temp directo
 - Frontend package runner: `npm.cmd` / `npx.cmd`
 - Browser cache path: `<local-browser-cache>`
 - Tested after repository structure migration into:
-  - `apps/backend/wailearning_backend/`
+  - `apps/backend/courseeval_backend/`
   - `apps/web/admin/`
   - `apps/web/parent/`
   - `ops/`
@@ -615,7 +615,7 @@ The test passes `JSON.stringify(body)` while the helper also sets `Content-Type:
 
 ### How to avoid (test side)
 
-- Before writing polls, confirm field names against **`apps/backend/wailearning_backend/api/schemas.py`** or a sample `GET` in Swagger/OpenAPI.
+- Before writing polls, confirm field names against **`apps/backend/courseeval_backend/api/schemas.py`** or a sample `GET` in Swagger/OpenAPI.
 - For “title updated” convergence, prefer **`GET /api/homeworks/{id}`** (or the list endpoint) for the homework record, not the submission history response.
 
 ## Pitfall 28: Pydantic validation limits are easy to violate in scripted payloads
@@ -773,7 +773,7 @@ Copy-pasting “`page_size=200` means 422” from homework/materials/notificatio
 
 ### How to avoid (test side)
 
-- Read the **`Query(..., le=)`** on the FastAPI handler (or grep `page_size` in `apps/backend/wailearning_backend/api/routers/`) before picking an out-of-range value. Prefer **`page_size = max_allowed + 1`** per route family.
+- Read the **`Query(..., le=)`** on the FastAPI handler (or grep `page_size` in `apps/backend/courseeval_backend/api/routers/`) before picking an out-of-range value. Prefer **`page_size = max_allowed + 1`** per route family.
 
 ## Pitfall 40: `force: true` on Element Plus table row checkboxes can skip selection state
 
@@ -1281,13 +1281,13 @@ Context:
 
 Cause:
 
-Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or **`WAILEARNING_AUTO_PG_TESTS=1`** auto-pick is enabled — see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)).
+Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or **`COURSEEVAL_AUTO_PG_TESTS=1`** auto-pick is enabled — see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)).
 
 Fix:
 
 1. Install **`unrar`** or **`unrar-free`** so `tests/backend/llm/test_llm_attachment_formats.py` can execute the RAR walks (same tooling the product uses in `domains/llm/attachments.py`). The **`rar`** compressor is **not** required at pytest runtime anymore because regression archives live under **`tests/fixtures/llm_rar/`** (generated offline by maintainers).
-2. Run **`bash ops/scripts/dev/provision_postgres_pytest.sh`** (creates `wailearning_pytest_all` + role `wailearning_test`; needs `sudo -u postgres` when the cluster exists).
-3. Either `export TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all'`, or set **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` probes that URL and switches `DATABASE_URL` before importing the app.
+2. Run **`bash ops/scripts/dev/provision_postgres_pytest.sh`** (creates `courseeval_pytest_all` + role `courseeval_test`; needs `sudo -u postgres` when the cluster exists).
+3. Either `export TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all'`, or set **`COURSEEVAL_AUTO_PG_TESTS=1`** so `tests/conftest.py` probes that URL and switches `DATABASE_URL` before importing the app.
 4. Ensure PostgreSQL is **listening** (`pg_ctlcluster <ver> main start` or your distro equivalent). The provision script fails loudly when `sudo -u postgres` cannot connect.
 
 Interpretation:
@@ -1323,7 +1323,7 @@ Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TES
 
 ### Interpretation
 
-This is **runner bootstrap debt**, not a failing test or a broken import path in `apps.backend.wailearning_backend`. Do not edit `tests/conftest.py` or `pytest.ini` to “fix” a missing `pytest` package on the system interpreter.
+This is **runner bootstrap debt**, not a failing test or a broken import path in `apps.backend.courseeval_backend`. Do not edit `tests/conftest.py` or `pytest.ini` to “fix” a missing `pytest` package on the system interpreter.
 
 ### Pitfall 47: `GET /api/homework` is not the student homework list — the plural router is `/api/homeworks`
 
@@ -1339,11 +1339,11 @@ but receives **404** or an HTML error page, so pagination validation never runs.
 
 ### Context
 
-`apps/backend/wailearning_backend/api/routers/homework.py` registers `APIRouter(prefix="/api/homeworks", ...)`. There is no first-class list route at `/api/homework` in this branch.
+`apps/backend/courseeval_backend/api/routers/homework.py` registers `APIRouter(prefix="/api/homeworks", ...)`. There is no first-class list route at `/api/homework` in this branch.
 
 ### Fix
 
-Use **`/api/homeworks`** for list queries. Re-run `rg "APIRouter\\(prefix=" apps/backend/wailearning_backend/api/routers/homework.py` before freezing URL literals in new tests.
+Use **`/api/homeworks`** for list queries. Re-run `rg "APIRouter\\(prefix=" apps/backend/courseeval_backend/api/routers/homework.py` before freezing URL literals in new tests.
 
 ### Interpretation
 
@@ -1480,14 +1480,14 @@ Follow-on failures: timeouts on `page.goto`, missing table rows, logins that suc
 
 - Admin Playwright uses a **file-backed SQLite** URL (see `apps/web/admin/playwright.config.cjs`; Unix placeholder pattern like `/tmp/playwright_e2e_<port>.sqlite`).
 - **`POST /api/e2e/dev/reset-scenario`** runs in many specs’ **`beforeEach`** hooks.
-- `Student.parent_code` is **`unique=True`** in `apps/backend/wailearning_backend/db/models.py`.
+- `Student.parent_code` is **`unique=True`** in `apps/backend/courseeval_backend/db/models.py`.
 - If seed assigns **`parent_code`** from a **small** derived space (historically a short prefix of `suffix`), repeated inserts into the **same** SQLite file across a long full-suite run increase collision probability (“birthday paradox” vs leftover rows).
 
 Short targeted runs often pass because the DB file is young or resets are fewer.
 
 ### Fix
 
-- **Product / seed fix (preferred):** derive **`parent_code`** from the **full** unique run suffix (or another high-entropy string), not an aggressively truncated token. The E2E seed handler in `apps/backend/wailearning_backend/api/routers/e2e_dev.py` uses **`P{suffix.upper()}`** where **`suffix`** is **`uuid.uuid4().hex[:10]`**, keeping the code space large enough for persistent SQLite full-suite runs.
+- **Product / seed fix (preferred):** derive **`parent_code`** from the **full** unique run suffix (or another high-entropy string), not an aggressively truncated token. The E2E seed handler in `apps/backend/courseeval_backend/api/routers/e2e_dev.py` uses **`P{suffix.upper()}`** where **`suffix`** is **`uuid.uuid4().hex[:10]`**, keeping the code space large enough for persistent SQLite full-suite runs.
 - **Operator mitigation (diagnostic only):** delete the Playwright SQLite file at `<E2E_SQLITE>` or change **`E2E_API_PORT`** so a fresh file is used — confirms collision vs logic regression; **do not** rely on this instead of seed entropy in CI.
 
 ### Interpretation
@@ -1506,7 +1506,7 @@ See also **§ Key pitfall A** in [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGH
 
 ### Fix
 
-In **`apps/backend/wailearning_backend/api/routers/auth.py`**, read the **`UploadFile`** bytes first and reject **`len(content) > MAX_AVATAR_BYTES`** immediately. Pass bytes into **`save_attachment(..., preloaded=content)`** so oversized rejects happen **without** writing to disk and **without** entering format validation for oversize junk payloads.
+In **`apps/backend/courseeval_backend/api/routers/auth.py`**, read the **`UploadFile`** bytes first and reject **`len(content) > MAX_AVATAR_BYTES`** immediately. Pass bytes into **`save_attachment(..., preloaded=content)`** so oversized rejects happen **without** writing to disk and **without** entering format validation for oversize junk payloads.
 
 ### Interpretation
 
@@ -1568,7 +1568,7 @@ Operators expect **`SECRET_KEY=change-me-in-production`** to fail fast in **all*
 
 ### Context
 
-Changing **`REQUIRE_STRONG_SECRETS`** default to **`true`** breaks **`from apps.backend.wailearning_backend.core.config import settings`** for processes that have **no** `.env` and rely on code defaults — pytest/conftest sets **`SECRET_KEY`** explicitly, but bare **`python -m uvicorn`** without env would crash unless operators create secrets first.
+Changing **`REQUIRE_STRONG_SECRETS`** default to **`true`** breaks **`from apps.backend.courseeval_backend.core.config import settings`** for processes that have **no** `.env` and rely on code defaults — pytest/conftest sets **`SECRET_KEY`** explicitly, but bare **`python -m uvicorn`** without env would crash unless operators create secrets first.
 
 ### Fix
 
@@ -1608,7 +1608,7 @@ Only some handlers wrapped **`try/except ValueError`**. Others assumed **`ensure
 
 ### Fix
 
-**`ensure_course_access_http`** (in **`apps/backend/wailearning_backend/domains/courses/access.py`**) now maps **`ValueError`** to HTTP **404** and **`PermissionError`** to **403**. Route modules were migrated to call **`ensure_course_access_http`** instead of **`ensure_course_access`** for HTTP endpoints (**`homework.py`**, **`scores.py`**, **`attendance.py`**, **`dashboard.py`**, **`subjects.py`**, **`llm_settings.py`**, **`files.py`** attachment ACL helper).
+**`ensure_course_access_http`** (in **`apps/backend/courseeval_backend/domains/courses/access.py`**) now maps **`ValueError`** to HTTP **404** and **`PermissionError`** to **403**. Route modules were migrated to call **`ensure_course_access_http`** instead of **`ensure_course_access`** for HTTP endpoints (**`homework.py`**, **`scores.py`**, **`attendance.py`**, **`dashboard.py`**, **`subjects.py`**, **`llm_settings.py`**, **`files.py`** attachment ACL helper).
 
 ### Interpretation
 
@@ -1806,7 +1806,7 @@ Authoring **`tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js`** (or similar API-
 
 - Prefer **explicit cross-class homework rows** (admin-created **`Homework`** with **`class_id`** / **`subject_id`** pointing at **`course_other_teacher_id`** + **`class_id_2`**) when testing “wrong class” submission denial.
 - Accept **`[403, 404]`** where course-access vs roster-order differs.
-- Validate pagination bounds only against routers that validate **`page_size`** in **`Query`** — grep **`apps/backend/wailearning_backend/api/routers/*.py`** before writing **`422`** expectations.
+- Validate pagination bounds only against routers that validate **`page_size`** in **`Query`** — grep **`apps/backend/courseeval_backend/api/routers/*.py`** before writing **`422`** expectations.
 
 ### Interpretation
 
@@ -1875,7 +1875,7 @@ Before opening **从花名册进课**, **`DELETE /api/subjects/{course_required_
 ### Symptom
 
 ```text
-> ddclass-frontend@1.0.0 build
+> courseeval-admin@1.0.0 build
 > vite build
 
 sh: 1: vite: not found
@@ -2042,7 +2042,7 @@ Cache the values needed for post-login branching **before** calling the logging
 helper, or re-query the `User` row by id after the logging commit before calling
 student-only repair such as `prepare_student_course_context(...)`.
 
-This repository now follows that rule in `apps/backend/wailearning_backend/api/routers/auth.py`.
+This repository now follows that rule in `apps/backend/courseeval_backend/api/routers/auth.py`.
 
 ### Interpretation
 
@@ -2064,7 +2064,7 @@ no such table: course_llm_configs
 
 ### Context
 
-Certain older backend test modules import `apps.backend.wailearning_backend.main`
+Certain older backend test modules import `apps.backend.courseeval_backend.main`
 at module load time. In this repository, `main.py` still calls:
 
 ```text
@@ -2488,7 +2488,7 @@ When extending homework lifecycle tests, prefer surgical row mutation over rewri
 
 ### Symptom
 
-Pytest runs fail early inside `apps.backend.wailearning_backend.bootstrap.ensure_schema_updates()` with `sqlite3.OperationalError: no such table: course_llm_configs` (or other core tables) immediately after `tests.db_reset.reset_test_database_schema()` reports success.
+Pytest runs fail early inside `apps.backend.courseeval_backend.bootstrap.ensure_schema_updates()` with `sqlite3.OperationalError: no such table: course_llm_configs` (or other core tables) immediately after `tests.db_reset.reset_test_database_schema()` reports success.
 
 Alternatively, mass `UNIQUE constraint failed: users.username` errors appear when executing many tests sequentially against the default file-backed SQLite URL.
 
@@ -2500,7 +2500,7 @@ Alternatively, mass `UNIQUE constraint failed: users.username` errors appear whe
 
 ### Product-side mitigation (implemented in `tests/db_reset.py`, 2026-05)
 
-`reset_test_database_schema()` now imports `apps.backend.wailearning_backend.db.models` **before** `metadata.drop_all` / `create_all`, guaranteeing mapper registration even when a test file only imported `db.database` + `main` without touching ORM classes directly. This removes the systematic `no such table: course_llm_configs` failure mode during `ensure_schema_updates()` on cold SQLite schemas.
+`reset_test_database_schema()` now imports `apps.backend.courseeval_backend.db.models` **before** `metadata.drop_all` / `create_all`, guaranteeing mapper registration even when a test file only imported `db.database` + `main` without touching ORM classes directly. This removes the systematic `no such table: course_llm_configs` failure mode during `ensure_schema_updates()` on cold SQLite schemas.
 
 Corrupted shared sqlite files and parallel writers remain hazards — keep the deletion playbook below.
 
@@ -2513,7 +2513,7 @@ Corrupted shared sqlite files and parallel writers remain hazards — keep the d
 
 ### Evidence note
 
-A minimal control script that imports `apps.backend.wailearning_backend.db.models` before `create_all` succeeded on a fresh sqlite path — see [`../DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](../DOCUMENTATION_UPGRADE_REPORT_2026-05.md).
+A minimal control script that imports `apps.backend.courseeval_backend.db.models` before `create_all` succeeded on a fresh sqlite path — see [`../DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](../DOCUMENTATION_UPGRADE_REPORT_2026-05.md).
 
 ## Demo seed strings containing LaTeX (`domains/seed/demo.py`, pytest / agents, 2026-05)
 
@@ -2532,7 +2532,7 @@ Standard Python string literals treat `\f` as a form-feed escape, `\t` as tab, a
 
 ### Interpretation for agents
 
-Treat `domains/seed/demo.py` as **data-heavy**: run `python3 -m py_compile apps/backend/wailearning_backend/domains/seed/demo.py` after edits and inspect a seeded row in SQLite/Postgres if unsure whether content round-tripped correctly.
+Treat `domains/seed/demo.py` as **data-heavy**: run `python3 -m py_compile apps/backend/courseeval_backend/domains/seed/demo.py` after edits and inspect a seeded row in SQLite/Postgres if unsure whether content round-tripped correctly.
 
 ## Linux agent: PostgreSQL apt install vs systemd-less containers (`policy-rc.d`, 2026-05)
 
@@ -2710,7 +2710,7 @@ Additional example from the richer demo-content pass:
 - Replacing the old three-level `_seed_demo_material_chapters(...)` implementation by matching its Chinese-containing docstring initially failed. The reliable patch matched only the ASCII function definition `def _seed_demo_material_chapters` and the next ASCII function boundary, then replaced the function body with helper functions.
 - Replacing `_DEMO_PREFILL_BODIES` by matching the old Chinese homework body text also failed. The reliable patch anchored on `_DEMO_PREFILL_STUDENT_NOS` and the following ASCII boundary `def _seed_prefilled_submissions_for_homework`.
 - Do not treat either failure as evidence that the tracked file is corrupt. In this repository, PowerShell rendering may display valid UTF-8 Chinese as mojibake, while `apply_patch` still writes valid UTF-8 when given a precise byte-level context.
-- For future seed-data edits, prefer this order: introduce new constants near ASCII identifiers, replace call signatures by ASCII function names, compile with `.venv\Scripts\python.exe -m py_compile apps\backend\wailearning_backend\domains\seed\demo.py`, then run the focused demo seed tests.
+- For future seed-data edits, prefer this order: introduce new constants near ASCII identifiers, replace call signatures by ASCII function names, compile with `.venv\Scripts\python.exe -m py_compile apps\backend\courseeval_backend\domains\seed\demo.py`, then run the focused demo seed tests.
 
 ### Pitfall: Vite build can succeed while terminal output looks mojibake
 
@@ -2750,7 +2750,7 @@ local checkout. If that target directory is later deleted or moved, the admin
 Playwright config still tries to start the managed FastAPI server with:
 
 ```text
-<repo>/.venv/Scripts/python.exe -m uvicorn apps.backend.wailearning_backend.main:app ...
+<repo>/.venv/Scripts/python.exe -m uvicorn apps.backend.courseeval_backend.main:app ...
 ```
 
 The targeted Playwright command may then fail after the sandbox `spawn EPERM`

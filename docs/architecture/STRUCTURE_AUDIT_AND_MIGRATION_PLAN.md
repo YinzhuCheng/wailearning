@@ -31,7 +31,7 @@ The current tree is best described by the following labels.
   - The two frontends are separated by deployment surface and user journey rather than being mixed into one UI tree.
 
 - **Neutral / transitional explicit-import monorepo**
-  - The canonical Python import root `apps.backend.wailearning_backend` is already documented and consistently used.
+  - The canonical Python import root `apps.backend.courseeval_backend` is already documented and consistently used.
   - This is structurally clearer than a short alias plus shim, but it still carries migration cost because every ops and test surface depends on the long path.
 
 - **Transitional backend-package flattening**
@@ -47,7 +47,7 @@ The current tree is best described by the following labels.
 ### Repository-level anti-pattern labels
 
 - **Backend root-module concentration**
-  - `apps/backend/wailearning_backend/` still contains many large domain modules beside the subpackages that are supposed to absorb them.
+  - `apps/backend/courseeval_backend/` still contains many large domain modules beside the subpackages that are supposed to absorb them.
   - The clearest examples are now `llm_grading.py` (~2128 lines), `bootstrap.py` (~965 lines), and `llm_discussion.py` (~516 lines).
 
 - **Entry-point dependency fan-out**
@@ -69,14 +69,14 @@ Mostly yes.
 
 Where naming and scale still drift:
 
-- `wailearning_backend/` is no longer broadly too flat, but a few package-root modules are still too large for a finished architecture.
+- `courseeval_backend/` is no longer broadly too flat, but a few package-root modules are still too large for a finished architecture.
 - the next architectural work is now concentrated refinement, not first-principles tree invention.
 
 ### 2. Is the Python import root and app boundary documented?
 
 Yes, and materially better than in many repositories.
 
-The canonical import root `apps.backend.wailearning_backend` is documented in:
+The canonical import root `apps.backend.courseeval_backend` is documented in:
 
 - `README.md`
 - `docs/architecture/REPOSITORY_STRUCTURE.md`
@@ -86,7 +86,7 @@ The canonical import root `apps.backend.wailearning_backend` is documented in:
 
 It is also reflected in real execution surfaces:
 
-- `ops/systemd/ddclass-backend.service`
+- `ops/systemd/courseeval-backend.service`
 - `ops/scripts/windows/start-backend.bat`
 - `apps/web/admin/playwright.config.cjs`
 - tests under `tests/`
@@ -102,7 +102,7 @@ The largest inconsistency has already been reduced.
 Current backend shape:
 
 ```text
-apps/backend/wailearning_backend/
+apps/backend/courseeval_backend/
   main.py
   bootstrap.py
   attachments.py
@@ -161,7 +161,7 @@ The target should remain conservative at the top level and become more explicit 
 repo/
   apps/
     backend/
-      wailearning_backend/
+      courseeval_backend/
         __init__.py
         main.py
         bootstrap.py
@@ -301,7 +301,7 @@ Applied after the documentation contract was stable:
 
 Constraint:
 
-- preserve `apps.backend.wailearning_backend` as the import root during this entire phase
+- preserve `apps.backend.courseeval_backend` as the import root during this entire phase
 
 ### Phase 4: import-contract changes deferred
 
@@ -319,7 +319,7 @@ Default recommendation:
 
 ### Import risk
 
-- every move inside `apps/backend/wailearning_backend/` can affect:
+- every move inside `apps/backend/courseeval_backend/` can affect:
   - route modules,
   - tests,
   - bootstrap helpers,
@@ -340,7 +340,7 @@ Default recommendation:
 
 ### E2E risk
 
-- Playwright bootstraps the backend through `apps.backend.wailearning_backend.main:app`
+- Playwright bootstraps the backend through `apps.backend.courseeval_backend.main:app`
 - it also assumes the repo-root shape when calculating `repoRoot`
 - any entrypoint move or `apps/` tree shift will break:
   - managed `webServer`

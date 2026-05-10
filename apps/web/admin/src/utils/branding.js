@@ -1,11 +1,5 @@
-const LEGACY_BRAND_REGEX = /dd-class/gi
-
 export function normalizeBrandingText(value) {
-  if (typeof value !== 'string') {
-    return value
-  }
-
-  return value.replace(LEGACY_BRAND_REGEX, 'BIMSA-CLASS')
+  return value
 }
 
 export function normalizeSystemSettings(settings) {

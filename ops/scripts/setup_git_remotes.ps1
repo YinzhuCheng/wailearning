@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$GitHubRepoUrl,
 
-    [string]$GitHubUpstreamUrl = "https://github.com/joyapple/DD-CLASS.git",
+    [string]$GitHubUpstreamUrl = "https://github.com/joyapple/CourseEval.git",
     [string]$GiteeUpstreamUrl = "https://gitee.com/joyapple2020/dd-class.git"
 )
 

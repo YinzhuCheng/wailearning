@@ -11,16 +11,16 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-APP_ROOT="${APP_ROOT:-/opt/dd-class}"
+APP_ROOT="${APP_ROOT:-/opt/courseeval}"
 SOURCE_DIR="${SOURCE_DIR:-${APP_ROOT}/source}"
 SHARED_DIR="${SHARED_DIR:-${APP_ROOT}/shared}"
 BACKUP_DIR="${BACKUP_DIR:-${APP_ROOT}/backups}"
 ENV_FILE="${ENV_FILE:-${SHARED_DIR}/.env.production}"
-APP_SERVICE="${APP_SERVICE:-ddclass-backend}"
-DB_NAME="${DB_NAME:-ddclass}"
+APP_SERVICE="${APP_SERVICE:-courseeval-backend}"
+DB_NAME="${DB_NAME:-courseeval}"
 UPLOADS_DIR="${UPLOADS_DIR:-${SHARED_DIR}/uploads}"
-FRONTEND_BUILD_DIR="${FRONTEND_BUILD_DIR:-/var/www/wailearning.xyz/admin}"
-PARENT_BUILD_DIR="${PARENT_BUILD_DIR:-/var/www/wailearning.xyz/parent}"
+FRONTEND_BUILD_DIR="${FRONTEND_BUILD_DIR:-/var/www/courseeval.example/admin}"
+PARENT_BUILD_DIR="${PARENT_BUILD_DIR:-/var/www/courseeval.example/parent}"
 RELEASE_TAG="${RELEASE_TAG:-$(date +%F-%H%M%S)}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
@@ -71,9 +71,9 @@ rsync -a --delete \
 
 echo "==> 6. Validate Python source"
 "${PYTHON_BIN}" -m py_compile \
-  "${TMP_DIR}/source/apps/backend/wailearning_backend/core/config.py" \
-  "${TMP_DIR}/source/apps/backend/wailearning_backend/main.py" \
-  "${TMP_DIR}/source/apps/backend/wailearning_backend/bootstrap.py"
+  "${TMP_DIR}/source/apps/backend/courseeval_backend/core/config.py" \
+  "${TMP_DIR}/source/apps/backend/courseeval_backend/main.py" \
+  "${TMP_DIR}/source/apps/backend/courseeval_backend/bootstrap.py"
 
 echo "==> 7. Stop backend before replacing source"
 systemctl stop "${APP_SERVICE}"
@@ -85,7 +85,7 @@ echo "==> 9. Rebuild backend environment"
 "${APP_ROOT}/venv/bin/pip" install -r "${SOURCE_DIR}/requirements.txt"
 
 echo "==> 10. Run bootstrap/schema sync against existing database"
-"${APP_ROOT}/venv/bin/python" -m apps.backend.wailearning_backend.bootstrap
+"${APP_ROOT}/venv/bin/python" -m apps.backend.courseeval_backend.bootstrap
 
 echo "==> 11. Build frontend assets"
 (
@@ -129,12 +129,12 @@ EOF
 
 # Domain / HTTPS follow-up (manual):
 # 1) Point DNS A records to your ECS public IP:
-#    - wailearning.xyz
-#    - www.wailearning.xyz
+#    - courseeval.example
+#    - www.courseeval.example
 # 2) Verify DNS resolution from server/client:
-#    nslookup wailearning.xyz
-#    nslookup www.wailearning.xyz
+#    nslookup courseeval.example
+#    nslookup www.courseeval.example
 # 3) Issue TLS cert with Certbot (Nginx plugin):
-#    certbot --nginx -d wailearning.xyz -d www.wailearning.xyz
+#    certbot --nginx -d courseeval.example -d www.courseeval.example
 # 4) Verify renewal timer:
 #    systemctl status certbot.timer --no-pager

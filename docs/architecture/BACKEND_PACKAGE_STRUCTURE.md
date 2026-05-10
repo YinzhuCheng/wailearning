@@ -4,7 +4,7 @@
 
 This document explains how to navigate the backend package after the namespace migration to:
 
-- `apps.backend.wailearning_backend`
+- `apps.backend.courseeval_backend`
 
 It is intended for maintainers and LLM coding agents that need to answer two recurring questions:
 
@@ -19,23 +19,23 @@ For the repository-wide assessment of whether the backend package is still too f
 
 The backend package root is:
 
-- `apps/backend/wailearning_backend/`
+- `apps/backend/courseeval_backend/`
 
 The canonical Python import root is:
 
-- `apps.backend.wailearning_backend`
+- `apps.backend.courseeval_backend`
 
 Examples:
 
-- `from apps.backend.wailearning_backend.core.config import settings`
-- `from apps.backend.wailearning_backend.db.models import User`
-- `from apps.backend.wailearning_backend.api.schemas import Token`
-- `from apps.backend.wailearning_backend.api.routers import auth`
+- `from apps.backend.courseeval_backend.core.config import settings`
+- `from apps.backend.courseeval_backend.db.models import User`
+- `from apps.backend.courseeval_backend.api.schemas import Token`
+- `from apps.backend.courseeval_backend.api.routers import auth`
 
 Do not use:
 
 - `app.*`
-- `wailearning_backend.*` without the `apps.backend` prefix
+- `courseeval_backend.*` without the `apps.backend` prefix
 - ad hoc `sys.path` edits in normal application code
 
 ## Current Layer Model
@@ -202,7 +202,7 @@ That is the intended pattern for subsequent rounds: extract coherent vertical sl
 
 The current route modules live in:
 
-- `apps/backend/wailearning_backend/api/routers/`
+- `apps/backend/courseeval_backend/api/routers/`
 
 Examples:
 
@@ -285,7 +285,7 @@ The next worthwhile structural reductions are:
 The likely extraction shape is:
 
 ```text
-apps/backend/wailearning_backend/
+apps/backend/courseeval_backend/
   domains/
     llm/
       worker.py
@@ -314,7 +314,7 @@ Most of those directories now exist. The remaining work is to keep reducing the 
 
 When moving backend files again:
 
-1. Preserve the canonical import root `apps.backend.wailearning_backend`.
+1. Preserve the canonical import root `apps.backend.courseeval_backend`.
 2. Prefer a single explicit edit set over compatibility shims.
 3. Update tests, docs, ops scripts, and Playwright config in the same change set.
 4. Avoid partial namespace migrations that leave two valid import styles in circulation.
@@ -323,13 +323,13 @@ When moving backend files again:
 
 Because the backend package now uses its real namespace everywhere, the following operational commands are authoritative:
 
-- `python -m uvicorn apps.backend.wailearning_backend.main:app --host 127.0.0.1 --port 8001 --reload`
-- `python -m apps.backend.wailearning_backend.bootstrap`
-- `gunicorn apps.backend.wailearning_backend.main:app`
+- `python -m uvicorn apps.backend.courseeval_backend.main:app --host 127.0.0.1 --port 8001 --reload`
+- `python -m apps.backend.courseeval_backend.bootstrap`
+- `gunicorn apps.backend.courseeval_backend.main:app`
 
 If future refactors move `main.py` or `bootstrap.py`, update:
 
-- `ops/systemd/ddclass-backend.service`
+- `ops/systemd/courseeval-backend.service`
 - `ops/scripts/windows/start-backend.bat`
 - `apps/web/admin/playwright.config.cjs`
 - developer docs and README examples

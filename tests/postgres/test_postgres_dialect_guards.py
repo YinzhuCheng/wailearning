@@ -14,9 +14,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import SessionLocal, engine
-from apps.backend.wailearning_backend.db.models import (
+from apps.backend.courseeval_backend.core.auth import get_password_hash
+from apps.backend.courseeval_backend.db.database import SessionLocal, engine
+from apps.backend.courseeval_backend.db.models import (
     Class,
     CourseEnrollment,
     Gender,
@@ -25,7 +25,7 @@ from apps.backend.wailearning_backend.db.models import (
     User,
     UserRole,
 )
-from apps.backend.wailearning_backend.main import app
+from apps.backend.courseeval_backend.main import app
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 pytestmark = pytest.mark.skipif(

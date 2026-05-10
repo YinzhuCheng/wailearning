@@ -12,7 +12,7 @@ Symptom-first pointers for **local development**, **tests**, and **deployments**
 |---------|----------------|---------------|
 | `ValidationError` for `SECRET_KEY` or `DATABASE_URL` | Production or `REQUIRE_STRONG_SECRETS=true` with placeholder secrets | [CONFIGURATION_REFERENCE.md](CONFIGURATION_REFERENCE.md) |
 | `E2E_DEV_SEED_ENABLED must be false when APP_ENV is production` | Mis-set env in prod template | `core/config.py` validator |
-| Import errors for `apps.backend.wailearning_backend` | Running Python from wrong cwd or broken venv | [REPOSITORY_STRUCTURE.md](REPOSITORY_STRUCTURE.md) |
+| Import errors for `apps.backend.courseeval_backend` | Running Python from wrong cwd or broken venv | [REPOSITORY_STRUCTURE.md](REPOSITORY_STRUCTURE.md) |
 
 ---
 

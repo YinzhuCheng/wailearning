@@ -6,13 +6,13 @@
 # (typical apt install on Debian/Ubuntu). Safe to re-run (idempotent).
 #
 # After this, either export TEST_DATABASE_URL (see printed line) or run pytest with:
-#   WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/
+#   COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/
 #
 set -euo pipefail
 
-DB_NAME="${WAILEARNING_PYTEST_DB_NAME:-wailearning_pytest_all}"
-ROLE_NAME="${WAILEARNING_PYTEST_DB_ROLE:-wailearning_test}"
-ROLE_PASS="${WAILEARNING_PYTEST_DB_PASSWORD:-wailearning_test}"
+DB_NAME="${COURSEEVAL_PYTEST_DB_NAME:-courseeval_pytest_all}"
+ROLE_NAME="${COURSEEVAL_PYTEST_DB_ROLE:-courseeval_test}"
+ROLE_PASS="${COURSEEVAL_PYTEST_DB_PASSWORD:-courseeval_test}"
 
 sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL
 DO \$\$
@@ -36,4 +36,4 @@ SQL
 echo "OK. Use:"
 echo "  export TEST_DATABASE_URL='postgresql+psycopg2://${ROLE_NAME}:${ROLE_PASS}@127.0.0.1:5432/${DB_NAME}'"
 echo "Or auto-detect in pytest (Linux/macOS):"
-echo "  WAILEARNING_AUTO_PG_TESTS=1 python3 -m pytest tests/"
+echo "  COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/"

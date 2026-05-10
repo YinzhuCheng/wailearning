@@ -90,7 +90,7 @@ The repository should not rely on a stray text file containing credentials. The 
 
 ## LLM default preset bootstrap (`DEFAULT_LLM_API_KEY`)
 
-Schema repair (`ensure_schema_updates()` in `apps/backend/wailearning_backend/bootstrap.py`) ensures the built-in `"gpt-5.4"` LLM endpoint preset row exists once per database.
+Schema repair (`ensure_schema_updates()` in `apps/backend/courseeval_backend/bootstrap.py`) ensures the built-in `"gpt-5.4"` LLM endpoint preset row exists once per database.
 
 - **Without `DEFAULT_LLM_API_KEY`**: the row is created with `validation_status=pending`, validation steps marked skipped, and `is_active=false`. This avoids claiming remote connectivity was proven offline.
 - **With `DEFAULT_LLM_API_KEY` set during first insert**: the bootstrap issues live HTTP checks for **text and vision** paths. Vision validation uploads the same conceptual payload as an administrator validating with a logo image: a **bundled minimal PNG** bytes payload encoded as a `data:image/png;base64,...` URL. Only an all-green check run marks the preset validated and active.

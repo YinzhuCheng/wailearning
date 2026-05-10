@@ -2,8 +2,8 @@
   <div class="login-container">
     <div class="login-header">
       <div class="logo">🎓</div>
-      <h1>家长端口</h1>
-      <p class="subtitle">BIMSA-CLASS 班级管理系统</p>
+      <h1>Parent Portal</h1>
+      <p class="subtitle">CourseEval</p>
     </div>
 
     <el-card class="login-card">

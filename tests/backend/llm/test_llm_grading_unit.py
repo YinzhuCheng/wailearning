@@ -8,8 +8,8 @@ import httpx
 import pytest
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
-from apps.backend.wailearning_backend.llm_grading import (
+from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
+from apps.backend.courseeval_backend.llm_grading import (
     VISION_TEST_IMAGE_DATA_URL,
     MaterialBlock,
     _build_chat_completion_url,
@@ -22,7 +22,7 @@ from apps.backend.wailearning_backend.llm_grading import (
     validate_endpoint_connectivity,
 )
 import base64
-from apps.backend.wailearning_backend.db.models import CourseLLMConfig, Homework, HomeworkAttempt, Subject
+from apps.backend.courseeval_backend.db.models import CourseLLMConfig, Homework, HomeworkAttempt, Subject
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +30,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -64,7 +64,7 @@ def test_parse_scoring_json_markdown_fence():
 
 
 def test_parse_scoring_json_out_of_range():
-    from apps.backend.wailearning_backend.llm_grading import RetryableLLMError
+    from apps.backend.courseeval_backend.llm_grading import RetryableLLMError
 
     hw = Homework(max_score=10, grade_precision="integer")
     with pytest.raises(RetryableLLMError) as exc:
@@ -122,7 +122,7 @@ def test_precheck_quota_allows_unlimited():
     try:
         cfg = CourseLLMConfig(subject_id=1, is_enabled=True)
         with mock.patch(
-            "apps.backend.wailearning_backend.domains.llm.quota.resolve_effective_daily_student_tokens",
+            "apps.backend.courseeval_backend.domains.llm.quota.resolve_effective_daily_student_tokens",
             return_value=2_000_000_000,
         ):
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=999_999_999)
@@ -141,9 +141,9 @@ def test_precheck_quota_blocks_student_when_mocked_usage_high():
             is_enabled=True,
         )
         with mock.patch(
-            "apps.backend.wailearning_backend.domains.llm.quota.get_used_tokens_for_scope", return_value=95
+            "apps.backend.courseeval_backend.domains.llm.quota.get_used_tokens_for_scope", return_value=95
         ), mock.patch(
-            "apps.backend.wailearning_backend.domains.llm.quota.resolve_effective_daily_student_tokens", return_value=100
+            "apps.backend.courseeval_backend.domains.llm.quota.resolve_effective_daily_student_tokens", return_value=100
         ):
             ok, code = precheck_quota(db, cfg, student_id=1, subject_id=1, estimated_tokens=10)
         assert ok is False

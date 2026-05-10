@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_DIR="${REPO_DIR:-$(cd "${SCRIPT_DIR}/../.." && pwd -P)}"
 
-APP_URL="${APP_URL:-https://wailearning.xyz}"
+APP_URL="${APP_URL:-https://courseeval.example}"
 API_HEALTH_URL="${API_HEALTH_URL:-${APP_URL}/health}"
 # When the public check is ${APP_URL}/health, also hit Nginx /api/health (unless overridden).
 PUBLIC_API_HEALTH_URL="${PUBLIC_API_HEALTH_URL:-}"
@@ -12,7 +12,7 @@ _app_url="${APP_URL%/}"
 if [[ -z "${PUBLIC_API_HEALTH_URL}" && "${API_HEALTH_URL}" == "${_app_url}/health" ]]; then
   PUBLIC_API_HEALTH_URL="${_app_url}/api/health"
 fi
-BACKEND_SERVICE="${BACKEND_SERVICE:-ddclass-backend}"
+BACKEND_SERVICE="${BACKEND_SERVICE:-courseeval-backend}"
 LOCAL_HEALTH_RETRIES="${LOCAL_HEALTH_RETRIES:-30}"
 LOCAL_HEALTH_INTERVAL_SECONDS="${LOCAL_HEALTH_INTERVAL_SECONDS:-1}"
 

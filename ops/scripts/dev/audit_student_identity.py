@@ -49,8 +49,8 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     add_repo_root_to_path()
 
-    from apps.backend.wailearning_backend.db.database import SessionLocal
-    from apps.backend.wailearning_backend.domains.roster.audit import audit_student_identity
+    from apps.backend.courseeval_backend.db.database import SessionLocal
+    from apps.backend.courseeval_backend.domains.roster.audit import audit_student_identity
 
     db = SessionLocal()
     try:

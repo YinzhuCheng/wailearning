@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Single place to document **environment variables and runtime settings** backed by `apps/backend/wailearning_backend/core/config.py` (Pydantic `Settings`). Values load from the process environment and optional `.env` file (`env_file=".env"`, UTF-8).
+Single place to document **environment variables and runtime settings** backed by `apps/backend/courseeval_backend/core/config.py` (Pydantic `Settings`). Values load from the process environment and optional `.env` file (`env_file=".env"`, UTF-8).
 
 If code adds a field to `Settings`, update this document in the same change set.
 
@@ -10,7 +10,7 @@ If code adds a field to `Settings`, update this document in the same change set.
 
 ## Reading settings in code
 
-- Import `settings` from `apps.backend.wailearning_backend.core.config`.
+- Import `settings` from `apps.backend.courseeval_backend.core.config`.
 - Do not duplicate defaults in unrelated modules; extend `Settings` instead.
 
 ---
@@ -19,7 +19,7 @@ If code adds a field to `Settings`, update this document in the same change set.
 
 | Variable | Default / notes | Role |
 |----------|-----------------|------|
-| `APP_NAME` | `BIMSA-CLASS API` | Display/name metadata for the backend application. |
+| `APP_NAME` | `CourseEval API` | Display/name metadata for the backend application. |
 | `APP_ENV` | `development` | Drives production checks; `production`/`prod` triggers strong secret validation. |
 | `DEBUG` | `false` | FastAPI/debug tooling flag. |
 | `HOST` | `127.0.0.1` | Bind address for documented uvicorn examples. |

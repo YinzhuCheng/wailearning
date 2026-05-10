@@ -8,7 +8,7 @@
 
 ## 1. Role enumeration (`UserRole`)
 
-**Source:** `apps/backend/wailearning_backend/db/models.py` (`UserRole` enum).
+**Source:** `apps/backend/courseeval_backend/db/models.py` (`UserRole` enum).
 
 | Stored value (`users.role`) | Typical meaning |
 |----------------------------|-----------------|

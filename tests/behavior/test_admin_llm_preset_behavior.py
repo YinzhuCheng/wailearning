@@ -8,8 +8,8 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.db.models import LLMEndpointPreset
+from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.db.models import LLMEndpointPreset
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
@@ -56,10 +56,10 @@ def test_p3_validate_with_image_then_teacher_sees_preset_in_list(client: TestCli
         b"\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x18\xdd\x8d\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
     )
     with mock.patch(
-        "apps.backend.wailearning_backend.api.routers.llm_settings.validate_text_connectivity",
+        "apps.backend.courseeval_backend.api.routers.llm_settings.validate_text_connectivity",
         return_value=(True, "ok"),
     ), mock.patch(
-        "apps.backend.wailearning_backend.api.routers.llm_settings.validate_vision_connectivity",
+        "apps.backend.courseeval_backend.api.routers.llm_settings.validate_vision_connectivity",
         return_value=(True, "vision ok"),
     ):
         r_val = client.post(

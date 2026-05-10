@@ -20,10 +20,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
-from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import (
+from apps.backend.courseeval_backend.core.auth import get_password_hash
+from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
+from apps.backend.courseeval_backend.main import app
+from apps.backend.courseeval_backend.db.models import (
     Class,
     CourseEnrollment,
     CourseEnrollmentBlock,
@@ -43,7 +43,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     _ensure_admin()
@@ -365,7 +365,7 @@ def test_student_user_class_set_but_no_roster_row(client: TestClient):
 
 def test_duplicate_student_no_across_classes_prepare_does_not_move_roster(client: TestClient):
     """同一学号两条花名册不同班：prepare 不得误迁（ambiguous，不移动）。"""
-    from apps.backend.wailearning_backend.domains.courses.access import (
+    from apps.backend.courseeval_backend.domains.courses.access import (
         prepare_student_course_context,
     )
 
@@ -640,7 +640,7 @@ def test_batch_import_students_existing_course_all_get_enrollment(client: TestCl
 def test_public_register_student_immediately_gets_roster_enrollments_and_quota(client: TestClient, monkeypatch):
     """公开注册学生后，无需再补学生管理花名册，也应直接获得本班课程上下文与额度视图。"""
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
-    from apps.backend.wailearning_backend.core.config import settings
+    from apps.backend.courseeval_backend.core.config import settings
 
     monkeypatch.setattr(settings, "ALLOW_PUBLIC_REGISTRATION", True)
 

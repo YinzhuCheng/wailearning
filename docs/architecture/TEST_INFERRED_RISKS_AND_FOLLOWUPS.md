@@ -7,7 +7,7 @@ This document records repository weaknesses, suspected bugs, and structural risk
 Historical note:
 
 - items that discuss the old root-level `app/` compatibility package are now historical,
-- the repository has since completed the namespace migration to `apps.backend.wailearning_backend`,
+- the repository has since completed the namespace migration to `apps.backend.courseeval_backend`,
 - those entries remain here because they explain why the migration was necessary.
 
 A later full-suite repair pass (May 2026, Linux/CI-style execution with Playwright + pytest) added a few more items: same schema as below—`Observed`, `Strong inference`, or `Structural risk`—and the same disclaimer: not a confirmed defect list.
@@ -75,7 +75,7 @@ This scenario is exactly the kind of state-convergence bug that real users hit i
 
 ### Evidence
 
-The backend still depends on `uvicorn apps.backend.wailearning_backend.main:app`, but importing the process entrypoint module is not a cheap or purely declarative step:
+The backend still depends on `uvicorn apps.backend.courseeval_backend.main:app`, but importing the process entrypoint module is not a cheap or purely declarative step:
 
 - database setup behavior exists at module import time
 - startup-related code paths are tightly coupled to database availability
@@ -139,7 +139,7 @@ This increases the chance of:
 
 ### Evidence
 
-`apps/backend/wailearning_backend/llm_grading.py` is very large and sits in the middle of:
+`apps/backend/courseeval_backend/llm_grading.py` is very large and sits in the middle of:
 
 - grading execution
 - attachment handling integration
@@ -282,7 +282,7 @@ Large route files often indicate mixed concerns:
 
 ### Evidence
 
-At the time of the original refactor pass, the repository used a thin root-level `app` package shim to preserve existing import paths while the real backend package lived under `apps/backend/wailearning_backend/`.
+At the time of the original refactor pass, the repository used a thin root-level `app` package shim to preserve existing import paths while the real backend package lived under `apps/backend/courseeval_backend/`.
 
 ### Interpretation
 
@@ -298,7 +298,7 @@ If left indefinitely, it would have kept:
 
 ### Follow-up
 
-- completed in May 2026 by migrating to the canonical namespace `apps.backend.wailearning_backend`
+- completed in May 2026 by migrating to the canonical namespace `apps.backend.courseeval_backend`
 - keep this note as a reminder not to recreate compatibility import layers casually
 
 ## P3: documentation and script path correctness will drift unless enforced
@@ -487,7 +487,7 @@ This section records **residual risk and suspected sources** after a long full-s
 
 ### May 2026 (second pass): pagination contract drift across routers
 
-**Concern:** Admin and teacher UIs call many list endpoints with `page_size`. FastAPI validates **`le=` per route**; some lists allow **1000** (e.g. students) while others cap at **100** (logs, points exchanges/records, parent portals, homework submission grids). **Source:** independent `Query` defaults in `apps/backend/wailearning_backend/api/routers/*.py`.
+**Concern:** Admin and teacher UIs call many list endpoints with `page_size`. FastAPI validates **`le=` per route**; some lists allow **1000** (e.g. students) while others cap at **100** (logs, points exchanges/records, parent portals, homework submission grids). **Source:** independent `Query` defaults in `apps/backend/courseeval_backend/api/routers/*.py`.
 
 **Risk:** A future UI change that sends a **single global `page_size`** (or copies a constant from one screen) could yield **422** on some pages while others silently cap or error — hard to spot without route-level contract tests.
 

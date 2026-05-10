@@ -5,10 +5,10 @@ import uuid
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
-from apps.backend.wailearning_backend.domains.courses.access import (
+from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.main import app
+from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Gender, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.domains.courses.access import (
     prepare_student_course_context,
 )
 
@@ -71,7 +71,7 @@ def test_student_course_list_only_enrolled_subjects():
         db.close()
 
     client = TestClient(app)
-    from apps.backend.wailearning_backend.core.auth import create_access_token
+    from apps.backend.courseeval_backend.core.auth import create_access_token
 
     token = create_access_token(data={"sub": user.username})
     res = client.get("/api/subjects", headers={"Authorization": f"Bearer {token}"})

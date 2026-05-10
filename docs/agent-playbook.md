@@ -24,7 +24,7 @@ Skipping step 1 causes agents to “fix” generated artifacts or propose forbid
 
 | If the task mentions… | Start reading… |
 |----------------------|----------------|
-| HTTP shape / validation | `apps/backend/wailearning_backend/api/schemas.py` + relevant `api/routers/*.py` |
+| HTTP shape / validation | `apps/backend/courseeval_backend/api/schemas.py` + relevant `api/routers/*.py` |
 | Who can call an API | Router dependency (`get_current_user`) + `domains/courses/access.py` + `core/permissions.py` |
 | Persistence | `db/models.py` + `bootstrap.py` (`ensure_schema_updates` if new columns) |
 | Homework scoring display | `llm_grading.py` (`resolve_effective_submission_score`, `refresh_submission_summary`) + `api/routers/homework.py` serializers |
@@ -35,7 +35,7 @@ Skipping step 1 causes agents to “fix” generated artifacts or propose forbid
 ### 2.2 Trace forward from UI click (homework example)
 
 1. Vue view calls API helper in `apps/web/admin/src/api/index.js` (axios instance `baseURL` = `/api` or `VITE_API_BASE_URL`).
-2. FastAPI router under `apps/backend/wailearning_backend/api/routers/homework.py`.
+2. FastAPI router under `apps/backend/courseeval_backend/api/routers/homework.py`.
 3. Dependencies: DB session + current user; `ensure_course_access_http` or equivalent when course-scoped.
 4. Services / domains: homework domain modules under `domains/homework/` (when logic extracted from router).
 5. Tables: `homeworks`, `homework_submissions`, `homework_attempts`, `homework_score_candidates`, `homework_grading_tasks` — see [`reference/DATA_MODEL_ESSENTIALS.md`](reference/DATA_MODEL_ESSENTIALS.md).
@@ -52,7 +52,7 @@ Skipping step 1 causes agents to “fix” generated artifacts or propose forbid
 
 ## 3. Backend bootstrap ordering (do not reorder blindly)
 
-**Source:** `apps/backend/wailearning_backend/main.py` `lifespan`.
+**Source:** `apps/backend/courseeval_backend/main.py` `lifespan`.
 
 Approximate sequence:
 
@@ -84,7 +84,7 @@ Approximate sequence:
 
 **Source:** `tests/conftest.py` (loaded automatically).
 
-- Sets `DATABASE_URL` to `TEST_DATABASE_URL` **or** auto-selected Postgres when `WAILEARNING_AUTO_PG_TESTS` matches **or** fallback SQLite file `<repo>/.pytest_tmp/test.sqlite`.
+- Sets `DATABASE_URL` to `TEST_DATABASE_URL` **or** auto-selected Postgres when `COURSEEVAL_AUTO_PG_TESTS` matches **or** fallback SQLite file `<repo>/.pytest_tmp/test.sqlite`.
 - Forces `INIT_DEFAULT_DATA=false` during tests.
 - Disables LLM worker by default (`TEST_ENABLE_LLM_GRADING_WORKER` overrides).
 
@@ -128,7 +128,7 @@ Agents must not invent certainty.
 
 ## 7. Anti-patterns (repeat offenders)
 
-1. **Adding “shortcut” imports** that bypass `apps.backend.wailearning_backend` namespace.
+1. **Adding “shortcut” imports** that bypass `apps.backend.courseeval_backend` namespace.
 2. **Changing demo seed** without updating `tests/backend/e2e_dev/test_demo_course_seed.py` expectations.
 3. **Editing only admin UI** for permission-sensitive actions — backend must reject unauthorized API calls.
 4. **Assuming Redis/Celery** — LLM grading uses DB-backed tasks + in-process worker (`llm_grading.py`).

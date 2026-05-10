@@ -15,7 +15,7 @@ __dd_git_sync_to_remote_branch() {
   local git_remote="$1"
   local branch="$2"
   local reset_worktree="${3:-0}"
-  local backup_dir="${4:-/opt/dd-class/backups}"
+  local backup_dir="${4:-/opt/courseeval/backups}"
   local git_final_clean="${5:-1}"
   local auto_stash="${GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT:-1}"
 

@@ -151,15 +151,15 @@
       "triggers": {
         "paths": [
           "tests/backend/learning_notes/test_learning_notes_api.py",
-          "apps/backend/wailearning_backend/api/routers/learning_notes.py",
-          "apps/backend/wailearning_backend/api/routers/attendance.py",
-          "apps/backend/wailearning_backend/api/schemas.py",
-          "apps/backend/wailearning_backend/db/models.py",
+          "apps/backend/courseeval_backend/api/routers/learning_notes.py",
+          "apps/backend/courseeval_backend/api/routers/attendance.py",
+          "apps/backend/courseeval_backend/api/schemas.py",
+          "apps/backend/courseeval_backend/db/models.py",
           "tests/scenarios/llm_scenario.py"
         ],
         "globs": [
-          "apps/backend/wailearning_backend/api/routers/learning_notes.py",
-          "apps/backend/wailearning_backend/api/routers/attendance.py"
+          "apps/backend/courseeval_backend/api/routers/learning_notes.py",
+          "apps/backend/courseeval_backend/api/routers/attendance.py"
         ]
       },
       "ledger_id": "backend.learning_notes.api",
@@ -247,8 +247,8 @@
           "apps/web/admin/src/views/MyCourses.vue",
           "apps/web/admin/src/views/StudentCourseHome.vue",
           "apps/web/admin/src/router/index.js",
-          "apps/backend/wailearning_backend/api/routers/learning_notes.py",
-          "apps/backend/wailearning_backend/api/routers/attendance.py"
+          "apps/backend/courseeval_backend/api/routers/learning_notes.py",
+          "apps/backend/courseeval_backend/api/routers/attendance.py"
         ],
         "globs": [
           "apps/web/admin/src/**/LearningNotes*.vue",
@@ -275,13 +275,13 @@
         "paths": [
           "tests/backend/llm/test_llm_attachment_formats.py",
           "tests/fixtures/llm_rar/",
-          "apps/backend/wailearning_backend/domains/llm/attachments.py",
-          "apps/backend/wailearning_backend/attachment_compliance.py",
-          "apps/backend/wailearning_backend/llm_grading.py"
+          "apps/backend/courseeval_backend/domains/llm/attachments.py",
+          "apps/backend/courseeval_backend/attachment_compliance.py",
+          "apps/backend/courseeval_backend/llm_grading.py"
         ],
         "globs": [
           "tests/fixtures/llm_rar/**",
-          "apps/backend/wailearning_backend/domains/llm/**"
+          "apps/backend/courseeval_backend/domains/llm/**"
         ]
       },
       "ledger_id": "backend.llm.attachment_formats",
@@ -304,15 +304,15 @@
         "paths": [
           "tests/backend/roster/test_student_user_api_roster_sync.py",
           "tests/backend/roster/test_admin_student_roster_from_users.py",
-          "apps/backend/wailearning_backend/api/routers/users.py",
-          "apps/backend/wailearning_backend/api/routers/students.py",
-          "apps/backend/wailearning_backend/api/schemas.py",
-          "apps/backend/wailearning_backend/domains/roster/reconciliation.py",
-          "apps/backend/wailearning_backend/domains/roster/sync.py",
-          "apps/backend/wailearning_backend/domains/roster/identity.py"
+          "apps/backend/courseeval_backend/api/routers/users.py",
+          "apps/backend/courseeval_backend/api/routers/students.py",
+          "apps/backend/courseeval_backend/api/schemas.py",
+          "apps/backend/courseeval_backend/domains/roster/reconciliation.py",
+          "apps/backend/courseeval_backend/domains/roster/sync.py",
+          "apps/backend/courseeval_backend/domains/roster/identity.py"
         ],
         "globs": [
-          "apps/backend/wailearning_backend/domains/roster/**",
+          "apps/backend/courseeval_backend/domains/roster/**",
           "tests/backend/roster/test_student_user_api_roster_sync.py",
           "tests/backend/roster/test_admin_student_roster_from_users.py"
         ]
@@ -336,13 +336,13 @@
       "triggers": {
         "paths": [
           "tests/backend/roster/test_student_identity_audit.py",
-          "apps/backend/wailearning_backend/domains/roster/audit.py",
-          "apps/backend/wailearning_backend/domains/roster/identity.py",
+          "apps/backend/courseeval_backend/domains/roster/audit.py",
+          "apps/backend/courseeval_backend/domains/roster/identity.py",
           "ops/scripts/dev/audit_student_identity.py",
-          "apps/backend/wailearning_backend/db/models.py"
+          "apps/backend/courseeval_backend/db/models.py"
         ],
         "globs": [
-          "apps/backend/wailearning_backend/domains/roster/**",
+          "apps/backend/courseeval_backend/domains/roster/**",
           "tests/backend/roster/**"
         ]
       },
@@ -365,17 +365,17 @@
       "triggers": {
         "paths": [
           "tests/backend/roster/test_student_identity_repair.py",
-          "apps/backend/wailearning_backend/domains/roster/repair.py",
-          "apps/backend/wailearning_backend/domains/roster/audit.py",
-          "apps/backend/wailearning_backend/domains/roster/identity.py",
-          "apps/backend/wailearning_backend/domains/roster/sync.py",
-          "apps/backend/wailearning_backend/domains/roster/reconciliation.py",
+          "apps/backend/courseeval_backend/domains/roster/repair.py",
+          "apps/backend/courseeval_backend/domains/roster/audit.py",
+          "apps/backend/courseeval_backend/domains/roster/identity.py",
+          "apps/backend/courseeval_backend/domains/roster/sync.py",
+          "apps/backend/courseeval_backend/domains/roster/reconciliation.py",
           "ops/scripts/dev/repair_student_identity.py",
-          "apps/backend/wailearning_backend/domains/seed/demo.py",
-          "apps/backend/wailearning_backend/bootstrap.py"
+          "apps/backend/courseeval_backend/domains/seed/demo.py",
+          "apps/backend/courseeval_backend/bootstrap.py"
         ],
         "globs": [
-          "apps/backend/wailearning_backend/domains/roster/**",
+          "apps/backend/courseeval_backend/domains/roster/**",
           "tests/backend/roster/test_student_identity_repair.py"
         ]
       },
@@ -398,15 +398,15 @@
       "triggers": {
         "paths": [
           "tests/backend/courses/test_student_course_roster_behavior.py",
-          "apps/backend/wailearning_backend/domains/courses/access.py",
-          "apps/backend/wailearning_backend/domains/roster/reconciliation.py",
-          "apps/backend/wailearning_backend/api/routers/auth.py",
-          "apps/backend/wailearning_backend/api/routers/homework.py",
-          "apps/backend/wailearning_backend/api/routers/subjects.py"
+          "apps/backend/courseeval_backend/domains/courses/access.py",
+          "apps/backend/courseeval_backend/domains/roster/reconciliation.py",
+          "apps/backend/courseeval_backend/api/routers/auth.py",
+          "apps/backend/courseeval_backend/api/routers/homework.py",
+          "apps/backend/courseeval_backend/api/routers/subjects.py"
         ],
         "globs": [
-          "apps/backend/wailearning_backend/domains/courses/**",
-          "apps/backend/wailearning_backend/domains/roster/**",
+          "apps/backend/courseeval_backend/domains/courses/**",
+          "apps/backend/courseeval_backend/domains/roster/**",
           "tests/backend/courses/**",
           "tests/backend/roster/**"
         ]
@@ -430,15 +430,15 @@
       "triggers": {
         "paths": [
           "tests/backend/homework/test_homework_llm_grading.py",
-          "apps/backend/wailearning_backend/api/routers/homework.py",
-          "apps/backend/wailearning_backend/llm_grading.py",
-          "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
-          "apps/backend/wailearning_backend/api/schemas.py",
-          "apps/backend/wailearning_backend/db/models.py"
+          "apps/backend/courseeval_backend/api/routers/homework.py",
+          "apps/backend/courseeval_backend/llm_grading.py",
+          "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
+          "apps/backend/courseeval_backend/api/schemas.py",
+          "apps/backend/courseeval_backend/db/models.py"
         ],
         "globs": [
           "tests/backend/homework/**",
-          "apps/backend/wailearning_backend/domains/homework/**"
+          "apps/backend/courseeval_backend/domains/homework/**"
         ]
       },
       "ledger_id": null,
@@ -460,14 +460,14 @@
       "triggers": {
         "paths": [
           "tests/behavior/test_notification_sync_api_edge_behavior.py",
-          "apps/backend/wailearning_backend/api/routers/notifications.py",
-          "apps/backend/wailearning_backend/domains/courses/access.py",
-          "apps/backend/wailearning_backend/api/schemas.py",
+          "apps/backend/courseeval_backend/api/routers/notifications.py",
+          "apps/backend/courseeval_backend/domains/courses/access.py",
+          "apps/backend/courseeval_backend/api/schemas.py",
           "apps/web/admin/src/views/Layout.vue",
           "apps/web/admin/src/views/Notifications.vue"
         ],
         "globs": [
-          "apps/backend/wailearning_backend/domains/notifications/**"
+          "apps/backend/courseeval_backend/domains/notifications/**"
         ]
       },
       "ledger_id": null,
@@ -489,14 +489,14 @@
       "triggers": {
         "paths": [
           "tests/behavior/test_homework_lifecycle_llm_behavior.py",
-          "apps/backend/wailearning_backend/api/routers/homework.py",
-          "apps/backend/wailearning_backend/llm_grading.py",
-          "apps/backend/wailearning_backend/domains/llm/quota.py",
-          "apps/backend/wailearning_backend/api/routers/llm_settings.py"
+          "apps/backend/courseeval_backend/api/routers/homework.py",
+          "apps/backend/courseeval_backend/llm_grading.py",
+          "apps/backend/courseeval_backend/domains/llm/quota.py",
+          "apps/backend/courseeval_backend/api/routers/llm_settings.py"
         ],
         "globs": [
-          "apps/backend/wailearning_backend/domains/homework/**",
-          "apps/backend/wailearning_backend/domains/llm/**"
+          "apps/backend/courseeval_backend/domains/homework/**",
+          "apps/backend/courseeval_backend/domains/llm/**"
         ]
       },
       "ledger_id": null,
@@ -518,15 +518,15 @@
       "triggers": {
         "paths": [
           "tests/behavior/test_course_roster_homework_edge_behavior.py",
-          "apps/backend/wailearning_backend/domains/courses/access.py",
-          "apps/backend/wailearning_backend/domains/roster/reconciliation.py",
-          "apps/backend/wailearning_backend/api/routers/homework.py",
-          "apps/backend/wailearning_backend/api/routers/subjects.py",
-          "apps/backend/wailearning_backend/api/routers/students.py"
+          "apps/backend/courseeval_backend/domains/courses/access.py",
+          "apps/backend/courseeval_backend/domains/roster/reconciliation.py",
+          "apps/backend/courseeval_backend/api/routers/homework.py",
+          "apps/backend/courseeval_backend/api/routers/subjects.py",
+          "apps/backend/courseeval_backend/api/routers/students.py"
         ],
         "globs": [
-          "apps/backend/wailearning_backend/domains/courses/**",
-          "apps/backend/wailearning_backend/domains/roster/**"
+          "apps/backend/courseeval_backend/domains/courses/**",
+          "apps/backend/courseeval_backend/domains/roster/**"
         ]
       },
       "ledger_id": null,
@@ -548,15 +548,15 @@
       "triggers": {
         "paths": [
           "tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py",
-          "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
-          "apps/backend/wailearning_backend/api/routers/discussions.py",
-          "apps/backend/wailearning_backend/api/routers/homework.py",
-          "apps/backend/wailearning_backend/api/routers/materials.py",
-          "apps/backend/wailearning_backend/api/routers/students.py",
-          "apps/backend/wailearning_backend/api/routers/notifications.py",
-          "apps/backend/wailearning_backend/api/routers/llm_settings.py",
-          "apps/backend/wailearning_backend/main.py",
-          "apps/backend/wailearning_backend/core/config.py",
+          "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
+          "apps/backend/courseeval_backend/api/routers/discussions.py",
+          "apps/backend/courseeval_backend/api/routers/homework.py",
+          "apps/backend/courseeval_backend/api/routers/materials.py",
+          "apps/backend/courseeval_backend/api/routers/students.py",
+          "apps/backend/courseeval_backend/api/routers/notifications.py",
+          "apps/backend/courseeval_backend/api/routers/llm_settings.py",
+          "apps/backend/courseeval_backend/main.py",
+          "apps/backend/courseeval_backend/core/config.py",
           "tests/e2e/web-admin/e2e-seed-headers.cjs",
           "tests/e2e/web-admin/fixtures.cjs",
           "tests/e2e/web-admin/global-setup.cjs"
@@ -586,14 +586,14 @@
       "triggers": {
         "paths": [
           "tests/security/test_security_regression.py",
-          "apps/backend/wailearning_backend/core/auth.py",
-          "apps/backend/wailearning_backend/api/routers/classes.py",
-          "apps/backend/wailearning_backend/domains/courses/access.py",
-          "apps/backend/wailearning_backend/api/routers/auth.py",
-          "apps/backend/wailearning_backend/api/routers/users.py",
-          "apps/backend/wailearning_backend/api/routers/homework.py",
-          "apps/backend/wailearning_backend/api/routers/llm_settings.py",
-          "apps/backend/wailearning_backend/api/routers/notifications.py"
+          "apps/backend/courseeval_backend/core/auth.py",
+          "apps/backend/courseeval_backend/api/routers/classes.py",
+          "apps/backend/courseeval_backend/domains/courses/access.py",
+          "apps/backend/courseeval_backend/api/routers/auth.py",
+          "apps/backend/courseeval_backend/api/routers/users.py",
+          "apps/backend/courseeval_backend/api/routers/homework.py",
+          "apps/backend/courseeval_backend/api/routers/llm_settings.py",
+          "apps/backend/courseeval_backend/api/routers/notifications.py"
         ],
         "globs": [
           "tests/security/**"
@@ -621,9 +621,9 @@
           "tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js",
           "apps/web/admin/src/components/CourseDiscussionPanel.vue",
           "apps/web/admin/src/views/MyCourses.vue",
-          "apps/backend/wailearning_backend/api/routers/discussions.py",
-          "apps/backend/wailearning_backend/llm_discussion.py",
-          "apps/backend/wailearning_backend/api/routers/subjects.py"
+          "apps/backend/courseeval_backend/api/routers/discussions.py",
+          "apps/backend/courseeval_backend/llm_discussion.py",
+          "apps/backend/courseeval_backend/api/routers/subjects.py"
         ],
         "globs": [
           "apps/web/admin/src/**/Discussion*.vue"
@@ -653,8 +653,8 @@
           "apps/web/admin/src/views/HomeworkSubmissions.vue",
           "apps/web/admin/src/views/HomeworkSubmissionReview.vue",
           "apps/web/admin/src/views/HomeworkSubmission.vue",
-          "apps/backend/wailearning_backend/api/routers/homework.py",
-          "apps/backend/wailearning_backend/llm_grading.py"
+          "apps/backend/courseeval_backend/api/routers/homework.py",
+          "apps/backend/courseeval_backend/llm_grading.py"
         ],
         "globs": [
           "apps/web/admin/src/**/Homework*.vue"
@@ -683,8 +683,8 @@
           "apps/web/admin/src/views/Login.vue",
           "apps/web/admin/src/views/Layout.vue",
           "apps/web/admin/src/router/index.js",
-          "apps/backend/wailearning_backend/api/routers/auth.py",
-          "apps/backend/wailearning_backend/api/routers/e2e_dev.py"
+          "apps/backend/courseeval_backend/api/routers/auth.py",
+          "apps/backend/courseeval_backend/api/routers/e2e_dev.py"
         ],
         "globs": [
           "apps/web/admin/src/api/**"
@@ -813,8 +813,8 @@
       "triggers": {
         "paths": [
           "tests/e2e/web-admin/e2e-agent-followup-batch.spec.js",
-          "apps/backend/wailearning_backend/api/routers/settings.py",
-          "apps/backend/wailearning_backend/api/routers/subjects.py",
+          "apps/backend/courseeval_backend/api/routers/settings.py",
+          "apps/backend/courseeval_backend/api/routers/subjects.py",
           "apps/web/admin/src/views/MyCourses.vue"
         ],
         "globs": []
@@ -839,10 +839,10 @@
       "triggers": {
         "paths": [
           "tests/e2e/web-admin/e2e-agent-hazard-tier-15.spec.js",
-          "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
-          "apps/backend/wailearning_backend/api/routers/llm_settings.py",
-          "apps/backend/wailearning_backend/api/routers/notifications.py",
-          "apps/backend/wailearning_backend/api/routers/auth.py"
+          "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
+          "apps/backend/courseeval_backend/api/routers/llm_settings.py",
+          "apps/backend/courseeval_backend/api/routers/notifications.py",
+          "apps/backend/courseeval_backend/api/routers/auth.py"
         ],
         "globs": []
       },
@@ -869,7 +869,7 @@
           "docs/development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
           "apps/web/admin/src/views/Layout.vue",
           "apps/web/admin/src/views/Notifications.vue",
-          "apps/backend/wailearning_backend/api/routers/notifications.py"
+          "apps/backend/courseeval_backend/api/routers/notifications.py"
         ],
         "globs": []
       },
@@ -896,8 +896,8 @@
           "docs/development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
           "apps/web/admin/src/views/Layout.vue",
           "apps/web/admin/src/views/Notifications.vue",
-          "apps/backend/wailearning_backend/api/routers/notifications.py",
-          "apps/backend/wailearning_backend/domains/courses/access.py"
+          "apps/backend/courseeval_backend/api/routers/notifications.py",
+          "apps/backend/courseeval_backend/domains/courses/access.py"
         ],
         "globs": []
       },
@@ -925,12 +925,12 @@
           "tests/conftest.py",
           "tests/db_reset.py",
           "ops/scripts/dev/provision_postgres_pytest.sh",
-          "apps/backend/wailearning_backend/db/models.py",
-          "apps/backend/wailearning_backend/bootstrap.py"
+          "apps/backend/courseeval_backend/db/models.py",
+          "apps/backend/courseeval_backend/bootstrap.py"
         ],
         "globs": [
           "tests/postgres/**",
-          "apps/backend/wailearning_backend/db/**"
+          "apps/backend/courseeval_backend/db/**"
         ]
       },
       "ledger_id": "postgres.pytest.package",
@@ -958,15 +958,15 @@
           "tests/db_reset.py",
           "pytest.ini",
           "requirements.txt",
-          "apps/backend/wailearning_backend/main.py",
-          "apps/backend/wailearning_backend/bootstrap.py",
-          "apps/backend/wailearning_backend/db/models.py"
+          "apps/backend/courseeval_backend/main.py",
+          "apps/backend/courseeval_backend/bootstrap.py",
+          "apps/backend/courseeval_backend/db/models.py"
         ],
         "globs": [
           "tests/behavior/**",
           "tests/security/**",
           "tests/postgres/**",
-          "apps/backend/wailearning_backend/db/**"
+          "apps/backend/courseeval_backend/db/**"
         ]
       },
       "ledger_id": "full.pytest.postgres",
@@ -993,8 +993,8 @@
           "tests/e2e/web-admin/global-setup.cjs",
           "tests/e2e/web-admin/fixtures.cjs",
           "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs",
-          "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
-          "apps/backend/wailearning_backend/main.py",
+          "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
+          "apps/backend/courseeval_backend/main.py",
           "apps/web/admin/src/router/index.js"
         ],
         "globs": [
@@ -1012,13 +1012,13 @@
       "id": "backend-high-blast-radius",
       "description": "Shared backend entrypoint, auth, config, bootstrap, schema, and E2E-dev gate changes require broad backend context beyond one targeted suite.",
       "if_any_path_matches": [
-        "apps/backend/wailearning_backend/main.py",
-        "apps/backend/wailearning_backend/bootstrap.py",
-        "apps/backend/wailearning_backend/core/config.py",
-        "apps/backend/wailearning_backend/core/auth.py",
-        "apps/backend/wailearning_backend/api/routers/classes.py",
-        "apps/backend/wailearning_backend/api/routers/e2e_dev.py",
-        "apps/backend/wailearning_backend/db/models.py",
+        "apps/backend/courseeval_backend/main.py",
+        "apps/backend/courseeval_backend/bootstrap.py",
+        "apps/backend/courseeval_backend/core/config.py",
+        "apps/backend/courseeval_backend/core/auth.py",
+        "apps/backend/courseeval_backend/api/routers/classes.py",
+        "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
+        "apps/backend/courseeval_backend/db/models.py",
         "tests/conftest.py",
         "tests/db_reset.py",
         "pytest.ini",
@@ -1042,8 +1042,8 @@
       "id": "backend-source-conservative",
       "description": "Unmapped backend source changes should receive at least full PostgreSQL pytest consideration because the selector lacks a precise dependency graph.",
       "if_any_unmatched_path_matches": [
-        "apps/backend/wailearning_backend/*.py",
-        "apps/backend/wailearning_backend/**/*.py"
+        "apps/backend/courseeval_backend/*.py",
+        "apps/backend/courseeval_backend/**/*.py"
       ],
       "recommend": ["full.pytest.postgres"]
     },

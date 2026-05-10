@@ -12,10 +12,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import Base, SessionLocal, engine
-from apps.backend.wailearning_backend.main import app
-from apps.backend.wailearning_backend.db.models import Class, CourseMaterial, Homework, Subject, User, UserRole
+from apps.backend.courseeval_backend.core.auth import get_password_hash
+from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
+from apps.backend.courseeval_backend.main import app
+from apps.backend.courseeval_backend.db.models import Class, CourseMaterial, Homework, Subject, User, UserRole
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 from tests.scenarios.material_flow import get_uncategorized_id, headers_for, make_subject_with_roster, ui_create_material
 
@@ -25,7 +25,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -112,7 +112,7 @@ def test_behavior_discussion_teacher_invoke_llm_allowed_200(client: TestClient, 
     ctx = make_grading_course_with_homework()
     te = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
     monkeypatch.setattr(
-        "apps.backend.wailearning_backend.api.routers.discussions.threading.Thread",
+        "apps.backend.courseeval_backend.api.routers.discussions.threading.Thread",
         lambda *args, **kwargs: type("NoopThread", (), {"start": lambda self: None})(),
     )
     base = {

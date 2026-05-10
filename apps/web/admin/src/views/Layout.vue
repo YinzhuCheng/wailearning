@@ -21,7 +21,7 @@
             <el-icon :size="22"><School /></el-icon>
           </div>
           <div v-if="!isCollapsed" class="logo-texts">
-            <h2>{{ userStore.systemSettings?.system_name || 'BIMSA-CLASS' }}</h2>
+            <h2>{{ userStore.systemSettings?.system_name || 'CourseEval' }}</h2>
             <p>大学教学管理系统</p>
           </div>
         </div>
@@ -232,7 +232,7 @@
       </el-main>
 
       <el-footer class="footer">
-        {{ userStore.systemSettings?.copyright || '(c) 2026 BIMSA-CLASS' }}
+        {{ userStore.systemSettings?.copyright || '(c) 2026 CourseEval' }}
       </el-footer>
     </el-container>
   </el-container>
@@ -279,7 +279,7 @@ const userStore = useUserStore()
 
 const adminHomePath = '/students'
 const mobileBreakpoint = 768
-const desktopSidebarStorageKey = 'wailearning-admin-sidebar-state'
+const desktopSidebarStorageKey = 'courseeval-admin-sidebar-state'
 const isCollapsed = ref(false)
 const isSidebarHidden = ref(false)
 const isMobile = ref(false)

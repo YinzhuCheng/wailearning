@@ -450,7 +450,7 @@ const extraChapterId = ref(null)
 const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
 const expandedStorageKey = computed(() =>
-  selectedCourse.value?.id ? `wailearning-materials-expanded-chapters:${selectedCourse.value.id}` : null
+  selectedCourse.value?.id ? `courseeval-materials-expanded-chapters:${selectedCourse.value.id}` : null
 )
 
 const isCourseInstructor = computed(() => {

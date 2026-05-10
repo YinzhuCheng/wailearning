@@ -3,7 +3,7 @@
  * without manual reload after new notices are published or created server-side.
  */
 
-const BROADCAST_CHANNEL = 'ddclass-notification-sync'
+const BROADCAST_CHANNEL = 'courseeval-notification-sync'
 /** Header and list refresh interval; keep low enough for timely toasts without hammering `/api/notifications/sync-status`. */
 export const DEFAULT_NOTIFICATION_POLL_INTERVAL_MS = 12_000
 const DEFAULT_POLL_INTERVAL_MS = DEFAULT_NOTIFICATION_POLL_INTERVAL_MS

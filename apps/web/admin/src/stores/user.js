@@ -163,7 +163,7 @@ export const useUserStore = defineStore('user', () => {
       const normalizedSettings = normalizeSystemSettings(data)
       systemSettings.value = normalizedSettings
       localStorage.setItem('system_settings', JSON.stringify(normalizedSettings))
-      document.title = normalizedSettings?.system_name || 'BIMSA-CLASS 管理端'
+      document.title = normalizedSettings?.system_name || 'CourseEval Admin'
     } catch (error) {
       console.error('Failed to fetch system settings', error)
     }

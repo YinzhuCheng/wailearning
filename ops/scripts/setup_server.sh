@@ -6,9 +6,9 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-APP_ROOT="${APP_ROOT:-/opt/dd-class}"
-WEB_ROOT="${WEB_ROOT:-/var/www/wailearning.xyz}"
-APP_USER="${APP_USER:-ddclass}"
+APP_ROOT="${APP_ROOT:-/opt/courseeval}"
+WEB_ROOT="${WEB_ROOT:-/var/www/courseeval.example}"
+APP_USER="${APP_USER:-courseeval}"
 
 export DEBIAN_FRONTEND=noninteractive
 

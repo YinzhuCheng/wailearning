@@ -1,4 +1,4 @@
-# AGENTS — LLM coding agent handbook (BIMSA-CLASS)
+# AGENTS — LLM coding agent handbook (CourseEval)
 
 This file is the **fast entry** for automated coding agents (Cursor, Codex, Claude Code, cloud agents). Humans may skim it; agents should read it **before** editing code.
 
@@ -10,7 +10,7 @@ The authoritative documentation hub remains [`docs/README.md`](docs/README.md). 
 
 1. **Code is the source of truth.** If docs disagree with code, update docs (unless explicitly tasked to fix product bugs).
 2. **Read task-scoped docs before editing.** Gate lists live in [`docs/README.md`](docs/README.md) §5 (“Mandatory reading by task”).
-3. **Package boundary:** canonical backend import root is `apps.backend.wailearning_backend`. Do not add alternate top-level packages or rename this casually — see [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md).
+3. **Package boundary:** canonical backend import root is `apps.backend.courseeval_backend`. Do not add alternate top-level packages or rename this casually — see [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md).
 4. **Never weaken `/api/e2e/dev/*` gates** without reading [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md) E2E sections — production still mounts the router but handlers return **404** unless `expose_e2e_dev_api()` is true (`main.py`).
 5. **Frontend hiding ≠ authorization.** Every sensitive mutation must be enforced in FastAPI routers / domain helpers (`domains/courses/access.py`, homework routers, etc.).
 6. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
@@ -152,11 +152,11 @@ current task.
 
 ## 5. High-risk modules (touch with a trace plan)
 
-1. **`apps/backend/wailearning_backend/llm_grading.py`** — quotas, retries, attachment extraction, effective-score aggregation, worker orchestration.
-2. **`apps/backend/wailearning_backend/domains/courses/access.py`** — enrollment visibility; impacts every role.
-3. **`apps/backend/wailearning_backend/bootstrap.py` + `main.py` lifespan** — ordering: `create_all` → `ensure_schema_updates` → roster normalization → optional demo seed → worker start.
-4. **`apps/backend/wailearning_backend/api/routers/e2e_dev.py`** — destructive endpoints; dual-gate auth when configured.
-5. **`apps/backend/wailearning_backend/api/routers/homework.py`** — permission matrix + serialization redaction for students vs staff.
+1. **`apps/backend/courseeval_backend/llm_grading.py`** — quotas, retries, attachment extraction, effective-score aggregation, worker orchestration.
+2. **`apps/backend/courseeval_backend/domains/courses/access.py`** — enrollment visibility; impacts every role.
+3. **`apps/backend/courseeval_backend/bootstrap.py` + `main.py` lifespan** — ordering: `create_all` → `ensure_schema_updates` → roster normalization → optional demo seed → worker start.
+4. **`apps/backend/courseeval_backend/api/routers/e2e_dev.py`** — destructive endpoints; dual-gate auth when configured.
+5. **`apps/backend/courseeval_backend/api/routers/homework.py`** — permission matrix + serialization redaction for students vs staff.
 
 ---
 
@@ -202,7 +202,7 @@ under "Diff-based validation workflow".
 
 ## 8. Naming honesty (avoid agent confusion)
 
-- **Product name:** README branding is **BIMSA-CLASS**; npm package may still show legacy names (`ddclass-frontend`) — treat as historical artifact unless migrating build metadata.
+- **Product name:** README branding is **CourseEval**; npm package may still show legacy names (`courseeval-admin`) — treat as historical artifact unless migrating build metadata.
 - **`Subject` vs “course”:** ORM model `Subject` maps to user-facing “course” in much of the UI and `/api/subjects` routes.
 
 ---

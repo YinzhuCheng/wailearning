@@ -1,20 +1,3 @@
-const legacyThemeAliases = {
-  default: 'professional-blue',
-  primary: 'professional-blue',
-  blue: 'professional-blue',
-  ocean: 'professional-blue',
-  green: 'fresh-green',
-  teal: 'fresh-green',
-  emerald: 'fresh-green',
-  warm: 'warm-amber',
-  orange: 'warm-amber',
-  amber: 'warm-amber',
-  grayscale: 'minimal-gray',
-  neutral: 'minimal-gray',
-  gray: 'minimal-gray',
-  grey: 'minimal-gray'
-}
-
 const colorScales = {
   blue: {
     50: '#eff6ff',
@@ -289,8 +272,7 @@ export function resolveAppearancePreset(value) {
   }
 
   const normalized = value.trim().toLowerCase().replace(/[_\s]+/g, '-')
-  const key = legacyThemeAliases[normalized] || normalized
-  return appearancePresets.find(item => item.key === key) || appearancePresets[0]
+  return appearancePresets.find(item => item.key === normalized) || appearancePresets[0]
 }
 
 export function normalizeAppearanceConfig(value = {}) {

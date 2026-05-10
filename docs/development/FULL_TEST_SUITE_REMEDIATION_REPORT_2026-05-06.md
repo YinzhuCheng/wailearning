@@ -9,7 +9,7 @@
 
 ### 项目类型与技术栈
 
-- **单体教学管理平台 BIMSA-CLASS**：FastAPI + SQLAlchemy + Pydantic v2；生产参考 PostgreSQL；本地/pytest 默认 SQLite。
+- **单体教学管理平台 CourseEval**：FastAPI + SQLAlchemy + Pydantic v2；生产参考 PostgreSQL；本地/pytest 默认 SQLite。
 - **管理端 SPA**：Vue 3 + Vite + Element Plus + Pinia；**无 Vitest/Jest** — 前端自动化以 **Playwright** 为主（`apps/web/admin/package.json` 仅有 `test:e2e`）。
 - **家长端 SPA**：独立 `apps/web/parent`（本回合未单独跑 E2E）。
 - **异步任务**：LLM 批改 **`HomeworkGradingTask`** + **进程内 worker**（非 Redis/Celery）；见 `docs/architecture/ASYNC_TASKS_AND_WORKERS.md`。
@@ -18,8 +18,8 @@
 
 | 区域 | 路径 |
 |------|------|
-| 应用装配 / 生命周期 | `apps/backend/wailearning_backend/main.py`, `bootstrap.py` |
-| HTTP 路由 | `apps/backend/wailearning_backend/api/routers/` |
+| 应用装配 / 生命周期 | `apps/backend/courseeval_backend/main.py`, `bootstrap.py` |
+| HTTP 路由 | `apps/backend/courseeval_backend/api/routers/` |
 | 领域逻辑 | `domains/courses/`, `domains/homework/`, `domains/llm/`, `domains/roster/`, … |
 | ORM | `db/models.py`，DDL 修补 `bootstrap.ensure_schema_updates()` |
 | 权限 | `core/permissions.py` + 路由内 `ensure_course_access_http` 等 |

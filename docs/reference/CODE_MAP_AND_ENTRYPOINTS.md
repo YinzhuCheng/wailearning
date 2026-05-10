@@ -2,7 +2,7 @@
 
 **Purpose:** File-level orientation for agents — **what exists and where**, aligned to the **current tree** (not aspirational architecture).
 
-**Naming:** Product branding uses **BIMSA-CLASS**; legacy strings (`dd-class`, `wailearning`) may appear in ops paths — treat as historical unless migrating.
+**Naming:** Product branding uses **CourseEval**; legacy strings (`dd-class`, `wailearning`) may appear in ops paths — treat as historical unless migrating.
 
 ---
 
@@ -18,7 +18,7 @@
 | [`tests/conftest.py`](../../tests/conftest.py) | **Critical:** sets `DATABASE_URL`, disables demo seed during pytest, worker defaults |
 | [`ops/`](../../ops/) | nginx, systemd, CI YAML (`ops/ci/*.yml`), deploy shell scripts |
 | [`tests/devtools/`](../../tests/devtools/) | Test-tree maintenance scripts (not collected by pytest); start at [`tests/devtools/README.md`](../../tests/devtools/README.md) |
-| [`apps/backend/wailearning_backend/`](../../apps/backend/wailearning_backend/) | Canonical FastAPI package |
+| [`apps/backend/courseeval_backend/`](../../apps/backend/courseeval_backend/) | Canonical FastAPI package |
 | [`apps/web/admin/`](../../apps/web/admin/) | Admin SPA + Playwright |
 | [`apps/web/parent/`](../../apps/web/parent/) | Parent SPA |
 
@@ -28,27 +28,27 @@
 
 | File | Responsibility |
 |------|------------------|
-| [`main.py`](../../apps/backend/wailearning_backend/main.py) | FastAPI app; middleware; **router includes**; `/health`; Bing wallpaper helper `/api/bing-background`; lifespan startup |
-| [`core/config.py`](../../apps/backend/wailearning_backend/core/config.py) | `pydantic-settings` `Settings`; env parsing; production validators (`expose_e2e_dev_api`) |
-| [`core/auth.py`](../../apps/backend/wailearning_backend/core/auth.py) | Password hashing, JWT creation/decoding |
-| [`core/permissions.py`](../../apps/backend/wailearning_backend/core/permissions.py) | Role booleans (`is_admin`, `is_teacher`, …) — coarse helpers |
-| [`bootstrap.py`](../../apps/backend/wailearning_backend/bootstrap.py) | `ensure_schema_updates()` compatibility DDL; demo LLM preset seed; homework backfills |
-| [`db/database.py`](../../apps/backend/wailearning_backend/db/database.py) | `engine`, `SessionLocal`, `Base` declarative |
-| [`db/models.py`](../../apps/backend/wailearning_backend/db/models.py) | SQLAlchemy ORM models (large) |
-| [`api/schemas.py`](../../apps/backend/wailearning_backend/api/schemas.py) | Pydantic request/response models |
-| [`api/routers/*.py`](../../apps/backend/wailearning_backend/api/routers/) | HTTP routers (see §3) |
-| [`llm_grading.py`](../../apps/backend/wailearning_backend/llm_grading.py) | Grading orchestration, **in-process worker manager**, effective score aggregation |
-| [`llm_discussion.py`](../../apps/backend/wailearning_backend/llm_discussion.py) | Course discussion assistant context assembly |
-| [`attachments.py`](../../apps/backend/wailearning_backend/attachments.py) | Upload directory prep; attachment reference checks |
-| [`domains/courses/access.py`](../../apps/backend/wailearning_backend/domains/courses/access.py) | Course visibility queries, enrollment sync, `ensure_course_access_http` |
-| [`domains/seed/demo.py`](../../apps/backend/wailearning_backend/domains/seed/demo.py) | `seed_demo_course_bundle` — demo teachers/students/courses/homework |
-| [`services/logging.py`](../../apps/backend/wailearning_backend/services/logging.py) | `LogService` — persists login and actions to `operation_logs` |
+| [`main.py`](../../apps/backend/courseeval_backend/main.py) | FastAPI app; middleware; **router includes**; `/health`; Bing wallpaper helper `/api/bing-background`; lifespan startup |
+| [`core/config.py`](../../apps/backend/courseeval_backend/core/config.py) | `pydantic-settings` `Settings`; env parsing; production validators (`expose_e2e_dev_api`) |
+| [`core/auth.py`](../../apps/backend/courseeval_backend/core/auth.py) | Password hashing, JWT creation/decoding |
+| [`core/permissions.py`](../../apps/backend/courseeval_backend/core/permissions.py) | Role booleans (`is_admin`, `is_teacher`, …) — coarse helpers |
+| [`bootstrap.py`](../../apps/backend/courseeval_backend/bootstrap.py) | `ensure_schema_updates()` compatibility DDL; demo LLM preset seed; homework backfills |
+| [`db/database.py`](../../apps/backend/courseeval_backend/db/database.py) | `engine`, `SessionLocal`, `Base` declarative |
+| [`db/models.py`](../../apps/backend/courseeval_backend/db/models.py) | SQLAlchemy ORM models (large) |
+| [`api/schemas.py`](../../apps/backend/courseeval_backend/api/schemas.py) | Pydantic request/response models |
+| [`api/routers/*.py`](../../apps/backend/courseeval_backend/api/routers/) | HTTP routers (see §3) |
+| [`llm_grading.py`](../../apps/backend/courseeval_backend/llm_grading.py) | Grading orchestration, **in-process worker manager**, effective score aggregation |
+| [`llm_discussion.py`](../../apps/backend/courseeval_backend/llm_discussion.py) | Course discussion assistant context assembly |
+| [`attachments.py`](../../apps/backend/courseeval_backend/attachments.py) | Upload directory prep; attachment reference checks |
+| [`domains/courses/access.py`](../../apps/backend/courseeval_backend/domains/courses/access.py) | Course visibility queries, enrollment sync, `ensure_course_access_http` |
+| [`domains/seed/demo.py`](../../apps/backend/courseeval_backend/domains/seed/demo.py) | `seed_demo_course_bundle` — demo teachers/students/courses/homework |
+| [`services/logging.py`](../../apps/backend/courseeval_backend/services/logging.py) | `LogService` — persists login and actions to `operation_logs` |
 
 ---
 
 ## 3. HTTP routers (actual includes in `main.py`)
 
-Routers live under `apps/backend/wailearning_backend/api/routers/`.
+Routers live under `apps/backend/courseeval_backend/api/routers/`.
 
 | Module | Typical prefix / notes |
 |--------|-------------------------|
@@ -127,8 +127,8 @@ Detail: [`product/PARENT_PORTAL.md`](../product/PARENT_PORTAL.md).
 | Path | Role |
 |------|------|
 | [`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml) | Reference CI: `python3 -m pytest -q` |
-| [`ops/systemd/ddclass-backend.service`](../../ops/systemd/ddclass-backend.service) | systemd unit template |
-| [`ops/nginx/wailearning.xyz.conf`](../../ops/nginx/wailearning.xyz.conf) | Example nginx |
+| [`ops/systemd/courseeval-backend.service`](../../ops/systemd/courseeval-backend.service) | systemd unit template |
+| [`ops/nginx/courseeval.example.conf`](../../ops/nginx/courseeval.example.conf) | Example nginx |
 | [`ops/scripts/deploy_backend.sh`](../../ops/scripts/deploy_backend.sh) | Deploy helper |
 | [`ops/scripts/dev/repo_line_health.py`](../../ops/scripts/dev/repo_line_health.py) | Repository line-count health metrics: documentation, tests, primary source, and supporting categories |
 

@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from apps.backend.wailearning_backend.llm_grading import (
+from apps.backend.courseeval_backend.llm_grading import (
     _classify_and_extract,
     _walk_rar_bytes,
     _walk_zip_bytes,
 )
-from apps.backend.wailearning_backend.domains.llm.attachments import _rar_extractor_tool_path
+from apps.backend.courseeval_backend.domains.llm.attachments import _rar_extractor_tool_path
 
 _FIXTURE_RAR_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "llm_rar"
 

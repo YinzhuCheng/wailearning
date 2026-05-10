@@ -7,13 +7,13 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-APP_ROOT="${APP_ROOT:-/opt/dd-class}"
+APP_ROOT="${APP_ROOT:-/opt/courseeval}"
 SOURCE_DIR="${SOURCE_DIR:-${APP_ROOT}/source}"
 VENV_DIR="${VENV_DIR:-${APP_ROOT}/venv}"
 SHARED_DIR="${SHARED_DIR:-${APP_ROOT}/shared}"
 ENV_FILE="${ENV_FILE:-${SHARED_DIR}/.env.production}"
-APP_USER="${APP_USER:-ddclass}"
-SERVICE_FILE="/etc/systemd/system/ddclass-backend.service"
+APP_USER="${APP_USER:-courseeval}"
+SERVICE_FILE="/etc/systemd/system/courseeval-backend.service"
 PYTHON_BIN="${PYTHON_BIN:-}"
 SHARED_UPLOADS_DIR="${SHARED_DIR}/uploads"
 
@@ -23,12 +23,6 @@ if ! id -u "${APP_USER}" >/dev/null 2>&1; then
 fi
 
 install -d -m 0755 "${APP_ROOT}" "${SHARED_DIR}" "${SHARED_UPLOADS_DIR}" "${SHARED_UPLOADS_DIR}/attachments"
-
-for legacy_uploads_dir in "${REPO_ROOT}/uploads" "${SOURCE_DIR}/uploads"; do
-  if [[ -d "${legacy_uploads_dir}" ]]; then
-    rsync -a "${legacy_uploads_dir}/" "${SHARED_UPLOADS_DIR}/"
-  fi
-done
 
 if [[ "${REPO_ROOT}" != "${SOURCE_DIR}" ]]; then
   install -d -m 0755 "${SOURCE_DIR}"
@@ -80,11 +74,11 @@ echo "Using Python interpreter: ${PYTHON_BIN}"
 "${VENV_DIR}/bin/pip" install --upgrade pip wheel
 "${VENV_DIR}/bin/pip" install -r "${SOURCE_DIR}/requirements.txt"
 
-install -m 0644 "${SOURCE_DIR}/ops/systemd/ddclass-backend.service" "${SERVICE_FILE}"
+install -m 0644 "${SOURCE_DIR}/ops/systemd/courseeval-backend.service" "${SERVICE_FILE}"
 
 chown -R "${APP_USER}:${APP_USER}" "${APP_ROOT}"
 
 systemctl daemon-reload
-systemctl enable ddclass-backend.service
-systemctl restart ddclass-backend.service
-systemctl --no-pager --full status ddclass-backend.service || true
+systemctl enable courseeval-backend.service
+systemctl restart courseeval-backend.service
+systemctl --no-pager --full status courseeval-backend.service || true

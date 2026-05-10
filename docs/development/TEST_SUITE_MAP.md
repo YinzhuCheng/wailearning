@@ -25,7 +25,7 @@ backlog, use
   tests/
     backend/                  focused backend pytest modules grouped by domain
     behavior/                 high-level multi-actor and workflow pytest suites
-    postgres/                 PostgreSQL-only guards (skip unless Postgres: TEST_DATABASE_URL or WAILEARNING_AUTO_PG_TESTS=1 after provision script)
+    postgres/                 PostgreSQL-only guards (skip unless Postgres: TEST_DATABASE_URL or COURSEEVAL_AUTO_PG_TESTS=1 after provision script)
     security/                 API authorization / abuse-edge regression (roles, tokens)
     e2e/web-admin/            Playwright browser coverage for the admin SPA
     frontend/                 lightweight frontend Node tests without backend/browser startup
@@ -363,7 +363,7 @@ Operational notes for agents authoring similar specs live under **â€œPitfall 50â
 
 ### `tests/postgres/`
 
-Small pytest package gated by dialect: when the effective engine is **not** PostgreSQL, tests **skip** at module level (set `TEST_DATABASE_URL`, or on Linux/macOS after `ops/scripts/dev/provision_postgres_pytest.sh` set **`WAILEARNING_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects the standard throwaway URL). Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/development/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).
+Small pytest package gated by dialect: when the effective engine is **not** PostgreSQL, tests **skip** at module level (set `TEST_DATABASE_URL`, or on Linux/macOS after `ops/scripts/dev/provision_postgres_pytest.sh` set **`COURSEEVAL_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects the standard throwaway URL). Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/development/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).
 
 Files:
 

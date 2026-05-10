@@ -10,7 +10,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield
@@ -18,14 +18,14 @@ def _reset_db():
 
 @pytest.fixture
 def client(_reset_db) -> TestClient:
-    from apps.backend.wailearning_backend.main import app
+    from apps.backend.courseeval_backend.main import app
 
     return TestClient(app)
 
 
 def test_public_register_rejects_nonexistent_class_id(client: TestClient, monkeypatch):
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
-    from apps.backend.wailearning_backend.core.config import settings
+    from apps.backend.courseeval_backend.core.config import settings
 
     monkeypatch.setattr(settings, "ALLOW_PUBLIC_REGISTRATION", True)
 
@@ -46,11 +46,11 @@ def test_public_register_rejects_nonexistent_class_id(client: TestClient, monkey
 def test_public_register_student_immediately_gets_bound_profile_and_quota_summary(client: TestClient, monkeypatch):
     import uuid
 
-    from apps.backend.wailearning_backend.db.database import SessionLocal
-    from apps.backend.wailearning_backend.db.models import Class, Student
+    from apps.backend.courseeval_backend.db.database import SessionLocal
+    from apps.backend.courseeval_backend.db.models import Class, Student
 
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
-    from apps.backend.wailearning_backend.core.config import settings
+    from apps.backend.courseeval_backend.core.config import settings
 
     monkeypatch.setattr(settings, "ALLOW_PUBLIC_REGISTRATION", True)
 
@@ -97,11 +97,11 @@ def test_public_register_student_immediately_gets_bound_profile_and_quota_summar
 def test_public_register_rejects_explicit_student_id_binding(client: TestClient, monkeypatch):
     import uuid
 
-    from apps.backend.wailearning_backend.db.database import SessionLocal
-    from apps.backend.wailearning_backend.db.models import Class, Gender, Student
+    from apps.backend.courseeval_backend.db.database import SessionLocal
+    from apps.backend.courseeval_backend.db.models import Class, Gender, Student
 
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
-    from apps.backend.wailearning_backend.core.config import settings
+    from apps.backend.courseeval_backend.core.config import settings
 
     monkeypatch.setattr(settings, "ALLOW_PUBLIC_REGISTRATION", True)
 

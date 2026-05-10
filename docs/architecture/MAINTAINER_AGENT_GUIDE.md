@@ -21,7 +21,7 @@ Fast orientation for humans and LLM agents editing this repository: **where to c
 
 | Concern | Primary locations |
 |---------|-------------------|
-| HTTP API contracts | `apps/backend/wailearning_backend/api/schemas.py`, `api/routers/*.py` |
+| HTTP API contracts | `apps/backend/courseeval_backend/api/schemas.py`, `api/routers/*.py` |
 | Auth / JWT | `core/auth.py`, `api/routers/auth.py` |
 | Permissions / course access | `domains/courses/access.py`, `core/permissions.py` |
 | Homework lifecycle | `api/routers/homework.py`, `domains/homework/` |
@@ -77,5 +77,5 @@ If you change:
 
 ## Historical / naming honesty
 
-- Package directory historically referenced as “wailearning” / “dd-class” in ops paths — deployment docs preserve server paths; code namespace is `apps.backend.wailearning_backend`.
+- Package directory historically referenced as “wailearning” / “dd-class” in ops paths — deployment docs preserve server paths; code namespace is `apps.backend.courseeval_backend`.
 - “Subject” in models often corresponds to user-facing “course” in UI copy — when debugging enrollment, grep both `Subject` and route `/api/subjects`.

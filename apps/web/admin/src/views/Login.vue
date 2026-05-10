@@ -106,11 +106,11 @@ const loading = ref(false)
 const bingBackground = ref('')
 
 const settings = ref({
-  system_name: 'BIMSA-CLASS 大学生教学管理系统',
+  system_name: 'CourseEval',
   system_logo: '',
-  system_intro: '面向大学生的教学管理系统',
+  system_intro: 'Teaching management platform',
   login_background: '',
-  copyright: '(c) 2026 BIMSA-CLASS',
+  copyright: '(c) 2026 CourseEval',
   use_bing_background: true
 })
 
@@ -194,7 +194,7 @@ const fetchSettings = async () => {
     const res = await apiPublic.get('/settings/public')
     const normalizedSettings = normalizeSystemSettings(res.data)
     settings.value = normalizedSettings
-    document.title = normalizedSettings?.system_name || 'BIMSA-CLASS 管理端'
+    document.title = normalizedSettings?.system_name || 'CourseEval Admin'
   } catch (error) {
     console.error('获取系统设置失败', error)
   }

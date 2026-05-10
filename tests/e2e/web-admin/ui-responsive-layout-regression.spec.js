@@ -12,7 +12,7 @@ const { loadE2eScenario, resetE2eScenario } = require('./fixtures.cjs')
 const { login } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
-const sidebarStateKey = 'wailearning-admin-sidebar-state'
+const sidebarStateKey = 'courseeval-admin-sidebar-state'
 
 async function expectNoPageHorizontalOverflow(page) {
   await expect

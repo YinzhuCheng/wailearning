@@ -13,7 +13,7 @@ It is written primarily for **LLM coding agents** and maintainers who need:
 
 This pass intentionally **does not** change:
 
-- the canonical Python import root `apps.backend.wailearning_backend`,
+- the canonical Python import root `apps.backend.courseeval_backend`,
 - HTTP routes, environment variable names, or database columns,
 - production deployment topology beyond documentation clarity,
 - backend package-internal decomposition (for example splitting `llm_grading.py` remains separate architectural work — see [STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)).
@@ -45,7 +45,7 @@ Collapsing test-local tooling into `tests/devtools/` reduces **surface area** wi
 
 ### Project type and stack
 
-- **Backend:** FastAPI application packaged as `apps/backend/wailearning_backend/` with explicit imports `apps.backend.wailearning_backend.*`.
+- **Backend:** FastAPI application packaged as `apps/backend/courseeval_backend/` with explicit imports `apps.backend.courseeval_backend.*`.
 - **Frontends:** Vue 3 + Vite SPAs — `apps/web/admin/` (staff/admin) and `apps/web/parent/` (parent portal).
 - **Tests:** `pytest` under `tests/backend`, `tests/behavior`, `tests/security`, `tests/postgres`; Playwright under `tests/e2e/web-admin/`.
 - **Ops:** Shell/systemd/nginx/CI YAML under `ops/`.
@@ -233,7 +233,7 @@ This subsection exists so agents do not reopen finished work by accident.
 **Explicitly out of scope for this same pass (defer to dedicated backend refactors):**
 
 - splitting `llm_grading.py`, `llm_discussion.py`, or `bootstrap.py` (high coupling; see [STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) §“Immediate recommendation after this pass”),
-- any change to the canonical import root `apps.backend.wailearning_backend`,
+- any change to the canonical import root `apps.backend.courseeval_backend`,
 - HTTP routes, environment variable names, and database columns.
 
 If you need to resume structural work, start a **new** task label rather than extending this closure section — it prevents ambiguous “half-done repo refactor” states for automation.

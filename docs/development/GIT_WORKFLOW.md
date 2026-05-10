@@ -32,7 +32,7 @@ git push -u origin feature/<short-name>
 ## Server-Side Deploy From Git
 
 ```bash
-cd /opt/dd-class/source
+cd /opt/courseeval/source
 sudo GIT_BRANCH=<branch> GIT_REMOTE=origin bash ops/scripts/redeploy.sh
 ```
 

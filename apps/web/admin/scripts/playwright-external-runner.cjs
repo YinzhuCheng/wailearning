@@ -129,7 +129,7 @@ async function main() {
     [
       '-m',
       'uvicorn',
-      'apps.backend.wailearning_backend.main:app',
+      'apps.backend.courseeval_backend.main:app',
       '--host',
       '127.0.0.1',
       '--port',

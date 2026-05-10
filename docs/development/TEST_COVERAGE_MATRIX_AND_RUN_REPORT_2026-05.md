@@ -8,7 +8,7 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 
 | Topic | Fact |
 |-------|------|
-| Backend framework | FastAPI + SQLAlchemy + Pydantic v2 (`apps/backend/wailearning_backend/`) |
+| Backend framework | FastAPI + SQLAlchemy + Pydantic v2 (`apps/backend/courseeval_backend/`) |
 | Primary pytest roots | `tests/backend/`, `tests/behavior/`, `tests/security/`, `tests/backend/e2e_dev/` |
 | Default DB under pytest | File-backed SQLite at `<repo-root>/.pytest_tmp/test.sqlite` unless `TEST_DATABASE_URL` overrides (`tests/conftest.py`). |
 | Schema bootstrap in tests | `tests/db_reset.reset_test_database_schema()` → imports **`db.models`** then `drop_all`/`create_all`; then `bootstrap.ensure_schema_updates()`. |
@@ -76,7 +76,7 @@ The items previously listed as “deferred for runtime” were executed in an ag
 | Former gap | Outcome |
 |------------|---------|
 | Full Playwright `npm run test:e2e` | **303 tests passed** (~14 minutes, managed uvicorn + Vite + Chromium). Log artifact pattern: `/tmp/playwright-full.log` (example path). |
-| Postgres-only suites (`tests/postgres/*`) | PostgreSQL server installed (`postgresql` apt package), cluster started via `pg_ctlcluster 16 main start` when `invoke-rc.d` blocked automatic start during package configure (**policy-rc.d** pattern in minimal containers). Database + role created using `bash ops/scripts/dev/provision_postgres_pytest.sh`. Full tree: `TEST_DATABASE_URL=postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all python3 -m pytest tests/ -q` → **466 passed, 0 skipped**. |
+| Postgres-only suites (`tests/postgres/*`) | PostgreSQL server installed (`postgresql` apt package), cluster started via `pg_ctlcluster 16 main start` when `invoke-rc.d` blocked automatic start during package configure (**policy-rc.d** pattern in minimal containers). Database + role created using `bash ops/scripts/dev/provision_postgres_pytest.sh`. Full tree: `TEST_DATABASE_URL=postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all python3 -m pytest tests/ -q` → **466 passed, 0 skipped**. |
 | `unrar` skips | `apt-get install unrar` — `tests/backend/llm/test_llm_attachment_formats.py` RAR walkers execute on both SQLite and Postgres passes. |
 | Vitest/Jest unit tests | Still **not declared** for admin SPA beyond Playwright — no change. |
 
@@ -118,7 +118,7 @@ pg_isready -h 127.0.0.1 -p 5432
 # Idempotent throwaway pytest database (see ops/scripts/dev/provision_postgres_pytest.sh)
 bash ops/scripts/dev/provision_postgres_pytest.sh
 
-export TEST_DATABASE_URL='postgresql+psycopg2://wailearning_test:wailearning_test@127.0.0.1:5432/wailearning_pytest_all'
+export TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all'
 python3 -m pytest tests/ -q
 
 unset TEST_DATABASE_URL

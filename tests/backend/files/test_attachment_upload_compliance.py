@@ -9,7 +9,7 @@ import fitz
 import pytest
 from fastapi.testclient import TestClient
 
-from apps.backend.wailearning_backend.main import app
+from apps.backend.courseeval_backend.main import app
 from tests.scenarios.llm_scenario import ensure_admin, login_api
 
 
@@ -18,7 +18,7 @@ def _reset_db():
     from tests.db_reset import reset_test_database_schema
 
     reset_test_database_schema()
-    from apps.backend.wailearning_backend.bootstrap import ensure_schema_updates
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
 
     ensure_schema_updates()
     yield

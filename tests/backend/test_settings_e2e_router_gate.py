@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from apps.backend.wailearning_backend.core.config import Settings
+from apps.backend.courseeval_backend.core.config import Settings
 
 
 def test_expose_e2e_dev_api_true_in_development_when_enabled() -> None:

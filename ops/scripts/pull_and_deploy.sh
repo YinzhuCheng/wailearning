@@ -20,10 +20,10 @@ BRANCH="${BRANCH:-${GIT_BRANCH:-main}}"
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 GIT_CLEAN="${GIT_CLEAN:-1}"
 GIT_RESET_WORKTREE_BEFORE_FETCH="${GIT_RESET_WORKTREE_BEFORE_FETCH:-0}"
-BACKUP_DIR="${BACKUP_DIR:-/opt/dd-class/backups}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/courseeval/backups}"
 SAFE_BACKUP_BEFORE_DEPLOY="${SAFE_BACKUP_BEFORE_DEPLOY:-0}"
-DB_NAME="${DB_NAME:-ddclass}"
-SHARED_DIR="${SHARED_DIR:-/opt/dd-class/shared}"
+DB_NAME="${DB_NAME:-courseeval}"
+SHARED_DIR="${SHARED_DIR:-/opt/courseeval/shared}"
 
 cd "${REPO_DIR}"
 

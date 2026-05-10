@@ -14,8 +14,8 @@ If you change router signatures, queue semantics, or worker startup, update this
 
 - **Admin SPA**: `apps/web/admin/` — Vue 3 + Element Plus; API calls go through `apps/web/admin/src/api/` helpers (axios) and typically hit `/api/*` via Vite dev proxy (`apps/web/admin/vite.config.js`: `VITE_PROXY_TARGET` defaults to `http://127.0.0.1:8001`).
 - **Parent SPA**: `apps/web/parent/` — separate build; dev server defaults to port **5174** (`apps/web/parent/vite.config.js`); same `/api` proxy pattern.
-- **Backend**: FastAPI app assembled in `apps/backend/wailearning_backend/main.py`; route modules under `apps/backend/wailearning_backend/api/routers/`; Pydantic contracts in `apps/backend/wailearning_backend/api/schemas.py`.
-- **Course access**: Most course-scoped routes call `ensure_course_access` / `ensure_course_access_http` in `apps/backend/wailearning_backend/domains/courses/access.py`. The `_http` variant maps `PermissionError` → **403** and `ValueError` → **404** for consistent API behavior.
+- **Backend**: FastAPI app assembled in `apps/backend/courseeval_backend/main.py`; route modules under `apps/backend/courseeval_backend/api/routers/`; Pydantic contracts in `apps/backend/courseeval_backend/api/schemas.py`.
+- **Course access**: Most course-scoped routes call `ensure_course_access` / `ensure_course_access_http` in `apps/backend/courseeval_backend/domains/courses/access.py`. The `_http` variant maps `PermissionError` → **403** and `ValueError` → **404** for consistent API behavior.
 
 ---
 
@@ -23,14 +23,14 @@ If you change router signatures, queue semantics, or worker startup, update this
 
 ### Entry
 
-- `POST /api/auth/login` — `apps/backend/wailearning_backend/api/routers/auth.py`
-- JWT dependency — `apps/backend/wailearning_backend/core/auth.py` (`get_current_user`, `get_current_active_user`, optional JWT for E2E gates)
+- `POST /api/auth/login` — `apps/backend/courseeval_backend/api/routers/auth.py`
+- JWT dependency — `apps/backend/courseeval_backend/core/auth.py` (`get_current_user`, `get_current_active_user`, optional JWT for E2E gates)
 
 ### Behavior (high level)
 
 1. Client sends credentials; router validates user and returns a JWT (`ACCESS_TOKEN_EXPIRE_MINUTES` from settings).
 2. Subsequent requests send `Authorization: Bearer <token>`.
-3. Role checks use string values stored on `users.role` aligned with `UserRole` enum — `apps/backend/wailearning_backend/db/models.py` (`admin`, `class_teacher`, `teacher`, `student`).
+3. Role checks use string values stored on `users.role` aligned with `UserRole` enum — `apps/backend/courseeval_backend/db/models.py` (`admin`, `class_teacher`, `teacher`, `student`).
 
 For **student** accounts, login also finalizes canonical learner context:
 
@@ -41,7 +41,7 @@ This is important because student quota APIs, homework submission, and discussio
 
 ### Related configuration
 
-- `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES` — `apps/backend/wailearning_backend/core/config.py`
+- `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES` — `apps/backend/courseeval_backend/core/config.py`
 
 ### Pitfalls
 
@@ -53,9 +53,9 @@ This is important because student quota APIs, homework submission, and discussio
 
 ### Entry (examples)
 
-- Subject listing and mutations — `apps/backend/wailearning_backend/api/routers/subjects.py`
+- Subject listing and mutations — `apps/backend/courseeval_backend/api/routers/subjects.py`
 - Student elective catalog / enroll / drop — same router (endpoints gated by `UserRole.STUDENT`)
-- Class-scoped administration — `apps/backend/wailearning_backend/api/routers/classes.py`, `students.py`, `users.py`
+- Class-scoped administration — `apps/backend/courseeval_backend/api/routers/classes.py`, `students.py`, `users.py`
 
 ### Domain logic
 
@@ -87,13 +87,13 @@ This is the highest-traffic “vertical slice” for the product.
 5. **Persistence**:
    - Upserts `HomeworkSubmission` summary row.
    - Inserts immutable `HomeworkAttempt` for each submission.
-6. **Auto grade enqueue**: if `homework.auto_grading_enabled`, calls `queue_grading_task(db, attempt, "new_submission")` — defined in `apps/backend/wailearning_backend/llm_grading.py`.
-7. **Summary refresh**: `refresh_submission_summary` recomputes denormalized fields on `HomeworkSubmission`. The displayed **「有效成绩」** (`review_score` / `review_comment`) is **not** necessarily tied only to `latest_attempt_id`: among attempts linked to the submission summary, only rows that are **on/before the homework due time** or have **`counts_toward_final_score == true`** participate; the winner is the maximum score after resolving teacher-vs-auto precedence **per attempt**, then taking the global max across those attempts. Tie-break favors higher score, then teacher source, then newer candidate timestamps. Implementation lives in `apps/backend/wailearning_backend/llm_grading.py` (`resolve_effective_submission_score`, `refresh_submission_summary`). The summary row still mirrors **latest** attempt body/attachments/`latest_task_*` fields for UX continuity while the score reflects the aggregate rule.
+6. **Auto grade enqueue**: if `homework.auto_grading_enabled`, calls `queue_grading_task(db, attempt, "new_submission")` — defined in `apps/backend/courseeval_backend/llm_grading.py`.
+7. **Summary refresh**: `refresh_submission_summary` recomputes denormalized fields on `HomeworkSubmission`. The displayed **「有效成绩」** (`review_score` / `review_comment`) is **not** necessarily tied only to `latest_attempt_id`: among attempts linked to the submission summary, only rows that are **on/before the homework due time** or have **`counts_toward_final_score == true`** participate; the winner is the maximum score after resolving teacher-vs-auto precedence **per attempt**, then taking the global max across those attempts. Tie-break favors higher score, then teacher source, then newer candidate timestamps. Implementation lives in `apps/backend/courseeval_backend/llm_grading.py` (`resolve_effective_submission_score`, `refresh_submission_summary`). The summary row still mirrors **latest** attempt body/attachments/`latest_task_*` fields for UX continuity while the score reflects the aggregate rule.
 8. **Commit** and response serialized via `_serialize_submission`.
 
 Code anchor for enqueue:
 
-```1059:1061:apps/backend/wailearning_backend/api/routers/homework.py
+```1059:1061:apps/backend/courseeval_backend/api/routers/homework.py
     if homework.auto_grading_enabled:
         queue_grading_task(db, attempt, "new_submission")
 ```

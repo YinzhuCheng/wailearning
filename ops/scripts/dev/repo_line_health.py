@@ -74,7 +74,7 @@ GENERATED_OR_LOCK_FILENAMES = {
 DOC_EXTENSIONS = {".md", ".rst", ".txt"}
 
 PRIMARY_SOURCE_PREFIXES = (
-    "apps/backend/wailearning_backend/",
+    "apps/backend/courseeval_backend/",
     "apps/web/admin/src/",
     "apps/web/parent/src/",
 )

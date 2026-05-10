@@ -2,7 +2,7 @@
 
 **Fact:** There is **no** Redis queue or Celery worker package in this repository for grading. Async work is modeled as **database rows** processed by an **in-process background thread** inside the API process.
 
-**Primary implementation:** `apps/backend/wailearning_backend/llm_grading.py`.
+**Primary implementation:** `apps/backend/courseeval_backend/llm_grading.py`.
 
 ---
 

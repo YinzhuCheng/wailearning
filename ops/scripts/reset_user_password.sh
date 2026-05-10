@@ -4,9 +4,9 @@ set -euo pipefail
 USERNAME="${1:-}"
 NEW_PASSWORD="${2:-}"
 
-REPO_DIR="${REPO_DIR:-/opt/dd-class/source}"
-VENV_DIR="${VENV_DIR:-/opt/dd-class/venv}"
-ENV_FILE="${ENV_FILE:-/opt/dd-class/shared/.env.production}"
+REPO_DIR="${REPO_DIR:-/opt/courseeval/source}"
+VENV_DIR="${VENV_DIR:-/opt/courseeval/venv}"
+ENV_FILE="${ENV_FILE:-/opt/courseeval/shared/.env.production}"
 
 if [[ -z "${USERNAME}" || -z "${NEW_PASSWORD}" ]]; then
   echo "Usage: bash ops/scripts/reset_user_password.sh <username> <new_password>"
@@ -32,9 +32,9 @@ cd "${REPO_DIR}"
 "${VENV_DIR}/bin/python" - "${USERNAME}" "${NEW_PASSWORD}" <<'PY'
 import sys
 
-from apps.backend.wailearning_backend.core.auth import get_password_hash
-from apps.backend.wailearning_backend.db.database import SessionLocal
-from apps.backend.wailearning_backend.db.models import User
+from apps.backend.courseeval_backend.core.auth import get_password_hash
+from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.db.models import User
 
 username = sys.argv[1]
 new_password = sys.argv[2]

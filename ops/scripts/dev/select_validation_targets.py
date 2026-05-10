@@ -11,7 +11,7 @@ Examples:
     python ops/scripts/dev/select_validation_targets.py --base origin/main
     python ops/scripts/dev/select_validation_targets.py --base origin/main --head HEAD --json
     python ops/scripts/dev/select_validation_targets.py --staged
-    python ops/scripts/dev/select_validation_targets.py --paths apps/backend/wailearning_backend/api/routers/learning_notes.py
+    python ops/scripts/dev/select_validation_targets.py --paths apps/backend/courseeval_backend/api/routers/learning_notes.py
 """
 
 from __future__ import annotations
@@ -259,8 +259,8 @@ def assess_history_status(item: Recommendation, changed_paths: list[ChangedPath]
 def is_product_source_path(path: str) -> bool:
     normalized = normalize_path(path)
     product_patterns = [
-        "apps/backend/wailearning_backend/*.py",
-        "apps/backend/wailearning_backend/**/*.py",
+        "apps/backend/courseeval_backend/*.py",
+        "apps/backend/courseeval_backend/**/*.py",
         "apps/web/admin/src/**",
         "apps/web/parent/src/**",
         "apps/web/admin/package.json",

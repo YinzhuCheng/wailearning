@@ -1,14 +1,5 @@
 <template>
   <div class="schedule-picker">
-    <el-alert
-      v-if="legacyValue"
-      type="warning"
-      :closable="false"
-      class="schedule-picker__legacy"
-    >
-      当前课程使用的是旧版手填时间：{{ legacyValue }}。保存时请重新勾选下面的周几与节次。
-    </el-alert>
-
     <div class="schedule-picker__toolbar">
       <div>
         <div class="schedule-picker__title">选择上课时间</div>
@@ -59,7 +50,6 @@ import {
   WEEK_DAYS,
   buildScheduleSlotKey,
   formatScheduleSlots,
-  isCanonicalScheduleValue,
   parseScheduleValue,
   serializeScheduleSlots
 } from '@/utils/courseSchedule'
@@ -82,14 +72,6 @@ watch(
   }
 )
 
-const legacyValue = computed(() => {
-  if (!props.modelValue) {
-    return ''
-  }
-
-  return isCanonicalScheduleValue(props.modelValue) ? '' : props.modelValue
-})
-
 const scheduleSummary = computed(() => formatScheduleSlots(selectedSlots.value))
 
 const isSelected = (dayValue, periodValue) =>
@@ -111,10 +93,6 @@ const toggleSlot = (dayValue, periodValue) => {
 <style scoped>
 .schedule-picker {
   width: 100%;
-}
-
-.schedule-picker__legacy {
-  margin-bottom: 12px;
 }
 
 .schedule-picker__toolbar {
