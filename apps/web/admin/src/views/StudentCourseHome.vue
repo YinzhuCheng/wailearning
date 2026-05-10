@@ -404,10 +404,9 @@ watch(selectedCourse, () => {
 .page-header {
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--sch-gap);
   margin-bottom: 28px;
-  text-align: center;
 }
 
 .page-title {

@@ -211,9 +211,8 @@ watch(
 
 .page-header {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   margin-bottom: 24px;
-  text-align: center;
 }
 
 .page-title {

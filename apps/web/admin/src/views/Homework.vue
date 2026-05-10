@@ -813,12 +813,10 @@ watch(selectedCourse, () => {
 
 .page-header {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
-  text-align: center;
 }
 
 .page-title {
@@ -835,10 +833,11 @@ watch(selectedCourse, () => {
 
 .header-actions {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 12px;
-  width: 100%;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .attachment-help,
@@ -976,7 +975,16 @@ watch(selectedCourse, () => {
 
 @media (max-width: 768px) {
   .page-header {
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    justify-content: stretch;
+  }
+
+  .header-actions :deep(.el-button) {
+    flex: 1 1 160px;
   }
 
   .homework-page {

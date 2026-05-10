@@ -884,20 +884,16 @@ watch(selectedCourse, async () => {
 }
 
 .page-header {
-  position: relative;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
-  text-align: center;
 }
 
 .back-button {
-  position: absolute;
-  left: 0;
-  top: 0;
+  order: 2;
+  flex: 0 0 auto;
 }
 
 .page-title {
@@ -914,11 +910,12 @@ watch(selectedCourse, async () => {
 
 .header-actions {
   display: flex;
+  order: 1;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 12px;
   min-width: 0;
-  width: 100%;
+  flex: 0 0 auto;
 }
 
 .stats-card {
@@ -997,12 +994,11 @@ watch(selectedCourse, async () => {
 
 .card-header-inline {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-direction: row;
   gap: 16px;
   flex-wrap: wrap;
-  text-align: center;
 }
 
 .weight-total {
@@ -1069,12 +1065,20 @@ watch(selectedCourse, async () => {
   }
 
   .page-header {
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .back-button {
-    position: static;
     align-self: flex-start;
+  }
+
+  .header-actions {
+    justify-content: stretch;
+  }
+
+  .header-actions :deep(.el-button) {
+    flex: 1 1 160px;
   }
 }
 </style>
