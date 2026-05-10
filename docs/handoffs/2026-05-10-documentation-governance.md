@@ -332,6 +332,44 @@ Passed after fixes:
     recommended only `static.encoding_text_tools` for the docs-only handoff
     diff.
   - `git diff --check` passed.
+  - Later first-round bootstrap/deploy follow-ups on the same branch tightened
+    repo-local operations governance further:
+    - `ops/scripts/post_deploy_check.sh` now defaults to local-only health and
+      performs public checks only when `APP_URL` / `API_HEALTH_URL` is set;
+    - `ops/scripts/setup_server.sh` now prints an executable first-run sequence
+      including `.env.production` editing, `psql -v ... -f ops/scripts/init_db.sql`,
+      `deploy_all.sh`, and `post_deploy_check.sh`;
+    - `ops/scripts/init_db.sql` now self-documents its required `psql -v`
+      variables and fails fast when they are missing;
+    - `ops/scripts/deploy_frontend.sh` and
+      `ops/scripts/deploy_parent_portal.sh` no longer restart
+      `courseeval-backend.service`, avoiding redundant backend restarts during
+      frontend-only deploys and full `deploy_all.sh` runs;
+    - `ops/scripts/example_safe_upgrade_aliyun.sh` now uses `npm ci` and the
+      shared `post_deploy_check.sh` instead of an ad hoc final `curl`;
+    - the tracked [`.env.production`](../../.env.production) template now
+      exposes `PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS`,
+      forgot-password throttles, and a blank `DEFAULT_LLM_API_KEY=` placeholder
+      so first-run production examples cover the current bootstrap/security
+      surface more honestly.
+  - Validation for those later deploy/bootstrap governance follow-ups remained
+    change-scoped and green:
+    - `python ops\scripts\dev\check_repository_normalization.py` passed;
+      `scanned=382 stale=0 missing_required_paths=0`.
+    - `python ops\scripts\dev\select_validation_targets.py --worktree` stayed
+      `acceptable` with only `static.encoding_text_tools` recommended.
+    - `python ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+      passed repeatedly; latest observed summaries included
+      `scanned=5 decode_errors=0 suspicious=0` and then
+      `scanned=3 decode_errors=0 suspicious=0` for the final
+      `.env.production` / ops-doc updates.
+    - `python -m unittest tests.backend.manual.test_validation_selector -v`
+      passed after adding the explicit `ops/scripts/init_db.sql` selector
+      mapping; `39 tests OK`.
+    - `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+      passed after the selector registry/test update.
+    - `git diff --check` passed for each batch aside from non-blocking working
+      copy line-ending warnings.
 - Configuration / bootstrap normalization follow-up:
   - `python -m py_compile apps\backend\courseeval_backend\main.py apps\backend\courseeval_backend\bootstrap.py tests\backend\integration\test_core_api_surface.py`
     passed.
@@ -440,13 +478,16 @@ repository root, but the failing frontier was pushed far back:
 
 ### Immediate next round
 
-1. If broader confidence is required locally, run one pytest process only and
-   delete `.pytest_tmp/test.sqlite` first if table-exists/no-such-table errors
-   recur.
-2. Validate `ops/scripts/set-password.sh` with `bash -n` on Linux/CI or during
+1. Validate `ops/scripts/set-password.sh` with `bash -n` on Linux/CI or during
    the next deployment-host check, because local Windows Bash is unavailable.
-3. Return to the broader repository-normalization mainline and continue the
-   docs/ops audit.
+2. Treat the repo-local first-run / deployment bootstrap governance pass as
+   complete after the `.env.production`, `init_db.sql`, `post_deploy_check.sh`,
+   frontend-deploy, and upgrade-example alignments, and move to the second
+   repository-normalization step: operator script and validation-selection
+   normalization.
+3. If broader backend confidence is required locally later, run one pytest
+   process only and delete `.pytest_tmp/test.sqlite` first if
+   table-exists/no-such-table errors recur.
 
 ### Suggested next governance batch after the suite is green
 

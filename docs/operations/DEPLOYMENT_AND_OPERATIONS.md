@@ -61,6 +61,7 @@ DEBUG=false
 DATABASE_URL=postgresql://courseeval:<password>@127.0.0.1:5432/courseeval
 SECRET_KEY=<strong-random-value>
 ALLOW_PUBLIC_REGISTRATION=false
+PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS=true
 INIT_ADMIN_USERNAME=admin
 INIT_ADMIN_PASSWORD=<strong-admin-password>
 INIT_ADMIN_REAL_NAME=System Administrator
@@ -71,6 +72,8 @@ ENABLE_LLM_GRADING_WORKER=true
 LLM_GRADING_WORKER_LEADER=true
 LLM_GRADING_WORKER_POLL_SECONDS=2
 LLM_GRADING_TASK_STALE_SECONDS=600
+FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS=600
+FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR=40
 REQUIRE_STRONG_SECRETS=true
 ```
 
@@ -79,10 +82,13 @@ Production rules:
 - never keep placeholder database credentials,
 - never keep the default weak secret,
 - normally keep `ALLOW_PUBLIC_REGISTRATION=false`,
+- keep `PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS=true` unless you intentionally need looser self-registration semantics,
 - use `INIT_DEFAULT_DATA=false` unless you intentionally want demo accounts and demo courses,
 - set `TRUSTED_HOSTS` and `BACKEND_CORS_ORIGINS` deliberately instead of relying on development defaults,
 - consider `REQUIRE_STRONG_SECRETS=true` even outside strict production startup paths so weak secrets fail early,
+- keep forgot-password throttles enabled unless you have a measured reason to relax them,
 - only one production backend leader should usually run the grading worker.
+- Optional: set `DEFAULT_LLM_API_KEY` when you want the built-in `gpt-5.4` preset to perform first-start text/vision connectivity validation automatically; if left empty, the preset remains pending/inactive until an administrator validates it manually.
 - Optional: set `FRONTEND_ADMIN_BASE_URL` to the public admin origin (for example `https://courseeval.example`) so **忘记密码** notifications include an absolute link to the password-reset screen; if unset, the notification still contains a relative `/users?...` path that works when opened inside the same admin site.
 
 ## Administrator password after deployment (SSH)

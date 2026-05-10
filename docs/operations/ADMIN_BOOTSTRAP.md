@@ -87,6 +87,11 @@ Useful repository scripts:
 
 Use these instead of keeping plaintext credentials in repository-side note files.
 
+The tracked [`.env.production`](../../.env.production) template now exposes the
+related first-run defaults explicitly: `PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS=true`,
+forgot-password throttles, and a blank `DEFAULT_LLM_API_KEY=` placeholder for
+operators who want the built-in preset validated during bootstrap.
+
 ## Why The Old Plaintext Admin Note Was Removed
 
 The repository should not rely on a stray text file containing credentials. The source of truth is the environment-backed bootstrap configuration plus the database state.
