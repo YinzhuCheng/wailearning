@@ -45,10 +45,10 @@ If code adds a field to `Settings`, update this document in the same change set.
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `INIT_ADMIN_USERNAME` | `admin` | Initial admin user name when seeding. |
-| `INIT_ADMIN_PASSWORD` | `ChangeMe123!` | **Change** for any shared or networked environment. |
-| `INIT_ADMIN_REAL_NAME` | `System Administrator` | Display name. |
-| `INIT_DEFAULT_DATA` | `true` | When true, `main.py` lifespan runs demo seed (`seed_demo_course_bundle`) after repairs. |
+| `INIT_ADMIN_USERNAME` | `admin` | Initial admin user name created during startup when missing. Independent of demo seed. |
+| `INIT_ADMIN_PASSWORD` | `ChangeMe123!` | Password used only when the initial admin row is first created; **change** for any shared or networked environment. Later env changes do not overwrite an existing password. |
+| `INIT_ADMIN_REAL_NAME` | `System Administrator` | Display name used when the initial admin row is first created. |
+| `INIT_DEFAULT_DATA` | `true` | When true, `main.py` lifespan runs demo seed (`seed_demo_course_bundle`) after repairs and initial admin bootstrap. Production should normally set this to `false`. |
 | `ALLOW_PUBLIC_REGISTRATION` | `false` | Enables student self-registration API when true. |
 | `PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS` | `true` | When true with public registration, `class_id` must reference an existing class row. |
 

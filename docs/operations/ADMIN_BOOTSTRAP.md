@@ -2,7 +2,10 @@
 
 ## Bootstrap Admin Account
 
-The backend can create an initial admin account during startup when `INIT_DEFAULT_DATA=true`.
+The backend creates an initial admin account during startup from `INIT_ADMIN_*`
+settings when that username does not already exist. This is independent of the
+demo seed: production deployments can keep `INIT_DEFAULT_DATA=false` and still
+receive the first admin account.
 
 Environment variables:
 
@@ -62,7 +65,7 @@ Idempotency detail:
 
 Current implementation context:
 
-- `main.py` creates tables, runs schema-update helpers, normalizes teacher/class and semester links, backfills homework grading data, reconciles student users and roster rows, and only then applies optional demo seeding
+- `main.py` creates tables, runs schema-update helpers, normalizes teacher/class and semester links, backfills homework grading data, ensures the bootstrap admin exists, reconciles student users and roster rows, and only then applies optional demo seeding
 - if `INIT_DEFAULT_DATA=true`, the demo seed is followed by another roster reconciliation before startup completes
 - if `ENABLE_LLM_GRADING_WORKER=true` and `LLM_GRADING_WORKER_LEADER=true`, the in-process grading worker is started after startup initialization
 
@@ -79,8 +82,8 @@ INIT_ADMIN_REAL_NAME=System Administrator
 
 Useful repository scripts:
 
-- `ops/scripts/reset_user_password.sh`
-- `ops/scripts/set-password.sh`
+- `ops/scripts/reset_user_password.sh <username> <new_password>` resets an existing user's password and increments `token_version`.
+- `ops/scripts/set-password.sh <username> <new_password>` creates the named admin user if missing, or resets/promotes it to an active admin if it already exists.
 
 Use these instead of keeping plaintext credentials in repository-side note files.
 

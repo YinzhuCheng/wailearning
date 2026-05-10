@@ -11,6 +11,7 @@ from apps.backend.courseeval_backend.bootstrap import (
     ensure_schema_updates,
     normalize_semester_catalog,
     normalize_teacher_class_assignments,
+    seed_default_admin,
     sync_subject_semester_links,
 )
 from apps.backend.courseeval_backend.domains.seed.demo import seed_demo_course_bundle
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
         normalize_semester_catalog(db)
         sync_subject_semester_links(db)
         backfill_homework_grading_data(db)
+        seed_default_admin(db)
         reconcile_student_users_and_roster(db)
         db.commit()
         if settings.INIT_DEFAULT_DATA:

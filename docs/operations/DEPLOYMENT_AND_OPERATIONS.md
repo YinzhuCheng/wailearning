@@ -87,14 +87,14 @@ Production rules:
 
 ## Administrator password after deployment (SSH)
 
-If you can SSH into the application server, you can reset any user password (including the bootstrap `INIT_ADMIN_USERNAME`) **without using the web UI** by running the bundled script against the production virtualenv and `.env.production`:
+If you can SSH into the application server, you can reset any existing user password (including the bootstrap `INIT_ADMIN_USERNAME`) **without using the web UI** by running the bundled script against the production virtualenv and `.env.production`:
 
 ```bash
 cd /opt/courseeval/source
 sudo bash ops/scripts/reset_user_password.sh admin 'YourNewStrongPasswordHere!'
 ```
 
-The script updates the password hash in the database and increments `token_version` so existing JWT sessions for that user are invalidated. Alternatively, set `INIT_ADMIN_PASSWORD` before the **first** bootstrap run when `INIT_DEFAULT_DATA=true`; for an already-deployed database, prefer the script above or an in-app admin reset from **用户管理**.
+The script updates the password hash in the database and increments `token_version` so existing JWT sessions for that user are invalidated. For a missing admin account, use `sudo bash ops/scripts/set-password.sh admin 'YourNewStrongPasswordHere!'`; it creates the named active admin if absent, or resets/promotes it if present. On first startup, `INIT_ADMIN_*` creates the initial admin independently of `INIT_DEFAULT_DATA`, so production can keep `INIT_DEFAULT_DATA=false` and still bootstrap access. For an already-deployed database with a working admin login, an in-app admin reset from **用户管理** is also acceptable.
 
 ## Database Initialization
 

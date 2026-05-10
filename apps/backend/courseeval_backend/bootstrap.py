@@ -1166,8 +1166,8 @@ def bootstrap() -> None:
         normalize_semester_catalog(db)
         sync_subject_semester_links(db)
         backfill_homework_grading_data(db)
+        seed_default_admin(db)
         if settings.INIT_DEFAULT_DATA:
-            seed_default_admin(db)
             seed_default_semesters(db)
             normalize_semester_catalog(db)
             sync_subject_semester_links(db)

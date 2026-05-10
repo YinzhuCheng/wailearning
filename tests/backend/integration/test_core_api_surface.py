@@ -44,6 +44,50 @@ def test_api_health_and_root_payload(client: TestClient):
     assert "message" in body
 
 
+def test_lifespan_seeds_initial_admin_without_demo_data():
+    from apps.backend.courseeval_backend.core.config import settings
+
+    old_values = (
+        settings.INIT_DEFAULT_DATA,
+        settings.INIT_ADMIN_USERNAME,
+        settings.INIT_ADMIN_PASSWORD,
+        settings.INIT_ADMIN_REAL_NAME,
+        settings.ENABLE_LLM_GRADING_WORKER,
+        settings.LLM_GRADING_WORKER_LEADER,
+    )
+    settings.INIT_DEFAULT_DATA = False
+    settings.INIT_ADMIN_USERNAME = "bootstrap_admin"
+    settings.INIT_ADMIN_PASSWORD = "bootstrap_admin_pass"
+    settings.INIT_ADMIN_REAL_NAME = "Bootstrap Admin"
+    settings.ENABLE_LLM_GRADING_WORKER = False
+    settings.LLM_GRADING_WORKER_LEADER = False
+    try:
+        with TestClient(app) as startup_client:
+            resp = startup_client.post(
+                "/api/auth/login",
+                data={"username": "bootstrap_admin", "password": "bootstrap_admin_pass"},
+            )
+            assert resp.status_code == 200, resp.text
+
+        db = SessionLocal()
+        try:
+            admin = db.query(User).filter(User.username == "bootstrap_admin").first()
+            assert admin is not None
+            assert admin.role == UserRole.ADMIN.value
+            assert db.query(User).filter(User.username == "teacher").first() is None
+        finally:
+            db.close()
+    finally:
+        (
+            settings.INIT_DEFAULT_DATA,
+            settings.INIT_ADMIN_USERNAME,
+            settings.INIT_ADMIN_PASSWORD,
+            settings.INIT_ADMIN_REAL_NAME,
+            settings.ENABLE_LLM_GRADING_WORKER,
+            settings.LLM_GRADING_WORKER_LEADER,
+        ) = old_values
+
+
 def test_login_rejects_bad_password_with_401(client: TestClient):
     ensure_admin()
     resp = client.post("/api/auth/login", data={"username": "pytest_admin", "password": "not-the-password"})

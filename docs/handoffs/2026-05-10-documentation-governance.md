@@ -108,6 +108,32 @@ context is no longer the Playwright-selector cleanup pass; it is now:
   `check_text_encoding.py` reported no suspicious text in the checked ops/docs
   files.
 
+### Configuration / bootstrap normalization audit
+
+- Audited the startup/bootstrap path across
+  [apps/backend/courseeval_backend/core/config.py](../../apps/backend/courseeval_backend/core/config.py),
+  [apps/backend/courseeval_backend/main.py](../../apps/backend/courseeval_backend/main.py),
+  [apps/backend/courseeval_backend/bootstrap.py](../../apps/backend/courseeval_backend/bootstrap.py),
+  [docs/architecture/CONFIGURATION_REFERENCE.md](../architecture/CONFIGURATION_REFERENCE.md),
+  [docs/operations/ADMIN_BOOTSTRAP.md](../operations/ADMIN_BOOTSTRAP.md),
+  [docs/operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md),
+  and [ops/scripts/set-password.sh](../../ops/scripts/set-password.sh).
+- Found and fixed a real contradiction: production docs recommended
+  `INIT_DEFAULT_DATA=false` while also implying `INIT_ADMIN_*` would create the
+  first admin account. Before this change, the standalone bootstrap helper only
+  called `seed_default_admin(db)` inside the demo-data branch, and FastAPI
+  lifespan did not call it at all.
+- Startup now ensures the initial admin account exists from `INIT_ADMIN_*`
+  independently of demo seed. `INIT_DEFAULT_DATA=false` remains the normal
+  production recommendation and no longer prevents first-admin bootstrap.
+- Replaced `ops/scripts/set-password.sh`, which was previously a one-line
+  command blob with hardcoded placeholder text, with a reusable Bash script
+  that loads the production env file, creates a missing admin account, or
+  resets/promotes an existing account while incrementing `token_version`.
+- Updated admin/bootstrap and deployment docs so operators can distinguish:
+  `reset_user_password.sh` resets existing users, while `set-password.sh` can
+  create a missing admin or reset/promote an existing one.
+
 ### Backend bug fixes found while chasing `pytest -q`
 
 The following are real implementation fixes, not just test updates:
@@ -169,8 +195,12 @@ fallback logic:
 - `docs/development/TEST_EXECUTION_PITFALLS.md`
 - `docs/handoffs/2026-05-10-documentation-governance.md`
 - `docs/operations/DEPLOYMENT_AND_OPERATIONS.md`
+- `docs/operations/ADMIN_BOOTSTRAP.md`
 - `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`
+- `apps/backend/courseeval_backend/bootstrap.py`
+- `apps/backend/courseeval_backend/main.py`
 - `ops/scripts/deploy_backend.sh`
+- `ops/scripts/set-password.sh`
 - `ops/scripts/dev/check_repository_normalization.py`
 - `ops/scripts/dev/check_text_encoding.py`
 - `ops/scripts/dev/run_validation_target.py`
@@ -302,6 +332,38 @@ Passed after fixes:
     recommended only `static.encoding_text_tools` for the docs-only handoff
     diff.
   - `git diff --check` passed.
+- Configuration / bootstrap normalization follow-up:
+  - `python -m py_compile apps\backend\courseeval_backend\main.py apps\backend\courseeval_backend\bootstrap.py tests\backend\integration\test_core_api_surface.py`
+    passed.
+  - Initial local pytest attempts were polluted by multiple concurrent pytest
+    processes sharing `.pytest_tmp/test.sqlite`; after confirming no residual
+    Python/pytest process was running, serial reruns passed.
+  - `.\.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py -q`
+    passed; `13 passed, 29 warnings`.
+  - `.\.venv\Scripts\python.exe -m pytest tests\backend\users\test_admin_reset_user_password.py -q`
+    passed; `3 passed, 29 warnings`.
+  - `.\.venv\Scripts\python.exe -m pytest tests\backend\e2e_dev\test_demo_course_seed.py -q`
+    passed; `4 passed, 29 warnings`.
+  - `.\.venv\Scripts\python.exe -m pytest tests\backend\e2e_dev\test_e2e_dev_api_hazard_tier.py -q`
+    passed; `23 passed, 29 warnings`.
+  - `.\.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_repair.py -q`
+    passed; `3 passed, 29 warnings`.
+  - `.\.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q`
+    passed; `17 passed, 29 warnings`.
+  - `python ops\scripts\dev\check_repository_normalization.py`
+    passed; `scanned=382 stale=0 missing_required_paths=0`.
+  - `python ops\scripts\dev\run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
+    passed; `scanned=7 decode_errors=0 suspicious=0`.
+  - `python ops\scripts\dev\run_validation_target.py static.validation_selector --timeout-seconds 120`
+    passed.
+  - `python ops\scripts\dev\select_validation_targets.py --worktree`
+    matched all changed paths and reported `not_sufficient` only because it
+    conservatively recommends high-cost `admin.e2e.full` and
+    `full.pytest.postgres` for shared startup/bootstrap changes.
+  - `git diff --check` passed.
+  - `bash -n ops/scripts/set-password.sh` could not run on this workstation:
+    the `bash` command resolves to the Windows WSL installer prompt, so this is
+    an environment block rather than a script syntax result.
 
 ### Full-suite progression evidence
 
@@ -348,6 +410,11 @@ repository root, but the failing frontier was pushed far back:
   now
   committed and pushed as
   `445e85f docs: normalize governance and fix backend access regressions`.
+- The configuration/bootstrap follow-up deliberately did not run local
+  `admin.e2e.full`, `postgres.pytest.package`, or `full.pytest.postgres`. The
+  selector recommends them for release-quality evidence because `main.py` and
+  `bootstrap.py` are shared startup surfaces, but the user asked not to spend
+  time on broad local validation while remote validation was already green.
 
 ## Risks
 
@@ -365,19 +432,19 @@ repository root, but the failing frontier was pushed far back:
 - Isolated SQLite reset noise around discussion behavior files suggests there
   may still be a fragile local test-reset path when only a subset of files is
   run repeatedly on Windows/Python 3.14.
+- Bash script syntax cannot currently be checked locally with `bash -n` because
+  WSL/Bash is unavailable in this shell. Validate `ops/scripts/set-password.sh`
+  on a Linux deployment host or CI shell before relying on it operationally.
 
 ## Recommended Next Steps
 
 ### Immediate next round
 
-1. Rerun the selector/governance checks after this follow-up change:
-   - `python ops/scripts/dev/check_repository_normalization.py`
-   - `python ops/scripts/dev/run_validation_target.py static.encoding_text_tools --timeout-seconds 120`
-   - `python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120`
-   - `git diff --check`
-2. If broader confidence is required locally, run one pytest process only and
+1. If broader confidence is required locally, run one pytest process only and
    delete `.pytest_tmp/test.sqlite` first if table-exists/no-such-table errors
    recur.
+2. Validate `ops/scripts/set-password.sh` with `bash -n` on Linux/CI or during
+   the next deployment-host check, because local Windows Bash is unavailable.
 3. Return to the broader repository-normalization mainline and continue the
    docs/ops audit.
 
@@ -385,10 +452,10 @@ repository root, but the failing frontier was pushed far back:
 
 1. Consider whether the isolated discussion-file SQLite reset failures deserve a
    dedicated test-harness hardening batch.
-2. Continue the repository-normalization audit with configuration/bootstrap
-   governance, especially `.env.production`, `core/config.py`,
-   `bootstrap.py`, `ops/scripts/init_db.sql`, and
-   [docs/operations/ADMIN_BOOTSTRAP.md](../operations/ADMIN_BOOTSTRAP.md).
+2. Continue the repository-normalization audit with database initialization and
+   deployment bootstrap edges, especially `ops/scripts/init_db.sql`, production
+   env examples, and any remaining operator scripts that touch credentials or
+   first-run setup.
 3. Keep deployment governance on a maintenance watchlist, but the 2026-05-10
    audit found no active script/doc contradiction requiring a behavior change.
 
