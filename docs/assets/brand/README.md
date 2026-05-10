@@ -30,9 +30,13 @@ This folder contains local, editable logo assets for CourseEval.
 - Runtime copies are checked into:
   - `apps/web/admin/src/assets/brand/`
   - `apps/web/parent/src/assets/brand/`
+  - `apps/web/admin/public/courseeval-mark.svg`
+  - `apps/web/parent/public/courseeval-mark.svg`
 - The admin login page uses `courseeval-logo.svg` as the default logo unless
   `/api/settings/public` provides `system_logo`.
 - The admin sidebar and parent login page use `courseeval-mark.svg` for compact
   brand placement.
+- Both web app `index.html` files use the public `courseeval-mark.svg` as the
+  browser tab favicon.
 - When changing these assets, update the runtime copies in both SPAs and run the
   frontend build targets selected by `ops/scripts/dev/select_validation_targets.py`.

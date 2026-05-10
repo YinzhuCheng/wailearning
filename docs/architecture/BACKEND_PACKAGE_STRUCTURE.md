@@ -13,7 +13,7 @@ It is intended for maintainers and LLM coding agents that need to answer two rec
 
 For the repository-wide assessment of whether the backend package is still too flat, and for the recommended migration order, also read:
 
-- [STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
+- [../reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](../reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
 
 ## Canonical Package Root
 

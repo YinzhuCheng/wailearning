@@ -14,11 +14,11 @@ This repository expects contributors, including LLM coding agents, to read task-
 
 **Minimum rule**
 
-- Before changing repository structure or file placement, read [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md), [`docs/architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md`](docs/architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md), and (for the latest consolidation mapping) [`docs/architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](docs/architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md).
+- Before changing repository structure or file placement, read [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md), [`docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md`](docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md), and (for the latest consolidation mapping) [`docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md).
 - Before changing backend or product behavior, read [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md), [`docs/architecture/CORE_BUSINESS_FLOWS.md`](docs/architecture/CORE_BUSINESS_FLOWS.md), and any feature-specific doc such as [`docs/product/LLM_HOMEWORK_GUIDE.md`](docs/product/LLM_HOMEWORK_GUIDE.md).
 - Before running tests or diagnosing failures, read [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md) and [`docs/development/TEST_EXECUTION_PITFALLS.md`](docs/development/TEST_EXECUTION_PITFALLS.md).
 - Before editing multilingual files from Windows + PowerShell, read [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
-- When assessing structural risk or full-suite follow-ups inferred from tests, see [`docs/architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md`](docs/architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
+- When assessing structural risk or full-suite follow-ups inferred from tests, see [`docs/reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md`](docs/reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
 - Before deployment or service changes, read [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md) and [`docs/operations/ADMIN_BOOTSTRAP.md`](docs/operations/ADMIN_BOOTSTRAP.md).
 - Before touching parent-facing flows, read [`docs/product/PARENT_PORTAL.md`](docs/product/PARENT_PORTAL.md).
 

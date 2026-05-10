@@ -2517,7 +2517,7 @@ Corrupted shared sqlite files and parallel writers remain hazards — keep the d
 
 ### Evidence note
 
-A minimal control script that imports `apps.backend.courseeval_backend.db.models` before `create_all` succeeded on a fresh sqlite path — see [`../DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](../DOCUMENTATION_UPGRADE_REPORT_2026-05.md).
+A minimal control script that imports `apps.backend.courseeval_backend.db.models` before `create_all` succeeded on a fresh sqlite path — see [`../reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](../reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md).
 
 ## Demo seed strings containing LaTeX (`domains/seed/demo.py`, pytest / agents, 2026-05)
 
@@ -2676,7 +2676,7 @@ Agents or humans follow bookmarks pointing at `tools/testing/audit_test_redundan
 
 ### Actual location
 
-The test redundancy auditor now lives at `tests/devtools/audit_test_redundancy.py` (see [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](../architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md)).
+The test redundancy auditor now lives at `tests/devtools/audit_test_redundancy.py` (see [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](../reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md)).
 
 ### Verification
 

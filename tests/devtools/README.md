@@ -27,4 +27,4 @@ python3 tests/devtools/audit_test_redundancy.py
 ## Deeper documentation
 
 - [`docs/development/TEST_SUITE_MAP.md`](../../docs/development/TEST_SUITE_MAP.md) — full `tests/` layout and devtools semantics.
-- [`docs/architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](../../docs/architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) — migration mapping from legacy `tools/testing/` and verification commands.
+- [`docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](../../docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) — migration mapping from legacy `tools/testing/` and verification commands.

@@ -113,7 +113,7 @@ Meaning:
 
 - [`README.md`](../../README.md) — repository layout block notes devtools location.
 - [`docs/architecture/REPOSITORY_STRUCTURE.md`](REPOSITORY_STRUCTURE.md) — high-level tree + Test Boundaries mention `tests/devtools/`.
-- [`docs/architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md`](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) — pattern labels + ASCII tree + Phase 2 guidance.
+- [`docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md`](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) — pattern labels + ASCII tree + Phase 2 guidance.
 - [`docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`](../reference/CODE_MAP_AND_ENTRYPOINTS.md) — map row points to `tests/devtools/`.
 - [`docs/development/TEST_SUITE_MAP.md`](../development/TEST_SUITE_MAP.md) — tree + dedicated subsection.
 - [`docs/development/DEVELOPMENT_AND_TESTING.md`](../development/DEVELOPMENT_AND_TESTING.md) — policy pointer path.

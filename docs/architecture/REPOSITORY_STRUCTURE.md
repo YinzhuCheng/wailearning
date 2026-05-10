@@ -6,7 +6,7 @@ This document defines the current repository layout after the full backend names
 
 For the current branch-state assessment of repository-level structural debt, migration order, and risk themes, also read:
 
-- [STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
+- [../reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](../reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
 
 It is written for both human contributors and LLM coding agents. Read it before:
 
@@ -35,6 +35,7 @@ repo/
       admin/                       admin SPA and Playwright config
       parent/                      parent-facing SPA
   docs/                            authoritative documentation tree
+    reports/                       dated audits, remediation notes, and restructure reports
   ops/                             deployment, CI, nginx, systemd, helper scripts
   tests/                           pytest suites, Playwright specs, and optional devtools (see Test Boundaries)
   README.md                        public repository entrypoint
@@ -52,6 +53,8 @@ Only these categories should normally remain at the top level:
 
 - repository metadata and onboarding files,
 - repository-wide Python test configuration,
+- ecosystem-recognized config and dependency files (`.editorconfig`,
+  `.gitattributes`, `.gitignore`, `requirements.txt`, `pytest.ini`),
 - main structural directories such as `apps/`, `docs/`, `ops/`, and `tests/`.
 
 The root should not be used as a generic dumping ground for:
@@ -252,6 +255,13 @@ Documentation lives under `docs/` and is organized by topic, not by arbitrary ch
 - `docs/development/` for developer workflow and test authoring,
 - `docs/operations/` for deployment and operational behavior,
 - `docs/product/` for feature behavior and user-facing workflow.
+- `docs/reports/` for dated audits, restructure reports, remediation reports,
+  and other historical runbooks that should stay searchable but should not
+  clutter the active architecture/development indices.
+
+Keep active guidance in the topic directory. Move completed audit trails and
+dated pass reports to `docs/reports/`, then update `docs/README.md`, `AGENTS.md`,
+and any task-specific references in the same change.
 
 When a structural refactor changes commands, package paths, or file placement, update at least:
 

@@ -71,7 +71,7 @@ Full risk notes: [../known-issues-and-risks.md](../known-issues-and-risks.md).
 
 | Symptom | Likely cause | Where to read |
 |---------|--------------|---------------|
-| Docs or bookmarks reference `tools/testing/audit_test_redundancy.py` but the path does not exist | The repository consolidated test maintenance scripts under `tests/devtools/` (2026-05 layout pass) | [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](REPOSITORY_RESTRUCTURE_REPORT_2026-05.md), [`tests/devtools/README.md`](../../tests/devtools/README.md) |
+| Docs or bookmarks reference `tools/testing/audit_test_redundancy.py` but the path does not exist | The repository consolidated test maintenance scripts under `tests/devtools/` (2026-05 layout pass) | [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](../reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md), [`tests/devtools/README.md`](../../tests/devtools/README.md) |
 
 Executable surfaces (`*.py`, CI YAML, shell) should not reference the legacy path. Use `rg 'tools/testing' -g '*.{py,yml,yaml,sh,bat,cjs,js,json}'` from the repo root when verifying migrations.
 

@@ -13,7 +13,7 @@ Read in this order first:
 5. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
 6. [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md) before deleting legacy-looking code, compatibility branches, or duplicate helpers
 7. the feature-specific document for the workflow you are about to touch
-8. when triaging full-suite outcomes or structural risk from tests, optionally read [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
+8. when triaging full-suite outcomes or structural risk from tests, optionally read [../reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 Why this is mandatory:
 
@@ -22,7 +22,7 @@ Why this is mandatory:
 - Windows + PowerShell sessions can also mis-render UTF-8 text; cleanup and documentation edits must follow [ENCODING_AND_MOJIBAKE_SAFETY.md](ENCODING_AND_MOJIBAKE_SAFETY.md) and the structural cleanup rules in [HISTORICAL_CODE_CLEANUP.md](HISTORICAL_CODE_CLEANUP.md)
 - Playwright failures in this repository are often environment or process-management issues before they are product regressions
 - local artifact directories can look like source or canonical output if you do not read the structure notes first
-- cross-platform and cloud-automation runs can hit additional traps such as Element Plus locale behavior, Playwright selector ambiguity, API `page_size` limits, and stale ports; see [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) and [../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) for follow-up risk notes
+- cross-platform and cloud-automation runs can hit additional traps such as Element Plus locale behavior, Playwright selector ambiguity, API `page_size` limits, and stale ports; see [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) and [../reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) for follow-up risk notes
 
 ## Local Development Setup
 
@@ -1061,7 +1061,7 @@ If you need **official `cloc` parity** (language breakdown with comment/code sep
 
 ### Agent triage notes (incremental, May 2026): pitfalls, sample hygiene, residual risk
 
-This subsection records lessons from a focused repair pass (pytest + Playwright + PostgreSQL smoke). It **adds** to earlier guidance; it does not replace [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) or [TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
+This subsection records lessons from a focused repair pass (pytest + Playwright + PostgreSQL smoke). It **adds** to earlier guidance; it does not replace [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) or [TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
 
 #### A. Pitfalls encountered (test-operator / harness side) and how to avoid them
 
@@ -1084,7 +1084,7 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 
 #### C. Residual product / architecture concerns (from tests, not a confirmed bug list)
 
-- **Startup and lifespan coupling:** Heavy bootstrap (schema repair, reconciliation, optional worker) increases **order-dependent** and **environment-sensitive** failure modes; failures often present as **health/E2E boot** issues rather than the edited feature — see existing P1 items in [TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
+- **Startup and lifespan coupling:** Heavy bootstrap (schema repair, reconciliation, optional worker) increases **order-dependent** and **environment-sensitive** failure modes; failures often present as **health/E2E boot** issues rather than the edited feature — see existing P1 items in [TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](../reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
 - **Notification read-state under concurrency:** Dual-tab mark-all-read remains a **high flake/risk** surface; distinguish **API truth** vs **UI convergence** under automation.
 - **SQLite vs PostgreSQL semantics:** Transaction boundaries, uniqueness timing, and **`SERIAL`** vs SQLite autoincrement can diverge; Postgres-only paths deserve **periodic** CI or manual smoke with `TEST_DATABASE_URL`.
 - **Large orchestration modules (`llm_grading`, heavy routers):** Fixes in one branch of grading or roster flows can **couple** unexpectedly — prefer **narrow pytest** for extracted helpers when refactoring.

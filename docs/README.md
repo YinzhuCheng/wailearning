@@ -17,8 +17,8 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`reference/DATA_MODEL_ESSENTIALS.md`](reference/DATA_MODEL_ESSENTIALS.md) | ORM tables grouped by domain |
 | [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WORKERS.md) | LLM grading worker (DB queue + thread pool) |
 | [`known-issues-and-risks.md`](known-issues-and-risks.md) | Open risks, “待人工确认”, CI location honesty |
-| [`DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
-| [`architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), mapping, pitfalls |
+| [`reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
+| [`reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), mapping, pitfalls |
 | [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Repeatable workflow for code-as-docs / docs-as-governance passes |
 | [`../skills/validation-selection/SKILL.md`](../skills/validation-selection/SKILL.md) | Change-scoped validation selection and honest validation reporting |
 | [`../skills/utf8-safe-editing/SKILL.md`](../skills/utf8-safe-editing/SKILL.md) | UTF-8-safe editing for multilingual / PowerShell-sensitive files |
@@ -41,8 +41,9 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [architecture/TROUBLESHOOTING.md](architecture/TROUBLESHOOTING.md) | Symptom-first links into pitfalls and ops docs |
 | [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md) | Source vs artifact; import namespace contract |
 | [architecture/BACKEND_PACKAGE_STRUCTURE.md](architecture/BACKEND_PACKAGE_STRUCTURE.md) | Layer model inside `courseeval_backend` |
-| [architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) | Structural migration rationale |
-| [architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), movement mapping, validation notes |
+| [reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) | Structural migration rationale |
+| [reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), movement mapping, validation notes |
+| [reports/README.md](reports/README.md) | Boundary rules for dated audits and remediation reports |
 | [operations/DEPLOYMENT_AND_OPERATIONS.md](operations/DEPLOYMENT_AND_OPERATIONS.md) | Production layout, nginx, systemd, env templates |
 | [operations/ADMIN_BOOTSTRAP.md](operations/ADMIN_BOOTSTRAP.md) | Startup ordering, seed behavior |
 
@@ -78,7 +79,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md](development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md) | Admin SPA responsive / UX notes |
 | [development/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md](development/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md) | HTTP client UX hint behavior |
 | [development/TEST_REDUNDANCY_AUDIT.md](development/TEST_REDUNDANCY_AUDIT.md) | Test merge/delete policy |
-| [architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) | Risks inferred from coverage |
+| [reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) | Risks inferred from coverage |
 
 ---
 
@@ -115,8 +116,8 @@ Read:
 
 1. [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md)
 2. [architecture/SYSTEM_OVERVIEW.md](architecture/SYSTEM_OVERVIEW.md)
-3. [architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](architecture/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
-4. [architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](architecture/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) (most recent file-tree consolidation notes; read when touching `tests/devtools/` or top-level layout)
+3. [reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
+4. [reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) (most recent file-tree consolidation notes; read when touching `tests/devtools/` or top-level layout)
 
 Why:
 
@@ -131,7 +132,7 @@ Read:
 1. [architecture/SYSTEM_OVERVIEW.md](architecture/SYSTEM_OVERVIEW.md)
 2. [architecture/CORE_BUSINESS_FLOWS.md](architecture/CORE_BUSINESS_FLOWS.md)
 3. the relevant product document such as [product/LLM_HOMEWORK_GUIDE.md](product/LLM_HOMEWORK_GUIDE.md) or [product/PARENT_PORTAL.md](product/PARENT_PORTAL.md)
-4. [architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) when working near fragile areas
+4. [reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) when working near fragile areas
 
 Why:
 
@@ -176,7 +177,7 @@ Why:
 2. [architecture/CORE_BUSINESS_FLOWS.md](architecture/CORE_BUSINESS_FLOWS.md)
 3. [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md)
 4. [product/LLM_HOMEWORK_GUIDE.md](product/LLM_HOMEWORK_GUIDE.md)
-5. [architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](architecture/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
+5. [reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 ### Local development
 
