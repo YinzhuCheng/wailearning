@@ -22,6 +22,10 @@
   designed, and the CSV target ledger now includes the score/dashboard,
   notification sync API edge, and course/roster/homework behavior targets that
   were actually run on this branch.
+- Admin Playwright target metadata is now consistently routed through the
+  repo-owned external runner. Registry lint/unit coverage rejects regressions by
+  checking every `admin-playwright` target command starts with
+  `node scripts/playwright-external-runner.cjs`.
 
 ## Verification
 
@@ -40,6 +44,7 @@
 - `.venv\Scripts\python.exe -m pytest tests\security -q`
 - `.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v`
 - `.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py`
+- `.venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json`
 
 ## Security And Robustness Follow-Ups
 
@@ -71,17 +76,17 @@
   committed row. Future validation-target additions should treat "registry
   target exists, committed ledger row exists, selector can read it" as one
   atomic contract rather than three separate chores.
-- Continue migrating local Playwright usage toward the repo-owned external
-  runner.
-  The external runner is now the preferred path for the key recorded admin
-  Playwright targets and for the full `admin.e2e.full` command metadata.
-  Future browser additions should avoid reintroducing fragile managed
-  `webServer` assumptions unless there is a strong reason and matching docs.
+- Keep admin Playwright target metadata on the repo-owned external runner.
+  All current `admin-playwright` registry targets now use
+  `node scripts/playwright-external-runner.cjs`, and selector unit coverage
+  enforces that repository-wide. Future browser additions should avoid
+  reintroducing fragile managed `webServer` assumptions unless there is a strong
+  reason, matching docs, and an intentional test update.
 - Expand CI evidence for high-value but still mostly local checks.
   Current lightweight CI is useful but does not yet cover PostgreSQL-backed
-  pytest, the new admin Playwright external-runner path, or attachment/tooling
-  environments that matter for release confidence. Security- and
-  authorization-sensitive changes still benefit from broader automated
+  pytest, a real admin Playwright external-runner execution, or
+  attachment/tooling environments that matter for release confidence. Security-
+  and authorization-sensitive changes still benefit from broader automated
   coverage.
 - Continue reviewing frontend request bounds against backend validation limits.
   A real admin UI issue surfaced because the students page requested
@@ -104,62 +109,39 @@
   PostgreSQL-backed validation remains the more trustworthy signal for
   cross-session consistency, constraint behavior, and release-quality claims.
 
-## Future Skill Candidates
+## Repo-Local Skill Status
 
-These are good candidates for future repo-local skills, but this handoff does
-not create them. Treat this as a backlog for later governance work when the
-workflow becomes frequent enough to justify a durable skill.
+The recurring workflows that were concrete enough to encode have been promoted
+from handoff backlog into repo-local skills:
 
-- `roster-identity-repair-playbook`
-  Use when auditing or repairing `users.student_id`, roster/user drift,
-  ambiguous same-username cases, or class-move side effects across
-  `auth.py`, `users.py`, `students.py`, and `domains/roster/*`.
-  Why it is a skill candidate:
-  this workflow now spans audit helpers, targeted pytest, selector rules, and
-  "do not auto-rebind" safety constraints that are easy for future agents to
-  partially remember.
-- `postgres-release-validation`
-  Use when a branch needs release-quality backend confidence rather than local
-  SQLite convenience evidence.
-  Why it is a skill candidate:
-  PostgreSQL-backed validation still has more setup and interpretation nuance
-  than ordinary targeted pytest, and the repository keeps treating it as the
-  stronger signal for constraint, migration, and cross-session behavior.
-- `validation-ledger-maintenance`
-  Use when adding or revising validation targets, wiring `ledger_id`, updating
-  `test-execution-targets.csv`, or checking selector/history consistency.
-  Why it is a skill candidate:
-  the branch found real registry/ledger drift, and the correct workflow now
-  spans `TEST_SELECTION_TARGETS.json`, CSV target rows, lint checks, and
-  selector/unit-test expectations.
-- `frontend-backend-contract-audit`
-  Use when reviewing pagination caps, timeout assumptions, bulk-input limits,
-  or route/query parameter contracts between Vue pages and FastAPI endpoints.
-  Why it is a skill candidate:
-  a real UI regression surfaced because the admin students page exceeded the
-  backend page-size limit, and similar shape/limit drift is likely to recur.
+- [`skills/roster-identity-repair-playbook/SKILL.md`](../../skills/roster-identity-repair-playbook/SKILL.md)
+  covers `users.student_id`, roster/user drift, ambiguous legacy matches,
+  class moves, and student-course enrollment repair.
+- [`skills/postgres-release-validation/SKILL.md`](../../skills/postgres-release-validation/SKILL.md)
+  covers PostgreSQL-backed and release-quality backend validation.
+- [`skills/validation-ledger-maintenance/SKILL.md`](../../skills/validation-ledger-maintenance/SKILL.md)
+  covers `TEST_SELECTION_TARGETS.json`, `ledger_id`, CSV target rows, and
+  selector/history consistency.
+- [`skills/frontend-backend-contract-audit/SKILL.md`](../../skills/frontend-backend-contract-audit/SKILL.md)
+  covers pagination caps, route/query contracts, request bounds, bulk limits,
+  and Vue/FastAPI contract drift.
+- [`skills/seed-surface-hardening/SKILL.md`](../../skills/seed-surface-hardening/SKILL.md)
+  covers `/api/e2e/dev/*`, `INIT_DEFAULT_DATA`, first-admin bootstrap, seed
+  tokens, public registration, and powerful local/demo surfaces.
+
+Still candidate-only:
+
 - `llm-worker-reliability-audit`
-  Use when changing queue semantics, retry logic, task recovery, timeout
-  behavior, or operational visibility for the in-process grading worker.
-  Why it is a skill candidate:
-  the architecture is intentionally not Celery/Redis-based, so agents need a
-  repository-specific workflow for reasoning about stuck tasks, idempotency,
-  and operational recovery.
-- `seed-surface-hardening`
-  Use when changing `/api/e2e/dev/*`, `INIT_DEFAULT_DATA`, first-admin
-  bootstrap, seed tokens, or powerful local/demo routes that should stay out of
-  production paths.
-  Why it is a skill candidate:
-  these surfaces are both operationally useful and security-sensitive, and
-  future hardening work will likely need a repeatable checklist of guards,
-  tests, and docs.
+  The architectural facts are already captured in
+  [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](../architecture/ASYNC_TASKS_AND_WORKERS.md)
+  and LLM/product docs. Promote this to a skill when the next worker change
+  adds a concrete repeatable checklist for queue semantics, stale-task recovery,
+  retry idempotency, or operational visibility.
 - `ci-gap-audit`
-  Use when deciding which currently local-only validation paths should be moved
-  into CI next, especially PostgreSQL pytest, admin Playwright external-runner
-  flows, and attachment/tooling environments.
-  Why it is a skill candidate:
-  this is a recurring judgment workflow that combines registry coverage, cost,
-  flake profile, and release risk rather than a one-off documentation task.
+  Keep this as a future skill candidate until the repository starts actively
+  moving PostgreSQL pytest, admin Playwright external-runner flows, or
+  attachment/tooling environments into CI. The current actionable state remains
+  the CI gap note above.
 
 ## Risks
 
@@ -169,7 +151,7 @@ workflow becomes frequent enough to justify a durable skill.
 - `docs/known-issues-and-risks.md` now includes repository-normalization notes
   for future cleanup passes.
 - The latest branch tip before this handoff refresh was
-  `64f079e test: harden validation and roster identity flows`.
+  `5f1eeee chore: tighten repository governance guardrails`.
 
 ## Do Not Revert
 

@@ -886,17 +886,13 @@ class ValidationSelectorTests(unittest.TestCase):
             issues,
         )
 
-    def test_repository_recorded_playwright_targets_use_external_runner(self):
+    def test_repository_admin_playwright_targets_use_external_runner(self):
         registry = json.loads((REPO_ROOT / "tests/TEST_SELECTION_TARGETS.json").read_text(encoding="utf-8"))
-        targets = {target["id"]: target for target in registry["targets"]}
+        targets = [target for target in registry["targets"] if target.get("category") == "admin-playwright"]
 
-        for target_id in (
-            "admin.e2e.learning_notes_attendance_cover_tier20",
-            "admin.e2e.discussion_cover_llm_tier3",
-            "admin.e2e.core_flows_smoke",
-            "admin.e2e.course_ui_markdown_reader",
-        ):
-            argv = targets[target_id]["commands"][0]["argv"]
+        self.assertGreater(len(targets), 0)
+        for target in targets:
+            argv = target["commands"][0]["argv"]
             self.assertEqual(argv[:2], ["node", "scripts/playwright-external-runner.cjs"])
 
     def test_repository_full_playwright_target_uses_external_runner(self):

@@ -1206,9 +1206,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-homework-comment-cover-tier4.spec.js",
                         "--project=chromium"
                     ]
@@ -1332,9 +1331,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-docs-gap-tier15.spec.js",
                         "--project=chromium"
                     ]
@@ -1366,9 +1364,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-llm-hard-scenarios.spec.js",
                         "--project=chromium"
                     ]
@@ -1404,9 +1401,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-scenario-resilience.spec.js",
                         "--project=chromium"
                     ]
@@ -1440,9 +1436,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "future-advanced-coverage.spec.js",
                         "--project=chromium"
                     ]
@@ -1477,9 +1472,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "future-advanced-coverage-2.spec.js",
                         "--project=chromium"
                     ]
@@ -1512,9 +1506,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-agent-followup-batch.spec.js",
                         "--project=chromium"
                     ]
@@ -1550,9 +1543,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-agent-hazard-tier-15.spec.js",
                         "--project=chromium"
                     ]
@@ -1587,9 +1579,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-notification-header-sync-tier.spec.js",
                         "--project=chromium"
                     ]
@@ -1626,9 +1617,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-notification-sync-deep-tier.spec.js",
                         "--project=chromium"
                     ]
