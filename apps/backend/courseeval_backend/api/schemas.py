@@ -121,12 +121,14 @@ class RecentPostAuthorResponse(BaseModel):
 
 class RecentPostItemResponse(BaseModel):
     id: str
-    kind: Literal["comment", "note", "material"]
+    kind: Literal["comment", "note", "material", "homework", "course"]
     source_type: Literal[
         "course_discussion_entry",
         "learning_note_discussion_entry",
         "learning_note",
         "course_material",
+        "homework",
+        "course",
     ]
     object_id: int
     target_id: Optional[int] = None

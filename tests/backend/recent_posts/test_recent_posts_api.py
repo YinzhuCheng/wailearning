@@ -13,6 +13,7 @@ from apps.backend.courseeval_backend.db.models import (
     CourseDiscussionEntry,
     CourseEnrollment,
     CourseMaterial,
+    Homework,
     LearningNote,
     LearningNoteDiscussionEntry,
     Student,
@@ -137,6 +138,18 @@ def _scenario() -> dict:
         )
         db.add(material)
         db.flush()
+        teacher_homework = Homework(
+            title="Teacher homework",
+            content="homework **instructions**",
+            content_format="markdown",
+            class_id=class_a.id,
+            subject_id=course.id,
+            due_date=now + timedelta(days=7),
+            created_by=teacher.id,
+            created_at=now + timedelta(minutes=10),
+        )
+        db.add(teacher_homework)
+        db.flush()
         course_comment = CourseDiscussionEntry(
             target_type="material",
             target_id=material.id,
@@ -205,6 +218,7 @@ def _scenario() -> dict:
         return {
             "admin_username": admin.username,
             "teacher_username": teacher.username,
+            "teacher_id": teacher.id,
             "author_username": author.username,
             "same_username": same_course.username,
             "outsider_username": outsider.username,
@@ -212,6 +226,9 @@ def _scenario() -> dict:
             "course_comment_id": course_comment.id,
             "note_comment_id": note_comment.id,
             "material_id": material.id,
+            "teacher_homework_id": teacher_homework.id,
+            "course_id": course.id,
+            "other_course_id": other_course.id,
             "public_note_id": public_note.id,
             "private_note_id": private_note.id,
             "private_note_comment_id": private_note_comment.id,
@@ -255,6 +272,79 @@ def test_recent_posts_kind_filter_returns_materials_only(client: TestClient):
     assert data["data"][0]["kind"] == "material"
     assert data["data"][0]["target"]["target_type"] == "material"
     assert data["data"][0]["has_attachment"] is True
+
+
+def test_recent_posts_teacher_feed_includes_linkable_homeworks_and_courses(client: TestClient):
+    ctx = _scenario()
+    teacher_headers = login_api(client, ctx["teacher_username"], "pass")
+
+    resp = client.get("/api/recent-posts/me", headers=teacher_headers)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    ids = _ids(data)
+
+    assert data["author"]["id"] == ctx["teacher_id"]
+    assert f"homework:{ctx['teacher_homework_id']}" in ids
+    assert f"course:{ctx['course_id']}" in ids
+    assert f"course:{ctx['other_course_id']}" in ids
+    homework = next(row for row in data["data"] if row["id"] == f"homework:{ctx['teacher_homework_id']}")
+    assert homework["kind"] == "homework"
+    assert homework["target"]["target_type"] == "homework"
+    course = next(row for row in data["data"] if row["id"] == f"course:{ctx['course_id']}")
+    assert course["kind"] == "course"
+    assert course["target"]["target_type"] == "course"
+
+
+def test_recent_posts_homework_and_course_kind_filters(client: TestClient):
+    ctx = _scenario()
+    teacher_headers = login_api(client, ctx["teacher_username"], "pass")
+
+    homework_resp = client.get("/api/recent-posts/me", headers=teacher_headers, params={"kind": "homework"})
+    assert homework_resp.status_code == 200, homework_resp.text
+    assert _ids(homework_resp.json()) == [f"homework:{ctx['teacher_homework_id']}"]
+
+    course_resp = client.get("/api/recent-posts/me", headers=teacher_headers, params={"kind": "course"})
+    assert course_resp.status_code == 200, course_resp.text
+    assert set(_ids(course_resp.json())) == {f"course:{ctx['course_id']}", f"course:{ctx['other_course_id']}"}
+
+
+def test_recent_posts_teacher_feed_filters_course_scoped_items_for_student_viewer(client: TestClient):
+    ctx = _scenario()
+    same_headers = login_api(client, ctx["same_username"], "pass")
+
+    resp = client.get(f"/api/recent-posts/users/{ctx['teacher_id']}", headers=same_headers)
+    assert resp.status_code == 200, resp.text
+    ids = _ids(resp.json())
+
+    assert f"homework:{ctx['teacher_homework_id']}" in ids
+    assert f"course:{ctx['course_id']}" in ids
+    assert f"course:{ctx['other_course_id']}" not in ids
+
+
+def test_recent_posts_teacher_feed_hidden_from_unenrolled_student(client: TestClient):
+    ctx = _scenario()
+    author_headers = login_api(client, ctx["author_username"], "pass")
+
+    resp = client.get(f"/api/recent-posts/users/{ctx['teacher_id']}", headers=author_headers)
+    assert resp.status_code == 200, resp.text
+    ids = _ids(resp.json())
+
+    assert f"homework:{ctx['teacher_homework_id']}" in ids
+    assert f"course:{ctx['course_id']}" in ids
+    assert f"course:{ctx['other_course_id']}" not in ids
+
+
+def test_recent_posts_teacher_feed_empty_for_course_outsider(client: TestClient):
+    ctx = _scenario()
+    outsider_headers = login_api(client, ctx["outsider_username"], "pass")
+
+    resp = client.get(f"/api/recent-posts/users/{ctx['teacher_id']}", headers=outsider_headers)
+    assert resp.status_code == 200, resp.text
+    ids = _ids(resp.json())
+
+    assert f"homework:{ctx['teacher_homework_id']}" not in ids
+    assert f"course:{ctx['course_id']}" not in ids
+    assert f"course:{ctx['other_course_id']}" in ids
 
 
 def test_recent_posts_other_user_silently_filters_inaccessible_items(client: TestClient):

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,8 +21,10 @@ from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import (
     CourseDiscussionEntry,
     CourseMaterial,
+    Homework,
     LearningNote,
     LearningNoteDiscussionEntry,
+    Subject,
     User,
     UserRole,
 )
@@ -37,7 +39,8 @@ router = APIRouter(prefix="/api/recent-posts", tags=["最近发表"])
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 50
-RecentPostKind = Literal["all", "comment", "note", "material"]
+RecentPostKind = Literal["all", "comment", "note", "material", "homework", "course"]
+RECENT_POST_KIND_PATTERN = "^(all|comment|note|material|homework|course)$"
 
 _MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -73,6 +76,12 @@ def _preview_text(value: Optional[str], *, max_len: int = 160) -> str:
     return f"{text[: max_len - 1]}..."
 
 
+def _created_at(value: Optional[datetime]) -> datetime:
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    return datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 def _is_note_visible(note: LearningNote, viewer: User, db: Session) -> bool:
     if int(note.owner_user_id) == int(viewer.id):
         return True
@@ -96,6 +105,25 @@ def _is_material_visible(material: CourseMaterial, viewer: User, db: Session) ->
             return False
     allowed_class_ids = get_accessible_class_ids(viewer, db)
     return viewer.role == UserRole.ADMIN or material.class_id in allowed_class_ids
+
+
+def _is_homework_visible(homework: Homework, viewer: User, db: Session) -> bool:
+    if homework.subject_id:
+        try:
+            ensure_course_access_http(int(homework.subject_id), viewer, db)
+            return True
+        except HTTPException:
+            return False
+    allowed_class_ids = get_accessible_class_ids(viewer, db)
+    return viewer.role == UserRole.ADMIN or homework.class_id in allowed_class_ids
+
+
+def _is_course_visible(course: Subject, viewer: User, db: Session) -> bool:
+    try:
+        ensure_course_access_http(int(course.id), viewer, db)
+        return True
+    except HTTPException:
+        return False
 
 
 def _course_discussion_visible(row: CourseDiscussionEntry, viewer: User, db: Session) -> bool:
@@ -137,7 +165,7 @@ def _course_discussion_item(
         title=target.get("title") or "评论",
         body_preview=_preview_text(row.body),
         body_format=normalize_content_format(getattr(row, "body_format", None)),
-        created_at=row.created_at,
+        created_at=_created_at(row.created_at),
         subject_id=row.subject_id,
         subject_name=subject_name,
         class_id=row.class_id,
@@ -169,7 +197,7 @@ def _note_discussion_item(
         title=target.get("title") or "笔记评论",
         body_preview=_preview_text(row.body),
         body_format=normalize_content_format(getattr(row, "body_format", None)),
-        created_at=row.created_at,
+        created_at=_created_at(row.created_at),
         subject_id=note.subject_id,
         subject_name=note.subject.name if note.subject else None,
         class_id=None,
@@ -194,7 +222,7 @@ def _learning_note_item(note: LearningNote, *, viewer: User, db: Session) -> Opt
         title=note.title,
         body_preview=_preview_text(note.description),
         body_format="plain",
-        created_at=note.created_at,
+        created_at=_created_at(note.created_at),
         subject_id=note.subject_id,
         subject_name=note.subject.name if note.subject else None,
         class_id=None,
@@ -208,19 +236,6 @@ def _material_item(material: CourseMaterial, *, viewer: User, db: Session) -> Op
     if not _is_material_visible(material, viewer, db):
         return None
     target = _target_payload(db, viewer, target_type="material", target_id=int(material.id))
-    if target is None and material.subject_id is None:
-        target = {
-            "target_type": "material",
-            "target_id": int(material.id),
-            "target_label": "资料",
-            "title": material.title,
-            "subject_id": None,
-            "subject_name": None,
-            "class_id": material.class_id,
-            "class_name": material.class_obj.name if material.class_obj else None,
-            "secondary_text": material.class_obj.name if material.class_obj else "班级资料",
-            "available": True,
-        }
     if target is None:
         return None
     subject_name = material.subject.name if material.subject else None
@@ -233,7 +248,7 @@ def _material_item(material: CourseMaterial, *, viewer: User, db: Session) -> Op
         title=material.title,
         body_preview=_preview_text(material.content),
         body_format=normalize_content_format(getattr(material, "content_format", None)),
-        created_at=material.created_at,
+        created_at=_created_at(material.created_at),
         subject_id=material.subject_id,
         subject_name=subject_name,
         class_id=material.class_id,
@@ -241,6 +256,58 @@ def _material_item(material: CourseMaterial, *, viewer: User, db: Session) -> Op
         context_title=target.get("secondary_text") or subject_name,
         target=target,
         has_attachment=bool(material.attachment_url or material.attachment_name),
+    )
+
+
+def _homework_item(homework: Homework, *, viewer: User, db: Session) -> Optional[RecentPostItemResponse]:
+    if not _is_homework_visible(homework, viewer, db):
+        return None
+    target = _target_payload(db, viewer, target_type="homework", target_id=int(homework.id))
+    if target is None:
+        return None
+    subject_name = homework.subject.name if homework.subject else None
+    return RecentPostItemResponse(
+        id=f"homework:{homework.id}",
+        kind="homework",
+        source_type="homework",
+        object_id=homework.id,
+        target_id=homework.id,
+        title=homework.title,
+        body_preview=_preview_text(homework.content),
+        body_format=normalize_content_format(getattr(homework, "content_format", None)),
+        created_at=_created_at(homework.created_at),
+        subject_id=homework.subject_id,
+        subject_name=subject_name,
+        class_id=homework.class_id,
+        class_name=homework.class_obj.name if homework.class_obj else None,
+        context_title=target.get("secondary_text") or subject_name,
+        target=target,
+        has_attachment=bool(homework.attachment_url or homework.attachment_name),
+    )
+
+
+def _course_item(course: Subject, *, viewer: User, db: Session) -> Optional[RecentPostItemResponse]:
+    if not _is_course_visible(course, viewer, db):
+        return None
+    target = _target_payload(db, viewer, target_type="course", target_id=int(course.id))
+    if target is None:
+        return None
+    return RecentPostItemResponse(
+        id=f"course:{course.id}",
+        kind="course",
+        source_type="course",
+        object_id=course.id,
+        target_id=course.id,
+        title=course.name,
+        body_preview=_preview_text(course.description),
+        body_format="plain",
+        created_at=_created_at(course.created_at),
+        subject_id=course.id,
+        subject_name=course.name,
+        class_id=course.class_id,
+        class_name=course.class_obj.name if course.class_obj else None,
+        context_title=target.get("secondary_text"),
+        target=target,
     )
 
 
@@ -305,6 +372,22 @@ def _collect_recent_posts(
             if item is not None:
                 items.append(item)
 
+    if kind in ("all", "homework"):
+        homework_query = db.query(Homework).filter(Homework.created_by == author.id)
+        homework_query = with_time_filter(homework_query, Homework.created_at)
+        for homework in homework_query.order_by(desc(Homework.created_at), desc(Homework.id)).all():
+            item = _homework_item(homework, viewer=viewer, db=db)
+            if item is not None:
+                items.append(item)
+
+    if kind in ("all", "course"):
+        course_query = db.query(Subject).filter(Subject.teacher_id == author.id)
+        course_query = with_time_filter(course_query, Subject.created_at)
+        for course in course_query.order_by(desc(Subject.created_at), desc(Subject.id)).all():
+            item = _course_item(course, viewer=viewer, db=db)
+            if item is not None:
+                items.append(item)
+
     items.sort(key=lambda item: (item.created_at, item.source_type, item.object_id), reverse=True)
     return items
 
@@ -349,7 +432,7 @@ def _recent_posts_for_author(
 def get_my_recent_posts(
     page: int = Query(1, ge=1),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-    kind: RecentPostKind = Query("all", pattern="^(all|comment|note|material)$"),
+    kind: RecentPostKind = Query("all", pattern=RECENT_POST_KIND_PATTERN),
     from_created_at: Optional[datetime] = Query(None),
     to_created_at: Optional[datetime] = Query(None),
     db: Session = Depends(get_db),
@@ -372,7 +455,7 @@ def get_user_recent_posts(
     user_id: int,
     page: int = Query(1, ge=1),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-    kind: RecentPostKind = Query("all", pattern="^(all|comment|note|material)$"),
+    kind: RecentPostKind = Query("all", pattern=RECENT_POST_KIND_PATTERN),
     from_created_at: Optional[datetime] = Query(None),
     to_created_at: Optional[datetime] = Query(None),
     db: Session = Depends(get_db),

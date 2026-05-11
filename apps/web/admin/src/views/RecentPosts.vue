@@ -23,6 +23,8 @@
           <el-radio-button label="comment">评论</el-radio-button>
           <el-radio-button label="note">笔记</el-radio-button>
           <el-radio-button label="material">资料</el-radio-button>
+          <el-radio-button label="homework">作业</el-radio-button>
+          <el-radio-button label="course">课程</el-radio-button>
         </el-radio-group>
       </div>
     </header>
@@ -89,7 +91,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, ChatDotRound, Collection, EditPen } from '@element-plus/icons-vue'
+import { ArrowRight, ChatDotRound, Collection, Document, EditPen, Reading } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
@@ -129,21 +131,27 @@ const kindText = value =>
   ({
     comment: '评论',
     note: '笔记',
-    material: '资料'
+    material: '资料',
+    homework: '作业',
+    course: '课程'
   }[value] || '发表')
 
 const kindTagType = value =>
   ({
     comment: 'primary',
     note: 'success',
-    material: 'warning'
+    material: 'warning',
+    homework: 'danger',
+    course: 'info'
   }[value] || 'info')
 
 const kindIcon = value =>
   ({
     comment: ChatDotRound,
     note: EditPen,
-    material: Collection
+    material: Collection,
+    homework: Document,
+    course: Reading
   }[value] || ChatDotRound)
 
 const revokeAuthorAvatar = () => {
@@ -292,6 +300,13 @@ onBeforeUnmount(() => {
 .head-actions {
   display: flex;
   flex-shrink: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.head-actions :deep(.el-radio-group) {
+  flex-wrap: nowrap;
 }
 
 .filters-row {
@@ -334,6 +349,16 @@ onBeforeUnmount(() => {
 .post-row__icon--material {
   background: #fef3c7;
   color: #b45309;
+}
+
+.post-row__icon--homework {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.post-row__icon--course {
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
 .post-row__body {

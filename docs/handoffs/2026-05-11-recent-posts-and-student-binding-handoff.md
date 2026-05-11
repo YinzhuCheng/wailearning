@@ -8,7 +8,7 @@ Status:
 
 - the structured discussion link-card line is functionally complete for this round and its targeted Playwright spec has passed locally;
 - the student roster/account strong-binding refactor described below is implemented and validated locally;
-- the new `最近发表` feature is **not** implemented yet; only requirement alignment and architecture discussion were completed.
+- the `最近发表` feature is now implemented as a permission-filtered authored-content feed aligned with the discussion linkable target set.
 
 ---
 
@@ -252,185 +252,160 @@ Result:
 
 ---
 
-## 5. Recent Posts Feature: Requirement Alignment Summary
+## 5. Recent Posts Current Implementation
 
-The user introduced a new feature request, but implementation did **not** start in this round. The following is the latest requirement understanding.
+`最近发表` is now implemented, and its object set intentionally matches the discussion linkable target set:
 
-### Proposed feature meaning
+- `discussion_entry`: course discussion entries and learning-note discussion entries, excluding `message_kind == "llm_assistant"`.
+- `learning_note`: authored learning notes.
+- `material`: authored course materials that resolve through the normal linked-target resolver.
+- `homework`: teacher-authored homework assignments that resolve through the normal linked-target resolver.
+- `course`: courses where `Subject.teacher_id == author.id`.
 
-`最近发表` should mean a unified feed of **discussion comments**, not every possible authored object.
+Important exclusions:
 
-Planned scope for first implementation:
+- homework submissions are not aggregated;
+- notifications and audit/activity rows are not aggregated;
+- class-only materials or homework without a linkable course target are not shown in the feed, because the user asked for `最近发表` and linkable objects to stay consistent.
 
-- course discussion comments
-- learning-note discussion comments
+Unassigned / ownerless edge cases:
 
-Out of scope for first implementation unless the user later expands it:
+- courses with no `teacher_id` have no author for this feed and are not listed on any user's recent-posts page;
+- homework requires `created_by`, so an ownerless homework row is not expected in normal data;
+- hidden objects are silently omitted rather than counted.
 
-- homework submission bodies
-- learning-note document bodies
-- notifications
-- materials
-- generic audit/activity feed
+### Backend Surface
 
-### Requested entry points
-
-1. current user can open their own recent posts from personal settings;
-2. users can click an author's avatar in discussion UI to view that author's recent posts;
-3. teachers / class teachers can open a student's recent posts from class roster / related student surfaces;
-4. administrators can view recent posts for any user.
-
-### Important product/permission assumptions agreed during discussion
-
-1. Teachers do **not** need a bound class.
-   - A `teacher` may teach across multiple classes.
-   - This matches current code and docs.
-2. `class_teacher` is the class-scoped role.
-3. Students should be bound to a class; missing class should be normalized into a temporary class rather than remaining null.
-4. The roster/account strong-binding work above is intended to make the roster entry point reliable for this future feature.
-
----
-
-## 6. Recent Posts: Proposed Technical Shape
-
-This is not implemented yet, but the current recommendation is:
-
-### Backend
-
-Build a unified recent-posts API over:
-
-- `CourseDiscussionEntry`
-- `LearningNoteDiscussionEntry`
-
-Likely route family:
+Implemented routes:
 
 - `GET /api/recent-posts/me`
 - `GET /api/recent-posts/users/{user_id}`
 
-The feed should:
+Supported `kind` values:
 
-- aggregate both tables into one ordered stream;
-- apply **viewer-specific visibility filtering**;
-- expose enough route/deep-link metadata to jump back to the source thread.
+- `all`
+- `comment`
+- `note`
+- `material`
+- `homework`
+- `course`
 
-### Frontend
+Visibility rule:
 
-Use a dedicated page rather than trying to overload existing discussion pages.
+- each item is included only if the current viewer could already open the underlying object through the normal product route / link-card resolver;
+- private notes remain hidden from other users and from admins when the normal learning-note route would hide them;
+- students viewing a teacher see only teacher-authored homework / teacher-taught courses from courses they can already access;
+- admins do not gain private-note visibility through this feed.
 
-Likely route shape:
+Backend files:
+
+- `apps/backend/courseeval_backend/api/routers/recent_posts.py`
+- `apps/backend/courseeval_backend/api/schemas.py`
+
+### Frontend Surface
+
+Implemented routes:
 
 - `/recent-posts/me`
 - `/recent-posts/users/:userId`
 
-The page should render:
+Entry points:
 
-- author header (avatar, name, role, maybe class);
-- recent comment items with timestamp, source type, source context, body preview;
-- click-through to the original discussion location.
+- personal settings opens the current user's feed;
+- discussion author avatar opens that user's feed;
+- admin user management table has a `最近发表` action.
 
-### Reuse from current link-card line
+The recent-posts page now exposes filters for all current authored kinds:
 
-The discussion link-card work already added:
+- all, comment, note, material, homework, course.
 
-- public `discussion_entry` target ids;
-- comment locator endpoints;
-- frontend deep-link routing helpers;
-- row highlighting in source discussion UIs.
+Frontend files:
 
-That means `最近发表` can reuse the same deep-linking strategy rather than inventing a second jump protocol.
+- `apps/web/admin/src/views/RecentPosts.vue`
+- earlier route/API/avatar entry wiring remains in `apps/web/admin/src/router/index.js`, `apps/web/admin/src/api/index.js`, `apps/web/admin/src/components/DiscussionAuthorAvatar.vue`, `apps/web/admin/src/components/CourseDiscussionPanel.vue`, and `apps/web/admin/src/views/Users.vue`.
 
----
+### Default Demo Data
 
-## 7. Recent Posts: Still-To-Align Questions
+The existing `INIT_DEFAULT_DATA=true` demo bundle already contains visible examples for the implemented feed:
 
-These points were discussed but not finally resolved in code.
+- demo teacher `teacher` / password `111111`;
+- teacher-authored required and elective homework;
+- teacher-authored course materials;
+- teacher-taught required and elective courses;
+- teacher discussion entries;
+- public learning-note activity from demo runtime activity.
 
-### 7.1 Exact visibility policy
-
-Recommended rule:
-
-- a viewer only sees recent-post items they are already allowed to see in their normal product visibility model.
-
-This avoids leaking existence of hidden/private comments.
-
-Still to confirm explicitly with the user/product:
-
-- should students be allowed to open another student's recent-posts page from an avatar click when they can already see that student in-thread?
-- should the page silently omit hidden items, or should it expose some "partially hidden history" indicator?
-
-Current recommendation:
-
-- allow opening the page;
-- silently filter inaccessible items;
-- do **not** expose hidden counts.
-
-### 7.2 Admin handling for learning-note deep links
-
-Current router behavior still redirects admins away from `/learning-notes`.
-
-This creates a product decision:
-
-1. allow admin read-only access to the learning-notes page/path for deep linking;
-2. or let admin view note-discussion recent-posts items in the feed but not jump into the original note thread.
-
-Recommended implementation direction:
-
-- add an admin-safe read-only route/path for learning-note deep linking, because otherwise the feed becomes inconsistent for admin users.
-
-### 7.3 Source identity for roster entry points
-
-Roster surfaces are `Student`-centric, but recent posts should be `User`-centric.
-
-Thanks to the strong-binding work above, the intended product rule can now be:
-
-- roster UI entry resolves `Student -> bound User(role=student)` and opens recent posts by `user_id`.
-
-If a future environment still has legacy drift, that should be treated as repair debt, not as a normal feature branch in the UI.
-
-### 7.4 Whether “recent posts” should stay comments-only forever
-
-Current recommendation:
-
-- start comments-only;
-- only expand later if the user explicitly wants a broader authored-activity feed.
-
-Keeping first scope comments-only makes aggregation, permissions, and navigation much simpler.
+No committed seed-data expansion was required for this round. Local Playwright screenshots were captured from a fresh `.agent-run` SQLite database with `INIT_DEFAULT_DATA=true`.
 
 ---
 
-## 8. Recommended Resume Order
+## 6. Recent Posts Validation Added
 
-When the next agent resumes:
+Targeted backend tests were added / expanded in:
 
-1. Read:
-   - `AGENTS.md`
-   - this handoff
-   - `docs/reference/DATA_MODEL_ESSENTIALS.md`
-   - `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`
-   - `apps/backend/courseeval_backend/domains/roster/identity.py`
-   - `apps/backend/courseeval_backend/domains/roster/reconciliation.py`
-   - `apps/backend/courseeval_backend/domains/roster/sync.py`
-   - `apps/backend/courseeval_backend/api/routers/users.py`
-   - `apps/backend/courseeval_backend/api/routers/students.py`
-   - `apps/backend/courseeval_backend/api/routers/auth.py`
-2. Decide whether to start `最近发表` implementation immediately or first add a small explicit audit/repair CLI/report around remaining legacy roster drift.
-3. If implementing `最近发表`, start with a backend-only unified recent-posts query and permission model before building the page.
-4. Only after backend shape is stable, add:
-   - personal-settings entry
-   - avatar click entry
-   - roster/user-management entry
-   - frontend recent-posts page
-5. If admin must deep-link into learning-note discussion items, resolve the admin route policy before polishing UI.
+- `tests/backend/recent_posts/test_recent_posts_api.py`
+
+The tests cover:
+
+- `/api/recent-posts/me` sorted feed behavior;
+- `kind=material`, `kind=homework`, and `kind=course` filters;
+- teacher feeds including homework and course items;
+- link target payload types matching the link-card target types;
+- hidden private notes;
+- LLM assistant comments excluded;
+- same-course and outsider student visibility filtering;
+- admin not bypassing private note visibility.
+
+Current targeted validation for this follow-up round:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\backend\recent_posts\test_recent_posts_api.py -q
+```
+
+Result:
+
+- `11 passed`
+
+```powershell
+.\.venv\Scripts\python.exe -m py_compile apps\backend\courseeval_backend\api\routers\recent_posts.py apps\backend\courseeval_backend\api\schemas.py
+```
+
+Result:
+
+- passed
+
+```powershell
+cd apps\web\admin
+npm.cmd run build
+```
+
+Result:
+
+- passed, with the existing Vite large chunk warning.
+
+Local browser validation:
+
+- a local ignored Playwright helper under `.agent-run/` started the backend with `INIT_DEFAULT_DATA=true`, launched the admin SPA, logged in as `teacher / 111111`, opened `/recent-posts/me`, exercised the `homework` filter, and captured desktop/mobile screenshots.
+- screenshots remain local under `.agent-run/screenshots/` and are intentionally not committed.
 
 ---
 
-## 9. Final State At Handoff
+## 7. Remaining Risks / Follow-Ups
 
-Current branch/worktree state before commit/push for this handoff:
+- The diff selector still recommends broader targets when router registration / shared FastAPI surfaces are touched. This handoff records the targeted validation actually run for recent-posts behavior; a release gate should still include the repository's broader backend and Playwright profiles.
+- The recent-posts query currently aggregates candidate rows and then filters in Python through existing permission/link resolvers. This is conservative for correctness and acceptable for the current page-size capped surface, but a later high-volume deployment may want DB-side prefiltering per viewer role.
+- The admin learning-note route decision was resolved pragmatically by allowing admin deep links to visible public notes while preserving private-note backend denial.
+
+---
+
+## 8. Final State At Handoff
+
+Current branch/worktree state for this handoff line:
 
 - branch: `cursor/repository-normalization`
-- worktree: modified files listed in `git status --short`
-- no known unresolved test failures in the changed surfaces
-- `最近发表` remains requirement-aligned only, not implemented
+- `最近发表` is implemented and aligned with linkable object types;
+- default demo data demonstrates homework, material, course, and discussion items in the feed;
+- no known unresolved failures in the targeted recent-posts validation listed above;
+- local screenshots are stored in `.agent-run/screenshots/` and should not be committed.
 
-This handoff is intended to be committed together with the strong-binding changes and pushed to the current branch so the next agent can continue from repository state alone.
+This handoff should stay with the current branch so future agents do not restart the recent-posts product discussion from the earlier comments-only proposal.
