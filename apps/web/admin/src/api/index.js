@@ -408,6 +408,10 @@ const api = {
     /** @param {AbortSignal} [signal] */
     listSignal: (params, signal) => http.get('/discussions', { params, signal })
   },
+  recentPosts: {
+    mine: params => http.get('/recent-posts/me', { params }),
+    user: (userId, params) => http.get(`/recent-posts/users/${userId}`, { params })
+  },
   llmSettings: {
     listPresets: () => http.get('/llm-settings/presets'),
     createPreset: data => http.post('/llm-settings/presets', data),

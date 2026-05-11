@@ -193,6 +193,18 @@ const routes = [
         meta: { title: '学习笔记' }
       },
       {
+        path: 'recent-posts/me',
+        name: 'RecentPostsMine',
+        component: () => import('@/views/RecentPosts.vue'),
+        meta: { title: '最近发表' }
+      },
+      {
+        path: 'recent-posts/users/:userId',
+        name: 'RecentPostsUser',
+        component: () => import('@/views/RecentPosts.vue'),
+        meta: { title: '最近发表' }
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/Notifications.vue')
@@ -222,7 +234,6 @@ const adminHiddenPaths = [
   '/analysis',
   '/points',
   '/materials',
-  '/learning-notes',
   '/homework',
   '/homework/students'
 ]
@@ -287,6 +298,7 @@ router.beforeEach(async (to, from, next) => {
     userStore.isStudent &&
     to.path !== '/courses' &&
     to.path !== '/learning-notes' &&
+    !to.path.startsWith('/recent-posts/') &&
     !userStore.selectedCourse &&
     to.path !== '/personal-settings'
   ) {

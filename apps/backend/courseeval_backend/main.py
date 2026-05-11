@@ -36,6 +36,7 @@ from apps.backend.courseeval_backend.api.routers import (
     notifications,
     parent,
     points,
+    recent_posts,
     scores,
     semesters,
     settings as system_settings,
@@ -114,6 +115,7 @@ app.include_router(discussions.router)
 app.include_router(material_chapters.router)
 app.include_router(materials.router)
 app.include_router(notifications.router)
+app.include_router(recent_posts.router)
 app.include_router(parent.router)
 # E2E dev routes are always registered; each handler is gated by
 # ``expose_e2e_dev_api()`` so production returns 404 and tests can toggle

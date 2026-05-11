@@ -1,5 +1,31 @@
 <template>
-  <div class="discussion-author-avatar-wrap">
+  <button
+    v-if="clickable"
+    type="button"
+    class="discussion-author-avatar-wrap discussion-author-avatar-wrap--button"
+    :title="buttonTitle"
+    @click="openRecentPosts"
+  >
+    <el-avatar
+      :size="size"
+      :src="avatarSrc || undefined"
+      class="discussion-author-avatar"
+      :class="{ 'discussion-author-avatar--assistant': messageKind === 'llm_assistant' }"
+      :style="{ backgroundColor: fallbackColor }"
+    >
+      {{ fallbackText }}
+    </el-avatar>
+    <span
+      v-if="badgeLabel"
+      class="discussion-author-avatar__badge"
+      :class="badgeClass"
+      :title="badgeTitle"
+      aria-hidden="true"
+    >
+      {{ badgeLabel }}
+    </span>
+  </button>
+  <div v-else class="discussion-author-avatar-wrap">
     <el-avatar
       :size="size"
       :src="avatarSrc || undefined"
@@ -23,10 +49,12 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { fetchAttachmentBlobUrl } from '@/utils/attachments'
 
 const props = defineProps({
+  userId: { type: [Number, String], default: null },
   avatarUrl: { type: String, default: '' },
   name: { type: String, default: '' },
   role: { type: String, default: '' },
@@ -34,8 +62,19 @@ const props = defineProps({
   size: { type: Number, default: 32 },
 })
 
+const router = useRouter()
 const avatarSrc = ref('')
 let avatarBlobUrl = ''
+
+const clickable = computed(() => props.messageKind !== 'llm_assistant' && props.userId != null && props.userId !== '')
+const buttonTitle = computed(() => `查看${props.name || '该用户'}的最近发表`)
+
+const openRecentPosts = () => {
+  if (!clickable.value) {
+    return
+  }
+  router.push({ name: 'RecentPostsUser', params: { userId: String(props.userId) } })
+}
 
 const fallbackText = computed(() => {
   if (props.messageKind === 'llm_assistant') return '助'
@@ -120,6 +159,21 @@ onBeforeUnmount(() => {
   position: relative;
   flex-shrink: 0;
   align-self: flex-start;
+}
+
+.discussion-author-avatar-wrap--button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.discussion-author-avatar-wrap--button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+  border-radius: 999px;
 }
 
 .discussion-author-avatar {

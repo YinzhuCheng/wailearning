@@ -58,6 +58,9 @@
         <el-table-column label="操作" width="300">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
+            <el-button size="small" @click="router.push({ name: 'RecentPostsUser', params: { userId: String(row.id) } })">
+              最近发表
+            </el-button>
             <el-button
               v-if="isAdmin"
               type="warning"
@@ -267,7 +270,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
@@ -277,6 +280,7 @@ import { loadAllPages } from '@/utils/pagedFetch'
 
 const userStore = useUserStore()
 const route = useRoute()
+const router = useRouter()
 const isAdmin = computed(() => userStore.isAdmin)
 
 const loading = ref(false)
@@ -717,7 +721,7 @@ watch(
 }
 
 .users-table-scroll :deep(.el-table) {
-  min-width: 1040px;
+  min-width: 1120px;
 }
 
 .page-header {

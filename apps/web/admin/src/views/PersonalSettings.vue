@@ -52,6 +52,9 @@
           <el-button type="primary" data-testid="personal-profile-save" :loading="profileSaving" @click="saveProfile">
             保存基本信息
           </el-button>
+          <el-button plain @click="router.push({ name: 'RecentPostsMine' })">
+            最近发表
+          </el-button>
         </el-form>
       </el-card>
 
@@ -144,6 +147,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
@@ -157,6 +161,7 @@ import {
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
+const router = useRouter()
 
 const profileForm = reactive({
   real_name: '',

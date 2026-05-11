@@ -109,6 +109,48 @@ class DiscussionLinkedTargetResponse(BaseModel):
     meta: Optional[dict[str, Any]] = None
 
 
+class RecentPostAuthorResponse(BaseModel):
+    id: int
+    username: str
+    real_name: Optional[str] = None
+    role: str
+    avatar_url: Optional[str] = None
+    class_id: Optional[int] = None
+    class_name: Optional[str] = None
+
+
+class RecentPostItemResponse(BaseModel):
+    id: str
+    kind: Literal["comment", "note", "material"]
+    source_type: Literal[
+        "course_discussion_entry",
+        "learning_note_discussion_entry",
+        "learning_note",
+        "course_material",
+    ]
+    object_id: int
+    target_id: Optional[int] = None
+    title: str
+    body_preview: Optional[str] = None
+    body_format: Optional[ContentFormatLiteral] = None
+    created_at: datetime
+    subject_id: Optional[int] = None
+    subject_name: Optional[str] = None
+    class_id: Optional[int] = None
+    class_name: Optional[str] = None
+    context_title: Optional[str] = None
+    target: DiscussionLinkedTargetResponse
+    has_attachment: bool = False
+
+
+class RecentPostsResponse(BaseModel):
+    author: RecentPostAuthorResponse
+    page: int
+    page_size: int
+    total: int
+    data: List[RecentPostItemResponse]
+
+
 class CourseDiscussionEntryResponse(BaseModel):
     id: int
     target_type: str

@@ -45,6 +45,7 @@
           >
             <div class="discussion-row__main">
               <DiscussionAuthorAvatar
+                :user-id="row.author_user_id"
                 :avatar-url="row.author_avatar_url"
                 :name="displayAuthorName(row)"
                 :role="row.author_role"
