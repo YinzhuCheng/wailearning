@@ -35,7 +35,7 @@ CourseEval treats **code as documentation** and **documentation as governance**.
 5. **Frontend hiding ≠ authorization.** Every sensitive mutation must be enforced in FastAPI routers / domain helpers (`domains/courses/access.py`, homework routers, etc.).
 6. **Do not revive removed legacy fallbacks.** Student identity resolves through `users.student_id`; course/class access resolves through `CourseEnrollment` and `subject_class_links`. Do not reintroduce `wailearning_backend`, `Subject.class_id` access fallbacks, or username/student-number guessing as normal feature behavior.
 7. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
-8. **Local agent workspace:** `.agent-run/` is the ignored, local-only workspace for private absolute paths, temporary orchestrators, logs, screenshots, and validation planning notes. Read task-relevant local files when continuing work on this machine, especially `.agent-run/local-private-paths.md` if present. Do **not** create a second handoff document under `.agent-run/`: the canonical handoff for this repository-normalization line is [`docs/handoffs/2026-05-10-documentation-governance.md`](docs/handoffs/2026-05-10-documentation-governance.md), which is committed and may be uploaded or shared. Never commit `.agent-run/` contents. Older local notes may still say `.e2e-run/`; in this worktree that role has been superseded by `.agent-run/` while `.e2e-run/` remains ignored for compatibility.
+8. **Local agent workspace:** `.agent-run/` is the ignored, local-only workspace for private absolute paths, temporary orchestrators, logs, screenshots, and validation planning notes. Read task-relevant local files when continuing work on this machine, especially `.agent-run/local-private-paths.md` if present. Keep handoff-worthy repository context in committed docs when the task needs it, and keep machine-local notes private under `.agent-run/`. Never commit `.agent-run/` contents. Older local notes may still say `.e2e-run/`; in this worktree that role has been superseded by `.agent-run/` while `.e2e-run/` remains ignored for compatibility.
 
 ---
 
@@ -115,16 +115,16 @@ current task.
    `ALL_PROXY` set to that proxy before treating the environment as offline.
    Keep `NO_PROXY=localhost,127.0.0.1,::1` so local backend, Vite, PostgreSQL,
    and Playwright traffic stays on loopback.
-10. **Refresh the canonical handoff on request.** When the user says they are
-   preparing to hand off, update
-   [`docs/handoffs/2026-05-10-documentation-governance.md`](docs/handoffs/2026-05-10-documentation-governance.md)
-   with the current problem statement, confirmed findings, touched files,
-   remaining plan, validation state, branch/worktree context, and explicit
-   warnings for the next agent. Do not maintain a second `.agent-run/HANDOFF.md`
-   or another competing handoff note; local `.agent-run/` files may only hold
-   private paths, logs, or machine-local artifacts that must not be uploaded.
-   Assume the user may close the conversation immediately after that request
-   and another agent system may continue from only the committed handoff.
+10. **Refresh the active committed handoff on request.** When the user says they
+   are preparing to hand off, update the task-relevant committed handoff
+   document under `docs/handoffs/` with the current problem statement,
+   confirmed findings, touched files, remaining plan, validation state,
+   branch/worktree context, and explicit warnings for the next agent. Do not
+   maintain a second `.agent-run/HANDOFF.md` or another competing private
+   handoff note; local `.agent-run/` files may only hold private paths, logs,
+   or machine-local artifacts that must not be uploaded. Assume the user may
+   close the conversation immediately after that request and another agent
+   system may continue from only the committed handoff.
 11. **Verify the commit boundary.** Before committing, confirm that ignored local
    notes are not tracked, scan committed changes for private path leaks, and run
    the narrowest useful static checks for the files touched. For validation
