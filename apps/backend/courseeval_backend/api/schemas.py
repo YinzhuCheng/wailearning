@@ -90,6 +90,25 @@ class ProfileSelfUpdate(BaseModel):
         return self
 
 
+class DiscussionLinkedTargetInput(BaseModel):
+    target_type: Literal["homework", "material", "learning_note", "course", "discussion_entry"]
+    target_id: int = Field(..., ge=1)
+
+
+class DiscussionLinkedTargetResponse(BaseModel):
+    target_type: Literal["homework", "material", "learning_note", "course", "discussion_entry"]
+    target_id: int
+    target_label: str
+    title: str
+    subject_id: Optional[int] = None
+    subject_name: Optional[str] = None
+    class_id: Optional[int] = None
+    class_name: Optional[str] = None
+    secondary_text: Optional[str] = None
+    available: bool = True
+    meta: Optional[dict[str, Any]] = None
+
+
 class CourseDiscussionEntryResponse(BaseModel):
     id: int
     target_type: str
@@ -338,25 +357,6 @@ class LearningNoteDiscussionCreate(BaseModel):
         from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 
         return normalize_content_format(value if isinstance(value, str) else None)
-
-
-class DiscussionLinkedTargetInput(BaseModel):
-    target_type: Literal["homework", "material", "learning_note", "course", "discussion_entry"]
-    target_id: int = Field(..., ge=1)
-
-
-class DiscussionLinkedTargetResponse(BaseModel):
-    target_type: Literal["homework", "material", "learning_note", "course", "discussion_entry"]
-    target_id: int
-    target_label: str
-    title: str
-    subject_id: Optional[int] = None
-    subject_name: Optional[str] = None
-    class_id: Optional[int] = None
-    class_name: Optional[str] = None
-    secondary_text: Optional[str] = None
-    available: bool = True
-    meta: Optional[dict[str, Any]] = None
 
 
 class DiscussionLinkTargetSearchResponse(BaseModel):
