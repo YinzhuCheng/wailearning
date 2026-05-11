@@ -2999,3 +2999,71 @@ Verification pattern:
 - seed a `teacher` user with `Subject.teacher_id = teacher.id` and `Subject.class_id = <class>`;
 - do **not** rely on `subject_class_links` or teacher `user.class_id` unless the scenario is explicitly class-scoped;
 - confirm that teacher-owned subject operations still work for attachments, homework batch operations, and attendance writes after the change.
+
+### Pitfall: validation targets must not borrow unrelated ledger IDs
+
+The validation selector reads `ledger_id` from
+`tests/TEST_SELECTION_TARGETS.json` and joins it to
+`docs/development/testing/test-execution-targets.csv`. During the
+repository-normalization hardening pass, several behavior pytest targets were
+found pointing at unrelated existing ledger rows, for example a notification
+API target using a Playwright discussion target's ledger id.
+
+Why this is dangerous:
+
+- selector output can show stale or unrelated pass history as if it covered the
+  current target;
+- a target without its own committed row can appear more trustworthy than it
+  is;
+- future agents may skip the correct validation because another target's
+  ledger row happened to be green.
+
+Current rule:
+
+- `ledger_id` must be `null` or exactly equal to the target's own `id`;
+- if a target has durable run history, add a matching row to
+  `test-execution-targets.csv` and set `ledger_id` to the same id;
+- do not use another target's ledger row as an informal alias.
+
+Verification pattern:
+
+```powershell
+.venv\Scripts\python.exe -m json.tool tests\TEST_SELECTION_TARGETS.json
+.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py
+.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v
+```
+
+If an alias mechanism is ever needed, design it explicitly in the registry,
+selector, lint script, and tests before using it in target metadata.
+
+### Pitfall: admin Playwright validation targets must use the external runner
+
+The admin Playwright registry used to mix direct `npx playwright test ...`
+commands with the repository-owned external runner. Direct commands can bypass
+the environment contract that the current Windows and agent workflows rely on:
+the runner starts FastAPI and Vite on the expected loopback ports, sets E2E seed
+environment variables, waits for readiness, invokes Playwright with external
+server mode, and cleans up only the processes it started.
+
+Current metadata rule:
+
+- every `category: "admin-playwright"` target in
+  `tests/TEST_SELECTION_TARGETS.json` must start with:
+
+```json
+["node", "scripts/playwright-external-runner.cjs"]
+```
+
+- direct `npx playwright test ...` is still useful for manual local debugging,
+  but it should not be the committed selector command for admin Playwright
+  targets unless the external-runner contract is intentionally changed.
+
+Verification pattern:
+
+```powershell
+.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py
+.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v
+```
+
+The selector tests include a repository-wide check that all current
+`admin-playwright` targets use `node scripts/playwright-external-runner.cjs`.
