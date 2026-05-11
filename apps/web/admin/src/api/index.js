@@ -410,7 +410,9 @@ const api = {
   },
   recentPosts: {
     mine: params => http.get('/recent-posts/me', { params }),
-    user: (userId, params) => http.get(`/recent-posts/users/${userId}`, { params })
+    mineGrouped: params => http.get('/recent-posts/me/grouped', { params }),
+    user: (userId, params) => http.get(`/recent-posts/users/${userId}`, { params }),
+    userGrouped: (userId, params) => http.get(`/recent-posts/users/${userId}/grouped`, { params })
   },
   llmSettings: {
     listPresets: () => http.get('/llm-settings/presets'),

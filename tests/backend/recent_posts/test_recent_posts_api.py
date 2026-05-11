@@ -241,6 +241,10 @@ def _ids(response: dict) -> list[str]:
     return [row["id"] for row in response["data"]]
 
 
+def _group_map(response: dict) -> dict[str, dict]:
+    return {row["kind"]: row for row in response["groups"]}
+
+
 def test_recent_posts_me_returns_visible_items_sorted_newest_first(client: TestClient):
     ctx = _scenario()
     author_headers = login_api(client, ctx["author_username"], "pass")
@@ -295,6 +299,39 @@ def test_recent_posts_teacher_feed_includes_linkable_homeworks_and_courses(clien
     assert course["target"]["target_type"] == "course"
 
 
+def test_recent_posts_grouped_feed_returns_link_type_groups(client: TestClient):
+    ctx = _scenario()
+    teacher_headers = login_api(client, ctx["teacher_username"], "pass")
+
+    resp = client.get("/api/recent-posts/me/grouped", headers=teacher_headers, params={"group_limit": 1})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    groups = _group_map(data)
+
+    assert data["group_limit"] == 1
+    assert [row["kind"] for row in data["groups"]] == ["course", "homework"]
+    assert groups["course"]["label"] == "课程"
+    assert groups["course"]["total"] == 2
+    assert len(groups["course"]["data"]) == 1
+    assert groups["course"]["data"][0]["target"]["target_type"] == "course"
+    assert groups["homework"]["label"] == "作业"
+    assert groups["homework"]["total"] == 1
+    assert groups["homework"]["data"][0]["target"]["target_type"] == "homework"
+
+
+def test_recent_posts_grouped_student_author_hides_empty_teacher_only_groups(client: TestClient):
+    ctx = _scenario()
+    author_headers = login_api(client, ctx["author_username"], "pass")
+
+    resp = client.get("/api/recent-posts/me/grouped", headers=author_headers)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    assert [row["kind"] for row in data["groups"]] == ["material", "note", "comment"]
+    assert "course" not in _group_map(data)
+    assert "homework" not in _group_map(data)
+
+
 def test_recent_posts_homework_and_course_kind_filters(client: TestClient):
     ctx = _scenario()
     teacher_headers = login_api(client, ctx["teacher_username"], "pass")
@@ -319,6 +356,13 @@ def test_recent_posts_teacher_feed_filters_course_scoped_items_for_student_viewe
     assert f"homework:{ctx['teacher_homework_id']}" in ids
     assert f"course:{ctx['course_id']}" in ids
     assert f"course:{ctx['other_course_id']}" not in ids
+
+    grouped = client.get(f"/api/recent-posts/users/{ctx['teacher_id']}/grouped", headers=same_headers)
+    assert grouped.status_code == 200, grouped.text
+    groups = _group_map(grouped.json())
+    assert groups["course"]["total"] == 1
+    assert groups["course"]["data"][0]["id"] == f"course:{ctx['course_id']}"
+    assert groups["homework"]["total"] == 1
 
 
 def test_recent_posts_teacher_feed_hidden_from_unenrolled_student(client: TestClient):

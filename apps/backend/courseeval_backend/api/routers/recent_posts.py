@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     RecentPostAuthorResponse,
+    RecentPostGroupResponse,
     RecentPostItemResponse,
+    RecentPostsGroupedResponse,
     RecentPostsResponse,
 )
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
@@ -39,8 +41,19 @@ router = APIRouter(prefix="/api/recent-posts", tags=["最近发表"])
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 50
+DEFAULT_GROUP_LIMIT = 3
+MAX_GROUP_LIMIT = 10
 RecentPostKind = Literal["all", "comment", "note", "material", "homework", "course"]
+RecentPostConcreteKind = Literal["comment", "note", "material", "homework", "course"]
 RECENT_POST_KIND_PATTERN = "^(all|comment|note|material|homework|course)$"
+RECENT_POST_GROUP_ORDER: tuple[RecentPostConcreteKind, ...] = ("course", "homework", "material", "note", "comment")
+RECENT_POST_GROUP_LABELS: dict[RecentPostConcreteKind, str] = {
+    "course": "课程",
+    "homework": "作业",
+    "material": "资料",
+    "note": "笔记",
+    "comment": "讨论",
+}
 
 _MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -428,6 +441,61 @@ def _recent_posts_for_author(
     )
 
 
+def _recent_posts_grouped_for_author(
+    *,
+    author: User,
+    group_limit: int,
+    from_created_at: Optional[datetime],
+    to_created_at: Optional[datetime],
+    db: Session,
+    current_user: User,
+) -> RecentPostsGroupedResponse:
+    groups: list[RecentPostGroupResponse] = []
+    for kind in RECENT_POST_GROUP_ORDER:
+        items = _collect_recent_posts(
+            author=author,
+            viewer=current_user,
+            db=db,
+            kind=kind,
+            from_created_at=from_created_at,
+            to_created_at=to_created_at,
+        )
+        if not items:
+            continue
+        groups.append(
+            RecentPostGroupResponse(
+                kind=kind,
+                label=RECENT_POST_GROUP_LABELS[kind],
+                total=len(items),
+                latest_created_at=items[0].created_at,
+                data=items[:group_limit],
+            )
+        )
+    return RecentPostsGroupedResponse(
+        author=_serialize_author(author),
+        group_limit=group_limit,
+        groups=groups,
+    )
+
+
+@router.get("/me/grouped", response_model=RecentPostsGroupedResponse)
+def get_my_recent_posts_grouped(
+    group_limit: int = Query(DEFAULT_GROUP_LIMIT, ge=1, le=MAX_GROUP_LIMIT),
+    from_created_at: Optional[datetime] = Query(None),
+    to_created_at: Optional[datetime] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return _recent_posts_grouped_for_author(
+        author=current_user,
+        group_limit=group_limit,
+        from_created_at=from_created_at,
+        to_created_at=to_created_at,
+        db=db,
+        current_user=current_user,
+    )
+
+
 @router.get("/me", response_model=RecentPostsResponse)
 def get_my_recent_posts(
     page: int = Query(1, ge=1),
@@ -443,6 +511,26 @@ def get_my_recent_posts(
         page=page,
         page_size=page_size,
         kind=kind,
+        from_created_at=from_created_at,
+        to_created_at=to_created_at,
+        db=db,
+        current_user=current_user,
+    )
+
+
+@router.get("/users/{user_id}/grouped", response_model=RecentPostsGroupedResponse)
+def get_user_recent_posts_grouped(
+    user_id: int,
+    group_limit: int = Query(DEFAULT_GROUP_LIMIT, ge=1, le=MAX_GROUP_LIMIT),
+    from_created_at: Optional[datetime] = Query(None),
+    to_created_at: Optional[datetime] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    author = _get_author_or_404(user_id, db)
+    return _recent_posts_grouped_for_author(
+        author=author,
+        group_limit=group_limit,
         from_created_at=from_created_at,
         to_created_at=to_created_at,
         db=db,

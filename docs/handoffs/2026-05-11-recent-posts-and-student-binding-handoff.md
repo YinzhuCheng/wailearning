@@ -280,6 +280,8 @@ Implemented routes:
 
 - `GET /api/recent-posts/me`
 - `GET /api/recent-posts/users/{user_id}`
+- `GET /api/recent-posts/me/grouped`
+- `GET /api/recent-posts/users/{user_id}/grouped`
 
 Supported `kind` values:
 
@@ -289,6 +291,13 @@ Supported `kind` values:
 - `material`
 - `homework`
 - `course`
+
+Grouped response behavior:
+
+- groups are ordered as `course`, `homework`, `material`, `note`, `comment`;
+- empty groups are omitted, so student pages normally show only note/discussion/material groups when those are the only visible authored kinds;
+- each group returns `total`, `latest_created_at`, and an initial `data` slice controlled by `group_limit`;
+- the frontend can load more rows for a group through the existing list endpoint with `kind`, `page`, and `page_size`.
 
 Visibility rule:
 
@@ -315,9 +324,13 @@ Entry points:
 - discussion author avatar opens that user's feed;
 - admin user management table has a `最近发表` action.
 
-The recent-posts page now exposes filters for all current authored kinds:
+The recent-posts page is organized by link type instead of a single mixed timeline:
 
-- all, comment, note, material, homework, course.
+- non-empty groups render as collapsible sections;
+- default group order is `课程`, `作业`, `资料`, `笔记`, `讨论`;
+- each group starts expanded and initially shows three rows;
+- groups with more rows expose `查看更多`;
+- the date range filter remains at the top and applies across all groups.
 
 Frontend files:
 
@@ -348,12 +361,13 @@ Targeted backend tests were added / expanded in:
 The tests cover:
 
 - `/api/recent-posts/me` sorted feed behavior;
+- grouped feed ordering and per-group limits;
 - `kind=material`, `kind=homework`, and `kind=course` filters;
 - teacher feeds including homework and course items;
 - link target payload types matching the link-card target types;
 - hidden private notes;
 - LLM assistant comments excluded;
-- same-course and outsider student visibility filtering;
+- same-course and outsider student visibility filtering for both list and grouped endpoints;
 - admin not bypassing private note visibility.
 
 Current targeted validation for this follow-up round:
@@ -364,7 +378,7 @@ Current targeted validation for this follow-up round:
 
 Result:
 
-- `11 passed`
+- `13 passed`
 
 ```powershell
 .\.venv\Scripts\python.exe -m py_compile apps\backend\courseeval_backend\api\routers\recent_posts.py apps\backend\courseeval_backend\api\schemas.py
@@ -385,7 +399,7 @@ Result:
 
 Local browser validation:
 
-- a local ignored Playwright helper under `.agent-run/` started the backend with `INIT_DEFAULT_DATA=true`, launched the admin SPA, logged in as `teacher / 111111`, opened `/recent-posts/me`, exercised the `homework` filter, and captured desktop/mobile screenshots.
+- a local ignored Playwright helper under `.agent-run/` started the backend with `INIT_DEFAULT_DATA=true`, launched the admin SPA, logged in as `teacher / 111111`, opened `/recent-posts/me`, captured the grouped desktop/mobile UI, and exercised group collapse.
 - screenshots remain local under `.agent-run/screenshots/` and are intentionally not committed.
 
 ---
@@ -404,7 +418,7 @@ Current branch/worktree state for this handoff line:
 
 - branch: `cursor/repository-normalization`
 - `最近发表` is implemented and aligned with linkable object types;
-- default demo data demonstrates homework, material, course, and discussion items in the feed;
+- default demo data demonstrates homework, material, course, and discussion groups in the feed;
 - no known unresolved failures in the targeted recent-posts validation listed above;
 - local screenshots are stored in `.agent-run/screenshots/` and should not be committed.
 

@@ -145,12 +145,26 @@ class RecentPostItemResponse(BaseModel):
     has_attachment: bool = False
 
 
+class RecentPostGroupResponse(BaseModel):
+    kind: Literal["comment", "note", "material", "homework", "course"]
+    label: str
+    total: int
+    latest_created_at: Optional[datetime] = None
+    data: List[RecentPostItemResponse]
+
+
 class RecentPostsResponse(BaseModel):
     author: RecentPostAuthorResponse
     page: int
     page_size: int
     total: int
     data: List[RecentPostItemResponse]
+
+
+class RecentPostsGroupedResponse(BaseModel):
+    author: RecentPostAuthorResponse
+    group_limit: int
+    groups: List[RecentPostGroupResponse]
 
 
 class CourseDiscussionEntryResponse(BaseModel):
