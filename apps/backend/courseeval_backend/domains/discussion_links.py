@@ -325,7 +325,8 @@ def _resolve_course_discussion_entry_target(
         return None
     author = row.author
     title = f"{_author_label(author)}: {_short_excerpt(row.body)}"
-    secondary = f"{row.subject.name if row.subject else '\u8bfe\u7a0b'} · {target_label(row.target_type)}\u8ba8\u8bba"
+    subject_name = row.subject.name if row.subject else "\u8bfe\u7a0b"
+    secondary = f"{subject_name} · {target_label(row.target_type)}\u8ba8\u8bba"
     return _serialize_target_payload(
         target_type="discussion_entry",
         target_id=row.id,
