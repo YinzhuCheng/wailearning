@@ -42,7 +42,7 @@
         <div class="style-section__head">
           <div>
             <h3>自定义组合</h3>
-            <p>颜色、字体、字号、透明度、阴影和圆角会立即预览；保存后可命名并再次选择。</p>
+            <p>颜色、字体、字号、透明度、阴影和界面圆润度会立即预览；保存后可命名并再次选择。</p>
           </div>
           <el-input
             v-model="styleName"
@@ -97,7 +97,7 @@
           </label>
 
           <label class="control-field">
-            <span>圆角</span>
+            <span>界面圆润度</span>
             <el-segmented v-model="draft.radius" :options="radiusOptions" data-testid="appearance-radius" />
           </label>
 

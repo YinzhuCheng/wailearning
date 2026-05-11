@@ -12,6 +12,7 @@ from apps.backend.courseeval_backend.db.models import (
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
+    CourseMaterialHomeworkLink,
     LLMQuotaReservation,
     LLMTokenUsageLog,
 )
@@ -32,6 +33,10 @@ def delete_attachment_if_unreferenced(
 
 def purge_homework_row(db: Session, homework: Homework) -> None:
     """Remove a homework row and dependent rows for internal/admin delete flows."""
+    db.query(CourseMaterialHomeworkLink).filter(CourseMaterialHomeworkLink.homework_id == homework.id).delete(
+        synchronize_session=False
+    )
+
     db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.homework_id == homework.id).delete(
         synchronize_session=False
     )

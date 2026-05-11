@@ -191,6 +191,27 @@ def ui_reorder_chapters(client: TestClient, headers: dict[str, str], subject_id:
     )
 
 
+def ui_add_homework_link(
+    client: TestClient,
+    headers: dict[str, str],
+    subject_id: int,
+    chapter_id: int,
+    homework_id: int,
+):
+    return client.post(
+        f"/api/material-chapters/homework-links?subject_id={subject_id}",
+        headers=headers,
+        json={"chapter_id": chapter_id, "homework_id": homework_id},
+    )
+
+
+def ui_remove_homework_link(client: TestClient, headers: dict[str, str], subject_id: int, link_id: int):
+    return client.delete(
+        f"/api/material-chapters/homework-links/{link_id}?subject_id={subject_id}",
+        headers=headers,
+    )
+
+
 def ui_materials_list(
     client: TestClient,
     headers: dict[str, str],

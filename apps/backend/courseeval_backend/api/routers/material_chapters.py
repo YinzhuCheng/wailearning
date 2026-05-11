@@ -6,7 +6,15 @@ from sqlalchemy.orm import Session
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
 from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, is_course_instructor
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.db.models import CourseMaterial, CourseMaterialChapter, CourseMaterialSection, Subject, User
+from apps.backend.courseeval_backend.db.models import (
+    CourseMaterial,
+    CourseMaterialChapter,
+    CourseMaterialHomeworkLink,
+    CourseMaterialSection,
+    Homework,
+    Subject,
+    User,
+)
 from apps.backend.courseeval_backend.api.schemas import (
     CourseMaterialAddPlacementRequest,
     CourseMaterialChapterCreate,
@@ -14,6 +22,8 @@ from apps.backend.courseeval_backend.api.schemas import (
     CourseMaterialChapterReorderRequest,
     CourseMaterialChapterTreeResponse,
     CourseMaterialChapterUpdate,
+    CourseMaterialHomeworkLinkCreate,
+    CourseMaterialHomeworkLinkResponse,
     CourseMaterialSectionReorderRequest,
 )
 from apps.backend.courseeval_backend.services.logging import LogService
@@ -30,6 +40,21 @@ def _chapter_belongs_to_subject(chapter: CourseMaterialChapter, subject_id: int)
     return int(chapter.subject_id) == int(subject_id)
 
 
+def _serialize_homework_link(link: CourseMaterialHomeworkLink, homework: Homework) -> CourseMaterialHomeworkLinkResponse:
+    return CourseMaterialHomeworkLinkResponse(
+        link_id=link.id,
+        homework_id=homework.id,
+        title=homework.title,
+        subject_id=homework.subject_id,
+        subject_name=homework.subject.name if homework.subject else None,
+        class_id=homework.class_id,
+        class_name=homework.class_obj.name if homework.class_obj else None,
+        due_date=homework.due_date,
+        created_at=homework.created_at,
+        sort_order=link.sort_order,
+    )
+
+
 def _build_tree_rows(subject_id: int, db: Session) -> List[CourseMaterialChapterNode]:
     chapters = (
         db.query(CourseMaterialChapter)
@@ -37,6 +62,26 @@ def _build_tree_rows(subject_id: int, db: Session) -> List[CourseMaterialChapter
         .order_by(CourseMaterialChapter.sort_order.asc(), CourseMaterialChapter.id.asc())
         .all()
     )
+    chapter_ids = [ch.id for ch in chapters]
+    links_by_chapter: dict[int, List[CourseMaterialHomeworkLinkResponse]] = {}
+    if chapter_ids:
+        link_rows = (
+            db.query(CourseMaterialHomeworkLink, Homework)
+            .join(Homework, Homework.id == CourseMaterialHomeworkLink.homework_id)
+            .filter(
+                CourseMaterialHomeworkLink.chapter_id.in_(chapter_ids),
+                Homework.subject_id == subject_id,
+            )
+            .order_by(
+                CourseMaterialHomeworkLink.chapter_id.asc(),
+                CourseMaterialHomeworkLink.sort_order.asc(),
+                CourseMaterialHomeworkLink.id.asc(),
+            )
+            .all()
+        )
+        for link, homework in link_rows:
+            links_by_chapter.setdefault(link.chapter_id, []).append(_serialize_homework_link(link, homework))
+
     by_parent: dict[Optional[int], List[CourseMaterialChapter]] = {}
     for ch in chapters:
         by_parent.setdefault(ch.parent_id, []).append(ch)
@@ -52,6 +97,7 @@ def _build_tree_rows(subject_id: int, db: Session) -> List[CourseMaterialChapter
                     title=ch.title,
                     sort_order=ch.sort_order,
                     is_uncategorized=bool(ch.is_uncategorized),
+                    homework_links=links_by_chapter.get(ch.id, []),
                     children=build(ch.id),
                 )
             )
@@ -130,6 +176,7 @@ def create_chapter(
         title=chapter.title,
         sort_order=chapter.sort_order,
         is_uncategorized=False,
+        homework_links=[],
         children=[],
     )
 
@@ -176,6 +223,7 @@ def update_chapter(
         title=chapter.title,
         sort_order=chapter.sort_order,
         is_uncategorized=bool(chapter.is_uncategorized),
+        homework_links=[],
         children=[],
     )
 
@@ -232,6 +280,9 @@ def delete_chapter(
         db.query(CourseMaterialSection).filter(CourseMaterialSection.chapter_id == chapter_id).delete(
             synchronize_session=False
         )
+    db.query(CourseMaterialHomeworkLink).filter(CourseMaterialHomeworkLink.chapter_id == chapter_id).delete(
+        synchronize_session=False
+    )
 
     children = db.query(CourseMaterialChapter).filter(CourseMaterialChapter.parent_id == chapter_id).all()
     for child in children:
@@ -394,6 +445,99 @@ def add_material_placement(
         user_agent=request.headers.get("user-agent"),
     )
     return {"section_id": sec.id, "chapter_id": chapter.id}
+
+
+@router.post("/homework-links", response_model=CourseMaterialHomeworkLinkResponse)
+def add_homework_link(
+    subject_id: int,
+    payload: CourseMaterialHomeworkLinkCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    course = ensure_course_access_http(subject_id, current_user, db)
+    _ensure_instructor(current_user, course)
+
+    chapter = db.query(CourseMaterialChapter).filter(CourseMaterialChapter.id == payload.chapter_id).first()
+    if not chapter or not _chapter_belongs_to_subject(chapter, subject_id):
+        raise HTTPException(status_code=404, detail="Chapter not found.")
+
+    homework = db.query(Homework).filter(Homework.id == payload.homework_id).first()
+    if not homework or homework.subject_id != subject_id:
+        raise HTTPException(status_code=404, detail="Homework not found for this course.")
+
+    exists = (
+        db.query(CourseMaterialHomeworkLink)
+        .filter(
+            CourseMaterialHomeworkLink.chapter_id == payload.chapter_id,
+            CourseMaterialHomeworkLink.homework_id == payload.homework_id,
+        )
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=400, detail="Homework already linked to this chapter.")
+
+    sort_order = db.query(CourseMaterialHomeworkLink).filter(
+        CourseMaterialHomeworkLink.chapter_id == payload.chapter_id
+    ).count()
+    link = CourseMaterialHomeworkLink(
+        chapter_id=payload.chapter_id,
+        homework_id=payload.homework_id,
+        sort_order=sort_order,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    db.refresh(homework)
+
+    LogService.log_create(
+        db,
+        user_id=current_user.id,
+        username=current_user.username,
+        target_type="course_directory_homework_link",
+        target_id=link.id,
+        target_name=f"{homework.title} -> {chapter.title}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    return _serialize_homework_link(link, homework)
+
+
+@router.delete("/homework-links/{link_id}")
+def remove_homework_link(
+    link_id: int,
+    subject_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    course = ensure_course_access_http(subject_id, current_user, db)
+    _ensure_instructor(current_user, course)
+
+    link = db.query(CourseMaterialHomeworkLink).filter(CourseMaterialHomeworkLink.id == link_id).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Homework link not found.")
+
+    chapter = db.query(CourseMaterialChapter).filter(CourseMaterialChapter.id == link.chapter_id).first()
+    if not chapter or not _chapter_belongs_to_subject(chapter, subject_id):
+        raise HTTPException(status_code=403, detail="Invalid homework link.")
+
+    homework = db.query(Homework).filter(Homework.id == link.homework_id).first()
+    label = f"{homework.title if homework else ''} -> {chapter.title}"
+    db.delete(link)
+    db.commit()
+
+    LogService.log_delete(
+        db,
+        user_id=current_user.id,
+        username=current_user.username,
+        target_type="course_directory_homework_link",
+        target_id=link_id,
+        target_name=label,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    return {"message": "Homework link removed."}
 
 
 @router.delete("/placements/{section_id}")

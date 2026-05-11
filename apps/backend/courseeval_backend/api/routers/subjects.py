@@ -33,6 +33,7 @@ from apps.backend.courseeval_backend.db.models import (
     CourseLLMConfig,
     CourseMaterial,
     CourseMaterialChapter,
+    CourseMaterialHomeworkLink,
     CourseMaterialSection,
     DiscussionLLMJob,
     Homework,
@@ -985,6 +986,9 @@ def delete_subject(
             synchronize_session=False,
         )
         db.query(CourseMaterialSection).filter(CourseMaterialSection.chapter_id.in_(chapter_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(CourseMaterialHomeworkLink).filter(CourseMaterialHomeworkLink.chapter_id.in_(chapter_ids)).delete(
             synchronize_session=False
         )
         db.query(CourseMaterialChapter).filter(CourseMaterialChapter.subject_id == subject_id).delete(

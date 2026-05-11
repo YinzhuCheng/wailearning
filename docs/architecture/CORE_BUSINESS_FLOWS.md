@@ -147,10 +147,13 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 
 - Materials and placement — `api/routers/materials.py`
 - Hierarchical chapters — `api/routers/material_chapters.py`
+- Course-directory homework links — `api/routers/material_chapters.py`
 
 ### Access
 
 - Instructor checks often use `is_course_instructor` / `ensure_course_access_http` — `domains/courses/access.py`.
+- A chapter can link course-level homework through `course_material_homework_links`. This does not move or duplicate homework ownership: `Homework.subject_id` remains the authoritative course scope, while the chapter link is only a course-directory placement.
+- Creating/removing homework links is restricted to the course instructor/admin via the same chapter-management gate. Reading the chapter tree still starts with `ensure_course_access_http`, so students only receive links inside courses they can already access.
 
 ---
 

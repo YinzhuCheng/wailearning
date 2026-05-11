@@ -675,7 +675,7 @@ const showManageActions = computed(() => !isClassTeacherView.value)
 const pageTitle = computed(() => (isClassTeacherView.value ? '课程信息' : '课程管理'))
 const pageSubtitle = computed(() => {
   if (isClassTeacherView.value) {
-    return currentClassId.value ? `${currentClassName.value} 全部课程信息；班主任可编辑课程资料、封面与 LLM 配置（与任课教师、管理员共享后端权限）。` : '请先为班主任账号分配班级。'
+    return currentClassId.value ? `${currentClassName.value} 全部课程信息；班主任可编辑课程目录、封面与 LLM 配置（与任课教师、管理员共享后端权限）。` : '请先为班主任账号分配班级。'
   }
 
   return '管理员可统一查看、编辑课程信息与课程时间安排。'

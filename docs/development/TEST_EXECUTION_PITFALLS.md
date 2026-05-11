@@ -2328,10 +2328,20 @@ TypeError: fetch failed
 [cause]: Error: read ECONNRESET
 ```
 
+Another observed symptom when the commands are the repository external runner
+instead of raw Playwright:
+
+```text
+Port 3012 is in use, trying another one...
+page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3012/login
+sqlite3.OperationalError: database is locked
+```
+
 Context:
 
 Two separate Playwright CLI commands were started at the same time from
-`<repo>/apps/web/admin`, both using the default admin Playwright config.
+`<repo>/apps/web/admin`, both using the default admin Playwright config or both
+using `node scripts/playwright-external-runner.cjs`.
 
 Relevant config shape:
 
@@ -2351,6 +2361,15 @@ performing a Node-side `fetch(...)` against the local API. The resulting error
 is a local backend/webServer connection reset. It is not evidence of Codex
 platform high demand, and it is not evidence that a real external LLM provider
 was called.
+
+With the external runner, Vite may notice that the default UI port is occupied
+and auto-bind to the next available port. The test process can still be
+configured with `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3012`, so page navigation
+then fails against the original port even though Vite printed a usable
+`http://127.0.0.1:3013/` URL. A second runner can also collide with the same
+SQLite database during FastAPI startup / schema repair, surfacing as
+`database is locked`. Treat both as the same orchestration class: two local E2E
+owners are trying to manage one default environment.
 
 How to identify the target:
 
@@ -2386,11 +2405,18 @@ session before invoking Playwright. Keep `NO_PROXY=localhost,127.0.0.1,::1` when
 a local HTTP proxy is configured so localhost E2E traffic does not leave the
 machine.
 
+For `npm.cmd run test:e2e:external -- ...`, do not launch two such commands in
+parallel on the default ports. Run targeted specs serially, or explicitly export
+a distinct `E2E_API_PORT`, `E2E_UI_PORT`, and database path for each runner
+process if parallelism is truly required.
+
 Interpretation:
 
 If the same test passes when rerun serially with the same code and local mock
 LLM endpoint, treat the earlier `ECONNRESET` as local E2E orchestration
-contention rather than product behavior.
+contention rather than product behavior. The same interpretation applies to
+the `3012` refused / `database is locked` pair after a parallel external-runner
+attempt.
 
 ### Pitfall: outbound dependency commands may need the local VPN proxy
 

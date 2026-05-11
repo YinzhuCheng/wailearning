@@ -19,7 +19,7 @@ from sqlalchemy import text
 from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
 from apps.backend.courseeval_backend.llm_grading import process_grading_task
 from apps.backend.courseeval_backend.main import app
-from apps.backend.courseeval_backend.db.models import HomeworkGradingTask, Subject
+from apps.backend.courseeval_backend.db.models import Homework, HomeworkGradingTask, Subject
 from tests.scenarios.llm_scenario import ensure_admin, json_llm_response, make_grading_course_with_homework, make_multi_student_scenario
 from tests.scenarios.material_flow import (
     ensure_class_teacher_same_class,
@@ -29,10 +29,12 @@ from tests.scenarios.material_flow import (
     make_subject_with_roster,
     ui_chapter_tree,
     ui_create_chapter,
+    ui_add_homework_link,
     ui_create_material,
     ui_materials_list,
     ui_notification_sync,
     ui_notifications_list,
+    ui_remove_homework_link,
     ui_reorder_chapters,
     ui_update_material,
 )
@@ -178,6 +180,72 @@ def test_ui09_section_reorder_changes_slice_order(client: TestClient) -> None:
     assert ro.status_code == 200
     rows = ui_materials_list(client, th, class_id=ctx["class_id"], subject_id=ctx["subject_id"], chapter_id=unc).json()["data"]
     assert [rows[0]["id"], rows[1]["id"]] == [m2["id"], m1["id"]]
+
+
+def test_ui10_teacher_links_homework_into_chapter_and_student_reads_link(client: TestClient) -> None:
+    ctx = make_subject_with_roster()
+    th = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    st = headers_for(client, ctx["student_username"], ctx["student_password"])
+    chapter_id = ui_create_chapter(client, th, ctx["subject_id"], "Homework chapter", None).json()["id"]
+
+    db = SessionLocal()
+    try:
+        homework = Homework(
+            title="Chapter linked homework",
+            content="Do the linked exercise.",
+            class_id=ctx["class_id"],
+            subject_id=ctx["subject_id"],
+            max_score=100,
+            auto_grading_enabled=False,
+            created_by=ctx["teacher_id"],
+        )
+        db.add(homework)
+        db.commit()
+        db.refresh(homework)
+        homework_id = homework.id
+    finally:
+        db.close()
+
+    linked = ui_add_homework_link(client, th, ctx["subject_id"], chapter_id, homework_id)
+    assert linked.status_code == 200, linked.text
+    assert linked.json()["homework_id"] == homework_id
+
+    tree = ui_chapter_tree(client, st, ctx["subject_id"])
+    assert tree.status_code == 200, tree.text
+    root = next(node for node in tree.json()["nodes"] if node["id"] == chapter_id)
+    assert root["homework_links"][0]["title"] == "Chapter linked homework"
+
+
+def test_ui11_student_and_foreign_teacher_cannot_manage_homework_links(client: TestClient) -> None:
+    ctx = make_subject_with_roster()
+    th = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    st = headers_for(client, ctx["student_username"], ctx["student_password"])
+    foreign = ensure_foreign_teacher()
+    fh = headers_for(client, foreign["username"], foreign["password"])
+    chapter_id = ui_create_chapter(client, th, ctx["subject_id"], "Guarded", None).json()["id"]
+
+    db = SessionLocal()
+    try:
+        homework = Homework(
+            title="Guarded linked homework",
+            content="x",
+            class_id=ctx["class_id"],
+            subject_id=ctx["subject_id"],
+            created_by=ctx["teacher_id"],
+        )
+        db.add(homework)
+        db.commit()
+        db.refresh(homework)
+        homework_id = homework.id
+    finally:
+        db.close()
+
+    assert ui_add_homework_link(client, st, ctx["subject_id"], chapter_id, homework_id).status_code == 403
+    assert ui_add_homework_link(client, fh, ctx["subject_id"], chapter_id, homework_id).status_code == 403
+    ok = ui_add_homework_link(client, th, ctx["subject_id"], chapter_id, homework_id)
+    assert ok.status_code == 200, ok.text
+    link_id = ok.json()["link_id"]
+    assert ui_remove_homework_link(client, st, ctx["subject_id"], link_id).status_code == 403
 
 
 def test_ui10_delete_chapter_moves_sections_to_uncategorized(client: TestClient) -> None:

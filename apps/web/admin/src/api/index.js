@@ -470,7 +470,11 @@ const api = {
     addPlacement: (materialId, subjectId, data) =>
       http.post(`/material-chapters/materials/${materialId}/placements?subject_id=${subjectId}`, data),
     removePlacement: (sectionId, subjectId) =>
-      http.delete(`/material-chapters/placements/${sectionId}?subject_id=${subjectId}`)
+      http.delete(`/material-chapters/placements/${sectionId}?subject_id=${subjectId}`),
+    addHomeworkLink: (subjectId, data) =>
+      http.post(`/material-chapters/homework-links?subject_id=${subjectId}`, data),
+    removeHomeworkLink: (linkId, subjectId) =>
+      http.delete(`/material-chapters/homework-links/${linkId}?subject_id=${subjectId}`)
   },
   learningNotes: {
     list: params => http.get('/learning-notes', { params }),

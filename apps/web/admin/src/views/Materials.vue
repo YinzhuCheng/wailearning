@@ -2,9 +2,9 @@
   <div class="materials-page" :class="`materials-page--${materialPresentationStyle}`">
     <div class="page-header">
       <div>
-        <h1 class="page-title">课程资料</h1>
+        <h1 class="page-title">课程目录</h1>
         <p class="page-subtitle">
-          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先选择课程后查看资料。' }}
+          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先选择课程后查看目录。' }}
         </p>
       </div>
       <div class="header-actions">
@@ -37,7 +37,7 @@
         >
           <div class="chapter-sidebar__head">
             <div class="chapter-sidebar__heading">
-              <span class="chapter-sidebar__eyebrow">教材目录</span>
+              <span class="chapter-sidebar__eyebrow">课程目录</span>
               <span class="chapter-sidebar__title">章节</span>
               <span class="chapter-sidebar__meta">{{ chapterSummaryText }}</span>
             </div>
@@ -64,13 +64,13 @@
                   @click="collapseAllChapters"
                 />
               </el-tooltip>
-              <el-tooltip content="收起教材目录" placement="top">
+              <el-tooltip content="收起课程目录" placement="top">
                 <el-button
                   class="chapter-outline-btn"
                   text
                   circle
                   :icon="Fold"
-                  aria-label="收起教材目录"
+                  aria-label="收起课程目录"
                   data-testid="materials-collapse-chapter-sidebar"
                   @click="isChapterSidebarCollapsed = true"
                 />
@@ -116,7 +116,8 @@
                 type="button"
                 class="tree-node-label"
                 :class="{ 'tree-node-label--uncategorized': data.is_uncategorized }"
-                @click.stop="openChapterRead(data)"
+                @click.stop="handleChapterClick(data)"
+                @dblclick.stop="openChapterRead(data)"
               >
                 <span class="tree-node-label__title">{{ displayChapterTitle(data) }}</span>
                 <el-tag v-if="data.is_uncategorized" size="small" type="info" class="tree-tag">资料库</el-tag>
@@ -133,13 +134,13 @@
         <section class="materials-main">
           <div class="materials-toolbar">
             <div class="materials-toolbar__summary">
-              <el-tooltip v-if="isChapterSidebarCollapsed" content="展开教材目录" placement="top">
+              <el-tooltip v-if="isChapterSidebarCollapsed" content="展开课程目录" placement="top">
                 <el-button
                   class="chapter-outline-btn materials-toolbar__outline-toggle"
                   text
                   circle
                   :icon="Expand"
-                  aria-label="展开教材目录"
+                  aria-label="展开课程目录"
                   data-testid="materials-expand-chapter-sidebar"
                   @click="isChapterSidebarCollapsed = false"
                 />
@@ -147,7 +148,9 @@
               <div class="materials-toolbar__text">
                 <span class="materials-toolbar__eyebrow">当前章节</span>
                 <strong data-testid="materials-current-chapter">{{ currentChapterTitle }}</strong>
-                <span class="materials-toolbar__count">{{ materials.length }} 篇资料</span>
+                <span class="materials-toolbar__count">
+                  {{ materials.length }} 篇资料 · {{ currentChapterHomeworkLinks.length }} 个作业
+                </span>
               </div>
             </div>
             <div class="materials-toolbar__actions">
@@ -157,6 +160,60 @@
               <el-button text size="small" @click="isMaterialShelfCollapsed = !isMaterialShelfCollapsed">
                 {{ isMaterialShelfCollapsed ? '展开资料列表' : '收起资料列表' }}
               </el-button>
+            </div>
+          </div>
+
+          <div class="chapter-homework-panel" data-testid="materials-homework-links-panel">
+            <div class="chapter-homework-panel__head">
+              <div>
+                <span class="materials-toolbar__eyebrow">关联作业</span>
+                <strong>{{ currentChapterTitle }}</strong>
+              </div>
+              <el-button
+                v-if="canManageChapters && selectedChapterId"
+                type="primary"
+                plain
+                size="small"
+                data-testid="materials-add-homework-link"
+                @click="openHomeworkLinkDialog"
+              >
+                添加作业链接
+              </el-button>
+            </div>
+            <el-empty
+              v-if="!currentChapterHomeworkLinks.length"
+              description="当前章节暂无关联作业"
+              :image-size="72"
+            />
+            <div v-else class="chapter-homework-list">
+              <article
+                v-for="link in currentChapterHomeworkLinks"
+                :key="link.link_id"
+                class="chapter-homework-card"
+                data-testid="materials-homework-link-card"
+                @click="openHomeworkLink(link)"
+              >
+                <div class="chapter-homework-card__main">
+                  <span class="chapter-homework-card__type">作业</span>
+                  <strong>{{ link.title }}</strong>
+                  <span class="chapter-homework-card__meta">
+                    {{ link.subject_name || selectedCourse?.name || '课程作业' }}
+                    <template v-if="link.due_date"> · 截止 {{ formatDate(link.due_date) }}</template>
+                  </span>
+                </div>
+                <div class="chapter-homework-card__actions" @click.stop>
+                  <el-button type="primary" link size="small" @click="openHomeworkLink(link)">打开</el-button>
+                  <el-button
+                    v-if="canManageChapters"
+                    type="danger"
+                    link
+                    size="small"
+                    @click="removeHomeworkLink(link)"
+                  >
+                    移除
+                  </el-button>
+                </div>
+              </article>
             </div>
           </div>
 
@@ -392,6 +449,48 @@
         <el-button type="primary" :loading="placementSubmitting" @click="submitExtraPlacement">添加引用</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="homeworkLinkDialogVisible"
+      title="添加作业链接"
+      width="min(720px, calc(100vw - 28px))"
+      destroy-on-close
+    >
+      <div class="homework-link-picker">
+        <el-input
+          v-model="homeworkSearchText"
+          clearable
+          placeholder="按作业标题搜索"
+          data-testid="materials-homework-link-search"
+        />
+        <div v-loading="homeworkPickerLoading" class="homework-link-picker__results">
+          <el-empty v-if="!homeworkPickerLoading && !homeworkPickerRows.length" description="没有找到可关联的作业" />
+          <div
+            v-for="item in homeworkPickerRows"
+            :key="item.target_id"
+            class="homework-link-picker__row"
+            data-testid="materials-homework-link-option"
+          >
+            <div class="homework-link-picker__meta">
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.secondary_text || selectedCourse?.name || '课程作业' }}</span>
+            </div>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :disabled="linkedHomeworkIds.has(Number(item.target_id))"
+              @click="addHomeworkLink(item)"
+            >
+              {{ linkedHomeworkIds.has(Number(item.target_id)) ? '已关联' : '关联' }}
+            </el-button>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="homeworkLinkDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -413,6 +512,7 @@ import {
   getMaterialPresentationStyle,
   MATERIAL_PRESENTATION_EVENT
 } from '@/utils/materialPresentation'
+import { openDiscussionLinkedTarget } from '@/utils/discussionLinkTargets'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -428,6 +528,7 @@ const detailVisible = ref(false)
 const chapterDialogVisible = ref(false)
 const renameChapterVisible = ref(false)
 const placementDialogVisible = ref(false)
+const homeworkLinkDialogVisible = ref(false)
 const currentMaterial = ref(null)
 const editingMaterial = ref(null)
 const materials = ref([])
@@ -446,6 +547,10 @@ const renameChapterId = ref(null)
 const renameChapterTitle = ref('')
 const placementTarget = ref(null)
 const extraChapterId = ref(null)
+const homeworkSearchText = ref('')
+const homeworkPickerRows = ref([])
+const homeworkPickerLoading = ref(false)
+let homeworkPickerDebounceTimer = null
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
@@ -634,6 +739,17 @@ const currentChapterTitle = computed(() => {
   const row = flat.find(x => x.id === selectedChapterId.value)
   return row?.title || '—'
 })
+
+const currentChapter = computed(() => {
+  const flat = flattenTree(chapterTreeNodes.value)
+  return flat.find(x => x.id === selectedChapterId.value) || null
+})
+
+const currentChapterHomeworkLinks = computed(() => currentChapter.value?.homework_links || [])
+
+const linkedHomeworkIds = computed(
+  () => new Set(currentChapterHomeworkLinks.value.map(item => Number(item.homework_id)))
+)
 
 const chapterSummaryText = computed(() => {
   const total = countStructuredChapters(chapterTreeNodes.value)
@@ -1080,6 +1196,70 @@ const submitExtraPlacement = async () => {
   }
 }
 
+const loadHomeworkPickerRows = async () => {
+  if (!homeworkLinkDialogVisible.value || !selectedCourse.value) return
+  homeworkPickerLoading.value = true
+  try {
+    const result = await api.discussions.searchTargets({
+      target_type: 'homework',
+      q: homeworkSearchText.value || undefined,
+      preferred_subject_id: selectedCourse.value.id,
+      limit: 30
+    })
+    homeworkPickerRows.value = (result?.data || []).filter(
+      item => String(item.subject_id || '') === String(selectedCourse.value.id)
+    )
+  } finally {
+    homeworkPickerLoading.value = false
+  }
+}
+
+const scheduleHomeworkPickerLoad = () => {
+  if (homeworkPickerDebounceTimer) {
+    window.clearTimeout(homeworkPickerDebounceTimer)
+  }
+  homeworkPickerDebounceTimer = window.setTimeout(loadHomeworkPickerRows, 180)
+}
+
+const openHomeworkLinkDialog = () => {
+  homeworkSearchText.value = ''
+  homeworkPickerRows.value = []
+  homeworkLinkDialogVisible.value = true
+  loadHomeworkPickerRows()
+}
+
+const addHomeworkLink = async item => {
+  if (!selectedCourse.value || !selectedChapterId.value || !item?.target_id) return
+  await api.materialChapters.addHomeworkLink(selectedCourse.value.id, {
+    chapter_id: selectedChapterId.value,
+    homework_id: item.target_id
+  })
+  ElMessage.success('作业链接已添加')
+  await loadChapterTree()
+  await loadHomeworkPickerRows()
+}
+
+const removeHomeworkLink = async link => {
+  if (!selectedCourse.value || !link?.link_id) return
+  await api.materialChapters.removeHomeworkLink(link.link_id, selectedCourse.value.id)
+  ElMessage.success('作业链接已移除')
+  await loadChapterTree()
+}
+
+const openHomeworkLink = async link => {
+  await openDiscussionLinkedTarget(
+    {
+      target_type: 'homework',
+      target_id: link.homework_id,
+      subject_id: link.subject_id,
+      class_id: link.class_id,
+      available: true
+    },
+    router,
+    userStore
+  )
+}
+
 onMounted(async () => {
   if (typeof window !== 'undefined') {
     window.addEventListener(MATERIAL_PRESENTATION_EVENT, handleMaterialPresentationStyleChange)
@@ -1107,11 +1287,18 @@ watch(selectedChapterId, () => {
   loadMaterials()
 })
 
+watch(homeworkSearchText, () => {
+  scheduleHomeworkPickerLoad()
+})
+
 const handleMaterialPresentationStyleChange = event => {
   materialPresentationStyle.value = event?.detail || getMaterialPresentationStyle()
 }
 
 onBeforeUnmount(() => {
+  if (homeworkPickerDebounceTimer) {
+    window.clearTimeout(homeworkPickerDebounceTimer)
+  }
   if (typeof window !== 'undefined') {
     window.removeEventListener(MATERIAL_PRESENTATION_EVENT, handleMaterialPresentationStyleChange)
   }
@@ -1370,7 +1557,10 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
   gap: 6px;
   flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 36px;
+  max-width: 100%;
   padding: 5px 8px 5px 0;
   border: none;
   background: transparent;
@@ -1385,6 +1575,8 @@ onBeforeUnmount(() => {
 
 .tree-node-label__title {
   display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .tree-node-label:hover .tree-node-label__title {
@@ -1404,8 +1596,11 @@ onBeforeUnmount(() => {
 .tree-node-actions {
   margin-left: auto;
   display: inline-flex;
+  flex-wrap: wrap;
   flex-shrink: 0;
   gap: 2px;
+  justify-content: flex-end;
+  max-width: 100%;
   padding-top: 4px;
 }
 
@@ -1466,6 +1661,130 @@ onBeforeUnmount(() => {
   border-radius: var(--wa-radius-lg);
   border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
   box-shadow: var(--wa-shadow-surface);
+}
+
+.chapter-homework-panel {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 82%, transparent);
+  border-radius: var(--wa-radius-lg);
+  background: color-mix(in srgb, var(--wa-color-surface) 92%, var(--wa-color-bg-soft));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--wa-color-text) 4%, transparent);
+}
+
+.chapter-homework-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.chapter-homework-panel__head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chapter-homework-list {
+  display: grid;
+  gap: 8px;
+}
+
+.chapter-homework-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 78%, transparent);
+  border-radius: var(--wa-radius-md);
+  background: var(--wa-color-surface);
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.chapter-homework-card:hover {
+  border-color: color-mix(in srgb, var(--wa-color-primary-500) 36%, transparent);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--wa-color-primary-600) 10%, transparent);
+  transform: translateY(-1px);
+}
+
+.chapter-homework-card__main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.chapter-homework-card__main strong {
+  color: var(--wa-color-text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.chapter-homework-card__type {
+  color: var(--wa-color-primary-600);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chapter-homework-card__meta {
+  color: var(--wa-color-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chapter-homework-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.homework-link-picker {
+  display: grid;
+  gap: 12px;
+}
+
+.homework-link-picker__results {
+  min-height: 180px;
+  max-height: min(52vh, 430px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.homework-link-picker__row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.homework-link-picker__row:last-child {
+  border-bottom: none;
+}
+
+.homework-link-picker__meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.homework-link-picker__meta strong {
+  color: var(--wa-color-text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.homework-link-picker__meta span {
+  color: var(--wa-color-text-muted);
+  font-size: 12px;
 }
 
 .materials-shelf-card__head {
@@ -1548,6 +1867,47 @@ onBeforeUnmount(() => {
   .chapter-sidebar__actions {
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .chapter-homework-panel__head,
+  .chapter-homework-card,
+  .homework-link-picker__row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .chapter-homework-card__actions,
+  .chapter-homework-panel__head :deep(.el-button),
+  .homework-link-picker__row :deep(.el-button) {
+    width: 100%;
+  }
+
+  .chapter-homework-card__actions {
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .chapter-tree :deep(.el-tree-node__content) {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .tree-node-label {
+    flex: 1 1 calc(100% - 32px);
+    padding-right: 0;
+  }
+
+  .tree-node-actions {
+    flex: 1 1 calc(100% - 32px);
+    margin-left: 32px;
+    padding: 0 0 6px;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .tree-node-actions :deep(.el-button + .el-button) {
+    margin-left: 0;
   }
 }
 </style>

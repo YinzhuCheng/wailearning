@@ -30,6 +30,7 @@ from apps.backend.courseeval_backend.db.models import (
     CourseLLMConfigEndpoint,
     CourseMaterial,
     CourseMaterialChapter,
+    CourseMaterialHomeworkLink,
     CourseMaterialSection,
     DiscussionLLMJob,
     Homework,
@@ -276,6 +277,9 @@ _DEMO_REQUIRED_MATERIAL_TREE = (
                     {
                         "title": _DEMO_CHAPTER_L3,
                         "sort_order": 0,
+                        "homework_links": (
+                            {"title_contains": "第一次作业", "sort_order": 0},
+                        ),
                         "materials": (
                             {
                                 "title": "【演示】课程运行说明与第一次课检查清单",
@@ -1213,6 +1217,50 @@ def _ensure_demo_material(
         exists_sec.sort_order = sort_order
 
 
+def _ensure_homework_link_for_title(
+    db: Session,
+    *,
+    subject_id: int,
+    chapter_id: int,
+    homework_title_contains: str,
+    sort_order: int,
+) -> None:
+    homework = (
+        db.query(Homework)
+        .filter(Homework.subject_id == subject_id, Homework.title.contains(homework_title_contains))
+        .first()
+    )
+    _ensure_demo_homework_link(
+        db,
+        chapter_id=chapter_id,
+        homework_id=homework.id if homework else None,
+        sort_order=sort_order,
+    )
+
+
+def _ensure_demo_homework_link(
+    db: Session,
+    *,
+    chapter_id: int,
+    homework_id: int | None,
+    sort_order: int,
+) -> None:
+    if homework_id is None:
+        return
+    exists = (
+        db.query(CourseMaterialHomeworkLink)
+        .filter(
+            CourseMaterialHomeworkLink.chapter_id == chapter_id,
+            CourseMaterialHomeworkLink.homework_id == homework_id,
+        )
+        .first()
+    )
+    if exists:
+        exists.sort_order = sort_order
+        return
+    db.add(CourseMaterialHomeworkLink(chapter_id=chapter_id, homework_id=homework_id, sort_order=sort_order))
+
+
 def _seed_demo_material_chapters(db: Session, *, course: Subject, class_id: int, teacher_id: int) -> None:
     """Richer multi-week outline and materials for the required demo course."""
 
@@ -1235,6 +1283,14 @@ def _seed_demo_material_chapters(db: Session, *, course: Subject, class_id: int,
                     title=str(material["title"]),
                     content=str(material["content"]),
                     sort_order=int(material.get("sort_order", 0)),
+                )
+            for homework_link in node.get("homework_links", ()):
+                _ensure_homework_link_for_title(
+                    db,
+                    subject_id=course.id,
+                    chapter_id=chapter.id,
+                    homework_title_contains=str(homework_link["title_contains"]),
+                    sort_order=int(homework_link.get("sort_order", 0)),
                 )
             walk(tuple(node.get("children", ())), chapter.id)
 
@@ -2407,7 +2463,6 @@ def seed_demo_course_bundle(db: Session) -> None:
     )
 
     _seed_demo_grade_weights(db, course=course)
-    _seed_demo_material_chapters(db, course=course, class_id=klass.id, teacher_id=teacher.id)
 
     enrolled = sync_course_enrollments(course, db)
     if enrolled:
@@ -2460,6 +2515,7 @@ def seed_demo_course_bundle(db: Session) -> None:
         .filter(Homework.subject_id == course.id, Homework.title == _HOMEWORK_TITLE)
         .first()
     )
+    _seed_demo_material_chapters(db, course=course, class_id=klass.id, teacher_id=teacher.id)
     _seed_demo_prefilled_homework_submissions(db, homework_row=hw, klass=klass)
 
     _seed_llm_elective_course(db, teacher=teacher, klass=klass, semester=semester)

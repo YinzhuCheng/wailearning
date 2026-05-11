@@ -53,7 +53,7 @@
             保存基本信息
           </el-button>
           <el-button plain @click="router.push({ name: 'RecentPostsMine' })">
-            最近发表
+            近期发表
           </el-button>
         </el-form>
       </el-card>

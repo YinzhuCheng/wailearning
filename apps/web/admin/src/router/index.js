@@ -196,13 +196,13 @@ const routes = [
         path: 'recent-posts/me',
         name: 'RecentPostsMine',
         component: () => import('@/views/RecentPosts.vue'),
-        meta: { title: '最近发表' }
+        meta: { title: '近期发表' }
       },
       {
         path: 'recent-posts/users/:userId',
         name: 'RecentPostsUser',
         component: () => import('@/views/RecentPosts.vue'),
-        meta: { title: '最近发表' }
+        meta: { title: '近期发表' }
       },
       {
         path: 'notifications',

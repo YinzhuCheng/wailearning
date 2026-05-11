@@ -59,7 +59,7 @@
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
             <el-button size="small" @click="router.push({ name: 'RecentPostsUser', params: { userId: String(row.id) } })">
-              最近发表
+              近期发表
             </el-button>
             <el-button
               v-if="isAdmin"

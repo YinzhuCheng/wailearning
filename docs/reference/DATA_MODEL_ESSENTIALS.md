@@ -60,6 +60,7 @@ Effects for agents:
 | `CourseMaterial` | `course_materials` | `content_format` default `markdown` |
 | `CourseMaterialChapter` | `course_material_chapters` | Hierarchy + uncategorized bucket |
 | `CourseMaterialSection` | `course_material_sections` | Placement linking materials to chapters |
+| `CourseMaterialHomeworkLink` | `course_material_homework_links` | Placement linking course-level homework into material/course-directory chapters; homework ownership stays on `Homework.subject_id` |
 | `CourseGradeScheme` | `course_grade_schemes` | Weights |
 | `CourseExamWeight` | `course_exam_weights` | Exam composition |
 

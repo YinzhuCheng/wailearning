@@ -20,6 +20,7 @@ from apps.backend.courseeval_backend.db.models import (
     CourseLLMConfigEndpoint,
     CourseMaterial,
     CourseMaterialChapter,
+    CourseMaterialHomeworkLink,
     Homework,
     HomeworkAttempt,
     HomeworkSubmission,
@@ -130,6 +131,12 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert (hw.rubric_staff_only or "").strip()
         assert hw.max_submissions == 3
         assert hw.due_date is not None
+        assert (
+            db.query(CourseMaterialHomeworkLink)
+            .filter(CourseMaterialHomeworkLink.homework_id == hw.id)
+            .count()
+            >= 1
+        )
         st1 = students_by_no["stu1"]
         st1_attempts = (
             db.query(HomeworkAttempt)

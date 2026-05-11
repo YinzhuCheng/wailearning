@@ -21,7 +21,7 @@
             <img :src="courseEvalMark" alt="" class="logo-mark" />
           </div>
           <div v-if="!isCollapsed" class="logo-texts">
-            <h2>{{ userStore.systemSettings?.system_name || 'CourseEval' }}</h2>
+            <h2>CourEval</h2>
             <p>大学教学管理系统</p>
           </div>
         </div>
@@ -55,16 +55,16 @@
 
         <div class="sidebar-footer">
           <div v-show="!isCollapsed" class="sidebar-footer__section-title">账户</div>
-          <el-tooltip content="个人设置" placement="right" :disabled="!isCollapsed || isMobile">
+          <el-tooltip content="近期发表" placement="right" :disabled="!isCollapsed || isMobile">
             <button
               type="button"
               class="sidebar-footer__btn"
-              :class="{ 'sidebar-footer__btn--active': route.path === '/personal-settings' }"
-              data-testid="sidebar-personal-settings"
-              @click="goPersonalSettings"
+              :class="{ 'sidebar-footer__btn--active': route.path === '/recent-posts/me' }"
+              data-testid="sidebar-recent-posts"
+              @click="goRecentPosts"
             >
-              <el-icon :size="18"><Setting /></el-icon>
-              <span v-show="!isCollapsed" class="sidebar-footer__label">个人设置</span>
+              <el-icon :size="18"><Clock /></el-icon>
+              <span v-show="!isCollapsed" class="sidebar-footer__label">近期发表</span>
             </button>
           </el-tooltip>
           <el-tooltip content="通知中心" placement="right" :disabled="!isCollapsed || isMobile">
@@ -80,6 +80,18 @@
               <span v-if="!isCollapsed && headerUnreadCount > 0" class="sidebar-footer__badge">
                 {{ headerUnreadCount > 99 ? '99+' : headerUnreadCount }}
               </span>
+            </button>
+          </el-tooltip>
+          <el-tooltip content="个人设置" placement="right" :disabled="!isCollapsed || isMobile">
+            <button
+              type="button"
+              class="sidebar-footer__btn"
+              :class="{ 'sidebar-footer__btn--active': route.path === '/personal-settings' }"
+              data-testid="sidebar-personal-settings"
+              @click="goPersonalSettings"
+            >
+              <el-icon :size="18"><Setting /></el-icon>
+              <span v-show="!isCollapsed" class="sidebar-footer__label">个人设置</span>
             </button>
           </el-tooltip>
           <el-tooltip content="退出登录" placement="right" :disabled="!isCollapsed || isMobile">
@@ -219,6 +231,8 @@
                     <p>{{ tokenDetailText }}</p>
                   </div>
                 </el-dropdown-item>
+                <el-dropdown-item command="recent-posts">近期发表</el-dropdown-item>
+                <el-dropdown-item command="notifications">通知中心</el-dropdown-item>
                 <el-dropdown-item command="personal-settings">个人设置</el-dropdown-item>
                 <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -248,6 +262,7 @@ import {
   ArrowRight,
   Bell,
   Calendar,
+  Clock,
   Collection,
   DataAnalysis,
   Document,
@@ -519,7 +534,7 @@ const routeNameMap = {
   '/points': '积分系统',
   '/points-display': '积分展示',
   '/settings': '系统设置',
-  '/materials': '课程资料',
+  '/materials': '课程目录',
   '/learning-notes': '学习笔记',
   '/homework': '作业管理',
   '/homework/students': '学生作业一览',
@@ -599,7 +614,7 @@ const classTeacherMenu = [
 const teacherMenu = [
   { path: '/students', label: '学生管理', icon: User },
   { path: '/homework', label: '作业管理', icon: Reading },
-  { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/materials', label: '课程目录', icon: Collection },
   { path: '/learning-notes', label: '学习笔记', icon: EditPen }
 ]
 
@@ -608,7 +623,7 @@ const studentMenu = [
   { path: '/courses', label: '选课与进度', icon: School },
   { path: '/course-home', label: '学习主页', icon: DataAnalysis },
   { path: '/homework', label: '课程作业', icon: Document },
-  { path: '/materials', label: '课程资料', icon: Collection },
+  { path: '/materials', label: '课程目录', icon: Collection },
   { path: '/learning-notes', label: '学习笔记', icon: EditPen },
   { path: '/student-scores', label: '我的成绩', icon: DataAnalysis }
 ]
@@ -769,6 +784,16 @@ const handleCourseSwitch = courseId => {
 }
 
 const handleCommand = command => {
+  if (command === 'recent-posts') {
+    router.push('/recent-posts/me')
+    return
+  }
+
+  if (command === 'notifications') {
+    router.push('/notifications')
+    return
+  }
+
   if (command === 'personal-settings') {
     router.push('/personal-settings')
     return
@@ -777,6 +802,13 @@ const handleCommand = command => {
   if (command === 'logout') {
     userStore.logout()
     router.push('/login')
+  }
+}
+
+const goRecentPosts = () => {
+  router.push('/recent-posts/me')
+  if (isMobile.value) {
+    isCollapsed.value = true
   }
 }
 
@@ -958,10 +990,10 @@ watch(notificationSyncParams, () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 0 10px 12px;
+  margin: 0 12px 12px 6px;
   padding: 10px 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--wa-radius-md);
+  border-radius: var(--wa-radius-xl);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.015) 100%),
     var(--wa-sidebar-footer-bg);
@@ -987,7 +1019,7 @@ watch(notificationSyncParams, () => {
   margin: 0;
   padding: 9px 8px;
   border: none;
-  border-radius: max(var(--wa-radius-xs), calc(var(--wa-radius-md) - 3px));
+  border-radius: var(--wa-radius-lg);
   background: transparent;
   color: rgba(255, 255, 255, 0.82);
   font-size: 14px;

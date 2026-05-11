@@ -1984,6 +1984,19 @@ class CourseMaterialListResponse(BaseModel):
     data: List[CourseMaterialResponse]
 
 
+class CourseMaterialHomeworkLinkResponse(BaseModel):
+    link_id: int
+    homework_id: int
+    title: str
+    subject_id: Optional[int] = None
+    subject_name: Optional[str] = None
+    class_id: Optional[int] = None
+    class_name: Optional[str] = None
+    due_date: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    sort_order: int
+
+
 class CourseMaterialChapterNode(BaseModel):
     id: int
     subject_id: int
@@ -1991,6 +2004,7 @@ class CourseMaterialChapterNode(BaseModel):
     title: str
     sort_order: int
     is_uncategorized: bool
+    homework_links: List[CourseMaterialHomeworkLinkResponse] = Field(default_factory=list)
     children: List["CourseMaterialChapterNode"] = Field(default_factory=list)
 
 
@@ -2020,6 +2034,11 @@ class CourseMaterialSectionReorderRequest(BaseModel):
 
 class CourseMaterialAddPlacementRequest(BaseModel):
     chapter_id: int
+
+
+class CourseMaterialHomeworkLinkCreate(BaseModel):
+    chapter_id: int
+    homework_id: int
 
 
 CourseMaterialChapterNode.model_rebuild()

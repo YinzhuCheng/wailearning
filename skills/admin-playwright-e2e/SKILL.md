@@ -27,6 +27,9 @@ API/UI startup and teardown stay owned by one process.
    helpers first, then assert the browser-visible outcome.
 6. Record whether a failure came from product behavior, seed/reset, browser
    startup, stale ports, or teardown/cleanup.
+7. Run external-runner commands serially when using the default ports/database.
+   Parallel default runners can make Vite switch away from port 3012 while
+   Playwright still navigates to 3012, and can lock the shared SQLite database.
 
 ## Commands
 
@@ -47,6 +50,9 @@ node scripts/playwright-external-runner.cjs
   `npx playwright test ...` for non-trivial local runs.
 - Keep `E2E_DEV_SEED_TOKEN`, `E2E_API_URL`, and `PLAYWRIGHT_BASE_URL`
   consistent with the runner flow; do not hand-roll mixed startup modes.
+- Do not start two `npm.cmd run test:e2e:external -- ...` commands in parallel
+  on the default ports. If parallelism is required, assign distinct
+  `E2E_API_PORT`, `E2E_UI_PORT`, and database paths per process.
 - Reuse fixture helpers before adding bespoke login or seed code.
 - For API-heavy browser scenarios, assert the API-side precondition before
   blaming a missing UI row.

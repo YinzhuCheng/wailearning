@@ -135,7 +135,7 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.getByRole('button', { name: '成绩管理' })).toBeVisible()
     await expect(page.getByRole('button', { name: '考勤管理' })).toBeVisible()
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '教学日历' })).toHaveCount(0)
-    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程资料' })).toBeVisible()
+    await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程目录' })).toBeVisible()
     await expect(page.locator('.sidebar-menu').getByRole('menuitem', { name: '课程仪表盘' })).toHaveCount(0)
     await expect(page.getByTestId('sidebar-notifications')).toBeVisible()
   })
@@ -165,12 +165,12 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     })
   })
 
-  test('material reader highlights 课程资料 in sidebar via active path mapping', async ({ page }) => {
+  test('material reader highlights 课程目录 in sidebar via active path mapping', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await page.goto(`/materials/read/${s.material_discussion_id}`)
     await expect(page.locator('.material-read-title')).toContainText(`E2E讨论资料_${s.suffix}`, { timeout: 15000 })
-    const materialsItem = page.locator('.sidebar-menu .el-menu-item').filter({ hasText: '课程资料' })
+    const materialsItem = page.locator('.sidebar-menu .el-menu-item').filter({ hasText: '课程目录' })
     await expect(materialsItem).toHaveClass(/is-active/, { timeout: 10000 })
   })
 

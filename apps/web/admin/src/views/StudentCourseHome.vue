@@ -102,7 +102,7 @@
           <section class="panel-card">
             <header class="panel-header">
               <div class="panel-header__titles">
-                <h2 class="panel-title">课程资料</h2>
+                <h2 class="panel-title">课程目录</h2>
                 <p class="panel-desc">章节目录与最近资料</p>
               </div>
               <el-button text type="primary" class="panel-link" @click="router.push('/materials')">查看全部</el-button>

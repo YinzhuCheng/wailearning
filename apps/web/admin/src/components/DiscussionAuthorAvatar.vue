@@ -67,7 +67,7 @@ const avatarSrc = ref('')
 let avatarBlobUrl = ''
 
 const clickable = computed(() => props.messageKind !== 'llm_assistant' && props.userId != null && props.userId !== '')
-const buttonTitle = computed(() => `查看${props.name || '该用户'}的最近发表`)
+const buttonTitle = computed(() => `查看${props.name || '该用户'}的近期发表`)
 
 const openRecentPosts = () => {
   if (!clickable.value) {

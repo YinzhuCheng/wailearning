@@ -861,6 +861,23 @@ class CourseMaterialSection(Base):
     chapter = relationship("CourseMaterialChapter", backref="section_links")
 
 
+class CourseMaterialHomeworkLink(Base):
+    """Placement of a course homework under a material chapter."""
+
+    __tablename__ = "course_material_homework_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chapter_id = Column(Integer, ForeignKey("course_material_chapters.id", ondelete="CASCADE"), nullable=False, index=True)
+    homework_id = Column(Integer, ForeignKey("homeworks.id", ondelete="CASCADE"), nullable=False, index=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("chapter_id", "homework_id", name="uq_course_material_homework_link"),)
+
+    chapter = relationship("CourseMaterialChapter", backref="homework_links")
+    homework = relationship("Homework", backref="material_chapter_links")
+
+
 class LearningNote(Base):
     """Personal or course-scoped public learning note owned by a teacher/student."""
 

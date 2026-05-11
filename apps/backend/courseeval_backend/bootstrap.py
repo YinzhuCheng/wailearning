@@ -16,6 +16,7 @@ from apps.backend.courseeval_backend.domains.roster.sync import reconcile_studen
 from apps.backend.courseeval_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
+    CourseMaterialHomeworkLink,
     CourseMaterialSection,
     LearningNote,
     LearningNoteChapter,
@@ -459,6 +460,16 @@ def ensure_schema_updates() -> None:
             chapter_id INTEGER NOT NULL REFERENCES course_material_chapters(id) ON DELETE CASCADE,
             sort_order INTEGER NOT NULL DEFAULT 0,
             CONSTRAINT uq_course_material_section_placement UNIQUE(material_id, chapter_id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS course_material_homework_links (
+            id INTEGER PRIMARY KEY,
+            chapter_id INTEGER NOT NULL REFERENCES course_material_chapters(id) ON DELETE CASCADE,
+            homework_id INTEGER NOT NULL REFERENCES homeworks(id) ON DELETE CASCADE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT uq_course_material_homework_link UNIQUE(chapter_id, homework_id)
         )
         """,
         "ALTER TABLE course_materials ADD COLUMN IF NOT EXISTS content_format VARCHAR NOT NULL DEFAULT 'markdown'",
