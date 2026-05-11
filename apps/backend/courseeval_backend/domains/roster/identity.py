@@ -35,24 +35,35 @@ def generate_student_no(db: Session) -> str:
         next_index += 1
 
 
-def get_bound_student_for_user(user: User, db: Session) -> Optional[Student]:
+def resolve_bound_student_for_user(user: User, db: Session) -> Optional[Student]:
     """
-    Resolve the canonical Student row for a student-role User.
+    Resolve the canonical Student row for a student-role User without mutating.
     """
     if (user.role or "").strip() != UserRole.STUDENT.value:
         return None
 
     student_id = getattr(user, "student_id", None)
-    if student_id:
-        student = db.query(Student).filter(Student.id == student_id).first()
-        if student:
-            if student.class_id and user.class_id != student.class_id:
-                user.class_id = student.class_id
-                db.flush()
-            return student
+    if not student_id:
+        return None
+
+    return db.query(Student).filter(Student.id == student_id).first()
+
+
+def get_bound_student_for_user(user: User, db: Session) -> Optional[Student]:
+    """
+    Resolve the canonical Student row for a student-role User and repair stale
+    binding fields.
+    """
+    student = resolve_bound_student_for_user(user, db)
+    if student:
+        if student.class_id and user.class_id != student.class_id:
+            user.class_id = student.class_id
+            db.flush()
+        return student
+
+    if (user.role or "").strip() == UserRole.STUDENT.value and getattr(user, "student_id", None):
         user.student_id = None
         db.flush()
-
     return None
 
 

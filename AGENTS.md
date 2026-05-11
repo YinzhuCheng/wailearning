@@ -65,6 +65,13 @@ current task.
    merely because a human might prefer a brief note. The primary consumer of
    repository process docs is an agentic coding system that benefits from
    explicit commands, preconditions, interpretation rules, and failure modes.
+   Repository documentation primarily serves agent systems, whose tolerance for
+   sustained, detail-heavy reading is generally higher than that of human
+   readers. Preserve documentation detail by default, and do not remove existing
+   information unless it is genuinely incorrect, obsolete, duplicative in a way
+   that causes confusion, or outside the document's intended scope. When keeping
+   documentation detailed, keep it highly structured so future agents can scan,
+   route, and execute the guidance reliably.
 5. **Preserve text encoding.** Treat Windows PowerShell rendering as
    display-only until verified. When editing multilingual or encoding-sensitive
    files, follow

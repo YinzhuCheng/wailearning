@@ -784,6 +784,39 @@ class ValidationSelectorTests(unittest.TestCase):
             "admin.e2e.sample: target has its own committed ledger row but ledger_id points elsewhere: other.target",
             issues,
         )
+        self.assertIn(
+            "admin.e2e.sample: ledger_id must match target id unless an explicit alias mechanism is added: other.target",
+            issues,
+        )
+
+    def test_registry_lint_rejects_mismatched_ledger_id_even_without_own_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\nother.target\n")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "behavior.sample",
+                            "category": "behavior-pytest",
+                            "risk": "targeted",
+                            "working_directory": ".",
+                            "commands": [{"label": "ok", "argv": ["python", "--version"]}],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": "other.target",
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+
+        self.assertIn(
+            "behavior.sample: ledger_id must match target id unless an explicit alias mechanism is added: other.target",
+            issues,
+        )
 
     def test_registry_lint_accepts_external_runner_playwright_spec_reference(self):
         with tempfile.TemporaryDirectory() as tmp:

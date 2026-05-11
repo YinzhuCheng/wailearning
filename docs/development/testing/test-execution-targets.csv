@@ -204,3 +204,26 @@ Changes to validation-profile documentation or target-selection policy.
 Changes to path matching semantics, fallback rules, or risk-level ordering.
 Changes to structured local history schema, signature calculation, or runner history writing.
 Changes to validation profile policy, risk filtering, or review-target execution defaults.",cursor/discussion-avatar-chat-ui-921d,this commit,passed,2026-05-08,9,9
+backend.scores.dashboard_course_scope,backend-pytest,"Focused score/dashboard API target for subject-scoped teacher visibility, score composition, grade appeals, and course-owned dashboard stats/rankings.",.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q,<repo>,"tests/backend/integration/test_core_api_surface.py
+tests/backend/scores/test_score_composition.py
+apps/backend/courseeval_backend/api/routers/dashboard.py
+apps/backend/courseeval_backend/api/routers/scores.py
+apps/backend/courseeval_backend/domains/scores/composition.py
+apps/backend/courseeval_backend/domains/scores/appeals.py
+apps/backend/courseeval_backend/domains/courses/access.py","Changes to score/dashboard routes, subject-scoped teacher visibility, score composition, grade appeals, or course access helpers used by dashboard/scores endpoints.
+Escalate to security or full PostgreSQL validation for shared auth, schema, or broad course-access changes.",cursor/repository-normalization,this commit,passed,2026-05-11,1,1
+behavior.notifications.sync_api_edge,behavior-pytest,"Behavior pytest target for notification list/sync-status alignment, concurrent read-state updates, and subject-scoped authorization edges.",.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q,<repo>,"tests/behavior/test_notification_sync_api_edge_behavior.py
+apps/backend/courseeval_backend/api/routers/notifications.py
+apps/backend/courseeval_backend/domains/courses/access.py
+apps/backend/courseeval_backend/api/schemas.py
+apps/web/admin/src/views/Layout.vue
+apps/web/admin/src/views/Notifications.vue","Changes to notification list or sync-status behavior.
+Changes to read-state convergence, subject-scoped notification authorization, or course access helpers used by notification routes.
+Pair with notification Playwright tiers when browser state convergence or course switcher behavior changes.",cursor/repository-normalization,this commit,passed,2026-05-11,1,1
+behavior.course_roster_homework_edge,behavior-pytest,"Behavior pytest target for course, roster, homework, score appeal, and enrollment edge interactions.",.venv\Scripts\python.exe -m pytest tests\behavior\test_course_roster_homework_edge_behavior.py -q,<repo>,"tests/behavior/test_course_roster_homework_edge_behavior.py
+apps/backend/courseeval_backend/domains/courses/access.py
+apps/backend/courseeval_backend/domains/roster/reconciliation.py
+apps/backend/courseeval_backend/api/routers/homework.py
+apps/backend/courseeval_backend/api/routers/subjects.py
+apps/backend/courseeval_backend/api/routers/students.py","Changes to course access, roster reconciliation, enrollment sync, homework authorization, score appeal edges, or student/class route behavior.
+Escalate to PostgreSQL full consideration when schema or broad course access helpers change.",cursor/repository-normalization,this commit,passed,2026-05-11,1,1

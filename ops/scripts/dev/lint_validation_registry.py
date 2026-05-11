@@ -143,6 +143,8 @@ def lint_registry(repo_root: Path, registry_path: str, ledger_path: str) -> list
         ledger_id = target.get("ledger_id")
         if ledger_id is not None and not isinstance(ledger_id, str):
             issues.append(f"{target_id}: ledger_id must be a string or null")
+        if isinstance(ledger_id, str) and ledger_id != target_id:
+            issues.append(f"{target_id}: ledger_id must match target id unless an explicit alias mechanism is added: {ledger_id}")
         if isinstance(ledger_id, str) and ledger_id not in ledger_ids:
             issues.append(f"{target_id}: ledger_id not found in ledger: {ledger_id}")
         if target_id in ledger_ids and ledger_id is None:

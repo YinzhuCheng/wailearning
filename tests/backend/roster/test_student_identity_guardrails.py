@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from apps.backend.courseeval_backend.core.auth import get_password_hash
 from apps.backend.courseeval_backend.db.database import SessionLocal
 from apps.backend.courseeval_backend.db.models import Class, Gender, Student, Subject, SubjectClassLink, User, UserRole
-from apps.backend.courseeval_backend.domains.courses.access import prepare_student_course_context
+from apps.backend.courseeval_backend.domains.courses.access import get_student_profile_for_user, prepare_student_course_context
 from apps.backend.courseeval_backend.domains.roster.audit import audit_student_identity
 from apps.backend.courseeval_backend.domains.roster.identity import find_user_for_student
 from apps.backend.courseeval_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
@@ -70,6 +70,37 @@ def test_find_user_for_student_ignores_same_username_user_bound_to_other_student
         db.commit()
 
         assert find_user_for_student(db, target) is None
+    finally:
+        db.close()
+
+
+def test_get_student_profile_for_user_does_not_repair_mismatched_user_class():
+    class_id, suffix = _class_and_suffix()
+    db = SessionLocal()
+    try:
+        other_class = Class(name=f"Other Guardrail {suffix}", grade=2026)
+        db.add(other_class)
+        db.flush()
+        student = Student(name="Bound", student_no=f"S{suffix}", gender=Gender.MALE, class_id=class_id)
+        db.add(student)
+        db.flush()
+        user = User(
+            username=f"bound_{suffix}",
+            hashed_password=get_password_hash("p"),
+            real_name="Bound",
+            role=UserRole.STUDENT.value,
+            class_id=other_class.id,
+            student_id=student.id,
+        )
+        db.add(user)
+        db.commit()
+
+        resolved = get_student_profile_for_user(user, db)
+
+        assert resolved is not None
+        assert resolved.id == student.id
+        db.refresh(user)
+        assert user.class_id == other_class.id
     finally:
         db.close()
 

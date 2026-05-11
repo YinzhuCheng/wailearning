@@ -16,7 +16,7 @@ from apps.backend.courseeval_backend.db.models import (
     User,
     UserRole,
 )
-from apps.backend.courseeval_backend.domains.roster.identity import get_bound_student_for_user
+from apps.backend.courseeval_backend.domains.roster.identity import resolve_bound_student_for_user
 
 
 def subject_linked_class_ids(db: Session, subject_id: int) -> list[int]:
@@ -84,7 +84,7 @@ def prepare_student_course_context(user: User, db: Session) -> None:
 
 def get_student_profile_for_user(user: User, db: Session) -> Optional[Student]:
     """Canonical Student for this login, resolved through users.student_id."""
-    return get_bound_student_for_user(user, db)
+    return resolve_bound_student_for_user(user, db)
 
 
 def get_accessible_courses_query(user: User, db: Session):

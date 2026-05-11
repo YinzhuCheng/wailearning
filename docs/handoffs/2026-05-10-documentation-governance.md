@@ -13,6 +13,15 @@
 - Validation governance, roster identity guardrails, and admin Playwright E2E
   workflow hardening were extended on the same branch after the original docs
   consolidation pass.
+- Student profile resolution now separates read-only lookup from repair-capable
+  binding cleanup: ordinary `get_student_profile_for_user()` calls no longer
+  silently repair a mismatched `User.class_id`, while explicit repair/enrollment
+  preparation paths still retain their existing behavior.
+- Validation target governance now rejects implicit ledger aliases. A target's
+  `ledger_id` must match its own id unless a future explicit alias mechanism is
+  designed, and the CSV target ledger now includes the score/dashboard,
+  notification sync API edge, and course/roster/homework behavior targets that
+  were actually run on this branch.
 
 ## Verification
 
@@ -21,23 +30,33 @@
 - `python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk static`
 - `python ops/scripts/dev/check_repository_normalization.py`
 - `git diff --check`
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_guardrails.py -q`
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_roster_user_sync.py tests\backend\courses\test_course_access_student_enrollment.py -q`
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py tests\backend\roster\test_student_identity_repair.py tests\backend\roster\test_student_user_api_roster_sync.py -q`
+- `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q`
+- `.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q`
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_course_roster_homework_edge_behavior.py -q`
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q`
+- `.venv\Scripts\python.exe -m pytest tests\security -q`
+- `.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v`
+- `.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py`
 
 ## Security And Robustness Follow-Ups
 
-- Student identity and roster binding still deserve the highest hardening
-  priority.
-  The current contract is better guarded than before, but the same logical
-  entity is still touched from `auth.py`, `users.py`, `students.py`,
-  `domains/roster/*`, and `domains/courses/access.py`. Future work should
-  reduce write-side surprise, especially around `prepare_student_course_context`
-  and any path that can bind `users.student_id`, create `Student` rows, or
-  repair `CourseEnrollment` during a read-driven flow.
-- Reduce hidden write side-effects on read paths.
-  The most important medium-term robustness improvement is to separate
-  "resolve current identity" from "repair missing identity/enrollment state"
-  wherever practical. Reads that currently repair or commit should be reviewed
-  carefully because they expand the regression surface and make concurrency,
-  auditability, and authorization debugging harder.
+- Student identity and roster binding still deserve high hardening priority.
+  The read-only profile lookup split removes one hidden write side effect, but
+  the same logical entity is still touched from `auth.py`, `users.py`,
+  `students.py`, `domains/roster/*`, and `domains/courses/access.py`. Future
+  work should keep reducing write-side surprise, especially around
+  `prepare_student_course_context` and any path that can bind
+  `users.student_id`, create `Student` rows, or repair `CourseEnrollment`
+  during a read-driven flow.
+- Continue separating resolve and repair flows.
+  `resolve_bound_student_for_user()` is now the read-only resolver and
+  `get_bound_student_for_user()` remains repair-capable for explicit repair
+  paths. Future reads that still repair or commit should be reviewed carefully
+  because they expand the regression surface and make concurrency, auditability,
+  and authorization debugging harder.
 - Tighten audit/report semantics around occupied legacy matches.
   `audit_student_identity()` now distinguishes usable candidate counts from raw
   legacy match counts, but the broader lesson remains: audit output should keep
@@ -45,11 +64,13 @@
   states. Future changes should preserve that distinction in both CLI helpers
   and UI/admin-facing maintenance flows.
 - Keep validation registry and durable ledger rows in lockstep.
-  The branch found real drift where targets had committed run history but
-  missing or mismatched `ledger_id` wiring. `lint_validation_registry.py` now
-  catches that class of problem, but future validation-target additions should
-  treat "registry target exists, committed ledger row exists, selector can read
-  it" as one atomic contract rather than three separate chores.
+  The branch found real drift where targets had missing or mismatched
+  `ledger_id` wiring, including accidental pointers from behavior pytest
+  targets to unrelated Playwright/security ledger rows. `lint_validation_registry.py`
+  now catches implicit aliases even when the target does not yet have its own
+  committed row. Future validation-target additions should treat "registry
+  target exists, committed ledger row exists, selector can read it" as one
+  atomic contract rather than three separate chores.
 - Continue migrating local Playwright usage toward the repo-owned external
   runner.
   The external runner is now the preferred path for the key recorded admin

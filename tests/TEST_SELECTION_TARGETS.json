@@ -894,7 +894,7 @@
                     "apps/backend/courseeval_backend/domains/scores/**"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "backend.scores.dashboard_course_scope",
             "notes": "Use this before full PostgreSQL fallback for bounded score/dashboard route changes. Escalate to security or full PostgreSQL validation for shared course-access helper, schema, or auth changes."
         },
         {
@@ -934,7 +934,7 @@
                     "apps/backend/courseeval_backend/domains/homework/**"
                 ]
             },
-            "ledger_id": "security.api_regression",
+            "ledger_id": null,
             "notes": "Pair with behavior and Playwright homework targets when browser-visible submission, review, or LLM routing behavior changes."
         },
         {
@@ -973,7 +973,7 @@
                     "apps/backend/courseeval_backend/domains/notifications/**"
                 ]
             },
-            "ledger_id": "admin.e2e.discussion_cover_llm_tier3",
+            "ledger_id": "behavior.notifications.sync_api_edge",
             "notes": "Use before or alongside notification header Playwright tiers when the invariant is mostly API/read-state behavior."
         },
         {
@@ -1012,7 +1012,7 @@
                     "apps/backend/courseeval_backend/domains/llm/**"
                 ]
             },
-            "ledger_id": "admin.e2e.core_flows_smoke",
+            "ledger_id": null,
             "notes": "Recommended for cross-module homework/LLM changes that exceed a single focused backend file."
         },
         {
@@ -1053,7 +1053,7 @@
                     "apps/backend/courseeval_backend/domains/roster/**"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "behavior.course_roster_homework_edge",
             "notes": "Escalate to PostgreSQL full consideration when schema or broad course access helpers change."
         },
         {
