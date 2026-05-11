@@ -34,7 +34,7 @@ from apps.backend.courseeval_backend.domains.roster.sync import (
     reconcile_student_users_and_roster,
     sync_student_user_from_roster_row,
 )
-from apps.backend.courseeval_backend.domains.roster.identity import generate_student_no
+from apps.backend.courseeval_backend.domains.roster.identity import ensure_student_class_id, generate_student_no
 
 
 router = APIRouter(prefix="/api/students", tags=["学生管理"])
@@ -132,6 +132,20 @@ def serialize_students(students: List[Student], db: Session) -> List[StudentResp
         )
         for student in students
     ]
+
+
+def ensure_student_user_binding(student: Student, db: Session) -> None:
+    bound = (
+        db.query(User.id)
+        .filter(
+            User.role == UserRole.STUDENT.value,
+            User.student_id == student.id,
+            User.is_active.is_(True),
+        )
+        .first()
+    )
+    if not bound:
+        raise HTTPException(status_code=400, detail="学生账号与花名册绑定失败，请检查学号是否与现有账号冲突")
 
 
 def normalize_gender(value: object) -> Gender:
@@ -312,19 +326,17 @@ def create_student(
     current_user: User = Depends(get_current_active_user),
 ):
     class_ids = get_accessible_class_ids(current_user, db)
-    if student_data.class_id is None:
+    target_class_id = student_data.class_id
+    if target_class_id is None:
         if current_user.role != UserRole.ADMIN.value:
-            raise HTTPException(status_code=403, detail="Only administrators can create unassigned students.")
-    elif student_data.class_id not in class_ids:
+            raise HTTPException(status_code=403, detail="只有管理员可以把学生放入待分班")
+        target_class_id = ensure_student_class_id(db, None)
+    elif target_class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权在该班级添加学生")
 
     student_no = clean_text(student_data.student_no) or generate_student_no(db)
 
-    class_match = (
-        Student.class_id.is_(None)
-        if student_data.class_id is None
-        else Student.class_id == student_data.class_id
-    )
+    class_match = Student.class_id == target_class_id
     existing = db.query(Student).filter(Student.student_no == student_no, class_match).first()
     if existing:
         if (existing.name or "").strip() != (student_data.name or "").strip():
@@ -337,10 +349,12 @@ def create_student(
         existing.address = student_data.address
         if current_user.role == UserRole.TEACHER.value and existing.teacher_id is None:
             existing.teacher_id = current_user.id
+        existing.class_id = target_class_id
         db.flush()
         if existing.class_id:
             sync_student_course_enrollments(existing, db)
         sync_student_user_from_roster_row(db, existing)
+        ensure_student_user_binding(existing, db)
         db.commit()
         db.refresh(existing)
         return serialize_students([existing], db)[0]
@@ -352,7 +366,7 @@ def create_student(
         phone=student_data.phone,
         parent_phone=student_data.parent_phone,
         address=student_data.address,
-        class_id=student_data.class_id,
+        class_id=target_class_id,
         teacher_id=current_user.id if current_user.role == UserRole.TEACHER.value else None,
     )
     db.add(student)
@@ -360,6 +374,7 @@ def create_student(
     if student.class_id:
         sync_student_course_enrollments(student, db)
     sync_student_user_from_roster_row(db, student)
+    ensure_student_user_binding(student, db)
     db.commit()
     db.refresh(student)
 
@@ -438,7 +453,7 @@ def create_students_batch(
         if not student_no:
             student_no = generate_student_no(db)
 
-        class_id_for_row = class_obj.id if class_obj else None
+        class_id_for_row = ensure_student_class_id(db, class_obj.id if class_obj else None)
         student_key = (class_id_for_row, student_no)
         if student_key in seen_student_keys:
             duplicate_count += 1
@@ -447,7 +462,7 @@ def create_students_batch(
             failed_data.append({"row": row_number, "name": name, "student_no": student_no, "error": "导入文件内重复学号"})
             continue
 
-        class_match = Student.class_id.is_(None) if class_id_for_row is None else Student.class_id == class_id_for_row
+        class_match = Student.class_id == class_id_for_row
         existing_student = db.query(Student).filter(Student.student_no == student_no, class_match).first()
         if existing_student:
             duplicate_count += 1
@@ -478,6 +493,7 @@ def create_students_batch(
             if student.class_id:
                 sync_student_course_enrollments(student, db)
             sync_student_user_from_roster_row(db, student)
+            ensure_student_user_binding(student, db)
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -510,9 +526,7 @@ def get_student(
     db.refresh(student)
 
     class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id is None and current_user.role != UserRole.ADMIN.value:
-        raise HTTPException(status_code=403, detail="Only administrators can access unassigned students.")
-    if student.class_id is not None and student.class_id not in class_ids:
+    if student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权访问该学生")
 
     return serialize_students([student], db)[0]
@@ -530,21 +544,18 @@ def update_student(
         raise HTTPException(status_code=404, detail="学生不存在")
 
     class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id is None and current_user.role != UserRole.ADMIN.value:
-        raise HTTPException(status_code=403, detail="Only administrators can edit unassigned students.")
-    if student.class_id is not None and student.class_id not in class_ids:
+    if student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权修改该学生")
 
     if student_data.name is not None:
         student.name = student_data.name
 
     if student_data.student_no is not None:
-        target_class_id = student_data.class_id if student_data.class_id is not None else student.class_id
-        target_class_match = (
-            Student.class_id.is_(None)
-            if target_class_id is None
-            else Student.class_id == target_class_id
+        target_class_id = ensure_student_class_id(
+            db,
+            student_data.class_id if student_data.class_id is not None else student.class_id,
         )
+        target_class_match = Student.class_id == target_class_id
         existing = (
             db.query(Student)
             .filter(Student.student_no == student_data.student_no, target_class_match, Student.id != student_id)
@@ -565,13 +576,15 @@ def update_student(
 
     class_changed = False
     if "class_id" in student_data.model_fields_set:
-        if student_data.class_id is None:
-            if current_user.role != UserRole.ADMIN.value:
-                raise HTTPException(status_code=403, detail="Only administrators can move students to unassigned.")
-        elif student_data.class_id not in class_ids:
+        target_class_id = (
+            ensure_student_class_id(db, None)
+            if student_data.class_id is None
+            else student_data.class_id
+        )
+        if target_class_id not in class_ids:
             raise HTTPException(status_code=403, detail="无权移动到该班级")
-        class_changed = student.class_id != student_data.class_id
-        student.class_id = student_data.class_id
+        class_changed = student.class_id != target_class_id
+        student.class_id = target_class_id
 
     if class_changed:
         db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student.id).delete()
@@ -579,6 +592,7 @@ def update_student(
         sync_student_course_enrollments(student, db)
 
     sync_student_user_from_roster_row(db, student)
+    ensure_student_user_binding(student, db)
 
     db.commit()
     db.refresh(student)
@@ -597,9 +611,7 @@ def delete_student(
         raise HTTPException(status_code=404, detail="学生不存在")
 
     class_ids = get_accessible_class_ids(current_user, db)
-    if student.class_id is None and current_user.role != UserRole.ADMIN.value:
-        raise HTTPException(status_code=403, detail="Only administrators can delete unassigned students.")
-    if student.class_id is not None and student.class_id not in class_ids:
+    if student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权删除该学生")
 
     try:

@@ -112,7 +112,7 @@ def test_student_identity_repair_apply_migrates_default_student_accounts():
         user_only_student = db.query(Student).filter(Student.student_no == "stu2").one()
         assert legacy_user.student_id == legacy.id
         assert user_only.student_id == user_only_student.id
-        assert user_only_student.class_id is None
+        assert user_only_student.class_id is not None
         assert roster_user.student_id == roster_only.id
         assert roster_user.class_id == klass.id
     finally:

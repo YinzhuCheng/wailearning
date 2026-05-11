@@ -23,6 +23,7 @@ from apps.backend.courseeval_backend.api.schemas import (
 from apps.backend.courseeval_backend.core.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from apps.backend.courseeval_backend.core.config import settings
 from apps.backend.courseeval_backend.domains.courses.access import prepare_student_course_context
+from apps.backend.courseeval_backend.domains.roster.identity import ensure_student_class_id
 from apps.backend.courseeval_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 from apps.backend.courseeval_backend.services.logging import LogService
 
@@ -243,15 +244,16 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Public registration can only create student accounts.")
     if user_data.student_id is not None:
         raise HTTPException(status_code=403, detail="Public registration cannot bind an existing student profile.")
+    target_class_id = ensure_student_class_id(db, user_data.class_id)
 
     if getattr(settings, "PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS", True):
-        klass = db.query(Class).filter(Class.id == user_data.class_id).first()
+        klass = db.query(Class).filter(Class.id == target_class_id).first()
         if not klass:
             raise HTTPException(status_code=400, detail="Invalid class_id: class does not exist.")
 
     existing_student = (
         db.query(Student)
-        .filter(Student.student_no == user_data.username, Student.class_id == user_data.class_id)
+        .filter(Student.student_no == user_data.username, Student.class_id == target_class_id)
         .first()
     )
     if existing_student and db.query(User).filter(User.student_id == existing_student.id).first():
@@ -263,7 +265,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         hashed_password=hashed_password,
         real_name=user_data.real_name,
         role=UserRole.STUDENT.value,
-        class_id=user_data.class_id,
+        class_id=target_class_id,
         student_id=existing_student.id if existing_student else None,
     )
     db.add(user)

@@ -250,8 +250,8 @@ def test_admin_can_create_unassigned_student_then_assign_class(client: TestClien
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["class_id"] is None
-    assert body["class_name"] is None
+    assert body["class_id"] is not None
+    assert body["class_name"] == "待分班"
     assert body["student_no"].startswith("SYS")
     assert body["has_user"] is True
 
@@ -264,8 +264,8 @@ def test_admin_can_create_unassigned_student_then_assign_class(client: TestClien
         db.flush()
         sid = student.id
         kid = klass.id
-        assert student.class_id is None
-        assert user.class_id is None
+        assert student.class_id is not None
+        assert user.class_id is not None
         db.commit()
     finally:
         db.close()
@@ -273,7 +273,7 @@ def test_admin_can_create_unassigned_student_then_assign_class(client: TestClien
     listed = client.get("/api/students", headers=h, params={"page": 1, "page_size": 1000})
     assert listed.status_code == 200, listed.text
     rows = listed.json()["data"]
-    assert any(row["id"] == sid and row["class_id"] is None for row in rows)
+    assert any(row["id"] == sid and row["class_id"] == body["class_id"] for row in rows)
 
     moved = client.put(
         f"/api/students/{sid}",
@@ -366,7 +366,7 @@ def test_create_student_user_can_bind_existing_student_id_without_username_stude
         u = db.query(User).filter(User.username == username).one()
         assert u.student_id == sid
         assert u.class_id == kid
-        assert st.student_no == f"real_no_{suf}"
+        assert st.student_no == username
     finally:
         db.close()
 
@@ -468,7 +468,7 @@ def test_update_student_user_class_moves_bound_student_when_username_differs(cli
         assert student.class_id == class_b_id
         assert user.student_id == sid
         assert user.class_id == class_b_id
-        assert db.query(Student).filter(Student.student_no == f"login_move_{suf}").count() == 0
+        assert db.query(Student).filter(Student.student_no == f"login_move_{suf}").count() == 1
     finally:
         db.close()
 
@@ -491,7 +491,7 @@ def test_admin_create_student_user_without_class_creates_unassigned_student_prof
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["role"] == "student"
-    assert body["class_id"] is None
+    assert body["class_id"] is not None
     assert body["student_id"] is not None
 
     db = SessionLocal()
@@ -500,9 +500,9 @@ def test_admin_create_student_user_without_class_creates_unassigned_student_prof
         u = db.query(User).filter(User.id == body["id"]).one()
         assert st.name == "User First Unassigned"
         assert st.student_no == username
-        assert st.class_id is None
+        assert st.class_id is not None
         assert u.student_id == st.id
-        assert u.class_id is None
+        assert u.class_id is not None
     finally:
         db.close()
 

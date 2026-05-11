@@ -684,7 +684,7 @@
             "id": "backend.roster.student_user_api_sync",
             "category": "backend-pytest",
             "risk": "targeted",
-            "description": "Focused roster/user API target for admin-created student users, canonical Student binding, unassigned student accounts, and user-to-roster synchronization.",
+            "description": "Focused roster/user API target for admin-created student users, canonical Student binding, temporary-class backfill for missing class assignment, and user-to-roster synchronization.",
             "working_directory": ".",
             "coverage_tags": [
                 "roster",

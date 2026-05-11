@@ -42,7 +42,7 @@ from apps.backend.courseeval_backend.api.schemas import (
     UserUpdate,
 )
 from apps.backend.courseeval_backend.domains.courses.access import prepare_student_course_context, sync_student_course_enrollments
-from apps.backend.courseeval_backend.domains.roster.identity import get_bound_student_for_user
+from apps.backend.courseeval_backend.domains.roster.identity import ensure_student_class_id, get_bound_student_for_user
 from apps.backend.courseeval_backend.services.logging import LogService
 from apps.backend.courseeval_backend.core.permissions import is_admin
 
@@ -62,6 +62,18 @@ def validate_class_exists(class_id: Optional[int], db: Session) -> None:
     class_obj = db.query(Class).filter(Class.id == class_id).first()
     if not class_obj:
         raise HTTPException(status_code=400, detail="班级不存在")
+
+
+def validate_role_class_contract(role: Optional[str], class_id: Optional[int]) -> None:
+    if role == UserRole.CLASS_TEACHER.value and class_id is None:
+        raise HTTPException(status_code=400, detail="班主任账号必须绑定班级")
+
+
+def sync_student_account_or_raise(db: Session, user: User) -> None:
+    result = sync_student_roster_from_user_accounts(db, [user.id])
+    if result.errors:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=result.errors[0].reason)
 
 
 def delete_user_homeworks(user_id: int, db: Session) -> None:
@@ -234,7 +246,6 @@ def create_user(
         raise HTTPException(status_code=400, detail="用户名已存在")
 
     managed_class_id = normalize_managed_class_id(user_data.role, user_data.class_id)
-    validate_class_exists(managed_class_id, db)
     linked_student = None
     if user_data.student_id is not None:
         linked_student = db.query(Student).filter(Student.id == user_data.student_id).first()
@@ -245,7 +256,12 @@ def create_user(
         existing_binding = db.query(User).filter(User.student_id == linked_student.id).first()
         if existing_binding:
             raise HTTPException(status_code=400, detail="该学生档案已绑定账号")
+        linked_student.class_id = ensure_student_class_id(db, linked_student.class_id)
         managed_class_id = linked_student.class_id
+    elif user_data.role == UserRole.STUDENT.value:
+        managed_class_id = ensure_student_class_id(db, managed_class_id)
+    validate_role_class_contract(user_data.role, managed_class_id)
+    validate_class_exists(managed_class_id, db)
 
     user = User(
         username=user_data.username,
@@ -258,7 +274,7 @@ def create_user(
     db.add(user)
     db.flush()
     if user.role == UserRole.STUDENT.value:
-        sync_student_roster_from_user_accounts(db, [user.id])
+        sync_student_account_or_raise(db, user)
     db.commit()
     db.refresh(user)
 
@@ -362,7 +378,6 @@ def update_user(
         if requested_class_change or next_role == UserRole.TEACHER.value
         else user.class_id
     )
-    validate_class_exists(next_class_id, db)
     linked_student = None
     if requested_student_binding_change:
         if user_data.student_id is not None:
@@ -378,9 +393,14 @@ def update_user(
             )
             if existing_binding:
                 raise HTTPException(status_code=400, detail="该学生档案已绑定账号")
+            linked_student.class_id = ensure_student_class_id(db, linked_student.class_id)
             next_class_id = linked_student.class_id
         else:
             linked_student = None
+    elif next_role == UserRole.STUDENT.value:
+        next_class_id = ensure_student_class_id(db, next_class_id)
+    validate_role_class_contract(next_role, next_class_id)
+    validate_class_exists(next_class_id, db)
 
     changes = []
     if user_data.username is not None:
@@ -416,7 +436,7 @@ def update_user(
         changes.append(f"班级ID: {user.class_id} -> {next_class_id}")
         if user.role == UserRole.STUDENT.value:
             if user.student_id is None:
-                sync_student_roster_from_user_accounts(db, [user.id])
+                sync_student_account_or_raise(db, user)
                 db.flush()
             roster = get_bound_student_for_user(user, db)
             if roster:
@@ -434,7 +454,7 @@ def update_user(
         user.is_active = user_data.is_active
 
     if user.role == UserRole.STUDENT.value and user.username:
-        sync_student_roster_from_user_accounts(db, [user.id])
+        sync_student_account_or_raise(db, user)
 
     db.commit()
     db.refresh(user)

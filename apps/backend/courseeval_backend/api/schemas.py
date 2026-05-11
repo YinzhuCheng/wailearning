@@ -491,8 +491,10 @@ class StudentResponse(BaseModel):
     """
     Roster row exposed by read/list APIs.
 
-    Serializers coerce legacy/default values while preserving nullable class_id
-    for students that are not assigned to a class yet.
+    Serializers still expose ``class_id`` as optional for legacy-database
+    compatibility, but normal create/update/repair flows backfill missing
+    student classes into the reserved temporary class instead of keeping active
+    students unassigned.
     """
 
     id: int

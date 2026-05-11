@@ -26,6 +26,7 @@ def _user_payload(user: User) -> dict[str, Any]:
         "role": user.role,
         "class_id": user.class_id,
         "student_id": user.student_id,
+        "is_active": bool(getattr(user, "is_active", True)),
     }
 
 
@@ -59,7 +60,11 @@ def audit_student_identity(db: Session) -> dict[str, Any]:
     """Return a read-only audit of canonical Student rows and student User bindings."""
     students = db.query(Student).order_by(Student.id.asc()).all()
     users = db.query(User).order_by(User.id.asc()).all()
-    student_users = [user for user in users if (user.role or "").strip() == UserRole.STUDENT.value]
+    student_users = [
+        user
+        for user in users
+        if (user.role or "").strip() == UserRole.STUDENT.value and bool(getattr(user, "is_active", True))
+    ]
     student_ids = {student.id for student in students}
 
     users_by_student_id: dict[int, list[User]] = defaultdict(list)

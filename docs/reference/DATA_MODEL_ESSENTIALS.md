@@ -20,10 +20,10 @@
 
 ### 1.1 Student roster ↔ student `User` alignment (implementation truth)
 
-The repository maintains one learner business identity plus an optional login account:
+The repository maintains one learner business identity plus a bound login account for active students:
 
 1. **`students`** — the canonical learner (`Student`), including class, gender, contact fields, parent code, and student-scoped business references.
-2. **`users`** where `role=student` — login account. It binds to the learner through `users.student_id`; `username` is not a relationship key.
+2. **`users`** where `role=student` — login account. It binds to the learner through `users.student_id`; `username` and `students.student_no` are kept aligned by repair/sync flows.
 
 **Authoritative source for “who is in the class”:** the **`students` table** (plus `course_enrollments` for per-course views). Login accounts are **not** created through a separate CSV import on the Users screen; instead the backend **`reconcile_student_users_and_roster`** (`domains/roster/sync.py`) runs at application startup and is invoked again on **read/list admin surfaces** so transient drift self-heals:
 
@@ -39,8 +39,8 @@ Additional implementation truth (May 2026):
 Effects for agents:
 
 - Do **not** add a second student-import surface under user management. Student import belongs to student management and creates the canonical `Student` plus the bound login account.
-- `StudentResponse` (`api/schemas.py`) intentionally allows **`gender` default `MALE`** and **`class_id: Optional[int]`** so incomplete student profiles still serialize; `build_student_response` fills display placeholders for empty names or student numbers.
-- Permission checks on `GET/PUT/DELETE /api/students/{id}` treat **`class_id is None`** as “not yet assigned to a class shell” and **do not** 403 solely because `None not in class_ids` (that Python expression was a bug source).
+- `StudentResponse` (`api/schemas.py`) still serializes `class_id` as optional for legacy compatibility, but normal create/update/repair paths now backfill missing student classes into the reserved temporary class `待分班` instead of leaving active students classless.
+- Permission checks on `GET/PUT/DELETE /api/students/{id}` now assume active students are class-bound. Legacy `class_id IS NULL` rows should be repaired into `待分班` rather than treated as a durable product state.
 - For LLM quota / discussion billing, the effective identity is the resolved **`Student.id`** from this same binding chain. There is **no** separate pre-created "quota row" requirement; the global default quota policy applies automatically when no `LLMStudentTokenOverride` row exists.
 
 ### 1.2 Pitfall catalog (student admin UX)

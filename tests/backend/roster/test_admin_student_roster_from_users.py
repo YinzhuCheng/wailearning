@@ -181,8 +181,8 @@ def test_sync_from_users_reuses_explicit_student_binding_when_username_differs(c
     try:
         st = db.query(Student).filter(Student.id == sid).one()
         assert st.name == "Bound Display"
-        assert st.student_no == "real_student_no"
-        assert db.query(Student).filter(Student.student_no == "login_account_only").count() == 0
+        assert st.student_no == "login_account_only"
+        assert db.query(Student).filter(Student.student_no == "real_student_no").count() == 0
     finally:
         db.close()
 

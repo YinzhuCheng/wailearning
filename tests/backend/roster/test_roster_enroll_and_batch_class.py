@@ -253,7 +253,7 @@ def test_admin_batch_set_class_moves_bound_student_when_username_differs(client:
         assert u2.student_id == sid
         assert u2.class_id == k2_id
         assert st2.class_id == k2_id
-        assert db.query(Student).filter(Student.student_no == f"login_{suffix}").count() == 0
+        assert db.query(Student).filter(Student.student_no == f"login_{suffix}").count() == 1
     finally:
         db.close()
 

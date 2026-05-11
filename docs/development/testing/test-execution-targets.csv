@@ -151,7 +151,7 @@ docs/development/TEST_EXECUTION_LEDGER.md","Changes to any UTF-8 / mojibake help
 Changes to encoding-safety documentation, Windows notes, or pitfalls that cite these helpers.
 Changes to text-file classification or suspicious-marker rules in check_text_encoding.py.
 Any branch that deliberately repairs suspected mojibake in tracked files.",cursor/repository-normalization,04297f4,passed,2026-05-10,7,7
-backend.roster.student_user_api_sync,backend-pytest,"Focused roster/user API coverage for admin-created student users, canonical Student binding, unassigned student accounts, and user-to-roster synchronization. This target verifies /api/users creates and updates student accounts into the same students + users.student_id model used by student-management and import flows.",.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q,<repo>,"tests/backend/roster/test_student_user_api_roster_sync.py
+backend.roster.student_user_api_sync,backend-pytest,"Focused roster/user API coverage for admin-created student users, canonical Student binding, reserved temporary-class backfill for missing class assignment, and user-to-roster synchronization. This target verifies /api/users creates and updates student accounts into the same students + users.student_id model used by student-management and import flows.",.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q,<repo>,"tests/backend/roster/test_student_user_api_roster_sync.py
 tests/backend/roster/test_admin_student_roster_from_users.py
 apps/backend/courseeval_backend/api/routers/users.py
 apps/backend/courseeval_backend/api/routers/students.py
@@ -161,7 +161,7 @@ apps/backend/courseeval_backend/domains/roster/sync.py
 apps/backend/courseeval_backend/domains/roster/identity.py","Changes to /api/users create/update behavior for student-role users.
 Changes to UserCreate, UserUpdate, or UserResponse student/class binding schemas.
 Changes to sync_student_roster_from_user_accounts or sync_student_user_from_roster_row.
-Changes to canonical users.student_id binding, unassigned student handling, or user-first student creation.
+Changes to canonical users.student_id binding, temporary-class backfill, or user-first student creation.
 Changes to admin user-management UI that claims student users may be created before class assignment.",cursor/unify-student-identity-plan,this commit,passed,2026-05-09,5,8
 backend.roster.student_identity_audit,backend-pytest,"Focused backend audit coverage for canonical Student identity and users.student_id migration prechecks. This target verifies the read-only audit report for clean bindings, students without accounts, student users without canonical students, safe legacy username == student_no binding candidates, duplicate student numbers, ambiguous user/student matches, invalid bindings, bound username/student-number mismatches, and unassigned students.",.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_audit.py -q,<repo>,"apps/backend/courseeval_backend/domains/roster/audit.py
 apps/backend/courseeval_backend/domains/roster/identity.py
@@ -169,7 +169,7 @@ ops/scripts/dev/audit_student_identity.py
 tests/backend/roster/test_student_identity_audit.py
 apps/backend/courseeval_backend/db/models.py","Changes to canonical student/user binding rules, especially users.student_id.
 Changes to legacy recovery by username == student_no.
-Changes to Student.class_id, unassigned student handling, or duplicate student-number constraints.
+Changes to Student.class_id, temporary-class backfill, or duplicate student-number constraints.
 Changes to migration/audit scripts that inspect or repair student identity data.
 Any branch that prepares automatic student identity data conversion.",cursor/unify-student-identity-plan,this commit,passed,2026-05-09,4,5
 backend.roster.student_identity_repair,backend-pytest,"Focused backend repair coverage for default/new-system student account migration into canonical Student rows and explicit users.student_id bindings. This target verifies dry-run reporting, applying safe default-data repair, creating missing student accounts from Student rows, creating missing Student rows from student users, and blocking ambiguous duplicate-student-number repairs.",.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_repair.py -q,<repo>,"apps/backend/courseeval_backend/domains/roster/repair.py

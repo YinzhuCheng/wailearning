@@ -14,8 +14,9 @@ from apps.backend.courseeval_backend.domains.courses.access import prepare_stude
 from apps.backend.courseeval_backend.db.models import Student, User, UserRole
 from apps.backend.courseeval_backend.domains.roster.identity import (
     clean_student_text,
+    ensure_student_row_defaults,
+    ensure_student_user_defaults,
     find_user_for_student,
-    generate_student_no,
 )
 from apps.backend.courseeval_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 
@@ -26,10 +27,8 @@ def _clean(s: object | None) -> str:
 
 def sync_student_user_from_roster_row(db: Session, student: Student) -> None:
     """Ensure a User row exists and is bound to this Student row. Does not commit."""
+    ensure_student_row_defaults(student, db)
     student_no = _clean(student.student_no)
-    if not student_no:
-        student.student_no = generate_student_no(db)
-        student_no = _clean(student.student_no)
 
     display_name = _clean(student.name) or student_no
     user = find_user_for_student(db, student)
@@ -57,14 +56,18 @@ def sync_student_user_from_roster_row(db: Session, student: Student) -> None:
 
     if (user.role or "").strip() != UserRole.STUDENT.value:
         user.role = UserRole.STUDENT.value
+    if _clean(user.username) != student_no:
+        occupied = db.query(User.id).filter(User.username == student_no, User.id != user.id).first()
+        if not occupied:
+            user.username = student_no
     if user.student_id != student.id:
         user.student_id = student.id
-    if user.class_id != student.class_id:
-        user.class_id = student.class_id
+    user.class_id = student.class_id
     if _clean(user.real_name) != display_name:
         user.real_name = display_name
     if not user.is_active:
         user.is_active = True
+    ensure_student_user_defaults(user, db)
     db.flush()
     sync_student_course_enrollments(student, db)
     prepare_student_course_context(user, db)
@@ -81,7 +84,7 @@ def sync_roster_from_all_student_users(db: Session):
     ids = [
         uid
         for (uid,) in db.query(User.id)
-        .filter(User.role == UserRole.STUDENT.value)
+        .filter(User.role == UserRole.STUDENT.value, User.is_active.is_(True))
         .all()
     ]
     if not ids:

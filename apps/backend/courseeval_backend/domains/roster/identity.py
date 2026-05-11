@@ -6,11 +6,40 @@ from typing import Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from apps.backend.courseeval_backend.db.models import Student, User, UserRole
+from apps.backend.courseeval_backend.db.models import Class, Student, User, UserRole
+
+
+TEMPORARY_STUDENT_CLASS_NAME = "待分班"
+TEMPORARY_STUDENT_CLASS_GRADE = 0
 
 
 def clean_student_text(value: object | None) -> str:
     return (str(value).strip() if value is not None else "").strip()
+
+
+def get_or_create_temporary_student_class(db: Session) -> Class:
+    klass = (
+        db.query(Class)
+        .filter(
+            Class.name == TEMPORARY_STUDENT_CLASS_NAME,
+            Class.grade == TEMPORARY_STUDENT_CLASS_GRADE,
+        )
+        .order_by(Class.id.asc())
+        .first()
+    )
+    if klass:
+        return klass
+
+    klass = Class(name=TEMPORARY_STUDENT_CLASS_NAME, grade=TEMPORARY_STUDENT_CLASS_GRADE)
+    db.add(klass)
+    db.flush()
+    return klass
+
+
+def ensure_student_class_id(db: Session, class_id: int | None) -> int:
+    if class_id is not None:
+        return int(class_id)
+    return int(get_or_create_temporary_student_class(db).id)
 
 
 def generate_student_no(db: Session) -> str:
@@ -65,6 +94,20 @@ def get_bound_student_for_user(user: User, db: Session) -> Optional[Student]:
         user.student_id = None
         db.flush()
     return None
+
+
+def ensure_student_row_defaults(student: Student, db: Session) -> None:
+    if not clean_student_text(student.student_no):
+        student.student_no = generate_student_no(db)
+    student.class_id = ensure_student_class_id(db, student.class_id)
+    db.flush()
+
+
+def ensure_student_user_defaults(user: User, db: Session) -> None:
+    if (user.role or "").strip() != UserRole.STUDENT.value:
+        return
+    user.class_id = ensure_student_class_id(db, user.class_id)
+    db.flush()
 
 
 def find_user_for_student(db: Session, student: Student) -> Optional[User]:

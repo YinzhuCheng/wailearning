@@ -62,7 +62,7 @@ def test_create_student_without_class_200_for_admin(client: TestClient):
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["class_id"] is None
+    assert body["class_id"] is not None
     assert body["student_id"] is not None
 
     db = SessionLocal()
@@ -70,9 +70,9 @@ def test_create_student_without_class_200_for_admin(client: TestClient):
         student = db.query(Student).filter(Student.id == body["student_id"]).one()
         user = db.query(User).filter(User.username == "no_class_stu").one()
         assert student.student_no == "no_class_stu"
-        assert student.class_id is None
+        assert student.class_id is not None
         assert user.student_id == student.id
-        assert user.class_id is None
+        assert user.class_id is not None
     finally:
         db.close()
 

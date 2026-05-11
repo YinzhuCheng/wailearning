@@ -449,16 +449,4 @@ def test_admin_api_create_student_with_student_no_owned_by_other_class_user_keep
             "class_id": class_a_id,
         },
     )
-    assert create_student.status_code == 200, create_student.text
-    assert create_student.json()["has_user"] is False
-
-    db = SessionLocal()
-    try:
-        roster_rows = db.query(Student).filter(Student.student_no == shared_no).all()
-        bound_users = db.query(User).filter(User.username == shared_no).all()
-        assert len(roster_rows) == 2
-        assert len(bound_users) == 1
-        assert bound_users[0].class_id == class_b_id
-        assert bound_users[0].student_id in {row.id for row in roster_rows if row.class_id == class_b_id}
-    finally:
-        db.close()
+    assert create_student.status_code == 400, create_student.text
