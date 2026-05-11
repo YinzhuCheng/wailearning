@@ -10,6 +10,10 @@ This document exists primarily for **LLM coding agents** and automation operator
 
 Cross-reference: [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (numbered pitfalls), [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md), [ENCODING_AND_MOJIBAKE_SAFETY.md](ENCODING_AND_MOJIBAKE_SAFETY.md).
 
+Repo-local skill: [`../../skills/admin-playwright-e2e/SKILL.md`](../../skills/admin-playwright-e2e/SKILL.md)
+for the condensed agent workflow when the full runbook is more detail than the
+current task needs.
+
 ---
 
 ## Hard prerequisites (treat as blocking)

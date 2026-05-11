@@ -118,20 +118,45 @@ def is_pytest_process(process: dict[str, str], current_pid: int) -> bool:
     return "pytest" in haystack or "py.test" in haystack
 
 
+def discover_sqlite_candidates(repo_root: Path, sqlite_path: Path) -> list[Path]:
+    if sqlite_path.is_dir():
+        return sorted(path.resolve() for path in sqlite_path.glob("test*.sqlite") if path.is_file())
+    if sqlite_path.exists():
+        return [sqlite_path.resolve()]
+    if sqlite_path.name == "test.sqlite":
+        return sorted(path.resolve() for path in sqlite_path.parent.glob("test*.sqlite") if path.is_file())
+    return []
+
+
 def build_report(repo_root: Path, sqlite_path: Path) -> dict[str, Any]:
     processes = active_python_processes()
     pytest_processes = [
         process for process in processes if is_pytest_process(process, os.getpid())
     ]
-    exists = sqlite_path.exists()
+    candidates = discover_sqlite_candidates(repo_root, sqlite_path)
+    exists = bool(candidates)
     sqlite_info: dict[str, Any] = {
         "path": repo_placeholder_path(repo_root, sqlite_path),
         "exists": exists,
     }
-    if exists:
-        stat = sqlite_path.stat()
-        sqlite_info["size_bytes"] = stat.st_size
-        sqlite_info["mtime_epoch"] = int(stat.st_mtime)
+    if sqlite_path.is_dir():
+        sqlite_info["mode"] = "directory-scan"
+    elif sqlite_path.name == "test.sqlite" and not sqlite_path.exists():
+        sqlite_info["mode"] = "compat-scan"
+    else:
+        sqlite_info["mode"] = "single-path"
+    sqlite_info["candidates"] = [
+        {
+            "path": repo_placeholder_path(repo_root, candidate),
+            "size_bytes": candidate.stat().st_size,
+            "mtime_epoch": int(candidate.stat().st_mtime),
+        }
+        for candidate in candidates
+    ]
+    sqlite_info["candidate_count"] = len(candidates)
+    if len(candidates) == 1:
+        sqlite_info["size_bytes"] = candidates[0].stat().st_size
+        sqlite_info["mtime_epoch"] = int(candidates[0].stat().st_mtime)
     return {
         "repo_root": "<repo>",
         "sqlite": sqlite_info,
@@ -151,8 +176,15 @@ def print_text(report: dict[str, Any]) -> None:
     print(f"status={report['status']}")
     print(f"sqlite_path={sqlite_info['path']}")
     print(f"sqlite_exists={sqlite_info['exists']}")
-    if sqlite_info["exists"]:
+    print(f"sqlite_mode={sqlite_info['mode']}")
+    print(f"sqlite_candidate_count={sqlite_info['candidate_count']}")
+    if "size_bytes" in sqlite_info:
         print(f"sqlite_size_bytes={sqlite_info['size_bytes']}")
+    for candidate in sqlite_info["candidates"]:
+        print(
+            "sqlite_candidate "
+            f"path={candidate['path']} size_bytes={candidate['size_bytes']} mtime_epoch={candidate['mtime_epoch']}"
+        )
     print(f"active_pytest_count={report['active_pytest_count']}")
     for process in report["active_pytest_processes"]:
         print(
@@ -169,8 +201,8 @@ def main() -> int:
     parser.add_argument("--repo-root", default=None, help="Repository root. Defaults to git root.")
     parser.add_argument(
         "--sqlite-path",
-        default=".pytest_tmp/test.sqlite",
-        help="SQLite file to inspect, relative to repo root unless absolute.",
+        default=".pytest_tmp",
+        help="SQLite file or directory to inspect, relative to repo root unless absolute.",
     )
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
     parser.add_argument(

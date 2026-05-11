@@ -75,6 +75,24 @@ def sync_student_roster_from_user_accounts(db: Session, user_ids: Iterable[int])
             .first()
         )
         if existing_same_class:
+            existing_binding = (
+                db.query(User)
+                .filter(
+                    User.role == UserRole.STUDENT.value,
+                    User.student_id == existing_same_class.id,
+                    User.id != user.id,
+                )
+                .first()
+            )
+            if existing_binding:
+                errors.append(
+                    StudentRosterUpsertFromUsersError(
+                        user_id=user.id,
+                        username=user.username,
+                        reason="existing same-class roster row is already bound to another student account",
+                    )
+                )
+                continue
             user.student_id = existing_same_class.id
             if (existing_same_class.name or "").strip() != display_name:
                 existing_same_class.name = display_name

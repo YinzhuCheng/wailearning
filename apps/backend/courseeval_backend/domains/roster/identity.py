@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.db.models import Student, User, UserRole
@@ -72,6 +73,7 @@ def find_user_for_student(db: Session, student: Student) -> Optional[User]:
     query = db.query(User).filter(
         User.role == UserRole.STUDENT.value,
         User.username == student_no,
+        or_(User.student_id.is_(None), User.student_id == student.id),
     )
     if student.class_id:
         same_class_user = query.filter(User.class_id == student.class_id).first()

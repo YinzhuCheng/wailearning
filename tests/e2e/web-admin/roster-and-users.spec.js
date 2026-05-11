@@ -1,6 +1,6 @@
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
-const { obtainAccessToken, apiDelete } = require('./future-advanced-coverage-helpers.cjs')
+const { obtainAccessToken, apiDelete, apiPostJson } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
 
@@ -126,6 +126,37 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await page.goto('/users')
     await expect(page.getByRole('button', { name: '文件导入学生用户' })).toHaveCount(0)
     await expect(page.getByTestId('users-open-create')).toBeVisible()
+  })
+
+  test('admin: students page keeps has_user false when same username account is bound in another class', async ({ page }) => {
+    const s = scenario()
+    const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
+    const sharedNo = `ui_guard_${s.suffix}`
+
+    const boundElsewhere = await apiPostJson('/api/users', adminTok, {
+      username: sharedNo,
+      password: s.password_teacher_student,
+      real_name: 'Bound Elsewhere',
+      role: 'student',
+      class_id: Number(s.class_id_2)
+    })
+    expect(boundElsewhere.student_id).toBeTruthy()
+
+    const rosterOnly = await apiPostJson('/api/students', adminTok, {
+      name: 'Roster Only',
+      student_no: sharedNo,
+      gender: 'male',
+      class_id: Number(s.class_id_1)
+    })
+    expect(rosterOnly.has_user).toBe(false)
+
+    await login(page, s.admin.username, s.admin.password)
+    await page.goto(`/students?class_id=${s.class_id_1}`)
+
+    const row = page.locator('tr').filter({ hasText: sharedNo }).first()
+    await expect(row).toBeVisible({ timeout: 30000 })
+    await expect(row.getByText('未生成')).toBeVisible({ timeout: 15000 })
+    await expect(row.getByText('已生成')).toHaveCount(0)
   })
 
   test('orphan course: roster dialog shows empty state', async ({ page }) => {

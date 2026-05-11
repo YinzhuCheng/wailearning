@@ -203,7 +203,8 @@ def audit_student_identity(db: Session) -> dict[str, Any]:
         issues["student_users_without_students"].append(
             {
                 "user": _user_payload(user),
-                "candidate_count": len(matches),
+                "candidate_count": len(unbound_matches),
+                "raw_candidate_count": len(matches),
             }
         )
 

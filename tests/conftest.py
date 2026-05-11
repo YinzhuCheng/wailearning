@@ -39,7 +39,9 @@ def _env_flag(name: str, default: bool) -> str:
 
 _tmp_dir = Path(__file__).resolve().parents[1] / ".pytest_tmp"
 _tmp_dir.mkdir(exist_ok=True)
-_tmp = _tmp_dir / "test.sqlite"
+_default_sqlite_name = f"test_{os.getpid()}.sqlite"
+_sqlite_name = (os.environ.get("PYTEST_SQLITE_BASENAME") or _default_sqlite_name).strip() or _default_sqlite_name
+_tmp = _tmp_dir / _sqlite_name
 _sqlite_url = "sqlite:///" + _tmp.resolve().as_posix()
 
 

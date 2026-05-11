@@ -777,7 +777,7 @@ const loadStudents = async () => {
         const result = await api.students.list({
           class_id: adminFilterClassId.value,
           page: 1,
-          page_size: 2000
+          page_size: 1000
         })
         students.value = result?.data || []
       } else {

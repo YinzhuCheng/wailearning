@@ -178,9 +178,10 @@ ready.
 
 ### Local pytest SQLite guardrail
 
-Default pytest runs use a repository-local SQLite file when no PostgreSQL test
-URL is configured. Before deleting or reusing `.pytest_tmp/test.sqlite` after an
-interrupted run, use the read-only guardrail:
+Default pytest runs use a repository-local per-process SQLite file under
+`.pytest_tmp/` when no PostgreSQL test URL is configured. Before deleting or
+reusing a local `test*.sqlite` artifact after an interrupted run, use the
+read-only guardrail:
 
 ```bash
 python ops/scripts/dev/pytest_sqlite_guard.py
@@ -198,9 +199,9 @@ Interpretation:
 
 - `status=pass` means the guardrail did not detect another pytest process.
 - `status=warn` means it found an active pytest-like process; stop that process
-  before deleting or reusing the shared SQLite file.
+  before deleting or reusing the reported SQLite artifact(s).
 - The script is diagnostic only. It does not kill processes and does not delete
-  `.pytest_tmp/test.sqlite`.
+  files under `.pytest_tmp/`.
 
 ### Diff-based validation target selection
 

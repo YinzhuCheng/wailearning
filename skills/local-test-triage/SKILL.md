@@ -20,7 +20,7 @@ guardrails when practical.
    collision, missing browser, stale Playwright process, corrupted SQLite file,
    or concurrent pytest processes.
 3. For SQLite weirdness, confirm no residual pytest/Python process is using
-   `.pytest_tmp/test.sqlite` before deleting or reusing it. Prefer the
+   `.pytest_tmp/test*.sqlite` before deleting or reusing it. Prefer the
    read-only guardrail script before manual process inspection.
 4. Reproduce with one process and the narrowest relevant target.
 5. If the failure is a real product regression, fix code/tests and run the
@@ -40,9 +40,8 @@ python ops/scripts/dev/run_validation_target.py <target-id> --timeout-seconds 12
 
 ## Guardrails
 
-- Do not run concurrent pytest processes against the same
-  `.pytest_tmp/test.sqlite`.
-- Do not delete `.pytest_tmp/test.sqlite` until no process is using it.
+- Do not run concurrent pytest processes against the same SQLite artifact.
+- Do not delete `.pytest_tmp/test*.sqlite` until no process is using it.
 - `pytest_sqlite_guard.py` is read-only: it reports active pytest processes and
   SQLite file state, but does not stop processes or delete files.
 - Treat isolated discussion-file SQLite reset noise as a harness concern unless

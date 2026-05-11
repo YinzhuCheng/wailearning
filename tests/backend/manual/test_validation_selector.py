@@ -17,7 +17,7 @@ from check_api_surface_governance import check_api_surface_governance  # noqa: E
 from check_operator_scripts import check_scripts as check_operator_scripts  # noqa: E402
 from check_repo_skills import check_repo_skills  # noqa: E402
 from check_schema_governance import check_schema_governance  # noqa: E402
-from pytest_sqlite_guard import is_pytest_process  # noqa: E402
+from pytest_sqlite_guard import build_report, is_pytest_process  # noqa: E402
 from select_validation_targets import parse_ledger  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
 from run_validation_target import (
@@ -729,6 +729,180 @@ class ValidationSelectorTests(unittest.TestCase):
             issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
 
         self.assertEqual(issues, [])
+
+    def test_registry_lint_rejects_null_ledger_id_when_target_has_committed_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\nadmin.e2e.sample\n")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "admin.e2e.sample",
+                            "category": "admin-playwright",
+                            "risk": "targeted",
+                            "working_directory": ".",
+                            "commands": [{"label": "ok", "argv": ["npx.cmd", "playwright", "test", "sample.spec.js"]}],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+
+        self.assertIn("admin.e2e.sample: target has a committed ledger row but ledger_id is null", issues)
+
+    def test_registry_lint_rejects_mismatched_ledger_id_when_target_has_own_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\nadmin.e2e.sample\nother.target\n")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "admin.e2e.sample",
+                            "category": "admin-playwright",
+                            "risk": "targeted",
+                            "working_directory": ".",
+                            "commands": [{"label": "ok", "argv": ["npx.cmd", "playwright", "test", "sample.spec.js"]}],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": "other.target",
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+
+        self.assertIn(
+            "admin.e2e.sample: target has its own committed ledger row but ledger_id points elsewhere: other.target",
+            issues,
+        )
+
+    def test_registry_lint_accepts_external_runner_playwright_spec_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "apps/web/admin/scripts/playwright-external-runner.cjs", "// runner\n")
+            write_text(root / "tests/e2e/web-admin/sample.spec.js", "test('ok', () => {})\n")
+            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\n")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "admin.e2e.sample",
+                            "category": "admin-playwright",
+                            "risk": "targeted",
+                            "working_directory": "apps/web/admin",
+                            "commands": [
+                                {
+                                    "label": "playwright",
+                                    "argv": ["node", "scripts/playwright-external-runner.cjs", "sample.spec.js", "--project=chromium"],
+                                }
+                            ],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+
+        self.assertEqual(issues, [])
+
+    def test_registry_lint_rejects_missing_external_runner_playwright_spec_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_text(root / "apps/web/admin/scripts/playwright-external-runner.cjs", "// runner\n")
+            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\n")
+            write_json(
+                root / "tests/TEST_SELECTION_TARGETS.json",
+                {
+                    "targets": [
+                        {
+                            "id": "admin.e2e.sample",
+                            "category": "admin-playwright",
+                            "risk": "targeted",
+                            "working_directory": "apps/web/admin",
+                            "commands": [
+                                {
+                                    "label": "playwright",
+                                    "argv": ["node", "scripts/playwright-external-runner.cjs", "missing.spec.js", "--project=chromium"],
+                                }
+                            ],
+                            "triggers": {"paths": [], "globs": []},
+                            "ledger_id": None,
+                        }
+                    ],
+                    "fallback_rules": [],
+                },
+            )
+
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+
+        self.assertIn(
+            "admin.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-admin/missing.spec.js",
+            issues,
+        )
+
+    def test_repository_recorded_playwright_targets_use_external_runner(self):
+        registry = json.loads((REPO_ROOT / "tests/TEST_SELECTION_TARGETS.json").read_text(encoding="utf-8"))
+        targets = {target["id"]: target for target in registry["targets"]}
+
+        for target_id in (
+            "admin.e2e.learning_notes_attendance_cover_tier20",
+            "admin.e2e.discussion_cover_llm_tier3",
+            "admin.e2e.core_flows_smoke",
+            "admin.e2e.course_ui_markdown_reader",
+        ):
+            argv = targets[target_id]["commands"][0]["argv"]
+            self.assertEqual(argv[:2], ["node", "scripts/playwright-external-runner.cjs"])
+
+    def test_repository_full_playwright_target_uses_external_runner(self):
+        registry = json.loads((REPO_ROOT / "tests/TEST_SELECTION_TARGETS.json").read_text(encoding="utf-8"))
+        targets = {target["id"]: target for target in registry["targets"]}
+
+        argv = targets["admin.e2e.full"]["commands"][0]["argv"]
+        self.assertEqual(argv, ["node", "scripts/playwright-external-runner.cjs"])
+
+    def test_pytest_sqlite_guard_directory_scan_collects_pid_named_candidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_dir = root / ".pytest_tmp"
+            sqlite_dir.mkdir(parents=True)
+            (sqlite_dir / "test_100.sqlite").write_text("a", encoding="utf-8")
+            (sqlite_dir / "test_200.sqlite").write_text("b", encoding="utf-8")
+
+            report = build_report(root, sqlite_dir)
+
+        self.assertEqual(report["sqlite"]["mode"], "directory-scan")
+        self.assertEqual(report["sqlite"]["candidate_count"], 2)
+        self.assertEqual(
+            {Path(item["path"]).name for item in report["sqlite"]["candidates"]},
+            {"test_100.sqlite", "test_200.sqlite"},
+        )
+
+    def test_pytest_sqlite_guard_compat_scan_finds_pid_named_candidate_without_legacy_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_dir = root / ".pytest_tmp"
+            sqlite_dir.mkdir(parents=True)
+            compat_path = sqlite_dir / "test.sqlite"
+            (sqlite_dir / "test_321.sqlite").write_text("x", encoding="utf-8")
+
+            report = build_report(root, compat_path)
+
+        self.assertEqual(report["sqlite"]["mode"], "compat-scan")
+        self.assertEqual(report["sqlite"]["candidate_count"], 1)
+        self.assertEqual(Path(report["sqlite"]["candidates"][0]["path"]).name, "test_321.sqlite")
 
     def test_registry_lint_rejects_unknown_fallback_target(self):
         with tempfile.TemporaryDirectory() as tmp:

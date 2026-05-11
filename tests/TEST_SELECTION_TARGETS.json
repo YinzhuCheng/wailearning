@@ -595,7 +595,7 @@
                     "apps/web/admin/src/utils/clipboard.js"
                 ]
             },
-            "ledger_id": "security.api_regression",
+            "ledger_id": null,
             "notes": "This target is intentionally cheaper than Playwright and should run before browser E2E for Markdown/LaTeX or copy-button changes."
         },
         {
@@ -615,9 +615,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-learning-notes-attendance-cover-tier20.spec.js",
                         "--project=chromium"
                     ]
@@ -709,6 +708,7 @@
                 "paths": [
                     "tests/backend/roster/test_student_user_api_roster_sync.py",
                     "tests/backend/roster/test_admin_student_roster_from_users.py",
+                    "tests/backend/roster/test_student_identity_guardrails.py",
                     "apps/backend/courseeval_backend/api/routers/users.py",
                     "apps/backend/courseeval_backend/api/routers/students.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
@@ -719,7 +719,8 @@
                 "globs": [
                     "apps/backend/courseeval_backend/domains/roster/**",
                     "tests/backend/roster/test_student_user_api_roster_sync.py",
-                    "tests/backend/roster/test_admin_student_roster_from_users.py"
+                    "tests/backend/roster/test_admin_student_roster_from_users.py",
+                    "tests/backend/roster/test_student_identity_guardrails.py"
                 ]
             },
             "ledger_id": "backend.roster.student_user_api_sync",
@@ -752,6 +753,7 @@
             "triggers": {
                 "paths": [
                     "tests/backend/roster/test_student_identity_audit.py",
+                    "tests/backend/roster/test_student_identity_guardrails.py",
                     "apps/backend/courseeval_backend/domains/roster/audit.py",
                     "apps/backend/courseeval_backend/domains/roster/identity.py",
                     "ops/scripts/dev/audit_student_identity.py",
@@ -932,7 +934,7 @@
                     "apps/backend/courseeval_backend/domains/homework/**"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "security.api_regression",
             "notes": "Pair with behavior and Playwright homework targets when browser-visible submission, review, or LLM routing behavior changes."
         },
         {
@@ -971,7 +973,7 @@
                     "apps/backend/courseeval_backend/domains/notifications/**"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "admin.e2e.discussion_cover_llm_tier3",
             "notes": "Use before or alongside notification header Playwright tiers when the invariant is mostly API/read-state behavior."
         },
         {
@@ -1010,7 +1012,7 @@
                     "apps/backend/courseeval_backend/domains/llm/**"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "admin.e2e.core_flows_smoke",
             "notes": "Recommended for cross-module homework/LLM changes that exceed a single focused backend file."
         },
         {
@@ -1144,7 +1146,7 @@
                     "tests/security/**"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "security.api_regression",
             "notes": "Does not replace full PostgreSQL validation for schema-sensitive authorization behavior."
         },
         {
@@ -1164,9 +1166,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-discussion-cover-llm-tier3.spec.js",
                         "--project=chromium"
                     ]
@@ -1185,7 +1186,7 @@
                     "apps/web/admin/src/**/Discussion*.vue"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "admin.e2e.discussion_cover_llm_tier3",
             "notes": "Escalate when shared E2E fixtures, route guards, or LLM seed helpers change."
         },
         {
@@ -1247,9 +1248,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-core-flows-smoke.spec.js",
                         "--project=chromium"
                     ]
@@ -1268,7 +1268,7 @@
                     "apps/web/admin/src/api/**"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "admin.e2e.core_flows_smoke",
             "notes": "Useful as a low-cost browser smoke when broad UI routing or auth surface changes, but not a replacement for route-specific suites."
         },
         {
@@ -1289,9 +1289,8 @@
                 {
                     "label": "playwright targeted",
                     "argv": [
-                        "npx",
-                        "playwright",
-                        "test",
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
                         "e2e-course-ui-markdown-reader.spec.js",
                         "--project=chromium"
                     ]
@@ -1312,7 +1311,7 @@
                     "apps/web/admin/src/**/Markdown*.vue"
                 ]
             },
-            "ledger_id": null,
+            "ledger_id": "admin.e2e.course_ui_markdown_reader",
             "notes": "Use for browser-visible course reader, materials, markdown, or course-entry UI changes."
         },
         {
@@ -1759,9 +1758,8 @@
                 {
                     "label": "full playwright",
                     "argv": [
-                        "npm",
-                        "run",
-                        "test:e2e"
+                        "node",
+                        "scripts/playwright-external-runner.cjs"
                     ]
                 }
             ],

@@ -25,17 +25,17 @@ See [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WOR
 
 ## 3. pytest / SQLite harness hazards (observed agent environment)
 
-### 3.1 Persistent SQLite file under `.pytest_tmp/test.sqlite`
+### 3.1 Persistent pytest SQLite artifacts under `.pytest_tmp/`
 
-**Mechanism:** `tests/conftest.py` sets `DATABASE_URL` to a **repo-local file** when Postgres URL not forced.
+**Mechanism:** `tests/conftest.py` sets `DATABASE_URL` to a **repo-local per-process SQLite file** such as `.pytest_tmp/test_<pid>.sqlite` when Postgres URL is not forced.
 
-**Risk:** Interrupted runs or partially applied DDL can leave the file in a state where later tests fail with missing tables or FK errors until the file is deleted.
+**Risk:** Interrupted runs or partially applied DDL can leave one or more local SQLite artifacts in a state where later tests fail with missing tables or FK errors until the affected file is deleted. The per-process naming reduces accidental cross-process sharing, but stale artifacts can still mislead local reruns.
 
 **Mitigation documented:** run `python ops/scripts/dev/pytest_sqlite_guard.py`
 first, stop any active pytest process it reports, then delete
-`<repo-root>/.pytest_tmp/test.sqlite` when bizarre `no such table` errors
-appear after supposedly resetting schema. The guardrail is read-only; it does
-not kill processes or delete the file.
+the reported `<repo-root>/.pytest_tmp/test*.sqlite` artifact when bizarre
+`no such table` errors appear after supposedly resetting schema. The guardrail
+is read-only; it does not kill processes or delete files.
 
 ### 3.2 `ensure_schema_updates()` vs empty/partial metadata — mitigated (2026-05)
 
@@ -45,7 +45,7 @@ not kill processes or delete the file.
 
 **Fix:** `tests/db_reset.py` now imports `apps.backend.courseeval_backend.db.models` at the beginning of `reset_test_database_schema()`.
 
-**Residual risks:** corrupted `.pytest_tmp/test.sqlite` files or concurrent pytest processes sharing that path — still require deletion / isolation when suspected.
+**Residual risks:** corrupted `.pytest_tmp/test*.sqlite` files or callers that override the basename back to a shared path still require deletion / isolation when suspected.
 
 ---
 

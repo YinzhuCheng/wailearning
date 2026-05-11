@@ -71,11 +71,19 @@ def check_repo_path_exists(repo_root: Path, value: str) -> bool:
 
 def check_playwright_command_target_exists(repo_root: Path, argv: list[str]) -> list[str]:
     issues: list[str] = []
-    if len(argv) < 4:
+    if len(argv) < 2:
         return issues
-    if argv[0] not in {"npx", "npx.cmd"} or argv[1:3] != ["playwright", "test"]:
+    if argv[0] in {"npx", "npx.cmd"} and argv[1:3] == ["playwright", "test"]:
+        spec_args = argv[3:]
+    elif (
+        argv[0] == "node"
+        and len(argv) >= 2
+        and argv[1].replace("\\", "/").endswith("scripts/playwright-external-runner.cjs")
+    ):
+        spec_args = argv[2:]
+    else:
         return issues
-    for part in argv[3:]:
+    for part in spec_args:
         if part.startswith("-"):
             continue
         if not part.endswith((".spec.js", ".cjs")):
@@ -137,6 +145,12 @@ def lint_registry(repo_root: Path, registry_path: str, ledger_path: str) -> list
             issues.append(f"{target_id}: ledger_id must be a string or null")
         if isinstance(ledger_id, str) and ledger_id not in ledger_ids:
             issues.append(f"{target_id}: ledger_id not found in ledger: {ledger_id}")
+        if target_id in ledger_ids and ledger_id is None:
+            issues.append(f"{target_id}: target has a committed ledger row but ledger_id is null")
+        if target_id in ledger_ids and isinstance(ledger_id, str) and ledger_id != target_id:
+            issues.append(
+                f"{target_id}: target has its own committed ledger row but ledger_id points elsewhere: {ledger_id}"
+            )
 
         commands = target.get("commands")
         if not isinstance(commands, list) or not commands:

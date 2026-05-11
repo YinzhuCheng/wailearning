@@ -161,7 +161,7 @@ current task.
 | In-process LLM worker | [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](docs/architecture/ASYNC_TASKS_AND_WORKERS.md) |
 | Known gaps / risks | [`docs/known-issues-and-risks.md`](docs/known-issues-and-risks.md) |
 | Operational playbook | [`docs/agent-playbook.md`](docs/agent-playbook.md) |
-| Repo-local skills | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md), [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md), [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md) |
+| Repo-local skills | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md), [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md), [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md), [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md) |
 
 ---
 
@@ -181,6 +181,7 @@ script when the workflow can be automated.
 | [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md) | Reviewing or changing authorization, role boundaries, course access, parent-code flows, or sensitive API behavior |
 | [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md) | Changing deployment scripts, ops docs, `.env.production`, nginx/systemd templates, or server Git deploy wrappers |
 | [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md) | Diagnosing local pytest, SQLite, Playwright, port, process, dependency, or Windows test-environment hazards |
+| [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md) | Running or debugging admin Playwright with the repository's external runner, seeded E2E helpers, and browser-harness guardrails |
 | [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md) | Changing SQLAlchemy models, schema repair DDL, student identity audit/repair helpers, or no-Alembic schema documentation |
 | [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md) | Changing FastAPI routers, route prefixes, frontend API clients, API docs, or API regression tests |
 
