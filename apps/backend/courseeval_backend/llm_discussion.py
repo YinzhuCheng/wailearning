@@ -413,6 +413,7 @@ def _run_discussion_llm_reply_unlocked(
                 author_user_id=sys_user.id,
                 body=f"【智能助教】暂无法回复：{msg}",
                 body_format="markdown",
+                linked_targets=[],
                 message_kind="llm_assistant",
                 llm_invocation=False,
             )
@@ -529,6 +530,7 @@ def _run_discussion_llm_reply_unlocked(
         author_user_id=sys_user.id,
         body=reply_body,
         body_format="markdown",
+        linked_targets=[],
         message_kind="llm_assistant",
         llm_invocation=False,
     )

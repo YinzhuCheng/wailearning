@@ -177,6 +177,7 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 - `GET/PUT/DELETE /api/learning-notes/{note_id}` enforce owner-only mutation and owner-or-public-scope read. Private notes remain owner-only. Public notes bound to a course require normal course access for non-owner readers/commenters. Public notes without a course can be read and discussed by any authenticated user.
 - `/{note_id}/chapters` and `/{note_id}/resources` implement an editable note-local outline and resource tree.
 - `/{note_id}/discussion` stores note-scoped discussion entries. Private note discussion is readable/commentable only by the owner. Course-visible note discussion is readable/commentable by same-course users.
+- Note-discussion create/list payloads also support a `linked_targets` array for structured internal references. Each link is validated against the current caller's visibility when the comment is created, then re-expanded per viewer so inaccessible or deleted targets degrade to an unavailable card instead of exposing stale titles.
 
 ### Copy semantics
 
@@ -188,7 +189,7 @@ The note discussion assistant reuses the course LLM routing stack (`ensure_cours
 
 ### Admin SPA
 
-`apps/web/admin/src/views/LearningNotes.vue` exposes the teacher/student sidebar destination `/learning-notes`. It lets users create private notes, optionally copy course outline/materials from accessible courses, publish a note either to same-course users (when a course is selected) or to all authenticated users (when no course is selected), edit the note-local outline/resources, and participate in the note discussion. Admin users are intentionally routed away by `adminHiddenPaths`; the feature was requested for teachers and students.
+`apps/web/admin/src/views/LearningNotes.vue` exposes the teacher/student sidebar destination `/learning-notes`. It lets users create private notes, optionally copy course outline/materials from accessible courses, publish a note either to same-course users (when a course is selected) or to all authenticated users (when no course is selected), edit the note-local outline/resources, and participate in the note discussion. The composer now includes a structured internal-link picker backed by `/api/discussions/link-targets`, and persisted rows render those links as compact cards. Admin users are intentionally routed away by `adminHiddenPaths`; the feature was requested for teachers and students.
 
 ---
 

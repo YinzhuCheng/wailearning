@@ -92,6 +92,13 @@
                     />
                     <template v-else>{{ collapsedBodyPreview(row) }}</template>
                   </div>
+                  <DiscussionLinkedTargetCards
+                    v-if="row.linked_targets?.length"
+                    :items="row.linked_targets"
+                    clickable
+                    compact
+                    @open="openLinkedTarget"
+                  />
                   <button
                     v-if="isTruncated(row.body) && isExpanded(row.id)"
                     type="button"
@@ -180,7 +187,27 @@
                 subtitle="回复格式为 Markdown 时显示：以下为固定演示渲染效果，可复制或插入后再撰写正文。"
                 @insert="appendDraftSnippet"
               />
+              <DiscussionLinkedTargetCards
+                v-if="draftLinkedTargets.length"
+                :items="draftLinkedTargets"
+                compact
+              />
             </div>
+
+            <div class="discussion-linked-targets-toolbar">
+              <DiscussionLinkTargetPicker
+                :preferred-subject-id="resolvedSubjectId"
+                :selected-targets="draftLinkedTargets"
+                @select="attachLinkedTarget"
+              />
+            </div>
+
+            <DiscussionLinkedTargetCards
+              v-if="draftLinkedTargets.length"
+              :items="draftLinkedTargets"
+              removable
+              @remove="removeLinkedTarget"
+            />
 
             <el-input
               v-if="composerMode === 'edit'"
@@ -227,14 +254,18 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import DiscussionAuthorAvatar from '@/components/DiscussionAuthorAvatar.vue'
+import DiscussionLinkedTargetCards from '@/components/DiscussionLinkedTargetCards.vue'
+import DiscussionLinkTargetPicker from '@/components/DiscussionLinkTargetPicker.vue'
 import MarkdownLatexLiveDemo from '@/components/MarkdownLatexLiveDemo.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
 import { normalizeContentFormat } from '@/utils/contentFormat'
+import { discussionLinkedTargetKey, openDiscussionLinkedTarget } from '@/utils/discussionLinkTargets'
 
 /** Each segment renders as one logical line: a text line (may be empty) or one image. */
 const PREVIEW_LINE_LIMIT = 3
@@ -258,6 +289,7 @@ const props = defineProps({
   isStudent: { type: Boolean, default: false }
 })
 
+const router = useRouter()
 const userStore = useUserStore()
 
 const selectedCourse = computed(() => userStore.selectedCourse)
@@ -293,6 +325,7 @@ const total = ref(0)
 const entries = ref([])
 const draft = ref('')
 const draftFormat = ref('markdown')
+const draftLinkedTargets = ref([])
 const showMarkdownDemo = ref(false)
 const llmMode = ref(false)
 const discussionCollapsed = ref(false)
@@ -325,6 +358,23 @@ const llmModeHint = computed(() => {
 const appendDraftSnippet = snippet => {
   const cur = (draft.value || '').trim()
   draft.value = cur ? `${cur}\n\n${snippet}` : snippet
+}
+
+const attachLinkedTarget = item => {
+  const key = discussionLinkedTargetKey(item)
+  if (draftLinkedTargets.value.some(existing => discussionLinkedTargetKey(existing) === key)) {
+    return
+  }
+  draftLinkedTargets.value = [...draftLinkedTargets.value, item]
+}
+
+const removeLinkedTarget = item => {
+  const key = discussionLinkedTargetKey(item)
+  draftLinkedTargets.value = draftLinkedTargets.value.filter(existing => discussionLinkedTargetKey(existing) !== key)
+}
+
+const openLinkedTarget = async item => {
+  await openDiscussionLinkedTarget(item, router, userStore)
 }
 
 const roleLabel = role =>
@@ -592,10 +642,15 @@ const submit = async () => {
       class_id: resolvedClassId.value,
       body: text,
       body_format: normalizeContentFormat(draftFormat.value),
+      linked_targets: draftLinkedTargets.value.map(item => ({
+        target_type: item.target_type,
+        target_id: item.target_id
+      })),
       invoke_llm: invokeLlm
     })
     draft.value = ''
     draftFormat.value = 'markdown'
+    draftLinkedTargets.value = []
     showMarkdownDemo.value = false
     llmMode.value = false
     composerMode.value = 'edit'
@@ -634,6 +689,7 @@ watch(
   () => {
     stopPolling()
     page.value = 1
+    draftLinkedTargets.value = []
     loadList()
   }
 )
@@ -877,6 +933,10 @@ loadList()
 }
 
 .discussion-md-demo-wrap {
+  margin-top: 10px;
+}
+
+.discussion-linked-targets-toolbar {
   margin-top: 10px;
 }
 

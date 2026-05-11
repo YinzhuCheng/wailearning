@@ -103,6 +103,7 @@ class CourseDiscussionEntryResponse(BaseModel):
     author_avatar_url: Optional[str] = None
     body: str
     body_format: ContentFormatLiteral = "markdown"
+    linked_targets: List["DiscussionLinkedTargetResponse"] = Field(default_factory=list)
     message_kind: str = "human"
     llm_invocation: bool = False
     created_at: datetime
@@ -125,6 +126,7 @@ class CourseDiscussionCreate(BaseModel):
     class_id: int = Field(..., ge=1)
     body: str = Field(..., min_length=1, max_length=8000)
     body_format: ContentFormatLiteral = "markdown"
+    linked_targets: List["DiscussionLinkedTargetInput"] = Field(default_factory=list)
     invoke_llm: bool = False
 
     @field_validator("body_format", mode="before")
@@ -308,6 +310,7 @@ class LearningNoteDiscussionEntryResponse(BaseModel):
     author_avatar_url: Optional[str] = None
     body: str
     body_format: ContentFormatLiteral = "markdown"
+    linked_targets: List["DiscussionLinkedTargetResponse"] = Field(default_factory=list)
     message_kind: str = "human"
     llm_invocation: bool = False
     created_at: datetime
@@ -326,6 +329,7 @@ class LearningNoteDiscussionListResponse(BaseModel):
 class LearningNoteDiscussionCreate(BaseModel):
     body: str = Field(..., min_length=1, max_length=8000)
     body_format: ContentFormatLiteral = "markdown"
+    linked_targets: List["DiscussionLinkedTargetInput"] = Field(default_factory=list)
     invoke_llm: bool = False
 
     @field_validator("body_format", mode="before")
@@ -334,6 +338,28 @@ class LearningNoteDiscussionCreate(BaseModel):
         from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 
         return normalize_content_format(value if isinstance(value, str) else None)
+
+
+class DiscussionLinkedTargetInput(BaseModel):
+    target_type: Literal["homework", "material", "learning_note"]
+    target_id: int = Field(..., ge=1)
+
+
+class DiscussionLinkedTargetResponse(BaseModel):
+    target_type: Literal["homework", "material", "learning_note"]
+    target_id: int
+    target_label: str
+    title: str
+    subject_id: Optional[int] = None
+    subject_name: Optional[str] = None
+    class_id: Optional[int] = None
+    class_name: Optional[str] = None
+    secondary_text: Optional[str] = None
+    available: bool = True
+
+
+class DiscussionLinkTargetSearchResponse(BaseModel):
+    data: List[DiscussionLinkedTargetResponse]
 
 
 class StudentRosterUpsertFromUsersRequest(BaseModel):

@@ -944,6 +944,7 @@ class LearningNoteDiscussionEntry(Base):
     author_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     body = Column(Text, nullable=False)
     body_format = Column(String, nullable=False, default="markdown")
+    linked_targets = Column(JSON, nullable=True)
     message_kind = Column(String, nullable=False, default="human")
     llm_invocation = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -965,6 +966,7 @@ class CourseDiscussionEntry(Base):
     author_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     body = Column(Text, nullable=False)
     body_format = Column(String, nullable=False, default="markdown")
+    linked_targets = Column(JSON, nullable=True)
     message_kind = Column(String, nullable=False, default="human")  # human | llm_assistant
     llm_invocation = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

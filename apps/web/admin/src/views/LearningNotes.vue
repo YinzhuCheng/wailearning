@@ -226,6 +226,19 @@
                   <el-radio-button label="preview" :disabled="discussionDraftFormat !== 'markdown'">预览</el-radio-button>
                 </el-radio-group>
               </div>
+              <div class="note-discussion__link-toolbar">
+                <DiscussionLinkTargetPicker
+                  :preferred-subject-id="selectedNote?.subject_id || userStore.selectedCourse?.id || null"
+                  :selected-targets="discussionLinkedTargets"
+                  @select="attachDiscussionLinkedTarget"
+                />
+              </div>
+              <DiscussionLinkedTargetCards
+                v-if="discussionLinkedTargets.length"
+                :items="discussionLinkedTargets"
+                removable
+                @remove="removeDiscussionLinkedTarget"
+              />
               <PlainOrMarkdownBlock
                 v-if="discussionComposeMode === 'preview' && discussionDraftFormat === 'markdown'"
                 :text="discussionDraft"
@@ -233,6 +246,11 @@
                 variant="student"
                 empty-text="（空）"
                 class="discussion-preview"
+              />
+              <DiscussionLinkedTargetCards
+                v-if="discussionComposeMode === 'preview' && discussionLinkedTargets.length"
+                :items="discussionLinkedTargets"
+                compact
               />
               <el-input
                 v-else
@@ -267,6 +285,13 @@
                   :format="row.body_format || 'markdown'"
                   variant="student"
                   empty-text="（空）"
+                />
+                <DiscussionLinkedTargetCards
+                  v-if="row.linked_targets?.length"
+                  :items="row.linked_targets"
+                  clickable
+                  compact
+                  @open="openLinkedTarget"
                 />
               </article>
             </div>
@@ -373,19 +398,25 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 
 import api from '@/api'
+import DiscussionLinkedTargetCards from '@/components/DiscussionLinkedTargetCards.vue'
+import DiscussionLinkTargetPicker from '@/components/DiscussionLinkTargetPicker.vue'
 import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { downloadAttachment } from '@/utils/attachments'
+import { discussionLinkedTargetKey, openDiscussionLinkedTarget } from '@/utils/discussionLinkTargets'
 import {
   getMaterialPresentationStyle,
   MATERIAL_PRESENTATION_EVENT
 } from '@/utils/materialPresentation'
 import { useUserStore } from '@/stores/user'
 
+const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
 const activeScope = ref('mine')
@@ -398,6 +429,7 @@ const discussionRows = ref([])
 const discussionLoading = ref(false)
 const discussionDraft = ref('')
 const discussionDraftFormat = ref('markdown')
+const discussionLinkedTargets = ref([])
 const discussionComposeMode = ref('edit')
 const discussionComposerOpen = ref(false)
 const invokeLlm = ref(false)
@@ -572,6 +604,25 @@ function discussionScopeLabel(note) {
   return note.subject_id ? '同课程用户可参与' : '全员可参与'
 }
 
+const attachDiscussionLinkedTarget = item => {
+  const key = discussionLinkedTargetKey(item)
+  if (discussionLinkedTargets.value.some(existing => discussionLinkedTargetKey(existing) === key)) {
+    return
+  }
+  discussionLinkedTargets.value = [...discussionLinkedTargets.value, item]
+}
+
+const removeDiscussionLinkedTarget = item => {
+  const key = discussionLinkedTargetKey(item)
+  discussionLinkedTargets.value = discussionLinkedTargets.value.filter(
+    existing => discussionLinkedTargetKey(existing) !== key
+  )
+}
+
+const openLinkedTarget = async item => {
+  await openDiscussionLinkedTarget(item, router, userStore)
+}
+
 const loadNotes = async () => {
   loadingNotes.value = true
   try {
@@ -592,10 +643,31 @@ const loadNotes = async () => {
   }
 }
 
+const openNoteFromRouteQuery = async () => {
+  const noteId = Number(route.query.note || 0)
+  if (!noteId || Number.isNaN(noteId)) {
+    return
+  }
+  if (Number(selectedNote.value?.id || 0) === noteId) {
+    return
+  }
+  try {
+    selectedNote.value = await api.learningNotes.get(noteId)
+    ensureResourceSelection()
+    discussionComposerOpen.value = false
+    discussionLinkedTargets.value = []
+    await loadDiscussion()
+  } catch (error) {
+    console.error('Failed to open linked note', error)
+  }
+}
+
 const selectNote = async note => {
   selectedNote.value = await api.learningNotes.get(note.id)
   ensureResourceSelection()
   discussionComposerOpen.value = false
+  discussionLinkedTargets.value = []
+  await router.replace({ name: 'LearningNotes', query: { note: String(note.id) } })
   await loadDiscussion()
 }
 
@@ -790,10 +862,15 @@ const submitDiscussion = async () => {
     await api.learningNotes.createDiscussion(selectedNote.value.id, {
       body: discussionDraft.value,
       body_format: discussionDraftFormat.value,
+      linked_targets: discussionLinkedTargets.value.map(item => ({
+        target_type: item.target_type,
+        target_id: item.target_id
+      })),
       invoke_llm: invokeLlm.value || discussionDraft.value.trim().startsWith('@LLM')
     })
     discussionDraft.value = ''
     discussionDraftFormat.value = 'markdown'
+    discussionLinkedTargets.value = []
     discussionComposeMode.value = 'edit'
     invokeLlm.value = false
     discussionComposerOpen.value = false
@@ -824,6 +901,13 @@ watch(discussionDraftFormat, value => {
   }
 })
 
+watch(
+  () => route.query.note,
+  () => {
+    openNoteFromRouteQuery()
+  }
+)
+
 const handleMaterialPresentationStyleChange = event => {
   materialPresentationStyle.value = event?.detail || getMaterialPresentationStyle()
 }
@@ -834,6 +918,7 @@ onMounted(async () => {
   }
   await userStore.fetchTeachingCourses(true)
   await loadNotes()
+  await openNoteFromRouteQuery()
 })
 
 onBeforeUnmount(() => {
@@ -1364,6 +1449,10 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.note-discussion__link-toolbar {
+  margin-top: 10px;
 }
 
 .discussion-preview {

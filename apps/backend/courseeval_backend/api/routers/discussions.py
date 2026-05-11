@@ -13,11 +13,17 @@ from apps.backend.courseeval_backend.core.auth import get_current_active_user
 from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, is_course_instructor
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import CourseDiscussionEntry, CourseMaterial, DiscussionLLMJob, Homework, Subject, User, UserRole
+from apps.backend.courseeval_backend.domains.discussion_links import (
+    search_link_targets,
+    serialize_linked_targets_for_viewer,
+    validate_visible_linked_targets,
+)
 from apps.backend.courseeval_backend.domains.llm.discussion_ui import strip_llm_ui_prefix
 from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     CourseDiscussionCreate,
     CourseDiscussionEntryResponse,
+    DiscussionLinkTargetSearchResponse,
     CourseDiscussionListResponse,
 )
 
@@ -124,7 +130,13 @@ def _can_delete_entry(entry: CourseDiscussionEntry, current_user: User, db: Sess
     return False
 
 
-def _serialize_entry(row: CourseDiscussionEntry, author: User) -> CourseDiscussionEntryResponse:
+def _serialize_entry(
+    row: CourseDiscussionEntry,
+    author: User,
+    *,
+    db: Session,
+    current_user: User,
+) -> CourseDiscussionEntryResponse:
     return CourseDiscussionEntryResponse(
         id=row.id,
         target_type=row.target_type,
@@ -138,6 +150,7 @@ def _serialize_entry(row: CourseDiscussionEntry, author: User) -> CourseDiscussi
         author_avatar_url=author.avatar_url,
         body=row.body,
         body_format=getattr(row, "body_format", None) or "markdown",
+        linked_targets=serialize_linked_targets_for_viewer(db, current_user, getattr(row, "linked_targets", None)),
         message_kind=getattr(row, "message_kind", None) or "human",
         llm_invocation=bool(getattr(row, "llm_invocation", False)),
         created_at=row.created_at,
@@ -185,7 +198,28 @@ def list_discussion(
         page=page,
         page_size=size,
         total=total,
-        data=[_serialize_entry(e, u) for e, u in rows],
+        data=[_serialize_entry(e, u, db=db, current_user=current_user) for e, u in rows],
+    )
+
+
+@router.get("/link-targets", response_model=DiscussionLinkTargetSearchResponse)
+def list_discussion_link_targets(
+    target_type: Literal["homework", "material", "learning_note"] = Query(...),
+    q: Optional[str] = Query(None, max_length=120),
+    preferred_subject_id: Optional[int] = Query(None, ge=1),
+    limit: int = Query(12, ge=1, le=30),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return DiscussionLinkTargetSearchResponse(
+        data=search_link_targets(
+            db,
+            current_user,
+            target_type=target_type,
+            query_text=q,
+            preferred_subject_id=preferred_subject_id,
+            limit=limit,
+        )
     )
 
 
@@ -200,6 +234,7 @@ def create_discussion(
         raise HTTPException(status_code=400, detail="body cannot be empty.")
     if len(body) > MAX_BODY_LEN:
         raise HTTPException(status_code=400, detail=f"body exceeds {MAX_BODY_LEN} characters.")
+    linked_targets = validate_visible_linked_targets(db, current_user, payload.linked_targets)
 
     if payload.target_type == "homework":
         hw = _load_homework(db, payload.target_id)
@@ -240,6 +275,7 @@ def create_discussion(
         author_user_id=current_user.id,
         body=body_for_display,
         body_format=payload.body_format,
+        linked_targets=linked_targets,
         message_kind="human",
         llm_invocation=llm_invocation,
     )
@@ -267,7 +303,7 @@ def create_discussion(
     if job_id is not None:
         threading.Thread(target=_run_discussion_llm_job, args=(job_id,), daemon=True).start()
 
-    return _serialize_entry(entry, current_user)
+    return _serialize_entry(entry, current_user, db=db, current_user=current_user)
 
 
 @router.delete("/{entry_id}", status_code=204)

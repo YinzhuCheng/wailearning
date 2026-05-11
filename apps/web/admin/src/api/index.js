@@ -401,6 +401,7 @@ const api = {
   },
   discussions: {
     list: params => http.get('/discussions', { params }),
+    searchTargets: params => http.get('/discussions/link-targets', { params }),
     create: data => http.post('/discussions', data),
     delete: id => http.delete(`/discussions/${id}`),
     /** @param {AbortSignal} [signal] */

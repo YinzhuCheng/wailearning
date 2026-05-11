@@ -29,6 +29,10 @@ from apps.backend.courseeval_backend.db.models import (
     User,
 )
 from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, get_accessible_course_ids
+from apps.backend.courseeval_backend.domains.discussion_links import (
+    serialize_linked_targets_for_viewer,
+    validate_visible_linked_targets,
+)
 from apps.backend.courseeval_backend.domains.text_content_format import body_text_for_grading_llm, normalize_content_format
 from apps.backend.courseeval_backend.llm_discussion import (
     _call_discussion_with_routing,
@@ -599,7 +603,13 @@ def delete_learning_note_resource(
     return _serialize_note_detail(note, db)
 
 
-def _serialize_note_discussion(row: LearningNoteDiscussionEntry, author: User) -> LearningNoteDiscussionEntryResponse:
+def _serialize_note_discussion(
+    row: LearningNoteDiscussionEntry,
+    author: User,
+    *,
+    db: Session,
+    current_user: User,
+) -> LearningNoteDiscussionEntryResponse:
     return LearningNoteDiscussionEntryResponse(
         id=row.id,
         note_id=row.note_id,
@@ -610,6 +620,7 @@ def _serialize_note_discussion(row: LearningNoteDiscussionEntry, author: User) -
         author_avatar_url=author.avatar_url,
         body=row.body,
         body_format=normalize_content_format(row.body_format),
+        linked_targets=serialize_linked_targets_for_viewer(db, current_user, getattr(row, "linked_targets", None)),
         message_kind=row.message_kind,
         llm_invocation=bool(row.llm_invocation),
         created_at=row.created_at,
@@ -642,7 +653,7 @@ def list_learning_note_discussion(
         page=page,
         page_size=page_size,
         total=total,
-        data=[_serialize_note_discussion(row, author) for row, author in rows],
+        data=[_serialize_note_discussion(row, author, db=db, current_user=current_user) for row, author in rows],
     )
 
 
@@ -660,12 +671,14 @@ def create_learning_note_discussion(
         raise HTTPException(status_code=400, detail="body cannot be empty.")
     if len(body) > MAX_DISCUSSION_BODY_LEN:
         raise HTTPException(status_code=400, detail=f"body exceeds {MAX_DISCUSSION_BODY_LEN} characters.")
+    linked_targets = validate_visible_linked_targets(db, current_user, payload.linked_targets)
 
     entry = LearningNoteDiscussionEntry(
         note_id=note.id,
         author_user_id=current_user.id,
         body=body,
         body_format=payload.body_format,
+        linked_targets=linked_targets,
         message_kind="human",
         llm_invocation=bool(payload.invoke_llm),
     )
@@ -676,7 +689,7 @@ def create_learning_note_discussion(
     if payload.invoke_llm:
         threading.Thread(target=_run_learning_note_llm_reply, args=(entry.id,), daemon=True).start()
 
-    return _serialize_note_discussion(entry, current_user)
+    return _serialize_note_discussion(entry, current_user, db=db, current_user=current_user)
 
 
 def _note_context_text(db: Session, note: LearningNote) -> str:
@@ -744,6 +757,7 @@ def _run_learning_note_llm_reply(entry_id: int) -> None:
                     author_user_id=sys_user.id,
                     body=text,
                     body_format="markdown",
+                    linked_targets=[],
                     message_kind="llm_assistant",
                     llm_invocation=False,
                 )

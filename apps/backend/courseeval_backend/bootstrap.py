@@ -188,6 +188,7 @@ def ensure_schema_updates() -> None:
         """,
         "CREATE INDEX IF NOT EXISTS ix_learning_note_discussion_entries_note_id ON learning_note_discussion_entries(note_id)",
         "CREATE INDEX IF NOT EXISTS ix_learning_note_discussion_entries_author_user_id ON learning_note_discussion_entries(author_user_id)",
+        "ALTER TABLE learning_note_discussion_entries ADD COLUMN IF NOT EXISTS linked_targets JSON",
         """
         CREATE TABLE IF NOT EXISTS homework_grade_appeals (
             id INTEGER PRIMARY KEY,
@@ -479,6 +480,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS message_kind VARCHAR NOT NULL DEFAULT 'human'",
         "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS llm_invocation BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS body_format VARCHAR NOT NULL DEFAULT 'markdown'",
+        "ALTER TABLE course_discussion_entries ADD COLUMN IF NOT EXISTS linked_targets JSON",
         """
         CREATE TABLE IF NOT EXISTS discussion_llm_jobs (
             id INTEGER PRIMARY KEY,
