@@ -110,7 +110,7 @@ class ValidationSelectorTests(unittest.TestCase):
 
         backend_target = recommendation(payload, "backend.learning_notes.api")
         self.assertEqual(backend_target["history_status"], "stale")
-        self.assertEqual(backend_target["history_reason"], "target trigger changed in current diff")
+        self.assertIn("changed-path snapshot", backend_target["history_reason"])
         self.assertIn("learning-notes", backend_target["coverage_tags"])
 
     def test_unmapped_backend_source_escalates_to_full_postgres(self):

@@ -49,6 +49,8 @@
                 :avatar-url="row.author_avatar_url"
                 :name="displayAuthorName(row)"
                 :role="row.author_role"
+                :student-id="row.author_student_id"
+                :course="selectedCourse"
                 :message-kind="row.message_kind"
               />
               <div class="discussion-row__content">

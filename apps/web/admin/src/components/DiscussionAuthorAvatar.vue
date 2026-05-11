@@ -1,6 +1,39 @@
 <template>
+  <StudentActionMenu
+    v-if="showStudentActionMenu"
+    :user-id="userId"
+    :student-id="studentId"
+    :course="course"
+  >
+    <template #trigger>
+      <button
+        type="button"
+        class="discussion-author-avatar-wrap discussion-author-avatar-wrap--button"
+        :title="buttonTitle"
+      >
+        <el-avatar
+          :size="size"
+          :src="avatarSrc || undefined"
+          class="discussion-author-avatar"
+          :class="{ 'discussion-author-avatar--assistant': messageKind === 'llm_assistant' }"
+          :style="{ backgroundColor: fallbackColor }"
+        >
+          {{ fallbackText }}
+        </el-avatar>
+        <span
+          v-if="badgeLabel"
+          class="discussion-author-avatar__badge"
+          :class="badgeClass"
+          :title="badgeTitle"
+          aria-hidden="true"
+        >
+          {{ badgeLabel }}
+        </span>
+      </button>
+    </template>
+  </StudentActionMenu>
   <button
-    v-if="clickable"
+    v-else-if="clickable"
     type="button"
     class="discussion-author-avatar-wrap discussion-author-avatar-wrap--button"
     :title="buttonTitle"
@@ -51,6 +84,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import StudentActionMenu from '@/components/StudentActionMenu.vue'
 import { fetchAttachmentBlobUrl } from '@/utils/attachments'
 
 const props = defineProps({
@@ -58,6 +92,8 @@ const props = defineProps({
   avatarUrl: { type: String, default: '' },
   name: { type: String, default: '' },
   role: { type: String, default: '' },
+  studentId: { type: [Number, String], default: null },
+  course: { type: Object, default: null },
   messageKind: { type: String, default: 'human' },
   size: { type: Number, default: 32 },
 })
@@ -67,6 +103,7 @@ const avatarSrc = ref('')
 let avatarBlobUrl = ''
 
 const clickable = computed(() => props.messageKind !== 'llm_assistant' && props.userId != null && props.userId !== '')
+const showStudentActionMenu = computed(() => props.role === 'student' && clickable.value)
 const buttonTitle = computed(() => `查看${props.name || '该用户'}的近期发表`)
 
 const openRecentPosts = () => {

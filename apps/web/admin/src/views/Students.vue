@@ -121,8 +121,9 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="180" fixed="right">
+            <el-table-column label="操作" width="220" fixed="right">
               <template #default="{ row }">
+                <StudentActionMenu :user-id="row.bound_user_id" :student-id="row.id" />
                 <el-button type="primary" size="small" @click="router.push(`/students/${row.id}/edit`)">
                   编辑
                 </el-button>
@@ -153,6 +154,11 @@
             <el-table-column label="家庭住址" min-width="220" show-overflow-tooltip>
               <template #default="{ row }">{{ emptyCell(row.address) }}</template>
             </el-table-column>
+            <el-table-column label="操作" width="90" fixed="right">
+              <template #default="{ row }">
+                <StudentActionMenu :user-id="row.bound_user_id" :student-id="row.id" />
+              </template>
+            </el-table-column>
           </template>
 
           <template v-else>
@@ -178,8 +184,13 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column v-if="canManageRoster" label="操作" width="220" fixed="right">
+            <el-table-column v-if="canManageRoster" label="操作" width="260" fixed="right">
               <template #default="{ row }">
+                <StudentActionMenu
+                  :user-id="row.student_user_id"
+                  :student-id="row.student_id"
+                  :course="selectedCourse"
+                />
                 <el-button type="primary" link size="small" @click="goRosterEdit(row.student_id)">
                   编辑花名册
                 </el-button>
@@ -300,6 +311,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import * as XLSX from 'xlsx'
 
 import api from '@/api'
+import StudentActionMenu from '@/components/StudentActionMenu.vue'
 import { useUserStore } from '@/stores/user'
 import { resolveClassTeacherClassId, resolveClassTeacherClassName } from '@/utils/classTeacher'
 

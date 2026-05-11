@@ -615,6 +615,7 @@ def _serialize_note_discussion(
         id=row.id,
         note_id=row.note_id,
         author_user_id=row.author_user_id,
+        author_student_id=author.student_id,
         author_real_name=author.real_name,
         author_username=author.username,
         author_role=author.role,

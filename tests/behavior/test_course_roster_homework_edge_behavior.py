@@ -302,3 +302,69 @@ def test_behavior_student_delete_peer_from_roster_forbidden_403(client: TestClie
     st_headers = headers_for(client, ctx["student_username"], ctx["student_password"])
     r = _delete(client, f"/api/subjects/{ctx['subject_id']}/students/{peer_id}", st_headers)
     assert r.status_code == 403
+
+
+def test_behavior_course_teacher_can_view_student_homework_status(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False)
+    th = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    r = client.get(
+        f"/api/homeworks/courses/{ctx['subject_id']}/students/{ctx['student_id']}/homeworks",
+        headers=th,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] >= 1
+    assert any(int(row["homework_id"]) == int(ctx["homework_id"]) for row in body["data"])
+
+
+def test_behavior_foreign_teacher_cannot_view_student_homework_status(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False)
+    db = SessionLocal()
+    try:
+        other_class = db.query(Student).filter(Student.id == ctx["student_id"]).one().class_id
+        other_teacher = User(
+            username=f"foreign_teacher_{uuid.uuid4().hex[:8]}",
+            hashed_password=get_password_hash("pw"),
+            real_name="Foreign Teacher",
+            role=UserRole.TEACHER.value,
+            class_id=other_class,
+        )
+        db.add(other_teacher)
+        db.commit()
+        db.refresh(other_teacher)
+        other_headers = headers_for(client, other_teacher.username, "pw")
+    finally:
+        db.close()
+
+    r = client.get(
+        f"/api/homeworks/courses/{ctx['subject_id']}/students/{ctx['student_id']}/homeworks",
+        headers=other_headers,
+    )
+    assert r.status_code == 403
+
+
+def test_behavior_class_teacher_with_course_access_cannot_view_student_homework_status(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False)
+    db = SessionLocal()
+    try:
+        class_teacher = User(
+            username=f"class_teacher_{uuid.uuid4().hex[:8]}",
+            hashed_password=get_password_hash("pw"),
+            real_name="Class Teacher",
+            role=UserRole.CLASS_TEACHER.value,
+            class_id=ctx["class_id"],
+        )
+        db.add(class_teacher)
+        db.commit()
+        db.refresh(class_teacher)
+        ct_headers = headers_for(client, class_teacher.username, "pw")
+    finally:
+        db.close()
+
+    roster = client.get(f"/api/homeworks/courses/{ctx['subject_id']}/students", headers=ct_headers)
+    assert roster.status_code == 403
+    r = client.get(
+        f"/api/homeworks/courses/{ctx['subject_id']}/students/{ctx['student_id']}/homeworks",
+        headers=ct_headers,
+    )
+    assert r.status_code == 403

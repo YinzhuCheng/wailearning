@@ -75,6 +75,7 @@ def build_student_response(
     *,
     class_name: Optional[str] = None,
     has_user: bool = False,
+    bound_user_id: Optional[int] = None,
 ) -> StudentResponse:
     display_name = (student.name or "").strip() or "无"
     display_no = (student.student_no or "").strip() or "—"
@@ -93,6 +94,7 @@ def build_student_response(
         class_name=class_name,
         parent_code=student.parent_code,
         has_user=has_user,
+        bound_user_id=bound_user_id,
     )
 
 
@@ -114,11 +116,11 @@ def serialize_students(students: List[Student], db: Session) -> List[StudentResp
         class_rows = db.query(Class.id, Class.name).filter(Class.id.in_(class_ids)).all()
         class_map = {class_id: class_name for class_id, class_name in class_rows}
 
-    bound_student_ids = set()
+    bound_user_by_student_id = {}
     if student_ids:
-        bound_student_ids = {
-            sid
-            for (sid,) in db.query(User.student_id)
+        bound_user_by_student_id = {
+            sid: uid
+            for uid, sid in db.query(User.id, User.student_id)
             .filter(User.role == UserRole.STUDENT.value, User.student_id.in_(student_ids))
             .all()
             if sid is not None
@@ -128,7 +130,8 @@ def serialize_students(students: List[Student], db: Session) -> List[StudentResp
         build_student_response(
             student,
             class_name=class_map.get(student.class_id),
-            has_user=student.id in bound_student_ids,
+            has_user=student.id in bound_user_by_student_id,
+            bound_user_id=bound_user_by_student_id.get(student.id),
         )
         for student in students
     ]

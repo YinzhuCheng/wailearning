@@ -351,6 +351,11 @@ def _serialize_enrollment(enrollment: CourseEnrollment, db: Session) -> CourseEn
     class_name = enrollment.class_obj.name if enrollment.class_obj else None
     if subj_ct == "elective" or enrollment_type == "elective":
         class_name = "-"
+    student_user_id = (
+        db.query(User.id)
+        .filter(User.role == UserRole.STUDENT.value, User.student_id == enrollment.student_id)
+        .scalar()
+    )
     return CourseEnrollmentResponse(
         id=enrollment.id,
         subject_id=enrollment.subject_id,
@@ -362,6 +367,7 @@ def _serialize_enrollment(enrollment: CourseEnrollment, db: Session) -> CourseEn
         student_name=enrollment.student.name if enrollment.student else None,
         student_no=enrollment.student.student_no if enrollment.student else None,
         class_name=class_name,
+        student_user_id=student_user_id,
     )
 
 

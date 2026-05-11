@@ -86,18 +86,19 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const loading = ref(false)
 const studentsLoading = ref(false)
 const students = ref([])
-const studentId = ref(null)
+const studentId = ref(route.query.student_id ? Number(route.query.student_id) : null)
 const rows = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -122,9 +123,19 @@ const formatDate = value => {
   return new Date(value).toLocaleString('zh-CN')
 }
 
+const routeStudentId = () => {
+  const id = Number(route.query.student_id)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
 const ensureDefaultStudent = () => {
   if (!students.value.length) {
     studentId.value = null
+    return
+  }
+  const requestedStudentId = routeStudentId()
+  if (requestedStudentId && students.value.some(s => Number(s.student_id) === requestedStudentId)) {
+    studentId.value = requestedStudentId
     return
   }
   const currentOk = students.value.some(s => s.student_id === studentId.value)
@@ -178,6 +189,13 @@ watch(
     rows.value = []
     total.value = 0
     await loadStudents()
+  }
+)
+
+watch(
+  () => route.query.student_id,
+  () => {
+    ensureDefaultStudent()
   }
 )
 

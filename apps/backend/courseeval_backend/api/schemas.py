@@ -174,6 +174,7 @@ class CourseDiscussionEntryResponse(BaseModel):
     subject_id: int
     class_id: int
     author_user_id: int
+    author_student_id: Optional[int] = None
     author_real_name: str
     author_username: str
     author_role: str
@@ -381,6 +382,7 @@ class LearningNoteDiscussionEntryResponse(BaseModel):
     id: int
     note_id: int
     author_user_id: int
+    author_student_id: Optional[int] = None
     author_real_name: Optional[str] = None
     author_username: str
     author_role: str
@@ -568,6 +570,7 @@ class StudentResponse(BaseModel):
     class_name: Optional[str] = None
     parent_code: Optional[str] = None
     has_user: bool = False
+    bound_user_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -681,6 +684,7 @@ class CourseEnrollmentResponse(BaseModel):
     student_name: Optional[str] = None
     student_no: Optional[str] = None
     class_name: Optional[str] = None
+    student_user_id: Optional[int] = None
 
     class Config:
         from_attributes = True

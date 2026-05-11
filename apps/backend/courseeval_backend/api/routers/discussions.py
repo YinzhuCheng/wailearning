@@ -144,6 +144,7 @@ def _serialize_entry(
         subject_id=row.subject_id,
         class_id=row.class_id,
         author_user_id=row.author_user_id,
+        author_student_id=author.student_id,
         author_real_name=author.real_name,
         author_username=author.username,
         author_role=author.role,

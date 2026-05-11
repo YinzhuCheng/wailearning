@@ -21,6 +21,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     ensure_course_access_http,
     get_enrolled_students,
     get_student_profile_for_user,
+    is_course_instructor,
     prepare_student_course_context,
 )
 from apps.backend.courseeval_backend.db.database import get_db
@@ -79,6 +80,15 @@ router = APIRouter(prefix="/api/homeworks", tags=["作业管理"])
 
 def is_teacher(user: User) -> bool:
     return user.role in [UserRole.ADMIN, UserRole.CLASS_TEACHER, UserRole.TEACHER]
+
+
+def _ensure_course_homework_status_access(subject_id: int, user: User, db: Session) -> Subject:
+    if not is_teacher(user):
+        raise HTTPException(status_code=403, detail="Only teachers can view this list.")
+    course = ensure_course_access_http(subject_id, user, db)
+    if not is_course_instructor(user, course):
+        raise HTTPException(status_code=403, detail="Only the course instructor can view student homework status.")
+    return course
 
 
 def _get_homework_or_404(homework_id: int, db: Session) -> Homework:
@@ -692,10 +702,7 @@ def list_student_homeworks_for_course(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if not is_teacher(current_user):
-        raise HTTPException(status_code=403, detail="Only teachers can view this list.")
-
-    ensure_course_access_http(subject_id, current_user, db)
+    _ensure_course_homework_status_access(subject_id, current_user, db)
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
@@ -749,9 +756,7 @@ def list_enrolled_students_for_course_teacher(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if not is_teacher(current_user):
-        raise HTTPException(status_code=403, detail="Only teachers can view this list.")
-    ensure_course_access_http(subject_id, current_user, db)
+    _ensure_course_homework_status_access(subject_id, current_user, db)
     enrollments = get_enrolled_students(subject_id, db)
     return [
         {
