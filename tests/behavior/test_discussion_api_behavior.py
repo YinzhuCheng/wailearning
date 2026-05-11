@@ -10,14 +10,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
-
 from apps.backend.courseeval_backend.core.auth import get_password_hash
 from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
 from apps.backend.courseeval_backend.main import app
-from apps.backend.courseeval_backend.db.models import Class, CourseMaterial, Homework, Subject, User, UserRole
+from apps.backend.courseeval_backend.db.models import Class, CourseDiscussionEntry, CourseMaterial, Homework, Subject, User, UserRole
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
-from tests.scenarios.material_flow import get_uncategorized_id, headers_for, make_subject_with_roster, ui_create_material
+from tests.scenarios.material_flow import ensure_foreign_teacher, get_uncategorized_id, headers_for, make_subject_with_roster, ui_create_material
 
 
 @pytest.fixture(autouse=True)
@@ -392,3 +390,201 @@ def test_behavior_discussion_material_post_delete_list_empty(client: TestClient)
     )
     assert lst.status_code == 200
     assert lst.json()["total"] == 0
+
+
+def test_behavior_discussion_link_targets_search_and_round_trip(client: TestClient):
+    ctx = make_subject_with_roster()
+    th = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    unc = get_uncategorized_id(ctx["subject_id"])
+    material = ui_create_material(
+        client,
+        th,
+        class_id=ctx["class_id"],
+        subject_id=ctx["subject_id"],
+        title="linkable material card",
+        chapter_ids=[unc],
+    )
+    assert material.status_code == 200, material.text
+
+    search = client.get(
+        "/api/discussions/link-targets",
+        headers=th,
+        params={"target_type": "material", "q": "linkable", "preferred_subject_id": ctx["subject_id"]},
+    )
+    assert search.status_code == 200, search.text
+    rows = search.json()["data"]
+    assert any(row["target_type"] == "material" and row["target_id"] == material.json()["id"] for row in rows)
+
+    created = _post_discussion(
+        client,
+        th,
+        {
+            "target_type": "material",
+            "target_id": material.json()["id"],
+            "subject_id": ctx["subject_id"],
+            "class_id": ctx["class_id"],
+            "body": "message with a structured link",
+            "linked_targets": [{"target_type": "material", "target_id": material.json()["id"]}],
+        },
+    )
+    assert created.status_code == 200, created.text
+    linked = created.json()["linked_targets"]
+    assert linked[0]["target_type"] == "material"
+    assert linked[0]["target_id"] == material.json()["id"]
+    assert linked[0]["title"] == "linkable material card"
+    assert linked[0]["available"] is True
+
+    listed = _list_discussion(
+        client,
+        th,
+        {
+            "target_type": "material",
+            "target_id": material.json()["id"],
+            "subject_id": ctx["subject_id"],
+            "class_id": ctx["class_id"],
+            "page": 1,
+            "page_size": 10,
+        },
+    )
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json()["data"] if item["id"] == created.json()["id"])
+    assert row["linked_targets"][0]["title"] == "linkable material card"
+
+
+def test_behavior_discussion_link_targets_dedupe_limit_and_unavailable_fallback(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    te = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    base = {
+        "target_type": "homework",
+        "target_id": ctx["homework_id"],
+        "subject_id": ctx["subject_id"],
+        "class_id": ctx["class_id"],
+    }
+
+    duplicate = _post_discussion(
+        client,
+        te,
+        {
+            **base,
+            "body": "dedupe linked target",
+            "linked_targets": [
+                {"target_type": "homework", "target_id": ctx["homework_id"]},
+                {"target_type": "homework", "target_id": ctx["homework_id"]},
+            ],
+        },
+    )
+    assert duplicate.status_code == 200, duplicate.text
+    assert len(duplicate.json()["linked_targets"]) == 1
+
+    over_limit = _post_discussion(
+        client,
+        te,
+        {
+            **base,
+            "body": "too many links",
+            "linked_targets": [{"target_type": "homework", "target_id": ctx["homework_id"] + i} for i in range(13)],
+        },
+    )
+    assert over_limit.status_code == 400
+
+    db = SessionLocal()
+    try:
+        row = db.query(CourseDiscussionEntry).filter(CourseDiscussionEntry.id == duplicate.json()["id"]).first()
+        assert row is not None
+        row.linked_targets = [{"target_type": "homework", "target_id": 999999}]
+        db.commit()
+    finally:
+        db.close()
+
+    listed = _list_discussion(client, te, {**base, "page": 1, "page_size": 10})
+    assert listed.status_code == 200, listed.text
+    patched = next(item for item in listed.json()["data"] if item["id"] == duplicate.json()["id"])
+    assert patched["linked_targets"][0]["target_type"] == "homework"
+    assert patched["linked_targets"][0]["available"] is False
+    assert patched["linked_targets"][0]["title"]
+
+
+def test_behavior_discussion_course_and_comment_link_targets_round_trip_and_locator(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    teacher = headers_for(client, ctx["teacher_username"], ctx["teacher_password"])
+    student = headers_for(client, ctx["student_username"], ctx["student_password"])
+    base = {
+        "target_type": "homework",
+        "target_id": ctx["homework_id"],
+        "subject_id": ctx["subject_id"],
+        "class_id": ctx["class_id"],
+    }
+    for idx in range(7):
+        r = _post_discussion(client, student if idx % 2 else teacher, {**base, "body": f"locator seed {idx}"})
+        assert r.status_code == 200, r.text
+    target = _post_discussion(client, student, {**base, "body": "hard-to-find target comment"})
+    assert target.status_code == 200, target.text
+
+    course_search = client.get(
+        "/api/discussions/link-targets",
+        headers=student,
+        params={"target_type": "course", "preferred_subject_id": ctx["subject_id"]},
+    )
+    assert course_search.status_code == 200, course_search.text
+    assert any(row["target_type"] == "course" and row["target_id"] == ctx["subject_id"] for row in course_search.json()["data"])
+
+    comment_search = client.get(
+        "/api/discussions/link-targets",
+        headers=student,
+        params={"target_type": "discussion_entry", "q": "hard-to-find", "preferred_subject_id": ctx["subject_id"]},
+    )
+    assert comment_search.status_code == 200, comment_search.text
+    comment_rows = comment_search.json()["data"]
+    assert comment_rows
+    comment_card = next(row for row in comment_rows if row["target_id"] == target.json()["id"])
+    assert comment_card["meta"]["discussion_family"] == "course"
+    assert comment_card["meta"]["thread_target_type"] == "homework"
+
+    linked = _post_discussion(
+        client,
+        student,
+        {
+            **base,
+            "body": "links to course and another comment",
+            "linked_targets": [
+                {"target_type": "course", "target_id": ctx["subject_id"]},
+                {"target_type": "discussion_entry", "target_id": target.json()["id"]},
+            ],
+        },
+    )
+    assert linked.status_code == 200, linked.text
+    types = [item["target_type"] for item in linked.json()["linked_targets"]]
+    assert types == ["course", "discussion_entry"]
+    assert linked.json()["linked_targets"][1]["meta"]["entry_id"] == target.json()["id"]
+
+    locator = client.get(
+        f"/api/discussions/entries/{target.json()['id']}/locator",
+        headers=student,
+        params={"page_size": 5},
+    )
+    assert locator.status_code == 200, locator.text
+    assert locator.json()["page"] == 2
+    assert locator.json()["thread_target_id"] == ctx["homework_id"]
+
+
+def test_behavior_discussion_comment_link_rejects_invisible_course_comment(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    student = headers_for(client, ctx["student_username"], ctx["student_password"])
+    foreign = ensure_foreign_teacher()
+    foreign_headers = headers_for(client, foreign["username"], foreign["password"])
+    base = {
+        "target_type": "homework",
+        "target_id": ctx["homework_id"],
+        "subject_id": ctx["subject_id"],
+        "class_id": ctx["class_id"],
+    }
+    target = _post_discussion(client, student, {**base, "body": "private after enrollment removal"})
+    assert target.status_code == 200, target.text
+
+    search = client.get(
+        "/api/discussions/link-targets",
+        headers=foreign_headers,
+        params={"target_type": "discussion_entry", "q": "private after enrollment removal"},
+    )
+    assert search.status_code == 200, search.text
+    assert search.json()["data"] == []

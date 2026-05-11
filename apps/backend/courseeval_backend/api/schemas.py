@@ -341,12 +341,12 @@ class LearningNoteDiscussionCreate(BaseModel):
 
 
 class DiscussionLinkedTargetInput(BaseModel):
-    target_type: Literal["homework", "material", "learning_note"]
+    target_type: Literal["homework", "material", "learning_note", "course", "discussion_entry"]
     target_id: int = Field(..., ge=1)
 
 
 class DiscussionLinkedTargetResponse(BaseModel):
-    target_type: Literal["homework", "material", "learning_note"]
+    target_type: Literal["homework", "material", "learning_note", "course", "discussion_entry"]
     target_id: int
     target_label: str
     title: str
@@ -356,6 +356,7 @@ class DiscussionLinkedTargetResponse(BaseModel):
     class_name: Optional[str] = None
     secondary_text: Optional[str] = None
     available: bool = True
+    meta: Optional[dict[str, Any]] = None
 
 
 class DiscussionLinkTargetSearchResponse(BaseModel):

@@ -9,26 +9,42 @@ from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.db.models import (
     Class,
+    CourseDiscussionEntry,
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
     Homework,
     LearningNote,
+    LearningNoteDiscussionEntry,
     Subject,
     User,
     UserRole,
 )
-from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, get_accessible_course_ids
+from apps.backend.courseeval_backend.domains.courses.access import (
+    ensure_course_access_http,
+    get_accessible_course_ids,
+    get_accessible_courses_query,
+)
 
-DiscussionLinkTargetType = Literal["homework", "material", "learning_note"]
+DiscussionLinkTargetType = Literal["homework", "material", "learning_note", "course", "discussion_entry"]
 
-LINKABLE_TARGET_TYPES: tuple[str, ...] = ("homework", "material", "learning_note")
+LINKABLE_TARGET_TYPES: tuple[str, ...] = ("homework", "material", "learning_note", "course", "discussion_entry")
 MAX_LINKED_TARGETS = 12
 DEFAULT_SEARCH_LIMIT = 12
 MAX_SEARCH_LIMIT = 30
+LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET = 1_000_000_000
 
 
 def target_label(target_type: str) -> str:
+    labels = {
+        "homework": "\u4f5c\u4e1a",
+        "material": "\u8d44\u6599",
+        "learning_note": "\u7b14\u8bb0",
+        "course": "\u8bfe\u7a0b",
+        "discussion_entry": "\u8bc4\u8bba",
+    }
+    if target_type in labels:
+        return labels[target_type]
     return {
         "homework": "作业",
         "material": "资料",
@@ -123,8 +139,9 @@ def _serialize_target_payload(
     class_name: Optional[str],
     secondary_text: Optional[str],
     available: bool,
+    meta: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "target_type": target_type,
         "target_id": target_id,
         "target_label": target_label(target_type),
@@ -136,6 +153,22 @@ def _serialize_target_payload(
         "secondary_text": secondary_text,
         "available": available,
     }
+    if meta:
+        payload["meta"] = meta
+    return payload
+
+
+def _short_excerpt(value: Optional[str], *, max_len: int = 72) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= max_len:
+        return text or "\u7a7a\u8bc4\u8bba"
+    return f"{text[: max_len - 1]}\u2026"
+
+
+def _author_label(author: Optional[User]) -> str:
+    if not author:
+        return "\u672a\u77e5\u7528\u6237"
+    return author.real_name or author.username or f"\u7528\u6237 {author.id}"
 
 
 def _resolve_homework_target(
@@ -238,6 +271,135 @@ def _resolve_learning_note_target(
     )
 
 
+def _resolve_course_target(
+    db: Session,
+    current_user: User,
+    target_id: int,
+    *,
+    require_visible: bool,
+) -> Optional[dict[str, Any]]:
+    try:
+        course = ensure_course_access_http(target_id, current_user, db)
+    except HTTPException:
+        if require_visible:
+            raise HTTPException(status_code=403, detail="You do not have access to this linked course.") from None
+        return None
+    class_name = course.class_obj.name if course.class_obj else None
+    secondary_parts = []
+    if class_name:
+        secondary_parts.append(class_name)
+    if course.course_type:
+        secondary_parts.append(str(course.course_type))
+    if course.teacher:
+        secondary_parts.append(_author_label(course.teacher))
+    return _serialize_target_payload(
+        target_type="course",
+        target_id=course.id,
+        title=course.name,
+        subject_id=course.id,
+        subject_name=course.name,
+        class_id=course.class_id,
+        class_name=class_name,
+        secondary_text=" · ".join(secondary_parts) if secondary_parts else "\u53ef\u89c1\u8bfe\u7a0b",
+        available=True,
+    )
+
+
+def _resolve_course_discussion_entry_target(
+    db: Session,
+    current_user: User,
+    target_id: int,
+    *,
+    require_visible: bool,
+) -> Optional[dict[str, Any]]:
+    row = db.query(CourseDiscussionEntry).filter(CourseDiscussionEntry.id == target_id).first()
+    if not row:
+        if require_visible:
+            raise HTTPException(status_code=404, detail="Linked discussion entry not found.")
+        return None
+    try:
+        ensure_course_access_http(int(row.subject_id), current_user, db)
+    except HTTPException:
+        if require_visible:
+            raise HTTPException(status_code=403, detail="You do not have access to this linked discussion entry.") from None
+        return None
+    author = row.author
+    title = f"{_author_label(author)}: {_short_excerpt(row.body)}"
+    secondary = f"{row.subject.name if row.subject else '\u8bfe\u7a0b'} · {target_label(row.target_type)}\u8ba8\u8bba"
+    return _serialize_target_payload(
+        target_type="discussion_entry",
+        target_id=row.id,
+        title=title,
+        subject_id=row.subject_id,
+        subject_name=row.subject.name if row.subject else None,
+        class_id=row.class_id,
+        class_name=row.class_obj.name if row.class_obj else None,
+        secondary_text=secondary,
+        available=True,
+        meta={
+            "discussion_family": "course",
+            "thread_target_type": row.target_type,
+            "thread_target_id": row.target_id,
+            "entry_id": row.id,
+        },
+    )
+
+
+def _resolve_learning_note_discussion_entry_target(
+    db: Session,
+    current_user: User,
+    target_id: int,
+    *,
+    require_visible: bool,
+) -> Optional[dict[str, Any]]:
+    row = db.query(LearningNoteDiscussionEntry).filter(LearningNoteDiscussionEntry.id == target_id).first()
+    if not row or not row.note:
+        if require_visible:
+            raise HTTPException(status_code=404, detail="Linked discussion entry not found.")
+        return None
+    if not _note_is_visible(row.note, current_user, db):
+        if require_visible:
+            raise HTTPException(status_code=403, detail="You do not have access to this linked discussion entry.") from None
+        return None
+    note = row.note
+    author = row.author
+    title = f"{_author_label(author)}: {_short_excerpt(row.body)}"
+    secondary = f"{note.title} · \u7b14\u8bb0\u8ba8\u8bba"
+    return _serialize_target_payload(
+        target_type="discussion_entry",
+        target_id=LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET + int(row.id),
+        title=title,
+        subject_id=note.subject_id,
+        subject_name=note.subject.name if note.subject else None,
+        class_id=None,
+        class_name=None,
+        secondary_text=secondary,
+        available=True,
+        meta={
+            "discussion_family": "learning_note",
+            "note_id": note.id,
+            "entry_id": row.id,
+        },
+    )
+
+
+def _resolve_discussion_entry_target(
+    db: Session,
+    current_user: User,
+    target_id: int,
+    *,
+    require_visible: bool,
+) -> Optional[dict[str, Any]]:
+    if target_id > LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET:
+        return _resolve_learning_note_discussion_entry_target(
+            db,
+            current_user,
+            target_id - LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET,
+            require_visible=require_visible,
+        )
+    return _resolve_course_discussion_entry_target(db, current_user, target_id, require_visible=require_visible)
+
+
 def resolve_linked_target(
     db: Session,
     current_user: User,
@@ -252,7 +414,11 @@ def resolve_linked_target(
         return _resolve_homework_target(db, current_user, normalized_id, require_visible=require_visible)
     if normalized_type == "material":
         return _resolve_material_target(db, current_user, normalized_id, require_visible=require_visible)
-    return _resolve_learning_note_target(db, current_user, normalized_id, require_visible=require_visible)
+    if normalized_type == "learning_note":
+        return _resolve_learning_note_target(db, current_user, normalized_id, require_visible=require_visible)
+    if normalized_type == "course":
+        return _resolve_course_target(db, current_user, normalized_id, require_visible=require_visible)
+    return _resolve_discussion_entry_target(db, current_user, normalized_id, require_visible=require_visible)
 
 
 def validate_visible_linked_targets(db: Session, current_user: User, raw_targets: Any) -> list[dict[str, int | str]]:
@@ -326,6 +492,68 @@ def search_link_targets(
     normalized_type = _normalize_target_type(target_type)
     q = (query_text or "").strip()
     safe_limit = max(1, min(MAX_SEARCH_LIMIT, int(limit)))
+
+    if normalized_type == "course":
+        query = get_accessible_courses_query(current_user, db)
+        if q:
+            query = query.filter(Subject.name.ilike(f"%{q}%"))
+        if preferred_subject_id is not None:
+            query = query.order_by(case((Subject.id == preferred_subject_id, 0), else_=1), desc(Subject.created_at))
+        else:
+            query = query.order_by(desc(Subject.created_at))
+        return [
+            _serialize_target_payload(
+                target_type="course",
+                target_id=row.id,
+                title=row.name,
+                subject_id=row.id,
+                subject_name=row.name,
+                class_id=row.class_id,
+                class_name=row.class_obj.name if row.class_obj else None,
+                secondary_text=row.class_obj.name if row.class_obj else (row.course_type or "\u53ef\u89c1\u8bfe\u7a0b"),
+                available=True,
+            )
+            for row in query.limit(safe_limit).all()
+        ]
+
+    if normalized_type == "discussion_entry":
+        results: list[dict[str, Any]] = []
+        accessible_course_ids = get_accessible_course_ids(current_user, db)
+        if accessible_course_ids:
+            course_query = (
+                db.query(CourseDiscussionEntry)
+                .filter(CourseDiscussionEntry.subject_id.in_(accessible_course_ids))
+                .order_by(
+                    case((CourseDiscussionEntry.subject_id == preferred_subject_id, 0), else_=1)
+                    if preferred_subject_id is not None
+                    else desc(CourseDiscussionEntry.created_at),
+                    desc(CourseDiscussionEntry.created_at),
+                    desc(CourseDiscussionEntry.id),
+                )
+            )
+            if q:
+                course_query = course_query.filter(CourseDiscussionEntry.body.ilike(f"%{q}%"))
+            for row in course_query.limit(safe_limit).all():
+                payload = _resolve_course_discussion_entry_target(db, current_user, row.id, require_visible=False)
+                if payload is not None:
+                    results.append(payload)
+
+        remaining = safe_limit - len(results)
+        if remaining > 0:
+            visible_note_ids = [row.id for row in _visible_note_query(db, current_user).all()]
+            if visible_note_ids:
+                note_query = (
+                    db.query(LearningNoteDiscussionEntry)
+                    .filter(LearningNoteDiscussionEntry.note_id.in_(visible_note_ids))
+                    .order_by(desc(LearningNoteDiscussionEntry.created_at), desc(LearningNoteDiscussionEntry.id))
+                )
+                if q:
+                    note_query = note_query.filter(LearningNoteDiscussionEntry.body.ilike(f"%{q}%"))
+                for row in note_query.limit(remaining).all():
+                    payload = _resolve_learning_note_discussion_entry_target(db, current_user, row.id, require_visible=False)
+                    if payload is not None:
+                        results.append(payload)
+        return results[:safe_limit]
 
     if normalized_type == "homework":
         query = db.query(Homework).filter(Homework.subject_id.is_not(None))

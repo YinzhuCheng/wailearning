@@ -402,6 +402,7 @@ const api = {
   discussions: {
     list: params => http.get('/discussions', { params }),
     searchTargets: params => http.get('/discussions/link-targets', { params }),
+    locateEntry: (id, params) => http.get(`/discussions/entries/${id}/locator`, { params }),
     create: data => http.post('/discussions', data),
     delete: id => http.delete(`/discussions/${id}`),
     /** @param {AbortSignal} [signal] */
@@ -478,6 +479,7 @@ const api = {
     updateResource: (noteId, resourceId, data) => http.put(`/learning-notes/${noteId}/resources/${resourceId}`, data),
     deleteResource: (noteId, resourceId) => http.delete(`/learning-notes/${noteId}/resources/${resourceId}`),
     discussion: (noteId, params) => http.get(`/learning-notes/${noteId}/discussion`, { params }),
+    locateDiscussionEntry: (id, params) => http.get(`/learning-notes/discussion-entries/${id}/locator`, { params }),
     createDiscussion: (noteId, data) => http.post(`/learning-notes/${noteId}/discussion`, data)
   },
   files: {

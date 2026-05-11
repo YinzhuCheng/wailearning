@@ -30,6 +30,7 @@ from apps.backend.courseeval_backend.db.models import (
 )
 from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, get_accessible_course_ids
 from apps.backend.courseeval_backend.domains.discussion_links import (
+    LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET,
     serialize_linked_targets_for_viewer,
     validate_visible_linked_targets,
 )
@@ -655,6 +656,43 @@ def list_learning_note_discussion(
         total=total,
         data=[_serialize_note_discussion(row, author, db=db, current_user=current_user) for row, author in rows],
     )
+
+
+@router.get("/discussion-entries/{entry_target_id}/locator")
+def locate_learning_note_discussion_entry(
+    entry_target_id: int,
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    entry_id = entry_target_id
+    if entry_id > LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET:
+        entry_id -= LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET
+    row = db.query(LearningNoteDiscussionEntry).filter(LearningNoteDiscussionEntry.id == entry_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Discussion entry not found.")
+    note = _load_note(row.note_id, db)
+    _ensure_note_read(note, current_user, db)
+    before_count = (
+        db.query(LearningNoteDiscussionEntry)
+        .filter(
+            LearningNoteDiscussionEntry.note_id == row.note_id,
+            (
+                (LearningNoteDiscussionEntry.created_at < row.created_at)
+                | ((LearningNoteDiscussionEntry.created_at == row.created_at) & (LearningNoteDiscussionEntry.id <= row.id))
+            ),
+        )
+        .count()
+    )
+    page = max(1, ((before_count - 1) // page_size) + 1)
+    return {
+        "discussion_family": "learning_note",
+        "entry_id": row.id,
+        "target_id": LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET + int(row.id),
+        "note_id": row.note_id,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.post("/{note_id}/discussion", response_model=LearningNoteDiscussionEntryResponse)

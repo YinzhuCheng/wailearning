@@ -19,11 +19,13 @@ from apps.backend.courseeval_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    LearningNoteDiscussionEntry,
     Student,
     Subject,
     User,
     UserRole,
 )
+from apps.backend.courseeval_backend.domains.discussion_links import LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET
 from tests.scenarios.llm_scenario import login_api
 
 
@@ -319,6 +321,171 @@ def test_ln10_discussion_scope_private_vs_public_and_author_metadata(client: Tes
     row = listing.json()["data"][0]
     assert row["author_username"] == ctx["same_username"]
     assert row["body_format"] == "plain"
+
+
+def test_ln10b_discussion_link_targets_round_trip_and_search(client: TestClient):
+    ctx = _scenario()
+    owner = login_api(client, ctx["owner_username"], "pass")
+    note = _create_note(client, owner, title="linked note", visibility="course", subject_id=ctx["course_id"])
+
+    search = client.get(
+        "/api/discussions/link-targets",
+        headers=owner,
+        params={"target_type": "learning_note", "q": "linked"},
+    )
+    assert search.status_code == 200, search.text
+    assert any(row["target_id"] == note["id"] and row["title"] == "linked note" for row in search.json()["data"])
+
+    posted = client.post(
+        f"/api/learning-notes/{note['id']}/discussion",
+        headers=owner,
+        json={
+            "body": "note discussion with links",
+            "linked_targets": [
+                {"target_type": "learning_note", "target_id": note["id"]},
+                {"target_type": "material", "target_id": ctx["material_id"]},
+            ],
+        },
+    )
+    assert posted.status_code == 200, posted.text
+    linked = posted.json()["linked_targets"]
+    assert [item["target_type"] for item in linked] == ["learning_note", "material"]
+    assert all(item["available"] for item in linked)
+
+    listing = client.get(f"/api/learning-notes/{note['id']}/discussion", headers=owner)
+    assert listing.status_code == 200
+    row = next(item for item in listing.json()["data"] if item["id"] == posted.json()["id"])
+    assert {item["target_type"] for item in row["linked_targets"]} == {"learning_note", "material"}
+
+
+def test_ln10c_discussion_link_targets_unavailable_fallback_for_viewer(client: TestClient):
+    ctx = _scenario()
+    owner = login_api(client, ctx["owner_username"], "pass")
+    same = login_api(client, ctx["same_username"], "pass")
+    note = _create_note(client, owner, title="public thread", visibility="course", subject_id=ctx["course_id"])
+    private_target = _create_note(client, owner, title="private target")
+
+    posted = client.post(
+        f"/api/learning-notes/{note['id']}/discussion",
+        headers=owner,
+        json={
+            "body": "private card should degrade for same-course viewer",
+            "linked_targets": [{"target_type": "learning_note", "target_id": private_target["id"]}],
+        },
+    )
+    assert posted.status_code == 200, posted.text
+    assert posted.json()["linked_targets"][0]["available"] is True
+
+    listing = client.get(f"/api/learning-notes/{note['id']}/discussion", headers=same)
+    assert listing.status_code == 200, listing.text
+    row = next(item for item in listing.json()["data"] if item["id"] == posted.json()["id"])
+    linked = row["linked_targets"][0]
+    assert linked["target_type"] == "learning_note"
+    assert linked["target_id"] == private_target["id"]
+    assert linked["available"] is False
+
+    db = SessionLocal()
+    try:
+        entry = db.query(LearningNoteDiscussionEntry).filter(LearningNoteDiscussionEntry.id == posted.json()["id"]).first()
+        assert entry is not None
+        entry.linked_targets = [{"target_type": "material", "target_id": 999999}]
+        db.commit()
+    finally:
+        db.close()
+
+    deleted_target = client.get(f"/api/learning-notes/{note['id']}/discussion", headers=owner)
+    assert deleted_target.status_code == 200
+    row = next(item for item in deleted_target.json()["data"] if item["id"] == posted.json()["id"])
+    assert row["linked_targets"][0]["available"] is False
+
+
+def test_ln10d_learning_note_comment_link_target_search_round_trip_and_locator(client: TestClient):
+    ctx = _scenario()
+    owner = login_api(client, ctx["owner_username"], "pass")
+    same = login_api(client, ctx["same_username"], "pass")
+    note = _create_note(client, owner, title="note with searchable comments", visibility="course", subject_id=ctx["course_id"])
+    for idx in range(22):
+        actor = same if idx % 2 else owner
+        created = client.post(
+            f"/api/learning-notes/{note['id']}/discussion",
+            headers=actor,
+            json={"body": f"note thread seed {idx}", "body_format": "plain"},
+        )
+        assert created.status_code == 200, created.text
+    target = client.post(
+        f"/api/learning-notes/{note['id']}/discussion",
+        headers=same,
+        json={"body": "deep note comment target", "body_format": "plain"},
+    )
+    assert target.status_code == 200, target.text
+    target_card_id = LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET + target.json()["id"]
+
+    search = client.get(
+        "/api/discussions/link-targets",
+        headers=owner,
+        params={"target_type": "discussion_entry", "q": "deep note comment target", "preferred_subject_id": ctx["course_id"]},
+    )
+    assert search.status_code == 200, search.text
+    rows = search.json()["data"]
+    card = next(row for row in rows if row["target_id"] == target_card_id)
+    assert card["meta"]["discussion_family"] == "learning_note"
+    assert card["meta"]["note_id"] == note["id"]
+
+    linked = client.post(
+        f"/api/learning-notes/{note['id']}/discussion",
+        headers=owner,
+        json={
+            "body": "links to note comment",
+            "linked_targets": [{"target_type": "discussion_entry", "target_id": target_card_id}],
+        },
+    )
+    assert linked.status_code == 200, linked.text
+    linked_card = linked.json()["linked_targets"][0]
+    assert linked_card["target_type"] == "discussion_entry"
+    assert linked_card["target_id"] == target_card_id
+    assert linked_card["meta"]["entry_id"] == target.json()["id"]
+
+    locator = client.get(
+        f"/api/learning-notes/discussion-entries/{target_card_id}/locator",
+        headers=owner,
+        params={"page_size": 20},
+    )
+    assert locator.status_code == 200, locator.text
+    assert locator.json()["note_id"] == note["id"]
+    assert locator.json()["page"] == 2
+
+
+def test_ln10e_private_note_comment_link_degrades_for_public_viewer_without_body_leak(client: TestClient):
+    ctx = _scenario()
+    owner = login_api(client, ctx["owner_username"], "pass")
+    same = login_api(client, ctx["same_username"], "pass")
+    public_note = _create_note(client, owner, title="public target host", visibility="course", subject_id=ctx["course_id"])
+    private_note = _create_note(client, owner, title="private target host")
+    private_comment = client.post(
+        f"/api/learning-notes/{private_note['id']}/discussion",
+        headers=owner,
+        json={"body": "secret private note comment body"},
+    )
+    assert private_comment.status_code == 200, private_comment.text
+    private_target_id = LEARNING_NOTE_DISCUSSION_TARGET_ID_OFFSET + private_comment.json()["id"]
+    posted = client.post(
+        f"/api/learning-notes/{public_note['id']}/discussion",
+        headers=owner,
+        json={
+            "body": "contains private comment card",
+            "linked_targets": [{"target_type": "discussion_entry", "target_id": private_target_id}],
+        },
+    )
+    assert posted.status_code == 200, posted.text
+    assert posted.json()["linked_targets"][0]["available"] is True
+
+    listing = client.get(f"/api/learning-notes/{public_note['id']}/discussion", headers=same)
+    assert listing.status_code == 200, listing.text
+    row = next(item for item in listing.json()["data"] if item["id"] == posted.json()["id"])
+    card = row["linked_targets"][0]
+    assert card["available"] is False
+    assert "secret private note comment body" not in card["title"]
+    assert "secret private note comment body" not in (card.get("secondary_text") or "")
 
 
 def test_ln11_attendance_single_create_parses_iso_date_string_for_sqlite(client: TestClient):

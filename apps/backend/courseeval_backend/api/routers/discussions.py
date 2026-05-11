@@ -204,7 +204,7 @@ def list_discussion(
 
 @router.get("/link-targets", response_model=DiscussionLinkTargetSearchResponse)
 def list_discussion_link_targets(
-    target_type: Literal["homework", "material", "learning_note"] = Query(...),
+    target_type: Literal["homework", "material", "learning_note", "course", "discussion_entry"] = Query(...),
     q: Optional[str] = Query(None, max_length=120),
     preferred_subject_id: Optional[int] = Query(None, ge=1),
     limit: int = Query(12, ge=1, le=30),
@@ -221,6 +221,50 @@ def list_discussion_link_targets(
             limit=limit,
         )
     )
+
+
+@router.get("/entries/{entry_id}/locator")
+def locate_course_discussion_entry(
+    entry_id: int,
+    page_size: Optional[int] = Query(None, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    row = db.query(CourseDiscussionEntry).filter(CourseDiscussionEntry.id == entry_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Discussion entry not found.")
+    if row.target_type == "homework":
+        hw = _load_homework(db, row.target_id)
+        _ensure_homework_discussion_scope(hw, subject_id=row.subject_id, class_id=row.class_id, current_user=current_user, db=db)
+    else:
+        mat = _load_material(db, row.target_id)
+        _ensure_material_discussion_scope(mat, subject_id=row.subject_id, class_id=row.class_id, current_user=current_user, db=db)
+    size = _resolve_page_size(current_user, page_size)
+    before_count = (
+        db.query(CourseDiscussionEntry)
+        .filter(
+            CourseDiscussionEntry.target_type == row.target_type,
+            CourseDiscussionEntry.target_id == row.target_id,
+            CourseDiscussionEntry.subject_id == row.subject_id,
+            CourseDiscussionEntry.class_id == row.class_id,
+            (
+                (CourseDiscussionEntry.created_at < row.created_at)
+                | ((CourseDiscussionEntry.created_at == row.created_at) & (CourseDiscussionEntry.id <= row.id))
+            ),
+        )
+        .count()
+    )
+    page = max(1, ((before_count - 1) // size) + 1)
+    return {
+        "discussion_family": "course",
+        "entry_id": row.id,
+        "thread_target_type": row.target_type,
+        "thread_target_id": row.target_id,
+        "subject_id": row.subject_id,
+        "class_id": row.class_id,
+        "page": page,
+        "page_size": size,
+    }
 
 
 @router.post("", response_model=CourseDiscussionEntryResponse)

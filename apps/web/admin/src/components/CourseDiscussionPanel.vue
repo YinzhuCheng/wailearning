@@ -37,7 +37,11 @@
             v-for="row in entries"
             :key="row.id"
             class="discussion-row"
-            :class="{ 'discussion-row--assistant': row.message_kind === 'llm_assistant' }"
+            :class="{
+              'discussion-row--assistant': row.message_kind === 'llm_assistant',
+              'discussion-row--highlighted': Number(highlightedEntryId) === Number(row.id)
+            }"
+            :data-discussion-entry-id="row.id"
           >
             <div class="discussion-row__main">
               <DiscussionAuthorAvatar
@@ -253,8 +257,8 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
@@ -290,6 +294,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const selectedCourse = computed(() => userStore.selectedCourse)
@@ -333,6 +338,7 @@ const composerExpanded = ref(false)
 const composerMode = ref('edit')
 /** entry id -> expanded full body */
 const expandedEntryIds = ref(new Set())
+const highlightedEntryId = ref(null)
 
 let pollTimer = null
 let pollAbort = null
@@ -375,6 +381,31 @@ const removeLinkedTarget = item => {
 
 const openLinkedTarget = async item => {
   await openDiscussionLinkedTarget(item, router, userStore)
+}
+
+const routeDiscussionEntryId = computed(() => {
+  const raw = Number(route.query.discussion_entry || 0)
+  return Number.isFinite(raw) && raw > 0 ? raw : null
+})
+
+const routeDiscussionPage = computed(() => {
+  const raw = Number(route.query.discussion_page || 0)
+  return Number.isFinite(raw) && raw > 0 ? raw : null
+})
+
+const highlightRouteEntry = async () => {
+  const targetId = routeDiscussionEntryId.value
+  if (!targetId) return
+  await nextTick()
+  const el = typeof document !== 'undefined' ? document.querySelector(`[data-discussion-entry-id="${targetId}"]`) : null
+  if (!el) return
+  highlightedEntryId.value = targetId
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  window.setTimeout(() => {
+    if (Number(highlightedEntryId.value) === Number(targetId)) {
+      highlightedEntryId.value = null
+    }
+  }, 3200)
 }
 
 const roleLabel = role =>
@@ -533,6 +564,7 @@ const loadList = async () => {
     total.value = res?.total ?? 0
     entries.value = res?.data ?? []
     expandedEntryIds.value = new Set()
+    await highlightRouteEntry()
   } catch (e) {
     console.error(e)
     ElMessage.error(e?.response?.data?.detail || '加载讨论失败')
@@ -712,10 +744,26 @@ watch(
   }
 )
 
+watch(
+  () => [route.query.discussion_entry, route.query.discussion_page],
+  () => {
+    const targetPage = routeDiscussionPage.value
+    if (routeDiscussionEntryId.value && targetPage && targetPage !== page.value) {
+      page.value = targetPage
+      loadList()
+      return
+    }
+    highlightRouteEntry()
+  }
+)
+
 onBeforeUnmount(() => {
   stopPolling()
 })
 
+if (routeDiscussionPage.value) {
+  page.value = routeDiscussionPage.value
+}
 loadList()
 </script>
 
@@ -809,6 +857,14 @@ loadList()
 .discussion-row {
   padding: 8px 0 10px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.discussion-row--highlighted {
+  margin: 4px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff7ed;
+  box-shadow: inset 3px 0 0 #f97316, 0 0 0 1px rgba(249, 115, 22, 0.22);
 }
 
 .discussion-row--assistant {

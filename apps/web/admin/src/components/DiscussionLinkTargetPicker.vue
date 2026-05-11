@@ -1,23 +1,32 @@
 <template>
   <div class="discussion-link-picker">
-    <el-button plain size="small" @click="openDialog">添加链接</el-button>
+    <el-button plain size="small" data-testid="discussion-link-picker-open" @click="openDialog">添加链接</el-button>
 
-    <el-dialog v-model="dialogVisible" title="添加内容链接" width="720px" destroy-on-close>
+    <el-dialog
+      v-model="dialogVisible"
+      title="添加内容链接"
+      width="min(720px, calc(100vw - 28px))"
+      destroy-on-close
+      class="discussion-link-picker-dialog"
+    >
       <div class="discussion-link-picker__controls">
         <el-radio-group v-model="activeType" size="small">
           <el-radio-button label="homework">作业</el-radio-button>
           <el-radio-button label="material">资料</el-radio-button>
           <el-radio-button label="learning_note">笔记</el-radio-button>
+          <el-radio-button label="course">课程</el-radio-button>
+          <el-radio-button label="discussion_entry">评论</el-radio-button>
         </el-radio-group>
         <el-input
           v-model="searchText"
           clearable
           placeholder="按标题搜索可见内容"
           class="discussion-link-picker__search"
+          data-testid="discussion-link-picker-search"
         />
       </div>
 
-      <div v-loading="loading" class="discussion-link-picker__results">
+      <div v-loading="loading" class="discussion-link-picker__results" data-testid="discussion-link-picker-results">
         <el-empty v-if="!loading && !rows.length" description="没有找到可添加的内容" />
         <div v-for="item in rows" :key="targetKey(item)" class="discussion-link-picker__row">
           <div class="discussion-link-picker__meta">
@@ -30,6 +39,7 @@
             type="primary"
             plain
             :disabled="selectedKeys.has(targetKey(item))"
+            data-testid="discussion-link-picker-add"
             @click="attach(item)"
           >
             {{ selectedKeys.has(targetKey(item)) ? '已添加' : '添加' }}
@@ -102,6 +112,7 @@ const openDialog = () => {
 
 const attach = item => {
   emit('select', item)
+  dialogVisible.value = false
 }
 
 watch(
@@ -127,6 +138,9 @@ watch(
 
 .discussion-link-picker__results {
   min-height: 180px;
+  max-height: min(52vh, 430px);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .discussion-link-picker__row {
@@ -151,6 +165,7 @@ watch(
 .discussion-link-picker__meta strong {
   color: #0f172a;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .discussion-link-picker__type {
@@ -166,9 +181,34 @@ watch(
 }
 
 @media (max-width: 720px) {
+  .discussion-link-picker__controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .discussion-link-picker__controls :deep(.el-radio-group) {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .discussion-link-picker__controls :deep(.el-radio-button__inner) {
+    width: 100%;
+    padding-inline: 8px;
+  }
+
+  .discussion-link-picker__search {
+    flex-basis: auto;
+    width: 100%;
+  }
+
   .discussion-link-picker__row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .discussion-link-picker__row :deep(.el-button) {
+    width: 100%;
   }
 }
 </style>

@@ -274,7 +274,11 @@
                 v-for="row in discussionRows"
                 :key="row.id"
                 class="discussion-row"
-                :class="{ 'discussion-row--assistant': row.message_kind === 'llm_assistant' }"
+                :class="{
+                  'discussion-row--assistant': row.message_kind === 'llm_assistant',
+                  'discussion-row--highlighted': Number(highlightedDiscussionEntryId) === Number(row.id)
+                }"
+                :data-discussion-entry-id="row.id"
               >
                 <div class="discussion-row__meta">
                   <strong>{{ row.message_kind === 'llm_assistant' ? '智能助教' : row.author_real_name || row.author_username }}</strong>
@@ -397,7 +401,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
@@ -427,6 +431,8 @@ const selectedResourceId = ref(null)
 const loadingNotes = ref(false)
 const discussionRows = ref([])
 const discussionLoading = ref(false)
+const discussionPage = ref(1)
+const highlightedDiscussionEntryId = ref(null)
 const discussionDraft = ref('')
 const discussionDraftFormat = ref('markdown')
 const discussionLinkedTargets = ref([])
@@ -623,6 +629,32 @@ const openLinkedTarget = async item => {
   await openDiscussionLinkedTarget(item, router, userStore)
 }
 
+const routeDiscussionEntryId = computed(() => {
+  const raw = Number(route.query.discussion_entry || 0)
+  if (!Number.isFinite(raw) || raw <= 0) return null
+  return raw > 1000000000 ? raw - 1000000000 : raw
+})
+
+const routeDiscussionPage = computed(() => {
+  const raw = Number(route.query.discussion_page || 0)
+  return Number.isFinite(raw) && raw > 0 ? raw : 1
+})
+
+const highlightDiscussionEntry = async () => {
+  const targetId = routeDiscussionEntryId.value
+  if (!targetId) return
+  await nextTick()
+  const el = typeof document !== 'undefined' ? document.querySelector(`[data-discussion-entry-id="${targetId}"]`) : null
+  if (!el) return
+  highlightedDiscussionEntryId.value = targetId
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  window.setTimeout(() => {
+    if (Number(highlightedDiscussionEntryId.value) === Number(targetId)) {
+      highlightedDiscussionEntryId.value = null
+    }
+  }, 3200)
+}
+
 const loadNotes = async () => {
   loadingNotes.value = true
   try {
@@ -656,6 +688,7 @@ const openNoteFromRouteQuery = async () => {
     ensureResourceSelection()
     discussionComposerOpen.value = false
     discussionLinkedTargets.value = []
+    discussionPage.value = routeDiscussionPage.value
     await loadDiscussion()
   } catch (error) {
     console.error('Failed to open linked note', error)
@@ -667,6 +700,7 @@ const selectNote = async note => {
   ensureResourceSelection()
   discussionComposerOpen.value = false
   discussionLinkedTargets.value = []
+  discussionPage.value = 1
   await router.replace({ name: 'LearningNotes', query: { note: String(note.id) } })
   await loadDiscussion()
 }
@@ -691,8 +725,9 @@ const loadDiscussion = async () => {
   if (!selectedNote.value) return
   discussionLoading.value = true
   try {
-    const result = await api.learningNotes.discussion(selectedNote.value.id, { page: 1, page_size: 20 })
+    const result = await api.learningNotes.discussion(selectedNote.value.id, { page: discussionPage.value, page_size: 20 })
     discussionRows.value = result?.data || []
+    await highlightDiscussionEntry()
   } finally {
     discussionLoading.value = false
   }
@@ -902,9 +937,13 @@ watch(discussionDraftFormat, value => {
 })
 
 watch(
-  () => route.query.note,
+  () => [route.query.note, route.query.discussion_entry, route.query.discussion_page],
   () => {
+    discussionPage.value = routeDiscussionPage.value
     openNoteFromRouteQuery()
+    if (selectedNote.value) {
+      loadDiscussion()
+    }
   }
 )
 
@@ -1480,6 +1519,12 @@ onBeforeUnmount(() => {
 .discussion-row--assistant {
   border-color: color-mix(in srgb, var(--wa-color-accent-200, #a5f3fc) 86%, transparent);
   background: color-mix(in srgb, var(--wa-color-accent-50) 84%, #fff);
+}
+
+.discussion-row--highlighted {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: #fff7ed;
+  box-shadow: inset 3px 0 0 #f97316;
 }
 
 .discussion-row__meta {
