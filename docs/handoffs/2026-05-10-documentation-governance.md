@@ -83,6 +83,63 @@
   PostgreSQL-backed validation remains the more trustworthy signal for
   cross-session consistency, constraint behavior, and release-quality claims.
 
+## Future Skill Candidates
+
+These are good candidates for future repo-local skills, but this handoff does
+not create them. Treat this as a backlog for later governance work when the
+workflow becomes frequent enough to justify a durable skill.
+
+- `roster-identity-repair-playbook`
+  Use when auditing or repairing `users.student_id`, roster/user drift,
+  ambiguous same-username cases, or class-move side effects across
+  `auth.py`, `users.py`, `students.py`, and `domains/roster/*`.
+  Why it is a skill candidate:
+  this workflow now spans audit helpers, targeted pytest, selector rules, and
+  "do not auto-rebind" safety constraints that are easy for future agents to
+  partially remember.
+- `postgres-release-validation`
+  Use when a branch needs release-quality backend confidence rather than local
+  SQLite convenience evidence.
+  Why it is a skill candidate:
+  PostgreSQL-backed validation still has more setup and interpretation nuance
+  than ordinary targeted pytest, and the repository keeps treating it as the
+  stronger signal for constraint, migration, and cross-session behavior.
+- `validation-ledger-maintenance`
+  Use when adding or revising validation targets, wiring `ledger_id`, updating
+  `test-execution-targets.csv`, or checking selector/history consistency.
+  Why it is a skill candidate:
+  the branch found real registry/ledger drift, and the correct workflow now
+  spans `TEST_SELECTION_TARGETS.json`, CSV target rows, lint checks, and
+  selector/unit-test expectations.
+- `frontend-backend-contract-audit`
+  Use when reviewing pagination caps, timeout assumptions, bulk-input limits,
+  or route/query parameter contracts between Vue pages and FastAPI endpoints.
+  Why it is a skill candidate:
+  a real UI regression surfaced because the admin students page exceeded the
+  backend page-size limit, and similar shape/limit drift is likely to recur.
+- `llm-worker-reliability-audit`
+  Use when changing queue semantics, retry logic, task recovery, timeout
+  behavior, or operational visibility for the in-process grading worker.
+  Why it is a skill candidate:
+  the architecture is intentionally not Celery/Redis-based, so agents need a
+  repository-specific workflow for reasoning about stuck tasks, idempotency,
+  and operational recovery.
+- `seed-surface-hardening`
+  Use when changing `/api/e2e/dev/*`, `INIT_DEFAULT_DATA`, first-admin
+  bootstrap, seed tokens, or powerful local/demo routes that should stay out of
+  production paths.
+  Why it is a skill candidate:
+  these surfaces are both operationally useful and security-sensitive, and
+  future hardening work will likely need a repeatable checklist of guards,
+  tests, and docs.
+- `ci-gap-audit`
+  Use when deciding which currently local-only validation paths should be moved
+  into CI next, especially PostgreSQL pytest, admin Playwright external-runner
+  flows, and attachment/tooling environments.
+  Why it is a skill candidate:
+  this is a recurring judgment workflow that combines registry coverage, cost,
+  flake profile, and release risk rather than a one-off documentation task.
+
 ## Risks
 
 - `docs/reports/` now holds dated audit / restructure / migration reports.
