@@ -117,6 +117,30 @@ def test_hz01_reset_scenario_returns_stable_id_bundle(client: TestClient) -> Non
     assert int(s["homework_id"]) > 0
 
 
+def test_hz01b_reset_scenario_binds_seeded_student_accounts_for_roster_actions(client: TestClient) -> None:
+    s = _reset_scenario(client)
+    admin_tok = _login_form(client, s["admin"]["username"], s["password_admin"])
+
+    users = client.get("/api/users", headers={"Authorization": f"Bearer {admin_tok}"})
+    assert users.status_code == 200, users.text
+    users_by_name = {row["username"]: row for row in users.json()}
+    for key in ("student_plain", "student_drop", "student_b"):
+        seeded = s[key]
+        row = users_by_name[seeded["username"]]
+        assert int(row["student_id"]) == int(seeded["student_row_id"])
+        assert int(row["id"]) == int(seeded["student_user_id"])
+
+    teacher_tok = _login_form(client, s["teacher_own"]["username"], s["password_teacher_student"])
+    roster = client.get(
+        f"/api/subjects/{s['course_required_id']}/students",
+        headers={"Authorization": f"Bearer {teacher_tok}"},
+    )
+    assert roster.status_code == 200, roster.text
+    by_student_id = {int(row["student_id"]): row for row in roster.json()}
+    plain = s["student_plain"]
+    assert int(by_student_id[int(plain["student_row_id"])]["student_user_id"]) == int(plain["student_user_id"])
+
+
 def test_hz02_reset_scenario_rejects_wrong_seed_token(client: TestClient) -> None:
     _enable_seed()
     r = client.post("/api/e2e/dev/reset-scenario", headers={"X-E2E-Seed-Token": "not-the-token"})

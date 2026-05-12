@@ -3,7 +3,6 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from apps.backend.courseeval_backend.domains.roster.sync import reconcile_student_users_and_roster
 from apps.backend.courseeval_backend.domains.roster.reconciliation import sync_student_roster_from_user_accounts
 
 from apps.backend.courseeval_backend.attachments import delete_attachment_file_if_unreferenced
@@ -136,9 +135,6 @@ def get_users(
 ):
     if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="只有管理员可以查看用户列表")
-
-    reconcile_student_users_and_roster(db)
-    db.commit()
 
     query = db.query(User)
 

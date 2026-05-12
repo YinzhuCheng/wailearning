@@ -1,5 +1,11 @@
 <template>
-  <el-dropdown v-if="hasActions" trigger="click" class="student-action-menu" @command="handleCommand">
+  <el-dropdown
+    v-if="hasActions"
+    trigger="click"
+    class="student-action-menu"
+    data-testid="student-action-menu"
+    @command="handleCommand"
+  >
     <slot name="trigger">
       <el-button
         :type="buttonType"
@@ -10,6 +16,7 @@
         class="student-action-menu__button"
         :aria-label="ariaLabel"
         :title="ariaLabel"
+        data-testid="student-action-menu-button"
       >
         <el-icon><MoreFilled /></el-icon>
         <span v-if="showLabel" class="student-action-menu__label">操作</span>
@@ -17,11 +24,11 @@
     </slot>
     <template #dropdown>
       <el-dropdown-menu>
-        <el-dropdown-item v-if="canViewRecentPosts" command="recent-posts">
+        <el-dropdown-item v-if="canViewRecentPosts" command="recent-posts" data-testid="student-action-menu-recent-posts">
           <el-icon><ChatDotRound /></el-icon>
           <span>近期发表</span>
         </el-dropdown-item>
-        <el-dropdown-item v-if="canViewHomeworkStatus" command="homework-status">
+        <el-dropdown-item v-if="canViewHomeworkStatus" command="homework-status" data-testid="student-action-menu-homework-status">
           <el-icon><Document /></el-icon>
           <span>作业状态</span>
         </el-dropdown-item>

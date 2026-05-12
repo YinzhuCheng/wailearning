@@ -31,7 +31,6 @@ from apps.backend.courseeval_backend.db.models import (
 from apps.backend.courseeval_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import StudentCreate, StudentListResponse, StudentResponse, StudentUpdate
 from apps.backend.courseeval_backend.domains.roster.sync import (
-    reconcile_student_users_and_roster,
     sync_student_user_from_roster_row,
 )
 from apps.backend.courseeval_backend.domains.roster.identity import ensure_student_class_id, generate_student_no
@@ -296,9 +295,6 @@ def get_students(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    reconcile_student_users_and_roster(db)
-    db.commit()
-
     class_ids = get_accessible_class_ids(current_user, db)
     if current_user.role == UserRole.ADMIN.value:
         query = db.query(Student)
@@ -523,10 +519,6 @@ def get_student(
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
-
-    reconcile_student_users_and_roster(db)
-    db.commit()
-    db.refresh(student)
 
     class_ids = get_accessible_class_ids(current_user, db)
     if student.class_id not in class_ids:

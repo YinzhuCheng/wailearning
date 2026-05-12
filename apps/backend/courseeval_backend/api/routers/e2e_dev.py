@@ -235,6 +235,7 @@ def reset_e2e_scenario(
         real_name=st_plain.name,
         role=UserRole.STUDENT.value,
         class_id=c1.id,
+        student_id=st_plain.id,
         is_active=True,
     )
     u_drop = User(
@@ -243,6 +244,7 @@ def reset_e2e_scenario(
         real_name=st_drop.name,
         role=UserRole.STUDENT.value,
         class_id=c1.id,
+        student_id=st_drop.id,
         is_active=True,
     )
     u_b = User(
@@ -251,6 +253,7 @@ def reset_e2e_scenario(
         real_name=st_b.name,
         role=UserRole.STUDENT.value,
         class_id=c1.id,
+        student_id=st_b.id,
         is_active=True,
     )
     db.add_all([u_plain, u_drop, u_b])
@@ -437,9 +440,24 @@ def reset_e2e_scenario(
         "admin": {"username": admin.username, "password": "E2eAdmin1!"},
         "teacher_own": {"username": t_own.username, "password": pwd},
         "teacher_other": {"username": t_other.username, "password": pwd},
-        "student_plain": {"username": u_plain.username, "password": pwd, "student_row_id": st_plain.id},
-        "student_drop": {"username": u_drop.username, "password": pwd, "student_row_id": st_drop.id},
-        "student_b": {"username": u_b.username, "password": pwd, "student_row_id": st_b.id},
+        "student_plain": {
+            "username": u_plain.username,
+            "password": pwd,
+            "student_row_id": st_plain.id,
+            "student_user_id": u_plain.id,
+        },
+        "student_drop": {
+            "username": u_drop.username,
+            "password": pwd,
+            "student_row_id": st_drop.id,
+            "student_user_id": u_drop.id,
+        },
+        "student_b": {
+            "username": u_b.username,
+            "password": pwd,
+            "student_row_id": st_b.id,
+            "student_user_id": u_b.id,
+        },
         "class_id_1": c1.id,
         "class_id_2": c2.id,
         "class_name_1": c1.name,

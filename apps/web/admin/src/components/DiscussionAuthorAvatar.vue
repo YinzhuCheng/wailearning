@@ -10,6 +10,7 @@
         type="button"
         class="discussion-author-avatar-wrap discussion-author-avatar-wrap--button"
         :title="buttonTitle"
+        data-testid="discussion-author-student-action-trigger"
       >
         <el-avatar
           :size="size"
