@@ -648,6 +648,21 @@ browser coverage now includes both the API denial for teacher-to-other-teacher
 targeting and a real teacher notification composer submission proving the UI
 posts the current course/class scope rather than an accidental global row.
 
+**Notification update clearing follow-up round:** The next red-team batch added
+backend `hard113`-`hard122` plus admin Playwright notification deep-tier cases
+23-24. It found that `PUT /api/notifications/{id}` could not distinguish an
+omitted optional field from explicit JSON `null`, so stored
+`target_student_id`, `target_user_id`, and even `subject_id` could not be
+cleared intentionally through the API. The same effective-value calculation
+also meant target switches were evaluated against stale stored targets. The
+router now uses the Pydantic update model's field-presence metadata: omitted
+fields preserve the row, explicit `null` clears the field, and the resulting
+row is checked by the existing admin-only global-write and target-scope guards.
+The new tests cover safe target clearing, rejected non-admin widening into
+global scope, admin clearing, target-type switches that require explicitly
+clearing the old target, and system-generated homework/appeal notification
+target shape.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -690,19 +705,24 @@ posts the current course/class scope rather than an accidental global row.
 18. Continue probing cross-course notification read-state when a single teacher
     owns several multi-class courses and switches rapidly between them; the
     current tests focus on one multi-class required course.
-19. If notification update semantics need explicit clearing of
-    `target_student_id` or `target_user_id`, design and test a
-    `model_fields_set`-aware contract first; the current update path validates
-    and applies non-null target changes but does not treat omitted vs explicit
-    `null` as a separate clearing operation.
+19. Add PostgreSQL-backed notification update coverage for explicit `null`
+    clears and target-type switches; SQLite now covers the API contract, but
+    the combined predicates still deserve PostgreSQL execution and query-plan
+    inspection.
 20. Run PostgreSQL-backed notification authorization tests when a
     `TEST_DATABASE_URL` is available, especially around the global-row predicate
     combined with class, target-user, target-student, and course-scoped filters.
 21. Continue probing bulk or system-generated targeted notifications, especially
     score-appeal/password-reset flows that may set target fields outside the
-    manual `/api/notifications` create/update path.
-22. Stress concurrent notification target updates with mark-read/mark-all-read
-    on PostgreSQL once the target-scope predicates are covered there.
+    manual `/api/notifications` create/update path; this round covered homework
+    grade-complete and homework-appeal helpers, but score-grade appeal and
+    forgot-password notification lifecycle remain worth direct checks.
+22. Stress concurrent notification target clears/switches with
+    mark-read/mark-all-read on PostgreSQL once the target-scope predicates are
+    covered there.
+23. Browser-test the notification edit dialog if the product UI later exposes
+    target editing; current E2E uses direct API plus header badge observation
+    because the visible composer does not provide target controls.
 
 ## What This Document Is Not
 

@@ -1,5 +1,5 @@
 /**
- * Twenty-two deeper Playwright checks motivated by residual risks after `e2e-notification-header-sync-tier.spec.js`:
+ * Twenty-four deeper Playwright checks motivated by residual risks after `e2e-notification-header-sync-tier.spec.js`:
  *
  * - Admin **`notificationSyncParams === null`** uses global sync (must match list aggregates).
  * - Teacher/student **course context** vs **orphan localStorage** / **deep links** / **rapid switching**.
@@ -71,7 +71,7 @@ async function courseNameById(token, courseId) {
   return row.name
 }
 
-test.describe('E2E notification sync deep tier (22 cases)', () => {
+test.describe('E2E notification sync deep tier (24 cases)', () => {
   test.describe.configure({ timeout: 120_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -756,5 +756,90 @@ test.describe('E2E notification sync deep tier (22 cases)', () => {
     expect(row).toBeTruthy()
     expect(Number(row.subject_id)).toBe(Number(s.course_required_id))
     expect(Number(row.class_id)).toBe(Number(s.class_id_1))
+  })
+
+  test('23 explicit null target_student_id clearing updates course badge without changing foreign course sync', async ({
+    page
+  }) => {
+    const s = scenario()
+    const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    const otherTeacherTok = await obtainAccessToken(s.teacher_other.username, s.password_teacher_student)
+    const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
+    const before = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    const otherBefore = await apiGetJson(
+      `/api/notifications/sync-status?subject_id=${s.course_other_teacher_id}`,
+      otherTeacherTok
+    )
+
+    const row = await apiPostJson('/api/notifications', teacherTok, {
+      title: `E2E_CLEAR_TARGET_${s.suffix}_${Date.now()}`,
+      content: 'targeted then cleared',
+      class_id: s.class_id_1,
+      subject_id: s.course_required_id,
+      target_student_id: s.student_plain.student_row_id
+    })
+
+    await apiPutJson(`/api/notifications/${row.id}`, teacherTok, { target_student_id: null })
+    const detail = await apiGetJson(`/api/notifications/${row.id}`, teacherTok)
+    expect(detail.target_student_id).toBeFalsy()
+
+    const after = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    const otherAfter = await apiGetJson(
+      `/api/notifications/sync-status?subject_id=${s.course_other_teacher_id}`,
+      otherTeacherTok
+    )
+    expect(after.total).toBe(before.total + 1)
+    expect(after.unread_count).toBe(before.unread_count + 1)
+    expect(otherAfter.total).toBe(otherBefore.total)
+    expect(otherAfter.unread_count).toBe(otherBefore.unread_count)
+
+    await login(page, s.student_plain.username, s.password_teacher_student)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await triggerHeaderPoll(page)
+    await expect
+      .poll(async () => {
+        const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')
+        return Number.parseInt(`${txt}`.trim(), 10)
+      })
+      .toBe(after.unread_count)
+  })
+
+  test('24 switching target_student_id to target_user_id without explicit clear is rejected', async ({
+    page
+  }) => {
+    const s = scenario()
+    const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
+    const before = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    const row = await apiPostJson('/api/notifications', teacherTok, {
+      title: `E2E_SWITCH_TARGET_DENY_${s.suffix}_${Date.now()}`,
+      content: 'must remain student-targeted',
+      class_id: s.class_id_1,
+      subject_id: s.course_required_id,
+      target_student_id: s.student_plain.student_row_id
+    })
+
+    const status = await fetchStatus('PUT', `/api/notifications/${row.id}`, {
+      token: teacherTok,
+      body: { target_user_id: s.teacher_user_id }
+    })
+    expect(status).toBe(400)
+
+    const detail = await apiGetJson(`/api/notifications/${row.id}`, teacherTok)
+    expect(Number(detail.target_student_id)).toBe(Number(s.student_plain.student_row_id))
+    expect(detail.target_user_id).toBeFalsy()
+    const after = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    expect(after.total).toBe(before.total + 1)
+    expect(after.unread_count).toBe(before.unread_count + 1)
+
+    await login(page, s.student_plain.username, s.password_teacher_student)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await triggerHeaderPoll(page)
+    await expect
+      .poll(async () => {
+        const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')
+        return Number.parseInt(`${txt}`.trim(), 10)
+      })
+      .toBe(after.unread_count)
   })
 })

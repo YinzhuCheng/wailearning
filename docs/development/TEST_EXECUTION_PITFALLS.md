@@ -3440,3 +3440,56 @@ Mitigation:
   sequence must increase monotonically by one.
 - Treat a duplicate low sequence as a transcription/tooling error and correct
   the newly appended row before commit.
+
+### Pitfall 88: Playwright grep can accidentally match describe text and run the whole spec
+
+The admin external runner passes `--grep` through to Playwright, where the
+regular expression is evaluated against the full test title, including
+`describe(...)` text. During the notification update-clearing hardening round,
+this command intended to run only cases 23 and 24:
+
+```powershell
+node apps\web\admin\scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium --grep "23|24"
+```
+
+The suite title contained `24 cases`, so every test title matched through the
+describe text and the runner executed all 24 cases. The long unintended run
+then hit unrelated browser/SQLite pressure: several course-card lookups failed
+after backend `QueuePool` exhaustion, obscuring the actual two new cases.
+
+Mitigation:
+
+- Grep on a distinctive case-title phrase, not just a bare number or a common
+  word from the `describe(...)` title. For example:
+
+```powershell
+node apps\web\admin\scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium --grep "23 explicit null|24 switching"
+```
+
+- After a targeted Playwright run starts, check the `Running N tests` line
+  before interpreting failures. If `N` is much larger than intended, stop and
+  rerun with a narrower grep before changing product code.
+- Do not over-anchor with `^23` unless you have verified Playwright's full
+  title starts with the case number; a too-strict anchor can produce
+  `No tests found`.
+
+### Pitfall 89: CSV ledger rewrites must not add a UTF-8 BOM to the header
+
+PowerShell `Set-Content -Encoding utf8` can rewrite repository CSV ledgers with
+a UTF-8 BOM. For ledgers such as
+`docs/development/testing/test-execution-targets.csv`, registry tooling reads
+the first header literally, so `test_id` becomes `\ufefftest_id`. The registry
+lint then reports every configured `ledger_id` as missing, and selector history
+can degrade from `stale` to `not-recorded`.
+
+Mitigation:
+
+- Prefer repository append/update helpers or CSV libraries that preserve the
+  existing encoding.
+- If a full-file rewrite is unavoidable, write UTF-8 without BOM, for example
+  with `.NET` `System.Text.UTF8Encoding($false)` from PowerShell.
+- After touching CSV ledgers, run `lint_validation_registry.py` and the
+  validation selector unit tests before assuming widespread missing-ledger
+  failures are real product or registry issues.
+- Inspect the first bytes when all ledger ids appear missing. `239 187 191`
+  (`EF BB BF`) at the start of a CSV ledger indicates a BOM.

@@ -29,6 +29,8 @@ from apps.backend.courseeval_backend.db.models import (
     CourseLLMConfig,
     CourseMaterial,
     Homework,
+    HomeworkGradeAppeal,
+    HomeworkSubmission,
     Notification,
     NotificationRead,
     Score,
@@ -178,6 +180,7 @@ def _create_notification(
     teacher_id: int,
     title: str,
     target_student_id: int | None = None,
+    target_user_id: int | None = None,
 ) -> int:
     db = SessionLocal()
     try:
@@ -189,6 +192,7 @@ def _create_notification(
             class_id=class_id,
             subject_id=subject_id,
             target_student_id=target_student_id,
+            target_user_id=target_user_id,
             created_by=teacher_id,
         )
         db.add(row)
@@ -3120,3 +3124,357 @@ def test_hard112_teacher_cannot_create_null_subject_class_zero_notification(clie
 
     assert r.status_code == 403
     assert _notification_count_for_subject(None) == before
+
+
+def test_hard113_teacher_can_explicitly_clear_target_student_without_widening_outside_course(
+    client: TestClient,
+):
+    teacher = _create_teacher("notif_clear_student_teacher")
+    class_id = _create_class("security-notif-clear-student")
+    student = _extra_student_account_for_class(class_id, "notif_clear_student")
+    other_class_id = _create_class("security-notif-clear-student-other")
+    other_student = _extra_student_account_for_class(other_class_id, "notif_clear_student_other")
+    subject_id = _create_subject("Notification clear student target", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    notification_id = _create_notification(
+        subject_id,
+        class_id,
+        int(teacher["user_id"]),
+        "hard113 clear target student",
+        target_student_id=int(student["student_id"]),
+    )
+    teacher_headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    student_headers = login_api(client, str(student["username"]), str(student["password"]))
+    other_headers = login_api(client, str(other_student["username"]), str(other_student["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=teacher_headers,
+        json={"target_student_id": None},
+    )
+    student_list = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=student_headers)
+    other_list = client.get("/api/notifications?page_size=100", headers=other_headers)
+
+    assert r.status_code == 200, r.text
+    assert r.json()["target_student_id"] is None
+    assert _notification_target_student_id(notification_id) is None
+    assert notification_id in {row["id"] for row in student_list.json()["data"]}
+    assert notification_id not in {row["id"] for row in other_list.json()["data"]}
+
+
+def test_hard114_teacher_cannot_switch_student_target_to_self_user_without_clearing_student_first(
+    client: TestClient,
+):
+    teacher = _create_teacher("notif_switch_student_user_teacher")
+    class_id = _create_class("security-notif-switch-student-user")
+    student = _extra_student_account_for_class(class_id, "notif_switch_student_user")
+    subject_id = _create_subject("Notification switch student to user", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    notification_id = _create_notification(
+        subject_id,
+        class_id,
+        int(teacher["user_id"]),
+        "hard114 student to self user",
+        target_student_id=int(student["student_id"]),
+    )
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"target_user_id": int(teacher["user_id"])},
+    )
+
+    assert r.status_code == 400
+    assert _notification_target_student_id(notification_id) == int(student["student_id"])
+    assert _notification_scope(notification_id)[2] is None
+
+
+def test_hard115_teacher_can_switch_student_target_to_self_user_after_explicit_clear(client: TestClient):
+    teacher = _create_teacher("notif_switch_after_clear_teacher")
+    class_id = _create_class("security-notif-switch-after-clear")
+    student = _extra_student_account_for_class(class_id, "notif_switch_after_clear_student")
+    subject_id = _create_subject("Notification switch after clear", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    notification_id = _create_notification(
+        subject_id,
+        class_id,
+        int(teacher["user_id"]),
+        "hard115 switch after clear",
+        target_student_id=int(student["student_id"]),
+    )
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"target_student_id": None, "target_user_id": int(teacher["user_id"])},
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["target_student_id"] is None
+    assert int(r.json()["target_user_id"]) == int(teacher["user_id"])
+    assert _notification_target_student_id(notification_id) is None
+    assert _notification_scope(notification_id)[2] == int(teacher["user_id"])
+
+
+def test_hard116_teacher_cannot_switch_self_user_target_to_student_without_clearing_user_first(
+    client: TestClient,
+):
+    teacher = _create_teacher("notif_switch_user_student_teacher")
+    class_id = _create_class("security-notif-switch-user-student")
+    student = _extra_student_account_for_class(class_id, "notif_switch_user_student")
+    subject_id = _create_subject("Notification switch user to student", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    notification_id = _create_notification(
+        subject_id,
+        class_id,
+        int(teacher["user_id"]),
+        "hard116 self user to student",
+        target_user_id=int(teacher["user_id"]),
+    )
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"target_student_id": int(student["student_id"])},
+    )
+
+    assert r.status_code == 400
+    assert _notification_scope(notification_id)[2] == int(teacher["user_id"])
+    assert _notification_target_student_id(notification_id) is None
+
+
+def test_hard117_teacher_can_switch_self_user_target_to_student_after_explicit_clear(client: TestClient):
+    teacher = _create_teacher("notif_switch_user_clear_teacher")
+    class_id = _create_class("security-notif-switch-user-clear")
+    student = _extra_student_account_for_class(class_id, "notif_switch_user_clear_student")
+    subject_id = _create_subject("Notification switch user clear", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    notification_id = _create_notification(
+        subject_id,
+        class_id,
+        int(teacher["user_id"]),
+        "hard117 user clear to student",
+        target_user_id=int(teacher["user_id"]),
+    )
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"target_user_id": None, "target_student_id": int(student["student_id"])},
+    )
+
+    assert r.status_code == 200, r.text
+    assert int(r.json()["target_student_id"]) == int(student["student_id"])
+    assert r.json()["target_user_id"] is None
+    assert _notification_scope(notification_id)[2] is None
+    assert _notification_target_student_id(notification_id) == int(student["student_id"])
+
+
+def test_hard118_teacher_cannot_clear_subject_and_class_to_global_while_clearing_target(
+    client: TestClient,
+):
+    teacher = _create_teacher("notif_clear_scope_target_teacher")
+    class_id = _create_class("security-notif-clear-scope-target")
+    student = _extra_student_account_for_class(class_id, "notif_clear_scope_target_student")
+    subject_id = _create_subject("Notification clear scope target", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    notification_id = _create_notification(
+        subject_id,
+        class_id,
+        int(teacher["user_id"]),
+        "hard118 clear to global",
+        target_student_id=int(student["student_id"]),
+    )
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"subject_id": None, "class_id": 0, "target_student_id": None},
+    )
+
+    assert r.status_code == 403
+    assert _notification_scope(notification_id)[:2] == (subject_id, class_id)
+    assert _notification_target_student_id(notification_id) == int(student["student_id"])
+
+
+def test_hard119_admin_can_clear_subject_class_and_targets_to_global_notice(client: TestClient):
+    ensure_admin()
+    teacher = _create_teacher("notif_admin_clear_all_teacher")
+    class_id = _create_class("security-notif-admin-clear-all")
+    student = _extra_student_account_for_class(class_id, "notif_admin_clear_all_student")
+    subject_id = _create_subject("Notification admin clear all", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    notification_id = _create_notification(
+        subject_id,
+        class_id,
+        int(teacher["user_id"]),
+        "hard119 admin clear all",
+        target_student_id=int(student["student_id"]),
+    )
+    headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"subject_id": None, "class_id": 0, "target_student_id": None},
+    )
+
+    assert r.status_code == 200, r.text
+    assert _notification_scope(notification_id)[:2] == (None, None)
+    assert _notification_target_student_id(notification_id) is None
+
+
+def test_hard120_admin_can_clear_target_user_from_system_password_reset_notice(client: TestClient):
+    ensure_admin()
+    teacher = _create_teacher("notif_admin_clear_reset_target")
+    db = SessionLocal()
+    try:
+        row = Notification(
+            title="hard120 reset target user",
+            content="system reset notice",
+            content_format="plain",
+            priority="important",
+            class_id=None,
+            subject_id=None,
+            target_user_id=int(teacher["user_id"]),
+            notification_kind="password_reset_request",
+            created_by=1,
+        )
+        db.add(row)
+        db.commit()
+        notification_id = int(row.id)
+    finally:
+        db.close()
+    headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"target_user_id": None},
+    )
+
+    assert r.status_code == 200, r.text
+    assert _notification_scope(notification_id)[2] is None
+
+
+def test_hard121_homework_grade_system_notification_normalizes_dual_targets_on_existing_row():
+    from apps.backend.courseeval_backend.domains.homework.notifications import upsert_homework_grade_notification
+
+    teacher = _create_teacher("notif_grade_system_teacher")
+    class_id = _create_class("security-notif-grade-system")
+    student = _extra_student_account_for_class(class_id, "notif_grade_system_student")
+    other = _create_teacher("notif_grade_system_other")
+    subject_id = _create_subject("Notification grade system", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    db = SessionLocal()
+    try:
+        homework = Homework(
+            title="hard121 graded homework",
+            content="grade notice",
+            class_id=class_id,
+            subject_id=subject_id,
+            max_score=100,
+            created_by=int(teacher["user_id"]),
+        )
+        db.add(homework)
+        db.flush()
+        student_row = db.query(Student).filter(Student.id == int(student["student_id"])).one()
+        stale = Notification(
+            title="hard121 stale",
+            content="stale",
+            class_id=class_id,
+            subject_id=subject_id,
+            target_student_id=None,
+            target_user_id=int(other["user_id"]),
+            related_homework_id=homework.id,
+            related_student_id=student_row.id,
+            notification_kind="grade_complete",
+            created_by=int(teacher["user_id"]),
+        )
+        db.add(stale)
+        db.commit()
+
+        updated = upsert_homework_grade_notification(
+            db,
+            homework=homework,
+            student=student_row,
+            score=95,
+            comment="ok",
+            source_label="manual",
+            created_by_user_id=int(teacher["user_id"]),
+        )
+        db.commit()
+        db.refresh(updated)
+
+        assert int(updated.target_student_id) == int(student["student_id"])
+        assert updated.target_user_id is None
+        assert int(updated.related_homework_id) == int(homework.id)
+    finally:
+        db.close()
+
+
+def test_hard122_homework_appeal_system_notification_targets_teacher_users_only():
+    from apps.backend.courseeval_backend.domains.homework.appeals import notify_teachers_grade_appeal
+
+    teacher = _create_teacher("notif_appeal_system_teacher")
+    class_id = _create_class("security-notif-appeal-system")
+    student = _extra_student_account_for_class(class_id, "notif_appeal_system_student")
+    subject_id = _create_subject("Notification appeal system", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    db = SessionLocal()
+    try:
+        homework = Homework(
+            title="hard122 appeal homework",
+            content="appeal",
+            class_id=class_id,
+            subject_id=subject_id,
+            max_score=100,
+            created_by=int(teacher["user_id"]),
+        )
+        db.add(homework)
+        db.flush()
+        submission = HomeworkSubmission(
+            homework_id=homework.id,
+            student_id=int(student["student_id"]),
+            subject_id=subject_id,
+            class_id=class_id,
+            content="appeal submission",
+            content_format="plain",
+        )
+        db.add(submission)
+        db.flush()
+        appeal = HomeworkGradeAppeal(
+            homework_id=homework.id,
+            student_id=int(student["student_id"]),
+            submission_id=submission.id,
+            reason_text="appeal reason with enough length",
+            status="pending",
+        )
+        db.add(appeal)
+        db.commit()
+        db.refresh(homework)
+        db.refresh(appeal)
+
+        rows = notify_teachers_grade_appeal(
+            db,
+            appeal=appeal,
+            homework=homework,
+            student_name="Appeal Student",
+            creator_user_id=int(student["student_id"]),
+        )
+        db.commit()
+        assert rows
+        for row in rows:
+            db.refresh(row)
+            assert row.target_student_id is None
+            assert row.target_user_id is not None
+            assert int(row.subject_id) == subject_id
+            assert int(row.class_id) == class_id
+            assert row.notification_kind == "grade_appeal"
+    finally:
+        db.close()

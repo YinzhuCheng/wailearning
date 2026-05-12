@@ -130,13 +130,18 @@ CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
 
 ### Playwright deep tier (follow-up hazards)
 
-- **File:** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` (**22** `test(...)` cases).
+- **File:** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` (**24** `test(...)` cases).
 - **Why it exists:** The first tier proved baseline badge wiring; this module stresses **role-specific** aggregation (**admin** global `sync-status` vs **teacher/student** course-scoped params), **corrupt `selected_course` localStorage** healing, **concurrent** teacher `POST`s, **teacher-owned vs other-teacher** notification isolation, **403** on inaccessible `subject_id`, **mobile viewport**, **full page reload** (`onMounted` → `pollNotificationSync` without relying on manual focus), **delete race** while the student notifications view loads, **multi-class course** badge behavior where students must not see another linked class's broadcast while the assigned teacher still sees the whole course scope, and global-notification write scope where ordinary teachers are rejected while admin global broadcasts still reach the student header badge.
 - **Lessons baked into the spec comments:**
   - Cases **21-22** add notification target-scope coverage: a teacher cannot
     direct a course notification at another teacher's user id, and the
     notification composer posts the current course/class scope instead of an
     accidental global row.
+  - Cases **23-24** add update-target clearing coverage: explicit JSON `null`
+    for `target_student_id` clears the target and updates the student's
+    course-scoped badge without changing another teacher's course sync, while
+    switching from `target_student_id` to `target_user_id` without explicitly
+    clearing the student target is rejected.
   - Teachers may land on **`/students`** (post-login default after **`Dashboard.vue` removal**; historically **`/dashboard`**) with **`ensureSelectedCourse`** picking a **non-required** course first (ranking by semester/id). Assertions against **`course_required_id`** must **explicitly switch** via **`header-course-switch`** → `.course-dropdown-menu .course-option` (click **switcher**, not hover-only).
   - Multi-class notification E2E setup must first update the course `class_links` to include the second class. Publishing a `subject_id = null` broadcast to an unrelated class without that link should correctly return **403** for a normal teacher, which is a setup error for multi-class badge tests rather than evidence of a product regression.
   - Course switcher assertions should use the course name returned by `GET /api/subjects`, not Chinese labels copied from terminal output. PowerShell can display valid UTF-8 as mojibake; API-derived names avoid corrupted selector literals.
@@ -179,6 +184,16 @@ is limited to the caller's own user id for non-admin staff; administrators may
 target other users. A payload cannot target both a student and a user. The
 create path also normalizes `class_id=0` to an empty class before applying the
 admin-only global-write guard.
+
+7. **Notification updates distinguish omitted fields from explicit `null`:**
+`PUT /api/notifications/{id}` uses the update model's field-presence metadata
+before computing the effective row. Omitting `target_student_id`,
+`target_user_id`, `subject_id`, or `class_id` preserves the stored value;
+sending explicit `null` clears that field and re-runs global-write and
+target-scope validation. This lets administrators or authorized teachers clear
+targets intentionally, but still rejects target switches that would leave both
+student and user targets present and still rejects non-admin attempts to widen a
+notice into the global stream.
 
 ## Related documentation
 

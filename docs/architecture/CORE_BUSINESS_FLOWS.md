@@ -219,7 +219,13 @@ Targeted manual notification writes are validated before persistence. A row may
 target one student or one user, but not both. `target_student_id` must match the
 selected class and, for course notices, an enrollment in the selected course.
 Non-admin staff may only set `target_user_id` to their own user id; admin can
-target other users.
+target other users. Notification updates are field-presence aware: omitted
+scope/target fields preserve existing values, while explicit JSON `null`
+clears a stored scope or target and then applies the same write-scope and
+target-scope validation to the effective row. A target switch therefore needs
+both sides in the payload, for example clearing `target_student_id` while
+setting `target_user_id`; setting the new target alone is rejected if the old
+target would remain.
 
 Course-scoped notification reading has two class-scope layers. Admins and the
 assigned course teacher see the whole course notification scope, including

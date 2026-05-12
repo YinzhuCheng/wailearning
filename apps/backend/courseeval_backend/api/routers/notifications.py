@@ -423,18 +423,24 @@ def update_notification(
     if not is_admin(current_user) and notification.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can only edit your own notifications.")
 
-    if data.class_id is not None and data.class_id != 0:
+    requested_fields = data.model_fields_set
+
+    if "class_id" in requested_fields and data.class_id is not None and data.class_id != 0:
         class_obj = db.query(Class).filter(Class.id == data.class_id).first()
         if not class_obj:
             raise HTTPException(status_code=404, detail="Class not found.")
 
-    effective_subject_id = data.subject_id if data.subject_id is not None else notification.subject_id
+    effective_subject_id = data.subject_id if "subject_id" in requested_fields else notification.subject_id
     effective_class_id = notification.class_id
-    if data.class_id is not None:
-        effective_class_id = None if data.class_id == 0 else data.class_id
+    if "class_id" in requested_fields:
+        effective_class_id = None if data.class_id in (None, 0) else data.class_id
     _ensure_notification_write_scope(current_user, effective_subject_id, effective_class_id)
-    effective_target_student_id = data.target_student_id if data.target_student_id is not None else notification.target_student_id
-    effective_target_user_id = data.target_user_id if data.target_user_id is not None else notification.target_user_id
+    effective_target_student_id = (
+        data.target_student_id if "target_student_id" in requested_fields else notification.target_student_id
+    )
+    effective_target_user_id = (
+        data.target_user_id if "target_user_id" in requested_fields else notification.target_user_id
+    )
     _ensure_notification_target_scope(
         db,
         current_user,
@@ -444,13 +450,13 @@ def update_notification(
         effective_target_user_id,
     )
 
-    if data.subject_id is not None:
-        course = ensure_course_access_http(data.subject_id, current_user, db)
+    if effective_subject_id is not None:
+        course = ensure_course_access_http(effective_subject_id, current_user, db)
         _ensure_notification_course_publish_access(current_user, course)
-        target_class_id = notification.class_id if data.class_id is None else data.class_id
+        target_class_id = effective_class_id
         if target_class_id and course.class_id and course.class_id != target_class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
-    elif data.class_id is not None and data.class_id != 0:
+    elif "class_id" in requested_fields and data.class_id is not None and data.class_id != 0:
         class_ids = get_accessible_class_ids(current_user, db)
         if not is_admin(current_user) and data.class_id not in class_ids:
             raise HTTPException(status_code=403, detail="You can only publish notifications for accessible classes.")
@@ -474,13 +480,13 @@ def update_notification(
         notification.priority = data.priority
     if data.is_pinned is not None:
         notification.is_pinned = data.is_pinned
-    if data.class_id is not None:
-        notification.class_id = None if data.class_id == 0 else data.class_id
-    if data.subject_id is not None:
+    if "class_id" in requested_fields:
+        notification.class_id = None if data.class_id in (None, 0) else data.class_id
+    if "subject_id" in requested_fields:
         notification.subject_id = data.subject_id
-    if data.target_student_id is not None:
+    if "target_student_id" in requested_fields:
         notification.target_student_id = data.target_student_id
-    if data.target_user_id is not None:
+    if "target_user_id" in requested_fields:
         notification.target_user_id = data.target_user_id
     if data.notification_kind is not None:
         nk = (data.notification_kind or "").strip()

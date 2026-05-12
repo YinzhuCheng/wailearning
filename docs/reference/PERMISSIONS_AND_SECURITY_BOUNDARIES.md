@@ -164,7 +164,15 @@ student enrolled in the selected course when `subject_id` is present. Non-admin
 staff may only set `target_user_id` to their own user id; administrators may
 target other users. These checks happen before persisting create/update payloads
 so later UI or query changes cannot accidentally expose malformed targeted
-notification rows.
+notification rows. Update payloads distinguish an omitted field from an
+explicit JSON `null`: omitting `target_student_id` / `target_user_id`,
+`subject_id`, or `class_id` preserves the existing value, while sending `null`
+clears the stored value and re-runs the same write-scope and target-scope
+checks on the resulting row. Switching from a student target to a user target,
+or the reverse, must explicitly clear the old target in the same request;
+otherwise the effective row would contain both targets and is rejected.
+Non-admin staff still cannot clear both `subject_id` and `class_id` into a
+global notice, even when they also clear the target field.
 
 ---
 
