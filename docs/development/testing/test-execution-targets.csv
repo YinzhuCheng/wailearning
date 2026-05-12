@@ -125,7 +125,7 @@ apps/backend/courseeval_backend/attachments.py
 apps/backend/courseeval_backend/attachment_compliance.py
 apps/backend/courseeval_backend/core/config.py","Changes to authentication, permission dependencies, or role boundary helpers.
 Changes to /api/users, /api/classes, homework authorization, LLM admin routes, notification visibility, attendance writes, file attachment ACL, or E2E dev seed gates.
-Changes that introduce or relax admin-only behavior, student self-service behavior, IDOR-sensitive resource lookup, token validation, or seed-token/admin-JWT requirements.",cursor/repository-normalization,this commit,passed,2026-05-12,10,13
+Changes that introduce or relax admin-only behavior, student self-service behavior, IDOR-sensitive resource lookup, token validation, or seed-token/admin-JWT requirements.",cursor/repository-normalization,this commit,passed,2026-05-12,12,16
 backend.courses.student_course_roster_behavior,backend-pytest,"Focused backend course/roster regression file for student account to roster synchronization, required-course enrollment sync, homework submission access, teacher enrollment counts, duplicate student numbers, course removal blocks, sync-enrollments repair, and related class/course invariants.",.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q,<repo>,"tests/backend/courses/test_student_course_roster_behavior.py
 apps/backend/courseeval_backend/domains/courses/access.py
 apps/backend/courseeval_backend/domains/roster/reconciliation.py
@@ -213,7 +213,7 @@ Changes to the ledger heading or strict field format parsed by the selector.
 Changes to validation-profile documentation or target-selection policy.
 Changes to path matching semantics, fallback rules, or risk-level ordering.
 Changes to structured local history schema, signature calculation, or runner history writing.
-Changes to validation profile policy, risk filtering, or review-target execution defaults.",cursor/repository-normalization,this commit,passed,2026-05-12,12,12
+Changes to validation profile policy, risk filtering, or review-target execution defaults.",cursor/repository-normalization,this commit,passed,2026-05-12,13,13
 backend.scores.dashboard_course_scope,backend-pytest,"Focused score/dashboard API target for subject-scoped teacher visibility, score composition, grade appeals, and course-owned dashboard stats/rankings.",.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q,<repo>,"tests/backend/integration/test_core_api_surface.py
 tests/backend/scores/test_score_composition.py
 apps/backend/courseeval_backend/api/routers/dashboard.py
@@ -221,7 +221,7 @@ apps/backend/courseeval_backend/api/routers/scores.py
 apps/backend/courseeval_backend/domains/scores/composition.py
 apps/backend/courseeval_backend/domains/scores/appeals.py
 apps/backend/courseeval_backend/domains/courses/access.py","Changes to score/dashboard routes, subject-scoped teacher visibility, score composition, grade appeals, or course access helpers used by dashboard/scores endpoints.
-Escalate to security or full PostgreSQL validation for shared auth, schema, or broad course-access changes.",cursor/repository-normalization,this commit,passed,2026-05-11,1,1
+Escalate to security or full PostgreSQL validation for shared auth, schema, or broad course-access changes.",cursor/repository-normalization,this commit,passed,2026-05-12,2,2
 behavior.notifications.sync_api_edge,behavior-pytest,"Behavior pytest target for notification list/sync-status alignment, concurrent read-state updates, and subject-scoped authorization edges.",.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q,<repo>,"tests/behavior/test_notification_sync_api_edge_behavior.py
 apps/backend/courseeval_backend/api/routers/notifications.py
 apps/backend/courseeval_backend/domains/courses/access.py
@@ -229,7 +229,7 @@ apps/backend/courseeval_backend/api/schemas.py
 apps/web/admin/src/views/Layout.vue
 apps/web/admin/src/views/Notifications.vue","Changes to notification list or sync-status behavior.
 Changes to read-state convergence, subject-scoped notification authorization, or course access helpers used by notification routes.
-Pair with notification Playwright tiers when browser state convergence or course switcher behavior changes.",cursor/repository-normalization,this commit,passed,2026-05-11,1,1
+Pair with notification Playwright tiers when browser state convergence or course switcher behavior changes.",cursor/repository-normalization,this commit,passed,2026-05-12,2,2
 behavior.course_roster_homework_edge,behavior-pytest,"Behavior pytest target for course, roster, homework, score appeal, and enrollment edge interactions.",.venv\Scripts\python.exe -m pytest tests\behavior\test_course_roster_homework_edge_behavior.py -q,<repo>,"tests/behavior/test_course_roster_homework_edge_behavior.py
 apps/backend/courseeval_backend/domains/courses/access.py
 apps/backend/courseeval_backend/domains/roster/reconciliation.py
@@ -249,4 +249,4 @@ apps/backend/courseeval_backend/api/routers/subjects.py
 apps/backend/courseeval_backend/api/routers/e2e_dev.py
 apps/backend/courseeval_backend/core/auth.py
 apps/backend/courseeval_backend/core/config.py","Changes to browser auth storage handling, login token persistence, frontend route guards, /api/users authorization, /api/subjects mutation authorization, /api/e2e/dev gates, or E2E seed header helpers.
-Pair with security.api_regression for backend-only authorization changes.",cursor/repository-normalization,this commit,passed,2026-05-12,4,5
+Pair with security.api_regression for backend-only authorization changes.",cursor/repository-normalization,this commit,passed,2026-05-12,5,6

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
-from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http
+from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, is_course_instructor
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import Attendance, Student, Subject, User, UserRole
 from apps.backend.courseeval_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
@@ -18,6 +18,11 @@ router = APIRouter(prefix="/api/attendance", tags=["考勤管理"])
 def _ensure_attendance_write_access(current_user: User):
     if current_user.role == UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Students cannot modify attendance.")
+
+
+def _ensure_attendance_course_write_access(current_user: User, course: Subject):
+    if not is_course_instructor(current_user, course):
+        raise HTTPException(status_code=403, detail="Only the assigned course teacher can modify course attendance.")
 
 
 def _parse_attendance_date(value) -> datetime:
@@ -143,6 +148,7 @@ def create_attendance(
 
     if attendance_data.subject_id:
         course = ensure_course_access_http(attendance_data.subject_id, current_user, db)
+        _ensure_attendance_course_write_access(current_user, course)
         if course.class_id and course.class_id != attendance_data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
@@ -192,6 +198,9 @@ def update_attendance(
         subject_id=attendance.subject_id,
         class_error_detail="You do not have access to this attendance record.",
     )
+    if attendance.subject_id:
+        course = ensure_course_access_http(attendance.subject_id, current_user, db)
+        _ensure_attendance_course_write_access(current_user, course)
 
     if attendance_data.status is not None:
         attendance.status = attendance_data.status
@@ -221,6 +230,9 @@ def delete_attendance(
         subject_id=attendance.subject_id,
         class_error_detail="You do not have access to this attendance record.",
     )
+    if attendance.subject_id:
+        course = ensure_course_access_http(attendance.subject_id, current_user, db)
+        _ensure_attendance_course_write_access(current_user, course)
 
     db.delete(attendance)
     db.commit()
@@ -325,6 +337,9 @@ async def create_attendances_batch(
             if not course:
                 errors.append(f"Row {index}: course not found.")
                 continue
+            if not is_course_instructor(current_user, course):
+                errors.append(f"Row {index}: only the assigned course teacher can modify course attendance.")
+                continue
             if course.class_id and course.class_id != class_id:
                 errors.append(f"Row {index}: selected course does not belong to this class.")
                 continue
@@ -405,6 +420,7 @@ async def create_class_attendance_batch(
             course = ensure_course_access_http(subject_id, current_user, db)
         except HTTPException:
             return {"success": 0, "failed": 1, "errors": ["No access to the selected course."]}
+        _ensure_attendance_course_write_access(current_user, course)
         if course.class_id and course.class_id != class_id:
             return {"success": 0, "failed": 1, "errors": ["Course does not belong to the selected class."]}
     else:

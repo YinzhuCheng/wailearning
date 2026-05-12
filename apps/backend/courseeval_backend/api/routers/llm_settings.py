@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
-from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, get_student_profile_for_user, prepare_student_course_context
+from apps.backend.courseeval_backend.domains.courses.access import (
+    ensure_course_access_http,
+    get_student_profile_for_user,
+    is_course_instructor,
+    prepare_student_course_context,
+)
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.llm_grading import (
     build_png_data_url_from_image_bytes,
@@ -68,6 +73,11 @@ def _is_admin(user: User) -> bool:
 
 def _can_manage_course_llm(user: User) -> bool:
     return user.role in [UserRole.ADMIN, UserRole.CLASS_TEACHER, UserRole.TEACHER]
+
+
+def _ensure_course_llm_management_access(user: User, course: Subject) -> None:
+    if not is_course_instructor(user, course):
+        raise HTTPException(status_code=403, detail="Only the assigned course teacher can manage course LLM config.")
 
 
 def _serialize_preset(preset: LLMEndpointPreset) -> LLMEndpointPresetResponse:
@@ -559,7 +569,8 @@ def get_course_llm_config(
 ):
     if not _can_manage_course_llm(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can manage course LLM config.")
-    ensure_course_access_http(subject_id, current_user, db)
+    course = ensure_course_access_http(subject_id, current_user, db)
+    _ensure_course_llm_management_access(current_user, course)
 
     config = ensure_course_llm_config(db, subject_id, current_user.id)
     db.commit()
@@ -576,7 +587,8 @@ def update_course_llm_config(
 ):
     if not _can_manage_course_llm(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can manage course LLM config.")
-    ensure_course_access_http(subject_id, current_user, db)
+    course = ensure_course_access_http(subject_id, current_user, db)
+    _ensure_course_llm_management_access(current_user, course)
 
     config = ensure_course_llm_config(db, subject_id, current_user.id)
     existing_has_group_rows = (

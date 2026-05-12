@@ -14,6 +14,7 @@ from apps.backend.courseeval_backend.core.auth import get_current_active_user
 from apps.backend.courseeval_backend.domains.courses.access import (
     ensure_course_access_http,
     get_student_profile_for_user,
+    is_course_instructor,
     prepare_student_course_context,
 )
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
@@ -38,6 +39,11 @@ def is_admin(user: User) -> bool:
 
 def is_admin_or_teacher(user: User) -> bool:
     return user.role in [UserRole.ADMIN, UserRole.CLASS_TEACHER, UserRole.TEACHER]
+
+
+def _ensure_notification_course_publish_access(user: User, course) -> None:
+    if not is_course_instructor(user, course):
+        raise HTTPException(status_code=403, detail="Only the assigned course teacher can publish course notifications.")
 
 
 def _visible_notifications_query(current_user: User, db: Session, subject_id: Optional[int] = None):
@@ -235,6 +241,7 @@ def create_notification(
 
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
+        _ensure_notification_course_publish_access(current_user, course)
         if data.class_id and course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
     elif data.class_id:
@@ -297,6 +304,7 @@ def update_notification(
 
     if data.subject_id is not None:
         course = ensure_course_access_http(data.subject_id, current_user, db)
+        _ensure_notification_course_publish_access(current_user, course)
         target_class_id = notification.class_id if data.class_id is None else data.class_id
         if target_class_id and course.class_id and course.class_id != target_class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")

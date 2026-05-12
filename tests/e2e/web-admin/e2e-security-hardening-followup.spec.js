@@ -27,7 +27,7 @@ async function apiStatus(pathname, { method = 'GET', token, headers = {}, body }
   return { status: res.status, text: await res.text() }
 }
 
-test.describe('security hardening follow-up E2E (8 cases)', () => {
+test.describe('security hardening follow-up E2E (10 cases)', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -204,5 +204,42 @@ test.describe('security hardening follow-up E2E (8 cases)', () => {
       token
     })
     expect(sync.status).toBe(403)
+  })
+
+  test('09 class teacher cannot alter teacher-owned visible course grading scheme via direct API', async () => {
+    const s = scenario()
+    const token = await obtainAccessToken(s.class_teacher.username, s.password_teacher_student)
+
+    const before = await apiStatus(`/api/scores/grade-scheme/${s.course_required_id}`, { token })
+    expect(before.status).toBe(200)
+
+    const update = await apiStatus(`/api/scores/grade-scheme/${s.course_required_id}`, {
+      method: 'PUT',
+      token,
+      body: { homework_weight: 5, extra_daily_weight: 5 }
+    })
+    expect(update.status).toBe(403)
+  })
+
+  test('10 class teacher cannot publish notification into teacher-owned visible course via direct API', async () => {
+    const s = scenario()
+    const token = await obtainAccessToken(s.class_teacher.username, s.password_teacher_student)
+
+    const before = await apiStatus(`/api/subjects/${s.course_required_id}`, { token })
+    expect(before.status).toBe(200)
+
+    const notice = await apiStatus('/api/notifications', {
+      method: 'POST',
+      token,
+      body: {
+        title: `E2E forbidden notice ${Date.now()}`,
+        content: 'should not publish',
+        content_format: 'plain',
+        priority: 'normal',
+        class_id: s.class_id_1,
+        subject_id: s.course_required_id
+      }
+    })
+    expect(notice.status).toBe(403)
   })
 })

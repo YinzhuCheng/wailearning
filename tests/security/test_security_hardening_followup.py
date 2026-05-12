@@ -14,7 +14,21 @@ from apps.backend.courseeval_backend.api.schemas import UserRole
 from apps.backend.courseeval_backend.core.auth import get_password_hash
 from apps.backend.courseeval_backend.core.config import Settings, settings
 from apps.backend.courseeval_backend.db.database import SessionLocal
-from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, CourseMaterial, Student, SubjectClassLink, User
+from apps.backend.courseeval_backend.db.models import (
+    Attendance,
+    Class,
+    CourseEnrollment,
+    CourseExamWeight,
+    CourseGradeScheme,
+    CourseLLMConfig,
+    CourseMaterial,
+    Notification,
+    Score,
+    ScoreGradeAppeal,
+    Student,
+    SubjectClassLink,
+    User,
+)
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
@@ -107,6 +121,88 @@ def _material_count_for_subject(subject_id: int) -> int:
     db = SessionLocal()
     try:
         return db.query(CourseMaterial).filter(CourseMaterial.subject_id == subject_id).count()
+    finally:
+        db.close()
+
+
+def _create_visible_teacher_owned_course(client: TestClient, ctx: dict, ct: dict, name: str) -> int:
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": name,
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    return int(created.json()["id"])
+
+
+def _score_count_for_subject(subject_id: int) -> int:
+    db = SessionLocal()
+    try:
+        return db.query(Score).filter(Score.subject_id == subject_id).count()
+    finally:
+        db.close()
+
+
+def _score_value(score_id: int) -> float:
+    db = SessionLocal()
+    try:
+        row = db.query(Score).filter(Score.id == score_id).first()
+        assert row is not None
+        return float(row.score)
+    finally:
+        db.close()
+
+
+def _exam_weight_count_for_subject(subject_id: int) -> int:
+    db = SessionLocal()
+    try:
+        return db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).count()
+    finally:
+        db.close()
+
+
+def _grade_scheme_for_subject(subject_id: int) -> tuple[float, float] | None:
+    db = SessionLocal()
+    try:
+        row = db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == subject_id).first()
+        if not row:
+            return None
+        return (float(row.homework_weight), float(row.extra_daily_weight))
+    finally:
+        db.close()
+
+
+def _attendance_count_for_subject(subject_id: int) -> int:
+    db = SessionLocal()
+    try:
+        return db.query(Attendance).filter(Attendance.subject_id == subject_id).count()
+    finally:
+        db.close()
+
+
+def _notification_count_for_subject(subject_id: int) -> int:
+    db = SessionLocal()
+    try:
+        return db.query(Notification).filter(Notification.subject_id == subject_id).count()
+    finally:
+        db.close()
+
+
+def _llm_config_enabled(subject_id: int) -> bool | None:
+    db = SessionLocal()
+    try:
+        row = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == subject_id).first()
+        if not row:
+            return None
+        return bool(row.is_enabled)
     finally:
         db.close()
 
@@ -863,3 +959,184 @@ def test_hard36_class_teacher_cannot_create_homework_in_teacher_owned_visible_co
         },
     )
     assert r.status_code == 403
+
+
+def test_hard37_class_teacher_cannot_create_score_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_score_create_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible score create guard")
+    student_id = _extra_student_for_class(int(ct["class_id"]), "ct_score_create_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    before = _score_count_for_subject(subject_id)
+    r = client.post(
+        "/api/scores",
+        headers=ct_headers,
+        json={
+            "student_id": student_id,
+            "subject_id": subject_id,
+            "class_id": ct["class_id"],
+            "semester": "2026-fall",
+            "exam_type": "midterm",
+            "score": 96,
+            "exam_date": None,
+        },
+    )
+    assert r.status_code == 403
+    assert _score_count_for_subject(subject_id) == before
+
+
+def test_hard38_class_teacher_cannot_update_score_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_score_update_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible score update guard")
+    student_id = _extra_student_for_class(int(ct["class_id"]), "ct_score_update_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/scores",
+        headers=admin_headers,
+        json={
+            "student_id": student_id,
+            "subject_id": subject_id,
+            "class_id": ct["class_id"],
+            "semester": "2026-fall",
+            "exam_type": "final",
+            "score": 88,
+            "exam_date": None,
+        },
+    )
+    assert created.status_code == 200, created.text
+    score_id = created.json()["id"]
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.put(f"/api/scores/{score_id}", headers=ct_headers, json={"score": 100})
+    assert r.status_code == 403
+    assert _score_value(score_id) == 88
+
+
+def test_hard39_class_teacher_cannot_update_exam_weights_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_score_weights_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible weights guard")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    before = _exam_weight_count_for_subject(subject_id)
+    r = client.put(
+        f"/api/scores/weights/{subject_id}",
+        headers=ct_headers,
+        json={"items": [{"exam_type": "final", "weight": 40}]},
+    )
+    assert r.status_code == 403
+    assert _exam_weight_count_for_subject(subject_id) == before
+
+
+def test_hard40_class_teacher_cannot_update_grade_scheme_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_grade_scheme_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible grade scheme guard")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    before = _grade_scheme_for_subject(subject_id)
+    r = client.put(
+        f"/api/scores/grade-scheme/{subject_id}",
+        headers=ct_headers,
+        json={"homework_weight": 10, "extra_daily_weight": 10},
+    )
+    assert r.status_code == 403
+    assert _grade_scheme_for_subject(subject_id) == before
+
+
+def test_hard41_class_teacher_cannot_create_attendance_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_attendance_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible attendance guard")
+    student_id = _extra_student_for_class(int(ct["class_id"]), "ct_attendance_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    before = _attendance_count_for_subject(subject_id)
+    r = client.post(
+        "/api/attendance",
+        headers=ct_headers,
+        json={
+            "student_id": student_id,
+            "class_id": ct["class_id"],
+            "subject_id": subject_id,
+            "date": "2026-05-12",
+            "status": "absent",
+            "remark": "should not write",
+        },
+    )
+    assert r.status_code == 403
+    assert _attendance_count_for_subject(subject_id) == before
+
+
+def test_hard42_class_teacher_cannot_class_batch_attendance_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_attendance_batch_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible attendance batch guard")
+    _extra_student_for_class(int(ct["class_id"]), "ct_attendance_batch_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    before = _attendance_count_for_subject(subject_id)
+    r = client.post(
+        "/api/attendance/class-batch",
+        headers=ct_headers,
+        json={
+            "class_id": ct["class_id"],
+            "subject_id": subject_id,
+            "date": "2026-05-13",
+            "status": "late",
+            "remark": "should not batch write",
+        },
+    )
+    assert r.status_code == 403
+    assert _attendance_count_for_subject(subject_id) == before
+
+
+def test_hard43_class_teacher_cannot_publish_notification_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_notification_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible notification guard")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    before = _notification_count_for_subject(subject_id)
+    r = client.post(
+        "/api/notifications",
+        headers=ct_headers,
+        json={
+            "title": "forbidden teacher-owned course notice",
+            "content": "should not publish",
+            "content_format": "plain",
+            "priority": "normal",
+            "class_id": ct["class_id"],
+            "subject_id": subject_id,
+        },
+    )
+    assert r.status_code == 403
+    assert _notification_count_for_subject(subject_id) == before
+
+
+def test_hard44_class_teacher_cannot_update_llm_config_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_llm_config_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible llm config guard")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    before = _llm_config_enabled(subject_id)
+    r = client.put(
+        f"/api/llm-settings/courses/{subject_id}",
+        headers=ct_headers,
+        json={
+            "is_enabled": True,
+            "response_language": "zh",
+            "max_input_tokens": 16000,
+            "max_output_tokens": 1000,
+            "system_prompt": None,
+            "teacher_prompt": "should not mutate",
+            "endpoints": [],
+            "groups": [],
+        },
+    )
+    assert r.status_code == 403
+    assert _llm_config_enabled(subject_id) == before

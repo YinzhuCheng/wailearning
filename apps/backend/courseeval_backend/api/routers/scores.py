@@ -11,6 +11,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     ensure_course_access_http,
     get_enrolled_students,
     get_student_profile_for_user,
+    is_course_instructor,
     subject_linked_class_ids,
 )
 from apps.backend.courseeval_backend.db.database import get_db
@@ -50,6 +51,11 @@ def _score_subject_allows_class(db: Session, subject: Subject, class_id: int) ->
 def _ensure_score_write_access(current_user: User):
     if current_user.role == UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Students cannot modify scores.")
+
+
+def _ensure_score_course_write_access(current_user: User, course: Subject):
+    if not is_course_instructor(current_user, course):
+        raise HTTPException(status_code=403, detail="Only the assigned course teacher can modify course scores.")
 
 
 def _serialize_score(score: Score) -> ScoreResponse:
@@ -175,6 +181,7 @@ def create_score(
         raise HTTPException(status_code=400, detail="Course not found.")
     if not _score_subject_allows_class(db, subject, score_data.class_id):
         raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
+    _ensure_score_course_write_access(current_user, subject)
 
     _validate_score_uniqueness(
         db,
@@ -223,7 +230,8 @@ def update_course_exam_weights(
     current_user: User = Depends(get_current_active_user),
 ):
     _ensure_score_write_access(current_user)
-    ensure_course_access_http(subject_id, current_user, db)
+    course = ensure_course_access_http(subject_id, current_user, db)
+    _ensure_score_course_write_access(current_user, course)
 
     if not payload.items:
         db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).delete()
@@ -294,7 +302,8 @@ def update_course_grade_scheme(
     current_user: User = Depends(get_current_active_user),
 ):
     _ensure_score_write_access(current_user)
-    ensure_course_access_http(subject_id, current_user, db)
+    course = ensure_course_access_http(subject_id, current_user, db)
+    _ensure_score_course_write_access(current_user, course)
     hw = float(payload.homework_weight)
     ex = float(payload.extra_daily_weight)
     if hw < 0 or ex < 0 or hw + ex > 100:
@@ -490,7 +499,8 @@ def respond_score_grade_appeal(
     appeal = db.query(ScoreGradeAppeal).filter(ScoreGradeAppeal.id == appeal_id).first()
     if not appeal:
         raise HTTPException(status_code=404, detail="申诉不存在。")
-    ensure_course_access_http(appeal.subject_id, current_user, db)
+    course = ensure_course_access_http(appeal.subject_id, current_user, db)
+    _ensure_score_course_write_access(current_user, course)
     next_status = (payload.status or "resolved").strip()
     if next_status not in ("pending", "resolved", "rejected"):
         raise HTTPException(status_code=400, detail="无效的处理状态。")
@@ -517,6 +527,9 @@ def update_score(
     class_ids = get_accessible_class_ids(current_user, db)
     if score.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="You do not have access to this score.")
+    if score.subject_id:
+        course = ensure_course_access_http(score.subject_id, current_user, db)
+        _ensure_score_course_write_access(current_user, course)
 
     if score_data.score is not None:
         score.score = score_data.score
@@ -558,6 +571,9 @@ def delete_score(
     class_ids = get_accessible_class_ids(current_user, db)
     if score.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="You do not have access to this score.")
+    if score.subject_id:
+        course = ensure_course_access_http(score.subject_id, current_user, db)
+        _ensure_score_course_write_access(current_user, course)
 
     db.delete(score)
     db.commit()
@@ -660,6 +676,10 @@ async def create_scores_batch(
             continue
 
         exam_type = score_data.get("exam_type", "期中考试")
+        if not is_course_instructor(current_user, subject):
+            errors.append(f"Row {index}: only the assigned course teacher can modify course scores.")
+            continue
+
         semester = score_data.get("semester", "")
         dedupe_key = (student.id, subject_id, semester, exam_type)
         if dedupe_key in seen_keys:
