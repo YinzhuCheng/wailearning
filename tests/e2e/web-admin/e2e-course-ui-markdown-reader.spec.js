@@ -18,6 +18,13 @@ function scenario() {
   return loadE2eScenario()
 }
 
+async function screenshot(page, testInfo, name) {
+  const output = testInfo.outputPath(`${name}.png`)
+  await page.screenshot({ path: output, fullPage: true })
+  await testInfo.attach(name, { path: output, contentType: 'image/png' })
+  return output
+}
+
 test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
   test.describe.configure({ timeout: 180_000 })
 
@@ -37,7 +44,7 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.locator('.header-count')).toContainText('共 2 人', { timeout: 15000 })
   })
 
-  test('homework publish dialog shows rendered Markdown LaTeX demo', async ({ page }) => {
+  test('homework publish dialog shows rendered Markdown LaTeX demo', async ({ page }, testInfo) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await clickCourseSwitcherOption(page, `E2E必修课_${s.suffix}`)
@@ -46,6 +53,8 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const dlg = page.getByRole('dialog', { name: /发布作业/ })
     await expect(dlg).toBeVisible({ timeout: 15000 })
     const bodyPanel = dlg.locator('.md-panel').first()
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
+    await bodyPanel.getByTestId('md-panel-card-help-toggle').click()
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 15000 })
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex').first()).toBeVisible({
       timeout: 15000
@@ -53,11 +62,27 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display').first()).toBeVisible({
       timeout: 15000
     })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display')).toHaveCount(2, {
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display')).toHaveCount(1, {
       timeout: 15000
     })
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).not.toContainText('$$')
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).not.toContainText('\\[')
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--example')).toBeVisible({
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--pricing')).toBeVisible({
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--tip')).toBeVisible({
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--warning')).toBeVisible({
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--danger')).toBeVisible({
+      timeout: 15000
+    })
+    await screenshot(page, testInfo, 'markdown-card-demo-homework-dialog')
   })
 
   test('homework dialog hides LaTeX demo when switching body to plain text', async ({ page }) => {
@@ -69,6 +94,8 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const dlg = page.getByRole('dialog', { name: /发布作业/ })
     await expect(dlg).toBeVisible({ timeout: 15000 })
     const bodyPanel = dlg.locator('.md-panel').first()
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
+    await bodyPanel.getByTestId('md-panel-card-help-toggle').click()
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 10000 })
     await bodyPanel.locator('.md-panel__format .el-radio-button').filter({ hasText: '纯文本' }).click()
     await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toHaveCount(0)

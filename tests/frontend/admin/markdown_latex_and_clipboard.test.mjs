@@ -6,6 +6,7 @@ import path from 'node:path'
 
 import MarkdownIt from '../../../apps/web/admin/node_modules/markdown-it/index.mjs'
 import { copyText } from '../../../apps/web/admin/src/utils/clipboard.js'
+import { MARKDOWN_IMAGE_EXAMPLE_MARKDOWN } from '../../../apps/web/admin/src/utils/markdownLatexDemo.js'
 import { createCourseMarkdownIt, renderCourseMarkdown } from '../../../apps/web/admin/src/utils/markdownIt.js'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -103,6 +104,30 @@ test('renderCourseMarkdown preserves escaped inline delimiters for KaTeX auto-re
   const html = render('inline \\(x^2\\) and bracket \\[y\\]')
   assert.match(html, /\\\(x\^2\\\)/)
   assert.match(html, /\\\[y\\\]/)
+})
+
+test('renderCourseMarkdown renders semantic card blocks with typed classes and title', () => {
+  const html = render([
+    ':::pricing 价格说明',
+    '- 输入：**$5 / M Tokens**',
+    '- 输出：**$30 / M Tokens**',
+    ':::'
+  ].join('\n'))
+  assert.match(html, /class="md-card md-card--pricing md-card--titled"/)
+  assert.match(html, /data-card-kind="pricing"/)
+  assert.match(html, /<div class="md-card__title">价格说明<\/div>/)
+  assert.match(html, /<strong>\$5 \/ M Tokens<\/strong>/)
+})
+
+test('renderCourseMarkdown leaves unknown ::: blocks as plain markdown text', () => {
+  const html = render([':::unknown nope', 'body', ':::'].join('\n'))
+  assert.match(html, /:::unknown nope/)
+  assert.doesNotMatch(html, /md-card--unknown/)
+})
+
+test('renderCourseMarkdown keeps built-in markdown demo image as an img tag', () => {
+  const html = render(MARKDOWN_IMAGE_EXAMPLE_MARKDOWN)
+  assert.match(html, /<img[^>]+src="\/markdown-demo-card-image\.svg"/)
 })
 
 test('copyText uses Clipboard API without DOM fallback when write succeeds async', async () => {

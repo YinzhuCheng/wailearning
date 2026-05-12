@@ -181,7 +181,16 @@
                 data-testid="discussion-markdown-demo-toggle"
                 @click="toggleMarkdownDemo"
               >
-                {{ showMarkdownDemo ? '隐藏 Markdown + LaTeX 示例' : '查看 Markdown + LaTeX 示例' }}
+                {{ showMarkdownDemo ? '隐藏卡片 / Markdown / LaTeX 示例' : '查看卡片 / Markdown / LaTeX 示例' }}
+              </el-button>
+              <el-button
+                type="primary"
+                link
+                size="small"
+                data-testid="discussion-image-help-toggle"
+                @click="showMarkdownImageHelp = !showMarkdownImageHelp"
+              >
+                {{ showMarkdownImageHelp ? '隐藏插图说明' : '查看当前支持的插图' }}
               </el-button>
               <span class="discussion-md-toolbar__hint">预览会在同一区域切换显示。</span>
             </div>
@@ -190,8 +199,8 @@
                 compact
                 :show-insert="true"
                 :show-source-collapse="false"
-                title="Markdown + LaTeX 示例"
-                subtitle="回复格式为 Markdown 时显示：以下为固定演示渲染效果，可复制或插入后再撰写正文。"
+                title="卡片 / Markdown / LaTeX 示例"
+                subtitle="回复格式为 Markdown 时按需展开：以下演示当前站点支持的多色卡片、插图与公式渲染。"
                 @insert="appendDraftSnippet"
               />
               <DiscussionLinkedTargetCards
@@ -199,6 +208,22 @@
                 :items="draftLinkedTargets"
                 compact
               />
+            </div>
+            <div v-if="draftFormat === 'markdown' && showMarkdownImageHelp" class="discussion-md-image-help">
+              <div class="discussion-md-image-help__title">当前系统支持的插图方式</div>
+              <ul class="discussion-md-image-help__list">
+                <li>Markdown 图片语法：`![说明](https://...)`</li>
+                <li>当前编辑器提供本地上传与图片 URL 两种常用入口</li>
+                <li>也可以插入系统内置的示例图，先确认版式效果再写正文</li>
+              </ul>
+              <div class="discussion-md-image-help__actions">
+                <el-button size="small" @click="appendDraftSnippet('\n![图片说明](https://example.com/your-image.png)\n')">
+                  插入图片模板
+                </el-button>
+                <el-button size="small" type="primary" plain @click="appendDraftSnippet(`\n${MARKDOWN_IMAGE_EXAMPLE_MARKDOWN}\n`)">
+                  插入示例图
+                </el-button>
+              </div>
             </div>
 
             <div class="discussion-linked-targets-toolbar">
@@ -273,6 +298,7 @@ import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
 import { normalizeContentFormat } from '@/utils/contentFormat'
 import { discussionLinkedTargetKey, openDiscussionLinkedTarget } from '@/utils/discussionLinkTargets'
+import { MARKDOWN_IMAGE_EXAMPLE_MARKDOWN } from '@/utils/markdownLatexDemo'
 
 /** Each segment renders as one logical line: a text line (may be empty) or one image. */
 const PREVIEW_LINE_LIMIT = 3
@@ -335,6 +361,7 @@ const draft = ref('')
 const draftFormat = ref('markdown')
 const draftLinkedTargets = ref([])
 const showMarkdownDemo = ref(false)
+const showMarkdownImageHelp = ref(false)
 const llmMode = ref(false)
 const discussionCollapsed = ref(false)
 const composerExpanded = ref(false)
@@ -628,6 +655,7 @@ watch(draft, val => {
 watch(draftFormat, val => {
   if (normalizeContentFormat(val) !== 'markdown') {
     showMarkdownDemo.value = false
+    showMarkdownImageHelp.value = false
   }
 })
 
@@ -654,6 +682,9 @@ const toggleComposer = () => {
   composerExpanded.value = !composerExpanded.value
   if (composerExpanded.value) {
     composerMode.value = 'edit'
+  } else {
+    showMarkdownDemo.value = false
+    showMarkdownImageHelp.value = false
   }
 }
 
@@ -687,6 +718,7 @@ const submit = async () => {
     draftFormat.value = 'markdown'
     draftLinkedTargets.value = []
     showMarkdownDemo.value = false
+    showMarkdownImageHelp.value = false
     llmMode.value = false
     composerMode.value = 'edit'
     composerExpanded.value = false
@@ -993,6 +1025,35 @@ loadList()
 
 .discussion-md-demo-wrap {
   margin-top: 10px;
+}
+
+.discussion-md-image-help {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.discussion-md-image-help__title {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.discussion-md-image-help__list {
+  margin: 0 0 8px 18px;
+  padding: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.discussion-md-image-help__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .discussion-linked-targets-toolbar {

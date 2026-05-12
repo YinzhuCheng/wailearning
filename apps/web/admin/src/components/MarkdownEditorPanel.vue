@@ -31,14 +31,38 @@
       <code>\\[ ... \\]</code>
       。下方先展示固定示例渲染，再展示您在编辑区输入的内容；保存后与资料/作业阅读页一致。
     </p>
+    <div v-if="isMarkdown" class="md-panel__help-toggles">
+      <el-button size="small" link data-testid="md-panel-card-help-toggle" @click="showCardHelp = !showCardHelp">
+        {{ showCardHelp ? '隐藏卡片与配色示例' : '查看卡片与配色示例' }}
+      </el-button>
+      <el-button size="small" link data-testid="md-panel-image-help-toggle" @click="showImageHelp = !showImageHelp">
+        {{ showImageHelp ? '隐藏插图说明' : '查看当前支持的插图' }}
+      </el-button>
+    </div>
     <MarkdownLatexLiveDemo
-      v-if="isMarkdown"
+      v-if="isMarkdown && showCardHelp"
       :show-insert="true"
       :show-source-collapse="!compactDemo"
       :compact="compactDemo"
       class="md-panel__demo"
+      title="卡片 / Markdown / LaTeX 示例"
+      subtitle="仅在你想查看时展开：这里展示当前站点支持的多色卡片、内置示例图和公式渲染效果。"
       @insert="insertExampleBlock"
     />
+    <div v-if="isMarkdown && showImageHelp" class="md-panel__image-help" data-testid="md-panel-image-help">
+      <div class="md-panel__image-help-title">当前系统支持的插图方式</div>
+      <ul class="md-panel__image-help-list">
+        <li v-if="enableImageUpload">本地上传图片：JPG、JPEG、PNG、GIF、WebP、BMP</li>
+        <li>远程图片 URL：`![说明](https://...)`</li>
+        <li>受控内置图片：可直接插入系统示例图，便于快速排版预览</li>
+      </ul>
+      <div class="md-panel__image-help-actions">
+        <el-button size="small" :disabled="disabled" @click="insertImageTemplate">插入图片模板</el-button>
+        <el-button size="small" type="primary" plain :disabled="disabled" @click="insertSampleImage">
+          插入示例图
+        </el-button>
+      </div>
+    </div>
     <el-input
       ref="inputRef"
       :model-value="modelValue"
@@ -82,6 +106,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import MarkdownLatexLiveDemo from '@/components/MarkdownLatexLiveDemo.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
+import { MARKDOWN_IMAGE_EXAMPLE_MARKDOWN } from '@/utils/markdownLatexDemo'
 import { validateAttachmentFile } from '@/utils/attachments'
 
 const props = defineProps({
@@ -105,6 +130,8 @@ const emit = defineEmits(['update:modelValue', 'update:contentFormat'])
 
 const inputRef = ref(null)
 const uploading = ref(false)
+const showCardHelp = ref(false)
+const showImageHelp = ref(false)
 
 const isMarkdown = computed(() => (props.contentFormat || 'markdown') === 'markdown')
 
@@ -152,6 +179,8 @@ const insertList = () => insertAtCursor('\n- 条目\n')
 const insertCode = () => insertAtCursor('\n```\n代码\n```\n')
 const insertInlineMath = () => insertAtCursor('\\( x \\)')
 const insertDisplayMath = () => insertAtCursor('\n$$\n\n$$\n')
+const insertImageTemplate = () => insertAtCursor('\n![图片说明](https://example.com/your-image.png)\n')
+const insertSampleImage = () => insertAtCursor(`\n${MARKDOWN_IMAGE_EXAMPLE_MARKDOWN}\n`)
 
 const onImagePick = async uploadFile => {
   const file = uploadFile.raw
@@ -237,6 +266,42 @@ const onContentFormatChange = v => {
 
 .md-panel__demo {
   margin: 8px 10px 0;
+}
+
+.md-panel__help-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 10px 0;
+}
+
+.md-panel__image-help {
+  margin: 8px 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.md-panel__image-help-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.md-panel__image-help-list {
+  margin: 0 0 8px 18px;
+  padding: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.md-panel__image-help-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .md-panel__katex-hint code {

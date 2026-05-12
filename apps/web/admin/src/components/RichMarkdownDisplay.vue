@@ -177,6 +177,90 @@ watch(
   overflow-x: auto;
 }
 
+.rich-md :deep(.md-card) {
+  --md-card-bg: #f8fafc;
+  --md-card-border: #dbe4ee;
+  --md-card-accent: #94a3b8;
+  margin: 0.8em 0;
+  padding: 0.85em 1em;
+  border: 1px solid var(--md-card-border);
+  border-radius: 12px;
+  background: var(--md-card-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.rich-md :deep(.md-card--titled) {
+  padding-top: 0.8em;
+}
+
+.rich-md :deep(.md-card__title) {
+  margin: 0 0 0.55em;
+  font-size: 0.95em;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.rich-md :deep(.md-card__title::before) {
+  content: '';
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 999px;
+  background: var(--md-card-accent);
+  flex: 0 0 auto;
+}
+
+.rich-md :deep(.md-card > :first-child) {
+  margin-top: 0;
+}
+
+.rich-md :deep(.md-card > :last-child) {
+  margin-bottom: 0;
+}
+
+.rich-md :deep(.md-card ul),
+.rich-md :deep(.md-card ol) {
+  margin-bottom: 0.2em;
+}
+
+.rich-md :deep(.md-card--example) {
+  --md-card-bg: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  --md-card-border: #dbe4ee;
+  --md-card-accent: #64748b;
+}
+
+.rich-md :deep(.md-card--pricing) {
+  --md-card-bg: linear-gradient(180deg, #f7f8fb 0%, #eef2f7 100%);
+  --md-card-border: #d3dae6;
+  --md-card-accent: #475569;
+}
+
+.rich-md :deep(.md-card--note) {
+  --md-card-bg: linear-gradient(180deg, #f5f9ff 0%, #edf5ff 100%);
+  --md-card-border: #cfe0ff;
+  --md-card-accent: #3b82f6;
+}
+
+.rich-md :deep(.md-card--tip) {
+  --md-card-bg: linear-gradient(180deg, #f2fbf5 0%, #e7f8ec 100%);
+  --md-card-border: #c5ead0;
+  --md-card-accent: #16a34a;
+}
+
+.rich-md :deep(.md-card--warning) {
+  --md-card-bg: linear-gradient(180deg, #fff9ec 0%, #fff2cc 100%);
+  --md-card-border: #f2d38a;
+  --md-card-accent: #d97706;
+}
+
+.rich-md :deep(.md-card--danger) {
+  --md-card-bg: linear-gradient(180deg, #fff4f4 0%, #ffe7e7 100%);
+  --md-card-border: #f4b4b4;
+  --md-card-accent: #dc2626;
+}
+
 .rich-md__empty {
   margin: 0;
   color: #94a3b8;

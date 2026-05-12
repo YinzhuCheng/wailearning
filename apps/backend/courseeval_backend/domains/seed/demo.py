@@ -68,6 +68,8 @@ _DEMO_COURSE_COVER_DATA_URL = (
     "</svg>"
 )
 
+_DEMO_NOTE_IMAGE_PATH = "/markdown-demo-card-image.svg"
+
 _CLASS_NAME = "人工智能1班"
 _COURSE_NAME = "数据挖掘"
 
@@ -2108,6 +2110,46 @@ def _seed_demo_learning_notes(db: Session, *, klass: Class, sys_user: User) -> N
 
 还不确定相关性热力图是否适合放在第一次作业里，准备先用箱线图说明差异。""",
     )
+    note1_resource = (
+        db.query(LearningNoteResource)
+        .filter(
+            LearningNoteResource.note_id == note1.id,
+            LearningNoteResource.title == "绗?-3鍛ㄦ暣鐞嗭細瀛楁灏哄害鍜屽彲瑙嗗寲",
+        )
+        .first()
+    )
+    if note1_resource:
+        note1_resource.content = f"""## 绗?1-3鍛ㄦ暣鐞嗭細瀛楁灏哄害銆佸崱鐗囧垎灞備笌鍥炬枃琛ㄨ揪
+
+:::example 鎶ュ憡缁撴瀯寤鸿
+1. 鍏堝啓鏁版嵁鏉ユ簮涓庢牱鏈妯°€?
+2. 鍐嶅啓瀛楁瑙傚療銆佸浘琛ㄧ粨鏋滃拰鑷繁鐨勮В閲娿€?
+3. 濡傛灉鏌愪竴姝ユ病璺戦€氾紝涔熻鎶婇敊璇俊鎭拰澶勭悊杩囩▼鍐欏嚭鏉ャ€?
+:::
+
+:::pricing 浼樺厛鍏虫敞鐨勫瓧娈?
+- `proline`锛氬昂搴﹀ぇ锛屽悗缁缓妯″墠瑕佽€冭檻鏍囧噯鍖栥€?
+- `color_intensity`锛氭寜绫诲埆鐪嬪樊寮傞€氬父姣旇緝鏄庢樉銆?
+- `hue`锛氶€傚悎鍜?`color_intensity` 涓€璧峰仛鏁ｇ偣鍥捐瀵熴€?
+:::
+
+:::note 鍥炬枃娣锋帓绀轰緥
+涓嬪浘浣跨敤绯荤粺褰撳墠鏀寔鐨勬爣鍑?Markdown 鍥剧墖璇硶鎻掑叆锛屽浘鐗囨簮鏄唴缃?SVG data URL锛屽彲鐩存帴闅忛粯璁ょ瀛愪竴璧锋覆鏌撱€?
+
+![璇剧▼鍗＄墖涓庢彃鍥剧ず鎰忓浘]({_DEMO_NOTE_IMAGE_PATH})
+:::
+
+:::tip 褰撳墠缁撹
+- 浣滀笟鎶ュ憡瑕佸啓鐜銆佷唬鐮併€佸浘琛ㄥ拰鏂囧瓧瑙ｉ噴锛屼笉鑳藉彧璐存埅鍥俱€?
+- 鍏堝畬鎴愭渶灏忓彲澶嶇幇娴佺▼锛屽啀琛ュ厖鏇村鏉傜殑鍥捐〃銆?
+:::
+
+:::warning 寰呯‘璁?
+- 鐩稿叧鎬х儹鍔涘浘鏄惁閫傚悎鏀惧湪绗竴娆′綔涓氶噷杩樺緱鍐嶈瀵熴€?
+- 濡傛灉鍥惧お澶嶆潅锛屽厛鐢ㄧ绾垮浘璇存槑宸紓浼氭洿绋冲Θ銆?
+:::
+"""
+        note1_resource.content_format = "markdown"
     _ensure_learning_note_discussion_entry(
         db,
         note_id=note1.id,
