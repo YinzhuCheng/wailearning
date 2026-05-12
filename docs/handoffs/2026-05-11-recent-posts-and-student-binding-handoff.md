@@ -441,7 +441,7 @@ User-facing terminology was normalized during this round:
 
 - `最近发表` was changed to `近期发表` across the admin SPA surfaces touched by the feature.
 - `课程资料` was changed to `课程目录` where the UI is presenting the structured course outline / chapter directory rather than a generic file list.
-- The left sidebar large brand text is now only `CourEval`; the smaller subtitle carries the Chinese system description.
+- The left sidebar large brand text is now only `CourseEval`; the smaller subtitle carries the Chinese system description.
 - The personal settings label formerly shown as `圆角` was renamed to `界面圆润度`.
 - The `近期发表` sidebar/account icon was changed away from the learning-note icon to avoid duplicate visual meaning.
 

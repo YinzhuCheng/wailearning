@@ -21,7 +21,7 @@
             <img :src="courseEvalMark" alt="" class="logo-mark" />
           </div>
           <div v-if="!isCollapsed" class="logo-texts">
-            <h2>CourEval</h2>
+            <h2>CourseEval</h2>
             <p>大学教学管理系统</p>
           </div>
         </div>
@@ -269,6 +269,7 @@ import {
   EditPen,
   Expand,
   Fold,
+  Histogram,
   Reading,
   School,
   Setting,
@@ -625,7 +626,7 @@ const studentMenu = [
   { path: '/homework', label: '课程作业', icon: Document },
   { path: '/materials', label: '课程目录', icon: Collection },
   { path: '/learning-notes', label: '学习笔记', icon: EditPen },
-  { path: '/student-scores', label: '我的成绩', icon: DataAnalysis }
+  { path: '/student-scores', label: '我的成绩', icon: Histogram }
 ]
 
 const adminMenu = [

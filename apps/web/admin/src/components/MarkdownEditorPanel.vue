@@ -42,11 +42,13 @@
     <MarkdownLatexLiveDemo
       v-if="isMarkdown && showCardHelp"
       :show-insert="true"
+      :show-card-section-toggle="true"
+      :show-image-section-toggle="true"
       :show-source-collapse="!compactDemo"
       :compact="compactDemo"
       class="md-panel__demo"
       title="卡片 / Markdown / LaTeX 示例"
-      subtitle="仅在你想查看时展开：这里展示当前站点支持的多色卡片、内置示例图和公式渲染效果。"
+      subtitle="这里先展示基础 Markdown 和公式；卡片、插图示例按需展开。"
       @insert="insertExampleBlock"
     />
     <div v-if="isMarkdown && showImageHelp" class="md-panel__image-help" data-testid="md-panel-image-help">
@@ -54,7 +56,7 @@
       <ul class="md-panel__image-help-list">
         <li v-if="enableImageUpload">本地上传图片：JPG、JPEG、PNG、GIF、WebP、BMP</li>
         <li>远程图片 URL：`![说明](https://...)`</li>
-        <li>受控内置图片：可直接插入系统示例图，便于快速排版预览</li>
+        <li>受控内置图片：可按需插入系统示例图，便于快速排版预览</li>
       </ul>
       <div class="md-panel__image-help-actions">
         <el-button size="small" :disabled="disabled" @click="insertImageTemplate">插入图片模板</el-button>

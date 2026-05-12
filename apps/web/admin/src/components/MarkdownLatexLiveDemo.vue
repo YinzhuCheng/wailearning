@@ -10,8 +10,37 @@
       </div>
     </div>
     <p class="md-latex-live-demo__sub">{{ subtitle }}</p>
-    <div class="md-latex-live-demo__render" data-testid="markdown-latex-demo-render">
-      <RichMarkdownDisplay :markdown="MARKDOWN_LATEX_EXAMPLE_MARKDOWN" variant="student" empty-text="" />
+    <div class="md-latex-live-demo__sections">
+      <div class="md-latex-live-demo__section">
+        <div class="md-latex-live-demo__section-head">
+          <span>基础示例</span>
+        </div>
+        <div class="md-latex-live-demo__render" data-testid="markdown-latex-demo-base-render">
+          <RichMarkdownDisplay :markdown="MARKDOWN_BASE_EXAMPLE_MARKDOWN" variant="student" empty-text="" />
+        </div>
+      </div>
+      <div class="md-latex-live-demo__section">
+        <div class="md-latex-live-demo__section-head">
+          <span>卡片示例</span>
+          <el-button v-if="showCardSectionToggle" size="small" link @click="showCards = !showCards">
+            {{ showCards ? '收起卡片示例' : '显示卡片示例' }}
+          </el-button>
+        </div>
+        <div v-if="showCards" class="md-latex-live-demo__render" data-testid="markdown-latex-demo-card-render">
+          <RichMarkdownDisplay :markdown="MARKDOWN_CARD_EXAMPLE_MARKDOWN" variant="student" empty-text="" />
+        </div>
+      </div>
+      <div class="md-latex-live-demo__section">
+        <div class="md-latex-live-demo__section-head">
+          <span>插图示例</span>
+          <el-button v-if="showImageSectionToggle" size="small" link @click="showImage = !showImage">
+            {{ showImage ? '收起插图示例' : '显示插图示例' }}
+          </el-button>
+        </div>
+        <div v-if="showImage" class="md-latex-live-demo__render" data-testid="markdown-latex-demo-image-render">
+          <RichMarkdownDisplay :markdown="MARKDOWN_IMAGE_EXAMPLE_MARKDOWN" variant="student" empty-text="" />
+        </div>
+      </div>
     </div>
     <el-collapse v-if="showSourceCollapse" class="md-latex-live-demo__collapse">
       <el-collapse-item title="查看示例 Markdown 源码" name="src">
@@ -27,12 +56,19 @@ import { ElMessage } from 'element-plus'
 
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { copyText } from '@/utils/clipboard'
-import { MARKDOWN_LATEX_EXAMPLE_MARKDOWN } from '@/utils/markdownLatexDemo'
+import {
+  MARKDOWN_BASE_EXAMPLE_MARKDOWN,
+  MARKDOWN_CARD_EXAMPLE_MARKDOWN,
+  MARKDOWN_IMAGE_EXAMPLE_MARKDOWN,
+  MARKDOWN_LATEX_EXAMPLE_MARKDOWN
+} from '@/utils/markdownLatexDemo'
 
 defineProps({
   /** Smaller typography / padding for discussion composer etc. */
   compact: { type: Boolean, default: false },
   showInsert: { type: Boolean, default: false },
+  showCardSectionToggle: { type: Boolean, default: true },
+  showImageSectionToggle: { type: Boolean, default: true },
   showSourceCollapse: { type: Boolean, default: true },
   title: {
     type: String,
@@ -48,6 +84,8 @@ defineProps({
 const emit = defineEmits(['insert'])
 
 const copied = ref(false)
+const showCards = ref(false)
+const showImage = ref(false)
 
 const emitInsert = () => {
   emit('insert', MARKDOWN_LATEX_EXAMPLE_MARKDOWN)
@@ -108,6 +146,27 @@ const copySource = async () => {
   font-size: 12px;
   color: #64748b;
   line-height: 1.55;
+}
+
+.md-latex-live-demo__sections {
+  display: grid;
+  gap: 10px;
+}
+
+.md-latex-live-demo__section {
+  display: grid;
+  gap: 8px;
+}
+
+.md-latex-live-demo__section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .md-latex-live-demo__render {

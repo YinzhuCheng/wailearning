@@ -198,9 +198,11 @@
               <MarkdownLatexLiveDemo
                 compact
                 :show-insert="true"
+                :show-card-section-toggle="true"
+                :show-image-section-toggle="true"
                 :show-source-collapse="false"
                 title="卡片 / Markdown / LaTeX 示例"
-                subtitle="回复格式为 Markdown 时按需展开：以下演示当前站点支持的多色卡片、插图与公式渲染。"
+                subtitle="回复格式为 Markdown 时按需展开：先看基础渲染，再显示卡片和插图示例。"
                 @insert="appendDraftSnippet"
               />
               <DiscussionLinkedTargetCards
@@ -214,7 +216,7 @@
               <ul class="discussion-md-image-help__list">
                 <li>Markdown 图片语法：`![说明](https://...)`</li>
                 <li>当前编辑器提供本地上传与图片 URL 两种常用入口</li>
-                <li>也可以插入系统内置的示例图，先确认版式效果再写正文</li>
+                <li>也可以按需插入系统内置的示例图，先确认版式效果再写正文</li>
               </ul>
               <div class="discussion-md-image-help__actions">
                 <el-button size="small" @click="appendDraftSnippet('\n![图片说明](https://example.com/your-image.png)\n')">

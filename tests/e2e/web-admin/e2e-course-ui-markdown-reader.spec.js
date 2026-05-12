@@ -53,35 +53,39 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const dlg = page.getByRole('dialog', { name: /发布作业/ })
     await expect(dlg).toBeVisible({ timeout: 15000 })
     const bodyPanel = dlg.locator('.md-panel').first()
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 15000 })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-image-render')).toHaveCount(0)
     await bodyPanel.getByTestId('md-panel-card-help-toggle').click()
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 15000 })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex').first()).toBeVisible({
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toBeVisible({ timeout: 15000 })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.katex').first()).toBeVisible({
       timeout: 15000
     })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display').first()).toBeVisible({
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.katex-display').first()).toBeVisible({
       timeout: 15000
     })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.katex-display')).toHaveCount(1, {
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.katex-display')).toHaveCount(1, {
       timeout: 15000
     })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).not.toContainText('$$')
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).not.toContainText('\\[')
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--example')).toBeVisible({
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).not.toContainText('$$')
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).not.toContainText('\\[')
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.md-card--example')).toBeVisible({
       timeout: 15000
     })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--pricing')).toBeVisible({
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.md-card--pricing')).toBeVisible({
       timeout: 15000
     })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--tip')).toBeVisible({
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.md-card--tip')).toBeVisible({
       timeout: 15000
     })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--warning')).toBeVisible({
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.md-card--warning')).toBeVisible({
       timeout: 15000
     })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render').locator('.md-card--danger')).toBeVisible({
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.md-card--danger')).toBeVisible({
       timeout: 15000
     })
+    await bodyPanel.getByTestId('md-panel-image-help-toggle').click()
+    await expect(bodyPanel.getByTestId('md-panel-image-help')).toBeVisible({ timeout: 15000 })
     await screenshot(page, testInfo, 'markdown-card-demo-homework-dialog')
   })
 
@@ -94,13 +98,15 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const dlg = page.getByRole('dialog', { name: /发布作业/ })
     await expect(dlg).toBeVisible({ timeout: 15000 })
     const bodyPanel = dlg.locator('.md-panel').first()
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 15000 })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-image-render')).toHaveCount(0)
     await bodyPanel.getByTestId('md-panel-card-help-toggle').click()
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 10000 })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toBeVisible({ timeout: 10000 })
     await bodyPanel.locator('.md-panel__format .el-radio-button').filter({ hasText: '纯文本' }).click()
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
     await bodyPanel.locator('.md-panel__format .el-radio-button').filter({ hasText: 'Markdown' }).click()
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 10000 })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 10000 })
   })
 
   test('desktop sidebar logo area has no redundant collapse button', async ({ page }) => {
@@ -216,7 +222,9 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const textarea = dlg.locator('.discussion-input textarea')
     const demoToggle = dlg.getByTestId('discussion-markdown-demo-toggle')
     await expect(demoToggle).toBeVisible({ timeout: 15000 })
-    await expect(dlg.getByTestId('markdown-latex-demo-render')).toHaveCount(0)
+    await expect(dlg.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 15000 })
+    await expect(dlg.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
+    await expect(dlg.getByTestId('markdown-latex-demo-image-render')).toHaveCount(0)
     const composerToolbar = dlg.locator('.discussion-composer-toolbar')
     await expect(composerToolbar.getByRole('radio', { name: 'Markdown' })).toBeChecked({ timeout: 5000 })
     await textarea.fill([
@@ -237,7 +245,7 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     })
     await expect(dlg.getByTestId('discussion-markdown-preview')).not.toContainText('$$')
     await demoToggle.click()
-    await expect(dlg.getByTestId('markdown-latex-demo-render')).toBeVisible({ timeout: 15000 })
+    await expect(dlg.getByTestId('markdown-latex-demo-card-render')).toBeVisible({ timeout: 15000 })
     await dlg.getByTestId('discussion-submit').click()
     const row = dlg.locator('.discussion-row').filter({ hasText: `md-material-${stamp}` })
     await expect(row).toBeVisible({ timeout: 15000 })
