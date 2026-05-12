@@ -2637,6 +2637,69 @@ Known Windows friction:
 - PowerShell `Start-Process` cannot redirect stdout and stderr to the same file; use separate log files.
 - If an interrupted orchestrator kills PostgreSQL during startup or recovery, the data directory can retain a stale `postmaster.pid` or enter crash recovery. For full-suite validation, a fresh throwaway data directory is often cheaper than trying to reason about the partially started one.
 
+### Windows PostgreSQL validation on Python 3.14: old `psycopg2-binary` pins can be the real blocker
+
+During the repository-normalization cleanup validation, `tests/postgres` was
+initially blocked even after a local PostgreSQL binary runtime was available.
+The repository virtualenv used Python 3.14, while `requirements.txt` still
+listed `psycopg2-binary==2.9.9`. That version has no Python 3.14 wheel, so pip
+fell back to a source build and failed at link time.
+
+The working fix was to install and pin a Python-3.14-capable wheel:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --upgrade "psycopg2-binary>=2.9.12"
+.\.venv\Scripts\python.exe -c "import psycopg2; print(psycopg2.__version__)"
+```
+
+This is environment bootstrap, not product behavior. Do not spend time
+rewriting database code until the selected interpreter can import `psycopg2`.
+
+Related dependency lesson: a local `.venv` may contain newer compatible wheels
+than the committed pins. If `pip show` proves the environment works only because
+newer wheels are installed, update `requirements.txt` in the same round so the
+next operator can reproduce the validation environment.
+
+### Windows PostgreSQL `initdb.exe` may require the approved execution context
+
+In the same session, running `initdb.exe` from the default automation sandbox
+failed immediately with:
+
+```text
+initdb: error: could not create restricted token: error code 87
+```
+
+The identical command succeeded when rerun in an approved non-restricted
+PowerShell context. The successful pattern was:
+
+1. create a fresh data directory under an ignored artifact root;
+2. run `initdb.exe -D <artifact-dir>/data -U postgres --auth=trust --encoding=UTF8 --locale=C`;
+3. start `postgres.exe` directly on a loopback-only local port;
+4. create the throwaway role/database;
+5. export `TEST_DATABASE_URL`;
+6. run `.\.venv\Scripts\python.exe -m pytest tests\postgres -q`;
+7. stop the process in a `finally` block.
+
+Do not commit the orchestrator, database directory, logs, or local port. The
+committed skill/documentation should describe the pattern with placeholders such
+as `<local-postgres-bin>`, `<artifact-dir>`, and `<local-port>`.
+
+### Chocolatey and official downloads are not the only path to Postgres validation
+
+The same Windows host had Chocolatey installed, but `choco install python312`
+failed because system Chocolatey directories and package locks under
+`C:\ProgramData\chocolatey` were not writable from the automation shell. A
+direct official Python installer download also timed out through the available
+network path. Neither failure meant PostgreSQL validation was impossible.
+
+Before declaring Postgres validation blocked:
+
+- inspect the repository `.venv` and package versions with `pip show`;
+- try a Python-3.14-compatible `psycopg2-binary` wheel when the interpreter is
+  Python 3.14;
+- prefer local PostgreSQL binaries and a throwaway database under ignored
+  artifacts over system service installation when the task only needs tests.
+
 ### Windows PostgreSQL reused data directory can fail crash recovery before pytest starts
 
 During a follow-up cleanup validation on `cursor/discussion-avatar-chat-ui-921d`, a local-only PowerShell orchestrator first reused a data directory from a previously interrupted PostgreSQL attempt. The server began crash recovery, repeatedly reported that the database system was still starting up to `pg_isready`, and then exited before readiness with:

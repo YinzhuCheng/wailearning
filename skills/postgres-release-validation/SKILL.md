@@ -26,6 +26,11 @@ fast local loop, not final evidence for schema-sensitive changes.
    when the task asks for release-quality confidence.
 6. Record blocked, skipped, or timed-out runs honestly. Do not convert
    environment skips into passing evidence.
+7. On Windows, if the host only has Python 3.14, confirm the repository
+   environment uses Python-3.14-capable backend wheels before treating
+   dependency install failures as product blockers. In particular,
+   `psycopg2-binary==2.9.9` source-builds on Python 3.14, while
+   `psycopg2-binary==2.9.12` provides a cp314 wheel.
 
 ## Commands
 
@@ -43,6 +48,23 @@ Windows agents may use the repository virtualenv interpreter once
 $env:TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all'
 .\.venv\Scripts\python.exe -m pytest tests\postgres -q
 ```
+
+When there is no system PostgreSQL service on Windows, use an ignored
+single-run orchestrator under `.agent-run/` or `.e2e-run/`:
+
+- create a fresh throwaway data directory for each run;
+- invoke `initdb.exe` from the local PostgreSQL binary archive;
+- start `postgres.exe` directly rather than relying on `pg_ctl.exe`;
+- create the disposable role/database;
+- set `TEST_DATABASE_URL`;
+- run `.\.venv\Scripts\python.exe -m pytest tests\postgres -q`;
+- stop the `postgres.exe` process in a `finally` block.
+
+If `initdb.exe` fails with Windows restricted-token errors in the default
+automation sandbox, retry the same orchestrator in an approved non-restricted
+execution context before changing product code. Keep machine paths and logs in
+ignored artifacts; committed docs should use placeholders such as
+`<local-postgres-bin>` and `<artifact-dir>`.
 
 ## Guardrails
 

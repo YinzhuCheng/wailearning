@@ -215,7 +215,7 @@ def check_python_version(python_path: Path | None) -> Check:
             "python-version",
             "pass",
             f"E2E Python is {version}; usable for local smoke when dependencies are installed",
-            "Use Python 3.11/3.12 for release-like validation; current requirements pins may lack cp314 wheels.",
+            "Python 3.14 requires dependency pins that publish cp314 wheels; requirements-python-compat reports known stale pins.",
         )
     if major_minor < (3, 11):
         return Check("python-version", "warn", f"E2E Python is {version}; expected Python 3.11/3.12 for current validation")
@@ -242,7 +242,7 @@ def check_pinned_requirements_python314(python_path: Path | None, repo_root: Pat
         return Check(
             "requirements-python-compat",
             "pass",
-            "requirements.txt contains pins with known Python 3.14 install risk",
+            "requirements.txt contains stale pins with known Python 3.14 install risk",
             "; ".join(risky),
         )
     return Check("requirements-python-compat", "pass", "no known Python 3.14 pin risks found in requirements.txt")
