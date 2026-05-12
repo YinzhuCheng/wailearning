@@ -20,6 +20,8 @@ from apps.backend.courseeval_backend.db.models import (
     Class,
     CourseEnrollment,
     Gender,
+    Homework,
+    Notification,
     Student,
     Subject,
     User,
@@ -326,3 +328,120 @@ def test_pg20_classes_list_teacher(client: TestClient):
     r = client.get("/api/classes", headers=h)
     assert r.status_code == 200
     assert isinstance(r.json(), list)
+
+
+def test_pg21_parent_subject_scope_keeps_null_subject_and_filters_unenrolled_subjects(client: TestClient):
+    uid = uuid.uuid4().hex[:8]
+    db = SessionLocal()
+    try:
+        klass = Class(name=f"pg_parent_scope_{uid}", grade=2026)
+        db.add(klass)
+        db.flush()
+        teacher = User(
+            username=f"pg_parent_teacher_{uid}",
+            hashed_password=get_password_hash("pw"),
+            real_name="PG Parent Teacher",
+            role=UserRole.TEACHER.value,
+            is_active=True,
+        )
+        db.add(teacher)
+        db.flush()
+        student = Student(
+            name="PG Parent Student",
+            student_no=f"pg_parent_student_{uid}",
+            gender=Gender.MALE,
+            class_id=klass.id,
+            parent_code=f"PGP{uid.upper()}",
+            parent_code_expires=None,
+        )
+        db.add(student)
+        db.flush()
+        required = Subject(
+            name=f"PG parent visible required {uid}",
+            teacher_id=teacher.id,
+            class_id=klass.id,
+            course_type="required",
+            status="active",
+        )
+        elective = Subject(
+            name=f"PG parent hidden elective {uid}",
+            teacher_id=teacher.id,
+            class_id=klass.id,
+            course_type="elective",
+            status="active",
+        )
+        db.add_all([required, elective])
+        db.flush()
+        db.add(
+            CourseEnrollment(
+                subject_id=required.id,
+                student_id=student.id,
+                class_id=klass.id,
+                enrollment_type="required",
+                can_remove=False,
+            )
+        )
+        db.add(
+            Homework(
+                title=f"pg visible required homework {uid}",
+                content="visible",
+                class_id=klass.id,
+                subject_id=required.id,
+                max_score=100,
+                created_by=teacher.id,
+            )
+        )
+        db.add(
+            Homework(
+                title=f"pg visible classwide homework {uid}",
+                content="visible classwide",
+                class_id=klass.id,
+                subject_id=None,
+                max_score=100,
+                created_by=teacher.id,
+            )
+        )
+        db.add(
+            Homework(
+                title=f"pg hidden elective homework {uid}",
+                content="hidden",
+                class_id=klass.id,
+                subject_id=elective.id,
+                max_score=100,
+                created_by=teacher.id,
+            )
+        )
+        db.add(
+            Notification(
+                title=f"pg visible classwide notice {uid}",
+                content="visible classwide",
+                class_id=klass.id,
+                subject_id=None,
+                created_by=teacher.id,
+            )
+        )
+        db.add(
+            Notification(
+                title=f"pg hidden elective notice {uid}",
+                content="hidden",
+                class_id=klass.id,
+                subject_id=elective.id,
+                created_by=teacher.id,
+            )
+        )
+        db.commit()
+        code = str(student.parent_code)
+    finally:
+        db.close()
+
+    homework = client.get(f"/api/parent/homework/{code}?page_size=100")
+    assert homework.status_code == 200, homework.text
+    homework_titles = {row["title"] for row in homework.json()["homeworks"]}
+    assert f"pg visible required homework {uid}" in homework_titles
+    assert f"pg visible classwide homework {uid}" in homework_titles
+    assert f"pg hidden elective homework {uid}" not in homework_titles
+    notices = client.get(f"/api/parent/notifications/{code}?page_size=100")
+    assert notices.status_code == 200, notices.text
+    notice_titles = {row["title"] for row in notices.json()["notifications"]}
+    assert f"pg visible classwide notice {uid}" in notice_titles
+    assert f"pg hidden elective notice {uid}" not in notice_titles

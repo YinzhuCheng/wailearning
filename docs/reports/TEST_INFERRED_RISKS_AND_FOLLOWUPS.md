@@ -550,6 +550,29 @@ teacher-role parent-code policy (as distinct from class-teacher visibility),
 student notification read-state isolation between parent and admin SPA, and
 PostgreSQL-backed confirmation of the parent subject-scope query shape.
 
+**Follow-up parent portal UI round:** The next hardening round added real
+parent SPA coverage for code binding/login plus homework and notification lists
+that must hide same-class elective content when the child is not enrolled in
+that subject. The first browser run exposed a true E2E seed/front-end contract
+bug: `/api/e2e/dev/reset-scenario` returned a parent code longer than the parent
+login input's `maxlength=8`, so the SPA truncated the code and stayed on
+`/login`. The seed now emits an 8-character code. Backend `hard61`-`hard68`
+also cover invalid-code rate limiting, expired-code read denial, code rotation,
+regular-teacher vs unrelated-teacher parent-code access, class-teacher linked
+foreign-class denial, classwide-vs-subject parent read scoping, and revoke
+expiry cleanup.
+
+**Remaining risk after that round:** PostgreSQL-backed execution is still the
+largest unclosed item. The new `pg21` guard asserts that parent homework and
+notifications keep `subject_id IS NULL` rows while filtering subject-scoped rows
+by the child's enrollments, but the local command skipped because
+`TEST_DATABASE_URL` was not configured. The parent-code rate limiter remains
+process-local and should not be treated as distributed brute-force protection.
+The regular-teacher parent-code policy is now covered as current behavior, not
+as final product approval. Notification read-state isolation between parent
+portal and admin/student surfaces remains worth a dedicated browser-backed
+round if parent read/unread UX grows beyond the current list-only parent API.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -567,6 +590,13 @@ PostgreSQL-backed confirmation of the parent subject-scope query shape.
     class-teacher visibility.
 11. Re-run parent portal subject-scope coverage on PostgreSQL and add a parent
     SPA UI smoke when the separate parent frontend is next in scope.
+12. Run `postgres.pytest.package` or `full.pytest.postgres` with a real
+    `TEST_DATABASE_URL` to execute the new `pg21` parent subject-scope guard,
+    then inspect query plans/index behavior for `subject_id IS NULL OR
+    subject_id IN (...)` on realistic homework/notification volumes.
+13. If parent notification read-state is added to the parent portal, add a
+    cross-surface E2E that marks notifications read in parent SPA and verifies
+    admin/student unread state does not leak or disappear across roles.
 
 ## What This Document Is Not
 

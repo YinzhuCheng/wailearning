@@ -8,6 +8,8 @@ small point-in-time security smoke.
 from __future__ import annotations
 
 import pytest
+from datetime import datetime, timedelta, timezone
+
 from fastapi.testclient import TestClient
 
 from apps.backend.courseeval_backend.api.schemas import UserRole
@@ -145,7 +147,12 @@ def _material_section_count(material_id: int) -> int:
         db.close()
 
 
-def _create_course_homework(subject_id: int, class_id: int, teacher_id: int, title: str = "Security linked homework") -> int:
+def _create_course_homework(
+    subject_id: int | None,
+    class_id: int,
+    teacher_id: int,
+    title: str = "Security linked homework",
+) -> int:
     db = SessionLocal()
     try:
         homework = Homework(
@@ -519,6 +526,39 @@ def _set_parent_code(student_id: int, code: str = "PARENT123") -> str:
         row.parent_code_expires = None
         db.commit()
         return code
+    finally:
+        db.close()
+
+
+def _set_parent_code_with_expiry(student_id: int, code: str, expires_at: datetime | None) -> str:
+    db = SessionLocal()
+    try:
+        row = db.query(Student).filter(Student.id == student_id).first()
+        assert row is not None
+        row.parent_code = code
+        row.parent_code_expires = expires_at
+        db.commit()
+        return code
+    finally:
+        db.close()
+
+
+def _parent_code_for_student(student_id: int) -> str | None:
+    db = SessionLocal()
+    try:
+        row = db.query(Student).filter(Student.id == student_id).first()
+        assert row is not None
+        return row.parent_code
+    finally:
+        db.close()
+
+
+def _parent_code_expiry_for_student(student_id: int) -> datetime | None:
+    db = SessionLocal()
+    try:
+        row = db.query(Student).filter(Student.id == student_id).first()
+        assert row is not None
+        return row.parent_code_expires
     finally:
         db.close()
 
@@ -1884,3 +1924,162 @@ def test_hard60_dashboard_subject_analysis_only_returns_requested_subject(client
     assert len(payload) == 1
     assert payload[0]["subject_id"] == ctx_a["subject_id"]
     assert payload[0]["avg_score"] == 64
+
+
+def test_hard61_parent_code_rate_limit_applies_to_invalid_verify_attempts(client: TestClient):
+    for idx in range(30):
+        r = client.get("/api/parent/verify/NOPE0001")
+        assert r.status_code == 200
+        assert r.json()["valid"] is False
+
+    limited = client.get("/api/parent/verify/NOPE0001")
+    assert limited.status_code == 429
+
+
+def test_hard62_expired_parent_code_verify_is_invalid_and_read_endpoints_forbid(client: TestClient):
+    class_id = _create_class("security-parent-expired")
+    student_id = _extra_student_for_class(class_id, "parent_expired")
+    code = _set_parent_code_with_expiry(
+        student_id,
+        "HARD62EXP",
+        datetime.now(timezone.utc) - timedelta(minutes=5),
+    )
+
+    verify = client.get(f"/api/parent/verify/{code}")
+    assert verify.status_code == 200
+    assert verify.json()["valid"] is False
+    assert "过期" in verify.json()["message"] or "杩囨湡" in verify.json()["message"]
+    student = client.get(f"/api/parent/student/{code}")
+    assert student.status_code == 403
+    homework = client.get(f"/api/parent/homework/{code}")
+    assert homework.status_code == 403
+
+
+def test_hard63_parent_code_regeneration_rotates_code_and_expires_old_code(client: TestClient):
+    teacher = _create_teacher("parent_rotate")
+    class_id = _create_class("security-parent-rotate")
+    student_id = _extra_student_for_class(class_id, "parent_rotate")
+    subject_id = _create_subject("Parent rotate teacher course", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, student_id, class_id)
+    old_code = _set_parent_code(student_id, "HARD63OLD")
+    teacher_headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    generated = client.post(f"/api/parent/students/{student_id}/generate-code", headers=teacher_headers)
+    assert generated.status_code == 200, generated.text
+    new_code = generated.json()["parent_code"]
+    assert new_code != old_code
+    assert client.get(f"/api/parent/verify/{old_code}").json()["valid"] is False
+    assert client.get(f"/api/parent/verify/{new_code}").json()["valid"] is True
+
+
+def test_hard64_regular_teacher_can_manage_parent_code_for_student_in_own_course_only(client: TestClient):
+    owner = _create_teacher("parent_regular_owner")
+    other = _create_teacher("parent_regular_other")
+    class_id = _create_class("security-parent-regular-owner")
+    student_id = _extra_student_for_class(class_id, "parent_regular_owner")
+    subject_id = _create_subject("Parent regular teacher owned course", int(owner["user_id"]), class_id)
+    _enroll_student(subject_id, student_id, class_id)
+    owner_headers = login_api(client, str(owner["username"]), str(owner["password"]))
+    other_headers = login_api(client, str(other["username"]), str(other["password"]))
+
+    denied = client.post(f"/api/parent/students/{student_id}/generate-code", headers=other_headers)
+    assert denied.status_code == 403
+    allowed = client.post(f"/api/parent/students/{student_id}/generate-code", headers=owner_headers)
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["parent_code"]
+
+
+def test_hard65_regular_teacher_batch_parent_code_generation_skips_unowned_course_students(client: TestClient):
+    owner = _create_teacher("parent_regular_batch_owner")
+    other = _create_teacher("parent_regular_batch_other")
+    own_class_id = _create_class("security-parent-regular-batch-own")
+    foreign_class_id = _create_class("security-parent-regular-batch-foreign")
+    own_student_id = _extra_student_for_class(own_class_id, "parent_regular_batch_own")
+    foreign_student_id = _extra_student_for_class(foreign_class_id, "parent_regular_batch_foreign")
+    subject_id = _create_subject("Parent regular batch owned course", int(owner["user_id"]), own_class_id)
+    _enroll_student(subject_id, own_student_id, own_class_id)
+    foreign_subject_id = _create_subject("Parent regular batch foreign course", int(other["user_id"]), foreign_class_id)
+    _enroll_student(foreign_subject_id, foreign_student_id, foreign_class_id)
+    owner_headers = login_api(client, str(owner["username"]), str(owner["password"]))
+
+    r = client.post(
+        "/api/parent/students/batch-generate-codes",
+        headers=owner_headers,
+        json=[own_student_id, foreign_student_id],
+    )
+    assert r.status_code == 200, r.text
+    generated_ids = {row["student_id"] for row in r.json()["students"]}
+    assert generated_ids == {own_student_id}
+    assert _parent_code_for_student(foreign_student_id) is None
+
+
+def test_hard66_class_teacher_cannot_manage_parent_code_without_direct_class_even_when_teacher_course_visible(client: TestClient):
+    teacher = _create_teacher("parent_ct_visible_teacher")
+    ct = _create_class_teacher("parent_ct_linked")
+    foreign_class_id = _create_class("security-parent-ct-linked-foreign")
+    foreign_student_id = _extra_student_for_class(foreign_class_id, "parent_ct_linked_foreign")
+    subject_id = _create_subject("Parent ct linked visible course", int(teacher["user_id"]), foreign_class_id)
+    _enroll_student(subject_id, foreign_student_id, foreign_class_id)
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=subject_id,
+                class_id=int(ct["class_id"]),
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(f"/api/parent/students/{foreign_student_id}/generate-code", headers=ct_headers)
+    assert r.status_code == 403
+    assert _parent_code_for_student(foreign_student_id) is None
+
+
+def test_hard67_parent_subject_scope_with_no_enrollments_returns_only_classwide_homework_and_notifications(client: TestClient):
+    teacher = _create_teacher("parent_empty_enrollment")
+    class_id = _create_class("security-parent-empty-enrollment")
+    student_id = _extra_student_for_class(class_id, "parent_empty_enrollment")
+    subject_id = _create_subject("Parent hidden no enrollment subject", int(teacher["user_id"]), class_id, "elective")
+    hidden_homework = "parent-hidden-no-enrollment-homework"
+    visible_homework = "parent-visible-classwide-homework"
+    hidden_notice = "parent-hidden-no-enrollment-notice"
+    visible_notice = "parent-visible-classwide-notice"
+    _create_course_homework(subject_id, class_id, int(teacher["user_id"]), hidden_homework)
+    _create_course_homework(None, class_id, int(teacher["user_id"]), visible_homework)
+    _create_notification(subject_id, class_id, int(teacher["user_id"]), hidden_notice)
+    _create_notification(None, class_id, int(teacher["user_id"]), visible_notice)
+    code = _set_parent_code(student_id, "HARD67PARENT")
+
+    homework = client.get(f"/api/parent/homework/{code}?page_size=100")
+    assert homework.status_code == 200, homework.text
+    homework_titles = {row["title"] for row in homework.json()["homeworks"]}
+    assert visible_homework in homework_titles
+    assert hidden_homework not in homework_titles
+    notices = client.get(f"/api/parent/notifications/{code}?page_size=100")
+    assert notices.status_code == 200, notices.text
+    notice_titles = {row["title"] for row in notices.json()["notifications"]}
+    assert visible_notice in notice_titles
+    assert hidden_notice not in notice_titles
+
+
+def test_hard68_generated_parent_codes_get_future_expiry_and_revoke_clears_expiry(client: TestClient):
+    teacher = _create_teacher("parent_expiry_revoke")
+    class_id = _create_class("security-parent-expiry-revoke")
+    student_id = _extra_student_for_class(class_id, "parent_expiry_revoke")
+    subject_id = _create_subject("Parent expiry teacher course", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, student_id, class_id)
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    generated = client.post(f"/api/parent/students/{student_id}/generate-code", headers=headers)
+    assert generated.status_code == 200, generated.text
+    expiry = _parent_code_expiry_for_student(student_id)
+    assert expiry is not None
+    assert expiry > datetime.now() + timedelta(days=300)
+    revoked = client.delete(f"/api/parent/students/{student_id}/revoke-code", headers=headers)
+    assert revoked.status_code == 200, revoked.text
+    assert _parent_code_for_student(student_id) is None
+    assert _parent_code_expiry_for_student(student_id) is None

@@ -7,12 +7,15 @@ const path = require('path')
 
 const adminRoot = path.resolve(__dirname, '..')
 const repoRoot = path.resolve(adminRoot, '..', '..', '..')
+const parentRoot = path.resolve(repoRoot, 'apps', 'web', 'parent')
 const isWindows = process.platform === 'win32'
 
 const apiPort = process.env.E2E_API_PORT || '8012'
 const uiPort = process.env.E2E_UI_PORT || '3012'
+const parentUiPort = process.env.E2E_PARENT_UI_PORT || '3014'
 const apiBase = `http://127.0.0.1:${apiPort}`
 const uiBase = `http://127.0.0.1:${uiPort}`
+const parentUiBase = `http://127.0.0.1:${parentUiPort}`
 const sqliteFile = isWindows
   ? path.join(os.tmpdir(), `playwright_e2e_${apiPort}.sqlite`)
   : `/tmp/playwright_e2e_${apiPort}.sqlite`
@@ -26,6 +29,7 @@ const pythonExe =
     ? path.join(repoRoot, '.venv', 'Scripts', 'python.exe')
     : path.join(repoRoot, '.venv', 'bin', 'python'))
 const viteBin = path.join(adminRoot, 'node_modules', 'vite', 'bin', 'vite.js')
+const parentViteBin = path.join(parentRoot, 'node_modules', 'vite', 'bin', 'vite.js')
 const playwrightCli = path.join(adminRoot, 'node_modules', '@playwright', 'test', 'cli.js')
 
 const useRealWorker = !['0', 'false', 'no', 'off'].includes(
@@ -123,6 +127,9 @@ async function cleanup() {
 
 async function main() {
   const playwrightArgs = process.argv.slice(2)
+  const wantsParentUi =
+    ['1', 'true', 'yes', 'on'].includes(String(process.env.E2E_PARENT_UI || '').trim().toLowerCase()) ||
+    playwrightArgs.some(arg => /parent[-_]portal/i.test(String(arg)))
   launch(
     'api',
     pythonExe,
@@ -150,6 +157,17 @@ async function main() {
   })
   await waitFor(`${uiBase}/`, 'ui')
 
+  if (wantsParentUi) {
+    launch('parent-ui', 'node', [parentViteBin, '--host', '127.0.0.1', '--port', parentUiPort], {
+      cwd: parentRoot,
+      env: serverEnv({
+        VITE_PROXY_TARGET: apiBase,
+        VITE_DEV_PORT: parentUiPort
+      })
+    })
+    await waitFor(`${parentUiBase}/`, 'parent-ui')
+  }
+
   const test = spawn(process.execPath, [playwrightCli, 'test', ...playwrightArgs], {
     cwd: adminRoot,
     env: {
@@ -158,7 +176,8 @@ async function main() {
       PLAYWRIGHT_USE_EXTERNAL_SERVERS: 'true',
       E2E_API_URL: process.env.E2E_API_URL || apiBase,
       E2E_DEV_SEED_TOKEN: process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed',
-      PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || uiBase
+      PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || uiBase,
+      PLAYWRIGHT_PARENT_BASE_URL: process.env.PLAYWRIGHT_PARENT_BASE_URL || parentUiBase
     },
     stdio: 'inherit',
     windowsHide: true

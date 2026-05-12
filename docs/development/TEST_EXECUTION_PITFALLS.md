@@ -1487,12 +1487,67 @@ Short targeted runs often pass because the DB file is young or resets are fewer.
 
 ### Fix
 
-- **Product / seed fix (preferred):** derive **`parent_code`** from the **full** unique run suffix (or another high-entropy string), not an aggressively truncated token. The E2E seed handler in `apps/backend/courseeval_backend/api/routers/e2e_dev.py` uses **`P{suffix.upper()}`** where **`suffix`** is **`uuid.uuid4().hex[:10]`**, keeping the code space large enough for persistent SQLite full-suite runs.
+- **Product / seed fix (preferred):** derive **`parent_code`** from a high-entropy
+  token that still matches the parent SPA input contract. The parent login input
+  currently has `maxlength=8`, so the E2E seed handler in
+  `apps/backend/courseeval_backend/api/routers/e2e_dev.py` uses
+  **`P{suffix[:7].upper()}`** where **`suffix`** is
+  **`uuid.uuid4().hex[:10]`**. This keeps the code at exactly 8 characters for
+  the browser while retaining enough space for persistent SQLite full-suite
+  runs.
 - **Operator mitigation (diagnostic only):** delete the Playwright SQLite file at `<E2E_SQLITE>` or change **`E2E_API_PORT`** so a fresh file is used — confirms collision vs logic regression; **do not** rely on this instead of seed entropy in CI.
 
 ### Interpretation
 
 See also **§ Key pitfall A** in [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+
+### Pitfall: parent SPA truncates overlong E2E parent codes before verification
+
+The parent portal login input enforces `maxlength=8`. If the E2E seed returns a
+longer `parent_code`, the browser truncates it before calling
+`/api/parent/verify/{parent_code}`. API-only tests can still pass because they
+send the full code directly, but real parent SPA tests stay on `/login` after
+the verify request returns `valid: false`.
+
+Mitigation:
+
+- Keep seeded parent codes exactly 8 characters unless the parent SPA contract
+  changes.
+- When debugging parent portal login failures, compare the code in
+  `scenario.json` with the network request URL, not only the backend seed
+  response.
+- Run the parent SPA browser spec after changing E2E seed parent-code logic;
+  direct API coverage is insufficient for this contract.
+
+### Pitfall: PowerShell splits nested pytest `-k` expressions inside ledger append commands
+
+When appending a test-execution ledger row from Windows PowerShell, a command
+string that itself contains a pytest `-k` boolean expression can be split before
+`append_run_ledger.py` receives it. For example, trying to pass a literal
+command containing:
+
+```powershell
+-k "hard61 or hard62 or hard63"
+```
+
+can surface as an argparse error from the ledger helper:
+
+```text
+append_run_ledger.py: error: unrecognized arguments: or hard62 or hard63 ...
+```
+
+This is a shell quoting pitfall in the ledger append step, not evidence that the
+observed pytest run failed. Mitigation:
+
+- Prefer recording a selector target command without inline `-k` when that is
+  faithful enough for the ledger.
+- If the exact observed command matters, append the CSV row through a
+  structured CSV writer or a small repo script that receives JSON/stdin instead
+  of trying to nest the pytest expression through multiple PowerShell quoting
+  layers.
+- Do not spend time re-running the already observed pytest target only to work
+  around the ledger quoting issue; record the original result and keep the
+  quoting failure itself as a pitfall.
 
 ### Pitfall 53: Avatar oversized PNG body hits format validation before the 2 MB guard
 

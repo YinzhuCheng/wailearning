@@ -255,6 +255,19 @@ cd <REPO_ROOT>/apps/web/admin
 npx playwright test <spec-filename>.spec.js --project=chromium
 ```
 
+Parent portal targeted spec through the external runner:
+
+```bash
+cd <REPO_ROOT>/apps/web/admin
+node scripts/playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium
+```
+
+The external runner starts the admin Vite app by default. It also starts the
+parent portal Vite app when the spec name contains `parent-portal` or when
+`E2E_PARENT_UI=1` is set. Override the parent port with
+`E2E_PARENT_UI_PORT`; Playwright reads the resulting base URL from
+`PLAYWRIGHT_PARENT_BASE_URL`.
+
 Full pytest (separate from Playwright; complementary):
 
 ```bash

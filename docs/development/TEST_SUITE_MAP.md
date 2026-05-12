@@ -394,6 +394,9 @@ boundary for teacher-owned visible courses:
 - parent portal reads for scores/stats staying bound to the linked student, and
   homework/notification reads requiring matching `CourseEnrollment` for
   subject-scoped rows;
+- parent-code rate limiting, expired-code semantics, regeneration/revocation
+  lifecycle, and the distinction between regular `teacher` course-based
+  parent-code management and `class_teacher` direct-class management;
 - score-appeal second submission after resolved/rejected history keeping at
   most one pending appeal per component;
 - dashboard subject statistics, rankings, trends, and subject analysis staying
@@ -407,6 +410,16 @@ first. The paired browser-backed direct-API guard is
 small and reserve it for high-value API edges that benefit from the managed
 Playwright seed/login path. The paired spec currently also covers parent-code
 read leakage for same-class unenrolled elective homework and notifications.
+
+Parent SPA browser coverage lives in
+`tests/e2e/web-admin/e2e-parent-portal-hardening.spec.js`. It runs from the
+admin Playwright package but starts the parent Vite app through
+`scripts/playwright-external-runner.cjs` when this spec name is passed. Run it
+from `apps/web/admin` with:
+
+```bash
+node scripts/playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium
+```
 
 ## Recommended Reading Order By Task
 

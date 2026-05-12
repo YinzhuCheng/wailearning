@@ -107,7 +107,7 @@ ops/scripts/dev/provision_postgres_pytest.sh
 docs/development/DEVELOPMENT_AND_TESTING.md
 docs/development/TEST_EXECUTION_PITFALLS.md","Changes to database models, migrations/repair logic, quota schema, FK constraints, or raw SQL in tests.
 Changes to tests/db_reset.py, tests/conftest.py, or PostgreSQL provisioning docs/scripts.
-Claims of full-suite or zero-skip pytest validation.",cursor/repository-normalization,38149b7,passed,2026-05-12,4,4
+Claims of full-suite or zero-skip pytest validation.",cursor/repository-normalization,this commit,skipped,2026-05-12,4,5
 security.api_regression,security-pytest,"Broad API security regression coverage for unauthenticated access, role boundaries, admin-only routes, IDOR edges, invalid tokens, and abuse cases. This target is recommended when auth, permission helpers, class/course access, or high-risk routers such as /api/users change.",.venv\Scripts\python.exe -m pytest tests\security -q,<repo>,"tests/security/test_security_regression.py
 tests/security/test_security_hardening_followup.py
 apps/backend/courseeval_backend/core/auth.py
@@ -250,3 +250,16 @@ apps/backend/courseeval_backend/api/routers/e2e_dev.py
 apps/backend/courseeval_backend/core/auth.py
 apps/backend/courseeval_backend/core/config.py","Changes to browser auth storage handling, login token persistence, frontend route guards, /api/users authorization, /api/subjects mutation authorization, /api/e2e/dev gates, or E2E seed header helpers.
 Pair with security.api_regression for backend-only authorization changes.",cursor/repository-normalization,this commit,passed,2026-05-12,5,6
+admin.e2e.parent_portal_hardening,admin-playwright,"Browser-backed parent portal hardening suite for parent-code login binding, same-class elective homework/notification leakage, and parent Vite runner startup.",node scripts\playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-parent-portal-hardening.spec.js
+tests/e2e/web-admin/fixtures.cjs
+tests/e2e/web-admin/future-advanced-coverage-helpers.cjs
+apps/web/admin/scripts/playwright-external-runner.cjs
+apps/web/parent/src/api/index.js
+apps/web/parent/src/router/index.js
+apps/web/parent/src/views/Login.vue
+apps/web/parent/src/views/Home.vue
+apps/web/parent/src/views/Homework.vue
+apps/web/parent/src/views/Notifications.vue
+apps/backend/courseeval_backend/api/routers/parent.py
+apps/backend/courseeval_backend/api/routers/e2e_dev.py","Changes to parent portal login, routing, API client, homework/notification UI, parent-code backend reads, E2E seed parent_code setup, or the external runner parent-UI startup path.
+Pair with security.api_regression for backend-only parent-code or parent-read authorization changes.",cursor/repository-normalization,this commit,passed,2026-05-12,1,2

@@ -65,6 +65,24 @@ grant parent-code management over that other class. Teacher-role access still
 uses the course-accessible class set; change that only with a matching
 permission decision, backend test, and documentation update.
 
+Parent-code verification is unauthenticated and therefore rate limited by
+client/code bucket. Invalid verification attempts return a normal parent portal
+payload with `valid: false` until the limiter is exceeded, while read endpoints
+such as `/student`, `/homework`, `/notifications`, `/scores`, and `/stats`
+raise HTTP errors for missing, expired, or invalid codes. Generated codes carry
+a future expiry; revocation clears both the code and expiry.
+
+Browser coverage for the parent SPA lives in the admin Playwright package so it
+can reuse the existing seeded FastAPI runner. Use:
+
+```bash
+cd apps/web/admin
+node scripts/playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium
+```
+
+The runner starts the normal admin Vite app by default and starts the parent
+Vite app only for parent-portal specs or when `E2E_PARENT_UI=1` is set.
+
 ## Operational Notes
 
 - Parent codes are generated and managed from the main system.
