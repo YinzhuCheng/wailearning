@@ -665,6 +665,11 @@ def create_subject(
         link_plan = [(class_obj.id, "all_in_class")]
 
     sorted_ids = tuple(sorted({int(cid) for cid, _ in link_plan}))
+    if current_user.role == UserRole.CLASS_TEACHER:
+        allowed_class_id = int(current_user.class_id or 0)
+        if not allowed_class_id or any(cid != allowed_class_id for cid in sorted_ids):
+            raise HTTPException(status_code=403, detail="Class teachers can only create courses for their own class.")
+
     if _required_course_duplicate(
         db,
         name=subject_data.name,

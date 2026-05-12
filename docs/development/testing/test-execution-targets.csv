@@ -106,6 +106,7 @@ docs/development/TEST_EXECUTION_PITFALLS.md","Changes to database models, migrat
 Changes to tests/db_reset.py, tests/conftest.py, or PostgreSQL provisioning docs/scripts.
 Claims of full-suite or zero-skip pytest validation.",cursor/repository-normalization,38149b7,passed,2026-05-12,4,4
 security.api_regression,security-pytest,"Broad API security regression coverage for unauthenticated access, role boundaries, admin-only routes, IDOR edges, invalid tokens, and abuse cases. This target is recommended when auth, permission helpers, class/course access, or high-risk routers such as /api/users change.",.venv\Scripts\python.exe -m pytest tests\security -q,<repo>,"tests/security/test_security_regression.py
+tests/security/test_security_hardening_followup.py
 apps/backend/courseeval_backend/core/auth.py
 apps/backend/courseeval_backend/api/routers/classes.py
 apps/backend/courseeval_backend/domains/courses/access.py
@@ -113,9 +114,13 @@ apps/backend/courseeval_backend/api/routers/auth.py
 apps/backend/courseeval_backend/api/routers/users.py
 apps/backend/courseeval_backend/api/routers/homework.py
 apps/backend/courseeval_backend/api/routers/llm_settings.py
-apps/backend/courseeval_backend/api/routers/notifications.py","Changes to authentication, permission dependencies, or role boundary helpers.
-Changes to /api/users, /api/classes, homework authorization, LLM admin routes, or notification visibility.
-Changes that introduce or relax admin-only behavior, student self-service behavior, IDOR-sensitive resource lookup, or token validation.",cursor/unify-student-identity-plan,this commit,passed,2026-05-09,2,2
+apps/backend/courseeval_backend/api/routers/notifications.py
+apps/backend/courseeval_backend/api/routers/attendance.py
+apps/backend/courseeval_backend/api/routers/files.py
+apps/backend/courseeval_backend/api/routers/e2e_dev.py
+apps/backend/courseeval_backend/core/config.py","Changes to authentication, permission dependencies, or role boundary helpers.
+Changes to /api/users, /api/classes, homework authorization, LLM admin routes, notification visibility, attendance writes, file attachment ACL, or E2E dev seed gates.
+Changes that introduce or relax admin-only behavior, student self-service behavior, IDOR-sensitive resource lookup, token validation, or seed-token/admin-JWT requirements.",cursor/repository-normalization,this commit,passed,2026-05-12,6,7
 backend.courses.student_course_roster_behavior,backend-pytest,"Focused backend course/roster regression file for student account to roster synchronization, required-course enrollment sync, homework submission access, teacher enrollment counts, duplicate student numbers, course removal blocks, sync-enrollments repair, and related class/course invariants.",.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q,<repo>,"tests/backend/courses/test_student_course_roster_behavior.py
 apps/backend/courseeval_backend/domains/courses/access.py
 apps/backend/courseeval_backend/domains/roster/reconciliation.py
@@ -124,7 +129,7 @@ apps/backend/courseeval_backend/api/routers/homework.py
 apps/backend/courseeval_backend/api/routers/subjects.py","Changes to prepare_student_course_context, sync_student_course_enrollments, sync_course_enrollments, or sync_student_roster_from_user_accounts.
 Changes to student login behavior, public registration, admin-created student users, or student account to roster synchronization.
 Changes to required-course class linking, course enrollment blocks, roster enroll/sync endpoints, or homework submission authorization.
-Any full PostgreSQL pytest run that reports failures in course/roster tests.",cursor/repository-normalization,04297f4,passed,2026-05-10,6,7
+Any full PostgreSQL pytest run that reports failures in course/roster tests.",cursor/repository-normalization,this commit,passed,2026-05-12,7,8
 full.pytest.postgres,full-suite,Full pytest tree under tests/ with TEST_DATABASE_URL pointing at a throwaway PostgreSQL database. This is the production-aligned backend regression profile for eliminating PostgreSQL-only skips and exercising schema/dialect behavior alongside the default backend and behavior suites.,"$env:TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:<local-port>/courseeval_pytest_all'
 .venv\Scripts\python.exe -m pytest tests -q",<repo>,"tests/
 tests/conftest.py
@@ -203,7 +208,7 @@ Changes to the ledger heading or strict field format parsed by the selector.
 Changes to validation-profile documentation or target-selection policy.
 Changes to path matching semantics, fallback rules, or risk-level ordering.
 Changes to structured local history schema, signature calculation, or runner history writing.
-Changes to validation profile policy, risk filtering, or review-target execution defaults.",cursor/discussion-avatar-chat-ui-921d,this commit,passed,2026-05-08,9,9
+Changes to validation profile policy, risk filtering, or review-target execution defaults.",cursor/repository-normalization,this commit,passed,2026-05-12,10,10
 backend.scores.dashboard_course_scope,backend-pytest,"Focused score/dashboard API target for subject-scoped teacher visibility, score composition, grade appeals, and course-owned dashboard stats/rankings.",.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q,<repo>,"tests/backend/integration/test_core_api_surface.py
 tests/backend/scores/test_score_composition.py
 apps/backend/courseeval_backend/api/routers/dashboard.py
@@ -227,3 +232,16 @@ apps/backend/courseeval_backend/api/routers/homework.py
 apps/backend/courseeval_backend/api/routers/subjects.py
 apps/backend/courseeval_backend/api/routers/students.py","Changes to course access, roster reconciliation, enrollment sync, homework authorization, score appeal edges, or student/class route behavior.
 Escalate to PostgreSQL full consideration when schema or broad course access helpers change.",cursor/repository-normalization,this commit,passed,2026-05-11,1,1
+admin.e2e.security_hardening_followup,admin-playwright,"Small browser-backed security hardening slice for localStorage role tampering, direct student API mutation attempts, and E2E dev seed-token-only rejection on powerful endpoints.",node scripts\playwright-external-runner.cjs e2e-security-hardening-followup.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-security-hardening-followup.spec.js
+tests/e2e/web-admin/e2e-seed-headers.cjs
+tests/e2e/web-admin/fixtures.cjs
+tests/e2e/web-admin/future-advanced-coverage-helpers.cjs
+apps/web/admin/src/views/Login.vue
+apps/web/admin/src/router/index.js
+apps/backend/courseeval_backend/api/routers/auth.py
+apps/backend/courseeval_backend/api/routers/users.py
+apps/backend/courseeval_backend/api/routers/subjects.py
+apps/backend/courseeval_backend/api/routers/e2e_dev.py
+apps/backend/courseeval_backend/core/auth.py
+apps/backend/courseeval_backend/core/config.py","Changes to browser auth storage handling, login token persistence, frontend route guards, /api/users authorization, /api/subjects mutation authorization, /api/e2e/dev gates, or E2E seed header helpers.
+Pair with security.api_regression for backend-only authorization changes.",cursor/repository-normalization,this commit,passed,2026-05-12,2,3

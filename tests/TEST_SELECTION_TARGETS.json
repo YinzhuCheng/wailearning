@@ -1133,10 +1133,15 @@
             "triggers": {
                 "paths": [
                     "tests/security/test_security_regression.py",
+                    "tests/security/test_security_hardening_followup.py",
                     "apps/backend/courseeval_backend/core/auth.py",
+                    "apps/backend/courseeval_backend/core/config.py",
                     "apps/backend/courseeval_backend/api/routers/classes.py",
                     "apps/backend/courseeval_backend/domains/courses/access.py",
                     "apps/backend/courseeval_backend/api/routers/auth.py",
+                    "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
+                    "apps/backend/courseeval_backend/api/routers/files.py",
+                    "apps/backend/courseeval_backend/api/routers/attendance.py",
                     "apps/backend/courseeval_backend/api/routers/users.py",
                     "apps/backend/courseeval_backend/api/routers/homework.py",
                     "apps/backend/courseeval_backend/api/routers/llm_settings.py",
@@ -1148,6 +1153,50 @@
             },
             "ledger_id": "security.api_regression",
             "notes": "Does not replace full PostgreSQL validation for schema-sensitive authorization behavior."
+        },
+        {
+            "id": "admin.e2e.security_hardening_followup",
+            "category": "admin-playwright",
+            "risk": "targeted",
+            "description": "Small browser-backed security hardening slice for localStorage role tampering, direct student API mutation attempts, and E2E dev seed-token-only rejection on powerful endpoints.",
+            "working_directory": "apps/web/admin",
+            "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+            "coverage_tags": [
+                "admin-playwright",
+                "security",
+                "auth",
+                "e2e-dev"
+            ],
+            "commands": [
+                {
+                    "label": "playwright targeted",
+                    "argv": [
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
+                        "e2e-security-hardening-followup.spec.js",
+                        "--project=chromium"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/e2e/web-admin/e2e-security-hardening-followup.spec.js",
+                    "tests/e2e/web-admin/e2e-seed-headers.cjs",
+                    "tests/e2e/web-admin/fixtures.cjs",
+                    "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs",
+                    "apps/web/admin/src/views/Login.vue",
+                    "apps/web/admin/src/router/index.js",
+                    "apps/backend/courseeval_backend/api/routers/auth.py",
+                    "apps/backend/courseeval_backend/api/routers/users.py",
+                    "apps/backend/courseeval_backend/api/routers/subjects.py",
+                    "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
+                    "apps/backend/courseeval_backend/core/auth.py",
+                    "apps/backend/courseeval_backend/core/config.py"
+                ],
+                "globs": []
+            },
+            "ledger_id": "admin.e2e.security_hardening_followup",
+            "notes": "Keep this spec small; broader API security coverage belongs in security.api_regression."
         },
         {
             "id": "admin.e2e.discussion_cover_llm_tier3",
