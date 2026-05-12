@@ -47,20 +47,61 @@ def _ensure_notification_course_publish_access(user: User, course) -> None:
         raise HTTPException(status_code=403, detail="Only the assigned course teacher can publish course notifications.")
 
 
+def _course_class_ids_for_course_wide_notification_view(current_user: User, db: Session, course) -> list[int]:
+    """Class ids visible for course-scoped notification rows in the current role.
+
+    Admins and assigned course teachers see the whole course, including every
+    linked administrative class. Students and non-instructor class teachers see
+    only their own class even when the course spans multiple classes.
+    """
+    if is_admin(current_user) or is_course_instructor(current_user, course):
+        ids = subject_linked_class_ids(db, course.id)
+        if course.class_id:
+            ids.append(int(course.class_id))
+        return sorted(set(ids))
+
+    if current_user.role == UserRole.STUDENT:
+        prepare_student_course_context(current_user, db)
+        student = get_student_profile_for_user(current_user, db)
+        if student and student.class_id:
+            return [int(student.class_id)]
+        if current_user.class_id:
+            return [int(current_user.class_id)]
+        return []
+
+    if current_user.role == UserRole.CLASS_TEACHER and current_user.class_id:
+        return [int(current_user.class_id)]
+
+    return []
+
+
+def _notification_class_ids_for_unscoped_view(current_user: User, db: Session) -> list[int]:
+    if current_user.role == UserRole.STUDENT:
+        prepare_student_course_context(current_user, db)
+        student = get_student_profile_for_user(current_user, db)
+        if student and student.class_id:
+            return [int(student.class_id)]
+        if current_user.class_id:
+            return [int(current_user.class_id)]
+        return []
+    if current_user.role == UserRole.CLASS_TEACHER:
+        return [int(current_user.class_id)] if current_user.class_id else []
+    return get_accessible_class_ids(current_user, db)
+
+
 def _visible_notifications_query(current_user: User, db: Session, subject_id: Optional[int] = None):
     query = db.query(Notification)
-    class_ids = get_accessible_class_ids(current_user, db)
 
     if subject_id:
         course = ensure_course_access_http(subject_id, current_user, db)
-        linked_class_ids = subject_linked_class_ids(db, course.id)
-        broadcast_scope = Notification.class_id.is_(None)
-        if linked_class_ids:
-            broadcast_scope = or_(broadcast_scope, Notification.class_id.in_(linked_class_ids))
+        course_class_ids = _course_class_ids_for_course_wide_notification_view(current_user, db, course)
+        course_class_scope = Notification.class_id.is_(None)
+        if course_class_ids:
+            course_class_scope = or_(course_class_scope, Notification.class_id.in_(course_class_ids))
         query = query.filter(
             or_(
-                Notification.subject_id == course.id,
-                and_(Notification.subject_id.is_(None), broadcast_scope),
+                and_(Notification.subject_id == course.id, course_class_scope),
+                and_(Notification.subject_id.is_(None), course_class_scope),
             )
         )
 
@@ -98,6 +139,7 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
         )
 
     if current_user.role != UserRole.ADMIN and subject_id is None:
+        class_ids = _notification_class_ids_for_unscoped_view(current_user, db)
         if class_ids:
             query = query.filter(or_(Notification.class_id.is_(None), Notification.class_id.in_(class_ids)))
         else:
@@ -222,9 +264,13 @@ def get_notification(
         raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
     if notification.subject_id:
-        ensure_course_access_http(notification.subject_id, current_user, db)
+        course = ensure_course_access_http(notification.subject_id, current_user, db)
+        if current_user.role != UserRole.ADMIN and notification.class_id is not None:
+            class_ids = _course_class_ids_for_course_wide_notification_view(current_user, db, course)
+            if int(notification.class_id) not in class_ids:
+                raise HTTPException(status_code=403, detail="You do not have access to this notification.")
     else:
-        class_ids = get_accessible_class_ids(current_user, db)
+        class_ids = _notification_class_ids_for_unscoped_view(current_user, db)
         if current_user.role != UserRole.ADMIN and notification.class_id and notification.class_id not in class_ids:
             raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 

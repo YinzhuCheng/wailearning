@@ -137,7 +137,11 @@ notification list or read-state endpoint is explicitly scoped by `subject_id`,
 course-scoped broadcasts (`Notification.subject_id IS NULL`) are limited to
 global rows or rows whose `class_id` is linked to that course via
 `subject_class_links`; another class's broadcast must not appear merely because
-the caller can access the requested course.
+the caller can access the requested course. For multi-class courses, admin and
+assigned course teachers retain a course-wide notification view across every
+linked class. Students and non-instructor class teachers remain class-local:
+they can read only rows for their own class plus global `class_id IS NULL`
+rows, even when the selected course links multiple administrative classes.
 
 ---
 

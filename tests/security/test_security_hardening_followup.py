@@ -2432,3 +2432,184 @@ def test_hard84_student_subject_list_and_detail_agree_on_foreign_class_broadcast
     assert listed.status_code == 200, listed.text
     assert hidden not in {row["id"] for row in listed.json()["data"]}
     assert detail.status_code == 403
+
+
+def test_hard85_student_course_scope_excludes_other_linked_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_multiclass_student")
+    own_class_id = _create_class("security-notif-multiclass-own")
+    other_class_id = _create_class("security-notif-multiclass-other")
+    student = _extra_student_account_for_class(own_class_id, "notif_multiclass_student")
+    subject_id = _create_subject("Notification multiclass student", int(teacher["user_id"]), own_class_id)
+    db = SessionLocal()
+    try:
+        db.add(SubjectClassLink(subject_id=subject_id, class_id=other_class_id, enrollment_mode="all_in_class"))
+        db.commit()
+    finally:
+        db.close()
+    _enroll_student(subject_id, int(student["student_id"]), own_class_id)
+    visible = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard85 own linked class broadcast")
+    hidden = _create_notification(None, other_class_id, int(teacher["user_id"]), "hard85 other linked class broadcast")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    listed = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+    sync = client.get(f"/api/notifications/sync-status?subject_id={subject_id}", headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    ids = {row["id"] for row in listed.json()["data"]}
+    assert visible in ids
+    assert hidden not in ids
+    assert sync.status_code == 200, sync.text
+    assert sync.json()["total"] == 1
+    assert sync.json()["unread_count"] == 1
+
+
+def test_hard86_student_mark_all_read_subject_scope_skips_other_linked_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_multiclass_mark")
+    own_class_id = _create_class("security-notif-multiclass-mark-own")
+    other_class_id = _create_class("security-notif-multiclass-mark-other")
+    student = _extra_student_account_for_class(own_class_id, "notif_multiclass_mark_student")
+    subject_id = _create_subject("Notification multiclass mark", int(teacher["user_id"]), own_class_id)
+    db = SessionLocal()
+    try:
+        db.add(SubjectClassLink(subject_id=subject_id, class_id=other_class_id, enrollment_mode="all_in_class"))
+        db.commit()
+    finally:
+        db.close()
+    _enroll_student(subject_id, int(student["student_id"]), own_class_id)
+    visible = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard86 own linked class broadcast")
+    hidden = _create_notification(None, other_class_id, int(teacher["user_id"]), "hard86 other linked class broadcast")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+    user_id = _user_id_for_username(str(student["username"]))
+
+    marked = client.post(f"/api/notifications/mark-all-read?subject_id={subject_id}", headers=headers)
+
+    assert marked.status_code == 200, marked.text
+    assert _notification_read_count(visible, user_id) == 1
+    assert _notification_read_count(hidden, user_id) == 0
+
+
+def test_hard87_student_unscoped_notifications_exclude_other_linked_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_multiclass_unscoped")
+    own_class_id = _create_class("security-notif-multiclass-unscoped-own")
+    other_class_id = _create_class("security-notif-multiclass-unscoped-other")
+    student = _extra_student_account_for_class(own_class_id, "notif_multiclass_unscoped_student")
+    subject_id = _create_subject("Notification multiclass unscoped", int(teacher["user_id"]), own_class_id)
+    db = SessionLocal()
+    try:
+        db.add(SubjectClassLink(subject_id=subject_id, class_id=other_class_id, enrollment_mode="all_in_class"))
+        db.commit()
+    finally:
+        db.close()
+    _enroll_student(subject_id, int(student["student_id"]), own_class_id)
+    visible = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard87 own class unscoped")
+    hidden = _create_notification(None, other_class_id, int(teacher["user_id"]), "hard87 other linked class unscoped")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    listed = client.get("/api/notifications?page_size=100", headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    ids = {row["id"] for row in listed.json()["data"]}
+    assert visible in ids
+    assert hidden not in ids
+
+
+def test_hard88_student_subject_notification_with_other_linked_class_id_is_hidden(client: TestClient):
+    teacher = _create_teacher("notif_multiclass_subject_row")
+    own_class_id = _create_class("security-notif-multiclass-subject-own")
+    other_class_id = _create_class("security-notif-multiclass-subject-other")
+    student = _extra_student_account_for_class(own_class_id, "notif_multiclass_subject_student")
+    subject_id = _create_subject("Notification multiclass subject row", int(teacher["user_id"]), own_class_id)
+    db = SessionLocal()
+    try:
+        db.add(SubjectClassLink(subject_id=subject_id, class_id=other_class_id, enrollment_mode="all_in_class"))
+        db.commit()
+    finally:
+        db.close()
+    _enroll_student(subject_id, int(student["student_id"]), own_class_id)
+    visible = _create_notification(subject_id, own_class_id, int(teacher["user_id"]), "hard88 own class subject row")
+    hidden = _create_notification(subject_id, other_class_id, int(teacher["user_id"]), "hard88 other class subject row")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    listed = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+    detail = client.get(f"/api/notifications/{hidden}", headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    ids = {row["id"] for row in listed.json()["data"]}
+    assert visible in ids
+    assert hidden not in ids
+    assert detail.status_code == 403
+
+
+def test_hard89_class_teacher_course_scope_excludes_other_linked_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_multiclass_ct_teacher")
+    own_class_id = _create_class("security-notif-multiclass-ct-own")
+    other_class_id = _create_class("security-notif-multiclass-ct-other")
+    ct = _create_class_teacher_for_class(own_class_id, "notif_multiclass_ct")
+    subject_id = _create_subject("Notification multiclass class teacher", int(teacher["user_id"]), own_class_id)
+    db = SessionLocal()
+    try:
+        db.add(SubjectClassLink(subject_id=subject_id, class_id=other_class_id, enrollment_mode="all_in_class"))
+        db.commit()
+    finally:
+        db.close()
+    visible = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard89 own linked class broadcast")
+    hidden = _create_notification(None, other_class_id, int(teacher["user_id"]), "hard89 other linked class broadcast")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    listed = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+    sync = client.get(f"/api/notifications/sync-status?subject_id={subject_id}", headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    ids = {row["id"] for row in listed.json()["data"]}
+    assert visible in ids
+    assert hidden not in ids
+    assert sync.status_code == 200, sync.text
+    assert sync.json()["total"] == 1
+
+
+def test_hard90_admin_course_scope_keeps_all_linked_class_broadcasts(client: TestClient):
+    ensure_admin()
+    teacher = _create_teacher("notif_multiclass_admin_teacher")
+    own_class_id = _create_class("security-notif-multiclass-admin-own")
+    other_class_id = _create_class("security-notif-multiclass-admin-other")
+    subject_id = _create_subject("Notification multiclass admin", int(teacher["user_id"]), own_class_id)
+    db = SessionLocal()
+    try:
+        db.add(SubjectClassLink(subject_id=subject_id, class_id=other_class_id, enrollment_mode="all_in_class"))
+        db.commit()
+    finally:
+        db.close()
+    first = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard90 own linked class broadcast")
+    second = _create_notification(None, other_class_id, int(teacher["user_id"]), "hard90 other linked class broadcast")
+    headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+
+    listed = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    ids = {row["id"] for row in listed.json()["data"]}
+    assert {first, second}.issubset(ids)
+
+
+def test_hard91_assigned_teacher_course_scope_keeps_all_linked_class_broadcasts(client: TestClient):
+    teacher = _create_teacher("notif_multiclass_teacher")
+    own_class_id = _create_class("security-notif-multiclass-teacher-own")
+    other_class_id = _create_class("security-notif-multiclass-teacher-other")
+    subject_id = _create_subject("Notification multiclass assigned teacher", int(teacher["user_id"]), own_class_id)
+    db = SessionLocal()
+    try:
+        db.add(SubjectClassLink(subject_id=subject_id, class_id=other_class_id, enrollment_mode="all_in_class"))
+        db.commit()
+    finally:
+        db.close()
+    first = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard91 own linked class broadcast")
+    second = _create_notification(None, other_class_id, int(teacher["user_id"]), "hard91 other linked class broadcast")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    listed = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+    sync = client.get(f"/api/notifications/sync-status?subject_id={subject_id}", headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    ids = {row["id"] for row in listed.json()["data"]}
+    assert {first, second}.issubset(ids)
+    assert sync.status_code == 200, sync.text
+    assert sync.json()["total"] == 2

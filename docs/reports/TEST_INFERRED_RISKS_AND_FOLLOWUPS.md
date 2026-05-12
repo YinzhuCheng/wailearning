@@ -612,6 +612,18 @@ The parent SPA additions did not expose a new bug: invalid login attempts now
 clear a stale existing parent binding, and protected routes clear partial
 bindings that have a `parent_code` but no `student_id`.
 
+**Multi-class notification audience follow-up round:** The next red-team batch
+added backend `hard85`-`hard91` plus admin Playwright notification deep-tier
+cases 16-18. It found that the previous subject-scoped broadcast fix still
+treated every class linked to a multi-class required course as visible to
+students and non-instructor class teachers. That let a student in class A see,
+count, or mark read a `subject_id IS NULL` broadcast for linked class B after
+requesting class A's course. The fix separates course-wide authority from
+class-local audience: admin and assigned course teachers still see the whole
+course-linked class scope, while students and non-instructor class teachers
+only see their own class plus global rows. The browser tests also cover stale
+`selected_course` cache and header badge convergence for this boundary.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -644,12 +656,16 @@ bindings that have a `parent_code` but no `student_id`.
     code guessing telemetry, and stale browser state across multiple tabs or
     multiple children if the product later supports family switching.
 16. Add PostgreSQL coverage for course-scoped notification broadcasts and
-    inspect the query plan for the `subject_id = course OR (subject_id IS NULL
-    AND class_id IN linked_classes/global)` predicate under realistic
-    notification volume.
-17. Add admin browser coverage for course switcher/header badge totals after
-    the subject-scoped broadcast fix, because backend totals are now tighter
-    than older UI assumptions may expect.
+    inspect the query plan for the role-dependent predicate:
+    `subject_id = course OR subject_id IS NULL`, plus class-local restrictions
+    for students/class teachers and course-wide restrictions for admin/assigned
+    teachers.
+17. Browser coverage now exists for three multi-class notification badge
+    samples, but a full `e2e-notification-sync-deep-tier.spec.js` run remains
+    useful before release because only cases 16-18 were rerun in this round.
+18. Continue probing cross-course notification read-state when a single teacher
+    owns several multi-class courses and switches rapidly between them; the
+    current tests focus on one multi-class required course.
 
 ## What This Document Is Not
 

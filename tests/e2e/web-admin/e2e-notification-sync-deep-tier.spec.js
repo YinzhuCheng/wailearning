@@ -1,5 +1,5 @@
 /**
- * Fifteen deeper Playwright checks motivated by residual risks after `e2e-notification-header-sync-tier.spec.js`:
+ * Eighteen deeper Playwright checks motivated by residual risks after `e2e-notification-header-sync-tier.spec.js`:
  *
  * - Admin **`notificationSyncParams === null`** uses global sync (must match list aggregates).
  * - Teacher/student **course context** vs **orphan localStorage** / **deep links** / **rapid switching**.
@@ -49,7 +49,25 @@ async function badgeContentLocator(page) {
   return page.locator('[data-testid="header-notification-badge"] .el-badge__content').first()
 }
 
-test.describe('E2E notification sync deep tier (15 cases)', () => {
+async function linkRequiredCourseToSecondClass(s, token) {
+  await apiPutJson(`/api/subjects/${s.course_required_id}`, token, {
+    class_links: [
+      { class_id: s.class_id_1, enrollment_mode: 'all_in_class' },
+      { class_id: s.class_id_2, enrollment_mode: 'all_in_class' }
+    ]
+  })
+}
+
+async function courseNameById(token, courseId) {
+  const courses = await apiGetJson('/api/subjects', token)
+  const row = Array.isArray(courses) ? courses.find(item => Number(item.id) === Number(courseId)) : null
+  if (!row) {
+    throw new Error(`course ${courseId} not visible`)
+  }
+  return row.name
+}
+
+test.describe('E2E notification sync deep tier (18 cases)', () => {
   test.describe.configure({ timeout: 120_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -339,6 +357,7 @@ test.describe('E2E notification sync deep tier (15 cases)', () => {
     const s = scenario()
     const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
     const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    await linkRequiredCourseToSecondClass(s, teacherTok)
 
     const before = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
 
@@ -486,5 +505,107 @@ test.describe('E2E notification sync deep tier (15 cases)', () => {
         return n === cur.unread_count
       })
       .toBe(true)
+  })
+
+  test('16 student header badge ignores other-class broadcast on required course scope', async ({ page }) => {
+    const s = scenario()
+    const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
+    const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    await linkRequiredCourseToSecondClass(s, teacherTok)
+
+    const before = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    await apiPostJson('/api/notifications', teacherTok, {
+      title: `E2E_FOREIGN_CLASS_${s.suffix}_${Date.now()}`,
+      content: 'foreign-class-broadcast',
+      class_id: s.class_id_2,
+      subject_id: null
+    })
+
+    const after = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    expect(after.unread_count).toBe(before.unread_count)
+    expect(after.total).toBe(before.total)
+
+    await login(page, s.student_plain.username, s.password_teacher_student)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await triggerHeaderPoll(page)
+
+    if (after.unread_count === 0) {
+      await expect(page.locator('[data-testid="header-notification-badge"] .el-badge__content')).toHaveCount(0)
+    } else {
+      await expect
+        .poll(async () => {
+          const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')
+          return Number.parseInt(`${txt}`.trim(), 10)
+        })
+        .toBe(after.unread_count)
+    }
+  })
+
+  test('17 student stale selected_course cache cannot make other-class broadcast appear in badge', async ({
+    page
+  }) => {
+    const s = scenario()
+    const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
+    const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    await linkRequiredCourseToSecondClass(s, teacherTok)
+
+    const before = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    await apiPostJson('/api/notifications', teacherTok, {
+      title: `E2E_STALE_FOREIGN_${s.suffix}_${Date.now()}`,
+      content: 'stale-cache-foreign-class',
+      class_id: s.class_id_2,
+      subject_id: null
+    })
+
+    await login(page, s.student_plain.username, s.password_teacher_student)
+    await page.evaluate(courseId => {
+      localStorage.setItem('selected_course', JSON.stringify({ id: courseId, name: 'stale required course' }))
+    }, s.course_required_id)
+    await page.goto('/course-home', { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await triggerHeaderPoll(page)
+
+    const after = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    expect(after.total).toBe(before.total)
+    expect(after.unread_count).toBe(before.unread_count)
+    if (after.unread_count === 0) {
+      await expect(page.locator('[data-testid="header-notification-badge"] .el-badge__content')).toHaveCount(0)
+    } else {
+      await expect
+        .poll(async () => {
+          const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')
+          return Number.parseInt(`${txt}`.trim(), 10)
+        })
+        .toBe(after.unread_count)
+    }
+  })
+
+  test('18 teacher course badge still includes all class broadcasts linked to assigned course', async ({ page }) => {
+    const s = scenario()
+    const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    await linkRequiredCourseToSecondClass(s, teacherTok)
+    const requiredCourseName = await courseNameById(teacherTok, s.course_required_id)
+
+    const before = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, teacherTok)
+    await apiPostJson('/api/notifications', teacherTok, {
+      title: `E2E_TEACHER_ALL_LINKED_${s.suffix}_${Date.now()}`,
+      content: 'teacher sees whole course broadcast scope',
+      class_id: s.class_id_2,
+      subject_id: null
+    })
+    const after = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, teacherTok)
+    expect(after.unread_count).toBe(before.unread_count + 1)
+    expect(after.total).toBe(before.total + 1)
+
+    await login(page, s.teacher_own.username, s.password_teacher_student)
+    await page.goto('/students', { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await clickCourseSwitcherOption(page, requiredCourseName)
+    await triggerHeaderPoll(page)
+
+    await expect
+      .poll(async () => {
+        const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')
+        return Number.parseInt(`${txt}`.trim(), 10)
+      })
+      .toBe(after.unread_count)
   })
 })

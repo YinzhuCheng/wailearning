@@ -210,6 +210,14 @@ Course-scoped notification publishing is a management operation. A
 access, but creating or rebinding a notification with `subject_id` requires the
 assigned course teacher or admin.
 
+Course-scoped notification reading has two class-scope layers. Admins and the
+assigned course teacher see the whole course notification scope, including
+class broadcasts for all `subject_class_links`. Students and class teachers
+who are not the assigned course teacher see only their own administrative
+class plus global rows, so a multi-class required course does not leak another
+class's broadcast into a student's header badge, list, detail, or read-state
+rows.
+
 ### Admin SPA behavior
 
 - Header badge + polling + `BroadcastChannel` — documented in [../development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md).

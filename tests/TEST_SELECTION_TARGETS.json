@@ -1739,7 +1739,7 @@
                 ],
                 "globs": []
             },
-            "ledger_id": null,
+            "ledger_id": "admin.e2e.notification_sync_deep_tier",
             "notes": "Use after narrower notification API/header targets when changes affect convergence or multi-role isolation."
         },
         {

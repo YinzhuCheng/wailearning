@@ -2305,6 +2305,74 @@ Depending on current catalog filters, enrollment state, table virtualization, an
 
 Scope the locator to the exact `article.course-card` whose heading is the seeded course title, then assert `course-card-cover` inside that card. Keep separate catalog-thumbnail tests for catalog-specific behavior if that surface is the product target.
 
+### Pitfall 85: Multi-class notification E2E must link the course before publishing second-class broadcasts
+
+Symptom:
+
+```text
+POST /api/notifications failed 403: You can only publish notifications for accessible classes.
+```
+
+Context:
+
+The notification header deep-tier tests intentionally exercise a required
+course that spans two administrative classes. A normal teacher is allowed to
+publish a class broadcast for another class only after the course has a
+`subject_class_links` row for that class. Merely choosing `class_id_2` from the
+seed scenario does not make the class accessible for course notification
+publishing.
+
+Fix:
+
+Before publishing a `subject_id = null` broadcast to the second class in a
+multi-class notification E2E, update the course with both class links, for
+example through `PUT /api/subjects/{course_id}` with:
+
+```json
+{
+  "class_links": [
+    { "class_id": "<class_id_1>", "enrollment_mode": "all_in_class" },
+    { "class_id": "<class_id_2>", "enrollment_mode": "all_in_class" }
+  ]
+}
+```
+
+Then publish the second-class broadcast and assert student/class-teacher
+visibility separately from assigned-teacher/admin visibility.
+
+Interpretation:
+
+This is a test setup pitfall. A 403 before linking the course is expected
+authorization behavior, not evidence that notification visibility or the header
+badge regressed.
+
+### Pitfall 86: Header course-switcher tests should use API-returned course names
+
+Symptom:
+
+Playwright cannot find the intended `.course-option` even though the course is
+visible in the selector menu. The failed selector may show a mojibake-looking
+Chinese course label copied from terminal output.
+
+Context:
+
+Windows PowerShell can display valid UTF-8 Chinese as mojibake. If a test
+hard-codes a rendered terminal label such as a seeded course name, the locator
+literal can diverge from the actual browser DOM text.
+
+Fix:
+
+When a Playwright test needs to select a seeded course in
+`header-course-switch`, obtain the current course name from `GET /api/subjects`
+using the same role token, then pass that exact string to the course-switcher
+helper. Avoid copying multilingual labels from shell output into selectors.
+
+Interpretation:
+
+This is a selector-authoring and encoding pitfall, not a product routing
+regression. Keep the API-derived name pattern for future course-switcher tests,
+especially around notification badge convergence.
+
 ### Pitfall: system-wide student quota totals are repeated on course attribution rows
 
 Symptom:
