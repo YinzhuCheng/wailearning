@@ -140,6 +140,15 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 ### 3.5 Parent portal read path
 
 - Parent-facing aggregated homework/score routes live under `api/routers/parent.py` — they enforce parent-code verification and read student data indirectly; they do not bypass homework access rules for staff routes.
+- Staff-side parent-code generation/revocation in the same router is not a
+  generic course-visible operation. `admin` may manage any student's code, while
+  `class_teacher` is limited to students in the class teacher's own
+  `users.class_id`. A course linked through `subject_class_links` can make a
+  foreign class visible for reading, but it must not let that class teacher
+  revoke or regenerate parent codes for students outside their direct class.
+  Regular `teacher` users currently follow `get_accessible_class_ids_from_courses(...)`;
+  treat any policy change there as a permissions change requiring docs and
+  hardening tests.
 
 ---
 

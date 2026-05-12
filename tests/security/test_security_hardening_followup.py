@@ -20,8 +20,13 @@ from apps.backend.courseeval_backend.db.models import (
     CourseEnrollment,
     CourseExamWeight,
     CourseGradeScheme,
+    CourseMaterialChapter,
+    CourseMaterialHomeworkLink,
+    CourseMaterialSection,
+    CourseDiscussionEntry,
     CourseLLMConfig,
     CourseMaterial,
+    Homework,
     Notification,
     Score,
     ScoreGradeAppeal,
@@ -57,6 +62,24 @@ def _create_class_teacher(label: str = "class_teacher") -> dict[str, object]:
         db.close()
 
 
+def _create_class_teacher_for_class(class_id: int, label: str = "class_teacher") -> dict[str, object]:
+    db = SessionLocal()
+    try:
+        user = User(
+            username=f"security_{label}",
+            hashed_password=get_password_hash(f"{label}_pass123"),
+            real_name=f"Security {label}",
+            role=UserRole.CLASS_TEACHER.value,
+            class_id=class_id,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        return {"user_id": user.id, "class_id": class_id, "username": user.username, "password": f"{label}_pass123"}
+    finally:
+        db.close()
+
+
 def _create_class(name: str) -> int:
     db = SessionLocal()
     try:
@@ -64,6 +87,113 @@ def _create_class(name: str) -> int:
         db.add(klass)
         db.commit()
         return int(klass.id)
+    finally:
+        db.close()
+
+
+def _create_chapter(subject_id: int, title: str) -> int:
+    db = SessionLocal()
+    try:
+        chapter = CourseMaterialChapter(subject_id=subject_id, title=title, sort_order=50)
+        db.add(chapter)
+        db.commit()
+        return int(chapter.id)
+    finally:
+        db.close()
+
+
+def _chapter_order(subject_id: int) -> list[int]:
+    db = SessionLocal()
+    try:
+        return [
+            int(row.id)
+            for row in db.query(CourseMaterialChapter)
+            .filter(CourseMaterialChapter.subject_id == subject_id)
+            .order_by(CourseMaterialChapter.sort_order.asc(), CourseMaterialChapter.id.asc())
+            .all()
+        ]
+    finally:
+        db.close()
+
+
+def _create_material_section(subject_id: int, class_id: int, teacher_id: int, chapter_id: int) -> tuple[int, int]:
+    db = SessionLocal()
+    try:
+        material = CourseMaterial(
+            title="Security chapter placement material",
+            content="placement guard",
+            class_id=class_id,
+            subject_id=subject_id,
+            created_by=teacher_id,
+        )
+        db.add(material)
+        db.flush()
+        section = CourseMaterialSection(material_id=material.id, chapter_id=chapter_id, sort_order=1)
+        db.add(section)
+        db.commit()
+        return int(material.id), int(section.id)
+    finally:
+        db.close()
+
+
+def _material_section_count(material_id: int) -> int:
+    db = SessionLocal()
+    try:
+        return db.query(CourseMaterialSection).filter(CourseMaterialSection.material_id == material_id).count()
+    finally:
+        db.close()
+
+
+def _create_course_homework(subject_id: int, class_id: int, teacher_id: int) -> int:
+    db = SessionLocal()
+    try:
+        homework = Homework(
+            title="Security linked homework",
+            content="linked homework guard",
+            class_id=class_id,
+            subject_id=subject_id,
+            max_score=100,
+            auto_grading_enabled=False,
+            created_by=teacher_id,
+        )
+        db.add(homework)
+        db.commit()
+        return int(homework.id)
+    finally:
+        db.close()
+
+
+def _homework_link_count(chapter_id: int) -> int:
+    db = SessionLocal()
+    try:
+        return db.query(CourseMaterialHomeworkLink).filter(CourseMaterialHomeworkLink.chapter_id == chapter_id).count()
+    finally:
+        db.close()
+
+
+def _create_discussion_entry(subject_id: int, class_id: int, target_id: int, author_user_id: int) -> int:
+    db = SessionLocal()
+    try:
+        row = CourseDiscussionEntry(
+            target_type="homework",
+            target_id=target_id,
+            subject_id=subject_id,
+            class_id=class_id,
+            author_user_id=author_user_id,
+            body="teacher-owned discussion management guard",
+            body_format="plain",
+        )
+        db.add(row)
+        db.commit()
+        return int(row.id)
+    finally:
+        db.close()
+
+
+def _discussion_exists(entry_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        return db.query(CourseDiscussionEntry).filter(CourseDiscussionEntry.id == entry_id).first() is not None
     finally:
         db.close()
 
@@ -203,6 +333,47 @@ def _llm_config_enabled(subject_id: int) -> bool | None:
         if not row:
             return None
         return bool(row.is_enabled)
+    finally:
+        db.close()
+
+
+def _create_score_appeal(subject_id: int, student_id: int, semester: str = "2026-fall") -> int:
+    db = SessionLocal()
+    try:
+        appeal = ScoreGradeAppeal(
+            subject_id=subject_id,
+            student_id=student_id,
+            semester=semester,
+            target_component="total",
+            reason_text="security appeal guard",
+            status="pending",
+        )
+        db.add(appeal)
+        db.commit()
+        return int(appeal.id)
+    finally:
+        db.close()
+
+
+def _appeal_status(appeal_id: int) -> str:
+    db = SessionLocal()
+    try:
+        row = db.query(ScoreGradeAppeal).filter(ScoreGradeAppeal.id == appeal_id).first()
+        assert row is not None
+        return str(row.status)
+    finally:
+        db.close()
+
+
+def _set_parent_code(student_id: int, code: str = "PARENT123") -> str:
+    db = SessionLocal()
+    try:
+        row = db.query(Student).filter(Student.id == student_id).first()
+        assert row is not None
+        row.parent_code = code
+        row.parent_code_expires = None
+        db.commit()
+        return code
     finally:
         db.close()
 
@@ -1140,3 +1311,176 @@ def test_hard44_class_teacher_cannot_update_llm_config_for_teacher_owned_visible
     )
     assert r.status_code == 403
     assert _llm_config_enabled(subject_id) == before
+
+
+def test_hard45_class_teacher_cannot_delete_course_teacher_discussion_entry_on_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_discussion_delete_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    entry_id = _create_discussion_entry(ctx["subject_id"], ctx["class_id"], ctx["homework_id"], ctx["teacher_id"])
+
+    r = client.delete(f"/api/discussions/{entry_id}", headers=ct_headers)
+    assert r.status_code == 403
+    assert _discussion_exists(entry_id)
+
+
+def test_hard46_class_teacher_cannot_reorder_material_chapters_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_chapter_reorder_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    first = _create_chapter(ctx["subject_id"], "Security reorder first")
+    second = _create_chapter(ctx["subject_id"], "Security reorder second")
+    before = _chapter_order(ctx["subject_id"])
+
+    r = client.post(
+        f"/api/material-chapters/reorder?subject_id={ctx['subject_id']}",
+        headers=ct_headers,
+        json={"parent_id": None, "ordered_chapter_ids": [second, first]},
+    )
+    assert r.status_code == 403
+    assert _chapter_order(ctx["subject_id"]) == before
+
+
+def test_hard47_class_teacher_cannot_add_material_placement_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_material_placement_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    chapter_id = _create_chapter(ctx["subject_id"], "Security placement target")
+    other_chapter_id = _create_chapter(ctx["subject_id"], "Security placement other")
+    material_id, _section_id = _create_material_section(ctx["subject_id"], ctx["class_id"], ctx["teacher_id"], chapter_id)
+    before = _material_section_count(material_id)
+
+    r = client.post(
+        f"/api/material-chapters/materials/{material_id}/placements?subject_id={ctx['subject_id']}",
+        headers=ct_headers,
+        json={"chapter_id": other_chapter_id},
+    )
+    assert r.status_code == 403
+    assert _material_section_count(material_id) == before
+
+
+def test_hard48_class_teacher_cannot_link_homework_into_teacher_owned_visible_course_directory(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_link_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    chapter_id = _create_chapter(ctx["subject_id"], "Security homework link target")
+    homework_id = _create_course_homework(ctx["subject_id"], ctx["class_id"], ctx["teacher_id"])
+    before = _homework_link_count(chapter_id)
+
+    r = client.post(
+        f"/api/material-chapters/homework-links?subject_id={ctx['subject_id']}",
+        headers=ct_headers,
+        json={"chapter_id": chapter_id, "homework_id": homework_id},
+    )
+    assert r.status_code == 403
+    assert _homework_link_count(chapter_id) == before
+
+
+def test_hard49_class_teacher_cannot_respond_to_appeal_for_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_appeal_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    appeal_id = _create_score_appeal(ctx["subject_id"], ctx["student_id"])
+
+    r = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=ct_headers,
+        json={"teacher_response": "class teacher should not resolve", "status": "resolved"},
+    )
+    assert r.status_code == 403
+    assert _appeal_status(appeal_id) == "pending"
+
+
+def test_hard50_class_teacher_cannot_revoke_parent_code_for_foreign_class_student_only_visible_through_course_link(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_parent_code_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    foreign_class_id = _create_class("security-parent-code-foreign")
+    foreign_student_id = _extra_student_for_class(foreign_class_id, "ct_parent_code_foreign")
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=ctx["subject_id"],
+                class_id=foreign_class_id,
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    code = _set_parent_code(foreign_student_id, "PARENTVISIBLE")
+
+    before = client.get(f"/api/parent/verify/{code}")
+    assert before.status_code == 200
+    r = client.delete(f"/api/parent/students/{foreign_student_id}/revoke-code", headers=ct_headers)
+    assert r.status_code == 403
+    after = client.get(f"/api/parent/verify/{code}")
+    assert after.status_code == 200
+
+
+def test_hard51_class_teacher_batch_score_import_cannot_write_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_batch_score_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    before = _score_count_for_subject(ctx["subject_id"])
+
+    r = client.post(
+        "/api/scores/batch",
+        headers=ct_headers,
+        json={
+            "scores": [
+                {
+                    "student_no": ctx["student_username"],
+                    "student_name": "Student One",
+                    "class_id": ctx["class_id"],
+                    "subject_id": ctx["subject_id"],
+                    "semester": "2026-fall",
+                    "exam_type": "batch-hardening",
+                    "score": 91,
+                }
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["success"] == 0
+    assert _score_count_for_subject(ctx["subject_id"]) == before
+
+
+def test_hard52_dashboard_subject_stats_do_not_mix_scores_from_other_visible_courses(client: TestClient):
+    ctx_a = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ctx_b = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    assert client.post(
+        "/api/scores",
+        headers=admin_headers,
+        json={
+            "student_id": ctx_a["student_id"],
+            "subject_id": ctx_a["subject_id"],
+            "class_id": ctx_a["class_id"],
+            "semester": "2026-fall",
+            "exam_type": "dashboard-a",
+            "score": 70,
+            "exam_date": None,
+        },
+    ).status_code == 200
+    assert client.post(
+        "/api/scores",
+        headers=admin_headers,
+        json={
+            "student_id": ctx_b["student_id"],
+            "subject_id": ctx_b["subject_id"],
+            "class_id": ctx_b["class_id"],
+            "semester": "2026-fall",
+            "exam_type": "dashboard-b",
+            "score": 100,
+            "exam_date": None,
+        },
+    ).status_code == 200
+    teacher_headers = login_api(client, ctx_a["teacher_username"], ctx_a["teacher_password"])
+
+    scoped = client.get(f"/api/dashboard/stats?subject_id={ctx_a['subject_id']}", headers=teacher_headers)
+    assert scoped.status_code == 200, scoped.text
+    assert scoped.json()["total_scores"] == 1
+    assert scoped.json()["avg_score"] == 70

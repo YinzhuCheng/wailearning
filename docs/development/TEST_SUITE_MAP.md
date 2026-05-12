@@ -386,7 +386,13 @@ boundary for teacher-owned visible courses:
 - score writes, weights, grade schemes, and score-appeal responses;
 - attendance writes and batch attendance;
 - course notification publishing;
-- course LLM config management.
+- discussion deletion and course-material chapter placement/reorder/homework
+  links;
+- parent-code revocation for foreign-class students that are only visible
+  through a linked course;
+- dashboard subject statistics staying scoped to the requested subject;
+- course LLM config management, including stale browser-selected-course cache
+  attempts in the paired Playwright spec.
 
 When adding a new course-owned mutation endpoint, add the backend assertion here
 first. The paired browser-backed direct-API guard is

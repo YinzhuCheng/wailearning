@@ -45,6 +45,14 @@ Typical endpoints include:
 - homework,
 - summary statistics.
 
+Parent-code management in the same API family is staff-side and more sensitive
+than portal reads. Administrators can manage any student's code. Class teachers
+can generate or revoke codes only for students in their own assigned class
+(`users.class_id`). Seeing another class through a class-linked course does not
+grant parent-code management over that other class. Teacher-role access still
+uses the course-accessible class set; change that only with a matching
+permission decision, backend test, and documentation update.
+
 ## Operational Notes
 
 - Parent codes are generated and managed from the main system.

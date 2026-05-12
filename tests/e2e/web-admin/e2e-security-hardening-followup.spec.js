@@ -27,7 +27,7 @@ async function apiStatus(pathname, { method = 'GET', token, headers = {}, body }
   return { status: res.status, text: await res.text() }
 }
 
-test.describe('security hardening follow-up E2E (10 cases)', () => {
+test.describe('security hardening follow-up E2E (12 cases)', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -241,5 +241,55 @@ test.describe('security hardening follow-up E2E (10 cases)', () => {
       }
     })
     expect(notice.status).toBe(403)
+  })
+
+  test('11 class teacher cannot delete teacher-owned visible discussion entry via direct API', async () => {
+    const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    const classTeacherToken = await obtainAccessToken(s.class_teacher.username, s.password_teacher_student)
+
+    const created = await apiStatus('/api/discussions', {
+      method: 'POST',
+      token: teacherToken,
+      body: {
+        target_type: 'homework',
+        target_id: s.homework_id,
+        subject_id: s.course_required_id,
+        class_id: s.class_id_1,
+        body: `e2e discussion delete guard ${Date.now()}`,
+        body_format: 'plain'
+      }
+    })
+    expect(created.status).toBe(200)
+    const entry = JSON.parse(created.text)
+
+    const deletion = await apiStatus(`/api/discussions/${entry.id}`, {
+      method: 'DELETE',
+      token: classTeacherToken
+    })
+    expect(deletion.status).toBe(403)
+
+    const list = await apiStatus(
+      `/api/discussions?target_type=homework&target_id=${s.homework_id}&subject_id=${s.course_required_id}&class_id=${s.class_id_1}&page=1&page_size=20`,
+      { token: teacherToken }
+    )
+    expect(list.status).toBe(200)
+    expect(JSON.parse(list.text).data.some(row => Number(row.id) === Number(entry.id))).toBe(true)
+  })
+
+  test('12 stale selected_course cache cannot expose course LLM config to visible non-manager', async ({ page }) => {
+    const s = scenario()
+    await login(page, s.class_teacher.username, s.password_teacher_student)
+    await page.evaluate(subjectId => {
+      localStorage.setItem('selected_course', String(subjectId))
+      localStorage.setItem('selectedCourse', JSON.stringify({ id: subjectId, name: 'tampered-visible-course' }))
+    }, s.course_required_id)
+    const token = await page.evaluate(() => localStorage.getItem('token') || localStorage.getItem('access_token'))
+    expect(token).toBeTruthy()
+
+    const cfg = await page.request.get(`${apiBase()}/api/llm-settings/courses/${s.course_required_id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    expect(cfg.status()).toBe(403)
   })
 })

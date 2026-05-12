@@ -84,6 +84,8 @@ admin include:
   and score-appeal responses;
 - attendance create/update/delete plus batch and class-batch course attendance;
 - course notification publish/update when `subject_id` is set;
+- discussion entry deletion and course-material chapter placement/reorder/link
+  operations;
 - course LLM config `GET` and `PUT` under
   `/api/llm-settings/courses/{subject_id}`.
 
@@ -91,6 +93,28 @@ Tests that guard this boundary live in
 `tests/security/test_security_hardening_followup.py` and
 `tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`. Extend those
 files when adding a new course-owned mutation route.
+
+---
+
+### Parent Code Management
+
+Parent-code verification is a read-oriented guardian flow, but code generation
+and revocation are staff-side management operations under `api/routers/parent.py`.
+The class-teacher rule is intentionally narrower than general course visibility:
+
+- `admin` may manage parent codes for any student.
+- `class_teacher` may generate or revoke parent codes only for students whose
+  `Student.class_id` is exactly the class teacher's `users.class_id`.
+- A class teacher's ability to see a foreign class through a course linked by
+  `subject_class_links` is not enough to manage that student's parent code.
+- Non-class-teacher `teacher` users still route through
+  `get_accessible_class_ids_from_courses(...)`; if product policy later wants a
+  stricter direct-teacher rule, update `api/routers/parent.py`, this document,
+  and the parent-code tests together.
+
+The hardening regression is
+`test_hard50_class_teacher_cannot_revoke_parent_code_for_foreign_class_student_only_visible_through_course_link`
+in `tests/security/test_security_hardening_followup.py`.
 
 ---
 

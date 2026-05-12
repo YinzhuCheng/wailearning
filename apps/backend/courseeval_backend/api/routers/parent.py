@@ -61,10 +61,14 @@ def _get_parent_bound_student_or_404(parent_code: str, db: Session) -> Student:
 def _ensure_teacher_can_manage_student(student: Student, current_user: User, db: Session) -> None:
     if current_user.role == UserRole.ADMIN:
         return
+    if current_user.role == UserRole.CLASS_TEACHER:
+        if current_user.class_id and int(student.class_id) == int(current_user.class_id):
+            return
+        raise HTTPException(status_code=403, detail="You do not have permission to manage this student.")
 
     accessible_class_ids = get_accessible_class_ids_from_courses(current_user, db)
     if student.class_id not in accessible_class_ids:
-        raise HTTPException(status_code=403, detail="无权操作该学生")
+        raise HTTPException(status_code=403, detail="You do not have permission to manage this student.")
 
 
 @router.get("/verify/{parent_code}")

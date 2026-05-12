@@ -504,7 +504,9 @@ another teacher's course-owned state.
 the current fixes: class teachers could mutate teacher-owned visible courses
 through subject management, cover uploads, roster operations, material/homework
 creation, scores and grade schemes, attendance writes, notification publishing,
-and course LLM config.
+discussion deletion, material chapter movement/linking, score appeal response,
+parent-code revocation for foreign-class students visible only through linked
+courses, dashboard course-scope aggregation, and course LLM config.
 
 **Current mitigation:** The affected routers now layer
 `is_course_instructor(...)` or equivalent route-local wrappers after
@@ -516,6 +518,14 @@ cover the red-to-green boundary.
 copying a read/list pattern into a write route. Any new route that writes
 course-owned data should include a direct class-teacher visible-course denial
 test before it is treated as secure.
+
+**Parent-code residual risk:** This round fixed the confirmed class-teacher
+case: a class teacher may manage parent codes only for students in their direct
+assigned class, not for foreign classes that become visible through a linked
+course. Regular `teacher` users still use `get_accessible_class_ids_from_courses(...)`
+for parent-code management. That may be an intended course-teacher workflow, but
+it is a policy point worth confirming before claiming the parent-code surface is
+fully narrowed.
 
 ## Suggested Follow-Up Order
 
@@ -529,6 +539,9 @@ test before it is treated as secure.
 8. After any API pagination limit change, grep the admin SPA for `page_size` and align client requests with server `le=` constraints.
 9. For every new course-owned mutation, test `class_teacher` visibility without
    assigned-teacher ownership and require **403** plus unchanged data.
+10. Confirm regular-teacher parent-code management policy, then add a regression
+    that distinguishes intended course-teacher access from class-linked
+    class-teacher visibility.
 
 ## What This Document Is Not
 

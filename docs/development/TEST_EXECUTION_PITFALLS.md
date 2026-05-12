@@ -3141,6 +3141,29 @@ The May 2026 ledger rows around `security.api_regression` document the observed
 red-to-green sequence. Extend the same tests before adding a new route that can
 write course-owned data.
 
+### Pitfall: patching mojibake-rendered exception strings can corrupt Python syntax
+
+Windows PowerShell can display UTF-8 Chinese exception strings as mojibake. If
+an agent copies the displayed text into an `apply_patch` hunk, the patch may
+replace only part of the original string or introduce mismatched quotes. During
+this hardening round, a route-level permission detail string in
+`apps/backend/courseeval_backend/api/routers/parent.py` was temporarily turned
+into an unterminated Python string, and `py_compile` caught the syntax error.
+
+Mitigation:
+
+- Treat terminal-rendered non-ASCII as display-only. Verify bytes, use an
+  escaped UTF-8 view, or patch around ASCII anchors before editing multilingual
+  source.
+- Prefer ASCII for backend exception details when the text is not user-facing or
+  is already inconsistent with localized UI copy.
+- If a line is syntactically corrupted and `apply_patch` cannot reliably match
+  the rendered bytes, replace the smallest complete syntactic unit and
+  immediately run `python -m py_compile` on the touched file.
+- Record the incident in `docs/development/testing/pitfall-index.csv` and keep
+  the mitigation close to the encoding guidance instead of leaving it as only a
+  chat transcript note.
+
 ### Pitfall: validation targets must not borrow unrelated ledger IDs
 
 The validation selector reads `ledger_id` from
