@@ -397,6 +397,11 @@ boundary for teacher-owned visible courses:
 - parent-code rate limiting, expired-code semantics, regeneration/revocation
   lifecycle, and the distinction between regular `teacher` course-based
   parent-code management and `class_teacher` direct-class management;
+- notification read-state authorization reusing list visibility, including
+  hidden targeted notices, teacher-targeted notices, unenrolled elective
+  notices, and mark-all-read creating rows only for visible notifications;
+- parent-code batch generation deduplicating repeated student ids before
+  code rotation and preserving the direct-class-only class-teacher boundary;
 - score-appeal second submission after resolved/rejected history keeping at
   most one pending appeal per component;
 - dashboard subject statistics, rankings, trends, and subject analysis staying
@@ -420,6 +425,11 @@ from `apps/web/admin` with:
 ```bash
 node scripts/playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium
 ```
+
+The parent portal spec covers successful binding, same-class unenrolled elective
+homework/notification hiding, invalid-code login behavior, revoked-code
+protected-route session cleanup, and isolation between student JWT
+notification read-state and parent notification lists.
 
 ## Recommended Reading Order By Task
 

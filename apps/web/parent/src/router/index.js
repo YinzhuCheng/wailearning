@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { clearParentSession } from '@/session'
 
 const routes = [
   {
@@ -43,7 +44,11 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const parentCode = localStorage.getItem('parent_code')
+  const studentId = localStorage.getItem('student_id')
   if (to.meta.requiresAuth && !parentCode) {
+    next('/login')
+  } else if (to.meta.requiresAuth && !studentId) {
+    clearParentSession()
     next('/login')
   } else {
     next()

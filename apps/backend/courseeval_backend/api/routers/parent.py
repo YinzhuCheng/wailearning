@@ -326,8 +326,13 @@ def batch_generate_student_parent_codes(
         raise HTTPException(status_code=403, detail="只有教师可以操作")
 
     results = []
+    seen_student_ids: set[int] = set()
 
     for student_id in student_ids:
+        if student_id in seen_student_ids:
+            continue
+        seen_student_ids.add(student_id)
+
         student = db.query(Student).filter(Student.id == student_id).first()
         if not student:
             continue

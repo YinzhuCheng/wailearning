@@ -72,6 +72,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Collection, Clock } from '@element-plus/icons-vue'
 import api from '@/api'
+import { handleParentApiError } from '@/session'
 
 const router = useRouter()
 const loading = ref(false)
@@ -94,6 +95,7 @@ const fetchHomework = async () => {
     homeworks.value = data.homeworks
     total.value = data.total
   } catch (e) {
+    if (handleParentApiError(e)) return
     console.error('获取作业失败', e)
   } finally {
     loading.value = false

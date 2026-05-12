@@ -11,7 +11,11 @@ http.interceptors.response.use(
   response => response.data,
   error => {
     if (error.response) {
-      return Promise.reject(error.response.data)
+      return Promise.reject({
+        ...(error.response.data || {}),
+        status: error.response.status,
+        status_code: error.response.status
+      })
     }
     return Promise.reject(error)
   }

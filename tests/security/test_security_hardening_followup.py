@@ -30,6 +30,7 @@ from apps.backend.courseeval_backend.db.models import (
     CourseMaterial,
     Homework,
     Notification,
+    NotificationRead,
     Score,
     ScoreGradeAppeal,
     Student,
@@ -455,6 +456,17 @@ def _notification_count_for_subject(subject_id: int) -> int:
         db.close()
 
 
+def _notification_read_count(notification_id: int, user_id: int | None = None) -> int:
+    db = SessionLocal()
+    try:
+        query = db.query(NotificationRead).filter(NotificationRead.notification_id == notification_id)
+        if user_id is not None:
+            query = query.filter(NotificationRead.user_id == user_id)
+        return query.count()
+    finally:
+        db.close()
+
+
 def _llm_config_enabled(subject_id: int) -> bool | None:
     db = SessionLocal()
     try:
@@ -559,6 +571,16 @@ def _parent_code_expiry_for_student(student_id: int) -> datetime | None:
         row = db.query(Student).filter(Student.id == student_id).first()
         assert row is not None
         return row.parent_code_expires
+    finally:
+        db.close()
+
+
+def _user_id_for_username(username: str) -> int:
+    db = SessionLocal()
+    try:
+        row = db.query(User).filter(User.username == username).first()
+        assert row is not None
+        return int(row.id)
     finally:
         db.close()
 
@@ -2083,3 +2105,179 @@ def test_hard68_generated_parent_codes_get_future_expiry_and_revoke_clears_expir
     assert revoked.status_code == 200, revoked.text
     assert _parent_code_for_student(student_id) is None
     assert _parent_code_expiry_for_student(student_id) is None
+
+
+def test_hard69_student_cannot_mark_targeted_notification_for_other_student_read(client: TestClient):
+    teacher = _create_teacher("notif_read_target_teacher")
+    class_id = _create_class("security-notif-read-target")
+    student_a = _extra_student_account_for_class(class_id, "notif_read_target_a")
+    student_b = _extra_student_account_for_class(class_id, "notif_read_target_b")
+    subject_id = _create_subject("Notification read targeted course", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student_a["student_id"]), class_id)
+    _enroll_student(subject_id, int(student_b["student_id"]), class_id)
+    notification_id = _create_notification(
+        subject_id,
+        class_id,
+        int(teacher["user_id"]),
+        "hard69 targeted notice",
+        target_student_id=int(student_b["student_id"]),
+    )
+    student_a_headers = login_api(client, str(student_a["username"]), str(student_a["password"]))
+
+    r = client.post(f"/api/notifications/{notification_id}/read", headers=student_a_headers)
+
+    assert r.status_code == 403
+    assert _notification_read_count(notification_id, _user_id_for_username(str(student_a["username"]))) == 0
+
+
+def test_hard70_teacher_cannot_mark_foreign_target_user_notification_read(client: TestClient):
+    owner = _create_teacher("notif_read_owner")
+    other = _create_teacher("notif_read_other")
+    class_id = _create_class("security-notif-read-user-target")
+    notification_id = _create_notification(
+        None,
+        class_id,
+        int(owner["user_id"]),
+        "hard70 teacher-targeted notice",
+    )
+    db = SessionLocal()
+    try:
+        row = db.query(Notification).filter(Notification.id == notification_id).first()
+        assert row is not None
+        row.target_user_id = int(owner["user_id"])
+        db.commit()
+    finally:
+        db.close()
+    other_headers = login_api(client, str(other["username"]), str(other["password"]))
+
+    r = client.post(f"/api/notifications/{notification_id}/read", headers=other_headers)
+
+    assert r.status_code == 403
+    assert _notification_read_count(notification_id, int(other["user_id"])) == 0
+
+
+def test_hard71_student_cannot_mark_unenrolled_elective_notification_read(client: TestClient):
+    teacher = _create_teacher("notif_read_elective_teacher")
+    class_id = _create_class("security-notif-read-elective")
+    student = _extra_student_account_for_class(class_id, "notif_read_elective")
+    subject_id = _create_subject("Notification read hidden elective", int(teacher["user_id"]), class_id, "elective")
+    notification_id = _create_notification(subject_id, class_id, int(teacher["user_id"]), "hard71 hidden elective")
+    student_headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    visible = client.get("/api/notifications?page_size=100", headers=student_headers)
+    assert visible.status_code == 200, visible.text
+    assert notification_id not in {row["id"] for row in visible.json()["data"]}
+    r = client.post(f"/api/notifications/{notification_id}/read", headers=student_headers)
+
+    assert r.status_code == 403
+    assert _notification_read_count(notification_id, _user_id_for_username(str(student["username"]))) == 0
+
+
+def test_hard72_mark_all_read_only_creates_read_rows_for_visible_notifications(client: TestClient):
+    teacher = _create_teacher("notif_mark_all_teacher")
+    class_id = _create_class("security-notif-mark-all")
+    student = _extra_student_account_for_class(class_id, "notif_mark_all_student")
+    peer = _extra_student_account_for_class(class_id, "notif_mark_all_peer")
+    required_subject = _create_subject("Notification mark all required", int(teacher["user_id"]), class_id)
+    elective_subject = _create_subject("Notification mark all elective", int(teacher["user_id"]), class_id, "elective")
+    _enroll_student(required_subject, int(student["student_id"]), class_id)
+    visible_general = _create_notification(required_subject, class_id, int(teacher["user_id"]), "hard72 visible general")
+    visible_target = _create_notification(
+        required_subject,
+        class_id,
+        int(teacher["user_id"]),
+        "hard72 visible target",
+        target_student_id=int(student["student_id"]),
+    )
+    hidden_target = _create_notification(
+        required_subject,
+        class_id,
+        int(teacher["user_id"]),
+        "hard72 hidden peer target",
+        target_student_id=int(peer["student_id"]),
+    )
+    hidden_elective = _create_notification(elective_subject, class_id, int(teacher["user_id"]), "hard72 hidden elective")
+    student_headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    r = client.post("/api/notifications/mark-all-read", headers=student_headers)
+
+    assert r.status_code == 200, r.text
+    user_id = _user_id_for_username(str(student["username"]))
+    assert _notification_read_count(visible_general, user_id) == 1
+    assert _notification_read_count(visible_target, user_id) == 1
+    assert _notification_read_count(hidden_target, user_id) == 0
+    assert _notification_read_count(hidden_elective, user_id) == 0
+
+
+def test_hard73_parent_code_rate_limit_isolated_per_code(client: TestClient):
+    class_id = _create_class("security-parent-rate-isolated")
+    student_id = _extra_student_for_class(class_id, "parent_rate_isolated")
+    valid_code = _set_parent_code(student_id, "HARD73OK")
+    for _ in range(30):
+        r = client.get("/api/parent/verify/HARD73NO")
+        assert r.status_code == 200
+
+    bad_limited = client.get("/api/parent/verify/HARD73NO")
+    assert bad_limited.status_code == 429
+    good = client.get(f"/api/parent/verify/{valid_code}")
+    assert good.status_code == 200
+    assert good.json()["valid"] is True
+
+
+def test_hard74_parent_student_endpoint_rate_limits_repeated_invalid_code(client: TestClient):
+    for _ in range(30):
+        r = client.get("/api/parent/student/HARD74NO")
+        assert r.status_code == 404
+
+    limited = client.get("/api/parent/student/HARD74NO")
+
+    assert limited.status_code == 429
+
+
+def test_hard75_batch_parent_code_generation_deduplicates_student_ids(client: TestClient):
+    teacher = _create_teacher("parent_batch_dedup")
+    class_id = _create_class("security-parent-batch-dedup")
+    student_id = _extra_student_for_class(class_id, "parent_batch_dedup")
+    subject_id = _create_subject("Parent batch dedup course", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, student_id, class_id)
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.post("/api/parent/students/batch-generate-codes", headers=headers, json=[student_id, student_id])
+
+    assert r.status_code == 200, r.text
+    assert r.json()["generated_count"] == 1
+    assert [row["student_id"] for row in r.json()["students"]] == [student_id]
+
+
+def test_hard76_class_teacher_batch_generation_stays_direct_class_only_with_duplicates(client: TestClient):
+    teacher = _create_teacher("parent_batch_ct_teacher")
+    ct = _create_class_teacher("parent_batch_ct")
+    own_student_id = _extra_student_for_class(int(ct["class_id"]), "parent_batch_ct_own")
+    foreign_class_id = _create_class("security-parent-batch-ct-foreign")
+    foreign_student_id = _extra_student_for_class(foreign_class_id, "parent_batch_ct_foreign")
+    subject_id = _create_subject("Parent ct foreign visible course", int(teacher["user_id"]), foreign_class_id)
+    _enroll_student(subject_id, foreign_student_id, foreign_class_id)
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=subject_id,
+                class_id=int(ct["class_id"]),
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(
+        "/api/parent/students/batch-generate-codes",
+        headers=headers,
+        json=[own_student_id, foreign_student_id, own_student_id],
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["generated_count"] == 1
+    assert [row["student_id"] for row in r.json()["students"]] == [own_student_id]
+    assert _parent_code_for_student(foreign_student_id) is None

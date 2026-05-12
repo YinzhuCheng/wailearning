@@ -60,6 +60,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import api from '@/api'
+import { handleParentApiError } from '@/session'
 
 const router = useRouter()
 const loading = ref(false)
@@ -91,6 +92,7 @@ const fetchScores = async () => {
     scores.value = data.scores
     total.value = data.total
   } catch (e) {
+    if (handleParentApiError(e)) return
     console.error('获取成绩失败', e)
   } finally {
     loading.value = false

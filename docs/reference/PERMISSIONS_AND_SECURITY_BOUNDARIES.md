@@ -115,6 +115,9 @@ The class-teacher rule is intentionally narrower than general course visibility:
 The hardening regression is
 `test_hard50_class_teacher_cannot_revoke_parent_code_for_foreign_class_student_only_visible_through_course_link`
 in `tests/security/test_security_hardening_followup.py`.
+Batch generation follows the same authorization policy and deduplicates
+repeated student ids in one request so one caller cannot rotate the same
+student's code multiple times through a duplicated payload.
 
 Parent-code read endpoints are also student-scoped. `/api/parent/scores` and
 `/api/parent/stats` use the linked `Student.id`. `/api/parent/homework` and
@@ -122,6 +125,14 @@ Parent-code read endpoints are also student-scoped. `/api/parent/scores` and
 `subject_id` must also match a `CourseEnrollment` for the linked student. Same
 administrative class is not enough to expose elective course homework or
 notifications to that student's guardian.
+
+Notification read-state writes use the same visibility boundary as notification
+lists. `POST /api/notifications/{id}/read` first proves the current JWT user can
+see the notification through `_visible_notifications_query(...)`; existing but
+invisible notification ids return 403 and do not create `notification_reads`
+rows. Student visibility additionally requires a matching enrollment for
+subject-scoped notifications, while `subject_id IS NULL` class/global rows
+remain visible when the class and target-student filters allow them.
 
 ---
 

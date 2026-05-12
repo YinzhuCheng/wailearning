@@ -573,6 +573,28 @@ as final product approval. Notification read-state isolation between parent
 portal and admin/student surfaces remains worth a dedicated browser-backed
 round if parent read/unread UX grows beyond the current list-only parent API.
 
+**Notification and parent-session follow-up round:** The next red-team batch
+added backend `hard69`-`hard76` plus parent SPA cases 04-06. It found and fixed
+three concrete issues. First, `POST /api/notifications/{id}/read` accepted an
+existing notification id without proving the current JWT user could see that
+notification, so hidden targeted or foreign-user notices could receive read
+rows. It now reuses `_visible_notifications_query(...)` and returns 403 without
+creating `notification_reads` for existing but invisible ids. Second, the
+student notification visibility helper did not apply the same enrollment
+subject-scope as parent notification reads, so same-class unenrolled elective
+notifications could appear in student list/mark-all-read flows. Student
+notification list, single read, and mark-all-read now require `subject_id IS
+NULL` or an enrolled subject. Third, parent batch code generation processed
+duplicate student ids independently, rotating the same code more than once in a
+single request. The batch endpoint now deduplicates ids before authorization and
+generation.
+
+The browser-backed parent SPA round also verified that invalid codes do not
+bind local storage, revoked stored codes clear the parent session and redirect
+protected routes to `/login`, and student JWT read-state does not hide parent
+portal notification list rows. Parent read-state remains list-only; add new
+cross-surface tests if parent-side read/unread mutations are introduced.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -597,6 +619,13 @@ round if parent read/unread UX grows beyond the current list-only parent API.
 13. If parent notification read-state is added to the parent portal, add a
     cross-surface E2E that marks notifications read in parent SPA and verifies
     admin/student unread state does not leak or disappear across roles.
+14. Add a PostgreSQL-backed run for notification visibility/read-state and
+    parent-code batch dedup once `TEST_DATABASE_URL` is available; inspect
+    query plans for student notification filters that combine class, target,
+    and `subject_id IS NULL OR IN (...)`.
+15. Continue probing parent-code abuse surfaces around distributed rate limits,
+    code guessing telemetry, and stale browser state across multiple tabs or
+    multiple children if the product later supports family switching.
 
 ## What This Document Is Not
 

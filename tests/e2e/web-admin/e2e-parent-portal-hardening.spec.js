@@ -88,7 +88,7 @@ async function seedHiddenParentContent(s, hiddenPrefix) {
   return { hiddenHomework, hiddenNotice, visibleNotice }
 }
 
-test.describe('parent portal hardening E2E (3 cases)', () => {
+test.describe('parent portal hardening E2E (6 cases)', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -128,6 +128,65 @@ test.describe('parent portal hardening E2E (3 cases)', () => {
   test('03 parent notifications UI hides unenrolled elective notices but shows class notices', async ({ page }) => {
     const s = scenario()
     const seeded = await seedHiddenParentContent(s, 'E2E_PARENT_NOTICE')
+    await page.goto(`${parentBase()}/login`)
+    await page.getByRole('textbox').fill(s.parent_code)
+    await page.getByRole('button').click()
+    await expect(page).toHaveURL(/\/home$/, { timeout: 30000 })
+    await page.goto(`${parentBase()}/notifications`)
+    await expect(page.locator('.notification-list')).toContainText(seeded.visibleNotice, { timeout: 30000 })
+    await expect(page.locator('.notification-list')).not.toContainText(seeded.hiddenNotice)
+  })
+
+  test('04 invalid parent code stays on login and does not bind local storage', async ({ page }) => {
+    await page.goto(`${parentBase()}/login`)
+    await page.getByRole('textbox').fill('BADCODE1')
+    await page.getByRole('button').click()
+
+    await expect(page).toHaveURL(/\/login$/, { timeout: 30000 })
+    const stored = await page.evaluate(() => ({
+      parentCode: localStorage.getItem('parent_code'),
+      studentId: localStorage.getItem('student_id')
+    }))
+    expect(stored.parentCode).toBeNull()
+    expect(stored.studentId).toBeNull()
+  })
+
+  test('05 revoked parent code local session is cleared on protected homework route', async ({ page }) => {
+    const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    const revoked = await apiStatus(`/api/parent/students/${s.student_plain.student_row_id}/revoke-code`, {
+      method: 'DELETE',
+      token: teacherToken
+    })
+    expect(revoked.status).toBe(200)
+
+    await page.goto(`${parentBase()}/login`)
+    await page.evaluate(({ code, student }) => {
+      localStorage.setItem('parent_code', code)
+      localStorage.setItem('student_name', student.name)
+      localStorage.setItem('student_id', String(student.student_row_id))
+    }, { code: s.parent_code, student: s.student_plain })
+    await page.goto(`${parentBase()}/homework`)
+
+    await expect(page).toHaveURL(/\/login$/, { timeout: 30000 })
+    const stored = await page.evaluate(() => localStorage.getItem('parent_code'))
+    expect(stored).toBeNull()
+  })
+
+  test('06 parent notification list is isolated from student JWT read state', async ({ page }) => {
+    const s = scenario()
+    const seeded = await seedHiddenParentContent(s, 'E2E_PARENT_READSTATE')
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
+    const list = await apiStatus('/api/notifications?page_size=100', { token: studentToken })
+    expect(list.status).toBe(200)
+    const visibleNotice = JSON.parse(list.text).data.find(row => row.title === seeded.visibleNotice)
+    expect(visibleNotice).toBeTruthy()
+    const read = await apiStatus(`/api/notifications/${visibleNotice.id}/read`, {
+      method: 'POST',
+      token: studentToken
+    })
+    expect(read.status).toBe(200)
+
     await page.goto(`${parentBase()}/login`)
     await page.getByRole('textbox').fill(s.parent_code)
     await page.getByRole('button').click()

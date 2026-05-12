@@ -72,6 +72,13 @@ such as `/student`, `/homework`, `/notifications`, `/scores`, and `/stats`
 raise HTTP errors for missing, expired, or invalid codes. Generated codes carry
 a future expiry; revocation clears both the code and expiry.
 
+The parent SPA treats those read-side HTTP errors as an invalid local binding.
+If a stored code is revoked, expired, invalid, or rate-limited, protected
+screens clear only parent-session local storage keys and redirect back to
+`/login`. Login attempts clear any stale parent-session keys before verifying
+the submitted code, so a failed bind must not leave an older student context in
+the browser.
+
 Browser coverage for the parent SPA lives in the admin Playwright package so it
 can reuse the existing seeded FastAPI runner. Use:
 

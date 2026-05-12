@@ -19,7 +19,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
 )
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.db.models import Class, Notification, NotificationRead, User, UserRole
+from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Notification, NotificationRead, User, UserRole
 from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     NotificationCreate,
@@ -59,10 +59,20 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
         student = get_student_profile_for_user(current_user, db)
         if not student:
             return query.filter(false())
+        enrolled_subject_ids = [
+            int(row[0])
+            for row in db.query(CourseEnrollment.subject_id)
+            .filter(CourseEnrollment.student_id == student.id)
+            .all()
+        ]
         query = query.filter(
             Notification.target_user_id.is_(None),
             or_(Notification.target_student_id.is_(None), Notification.target_student_id == student.id),
         )
+        if enrolled_subject_ids:
+            query = query.filter(or_(Notification.subject_id.is_(None), Notification.subject_id.in_(enrolled_subject_ids)))
+        else:
+            query = query.filter(Notification.subject_id.is_(None))
 
     if current_user.role != UserRole.ADMIN:
         query = query.filter(
@@ -382,11 +392,12 @@ def mark_as_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    notification = db.query(Notification).filter(Notification.id == notification_id).first()
-    if not notification:
+    exists = db.query(Notification.id).filter(Notification.id == notification_id).first()
+    if not exists:
         raise HTTPException(status_code=404, detail="Notification not found.")
 
-    if (notification.notification_kind or "") == "password_reset_request" and current_user.role != UserRole.ADMIN:
+    notification = _visible_notifications_query(current_user, db).filter(Notification.id == notification_id).first()
+    if not notification:
         raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
     read_record = db.query(NotificationRead).filter(

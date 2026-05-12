@@ -78,6 +78,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bell, Document, TrendCharts, Calendar, SwitchButton, ArrowRight } from '@element-plus/icons-vue'
 import api from '@/api'
+import { clearParentSession, handleParentApiError } from '@/session'
 
 const router = useRouter()
 const parentCode = localStorage.getItem('parent_code')
@@ -91,6 +92,7 @@ const fetchStats = async () => {
     const data = await api.getStats(parentCode)
     stats.value = data
   } catch (e) {
+    if (handleParentApiError(e)) return
     console.error('获取统计失败', e)
   }
 }
@@ -100,12 +102,13 @@ const fetchRecentScores = async () => {
     const data = await api.getScores(parentCode, { page: 1, page_size: 5 })
     recentScores.value = data.scores
   } catch (e) {
+    if (handleParentApiError(e)) return
     console.error('获取成绩失败', e)
   }
 }
 
 const handleLogout = () => {
-  localStorage.clear()
+  clearParentSession()
   router.push('/login')
 }
 

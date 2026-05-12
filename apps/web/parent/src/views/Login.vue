@@ -46,6 +46,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Key } from '@element-plus/icons-vue'
 import api from '@/api'
+import { clearParentSession } from '@/session'
 import courseEvalMark from '@/assets/brand/courseeval-mark.svg'
 
 const router = useRouter()
@@ -68,6 +69,7 @@ const handleLogin = async () => {
 
   loading.value = true
   try {
+    clearParentSession()
     const verifyResult = await api.verifyCode(form.value.parentCode)
 
     if (verifyResult.valid) {
