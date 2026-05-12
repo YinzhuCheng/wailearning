@@ -27,6 +27,53 @@ If you are about to run tests, especially as an LLM coding agent on Windows + Po
 
 If you skip this checklist, you may spend time debugging the shell, temp directories, old background processes, or port collisions instead of the repository itself.
 
+## Fuzzy Pitfall Lookup Before Failure Triage
+
+Before classifying any command, test, Playwright, PostgreSQL, encoding, port,
+process, selector, or local-environment failure, search the pitfall memory. Do
+this before changing product code or deciding whether the failure is product,
+test-contract, harness, or environment.
+
+Use the repository helper from the repo root:
+
+```powershell
+python ops\scripts\dev\search_pitfalls.py "initdb restricted token error code 87 postgres"
+python ops\scripts\dev\search_pitfalls.py "playwright grep no tests found"
+python ops\scripts\dev\search_pitfalls.py "QueuePool course card timeout"
+```
+
+The helper searches:
+
+- this Markdown pitfall file;
+- `docs/development/testing/pitfall-index.csv`;
+- `docs/architecture/TROUBLESHOOTING.md`;
+- `docs/development/DEVELOPMENT_AND_TESTING.md`;
+- repo-local `skills/*/SKILL.md`.
+
+Fuzzy lookup strategy:
+
+1. Search the exact error text first, including numeric error codes.
+2. Search the command or tool name (`pytest`, `playwright`, `initdb`,
+   `postgres`, `npm.cmd`, `selector`, `encoding`, etc.).
+3. Search the affected subsystem or harness (`parent portal`, `notification`,
+   `e2e`, `sqlite`, `QueuePool`, `localStorage`, `TEST_DATABASE_URL`).
+4. Search aliases and near terms. Examples: `pg` and `postgres`; `e2e` and
+   `playwright`; `utf8`, `utf-8`, and `mojibake`.
+5. Inspect both the structured index hit and the surrounding Markdown or skill
+   guidance before acting.
+
+Interpretation rules:
+
+- A search hit is a lead, not a verdict. Confirm that the root cause and
+  mitigation match the current failure before reusing it.
+- If an existing pitfall matches, record the observed run or validation result
+  in the relevant ledger; do not create duplicate pitfall entries.
+- Add a new pitfall only when the root cause, trigger condition, or mitigation
+  is genuinely new.
+- If the search returns no useful hits, document the failed lookup in your
+  reasoning, classify the failure from primary evidence, and add a pitfall if
+  the trap is repeatable.
+
 ## Scope of the Recorded Session
 
 - Host shell: Windows PowerShell

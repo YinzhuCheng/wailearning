@@ -102,6 +102,7 @@
                         "ops/scripts/dev/validation_history.py",
                         "ops/scripts/dev/check_repo_skills.py",
                         "ops/scripts/dev/lint_validation_registry.py",
+                        "ops/scripts/dev/search_pitfalls.py",
                         "tests/backend/manual/test_validation_selector.py"
                     ]
                 },
@@ -141,6 +142,7 @@
                     "ops/scripts/dev/validation_history.py",
                     "ops/scripts/dev/check_repo_skills.py",
                     "ops/scripts/dev/lint_validation_registry.py",
+                    "ops/scripts/dev/search_pitfalls.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
                     "tests/TEST_SELECTION_TARGETS.json",
@@ -160,6 +162,7 @@
                     "ops/scripts/dev/run_validation_profile.py",
                     "ops/scripts/dev/validation_history.py",
                     "ops/scripts/dev/lint_validation_registry.py",
+                    "ops/scripts/dev/search_pitfalls.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
                     "tests/TEST_SELECTION_TARGETS.json",

@@ -104,6 +104,15 @@ automatically. Use it when a selector recommendation should be turned into a
 local run record with stdout/stderr logs and a ledger snippet that can be
 manually translated into CSV rows.
 
+Failure triage should start with the pitfall lookup helper:
+
+- [`ops/scripts/dev/search_pitfalls.py`](../../ops/scripts/dev/search_pitfalls.py)
+
+Use it before classifying command/test/environment failures or changing product
+code. It fuzzy-searches the pitfall Markdown, structured pitfall index,
+troubleshooting notes, development testing guidance, and repo-local skills so
+agents can reuse known mitigations instead of rediscovering them.
+
 Registry commands should use portable command names where practical. The runner
 normalizes `python` to the repository virtualenv when present, falls back to the
 current interpreter, and maps `npm`/`npm.cmd` plus `npx`/`npx.cmd` to the

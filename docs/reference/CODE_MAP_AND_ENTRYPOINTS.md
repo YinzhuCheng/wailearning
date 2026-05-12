@@ -131,6 +131,7 @@ Detail: [`product/PARENT_PORTAL.md`](../product/PARENT_PORTAL.md).
 | [`ops/nginx/courseeval.example.conf`](../../ops/nginx/courseeval.example.conf) | Example nginx |
 | [`ops/scripts/deploy_backend.sh`](../../ops/scripts/deploy_backend.sh) | Deploy helper |
 | [`ops/scripts/dev/repo_line_health.py`](../../ops/scripts/dev/repo_line_health.py) | Repository line-count health metrics: documentation, tests, primary source, and supporting categories |
+| [`ops/scripts/dev/search_pitfalls.py`](../../ops/scripts/dev/search_pitfalls.py) | Fuzzy lookup across pitfall docs, pitfall CSV index, troubleshooting notes, development testing guidance, and repo-local skills before failure triage |
 
 ---
 

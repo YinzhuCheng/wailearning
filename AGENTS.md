@@ -36,6 +36,16 @@ CourseEval treats **code as documentation** and **documentation as governance**.
 6. **Do not revive removed legacy fallbacks.** Student identity resolves through `users.student_id`; course/class access resolves through `CourseEnrollment` and `subject_class_links`. Do not reintroduce `wailearning_backend`, `Subject.class_id` access fallbacks, or username/student-number guessing as normal feature behavior.
 7. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
 8. **Local agent workspace:** `.agent-run/` is the ignored, local-only workspace for private absolute paths, temporary orchestrators, logs, screenshots, and validation planning notes. Read task-relevant local files when continuing work on this machine, especially `.agent-run/local-private-paths.md` if present. Keep handoff-worthy repository context in committed docs when the task needs it, and keep machine-local notes private under `.agent-run/`. Never commit `.agent-run/` contents. Older local notes may still say `.e2e-run/`; in this worktree that role has been superseded by `.agent-run/` while `.e2e-run/` remains ignored for compatibility.
+9. **Failure triage starts with pitfall search.** Before classifying any command,
+   test, Playwright, PostgreSQL, encoding, port, process, selector, or local
+   environment failure, search the pitfall memory first: run
+   `python ops/scripts/dev/search_pitfalls.py "<error text or symptom>"`, then
+   inspect [`docs/development/TEST_EXECUTION_PITFALLS.md`](docs/development/TEST_EXECUTION_PITFALLS.md),
+   [`docs/development/testing/pitfall-index.csv`](docs/development/testing/pitfall-index.csv),
+   [`docs/architecture/TROUBLESHOOTING.md`](docs/architecture/TROUBLESHOOTING.md),
+   and the task-relevant skill. Do not guess, rewrite product code, or label a
+   failure as product/test/environment until the existing pitfall memory has
+   been checked.
 
 ---
 
@@ -107,6 +117,14 @@ current task.
    `source_commit_sha=Null`; do not rewrite old prose just to assign historical
    numbers. For a new pitfall, use the most recent committed hash at the time
    the pitfall is recorded as `source_commit_sha`.
+   Use `python ops/scripts/dev/search_pitfalls.py "<symptom>"` as the default
+   fuzzy lookup before deciding whether the event is a new pitfall. Search the
+   exact error text, the command/tool name, the affected framework, and likely
+   aliases such as `pg`/`postgres`, `e2e`/`playwright`, or `utf8`/`mojibake`.
+   If the search finds an existing entry with the same root cause and
+   mitigation, add only the observed run/validation evidence. Add a new pitfall
+   entry only when the root cause, trigger condition, or mitigation is genuinely
+   new.
 6a. **Record each conversation round in the update log.** At the end of every
    user-visible work round that changes repository files, append one row to
    `docs/development/testing/agent-update-log.csv`. Use a positive increasing

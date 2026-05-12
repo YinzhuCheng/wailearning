@@ -194,7 +194,7 @@ apps/backend/courseeval_backend/bootstrap.py","Changes to default/demo student s
 Changes to reconcile_student_users_and_roster or user-to-roster repair behavior.
 Changes to canonical student/user binding rules, especially legacy username == student_no recovery.
 Changes to repair CLI output, dry-run/apply semantics, or ambiguity blocking.",cursor/unify-student-identity-plan,this commit,passed,2026-05-09,9,11
-static.validation_selector,static-check,"Static and smoke validation for the first-version diff-based validation target selector. This target proves the selector script compiles, the machine-readable registry is valid JSON, representative path-based recommendations work, the selector can read target-level history from this ledger, and the runners can write ignored structured local history, pytest JUnit result summaries, and profile-level summaries.",".venv\Scripts\python.exe -m py_compile ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py ops\scripts\dev\validation_history.py tests\backend\manual\test_validation_selector.py
+static.validation_selector,static-check,"Static and smoke validation for the first-version diff-based validation target selector. This target proves the selector script compiles, the machine-readable registry is valid JSON, representative path-based recommendations work, pitfall fuzzy lookup works, the selector can read target-level history from this ledger, and the runners can write ignored structured local history, pytest JUnit result summaries, and profile-level summaries.",".venv\Scripts\python.exe -m py_compile ops\scripts\dev\select_validation_targets.py ops\scripts\dev\run_validation_target.py ops\scripts\dev\run_validation_profile.py ops\scripts\dev\validation_history.py ops\scripts\dev\search_pitfalls.py tests\backend\manual\test_validation_selector.py
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths apps\backend\courseeval_backend\api\routers\learning_notes.py
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --paths ops\scripts\dev\select_validation_targets.py tests\TEST_SELECTION_TARGETS.json --json
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree --json
@@ -203,17 +203,18 @@ python ops\scripts\dev\run_validation_target.py static.validation_selector --dry
 ops/scripts/dev/run_validation_target.py
 ops/scripts/dev/run_validation_profile.py
 ops/scripts/dev/validation_history.py
+ops/scripts/dev/search_pitfalls.py
 tests/TEST_SELECTION_TARGETS.json
 tests/backend/manual/test_validation_selector.py
 docs/development/DEVELOPMENT_AND_TESTING.md
 docs/development/TEST_SUITE_MAP.md
-docs/development/TEST_EXECUTION_LEDGER.md","Changes to the selector script.
+docs/development/TEST_EXECUTION_LEDGER.md","Changes to the selector or pitfall-search scripts.
 Changes to the machine-readable target registry.
 Changes to the ledger heading or strict field format parsed by the selector.
 Changes to validation-profile documentation or target-selection policy.
 Changes to path matching semantics, fallback rules, or risk-level ordering.
 Changes to structured local history schema, signature calculation, or runner history writing.
-Changes to validation profile policy, risk filtering, or review-target execution defaults.",cursor/repository-normalization,this commit,passed,2026-05-12,13,13
+Changes to validation profile policy, risk filtering, or review-target execution defaults.",cursor/repository-normalization,43cef79,passed,2026-05-13,18,18
 backend.scores.dashboard_course_scope,backend-pytest,"Focused score/dashboard API target for subject-scoped teacher visibility, score composition, grade appeals, and course-owned dashboard stats/rankings.",.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q,<repo>,"tests/backend/integration/test_core_api_surface.py
 tests/backend/scores/test_score_composition.py
 apps/backend/courseeval_backend/api/routers/dashboard.py

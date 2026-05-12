@@ -18,6 +18,7 @@ from check_operator_scripts import check_scripts as check_operator_scripts  # no
 from check_repo_skills import check_repo_skills  # noqa: E402
 from check_schema_governance import check_schema_governance  # noqa: E402
 from pytest_sqlite_guard import build_report, is_pytest_process  # noqa: E402
+from search_pitfalls import build_corpus, search_blocks  # noqa: E402
 from select_validation_targets import parse_ledger  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
 from run_validation_target import (
@@ -184,6 +185,14 @@ class ValidationSelectorTests(unittest.TestCase):
         ids = recommendation_ids(payload)
         self.assertIn("static.encoding_text_tools", ids)
         self.assertIn("static.local_test_guardrails", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_pitfall_search_change_is_static_selector_governance(self):
+        payload = run_selector("--paths", "ops/scripts/dev/search_pitfalls.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.validation_selector", ids)
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
@@ -679,6 +688,23 @@ class ValidationSelectorTests(unittest.TestCase):
             issues = check_repo_skills(root)
 
         self.assertIn("skills/sample-skill/SKILL.md: contains TODO placeholder", issues)
+
+    def test_search_pitfalls_finds_postgres_restricted_token_guidance(self):
+        blocks = build_corpus(REPO_ROOT, context_lines=1)
+        hits = search_blocks("initdb restricted token error code 87 postgres", blocks, limit=8)
+
+        self.assertTrue(hits)
+        rendered = "\n".join(f"{hit.path}:{hit.line}:{hit.title}:{hit.snippet}" for hit in hits)
+        self.assertIn("postgres-release-validation", rendered)
+        self.assertIn("restricted", rendered.lower())
+
+    def test_search_pitfalls_finds_playwright_grep_pitfall(self):
+        blocks = build_corpus(REPO_ROOT, context_lines=1)
+        hits = search_blocks("playwright grep describe text no tests found", blocks, limit=8)
+
+        self.assertTrue(hits)
+        rendered = "\n".join(f"{hit.path}:{hit.line}:{hit.title}:{hit.snippet}" for hit in hits)
+        self.assertIn("Playwright grep", rendered)
 
     def test_schema_governance_check_passes_for_repository_schema_contract(self):
         self.assertEqual(check_schema_governance(REPO_ROOT), [])
