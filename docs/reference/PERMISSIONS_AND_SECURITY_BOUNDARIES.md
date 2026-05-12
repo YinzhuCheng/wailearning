@@ -153,6 +153,18 @@ those rows intentionally reach every role's unscoped notification stream.
 Teachers and class teachers cannot create those rows directly and cannot update
 an existing class/course notice to clear both scope columns. This prevents a
 course or class notification composer from becoming a site-wide broadcast tool.
+The create path treats `class_id=0` the same as an empty class for this guard so
+clients cannot create malformed `subject_id IS NULL`, `class_id=0` rows.
+
+Notification target fields are also write-validated. A manual notification may
+target either one student (`target_student_id`) or one staff/user account
+(`target_user_id`), but not both. Targeted student notices must point at an
+existing student in the selected class when `class_id` is present, and at a
+student enrolled in the selected course when `subject_id` is present. Non-admin
+staff may only set `target_user_id` to their own user id; administrators may
+target other users. These checks happen before persisting create/update payloads
+so later UI or query changes cannot accidentally expose malformed targeted
+notification rows.
 
 ---
 

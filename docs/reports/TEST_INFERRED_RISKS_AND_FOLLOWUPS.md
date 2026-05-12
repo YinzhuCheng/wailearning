@@ -636,6 +636,18 @@ admin-only: non-admin staff must bind manual notifications to a course or class,
 and cannot widen an existing scoped notice into global scope. Admin-created
 global notices remain supported and are covered by backend and browser tests.
 
+**Notification target-scope follow-up round:** The next red-team batch added
+backend `hard102`-`hard112` plus admin Playwright notification deep-tier cases
+21-22. It hardened targeted notification writes before malformed rows can be
+stored: a payload cannot target both `target_student_id` and `target_user_id`;
+targeted students must belong to the selected class and, for course notices,
+must be enrolled in the selected course; non-admin staff may only target their
+own user id; and `class_id=0` on create is normalized into the same empty-class
+shape as a global notice before applying the admin-only global-write guard. The
+browser coverage now includes both the API denial for teacher-to-other-teacher
+targeting and a real teacher notification composer submission proving the UI
+posts the current course/class scope rather than an accidental global row.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -678,13 +690,19 @@ global notices remain supported and are covered by backend and browser tests.
 18. Continue probing cross-course notification read-state when a single teacher
     owns several multi-class courses and switches rapidly between them; the
     current tests focus on one multi-class required course.
-19. Add direct UI composer coverage for notification scope controls. The current
-    browser checks use direct API calls plus header badge assertions; a future
-    UI regression could still expose a misleading "global" publish affordance to
-    normal teachers if the form later adds such a selector.
+19. If notification update semantics need explicit clearing of
+    `target_student_id` or `target_user_id`, design and test a
+    `model_fields_set`-aware contract first; the current update path validates
+    and applies non-null target changes but does not treat omitted vs explicit
+    `null` as a separate clearing operation.
 20. Run PostgreSQL-backed notification authorization tests when a
     `TEST_DATABASE_URL` is available, especially around the global-row predicate
     combined with class, target-user, target-student, and course-scoped filters.
+21. Continue probing bulk or system-generated targeted notifications, especially
+    score-appeal/password-reset flows that may set target fields outside the
+    manual `/api/notifications` create/update path.
+22. Stress concurrent notification target updates with mark-read/mark-all-read
+    on PostgreSQL once the target-scope predicates are covered there.
 
 ## What This Document Is Not
 

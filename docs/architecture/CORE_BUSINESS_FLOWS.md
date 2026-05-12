@@ -215,6 +215,12 @@ Global notification publishing is an admin operation. A row with both
 streams across roles, so teachers and class teachers must not be able to create
 one or update a scoped notice into that shape.
 
+Targeted manual notification writes are validated before persistence. A row may
+target one student or one user, but not both. `target_student_id` must match the
+selected class and, for course notices, an enrollment in the selected course.
+Non-admin staff may only set `target_user_id` to their own user id; admin can
+target other users.
+
 Course-scoped notification reading has two class-scope layers. Admins and the
 assigned course teacher see the whole course notification scope, including
 class broadcasts for all `subject_class_links`. Students and class teachers

@@ -947,7 +947,7 @@
             "id": "behavior.notifications.sync_api_edge",
             "category": "behavior-pytest",
             "risk": "targeted",
-            "description": "Behavior pytest target for notification list/sync-status alignment, concurrent read-state updates, and subject-scoped authorization edges.",
+            "description": "Behavior pytest target for notification list/sync-status alignment, concurrent read-state updates, subject-scoped authorization edges, and target-scope regressions.",
             "working_directory": ".",
             "coverage_tags": [
                 "notifications",
@@ -1707,7 +1707,7 @@
             "id": "admin.e2e.notification_sync_deep_tier",
             "category": "admin-playwright",
             "risk": "broad",
-            "description": "Deeper notification sync Playwright tier for admin global totals, course switch discipline, localStorage poison healing, concurrent publishes, isolation, mobile viewport, cold polling, delete races, multi-class course badge boundaries, and admin-only global notification write scope.",
+            "description": "Deeper notification sync Playwright tier for admin global totals, course switch discipline, localStorage poison healing, concurrent publishes, isolation, mobile viewport, cold polling, delete races, multi-class course badge boundaries, admin-only global notification write scope, notification target-user denial, and UI composer course/class scope.",
             "working_directory": "apps/web/admin",
             "requires_review_reason": "High-cost browser tier with concurrency and viewport coverage; run when notification UI/state convergence changes are material.",
             "coverage_tags": [

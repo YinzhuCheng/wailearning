@@ -1,5 +1,5 @@
 /**
- * Twenty deeper Playwright checks motivated by residual risks after `e2e-notification-header-sync-tier.spec.js`:
+ * Twenty-two deeper Playwright checks motivated by residual risks after `e2e-notification-header-sync-tier.spec.js`:
  *
  * - Admin **`notificationSyncParams === null`** uses global sync (must match list aggregates).
  * - Teacher/student **course context** vs **orphan localStorage** / **deep links** / **rapid switching**.
@@ -71,7 +71,7 @@ async function courseNameById(token, courseId) {
   return row.name
 }
 
-test.describe('E2E notification sync deep tier (20 cases)', () => {
+test.describe('E2E notification sync deep tier (22 cases)', () => {
   test.describe.configure({ timeout: 120_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -676,5 +676,85 @@ test.describe('E2E notification sync deep tier (20 cases)', () => {
         return Number.parseInt(`${txt}`.trim(), 10)
       })
       .toBe(after.unread_count)
+  })
+
+  test('21 teacher cannot target another teacher user from course notification API', async ({ page }) => {
+    const s = scenario()
+    const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    const otherTok = await obtainAccessToken(s.teacher_other.username, s.password_teacher_student)
+    const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
+    const otherTeacher = await apiGetJson('/api/auth/me', otherTok)
+    const before = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+
+    const status = await fetchStatus('POST', '/api/notifications', {
+      token: teacherTok,
+      body: {
+        title: `E2E_TARGET_USER_DENY_${s.suffix}_${Date.now()}`,
+        content: 'teacher must not target another teacher',
+        class_id: s.class_id_1,
+        subject_id: s.course_required_id,
+        target_user_id: otherTeacher.id
+      }
+    })
+    expect(status).toBe(403)
+
+    const after = await apiGetJson(`/api/notifications/sync-status?subject_id=${s.course_required_id}`, studentTok)
+    expect(after.total).toBe(before.total)
+    expect(after.unread_count).toBe(before.unread_count)
+
+    await login(page, s.student_plain.username, s.password_teacher_student)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await triggerHeaderPoll(page)
+    if (after.unread_count === 0) {
+      await expect(page.locator('[data-testid="header-notification-badge"] .el-badge__content')).toHaveCount(0)
+    } else {
+      await expect
+        .poll(async () => {
+          const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')
+          return Number.parseInt(`${txt}`.trim(), 10)
+        })
+        .toBe(after.unread_count)
+    }
+  })
+
+  test('22 teacher notification composer posts current course scope not global', async ({ page }) => {
+    const s = scenario()
+    const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    const title = `E2E_UI_SCOPED_${s.suffix}_${Date.now()}`
+    let observedPayload = null
+
+    await login(page, s.teacher_own.username, s.password_teacher_student)
+    await page.goto('/students', { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await expect(page.getByTestId('header-course-switch')).toBeVisible({ timeout: 20000 })
+    await clickCourseSwitcherOption(page, await courseNameById(teacherTok, s.course_required_id))
+    await page.goto('/notifications', { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await expect(page).toHaveURL(/\/notifications$/, { timeout: 20000 })
+
+    const responsePromise = page.waitForResponse(resp => {
+      const req = resp.request()
+      if (!resp.url().includes('/api/notifications') || req.method() !== 'POST') return false
+      observedPayload = JSON.parse(req.postData() || '{}')
+      return true
+    })
+    await page.getByRole('button', { name: /发布通知/ }).click()
+    const dialog = page.locator('.el-dialog').filter({ hasText: '发布通知' }).last()
+    await expect(dialog).toBeVisible({ timeout: 10000 })
+    await dialog.getByLabel(/通知标题/).fill(title)
+    await dialog.locator('textarea').first().fill('composer scope guard')
+    await dialog.getByRole('button', { name: /保存/ }).click()
+    const response = await responsePromise
+
+    expect(response.status()).toBe(200)
+    expect(Number(observedPayload.subject_id)).toBe(Number(s.course_required_id))
+    expect(Number(observedPayload.class_id)).toBe(Number(s.class_id_1))
+
+    const list = await apiGetJson(
+      `/api/notifications?subject_id=${s.course_required_id}&page=1&page_size=100`,
+      teacherTok
+    )
+    const row = (list.data || []).find(item => item.title === title)
+    expect(row).toBeTruthy()
+    expect(Number(row.subject_id)).toBe(Number(s.course_required_id))
+    expect(Number(row.class_id)).toBe(Number(s.class_id_1))
   })
 })

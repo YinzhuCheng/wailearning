@@ -20,7 +20,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
 )
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Notification, NotificationRead, User, UserRole
+from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Notification, NotificationRead, Student, User, UserRole
 from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     NotificationCreate,
@@ -50,8 +50,49 @@ def _ensure_notification_course_publish_access(user: User, course) -> None:
 def _ensure_notification_write_scope(user: User, subject_id: Optional[int], class_id: Optional[int]) -> None:
     if is_admin(user):
         return
-    if subject_id is None and class_id is None:
+    if subject_id is None and (class_id is None or class_id == 0):
         raise HTTPException(status_code=403, detail="Only administrators can publish global notifications.")
+
+
+def _ensure_notification_target_scope(
+    db: Session,
+    user: User,
+    subject_id: Optional[int],
+    class_id: Optional[int],
+    target_student_id: Optional[int],
+    target_user_id: Optional[int],
+) -> None:
+    if target_student_id is not None and target_user_id is not None:
+        raise HTTPException(status_code=400, detail="A notification cannot target both a student and a user.")
+
+    if target_user_id is not None:
+        target_user = db.query(User).filter(User.id == target_user_id).first()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Target user not found.")
+        if not is_admin(user) and int(target_user_id) != int(user.id):
+            raise HTTPException(status_code=403, detail="You can only target notifications to yourself.")
+
+    if target_student_id is None:
+        return
+
+    target_student = db.query(Student).filter(Student.id == target_student_id).first()
+    if not target_student:
+        raise HTTPException(status_code=404, detail="Target student not found.")
+
+    if class_id is not None and int(target_student.class_id) != int(class_id):
+        raise HTTPException(status_code=400, detail="Target student must belong to the notification class.")
+
+    if subject_id is not None:
+        enrolled = (
+            db.query(CourseEnrollment.id)
+            .filter(
+                CourseEnrollment.subject_id == subject_id,
+                CourseEnrollment.student_id == target_student_id,
+            )
+            .first()
+        )
+        if not enrolled:
+            raise HTTPException(status_code=400, detail="Target student must be enrolled in the notification course.")
 
 
 def _course_class_ids_for_course_wide_notification_view(current_user: User, db: Session, course) -> list[int]:
@@ -307,21 +348,31 @@ def create_notification(
     if not is_admin_or_teacher(current_user):
         raise HTTPException(status_code=403, detail="Only teachers can publish notifications.")
 
-    if data.class_id:
-        class_obj = db.query(Class).filter(Class.id == data.class_id).first()
+    effective_class_id = None if data.class_id == 0 else data.class_id
+
+    if effective_class_id:
+        class_obj = db.query(Class).filter(Class.id == effective_class_id).first()
         if not class_obj:
             raise HTTPException(status_code=404, detail="Class not found.")
 
-    _ensure_notification_write_scope(current_user, data.subject_id, data.class_id)
+    _ensure_notification_write_scope(current_user, data.subject_id, effective_class_id)
+    _ensure_notification_target_scope(
+        db,
+        current_user,
+        data.subject_id,
+        effective_class_id,
+        data.target_student_id,
+        data.target_user_id,
+    )
 
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
         _ensure_notification_course_publish_access(current_user, course)
-        if data.class_id and course.class_id and course.class_id != data.class_id:
+        if effective_class_id and course.class_id and course.class_id != effective_class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
-    elif data.class_id:
+    elif effective_class_id:
         class_ids = get_accessible_class_ids(current_user, db)
-        if not is_admin(current_user) and data.class_id not in class_ids:
+        if not is_admin(current_user) and effective_class_id not in class_ids:
             raise HTTPException(status_code=403, detail="You can only publish notifications for accessible classes.")
 
     kind = (data.notification_kind or "general").strip()
@@ -336,7 +387,7 @@ def create_notification(
         attachment_url=data.attachment_url,
         priority=data.priority,
         is_pinned=data.is_pinned,
-        class_id=data.class_id,
+        class_id=effective_class_id,
         subject_id=data.subject_id,
         target_student_id=data.target_student_id,
         related_homework_id=data.related_homework_id,
@@ -382,6 +433,16 @@ def update_notification(
     if data.class_id is not None:
         effective_class_id = None if data.class_id == 0 else data.class_id
     _ensure_notification_write_scope(current_user, effective_subject_id, effective_class_id)
+    effective_target_student_id = data.target_student_id if data.target_student_id is not None else notification.target_student_id
+    effective_target_user_id = data.target_user_id if data.target_user_id is not None else notification.target_user_id
+    _ensure_notification_target_scope(
+        db,
+        current_user,
+        effective_subject_id,
+        effective_class_id,
+        effective_target_student_id,
+        effective_target_user_id,
+    )
 
     if data.subject_id is not None:
         course = ensure_course_access_http(data.subject_id, current_user, db)
@@ -417,6 +478,10 @@ def update_notification(
         notification.class_id = None if data.class_id == 0 else data.class_id
     if data.subject_id is not None:
         notification.subject_id = data.subject_id
+    if data.target_student_id is not None:
+        notification.target_student_id = data.target_student_id
+    if data.target_user_id is not None:
+        notification.target_user_id = data.target_user_id
     if data.notification_kind is not None:
         nk = (data.notification_kind or "").strip()
         if nk == "password_reset_request":

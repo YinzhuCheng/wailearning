@@ -130,9 +130,13 @@ CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
 
 ### Playwright deep tier (follow-up hazards)
 
-- **File:** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` (**20** `test(...)` cases).
+- **File:** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` (**22** `test(...)` cases).
 - **Why it exists:** The first tier proved baseline badge wiring; this module stresses **role-specific** aggregation (**admin** global `sync-status` vs **teacher/student** course-scoped params), **corrupt `selected_course` localStorage** healing, **concurrent** teacher `POST`s, **teacher-owned vs other-teacher** notification isolation, **403** on inaccessible `subject_id`, **mobile viewport**, **full page reload** (`onMounted` → `pollNotificationSync` without relying on manual focus), **delete race** while the student notifications view loads, **multi-class course** badge behavior where students must not see another linked class's broadcast while the assigned teacher still sees the whole course scope, and global-notification write scope where ordinary teachers are rejected while admin global broadcasts still reach the student header badge.
 - **Lessons baked into the spec comments:**
+  - Cases **21-22** add notification target-scope coverage: a teacher cannot
+    direct a course notification at another teacher's user id, and the
+    notification composer posts the current course/class scope instead of an
+    accidental global row.
   - Teachers may land on **`/students`** (post-login default after **`Dashboard.vue` removal**; historically **`/dashboard`**) with **`ensureSelectedCourse`** picking a **non-required** course first (ranking by semester/id). Assertions against **`course_required_id`** must **explicitly switch** via **`header-course-switch`** → `.course-dropdown-menu .course-option` (click **switcher**, not hover-only).
   - Multi-class notification E2E setup must first update the course `class_links` to include the second class. Publishing a `subject_id = null` broadcast to an unrelated class without that link should correctly return **403** for a normal teacher, which is a setup error for multi-class badge tests rather than evidence of a product regression.
   - Course switcher assertions should use the course name returned by `GET /api/subjects`, not Chinese labels copied from terminal output. PowerShell can display valid UTF-8 as mojibake; API-derived names avoid corrupted selector literals.
@@ -167,6 +171,14 @@ These are not “optional commentary”; they are contract fixes discovered whil
 4. **Multi-class course notification visibility:** Course-scoped notification reads distinguish course-wide authority from class-local audience. Admins and assigned course teachers can read `subject_id = course` rows and `subject_id IS NULL` broadcasts for every class linked to the course. Students and non-instructor class teachers can read only their own class plus global `class_id IS NULL` rows, even when the requested course links multiple classes. This rule applies to list, sync-status, detail, single-read, and mark-all-read so another linked class's broadcast cannot inflate the header badge or create `notification_reads` for the wrong audience.
 
 5. **Global notification writes are admin-only:** `subject_id IS NULL` plus `class_id IS NULL` is a site-wide notification stream. Manual teacher/class-teacher writes must stay course- or class-scoped; otherwise a normal teacher can inflate unrelated students' header badges or inject another teacher's unscoped inbox. `create_notification` and `update_notification` now reject non-admin attempts to create or widen a notice into that global scope, while admin-created global notices remain visible and badge-counted for normal users.
+
+6. **Notification target scope is validated on write:** `target_student_id` must
+refer to an existing student in the selected class and, for course
+notifications, to a student enrolled in the selected course. `target_user_id`
+is limited to the caller's own user id for non-admin staff; administrators may
+target other users. A payload cannot target both a student and a user. The
+create path also normalizes `class_id=0` to an empty class before applying the
+admin-only global-write guard.
 
 ## Related documentation
 

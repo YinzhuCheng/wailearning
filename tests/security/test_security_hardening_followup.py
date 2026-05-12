@@ -212,6 +212,16 @@ def _notification_scope(notification_id: int) -> tuple[int | None, int | None, i
         db.close()
 
 
+def _notification_target_student_id(notification_id: int) -> int | None:
+    db = SessionLocal()
+    try:
+        row = db.query(Notification).filter(Notification.id == notification_id).first()
+        assert row is not None
+        return int(row.target_student_id) if row.target_student_id is not None else None
+    finally:
+        db.close()
+
+
 def _notification_kind(notification_id: int) -> str | None:
     db = SessionLocal()
     try:
@@ -2864,3 +2874,249 @@ def test_hard101_teacher_cannot_update_general_notice_to_password_reset_kind(cli
 
     assert r.status_code == 403
     assert _notification_kind(notification_id) != "password_reset_request"
+
+
+def test_hard102_teacher_cannot_create_course_notification_for_unenrolled_target_student(client: TestClient):
+    teacher = _create_teacher("notif_target_unenrolled_teacher")
+    class_id = _create_class("security-notif-target-unenrolled")
+    enrolled_student = _extra_student_account_for_class(class_id, "notif_target_enrolled")
+    unenrolled_student = _extra_student_account_for_class(class_id, "notif_target_unenrolled")
+    subject_id = _create_subject("Notification target unenrolled", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(enrolled_student["student_id"]), class_id)
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    before = _notification_count_for_subject(subject_id)
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard102 unenrolled target",
+            "content": "must not store unenrolled target",
+            "class_id": class_id,
+            "subject_id": subject_id,
+            "target_student_id": int(unenrolled_student["student_id"]),
+        },
+    )
+
+    assert r.status_code == 400
+    assert _notification_count_for_subject(subject_id) == before
+
+
+def test_hard103_teacher_can_create_course_notification_for_enrolled_target_student(client: TestClient):
+    teacher = _create_teacher("notif_target_enrolled_teacher")
+    class_id = _create_class("security-notif-target-enrolled")
+    student = _extra_student_account_for_class(class_id, "notif_target_enrolled_ok")
+    subject_id = _create_subject("Notification target enrolled", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard103 enrolled target",
+            "content": "target is valid",
+            "class_id": class_id,
+            "subject_id": subject_id,
+            "target_student_id": int(student["student_id"]),
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert int(r.json()["target_student_id"]) == int(student["student_id"])
+
+
+def test_hard104_teacher_cannot_target_student_from_different_class_on_class_notice(client: TestClient):
+    teacher = _create_teacher("notif_target_foreign_class_teacher")
+    own_class_id = _create_class("security-notif-target-own-class")
+    other_class_id = _create_class("security-notif-target-other-class")
+    other_student = _extra_student_account_for_class(other_class_id, "notif_target_other_class_student")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    before = _notification_count_for_subject(None)
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard104 foreign class target",
+            "content": "target class mismatch",
+            "class_id": own_class_id,
+            "subject_id": None,
+            "target_student_id": int(other_student["student_id"]),
+        },
+    )
+
+    assert r.status_code == 400
+    assert _notification_count_for_subject(None) == before
+
+
+def test_hard105_admin_can_create_global_target_student_notification(client: TestClient):
+    ensure_admin()
+    class_id = _create_class("security-notif-admin-target-student")
+    student = _extra_student_account_for_class(class_id, "notif_admin_global_target_student")
+    headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard105 admin target student",
+            "content": "admin global student target",
+            "class_id": None,
+            "subject_id": None,
+            "target_student_id": int(student["student_id"]),
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert int(r.json()["target_student_id"]) == int(student["student_id"])
+
+
+def test_hard106_teacher_cannot_target_other_teacher_user(client: TestClient):
+    owner = _create_teacher("notif_target_user_owner")
+    other = _create_teacher("notif_target_user_other")
+    class_id = _create_class("security-notif-target-user")
+    subject_id = _create_subject("Notification target user", int(owner["user_id"]), class_id)
+    headers = login_api(client, str(owner["username"]), str(owner["password"]))
+    before = _notification_count_for_subject(subject_id)
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard106 other teacher target user",
+            "content": "must not target other teacher",
+            "class_id": class_id,
+            "subject_id": subject_id,
+            "target_user_id": int(other["user_id"]),
+        },
+    )
+
+    assert r.status_code == 403
+    assert _notification_count_for_subject(subject_id) == before
+
+
+def test_hard107_teacher_can_target_self_user_on_owned_course_notification(client: TestClient):
+    teacher = _create_teacher("notif_target_self_teacher")
+    class_id = _create_class("security-notif-target-self")
+    subject_id = _create_subject("Notification target self", int(teacher["user_id"]), class_id)
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard107 self target user",
+            "content": "self target is valid",
+            "class_id": class_id,
+            "subject_id": subject_id,
+            "target_user_id": int(teacher["user_id"]),
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert _notification_scope(int(r.json()["id"]))[2] == int(teacher["user_id"])
+
+
+def test_hard108_notification_cannot_target_student_and_user_together(client: TestClient):
+    teacher = _create_teacher("notif_dual_target_teacher")
+    class_id = _create_class("security-notif-dual-target")
+    student = _extra_student_account_for_class(class_id, "notif_dual_target_student")
+    subject_id = _create_subject("Notification dual target", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    before = _notification_count_for_subject(subject_id)
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard108 dual target",
+            "content": "cannot target both",
+            "class_id": class_id,
+            "subject_id": subject_id,
+            "target_student_id": int(student["student_id"]),
+            "target_user_id": int(teacher["user_id"]),
+        },
+    )
+
+    assert r.status_code == 400
+    assert _notification_count_for_subject(subject_id) == before
+
+
+def test_hard109_teacher_cannot_update_notice_to_unenrolled_target_student(client: TestClient):
+    teacher = _create_teacher("notif_update_unenrolled_teacher")
+    class_id = _create_class("security-notif-update-unenrolled")
+    enrolled_student = _extra_student_account_for_class(class_id, "notif_update_enrolled")
+    unenrolled_student = _extra_student_account_for_class(class_id, "notif_update_unenrolled")
+    subject_id = _create_subject("Notification update target unenrolled", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(enrolled_student["student_id"]), class_id)
+    notification_id = _create_notification(subject_id, class_id, int(teacher["user_id"]), "hard109 course notice")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"target_student_id": int(unenrolled_student["student_id"])},
+    )
+
+    assert r.status_code == 400
+    assert _notification_target_student_id(notification_id) is None
+
+
+def test_hard110_teacher_cannot_update_notice_to_other_teacher_target_user(client: TestClient):
+    owner = _create_teacher("notif_update_target_owner")
+    other = _create_teacher("notif_update_target_other")
+    class_id = _create_class("security-notif-update-target-user")
+    subject_id = _create_subject("Notification update target user", int(owner["user_id"]), class_id)
+    notification_id = _create_notification(subject_id, class_id, int(owner["user_id"]), "hard110 course notice")
+    headers = login_api(client, str(owner["username"]), str(owner["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"target_user_id": int(other["user_id"])},
+    )
+
+    assert r.status_code == 403
+    assert _notification_scope(notification_id)[2] is None
+
+
+def test_hard111_admin_can_update_notice_to_valid_target_student(client: TestClient):
+    ensure_admin()
+    teacher = _create_teacher("notif_admin_update_target_teacher")
+    class_id = _create_class("security-notif-admin-update-target")
+    student = _extra_student_account_for_class(class_id, "notif_admin_update_target_student")
+    subject_id = _create_subject("Notification admin update target", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    notification_id = _create_notification(subject_id, class_id, int(teacher["user_id"]), "hard111 course notice")
+    headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"target_student_id": int(student["student_id"])},
+    )
+
+    assert r.status_code == 200, r.text
+    assert _notification_target_student_id(notification_id) == int(student["student_id"])
+
+
+def test_hard112_teacher_cannot_create_null_subject_class_zero_notification(client: TestClient):
+    teacher = _create_teacher("notif_create_class_zero_teacher")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    before = _notification_count_for_subject(None)
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard112 class zero create",
+            "content": "class zero should not bypass global write guard",
+            "class_id": 0,
+            "subject_id": None,
+        },
+    )
+
+    assert r.status_code == 403
+    assert _notification_count_for_subject(None) == before
