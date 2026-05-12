@@ -13,7 +13,7 @@
 | Stored value (`users.role`) | Typical meaning |
 |----------------------------|-----------------|
 | `admin` | Full administration; bypasses many class filters via queries |
-| `class_teacher` | Scoped to `user.class_id` **plus** courses they instruct (`Subject.teacher_id`) |
+| `class_teacher` | Can see class-linked courses through `subject_class_links` **plus** courses they instruct (`Subject.teacher_id`); class-linked visibility is not course management permission |
 | `teacher` | Subject teacher — primarily courses where `Subject.teacher_id == user.id` |
 | `student` | Student — enrolled courses only (via `CourseEnrollment`) |
 
@@ -48,6 +48,52 @@ Key symbols:
 
 ---
 
+### Visibility is not management permission
+
+`ensure_course_access_http(subject_id, current_user, db)` proves that the caller
+may see or enter a course. It does **not** prove that the caller may mutate the
+course or write business records into it.
+
+Current management rule for course-owned writes:
+
+- `is_course_instructor(user, course)` is the shared ownership predicate.
+- It returns true for administrators and for the assigned course teacher
+  (`Subject.teacher_id == user.id`).
+- A `class_teacher` who sees a course only because it is linked to their class
+  through `subject_class_links` is a reader/observer for that course, not the
+  course manager.
+
+The distinction was hardened after repeated May 2026 security runs found
+`class_teacher` users could mutate teacher-owned visible courses through
+multiple routes. Future route work must keep this layering:
+
+1. use `ensure_course_access_http(...)` for course visibility and read/list
+   scopes;
+2. add `is_course_instructor(...)` or a small route-local wrapper before any
+   course-owned mutation;
+3. keep no-subject class-wide workflows on class filters only when the record is
+   truly class-scoped.
+
+Course-owned mutation surfaces that currently require the assigned teacher or
+admin include:
+
+- subject/course update, delete, cover upload, roster sync, roster enroll,
+  enrollment-type update, and student removal;
+- course material creation and course homework creation;
+- score creation/update/delete, batch score import, exam weights, grade schemes,
+  and score-appeal responses;
+- attendance create/update/delete plus batch and class-batch course attendance;
+- course notification publish/update when `subject_id` is set;
+- course LLM config `GET` and `PUT` under
+  `/api/llm-settings/courses/{subject_id}`.
+
+Tests that guard this boundary live in
+`tests/security/test_security_hardening_followup.py` and
+`tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`. Extend those
+files when adding a new course-owned mutation route.
+
+---
+
 ### Subject-scoped route ordering rule
 
 When a FastAPI route is explicitly scoped by `subject_id` / course id, validate
@@ -76,11 +122,13 @@ Why this matters:
 Safe pattern:
 
 1. If `subject_id` is present, call `ensure_course_access_http(...)`.
-2. Build the query from the course/subject predicate, for example
+2. If the operation mutates course-owned state, call `is_course_instructor(...)`
+   or a route-local wrapper that enforces the assigned-teacher/admin rule.
+3. Build the query from the course/subject predicate, for example
    `Score.subject_id == subject_id`.
-3. Apply optional `class_id` filters only as additional narrowing, not as the
+4. Apply optional `class_id` filters only as additional narrowing, not as the
    initial permission gate.
-4. For no-`subject_id` list endpoints, keep class-wide filtering via
+5. For no-`subject_id` list endpoints, keep class-wide filtering via
    `get_accessible_class_ids(...)` / `apply_class_id_filter(...)`.
 
 ---
@@ -107,7 +155,13 @@ Homework routers (`api/routers/homework.py`) generally:
 | Surface | Who configures |
 |---------|----------------|
 | Global endpoint presets, global quota policy | Admin (`/api/llm-settings` family) |
-| Per-course LLM enable, endpoints order, prompts | Teacher assigned to course **or** admin; class teachers may manage courses for their class per recent product rules — verify router guards when editing |
+| Per-course LLM enable, endpoints order, prompts | Assigned course teacher (`Subject.teacher_id`) or admin. Class-linked visibility alone is not enough. |
+
+Current implementation note: per-course LLM config is stricter than older
+product phrasing in some historical docs. `GET` and `PUT`
+`/api/llm-settings/courses/{subject_id}` now require the assigned course teacher
+or admin; class-linked visibility alone is not enough to read or change course
+LLM config.
 
 **Agent rule:** open the specific router function before assuming UI parity.
 
@@ -148,3 +202,8 @@ These control **navigation/UI**. They do **not** replace backend checks.
 ## 10. 待人工确认
 
 - **Exact matrix** for every `subjects` mutation endpoint across `class_teacher` vs `teacher` (product evolves). Agents must grep `is_course_instructor` / `ensure_course_access` at edit time rather than trusting prose alone.
+- **Exact matrix** for every newly added course mutation endpoint still needs
+  active verification at edit time. A route that calls
+  `ensure_course_access_http(...)` is not automatically safe for writes; grep
+  for an assigned-teacher/admin guard and add a hardening test when extending
+  course-owned mutations.

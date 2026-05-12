@@ -493,6 +493,30 @@ This section records **residual risk and suspected sources** after a long full-s
 
 **Mitigation (engineering):** when changing pagination defaults, grep **`page_size`** across routers and the admin `src/api` client together; keep at least one **per-family** API test (see `e2e-pitfall-guard-rails-batch2.spec.js`) or pytest parametrics so drift is caught early.
 
+### May 2026: class-teacher visible-course management boundary
+
+**Concern:** The class-teacher role has legitimate course visibility through
+`subject_class_links`, but that visibility must not become write authority over
+another teacher's course-owned state.
+
+**Evidence:** Repeated security hardening runs on
+`tests/security/test_security_hardening_followup.py` exposed real gaps before
+the current fixes: class teachers could mutate teacher-owned visible courses
+through subject management, cover uploads, roster operations, material/homework
+creation, scores and grade schemes, attendance writes, notification publishing,
+and course LLM config.
+
+**Current mitigation:** The affected routers now layer
+`is_course_instructor(...)` or equivalent route-local wrappers after
+`ensure_course_access_http(...)` for course-owned writes. The focused backend
+security file and `tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`
+cover the red-to-green boundary.
+
+**Residual risk:** Future feature work can reintroduce the same mistake by
+copying a read/list pattern into a write route. Any new route that writes
+course-owned data should include a direct class-teacher visible-course denial
+test before it is treated as secure.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -503,6 +527,8 @@ This section records **residual risk and suspected sources** after a long full-s
 6. Harden course enrollment creation so reconciliation cannot double-insert the same row (see P2 `course_enrollments` item above); re-validate on SQLite and Postgres.
 7. Lock Element Plus locale (or E2E strategy) to avoid English message-box affordances in a Chinese UI.
 8. After any API pagination limit change, grep the admin SPA for `page_size` and align client requests with server `le=` constraints.
+9. For every new course-owned mutation, test `class_teacher` visibility without
+   assigned-teacher ownership and require **403** plus unchanged data.
 
 ## What This Document Is Not
 

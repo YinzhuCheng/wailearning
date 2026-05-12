@@ -61,7 +61,10 @@ The system assumes presets are the reusable source of truth. Courses do not crea
 
 ## Course Workflow
 
-Teachers configure LLM behavior per course.
+Teachers configure LLM behavior per course. In the current backend this means
+the assigned course teacher (`Subject.teacher_id`) or an administrator. A
+`class_teacher` may see a class-linked course without being allowed to read or
+change that course's LLM config.
 
 - Enable or disable LLM use at the course level.
 - Set prompts and response language.
@@ -70,6 +73,16 @@ Teachers configure LLM behavior per course.
 - Preserve course-specific routing and prompt behavior even when global quota defaults change.
 
 Quota day boundaries and estimation policy are deliberately not configured here. They belong to the system-level LLM usage policy so students do not see multiple quota calendars or per-course daily pools.
+
+Route-level authorization note:
+
+- `GET /api/llm-settings/courses/{subject_id}` and
+  `PUT /api/llm-settings/courses/{subject_id}` both require the assigned course
+  teacher or admin.
+- Plain course visibility from `ensure_course_access_http(...)` is not enough
+  because the course config route returns and initializes management state.
+- Student quota read endpoints are separate and must stay side-effect-light;
+  they should not call `ensure_course_llm_config(...)`.
 
 ## Homework Workflow
 

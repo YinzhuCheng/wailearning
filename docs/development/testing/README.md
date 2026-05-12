@@ -11,6 +11,8 @@ that agents append and tooling parses live here.
 | `test-execution-targets.csv` | One row per validation target: category, scope, canonical command, last observed result, pass count, run count, relevant paths, and retest triggers. |
 | `test-execution-runs.csv` | Append-only observed run history. Add failed, blocked, timed-out, interrupted, and skipped attempts as well as passes. |
 | `test-execution-summary.csv` | Short scan aid for recent or important observed validation runs. |
+| `pitfall-index.csv` | Structured index for pitfalls recorded in Markdown docs. New pitfalls use increasing positive `pitfall_sequence`; legacy Markdown-only entries may use `0` and `Null`. |
+| `agent-update-log.csv` | One row per user-visible repository-changing conversation round, starting at sequence 1. Summaries stay short; details remain in docs, ledgers, and commits. |
 
 ## Rules
 
@@ -24,3 +26,9 @@ that agents append and tooling parses live here.
    `../TEST_EXECUTION_PITFALLS.md`; keep CSV notes short and factual.
 5. Use UTF-8 and the repository safe-text workflow before editing these files
    from Windows PowerShell.
+6. When adding a new pitfall to Markdown, add a matching row to
+   `pitfall-index.csv` in the same change set. Use the most recent committed
+   hash as `source_commit_sha`.
+7. At the end of every repository-changing conversation round, append one row
+   to `agent-update-log.csv` before committing. Use the most recent committed
+   hash from the start of the round as `source_commit_sha`.

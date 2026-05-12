@@ -3089,6 +3089,58 @@ Verification pattern:
 - do **not** rely on `subject_class_links` or teacher `user.class_id` unless the scenario is explicitly class-scoped;
 - confirm that teacher-owned subject operations still work for attachments, homework batch operations, and attendance writes after the change.
 
+### Pitfall: visible course access is not course management permission
+
+The mirror-image regression is treating a `class_teacher` who can see a course
+through `subject_class_links` as if they can manage that course. That was a real
+bug across several repository-normalization hardening rounds.
+
+Observed failure pattern:
+
+1. `class_teacher` has `user.class_id = class A`.
+2. A course is linked to class A, so `ensure_course_access_http(...)` succeeds.
+3. The course is actually owned by another teacher through `Subject.teacher_id`.
+4. A mutation endpoint uses only role membership plus course visibility.
+5. The `class_teacher` can mutate another teacher's course-owned records.
+
+Routes that have already been hardened after this bug pattern:
+
+- `api/routers/subjects.py`: update/delete, cover upload, sync-enrollments,
+  roster-enroll, enrollment-type update, and student removal.
+- `api/routers/materials.py`: course material creation.
+- `api/routers/homework.py`: course homework creation.
+- `api/routers/scores.py`: score creation/update/delete, batch score import,
+  exam weights, grade schemes, and score-appeal responses.
+- `api/routers/attendance.py`: course attendance create/update/delete plus
+  batch and class-batch variants.
+- `api/routers/notifications.py`: course notification publish/update when
+  `subject_id` is set.
+- `api/routers/llm_settings.py`: course LLM config `GET` and `PUT`.
+
+Safe rule:
+
+- Use `ensure_course_access_http(...)` for visibility and read/list access.
+- Add `is_course_instructor(...)` or a route-local wrapper for any
+  course-owned mutation.
+- Do not assume `class_teacher` plus class-linked course visibility equals
+  assigned-teacher authority.
+
+Verification pattern:
+
+- seed a course whose `Subject.teacher_id` belongs to a teacher;
+- link that course to a class teacher's class via `subject_class_links`;
+- login as the class teacher and attempt the write directly over HTTP;
+- assert **403** and verify the target row did not change.
+
+Canonical regression files:
+
+- `tests/security/test_security_hardening_followup.py`
+- `tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`
+
+The May 2026 ledger rows around `security.api_regression` document the observed
+red-to-green sequence. Extend the same tests before adding a new route that can
+write course-owned data.
+
 ### Pitfall: validation targets must not borrow unrelated ledger IDs
 
 The validation selector reads `ledger_id` from

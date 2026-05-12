@@ -376,6 +376,24 @@ Files:
 
 API-level **authorization and abuse-edge** regression tests (unauthenticated vs role boundaries, admin-only routes, cross-tenant homework/parent-code actions, invalid tokens). Uses the same DB reset contract as `tests/behavior/`. Run targeted: `python -m pytest tests/security/ -q`.
 
+`tests/security/test_security_hardening_followup.py` is the additive hardening
+file for high-risk authorization edges discovered during repository
+normalization. As of May 2026 it includes the `class_teacher` read-vs-manage
+boundary for teacher-owned visible courses:
+
+- course update/delete/cover/roster management;
+- material and homework creation;
+- score writes, weights, grade schemes, and score-appeal responses;
+- attendance writes and batch attendance;
+- course notification publishing;
+- course LLM config management.
+
+When adding a new course-owned mutation endpoint, add the backend assertion here
+first. The paired browser-backed direct-API guard is
+`tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`; keep that file
+small and reserve it for high-value API edges that benefit from the managed
+Playwright seed/login path.
+
 ## Recommended Reading Order By Task
 
 ### If you are changing LLM logic

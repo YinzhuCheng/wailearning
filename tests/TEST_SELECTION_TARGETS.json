@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "description": "Machine-readable conservative mapping from changed repository paths to validation targets. This registry drives ops/scripts/dev/select_validation_targets.py. It complements docs/development/testing/test-execution-targets.csv and test-execution-runs.csv; it does not replace the ledger of observed runs.",
+    "description": "Machine-readable conservative mapping from changed repository paths to validation targets. This registry drives ops/scripts/dev/select_validation_targets.py. It complements docs/development/testing/test-execution-targets.csv, test-execution-runs.csv, pitfall-index.csv, and agent-update-log.csv; it does not replace the ledger of observed runs.",
     "defaults": {
         "repo_root_placeholder": "<repo>",
         "selection_policy": "conservative",
@@ -150,6 +150,8 @@
                     "docs/development/testing/test-execution-targets.csv",
                     "docs/development/testing/test-execution-runs.csv",
                     "docs/development/testing/test-execution-summary.csv",
+                    "docs/development/testing/pitfall-index.csv",
+                    "docs/development/testing/agent-update-log.csv",
                     "docs/development/TEST_SUITE_MAP.md"
                 ],
                 "globs": [

@@ -72,6 +72,11 @@ current task.
    that causes confusion, or outside the document's intended scope. When keeping
    documentation detailed, keep it highly structured so future agents can scan,
    route, and execute the guidance reliably.
+   Any code change that alters behavior, permissions, configuration, API
+   contracts, validation flow, or operational workflow must update the
+   corresponding committed documentation in the same change set. Do not leave
+   changed code with stale docs and plan to "document later" unless the user
+   explicitly asks for an isolated throwaway patch.
 5. **Preserve text encoding.** Treat Windows PowerShell rendering as
    display-only until verified. When editing multilingual or encoding-sensitive
    files, follow
@@ -93,6 +98,23 @@ current task.
    be automated yet, document the manual procedure and name the missing
    automation point so a later agent can code it instead of rediscovering the
    same failure.
+   Every newly recorded pitfall must also be indexed in
+   `docs/development/testing/pitfall-index.csv` with:
+   `pitfall_sequence`, `source_commit_sha`, `document_path`, `heading`,
+   `category`, `status`, and `notes`. New pitfall sequences are positive
+   integers that increase by one. Historical Markdown-only pitfalls that predate
+   the structured index may be represented with `pitfall_sequence=0` and
+   `source_commit_sha=Null`; do not rewrite old prose just to assign historical
+   numbers. For a new pitfall, use the most recent committed hash at the time
+   the pitfall is recorded as `source_commit_sha`.
+6a. **Record each conversation round in the update log.** At the end of every
+   user-visible work round that changes repository files, append one row to
+   `docs/development/testing/agent-update-log.csv`. Use a positive increasing
+   `update_sequence` starting at 1, include the most recent committed hash at
+   the start of that round as `source_commit_sha`, summarize the request and
+   changed files, and mark whether code, tests, docs, pitfalls, and validation
+   were touched. This log is a concise CSV index; keep detailed evidence in the
+   normal docs, ledgers, and commit message.
 7. **Keep private machine details local.** Real user names, absolute home
    paths, browser cache paths, downloaded binary locations, local database
    directories, local credentials/tokens, and machine-specific logs belong only

@@ -21,6 +21,26 @@ If you change router signatures, queue semantics, or worker startup, update this
 
 ## 1. Authentication and sessions
 
+### Cross-cutting course access rule
+
+Course visibility and course management are intentionally separate:
+
+- `ensure_course_access_http(subject_id, user, db)` answers "may this user see
+  or enter this course?"
+- `is_course_instructor(user, course)` answers "may this user manage this
+  course-owned state?"
+
+Administrators and the assigned `Subject.teacher_id` may manage course-owned
+state. A `class_teacher` who sees a course through `subject_class_links` may
+read/list/enter the course where the feature allows it, but that visibility
+does not authorize them to mutate another teacher's course.
+
+This rule applies to course update/delete/cover/roster operations, course
+materials/homework creation, scores, attendance, course notifications, and
+course LLM config. Future course-owned mutation routes should add both the
+router guard and a hardening test in
+`tests/security/test_security_hardening_followup.py`.
+
 ### Entry
 
 - `POST /api/auth/login` — `apps/backend/courseeval_backend/api/routers/auth.py`
@@ -130,6 +150,12 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 - `api/routers/llm_settings.py` — presets, course LLM config, global quota policy, student overrides.
 - Student-facing quota **read** endpoints avoid side effects that mutate course configuration (quota snapshots read from policy + usage tables).
 
+Course LLM config management (`GET` and `PUT`
+`/api/llm-settings/courses/{subject_id}`) is intentionally restricted to the
+assigned course teacher or admin. Class-linked `class_teacher` visibility alone
+is not sufficient because reading the config initializes/returns management
+state through `ensure_course_llm_config(...)`.
+
 ### Domain
 
 - Quota math and recording — `domains/llm/quota.py`, `domains/llm/token_quota.py`.
@@ -163,6 +189,11 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 
 - CRUD and read-state — `api/routers/notifications.py`
 - Lightweight poll snapshot — `GET /api/notifications/sync-status` (same visibility as list query helpers in-router).
+
+Course-scoped notification publishing is a management operation. A
+`class_teacher` may read notifications for a class-linked course they can
+access, but creating or rebinding a notification with `subject_id` requires the
+assigned course teacher or admin.
 
 ### Admin SPA behavior
 

@@ -1105,6 +1105,21 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 - `tests/security/test_security_regression.py` — twenty API security-boundary checks (admin vs teacher vs student, unauthenticated paths, invalid JWT).
 - `ops/scripts/dev/provision_postgres_pytest.sh` — idempotent **throwaway PostgreSQL** role+database for zero-skip full `pytest` (see Cross-platform smoke expectations above and **Pitfall 45** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
 
+Security hardening follow-up files added during repository normalization:
+
+- `tests/security/test_security_hardening_followup.py` - additive backend
+  security checks for recently discovered authorization gaps. The current
+  high-risk block proves that class-linked `class_teacher` course visibility
+  does not imply assigned-teacher management authority over subjects, roster
+  operations, materials, homework, scores, attendance, notifications, or course
+  LLM config.
+- `tests/e2e/web-admin/e2e-security-hardening-followup.spec.js` - small
+  browser-backed direct-API slice for the highest-value security hardening
+  cases. Use `node scripts/playwright-external-runner.cjs
+  e2e-security-hardening-followup.spec.js --project=chromium` from
+  `<repo>/apps/web/admin`; keep this file narrower than the backend security
+  suite.
+
 #### D. Agent hazard pass (additive, May 2026): new tests, pitfalls observed, worries, coverage gaps
 
 This subsection documents a follow-up **hazard-tier** pass that added **15 Playwright API tests** and **15 pytest E2E-dev API tests** (see file list under “New focused suites”). It is written primarily for LLM agents that need searchable, exhaustive context; humans may skim headings.

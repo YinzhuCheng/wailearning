@@ -75,6 +75,13 @@ UI and APIs may show **latest attempt content** while numeric grade reflects **e
 
 ## 8. Suggested human follow-ups
 
+Additional permission follow-up: recent hardening found multiple routes where
+`class_teacher` class-linked visibility was accidentally treated as
+assigned-teacher management authority. The current code is hardened across
+subjects, materials, homework, scores, attendance, notifications, and course
+LLM config, but every new course-owned mutation should still get an explicit
+security test.
+
 | Item | Why |
 |------|-----|
 | Alembic or formal migrations | Current `ensure_schema_updates` pattern works but requires discipline |
