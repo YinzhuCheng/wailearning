@@ -140,6 +140,12 @@ There is **no separate message broker** (no Redis/Celery) in this codebase; the 
 ### 3.5 Parent portal read path
 
 - Parent-facing aggregated homework/score routes live under `api/routers/parent.py` — they enforce parent-code verification and read student data indirectly; they do not bypass homework access rules for staff routes.
+- Parent homework and notification reads combine class/global visibility with
+  the linked student's course enrollments. Rows with `subject_id IS NULL` stay
+  class/global scoped; rows with `subject_id` require a matching
+  `CourseEnrollment(student_id, subject_id)`. This prevents same-class elective
+  homework or course notifications from leaking to guardians of students who
+  never enrolled in that elective.
 - Staff-side parent-code generation/revocation in the same router is not a
   generic course-visible operation. `admin` may manage any student's code, while
   `class_teacher` is limited to students in the class teacher's own

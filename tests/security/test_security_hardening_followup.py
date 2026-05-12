@@ -32,6 +32,7 @@ from apps.backend.courseeval_backend.db.models import (
     ScoreGradeAppeal,
     Student,
     SubjectClassLink,
+    Subject,
     User,
 )
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
@@ -144,11 +145,11 @@ def _material_section_count(material_id: int) -> int:
         db.close()
 
 
-def _create_course_homework(subject_id: int, class_id: int, teacher_id: int) -> int:
+def _create_course_homework(subject_id: int, class_id: int, teacher_id: int, title: str = "Security linked homework") -> int:
     db = SessionLocal()
     try:
         homework = Homework(
-            title="Security linked homework",
+            title=title,
             content="linked homework guard",
             class_id=class_id,
             subject_id=subject_id,
@@ -159,6 +160,32 @@ def _create_course_homework(subject_id: int, class_id: int, teacher_id: int) -> 
         db.add(homework)
         db.commit()
         return int(homework.id)
+    finally:
+        db.close()
+
+
+def _create_notification(
+    subject_id: int | None,
+    class_id: int | None,
+    teacher_id: int,
+    title: str,
+    target_student_id: int | None = None,
+) -> int:
+    db = SessionLocal()
+    try:
+        row = Notification(
+            title=title,
+            content="security notification guard",
+            content_format="plain",
+            priority="normal",
+            class_id=class_id,
+            subject_id=subject_id,
+            target_student_id=target_student_id,
+            created_by=teacher_id,
+        )
+        db.add(row)
+        db.commit()
+        return int(row.id)
     finally:
         db.close()
 
@@ -230,6 +257,101 @@ def _extra_student_for_class(class_id: int, label: str) -> int:
         user.student_id = student.id
         db.commit()
         return int(student.id)
+    finally:
+        db.close()
+
+
+def _extra_student_account_for_class(class_id: int, label: str) -> dict[str, object]:
+    db = SessionLocal()
+    try:
+        password = f"{label}_pass123"
+        user = User(
+            username=f"security_student_{label}",
+            hashed_password=get_password_hash(password),
+            real_name=f"Security Student {label}",
+            role=UserRole.STUDENT.value,
+            class_id=class_id,
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+        student = Student(name=f"Security Student {label}", student_no=user.username, class_id=class_id)
+        db.add(student)
+        db.flush()
+        user.student_id = student.id
+        db.commit()
+        return {"student_id": int(student.id), "username": user.username, "password": password}
+    finally:
+        db.close()
+
+
+def _create_teacher(label: str) -> dict[str, object]:
+    db = SessionLocal()
+    try:
+        password = f"{label}_pass123"
+        user = User(
+            username=f"security_teacher_{label}",
+            hashed_password=get_password_hash(password),
+            real_name=f"Security Teacher {label}",
+            role=UserRole.TEACHER.value,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        return {"user_id": int(user.id), "username": user.username, "password": password}
+    finally:
+        db.close()
+
+
+def _create_subject(
+    name: str,
+    teacher_id: int,
+    class_id: int | None,
+    course_type: str = "required",
+) -> int:
+    db = SessionLocal()
+    try:
+        subject = Subject(
+            name=name,
+            teacher_id=teacher_id,
+            class_id=class_id,
+            course_type=course_type,
+            status="active",
+        )
+        db.add(subject)
+        db.flush()
+        if class_id is not None:
+            db.add(
+                SubjectClassLink(
+                    subject_id=subject.id,
+                    class_id=class_id,
+                    enrollment_mode="all_in_class" if course_type == "required" else "roster_subset",
+                )
+            )
+        db.commit()
+        return int(subject.id)
+    finally:
+        db.close()
+
+
+def _enroll_student(subject_id: int, student_id: int, class_id: int, enrollment_type: str = "required") -> None:
+    db = SessionLocal()
+    try:
+        if not (
+            db.query(CourseEnrollment)
+            .filter(CourseEnrollment.subject_id == subject_id, CourseEnrollment.student_id == student_id)
+            .first()
+        ):
+            db.add(
+                CourseEnrollment(
+                    subject_id=subject_id,
+                    student_id=student_id,
+                    class_id=class_id,
+                    enrollment_type=enrollment_type,
+                    can_remove=enrollment_type == "elective",
+                )
+            )
+            db.commit()
     finally:
         db.close()
 
@@ -361,6 +483,29 @@ def _appeal_status(appeal_id: int) -> str:
         row = db.query(ScoreGradeAppeal).filter(ScoreGradeAppeal.id == appeal_id).first()
         assert row is not None
         return str(row.status)
+    finally:
+        db.close()
+
+
+def _appeal_count(
+    *,
+    subject_id: int,
+    student_id: int,
+    semester: str,
+    target_component: str,
+    status: str | None = None,
+) -> int:
+    db = SessionLocal()
+    try:
+        query = db.query(ScoreGradeAppeal).filter(
+            ScoreGradeAppeal.subject_id == subject_id,
+            ScoreGradeAppeal.student_id == student_id,
+            ScoreGradeAppeal.semester == semester,
+            ScoreGradeAppeal.target_component == target_component,
+        )
+        if status is not None:
+            query = query.filter(ScoreGradeAppeal.status == status)
+        return query.count()
     finally:
         db.close()
 
@@ -1484,3 +1629,258 @@ def test_hard52_dashboard_subject_stats_do_not_mix_scores_from_other_visible_cou
     assert scoped.status_code == 200, scoped.text
     assert scoped.json()["total_scores"] == 1
     assert scoped.json()["avg_score"] == 70
+
+
+def test_hard53_parent_homework_requires_subject_enrollment_for_same_class_electives(client: TestClient):
+    teacher = _create_teacher("parent_homework_scope")
+    class_id = _create_class("security-parent-homework-scope")
+    student = _extra_student_account_for_class(class_id, "parent_homework_scope")
+    required_subject_id = _create_subject("Parent visible required homework", int(teacher["user_id"]), class_id)
+    elective_subject_id = _create_subject("Parent hidden elective homework", int(teacher["user_id"]), class_id, "elective")
+    _enroll_student(required_subject_id, int(student["student_id"]), class_id)
+    visible_title = "parent-visible-required-homework"
+    hidden_title = "parent-hidden-elective-homework"
+    _create_course_homework(required_subject_id, class_id, int(teacher["user_id"]), visible_title)
+    _create_course_homework(elective_subject_id, class_id, int(teacher["user_id"]), hidden_title)
+    parent_code = _set_parent_code(int(student["student_id"]), "HARD53PARENT")
+
+    r = client.get(f"/api/parent/homework/{parent_code}?page_size=100")
+    assert r.status_code == 200, r.text
+    titles = {row["title"] for row in r.json()["homeworks"]}
+    assert visible_title in titles
+    assert hidden_title not in titles
+
+
+def test_hard54_parent_notifications_compose_subject_enrollment_and_target_student_filters(client: TestClient):
+    teacher = _create_teacher("parent_notice_scope")
+    class_id = _create_class("security-parent-notice-scope")
+    student = _extra_student_account_for_class(class_id, "parent_notice_scope_a")
+    sibling = _extra_student_account_for_class(class_id, "parent_notice_scope_b")
+    required_subject_id = _create_subject("Parent visible required notice", int(teacher["user_id"]), class_id)
+    elective_subject_id = _create_subject("Parent hidden elective notice", int(teacher["user_id"]), class_id, "elective")
+    _enroll_student(required_subject_id, int(student["student_id"]), class_id)
+    visible_required = "parent-visible-required-notice"
+    hidden_elective = "parent-hidden-elective-notice"
+    hidden_target = "parent-hidden-targeted-sibling-notice"
+    visible_class = "parent-visible-class-notice"
+    _create_notification(required_subject_id, class_id, int(teacher["user_id"]), visible_required)
+    _create_notification(elective_subject_id, class_id, int(teacher["user_id"]), hidden_elective)
+    _create_notification(required_subject_id, class_id, int(teacher["user_id"]), hidden_target, int(sibling["student_id"]))
+    _create_notification(None, class_id, int(teacher["user_id"]), visible_class)
+    parent_code = _set_parent_code(int(student["student_id"]), "HARD54PARENT")
+
+    r = client.get(f"/api/parent/notifications/{parent_code}?page_size=100")
+    assert r.status_code == 200, r.text
+    titles = {row["title"] for row in r.json()["notifications"]}
+    assert visible_required in titles
+    assert visible_class in titles
+    assert hidden_elective not in titles
+    assert hidden_target not in titles
+
+
+def test_hard55_class_teacher_batch_parent_code_generation_skips_linked_foreign_class_student(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_parent_batch")
+    own_student_id = _extra_student_for_class(int(ct["class_id"]), "ct_parent_batch_own")
+    foreign_class_id = _create_class("security-parent-code-batch-foreign")
+    foreign_student_id = _extra_student_for_class(foreign_class_id, "ct_parent_batch_foreign")
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=ctx["subject_id"],
+                class_id=foreign_class_id,
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(
+        "/api/parent/students/batch-generate-codes",
+        headers=ct_headers,
+        json=[own_student_id, foreign_student_id],
+    )
+    assert r.status_code == 200, r.text
+    generated_ids = {row["student_id"] for row in r.json()["students"]}
+    assert r.json()["generated_count"] == 1
+    assert own_student_id in generated_ids
+    assert foreign_student_id not in generated_ids
+    assert client.get(f"/api/parent/verify/{_set_parent_code(foreign_student_id, 'HARD55FOREIGN')}").json()["valid"] is True
+
+
+def test_hard56_parent_scores_and_stats_ignore_other_student_same_class_records(client: TestClient):
+    teacher = _create_teacher("parent_score_scope")
+    class_id = _create_class("security-parent-score-scope")
+    student = _extra_student_account_for_class(class_id, "parent_score_scope_a")
+    sibling = _extra_student_account_for_class(class_id, "parent_score_scope_b")
+    subject_id = _create_subject("Parent score scoped course", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    _enroll_student(subject_id, int(sibling["student_id"]), class_id)
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    for student_id, exam_type, score in (
+        (int(student["student_id"]), "parent-own", 72),
+        (int(sibling["student_id"]), "parent-sibling", 99),
+    ):
+        r = client.post(
+            "/api/scores",
+            headers=admin_headers,
+            json={
+                "student_id": student_id,
+                "subject_id": subject_id,
+                "class_id": class_id,
+                "semester": "2026-fall",
+                "exam_type": exam_type,
+                "score": score,
+                "exam_date": None,
+            },
+        )
+        assert r.status_code == 200, r.text
+    parent_code = _set_parent_code(int(student["student_id"]), "HARD56PARENT")
+
+    scores = client.get(f"/api/parent/scores/{parent_code}?page_size=100")
+    assert scores.status_code == 200, scores.text
+    returned_exam_types = {row["exam_type"] for row in scores.json()["scores"]}
+    assert returned_exam_types == {"parent-own"}
+    stats = client.get(f"/api/parent/stats/{parent_code}")
+    assert stats.status_code == 200, stats.text
+    assert stats.json()["total_exams"] == 1
+    assert stats.json()["average_score"] == 72
+
+
+def test_hard57_score_appeal_second_submission_after_resolved_creates_one_new_pending(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    first = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_headers,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "first appeal"},
+    )
+    assert first.status_code == 200, first.text
+    resolved = client.put(
+        f"/api/scores/appeals/{first.json()['id']}",
+        headers=teacher_headers,
+        json={"teacher_response": "resolved", "status": "resolved"},
+    )
+    assert resolved.status_code == 200, resolved.text
+
+    second = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_headers,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "second appeal"},
+    )
+    assert second.status_code == 200, second.text
+    assert _appeal_status(first.json()["id"]) == "resolved"
+    assert _appeal_count(
+        subject_id=ctx["subject_id"],
+        student_id=ctx["student_id"],
+        semester="2026-fall",
+        target_component="total",
+        status="pending",
+    ) == 1
+
+
+def test_hard58_score_appeal_duplicate_pending_block_survives_rejected_prior_appeal(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    first = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_headers,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "first reject path"},
+    )
+    assert first.status_code == 200, first.text
+    rejected = client.put(
+        f"/api/scores/appeals/{first.json()['id']}",
+        headers=teacher_headers,
+        json={"teacher_response": "rejected", "status": "rejected"},
+    )
+    assert rejected.status_code == 200, rejected.text
+    second = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_headers,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "second pending"},
+    )
+    assert second.status_code == 200, second.text
+    duplicate = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_headers,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "duplicate pending"},
+    )
+    assert duplicate.status_code == 400
+    assert _appeal_status(first.json()["id"]) == "rejected"
+    assert _appeal_count(
+        subject_id=ctx["subject_id"],
+        student_id=ctx["student_id"],
+        semester="2026-fall",
+        target_component="total",
+        status="pending",
+    ) == 1
+
+
+def test_hard59_dashboard_subject_rankings_and_trends_do_not_mix_other_courses(client: TestClient):
+    ctx_a = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ctx_b = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    for ctx, exam_type, score in ((ctx_a, "dash-midterm", 61), (ctx_b, "dash-midterm", 99), (ctx_a, "dash-final", 81)):
+        r = client.post(
+            "/api/scores",
+            headers=admin_headers,
+            json={
+                "student_id": ctx["student_id"],
+                "subject_id": ctx["subject_id"],
+                "class_id": ctx["class_id"],
+                "semester": "2026-fall",
+                "exam_type": exam_type,
+                "score": score,
+                "exam_date": None,
+            },
+        )
+        assert r.status_code == 200, r.text
+    teacher_headers = login_api(client, ctx_a["teacher_username"], ctx_a["teacher_password"])
+
+    classes = client.get(f"/api/dashboard/rankings/classes?subject_id={ctx_a['subject_id']}", headers=teacher_headers)
+    assert classes.status_code == 200, classes.text
+    assert [row["avg_score"] for row in classes.json()] == [71]
+    students = client.get(f"/api/dashboard/rankings/students?subject_id={ctx_a['subject_id']}", headers=teacher_headers)
+    assert students.status_code == 200, students.text
+    assert students.json()[0]["avg_score"] == 71
+    trends = client.get(f"/api/dashboard/analysis/trends?subject_id={ctx_a['subject_id']}", headers=teacher_headers)
+    assert trends.status_code == 200, trends.text
+    assert trends.json()["dash-midterm"]["avg"] == 61
+    assert trends.json()["dash-final"]["avg"] == 81
+
+
+def test_hard60_dashboard_subject_analysis_only_returns_requested_subject(client: TestClient):
+    ctx_a = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ctx_b = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    for ctx, score in ((ctx_a, 64), (ctx_b, 98)):
+        r = client.post(
+            "/api/scores",
+            headers=admin_headers,
+            json={
+                "student_id": ctx["student_id"],
+                "subject_id": ctx["subject_id"],
+                "class_id": ctx["class_id"],
+                "semester": "2026-fall",
+                "exam_type": "dash-analysis",
+                "score": score,
+                "exam_date": None,
+            },
+        )
+        assert r.status_code == 200, r.text
+    teacher_headers = login_api(client, ctx_a["teacher_username"], ctx_a["teacher_password"])
+
+    analysis = client.get(f"/api/dashboard/analysis/subjects?subject_id={ctx_a['subject_id']}", headers=teacher_headers)
+    assert analysis.status_code == 200, analysis.text
+    payload = analysis.json()
+    assert len(payload) == 1
+    assert payload[0]["subject_id"] == ctx_a["subject_id"]
+    assert payload[0]["avg_score"] == 64

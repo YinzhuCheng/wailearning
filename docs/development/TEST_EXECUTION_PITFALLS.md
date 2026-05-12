@@ -3231,3 +3231,52 @@ Verification pattern:
 
 The selector tests include a repository-wide check that all current
 `admin-playwright` targets use `node scripts/playwright-external-runner.cjs`.
+
+### Pitfall: Playwright external-runner API readiness can time out before slow FastAPI startup finishes
+
+The repository admin Playwright external runner waits for `/api/health` with a
+fixed readiness window. In one May 2026 hardening run,
+`node scripts/playwright-external-runner.cjs e2e-security-hardening-followup.spec.js --project=chromium`
+failed with:
+
+```text
+api did not become ready at http://127.0.0.1:<local-port>/api/health within 120000ms
+```
+
+The FastAPI log printed `Application startup complete` immediately after the
+runner had already given up. A repeat run on the same changed code reached the
+tests and later passed after a test-side matcher correction, so the first
+failure was an environment/startup timing hazard, not evidence of a product
+regression.
+
+Mitigation:
+
+- Treat this specific failure shape as an observed run and record it, but check
+  for residual `uvicorn`/`node` processes before rerunning.
+- Prefer a second external-runner attempt on the same isolated ports when the
+  only failure is readiness timeout and the API completes startup right after
+  the timeout.
+- If this recurs frequently, extend the runner's API readiness timeout or add a
+  startup-progress diagnostic before the timeout fires; do not silently
+  classify the target as product-failed without a request reaching the app.
+
+### Pitfall: Playwright array containment does not apply asymmetric string matchers to array elements
+
+In Playwright/Jest-style `expect`, `toContain(expect.stringContaining("..."))`
+checks whether the array contains that matcher object; it does not apply the
+matcher to each string element. During the parent-portal hardening E2E, the
+array contained a seeded title with `E2E_UI`, but the assertion failed:
+
+```javascript
+expect(titles).toContain(expect.stringContaining('E2E_UI'))
+```
+
+Use one of these patterns instead:
+
+```javascript
+expect(titles.some(title => title.includes('E2E_UI'))).toBe(true)
+expect(titles).toContainEqual(expect.stringContaining('E2E_UI'))
+```
+
+This is a test-authoring pitfall. If the response payload visibly contains the
+expected substring, fix the matcher before changing product code.

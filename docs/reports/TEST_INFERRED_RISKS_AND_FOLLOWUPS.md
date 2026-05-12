@@ -527,6 +527,29 @@ for parent-code management. That may be an intended course-teacher workflow, but
 it is a policy point worth confirming before claiming the parent-code surface is
 fully narrowed.
 
+**Parent portal read residual risk:** A later hardening round found and fixed a
+different parent-code issue: `/api/parent/homework` and
+`/api/parent/notifications` previously trusted same-class visibility for rows
+with `subject_id`, which leaked same-class elective homework and course
+notifications to guardians of students who were not enrolled in that elective.
+The parent router now keeps class/global rows visible when `subject_id IS NULL`
+but requires a matching `CourseEnrollment` for subject-scoped rows. The backend
+regressions are `test_hard53` and `test_hard54`; the browser-backed direct-API
+regressions are cases 13 and 14 in
+`tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`.
+
+**This round's additional coverage:** The hardening file now also asserts
+class-teacher batch parent-code generation skips linked foreign-class students,
+parent score/stat reads ignore other students in the same class, score-appeal
+second submissions after resolved/rejected history keep only one pending appeal,
+and dashboard subject rankings/trends/analysis do not mix another course.
+
+**Next concerns:** The next most valuable tests should target parent portal UI
+state, parent-code expiry/rate-limit behavior under repeated invalid codes,
+teacher-role parent-code policy (as distinct from class-teacher visibility),
+student notification read-state isolation between parent and admin SPA, and
+PostgreSQL-backed confirmation of the parent subject-scope query shape.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -542,6 +565,8 @@ fully narrowed.
 10. Confirm regular-teacher parent-code management policy, then add a regression
     that distinguishes intended course-teacher access from class-linked
     class-teacher visibility.
+11. Re-run parent portal subject-scope coverage on PostgreSQL and add a parent
+    SPA UI smoke when the separate parent frontend is next in scope.
 
 ## What This Document Is Not
 

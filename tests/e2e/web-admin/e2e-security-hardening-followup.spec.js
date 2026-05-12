@@ -27,7 +27,7 @@ async function apiStatus(pathname, { method = 'GET', token, headers = {}, body }
   return { status: res.status, text: await res.text() }
 }
 
-test.describe('security hardening follow-up E2E (12 cases)', () => {
+test.describe('security hardening follow-up E2E (14 cases)', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -291,5 +291,79 @@ test.describe('security hardening follow-up E2E (12 cases)', () => {
       headers: { Authorization: `Bearer ${token}` }
     })
     expect(cfg.status()).toBe(403)
+  })
+
+  test('13 parent portal API hides same-class elective homework for unenrolled student', async () => {
+    const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    await apiStatus(`/api/subjects/${s.course_elective_id}/students/${s.student_plain.student_row_id}`, {
+      method: 'DELETE',
+      token: teacherToken
+    })
+    const hiddenTitle = `E2E hidden elective homework ${Date.now()}`
+    const created = await apiStatus('/api/homeworks', {
+      method: 'POST',
+      token: teacherToken,
+      body: {
+        title: hiddenTitle,
+        content: 'same class elective homework should stay hidden from parent code user',
+        content_format: 'plain',
+        class_id: s.class_id_1,
+        subject_id: s.course_elective_id,
+        due_date: null,
+        max_score: 100,
+        grade_precision: 'integer',
+        auto_grading_enabled: false,
+        allow_late_submission: true,
+        late_submission_affects_score: false,
+        max_submissions: null,
+        llm_routing_spec: null
+      }
+    })
+    expect(created.status).toBe(200)
+
+    const parentHomeworks = await apiStatus(`/api/parent/homework/${s.parent_code}?page_size=100`)
+    expect(parentHomeworks.status).toBe(200)
+    const titles = JSON.parse(parentHomeworks.text).homeworks.map(row => row.title)
+    expect(titles.some(title => title.includes('E2E_UI'))).toBe(true)
+    expect(titles).not.toContain(hiddenTitle)
+  })
+
+  test('14 parent portal API hides same-class elective notification for unenrolled student', async () => {
+    const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    const hiddenTitle = `E2E hidden elective notice ${Date.now()}`
+    const visibleTitle = `E2E visible class notice ${Date.now()}`
+    const hidden = await apiStatus('/api/notifications', {
+      method: 'POST',
+      token: teacherToken,
+      body: {
+        title: hiddenTitle,
+        content: 'same class elective notification should stay hidden from parent code user',
+        content_format: 'plain',
+        priority: 'normal',
+        class_id: s.class_id_1,
+        subject_id: s.course_elective_id
+      }
+    })
+    expect(hidden.status).toBe(200)
+    const visible = await apiStatus('/api/notifications', {
+      method: 'POST',
+      token: teacherToken,
+      body: {
+        title: visibleTitle,
+        content: 'class-only notification remains visible to parent code user',
+        content_format: 'plain',
+        priority: 'normal',
+        class_id: s.class_id_1
+      }
+    })
+    expect(visible.status).toBe(200)
+
+    const parentNotices = await apiStatus(`/api/parent/notifications/${s.parent_code}?page_size=100`)
+    expect(parentNotices.status).toBe(200)
+    const titles = JSON.parse(parentNotices.text).notifications.map(row => row.title)
+    expect(titles).toContain(visibleTitle)
+    expect(titles).not.toContain(hiddenTitle)
   })
 })

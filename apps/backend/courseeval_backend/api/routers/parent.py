@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
 from apps.backend.courseeval_backend.domains.courses.access import get_accessible_class_ids_from_courses
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.db.models import Attendance, Class, Homework, Notification, Score, Student, User, UserRole
+from apps.backend.courseeval_backend.db.models import Attendance, Class, CourseEnrollment, Homework, Notification, Score, Student, User, UserRole
 
 router = APIRouter(prefix="/api/parent", tags=["家长端口"])
 
@@ -69,6 +69,22 @@ def _ensure_teacher_can_manage_student(student: Student, current_user: User, db:
     accessible_class_ids = get_accessible_class_ids_from_courses(current_user, db)
     if student.class_id not in accessible_class_ids:
         raise HTTPException(status_code=403, detail="You do not have permission to manage this student.")
+
+
+def _student_enrolled_subject_ids(student_id: int, db: Session) -> set[int]:
+    return {
+        int(row[0])
+        for row in db.query(CourseEnrollment.subject_id)
+        .filter(CourseEnrollment.student_id == student_id)
+        .all()
+    }
+
+
+def _apply_parent_subject_scope(query, subject_column, student: Student, db: Session):
+    enrolled_subject_ids = _student_enrolled_subject_ids(int(student.id), db)
+    if enrolled_subject_ids:
+        return query.filter(or_(subject_column.is_(None), subject_column.in_(enrolled_subject_ids)))
+    return query.filter(subject_column.is_(None))
 
 
 @router.get("/verify/{parent_code}")
@@ -173,6 +189,7 @@ def get_class_notifications_by_parent_code(
         ),
         or_(Notification.target_student_id.is_(None), Notification.target_student_id == student.id),
     )
+    query = _apply_parent_subject_scope(query, Notification.subject_id, student, db)
 
     total = query.count()
     notifications = query.order_by(
@@ -210,6 +227,7 @@ def get_class_homework_by_parent_code(
     student = _get_parent_bound_student_or_404(parent_code, db)
 
     query = db.query(Homework).filter(Homework.class_id == student.class_id)
+    query = _apply_parent_subject_scope(query, Homework.subject_id, student, db)
 
     total = query.count()
     homeworks = query.order_by(desc(Homework.created_at)).offset((page-1)*page_size).limit(page_size).all()

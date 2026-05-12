@@ -390,7 +390,14 @@ boundary for teacher-owned visible courses:
   links;
 - parent-code revocation for foreign-class students that are only visible
   through a linked course;
-- dashboard subject statistics staying scoped to the requested subject;
+- parent-code batch generation skipping class-linked foreign-class students;
+- parent portal reads for scores/stats staying bound to the linked student, and
+  homework/notification reads requiring matching `CourseEnrollment` for
+  subject-scoped rows;
+- score-appeal second submission after resolved/rejected history keeping at
+  most one pending appeal per component;
+- dashboard subject statistics, rankings, trends, and subject analysis staying
+  scoped to the requested subject;
 - course LLM config management, including stale browser-selected-course cache
   attempts in the paired Playwright spec.
 
@@ -398,7 +405,8 @@ When adding a new course-owned mutation endpoint, add the backend assertion here
 first. The paired browser-backed direct-API guard is
 `tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`; keep that file
 small and reserve it for high-value API edges that benefit from the managed
-Playwright seed/login path.
+Playwright seed/login path. The paired spec currently also covers parent-code
+read leakage for same-class unenrolled elective homework and notifications.
 
 ## Recommended Reading Order By Task
 

@@ -116,6 +116,13 @@ The hardening regression is
 `test_hard50_class_teacher_cannot_revoke_parent_code_for_foreign_class_student_only_visible_through_course_link`
 in `tests/security/test_security_hardening_followup.py`.
 
+Parent-code read endpoints are also student-scoped. `/api/parent/scores` and
+`/api/parent/stats` use the linked `Student.id`. `/api/parent/homework` and
+`/api/parent/notifications` may include class/global rows, but any row carrying
+`subject_id` must also match a `CourseEnrollment` for the linked student. Same
+administrative class is not enough to expose elective course homework or
+notifications to that student's guardian.
+
 ---
 
 ### Subject-scoped route ordering rule

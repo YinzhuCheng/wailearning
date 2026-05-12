@@ -45,6 +45,18 @@ Typical endpoints include:
 - homework,
 - summary statistics.
 
+Parent-code reads are scoped to the linked `Student` row, not merely to the
+student's administrative class. Score and statistics endpoints use
+`Score.student_id` / `Attendance.student_id`. Homework and notification reads
+start from class/global visibility, then apply an additional course-enrollment
+filter when a row has `subject_id`: subject-scoped homework or notifications
+are returned only when the linked student has a matching `CourseEnrollment`.
+Class-only or global rows with `subject_id IS NULL` remain visible when the
+class/target-student filters allow them. This is important for same-class
+electives: a guardian for a student who did not enroll in an elective must not
+see that elective's homework or course notifications just because the course
+content also names the student's class.
+
 Parent-code management in the same API family is staff-side and more sensitive
 than portal reads. Administrators can manage any student's code. Class teachers
 can generate or revoke codes only for students in their own assigned class
