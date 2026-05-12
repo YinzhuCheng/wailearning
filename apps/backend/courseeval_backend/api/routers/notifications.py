@@ -16,6 +16,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     get_student_profile_for_user,
     is_course_instructor,
     prepare_student_course_context,
+    subject_linked_class_ids,
 )
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 from apps.backend.courseeval_backend.db.database import get_db
@@ -52,7 +53,16 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
 
     if subject_id:
         course = ensure_course_access_http(subject_id, current_user, db)
-        query = query.filter(or_(Notification.subject_id == course.id, Notification.subject_id.is_(None)))
+        linked_class_ids = subject_linked_class_ids(db, course.id)
+        broadcast_scope = Notification.class_id.is_(None)
+        if linked_class_ids:
+            broadcast_scope = or_(broadcast_scope, Notification.class_id.in_(linked_class_ids))
+        query = query.filter(
+            or_(
+                Notification.subject_id == course.id,
+                and_(Notification.subject_id.is_(None), broadcast_scope),
+            )
+        )
 
     if current_user.role == UserRole.STUDENT:
         prepare_student_course_context(current_user, db)

@@ -595,6 +595,23 @@ protected routes to `/login`, and student JWT read-state does not hide parent
 portal notification list rows. Parent read-state remains list-only; add new
 cross-surface tests if parent-side read/unread mutations are introduced.
 
+**Subject-scoped broadcast follow-up round:** The next red-team batch added
+backend `hard77`-`hard84` plus parent SPA cases 07-08. It found that
+`GET /api/notifications?subject_id=...`, `/sync-status?subject_id=...`, and
+`POST /api/notifications/mark-all-read?subject_id=...` treated every
+`subject_id IS NULL` class broadcast as part of the course-scoped view after
+course access was validated. That let another class's broadcast inflate totals,
+appear in a course-scoped list, or receive a read row for a student/teacher who
+was only looking at one course. The fix keeps course-subject notifications and
+global broadcasts visible, but limits class broadcasts to classes linked to the
+requested course through `subject_class_links`. The same tests also preserve
+same-class broadcasts, global broadcasts, subject rows, and target-student
+filters.
+
+The parent SPA additions did not expose a new bug: invalid login attempts now
+clear a stale existing parent binding, and protected routes clear partial
+bindings that have a `parent_code` but no `student_id`.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -626,6 +643,13 @@ cross-surface tests if parent-side read/unread mutations are introduced.
 15. Continue probing parent-code abuse surfaces around distributed rate limits,
     code guessing telemetry, and stale browser state across multiple tabs or
     multiple children if the product later supports family switching.
+16. Add PostgreSQL coverage for course-scoped notification broadcasts and
+    inspect the query plan for the `subject_id = course OR (subject_id IS NULL
+    AND class_id IN linked_classes/global)` predicate under realistic
+    notification volume.
+17. Add admin browser coverage for course switcher/header badge totals after
+    the subject-scoped broadcast fix, because backend totals are now tighter
+    than older UI assumptions may expect.
 
 ## What This Document Is Not
 

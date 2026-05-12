@@ -88,7 +88,7 @@ async function seedHiddenParentContent(s, hiddenPrefix) {
   return { hiddenHomework, hiddenNotice, visibleNotice }
 }
 
-test.describe('parent portal hardening E2E (6 cases)', () => {
+test.describe('parent portal hardening E2E (8 cases)', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -194,5 +194,48 @@ test.describe('parent portal hardening E2E (6 cases)', () => {
     await page.goto(`${parentBase()}/notifications`)
     await expect(page.locator('.notification-list')).toContainText(seeded.visibleNotice, { timeout: 30000 })
     await expect(page.locator('.notification-list')).not.toContainText(seeded.hiddenNotice)
+  })
+
+  test('07 invalid login clears an existing stale parent binding', async ({ page }) => {
+    const s = scenario()
+    await page.goto(`${parentBase()}/login`)
+    await page.evaluate(({ code, student }) => {
+      localStorage.setItem('parent_code', code)
+      localStorage.setItem('student_name', student.name)
+      localStorage.setItem('student_id', String(student.student_row_id))
+    }, { code: s.parent_code, student: s.student_plain })
+
+    await page.getByRole('textbox').fill('BADCODE2')
+    await page.getByRole('button').click()
+
+    await expect(page).toHaveURL(/\/login$/, { timeout: 30000 })
+    const stored = await page.evaluate(() => ({
+      parentCode: localStorage.getItem('parent_code'),
+      studentName: localStorage.getItem('student_name'),
+      studentId: localStorage.getItem('student_id')
+    }))
+    expect(stored.parentCode).toBeNull()
+    expect(stored.studentName).toBeNull()
+    expect(stored.studentId).toBeNull()
+  })
+
+  test('08 protected route clears partial parent binding without student id', async ({ page }) => {
+    const s = scenario()
+    await page.goto(`${parentBase()}/login`)
+    await page.evaluate((code) => {
+      localStorage.setItem('parent_code', code)
+      localStorage.setItem('student_name', 'stale parent')
+      localStorage.removeItem('student_id')
+    }, s.parent_code)
+
+    await page.goto(`${parentBase()}/scores`)
+
+    await expect(page).toHaveURL(/\/login$/, { timeout: 30000 })
+    const stored = await page.evaluate(() => ({
+      parentCode: localStorage.getItem('parent_code'),
+      studentName: localStorage.getItem('student_name')
+    }))
+    expect(stored.parentCode).toBeNull()
+    expect(stored.studentName).toBeNull()
   })
 })

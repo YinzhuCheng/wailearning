@@ -399,7 +399,8 @@ boundary for teacher-owned visible courses:
   parent-code management and `class_teacher` direct-class management;
 - notification read-state authorization reusing list visibility, including
   hidden targeted notices, teacher-targeted notices, unenrolled elective
-  notices, and mark-all-read creating rows only for visible notifications;
+  notices, subject-scoped list/sync/mark-all-read excluding unrelated-class
+  broadcasts, and mark-all-read creating rows only for visible notifications;
 - parent-code batch generation deduplicating repeated student ids before
   code rotation and preserving the direct-class-only class-teacher boundary;
 - score-appeal second submission after resolved/rejected history keeping at
@@ -429,7 +430,9 @@ node scripts/playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js 
 The parent portal spec covers successful binding, same-class unenrolled elective
 homework/notification hiding, invalid-code login behavior, revoked-code
 protected-route session cleanup, and isolation between student JWT
-notification read-state and parent notification lists.
+notification read-state and parent notification lists. It also covers clearing
+stale local storage when an invalid login is attempted and when a protected
+route sees a partial parent binding without `student_id`.
 
 ## Recommended Reading Order By Task
 

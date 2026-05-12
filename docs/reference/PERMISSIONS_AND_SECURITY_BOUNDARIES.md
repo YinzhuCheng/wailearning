@@ -132,7 +132,12 @@ see the notification through `_visible_notifications_query(...)`; existing but
 invisible notification ids return 403 and do not create `notification_reads`
 rows. Student visibility additionally requires a matching enrollment for
 subject-scoped notifications, while `subject_id IS NULL` class/global rows
-remain visible when the class and target-student filters allow them.
+remain visible when the class and target-student filters allow them. When a
+notification list or read-state endpoint is explicitly scoped by `subject_id`,
+course-scoped broadcasts (`Notification.subject_id IS NULL`) are limited to
+global rows or rows whose `class_id` is linked to that course via
+`subject_class_links`; another class's broadcast must not appear merely because
+the caller can access the requested course.
 
 ---
 

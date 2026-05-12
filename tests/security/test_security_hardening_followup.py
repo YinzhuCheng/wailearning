@@ -2281,3 +2281,154 @@ def test_hard76_class_teacher_batch_generation_stays_direct_class_only_with_dupl
     assert r.json()["generated_count"] == 1
     assert [row["student_id"] for row in r.json()["students"]] == [own_student_id]
     assert _parent_code_for_student(foreign_student_id) is None
+
+
+def test_hard77_student_course_scoped_notifications_exclude_foreign_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_subject_class_scope")
+    own_class_id = _create_class("security-notif-subject-scope-own")
+    foreign_class_id = _create_class("security-notif-subject-scope-foreign")
+    student = _extra_student_account_for_class(own_class_id, "notif_subject_scope_student")
+    subject_id = _create_subject("Notification subject class scope", int(teacher["user_id"]), own_class_id)
+    _enroll_student(subject_id, int(student["student_id"]), own_class_id)
+    visible = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard77 own class broadcast")
+    hidden = _create_notification(None, foreign_class_id, int(teacher["user_id"]), "hard77 foreign class broadcast")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    r = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+
+    assert r.status_code == 200, r.text
+    ids = {row["id"] for row in r.json()["data"]}
+    assert visible in ids
+    assert hidden not in ids
+
+
+def test_hard78_student_course_scoped_sync_status_excludes_foreign_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_subject_sync_scope")
+    own_class_id = _create_class("security-notif-subject-sync-own")
+    foreign_class_id = _create_class("security-notif-subject-sync-foreign")
+    student = _extra_student_account_for_class(own_class_id, "notif_subject_sync_student")
+    subject_id = _create_subject("Notification subject sync scope", int(teacher["user_id"]), own_class_id)
+    _enroll_student(subject_id, int(student["student_id"]), own_class_id)
+    _create_notification(None, own_class_id, int(teacher["user_id"]), "hard78 own class broadcast")
+    _create_notification(None, foreign_class_id, int(teacher["user_id"]), "hard78 foreign class broadcast")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    sync = client.get(f"/api/notifications/sync-status?subject_id={subject_id}", headers=headers)
+
+    assert sync.status_code == 200, sync.text
+    assert sync.json()["total"] == 1
+    assert sync.json()["unread_count"] == 1
+
+
+def test_hard79_student_subject_mark_all_read_does_not_mark_foreign_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_subject_mark_scope")
+    own_class_id = _create_class("security-notif-subject-mark-own")
+    foreign_class_id = _create_class("security-notif-subject-mark-foreign")
+    student = _extra_student_account_for_class(own_class_id, "notif_subject_mark_student")
+    subject_id = _create_subject("Notification subject mark scope", int(teacher["user_id"]), own_class_id)
+    _enroll_student(subject_id, int(student["student_id"]), own_class_id)
+    visible = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard79 own class broadcast")
+    hidden = _create_notification(None, foreign_class_id, int(teacher["user_id"]), "hard79 foreign class broadcast")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+    user_id = _user_id_for_username(str(student["username"]))
+
+    r = client.post(f"/api/notifications/mark-all-read?subject_id={subject_id}", headers=headers)
+
+    assert r.status_code == 200, r.text
+    assert _notification_read_count(visible, user_id) == 1
+    assert _notification_read_count(hidden, user_id) == 0
+
+
+def test_hard80_teacher_course_scoped_notifications_exclude_unrelated_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_teacher_subject_scope")
+    own_class_id = _create_class("security-notif-teacher-subject-own")
+    foreign_class_id = _create_class("security-notif-teacher-subject-foreign")
+    subject_id = _create_subject("Notification teacher subject scope", int(teacher["user_id"]), own_class_id)
+    visible = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard80 own class broadcast")
+    hidden = _create_notification(None, foreign_class_id, int(teacher["user_id"]), "hard80 foreign class broadcast")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+
+    assert r.status_code == 200, r.text
+    ids = {row["id"] for row in r.json()["data"]}
+    assert visible in ids
+    assert hidden not in ids
+
+
+def test_hard81_teacher_subject_mark_all_read_does_not_mark_unrelated_class_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_teacher_mark_scope")
+    own_class_id = _create_class("security-notif-teacher-mark-own")
+    foreign_class_id = _create_class("security-notif-teacher-mark-foreign")
+    subject_id = _create_subject("Notification teacher mark scope", int(teacher["user_id"]), own_class_id)
+    visible = _create_notification(None, own_class_id, int(teacher["user_id"]), "hard81 own class broadcast")
+    hidden = _create_notification(None, foreign_class_id, int(teacher["user_id"]), "hard81 foreign class broadcast")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.post(f"/api/notifications/mark-all-read?subject_id={subject_id}", headers=headers)
+
+    assert r.status_code == 200, r.text
+    assert _notification_read_count(visible, int(teacher["user_id"])) == 1
+    assert _notification_read_count(hidden, int(teacher["user_id"])) == 0
+
+
+def test_hard82_student_course_scoped_notifications_keep_global_and_own_class_broadcasts(client: TestClient):
+    teacher = _create_teacher("notif_subject_global_scope")
+    class_id = _create_class("security-notif-subject-global")
+    student = _extra_student_account_for_class(class_id, "notif_subject_global_student")
+    subject_id = _create_subject("Notification subject global scope", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    own = _create_notification(None, class_id, int(teacher["user_id"]), "hard82 own class broadcast")
+    global_notice = _create_notification(None, None, int(teacher["user_id"]), "hard82 global broadcast")
+    subject_notice = _create_notification(subject_id, class_id, int(teacher["user_id"]), "hard82 subject notice")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    r = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+
+    assert r.status_code == 200, r.text
+    ids = {row["id"] for row in r.json()["data"]}
+    assert {own, global_notice, subject_notice}.issubset(ids)
+
+
+def test_hard83_student_course_scoped_notifications_still_hide_peer_target_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_subject_peer_target")
+    class_id = _create_class("security-notif-subject-peer-target")
+    student = _extra_student_account_for_class(class_id, "notif_subject_peer_student")
+    peer = _extra_student_account_for_class(class_id, "notif_subject_peer_peer")
+    subject_id = _create_subject("Notification subject peer target", int(teacher["user_id"]), class_id)
+    _enroll_student(subject_id, int(student["student_id"]), class_id)
+    _enroll_student(subject_id, int(peer["student_id"]), class_id)
+    visible = _create_notification(None, class_id, int(teacher["user_id"]), "hard83 own class broadcast")
+    hidden = _create_notification(
+        None,
+        class_id,
+        int(teacher["user_id"]),
+        "hard83 peer target broadcast",
+        target_student_id=int(peer["student_id"]),
+    )
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    r = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+
+    assert r.status_code == 200, r.text
+    ids = {row["id"] for row in r.json()["data"]}
+    assert visible in ids
+    assert hidden not in ids
+
+
+def test_hard84_student_subject_list_and_detail_agree_on_foreign_class_broadcast_denial(client: TestClient):
+    teacher = _create_teacher("notif_subject_detail_scope")
+    own_class_id = _create_class("security-notif-subject-detail-own")
+    foreign_class_id = _create_class("security-notif-subject-detail-foreign")
+    student = _extra_student_account_for_class(own_class_id, "notif_subject_detail_student")
+    subject_id = _create_subject("Notification subject detail scope", int(teacher["user_id"]), own_class_id)
+    _enroll_student(subject_id, int(student["student_id"]), own_class_id)
+    hidden = _create_notification(None, foreign_class_id, int(teacher["user_id"]), "hard84 foreign class broadcast")
+    headers = login_api(client, str(student["username"]), str(student["password"]))
+
+    listed = client.get(f"/api/notifications?subject_id={subject_id}&page_size=100", headers=headers)
+    detail = client.get(f"/api/notifications/{hidden}", headers=headers)
+
+    assert listed.status_code == 200, listed.text
+    assert hidden not in {row["id"] for row in listed.json()["data"]}
+    assert detail.status_code == 403
