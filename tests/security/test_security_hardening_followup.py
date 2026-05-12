@@ -198,6 +198,30 @@ def _create_notification(
         db.close()
 
 
+def _notification_scope(notification_id: int) -> tuple[int | None, int | None, int | None]:
+    db = SessionLocal()
+    try:
+        row = db.query(Notification).filter(Notification.id == notification_id).first()
+        assert row is not None
+        return (
+            int(row.subject_id) if row.subject_id is not None else None,
+            int(row.class_id) if row.class_id is not None else None,
+            int(row.target_user_id) if row.target_user_id is not None else None,
+        )
+    finally:
+        db.close()
+
+
+def _notification_kind(notification_id: int) -> str | None:
+    db = SessionLocal()
+    try:
+        row = db.query(Notification).filter(Notification.id == notification_id).first()
+        assert row is not None
+        return row.notification_kind
+    finally:
+        db.close()
+
+
 def _homework_link_count(chapter_id: int) -> int:
     db = SessionLocal()
     try:
@@ -2613,3 +2637,230 @@ def test_hard91_assigned_teacher_course_scope_keeps_all_linked_class_broadcasts(
     assert {first, second}.issubset(ids)
     assert sync.status_code == 200, sync.text
     assert sync.json()["total"] == 2
+
+
+def test_hard92_regular_teacher_cannot_create_global_unscoped_notification(client: TestClient):
+    teacher = _create_teacher("notif_global_create_teacher")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    before = _notification_count_for_subject(None)
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard92 teacher global broadcast",
+            "content": "global broadcast should be admin-only",
+            "class_id": None,
+            "subject_id": None,
+        },
+    )
+
+    assert r.status_code == 403
+    assert _notification_count_for_subject(None) == before
+
+
+def test_hard93_class_teacher_cannot_create_global_unscoped_notification(client: TestClient):
+    ct = _create_class_teacher("notif_global_create_ct")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    before = _notification_count_for_subject(None)
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard93 class teacher global broadcast",
+            "content": "class teacher global broadcast should be admin-only",
+            "class_id": None,
+            "subject_id": None,
+        },
+    )
+
+    assert r.status_code == 403
+    assert _notification_count_for_subject(None) == before
+
+
+def test_hard94_admin_can_create_global_unscoped_notification_visible_to_all_roles(client: TestClient):
+    ensure_admin()
+    teacher = _create_teacher("notif_global_admin_teacher")
+    class_id = _create_class("security-notif-global-admin-class")
+    student = _extra_student_account_for_class(class_id, "notif_global_admin_student")
+    student_headers = login_api(client, str(student["username"]), str(student["password"]))
+    teacher_headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+
+    created = client.post(
+        "/api/notifications",
+        headers=admin_headers,
+        json={
+            "title": "hard94 admin global broadcast",
+            "content": "admin global broadcast",
+            "class_id": None,
+            "subject_id": None,
+        },
+    )
+
+    assert created.status_code == 200, created.text
+    notification_id = created.json()["id"]
+    assert _notification_scope(notification_id)[:2] == (None, None)
+    for headers in (student_headers, teacher_headers, admin_headers):
+        listed = client.get("/api/notifications?page_size=100", headers=headers)
+        assert listed.status_code == 200, listed.text
+        assert notification_id in {row["id"] for row in listed.json()["data"]}
+
+
+def test_hard95_teacher_cannot_update_class_notification_into_global_broadcast(client: TestClient):
+    teacher = _create_teacher("notif_global_update_teacher")
+    class_id = _create_class("security-notif-global-update")
+    notification_id = _create_notification(None, class_id, int(teacher["user_id"]), "hard95 class notice")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"class_id": 0, "subject_id": None, "title": "hard95 widened global notice"},
+    )
+
+    assert r.status_code == 403
+    assert _notification_scope(notification_id)[:2] == (None, class_id)
+
+
+def test_hard96_class_teacher_cannot_update_direct_class_notification_into_global_broadcast(client: TestClient):
+    ct = _create_class_teacher("notif_ct_to_global")
+    class_id = int(ct["class_id"])
+    notification_id = _create_notification(None, class_id, int(ct["user_id"]), "hard96 class teacher notice")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"class_id": 0, "title": "hard96 widened global notice"},
+    )
+
+    assert r.status_code == 403
+    assert _notification_scope(notification_id)[:2] == (None, class_id)
+
+
+def test_hard97_admin_can_update_owned_or_foreign_notice_into_global_broadcast(client: TestClient):
+    ensure_admin()
+    teacher = _create_teacher("notif_admin_global_update_teacher")
+    class_id = _create_class("security-notif-admin-global-update")
+    notification_id = _create_notification(None, class_id, int(teacher["user_id"]), "hard97 class notice")
+    headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"class_id": 0, "subject_id": None, "title": "hard97 admin global notice"},
+    )
+
+    assert r.status_code == 200, r.text
+    assert _notification_scope(notification_id)[:2] == (None, None)
+
+
+def test_hard98_teacher_global_broadcast_attempt_does_not_inflate_unrelated_student_sync(client: TestClient):
+    teacher = _create_teacher("notif_global_inflate_teacher")
+    target_class_id = _create_class("security-notif-global-inflate-target")
+    other_class_id = _create_class("security-notif-global-inflate-other")
+    target_student = _extra_student_account_for_class(target_class_id, "notif_global_inflate_target")
+    other_student = _extra_student_account_for_class(other_class_id, "notif_global_inflate_other")
+    target_subject_id = _create_subject("Notification global inflate target", int(teacher["user_id"]), target_class_id)
+    _enroll_student(target_subject_id, int(target_student["student_id"]), target_class_id)
+    other_headers = login_api(client, str(other_student["username"]), str(other_student["password"]))
+    teacher_headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    before = client.get("/api/notifications/sync-status", headers=other_headers)
+    assert before.status_code == 200, before.text
+
+    r = client.post(
+        "/api/notifications",
+        headers=teacher_headers,
+        json={
+            "title": "hard98 attempted global",
+            "content": "must not reach unrelated student",
+            "class_id": None,
+            "subject_id": None,
+        },
+    )
+    after = client.get("/api/notifications/sync-status", headers=other_headers)
+
+    assert r.status_code == 403
+    assert after.status_code == 200, after.text
+    assert after.json()["unread_count"] == before.json()["unread_count"]
+    assert after.json()["total"] == before.json()["total"]
+
+
+def test_hard99_teacher_cannot_create_global_target_user_notification_for_other_teacher(client: TestClient):
+    owner = _create_teacher("notif_global_target_owner")
+    other = _create_teacher("notif_global_target_other")
+    owner_headers = login_api(client, str(owner["username"]), str(owner["password"]))
+    other_headers = login_api(client, str(other["username"]), str(other["password"]))
+    before = client.get("/api/notifications/sync-status", headers=other_headers)
+    assert before.status_code == 200, before.text
+
+    r = client.post(
+        "/api/notifications",
+        headers=owner_headers,
+        json={
+            "title": "hard99 target other teacher",
+            "content": "teacher must not inject another teacher's global inbox",
+            "class_id": None,
+            "subject_id": None,
+            "target_user_id": int(other["user_id"]),
+        },
+    )
+    after = client.get("/api/notifications/sync-status", headers=other_headers)
+
+    assert r.status_code == 403
+    assert after.status_code == 200, after.text
+    assert after.json()["unread_count"] == before.json()["unread_count"]
+    assert after.json()["total"] == before.json()["total"]
+
+
+def test_hard100_admin_password_reset_kind_is_admin_only_in_global_list(client: TestClient):
+    ensure_admin()
+    teacher = _create_teacher("notif_password_reset_hidden_teacher")
+    teacher_headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    db = SessionLocal()
+    try:
+        row = Notification(
+            title="hard100 reset request",
+            content="reserved system notification",
+            content_format="plain",
+            priority="normal",
+            class_id=None,
+            subject_id=None,
+            target_user_id=int(teacher["user_id"]),
+            notification_kind="password_reset_request",
+            created_by=1,
+        )
+        db.add(row)
+        db.commit()
+        notification_id = int(row.id)
+    finally:
+        db.close()
+
+    teacher_list = client.get("/api/notifications?page_size=100", headers=teacher_headers)
+    teacher_detail = client.get(f"/api/notifications/{notification_id}", headers=teacher_headers)
+    admin_list = client.get("/api/notifications?page_size=100", headers=admin_headers)
+
+    assert teacher_list.status_code == 200, teacher_list.text
+    assert notification_id not in {row["id"] for row in teacher_list.json()["data"]}
+    assert teacher_detail.status_code == 403
+    assert admin_list.status_code == 200, admin_list.text
+    assert notification_id in {row["id"] for row in admin_list.json()["data"]}
+
+
+def test_hard101_teacher_cannot_update_general_notice_to_password_reset_kind(client: TestClient):
+    teacher = _create_teacher("notif_kind_update_teacher")
+    class_id = _create_class("security-notif-kind-update")
+    notification_id = _create_notification(None, class_id, int(teacher["user_id"]), "hard101 class notice")
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"notification_kind": "password_reset_request"},
+    )
+
+    assert r.status_code == 403
+    assert _notification_kind(notification_id) != "password_reset_request"

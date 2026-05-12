@@ -47,6 +47,13 @@ def _ensure_notification_course_publish_access(user: User, course) -> None:
         raise HTTPException(status_code=403, detail="Only the assigned course teacher can publish course notifications.")
 
 
+def _ensure_notification_write_scope(user: User, subject_id: Optional[int], class_id: Optional[int]) -> None:
+    if is_admin(user):
+        return
+    if subject_id is None and class_id is None:
+        raise HTTPException(status_code=403, detail="Only administrators can publish global notifications.")
+
+
 def _course_class_ids_for_course_wide_notification_view(current_user: User, db: Session, course) -> list[int]:
     """Class ids visible for course-scoped notification rows in the current role.
 
@@ -305,6 +312,8 @@ def create_notification(
         if not class_obj:
             raise HTTPException(status_code=404, detail="Class not found.")
 
+    _ensure_notification_write_scope(current_user, data.subject_id, data.class_id)
+
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
         _ensure_notification_course_publish_access(current_user, course)
@@ -367,6 +376,12 @@ def update_notification(
         class_obj = db.query(Class).filter(Class.id == data.class_id).first()
         if not class_obj:
             raise HTTPException(status_code=404, detail="Class not found.")
+
+    effective_subject_id = data.subject_id if data.subject_id is not None else notification.subject_id
+    effective_class_id = notification.class_id
+    if data.class_id is not None:
+        effective_class_id = None if data.class_id == 0 else data.class_id
+    _ensure_notification_write_scope(current_user, effective_subject_id, effective_class_id)
 
     if data.subject_id is not None:
         course = ensure_course_access_http(data.subject_id, current_user, db)

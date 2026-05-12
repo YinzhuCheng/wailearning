@@ -1707,7 +1707,7 @@
             "id": "admin.e2e.notification_sync_deep_tier",
             "category": "admin-playwright",
             "risk": "broad",
-            "description": "Deeper notification sync Playwright tier for admin global totals, course switch discipline, localStorage poison healing, concurrent publishes, isolation, mobile viewport, cold polling, and delete races.",
+            "description": "Deeper notification sync Playwright tier for admin global totals, course switch discipline, localStorage poison healing, concurrent publishes, isolation, mobile viewport, cold polling, delete races, multi-class course badge boundaries, and admin-only global notification write scope.",
             "working_directory": "apps/web/admin",
             "requires_review_reason": "High-cost browser tier with concurrency and viewport coverage; run when notification UI/state convergence changes are material.",
             "coverage_tags": [

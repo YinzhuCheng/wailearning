@@ -3422,3 +3422,21 @@ Mitigation:
   files are invisible until after they are staged.
 - Treat scanner self-hits as tooling false positives only when the matched line
   is clearly a detection pattern or placeholder, not a real local path.
+
+### Pitfall 87: agent update append script must read BOM-prefixed CSV headers
+
+`docs/development/testing/agent-update-log.csv` may start with a UTF-8 BOM.
+If a helper opens it with plain `encoding="utf-8"`, `csv.DictReader` sees the
+first header as `\ufeffupdate_sequence` instead of `update_sequence`. A sequence
+calculation that looks up `row["update_sequence"]` then sees no values and can
+append a duplicate `update_sequence=1` even when the ledger already contains
+higher rows.
+
+Mitigation:
+
+- Use `encoding="utf-8-sig"` for CSV helpers that read repository ledger
+  headers.
+- Inspect the tail of `agent-update-log.csv` after using append helpers; the
+  sequence must increase monotonically by one.
+- Treat a duplicate low sequence as a transcription/tooling error and correct
+  the newly appended row before commit.

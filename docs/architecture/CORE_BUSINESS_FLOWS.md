@@ -210,6 +210,11 @@ Course-scoped notification publishing is a management operation. A
 access, but creating or rebinding a notification with `subject_id` requires the
 assigned course teacher or admin.
 
+Global notification publishing is an admin operation. A row with both
+`subject_id IS NULL` and `class_id IS NULL` is visible in unscoped notification
+streams across roles, so teachers and class teachers must not be able to create
+one or update a scoped notice into that shape.
+
 Course-scoped notification reading has two class-scope layers. Admins and the
 assigned course teacher see the whole course notification scope, including
 class broadcasts for all `subject_class_links`. Students and class teachers

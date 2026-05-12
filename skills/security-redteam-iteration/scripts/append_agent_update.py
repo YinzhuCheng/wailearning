@@ -28,7 +28,7 @@ def bool_arg(value: str) -> str:
 
 
 def next_sequence(path) -> int:
-    with path.open(newline="", encoding="utf-8") as handle:
+    with path.open(newline="", encoding="utf-8-sig") as handle:
         rows = csv.DictReader(handle)
         values = [int(row["update_sequence"]) for row in rows if row.get("update_sequence")]
     return max(values, default=0) + 1

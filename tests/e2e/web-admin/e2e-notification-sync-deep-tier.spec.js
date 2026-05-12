@@ -1,5 +1,5 @@
 /**
- * Eighteen deeper Playwright checks motivated by residual risks after `e2e-notification-header-sync-tier.spec.js`:
+ * Twenty deeper Playwright checks motivated by residual risks after `e2e-notification-header-sync-tier.spec.js`:
  *
  * - Admin **`notificationSyncParams === null`** uses global sync (must match list aggregates).
  * - Teacher/student **course context** vs **orphan localStorage** / **deep links** / **rapid switching**.
@@ -31,10 +31,14 @@ function apiBase() {
   return (process.env.E2E_API_URL || 'http://127.0.0.1:8012').replace(/\/$/, '')
 }
 
-async function fetchStatus(method, pathname, { token } = {}) {
+async function fetchStatus(method, pathname, { token, body } = {}) {
   const res = await fetch(`${apiBase()}${pathname}`, {
     method,
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body == null ? {} : { 'Content-Type': 'application/json' })
+    },
+    body: body == null ? undefined : JSON.stringify(body)
   })
   return res.status
 }
@@ -67,7 +71,7 @@ async function courseNameById(token, courseId) {
   return row.name
 }
 
-test.describe('E2E notification sync deep tier (18 cases)', () => {
+test.describe('E2E notification sync deep tier (20 cases)', () => {
   test.describe.configure({ timeout: 120_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -601,6 +605,71 @@ test.describe('E2E notification sync deep tier (18 cases)', () => {
     await clickCourseSwitcherOption(page, requiredCourseName)
     await triggerHeaderPoll(page)
 
+    await expect
+      .poll(async () => {
+        const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')
+        return Number.parseInt(`${txt}`.trim(), 10)
+      })
+      .toBe(after.unread_count)
+  })
+
+  test('19 teacher global broadcast attempt does not increase unrelated student header badge', async ({
+    page
+  }) => {
+    const s = scenario()
+    const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
+    const before = await apiGetJson('/api/notifications/sync-status', studentTok)
+
+    const status = await fetchStatus('POST', '/api/notifications', {
+      token: teacherTok,
+      body: {
+        title: `E2E_TEACHER_GLOBAL_DENY_${s.suffix}_${Date.now()}`,
+        content: 'teacher global should be rejected',
+        class_id: null,
+        subject_id: null
+      }
+    })
+    expect(status).toBe(403)
+
+    const after = await apiGetJson('/api/notifications/sync-status', studentTok)
+    expect(after.total).toBe(before.total)
+    expect(after.unread_count).toBe(before.unread_count)
+
+    await login(page, s.student_plain.username, s.password_teacher_student)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await triggerHeaderPoll(page)
+    if (after.unread_count === 0) {
+      await expect(page.locator('[data-testid="header-notification-badge"] .el-badge__content')).toHaveCount(0)
+    } else {
+      await expect
+        .poll(async () => {
+          const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')
+          return Number.parseInt(`${txt}`.trim(), 10)
+        })
+        .toBe(after.unread_count)
+    }
+  })
+
+  test('20 admin global broadcast reaches student header badge', async ({ page }) => {
+    const s = scenario()
+    const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
+    const studentTok = await obtainAccessToken(s.student_plain.username, s.password_teacher_student)
+    const before = await apiGetJson('/api/notifications/sync-status', studentTok)
+
+    await apiPostJson('/api/notifications', adminTok, {
+      title: `E2E_ADMIN_GLOBAL_${s.suffix}_${Date.now()}`,
+      content: 'admin global broadcast',
+      class_id: null,
+      subject_id: null
+    })
+    const after = await apiGetJson('/api/notifications/sync-status', studentTok)
+    expect(after.total).toBe(before.total + 1)
+    expect(after.unread_count).toBe(before.unread_count + 1)
+
+    await login(page, s.student_plain.username, s.password_teacher_student)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await triggerHeaderPoll(page)
     await expect
       .poll(async () => {
         const txt = await (await badgeContentLocator(page)).innerText().catch(() => '')

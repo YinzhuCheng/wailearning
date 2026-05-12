@@ -334,7 +334,7 @@ Earlier Playwright suites exercised **`POST /api/notifications`** and list/mark-
 
 **New Playwright module (10 cases):** `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js`
 
-**Deeper follow-up (15 cases):** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` — admin global totals vs list, teacher explicit course switch before badge asserts, corrupt `selected_course` healing, concurrent publishes, cross-teacher isolation, mobile viewport, reload-based cold poll, delete race on `/notifications`. Run alone:
+**Deeper follow-up (20 cases):** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` — admin global totals vs list, teacher explicit course switch before badge asserts, corrupt `selected_course` healing, concurrent publishes, cross-teacher isolation, mobile viewport, reload-based cold poll, delete race on `/notifications`, multi-class course badge isolation, and admin-only global notification write scope. Run alone:
 
 ```bash
 cd <REPO_ROOT>/apps/web/admin
@@ -401,6 +401,9 @@ boundary for teacher-owned visible courses:
   hidden targeted notices, teacher-targeted notices, unenrolled elective
   notices, subject-scoped list/sync/mark-all-read excluding unrelated-class
   broadcasts, and mark-all-read creating rows only for visible notifications;
+- global notification write scope, including rejecting teacher/class-teacher
+  attempts to create or update into `subject_id IS NULL` plus
+  `class_id IS NULL` while preserving admin global broadcast behavior;
 - parent-code batch generation deduplicating repeated student ids before
   code rotation and preserving the direct-class-only class-teacher boundary;
 - score-appeal second submission after resolved/rejected history keeping at

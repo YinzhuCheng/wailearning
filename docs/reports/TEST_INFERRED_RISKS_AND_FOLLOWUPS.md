@@ -624,6 +624,18 @@ course-linked class scope, while students and non-instructor class teachers
 only see their own class plus global rows. The browser tests also cover stale
 `selected_course` cache and header badge convergence for this boundary.
 
+**Global notification write-scope follow-up round:** The next red-team batch
+added backend `hard92`-`hard101` plus admin Playwright notification deep-tier
+cases 19-20. It found that teachers and class teachers could create
+site-wide notifications by omitting both `subject_id` and `class_id`, and could
+also update a class-scoped notice into the same global shape by clearing
+`class_id`. Because global rows appear in unscoped notification streams for all
+roles, this could inflate unrelated students' header badges or inject another
+teacher's unscoped inbox. The router now treats global notification writes as
+admin-only: non-admin staff must bind manual notifications to a course or class,
+and cannot widen an existing scoped notice into global scope. Admin-created
+global notices remain supported and are covered by backend and browser tests.
+
 ## Suggested Follow-Up Order
 
 1. Investigate the dual-tab notification mark-all-read scenario until it is clearly classified as either a product race or a flaky test.
@@ -666,6 +678,13 @@ only see their own class plus global rows. The browser tests also cover stale
 18. Continue probing cross-course notification read-state when a single teacher
     owns several multi-class courses and switches rapidly between them; the
     current tests focus on one multi-class required course.
+19. Add direct UI composer coverage for notification scope controls. The current
+    browser checks use direct API calls plus header badge assertions; a future
+    UI regression could still expose a misleading "global" publish affordance to
+    normal teachers if the form later adds such a selector.
+20. Run PostgreSQL-backed notification authorization tests when a
+    `TEST_DATABASE_URL` is available, especially around the global-row predicate
+    combined with class, target-user, target-student, and course-scoped filters.
 
 ## What This Document Is Not
 

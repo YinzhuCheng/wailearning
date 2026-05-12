@@ -84,6 +84,10 @@ admin include:
   and score-appeal responses;
 - attendance create/update/delete plus batch and class-batch course attendance;
 - course notification publish/update when `subject_id` is set;
+- global notification publish/update when both `subject_id` and `class_id` are
+  empty is admin-only; teachers and class teachers must bind manual
+  notifications to an assigned course or an accessible class and may not widen a
+  class/course notice into a global broadcast;
 - discussion entry deletion and course-material chapter placement/reorder/link
   operations;
 - course LLM config `GET` and `PUT` under
@@ -142,6 +146,13 @@ assigned course teachers retain a course-wide notification view across every
 linked class. Students and non-instructor class teachers remain class-local:
 they can read only rows for their own class plus global `class_id IS NULL`
 rows, even when the selected course links multiple administrative classes.
+
+Notification write scope is narrower than read scope. Administrators may create
+or update global notices (`subject_id IS NULL` and `class_id IS NULL`) because
+those rows intentionally reach every role's unscoped notification stream.
+Teachers and class teachers cannot create those rows directly and cannot update
+an existing class/course notice to clear both scope columns. This prevents a
+course or class notification composer from becoming a site-wide broadcast tool.
 
 ---
 
