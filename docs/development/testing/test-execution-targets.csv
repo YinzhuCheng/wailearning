@@ -107,7 +107,7 @@ ops/scripts/dev/provision_postgres_pytest.sh
 docs/development/DEVELOPMENT_AND_TESTING.md
 docs/development/TEST_EXECUTION_PITFALLS.md","Changes to database models, migrations/repair logic, quota schema, FK constraints, or raw SQL in tests.
 Changes to tests/db_reset.py, tests/conftest.py, or PostgreSQL provisioning docs/scripts.
-Claims of full-suite or zero-skip pytest validation.",cursor/repository-normalization,this commit,skipped,2026-05-12,4,5
+Claims of full-suite or zero-skip pytest validation.",cursor/repository-normalization,023a6cf,passed,2026-05-13,5,7
 security.api_regression,security-pytest,"Broad API security regression coverage for unauthenticated access, role boundaries, admin-only routes, IDOR edges, invalid tokens, and abuse cases. This target is recommended when auth, permission helpers, class/course access, or high-risk routers such as /api/users change.",.venv\Scripts\python.exe -m pytest tests\security -q,<repo>,"tests/security/test_security_regression.py
 tests/security/test_security_hardening_followup.py
 apps/backend/courseeval_backend/core/auth.py

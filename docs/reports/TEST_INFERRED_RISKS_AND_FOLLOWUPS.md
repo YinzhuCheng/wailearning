@@ -724,6 +724,45 @@ target shape.
     target editing; current E2E uses direct API plus header badge observation
     because the visible composer does not provide target controls.
 
+## Red-Team Close-Out Snapshot (2026-05-13)
+
+The iterative red-team expansion can pause after the notification
+target-clearing round. The recent batches covered the highest-value permission
+and robustness seams with a mix of backend security tests, behavior tests, and
+browser-backed E2E: parent-code and parent-portal scope, parent notification
+and homework reads, discussion/material/course ownership, score appeals,
+dashboard aggregation, LLM course configuration visibility, manual and
+system-generated notifications, global notification write scope, multi-class
+notification audience boundaries, targeted notification writes, and explicit
+notification update clears.
+
+Close-out validation moved one of the largest deferred items from "not yet run"
+to observed PostgreSQL evidence: `postgres.pytest.package` passed against a
+fresh throwaway local PostgreSQL database on commit `023a6cf`
+(`43 passed, 30 warnings`). The first default-sandbox attempt was blocked by
+the known Windows `initdb` restricted-token error, and the approved
+non-restricted rerun completed successfully. This gives PostgreSQL dialect
+coverage for the committed `tests/postgres/` package, including the parent and
+notification subject-scope guards that SQLite alone could not prove.
+
+The remaining work is release-gate work, not another open-ended red-team
+expansion:
+
+1. Run `full.pytest.postgres` before a release-quality or zero-skip backend
+   claim. The package-level PostgreSQL run is useful evidence, but it is not
+   the full backend tree.
+2. Keep a small future专项 backlog instead of another automatic "10 hard
+   tests" batch: score-grade appeal and forgot-password notification lifecycle,
+   concurrent notification target clear/switch plus mark-read on PostgreSQL,
+   and browser UI coverage for notification target editing if that UI becomes
+   available.
+3. Stabilize and preserve the high-value E2E cases already added. Prefer
+   distinctive Playwright grep fragments, avoid bare numeric grep, and keep
+   seed/control tokens explicit so targeted runs stay small and interpretable.
+4. Treat new red-team rounds as risk-triggered: start one only when a new
+   feature changes authorization, target scoping, parent-code behavior, LLM
+   visibility, bulk import/export, or shared notification/read-state logic.
+
 ## What This Document Is Not
 
 - It is not a confirmed bug list.
