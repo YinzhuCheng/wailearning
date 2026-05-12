@@ -614,9 +614,6 @@ class SubjectCreate(BaseModel):
     course_type: str = "required"
     status: str = "active"
     semester: Optional[str] = None
-    weekly_schedule: Optional[str] = None
-    course_start_at: Optional[datetime] = None
-    course_end_at: Optional[datetime] = None
     course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
     students: Optional[List["CourseRosterStudentInput"]] = None
@@ -631,9 +628,6 @@ class SubjectUpdate(BaseModel):
     course_type: Optional[str] = None
     status: Optional[str] = None
     semester: Optional[str] = None
-    weekly_schedule: Optional[str] = None
-    course_start_at: Optional[datetime] = None
-    course_end_at: Optional[datetime] = None
     course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
     cover_image_url: Optional[str] = None
@@ -649,9 +643,6 @@ class SubjectResponse(BaseModel):
     course_type: str = "required"
     status: str = "active"
     semester: Optional[str] = None
-    weekly_schedule: Optional[str] = None
-    course_start_at: Optional[datetime] = None
-    course_end_at: Optional[datetime] = None
     course_times: List[CourseTimeItem] = Field(default_factory=list)
     description: Optional[str] = None
     cover_image_url: Optional[str] = None

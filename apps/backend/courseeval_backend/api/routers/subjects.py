@@ -79,38 +79,8 @@ def _sort_course_times(course_times: List[CourseTimeItem]) -> List[CourseTimeIte
     )
 
 
-def _build_course_time_items(
-    weekly_schedule: Optional[str],
-    course_start_at,
-    course_end_at,
-) -> List[CourseTimeItem]:
-    if not weekly_schedule or not course_start_at or not course_end_at:
-        return []
-
-    return [
-        CourseTimeItem(
-            weekly_schedule=weekly_schedule,
-            course_start_at=course_start_at,
-            course_end_at=course_end_at,
-        )
-    ]
-
-
-def _resolve_course_times(
-    course_times: Optional[List[CourseTimeItem]],
-    weekly_schedule: Optional[str],
-    course_start_at,
-    course_end_at,
-) -> List[CourseTimeItem]:
+def _resolve_course_times(course_times: Optional[List[CourseTimeItem]]) -> List[CourseTimeItem]:
     normalized = [CourseTimeItem.model_validate(item) for item in (course_times or [])]
-
-    if not normalized:
-        normalized = _build_course_time_items(
-            weekly_schedule=weekly_schedule,
-            course_start_at=course_start_at,
-            course_end_at=course_end_at,
-        )
-
     return _sort_course_times(normalized)
 
 
@@ -131,11 +101,7 @@ def _deserialize_course_times(course: Subject) -> List[CourseTimeItem]:
         except Exception:
             pass
 
-    return _build_course_time_items(
-        weekly_schedule=course.weekly_schedule,
-        course_start_at=course.course_start_at,
-        course_end_at=course.course_end_at,
-    )
+    return []
 
 
 def _serialize_course_times_for_storage(course_times: List[CourseTimeItem]) -> Optional[str]:
@@ -264,7 +230,6 @@ def _serialize_course(course: Subject, db: Session, *, student_count: Optional[i
         else _normalize_semester_label(course.semester, db)
     )
     course_times = _deserialize_course_times(course)
-    primary_course_time = course_times[0] if course_times else None
 
     ct = (course.course_type or "required").strip().lower()
     link_rows = (
@@ -300,9 +265,6 @@ def _serialize_course(course: Subject, db: Session, *, student_count: Optional[i
         course_type=course.course_type or "required",
         status=course.status or "active",
         semester=semester_label,
-        weekly_schedule=primary_course_time.weekly_schedule if primary_course_time else course.weekly_schedule,
-        course_start_at=primary_course_time.course_start_at if primary_course_time else course.course_start_at,
-        course_end_at=primary_course_time.course_end_at if primary_course_time else course.course_end_at,
         course_times=course_times,
         description=course.description,
         cover_image_url=course.cover_image_url,
@@ -633,9 +595,6 @@ def create_subject(
     if not _can_create_course(current_user):
         raise HTTPException(status_code=403, detail="You do not have permission to create courses.")
 
-    if subject_data.course_end_at and subject_data.course_start_at and subject_data.course_end_at < subject_data.course_start_at:
-        raise HTTPException(status_code=400, detail="Course end time must be later than start time.")
-
     target_teacher_id: Optional[int] = subject_data.teacher_id
     if current_user.role != UserRole.ADMIN:
         target_teacher_id = current_user.id
@@ -648,13 +607,7 @@ def create_subject(
         semester_name=subject_data.semester,
     )
     semester_label = semester_obj.name if semester_obj else None
-    course_times = _resolve_course_times(
-        subject_data.course_times,
-        subject_data.weekly_schedule,
-        subject_data.course_start_at,
-        subject_data.course_end_at,
-    )
-    primary_course_time = course_times[0] if course_times else None
+    course_times = _resolve_course_times(subject_data.course_times)
 
     if course_type == "elective":
         if subject_data.students:
@@ -684,9 +637,6 @@ def create_subject(
             course_type="elective",
             status=subject_data.status,
             semester=semester_label,
-            weekly_schedule=primary_course_time.weekly_schedule if primary_course_time else subject_data.weekly_schedule,
-            course_start_at=primary_course_time.course_start_at if primary_course_time else subject_data.course_start_at,
-            course_end_at=primary_course_time.course_end_at if primary_course_time else subject_data.course_end_at,
             course_times=_serialize_course_times_for_storage(course_times),
             description=subject_data.description,
         )
@@ -732,9 +682,6 @@ def create_subject(
         course_type="required",
         status=subject_data.status,
         semester=semester_label,
-        weekly_schedule=primary_course_time.weekly_schedule if primary_course_time else subject_data.weekly_schedule,
-        course_start_at=primary_course_time.course_start_at if primary_course_time else subject_data.course_start_at,
-        course_end_at=primary_course_time.course_end_at if primary_course_time else subject_data.course_end_at,
         course_times=_serialize_course_times_for_storage(course_times),
         description=subject_data.description,
     )
@@ -796,9 +743,6 @@ def update_subject(
     if not original_link_ids and course.class_id:
         original_link_ids = {int(course.class_id)}
 
-    if subject_data.course_end_at and subject_data.course_start_at and subject_data.course_end_at < subject_data.course_start_at:
-        raise HTTPException(status_code=400, detail="Course end time must be later than start time.")
-
     if current_user.role != UserRole.ADMIN and subject_data.teacher_id is not None and subject_data.teacher_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only assign yourself as the course teacher.")
 
@@ -825,23 +769,9 @@ def update_subject(
             delete_attachment_file_if_unreferenced(db, prev)
         course.cover_image_url = new_url
 
-    if (
-        subject_data.course_times is not None
-        or subject_data.weekly_schedule is not None
-        or subject_data.course_start_at is not None
-        or subject_data.course_end_at is not None
-    ):
-        course_times = _resolve_course_times(
-            subject_data.course_times,
-            subject_data.weekly_schedule,
-            subject_data.course_start_at,
-            subject_data.course_end_at,
-        )
-        primary_course_time = course_times[0] if course_times else None
+    if subject_data.course_times is not None:
+        course_times = _resolve_course_times(subject_data.course_times)
         course.course_times = _serialize_course_times_for_storage(course_times)
-        course.weekly_schedule = primary_course_time.weekly_schedule if primary_course_time else None
-        course.course_start_at = primary_course_time.course_start_at if primary_course_time else None
-        course.course_end_at = primary_course_time.course_end_at if primary_course_time else None
 
     if subject_data.semester_id is not None or subject_data.semester is not None:
         semester_obj = _resolve_semester(

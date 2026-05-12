@@ -225,8 +225,7 @@
                 <span>班级：{{ course.class_name || '未分配' }}</span>
                 <span>任课老师：{{ course.teacher_name || '未分配' }}</span>
                 <span>学期：{{ course.semester || '未设置' }}</span>
-                <span>每周时间：{{ formatScheduleDisplay(course.weekly_schedule) || '未设置' }}</span>
-                <span>起止时间：{{ formatDateRange(course.course_start_at, course.course_end_at) }}</span>
+                <span>课程时间：{{ formatCourseTimes(course) || '未设置' }}</span>
                 <span>学生数：{{ course.student_count || 0 }}</span>
               </div>
               <p class="course-description">{{ course.description || '暂无课程简介。' }}</p>
@@ -273,8 +272,7 @@
                 <span>班级：{{ course.class_name || '未分配' }}</span>
                 <span>任课老师：{{ course.teacher_name || '未分配' }}</span>
                 <span>学期：{{ course.semester || '未设置' }}</span>
-                <span>每周时间：{{ formatScheduleDisplay(course.weekly_schedule) || '未设置' }}</span>
-                <span>起止时间：{{ formatDateRange(course.course_start_at, course.course_end_at) }}</span>
+                <span>课程时间：{{ formatCourseTimes(course) || '未设置' }}</span>
               </div>
               <div class="course-actions">
                 <el-button
@@ -319,26 +317,64 @@
             <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="每周上课时间" prop="weekly_schedule">
-          <el-input v-model="form.weekly_schedule" placeholder="例如：每周二 19:00-21:00" />
-        </el-form-item>
-        <el-form-item label="开始时间" prop="course_start_at">
-          <el-date-picker
-            v-model="form.course_start_at"
-            type="datetime"
-            placeholder="选择课程开始时间"
-            style="width: 100%"
-            value-format="YYYY-MM-DDTHH:mm:ss"
-          />
-        </el-form-item>
-        <el-form-item label="结束时间" prop="course_end_at">
-          <el-date-picker
-            v-model="form.course_end_at"
-            type="datetime"
-            placeholder="选择课程结束时间"
-            style="width: 100%"
-            value-format="YYYY-MM-DDTHH:mm:ss"
-          />
+        <el-form-item label="课程时间" prop="course_times" class="course-times-form-item">
+          <div class="course-times-editor">
+            <div
+              v-for="(courseTime, index) in form.course_times"
+              :key="`course-time-${index}`"
+              class="course-time-panel"
+            >
+              <div class="course-time-panel__header">
+                <div>
+                  <div class="course-time-panel__title">课程时间 {{ index + 1 }}</div>
+                  <div class="course-time-panel__subtitle">
+                    设置这一段时间内的起止日期和每周上课时间
+                  </div>
+                </div>
+                <el-button
+                  v-if="form.course_times.length > 1"
+                  text
+                  type="danger"
+                  @click="removeCourseTime(index)"
+                >
+                  删除
+                </el-button>
+              </div>
+
+              <div class="course-time-panel__fields">
+                <div class="course-time-panel__field">
+                  <div class="course-time-panel__field-label">开始日期</div>
+                  <el-date-picker
+                    v-model="courseTime.course_start_at"
+                    type="date"
+                    placeholder="请选择开始日期"
+                    style="width: 100%"
+                    value-format="YYYY-MM-DD"
+                  />
+                </div>
+
+                <div class="course-time-panel__field">
+                  <div class="course-time-panel__field-label">结束日期</div>
+                  <el-date-picker
+                    v-model="courseTime.course_end_at"
+                    type="date"
+                    placeholder="请选择结束日期"
+                    style="width: 100%"
+                    value-format="YYYY-MM-DD"
+                  />
+                </div>
+              </div>
+
+              <div class="course-time-panel__schedule">
+                <div class="course-time-panel__field-label">每周时间</div>
+                <CourseSchedulePicker v-model="courseTime.weekly_schedule" />
+              </div>
+            </div>
+
+            <el-button plain class="course-times-editor__add" @click="addCourseTime">
+              添加课程时间
+            </el-button>
+          </div>
         </el-form-item>
         <el-form-item label="课程简介">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="可选，简单说明课程内容" />
@@ -379,8 +415,14 @@ import * as XLSX from 'xlsx'
 import { ElMessage } from 'element-plus'
 
 import api from '@/api'
+import CourseSchedulePicker from '@/components/CourseSchedulePicker.vue'
 import { useUserStore } from '@/stores/user'
-import { formatScheduleValue } from '@/utils/courseSchedule'
+import { parseScheduleValue } from '@/utils/courseSchedule'
+import {
+  createEmptyCourseTime,
+  formatCourseTimes,
+  serializeCourseTimesPayload
+} from '@/utils/courseTimes'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -417,18 +459,9 @@ const form = reactive({
   course_type: 'required',
   status: 'active',
   semester_id: null,
-  weekly_schedule: '',
-  course_start_at: '',
-  course_end_at: '',
+  course_times: [createEmptyCourseTime()],
   description: ''
 })
-
-const rules = {
-  name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
-  weekly_schedule: [{ required: true, message: '请输入每周上课时间', trigger: 'blur' }],
-  course_start_at: [{ required: true, message: '请选择课程开始时间', trigger: 'change' }],
-  course_end_at: [{ required: true, message: '请选择课程结束时间', trigger: 'change' }]
-}
 
 const activeCourses = computed(() => courses.value.filter(course => course.status !== 'completed'))
 const completedCourses = computed(() => courses.value.filter(course => course.status === 'completed'))
@@ -560,15 +593,44 @@ const loadSemesters = async () => {
   semesters.value = await api.semesters.list()
 }
 
+function validateCourseTimes(_rule, value, callback) {
+  if (!Array.isArray(value) || !value.length) {
+    callback(new Error('请至少添加一组课程时间'))
+    return
+  }
+
+  for (const item of value) {
+    if (!item.course_start_at || !item.course_end_at) {
+      callback(new Error('请为每组课程时间选择开始日期和结束日期'))
+      return
+    }
+
+    if (new Date(item.course_end_at) < new Date(item.course_start_at)) {
+      callback(new Error('课程时间的结束日期不能早于开始日期'))
+      return
+    }
+
+    if (!parseScheduleValue(item.weekly_schedule).length) {
+      callback(new Error('请为每组课程时间选择每周时间'))
+      return
+    }
+  }
+
+  callback()
+}
+
+const rules = {
+  name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
+  course_times: [{ validator: validateCourseTimes, trigger: 'change' }]
+}
+
 const resetForm = () => {
   Object.assign(form, {
     name: '',
     course_type: 'required',
     status: 'active',
     semester_id: null,
-    weekly_schedule: '',
-    course_start_at: '',
-    course_end_at: '',
+    course_times: [createEmptyCourseTime()],
     description: ''
   })
   rosterStudents.value = []
@@ -596,28 +658,6 @@ const selectCourse = course => {
   }
   router.push('/students')
 }
-
-const formatDate = value => {
-  if (!value) {
-    return ''
-  }
-  return new Date(value).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-const formatDateRange = (startAt, endAt) => {
-  if (!startAt && !endAt) {
-    return '未设置'
-  }
-  return `${formatDate(startAt) || '未设置'} - ${formatDate(endAt) || '未设置'}`
-}
-
-const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
 
 const normalizeCellValue = value => {
   if (value === undefined || value === null) {
@@ -691,6 +731,20 @@ const downloadTemplate = format => {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, '学生名单')
   XLSX.writeFile(workbook, '课程学生名单模板.xlsx')
+}
+
+const addCourseTime = () => {
+  form.course_times.push(createEmptyCourseTime())
+  formRef.value?.clearValidate('course_times')
+}
+
+const removeCourseTime = index => {
+  if (form.course_times.length <= 1) {
+    return
+  }
+
+  form.course_times.splice(index, 1)
+  formRef.value?.clearValidate('course_times')
 }
 
 const triggerImport = () => {
@@ -842,8 +896,12 @@ const submitForm = async () => {
   submitting.value = true
   try {
     const createdCourse = await api.courses.create({
-      ...form,
+      name: form.name,
+      course_type: form.course_type,
+      status: form.status,
       semester_id: form.semester_id || null,
+      course_times: serializeCourseTimesPayload(form.course_times),
+      description: form.description,
       students: rosterStudents.value
     })
     await Promise.all([loadCourses(), userStore.fetchTeachingCourses(true)])
@@ -1190,6 +1248,63 @@ watch(
   display: none;
 }
 
+.course-times-editor {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.course-times-editor__add {
+  align-self: flex-start;
+}
+
+.course-time-panel {
+  border: 1px solid #dbe4f0;
+  border-radius: var(--wa-radius-lg);
+  background: #f8fbff;
+  padding: 16px;
+}
+
+.course-time-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.course-time-panel__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.course-time-panel__subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.course-time-panel__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.course-time-panel__field-label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.course-time-panel__schedule {
+  display: flex;
+  flex-direction: column;
+}
+
 .course-section {
   background: #fff;
   border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
@@ -1402,6 +1517,12 @@ watch(
   .course-card-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .course-time-panel__header,
+  .course-time-panel__fields {
+    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 
   .course-tags {

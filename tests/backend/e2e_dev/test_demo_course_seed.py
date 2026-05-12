@@ -66,12 +66,10 @@ def test_demo_seed_creates_teacher_students_course_homework():
 
         course = db.query(Subject).filter(Subject.name == "数据挖掘").first()
         assert course is not None
-        assert course.weekly_schedule
         assert course.description
         required_times = json.loads(course.course_times or "[]")
         assert len(required_times) == 1
         assert required_times[0]["weekly_schedule"] == "2@7,8"
-        assert course.course_start_at is not None and course.course_end_at is not None
 
         assert db.query(CourseGradeScheme).filter(CourseGradeScheme.subject_id == course.id).first() is not None
         exam_w = db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == course.id).first()

@@ -53,20 +53,22 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const dlg = page.getByRole('dialog', { name: /发布作业/ })
     await expect(dlg).toBeVisible({ timeout: 15000 })
     const bodyPanel = dlg.locator('.md-panel').first()
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 15000 })
+    await expect(bodyPanel.getByTestId('discussion-markdown-demo-toggle')).toHaveCount(0)
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render')).toHaveCount(0)
     await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
     await expect(bodyPanel.getByTestId('markdown-latex-demo-image-render')).toHaveCount(0)
     await bodyPanel.getByTestId('md-panel-card-help-toggle').click()
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 15000 })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render').locator('.katex').first()).toBeVisible({
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render').locator('.katex-display').first()).toBeVisible({
+      timeout: 15000
+    })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-image-render')).toHaveCount(0)
+    await bodyPanel.getByTestId('markdown-latex-demo-card-toggle').click()
     await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toBeVisible({ timeout: 15000 })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.katex').first()).toBeVisible({
-      timeout: 15000
-    })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.katex-display').first()).toBeVisible({
-      timeout: 15000
-    })
-    await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.katex-display')).toHaveCount(1, {
-      timeout: 15000
-    })
     await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).not.toContainText('$$')
     await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).not.toContainText('\\[')
     await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render').locator('.md-card--example')).toBeVisible({
@@ -86,6 +88,9 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     })
     await bodyPanel.getByTestId('md-panel-image-help-toggle').click()
     await expect(bodyPanel.getByTestId('md-panel-image-help')).toBeVisible({ timeout: 15000 })
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-image-render')).toHaveCount(0)
+    await bodyPanel.getByTestId('markdown-latex-demo-image-toggle').click()
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-image-render')).toBeVisible({ timeout: 15000 })
     await screenshot(page, testInfo, 'markdown-card-demo-homework-dialog')
   })
 
@@ -98,10 +103,13 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const dlg = page.getByRole('dialog', { name: /发布作业/ })
     await expect(dlg).toBeVisible({ timeout: 15000 })
     const bodyPanel = dlg.locator('.md-panel').first()
+    await expect(bodyPanel.getByTestId('discussion-markdown-demo-toggle')).toHaveCount(0)
+    await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render')).toHaveCount(0)
+    await bodyPanel.getByTestId('md-panel-card-help-toggle').click()
     await expect(bodyPanel.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 15000 })
     await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
     await expect(bodyPanel.getByTestId('markdown-latex-demo-image-render')).toHaveCount(0)
-    await bodyPanel.getByTestId('md-panel-card-help-toggle').click()
+    await bodyPanel.getByTestId('markdown-latex-demo-card-toggle').click()
     await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toBeVisible({ timeout: 10000 })
     await bodyPanel.locator('.md-panel__format .el-radio-button').filter({ hasText: '纯文本' }).click()
     await expect(bodyPanel.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
@@ -186,6 +194,23 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     await expect(page.getByTestId('sidebar-notifications')).toBeVisible()
   })
 
+  test('student sidebar uses distinct icons for learning home and scores', async ({ page }) => {
+    const s = scenario()
+    const pw = s.student_plain.password || s.password_teacher_student
+    await login(page, s.student_plain.username, pw)
+    await page.goto('/courses')
+    const menu = page.locator('.sidebar-menu')
+    const studentNavLabels = ['选课与进度', '学习主页', '课程作业', '课程目录', '学习笔记', '我的成绩']
+    const iconHtmlByLabel = {}
+    for (const label of studentNavLabels) {
+      const item = menu.getByRole('menuitem', { name: label })
+      await expect(item).toBeVisible({ timeout: 15000 })
+      iconHtmlByLabel[label] = await item.locator('svg').first().evaluate(svg => svg.outerHTML)
+      expect(iconHtmlByLabel[label]).toBeTruthy()
+    }
+    expect(new Set(Object.values(iconHtmlByLabel)).size).toBe(studentNavLabels.length)
+  })
+
   test('historical teaching-calendar deep link redirects to attendance with embedded TeachingCalendar', async ({ page }) => {
     const s = scenario()
     await login(page, s.teacher_own.username, s.teacher_own.password)
@@ -222,6 +247,8 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
     const textarea = dlg.locator('.discussion-input textarea')
     const demoToggle = dlg.getByTestId('discussion-markdown-demo-toggle')
     await expect(demoToggle).toBeVisible({ timeout: 15000 })
+    await expect(dlg.getByTestId('discussion-markdown-demo-toggle')).toBeVisible({ timeout: 15000 })
+    await dlg.getByTestId('discussion-markdown-demo-toggle').click()
     await expect(dlg.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 15000 })
     await expect(dlg.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
     await expect(dlg.getByTestId('markdown-latex-demo-image-render')).toHaveCount(0)
@@ -244,7 +271,9 @@ test.describe('Course UI + Markdown LaTeX demo (seeded)', () => {
       timeout: 15000
     })
     await expect(dlg.getByTestId('discussion-markdown-preview')).not.toContainText('$$')
-    await demoToggle.click()
+    await expect(dlg.getByTestId('markdown-latex-demo-base-render')).toBeVisible({ timeout: 15000 })
+    await expect(dlg.getByTestId('markdown-latex-demo-card-render')).toHaveCount(0)
+    await dlg.getByTestId('markdown-latex-demo-card-toggle').click()
     await expect(dlg.getByTestId('markdown-latex-demo-card-render')).toBeVisible({ timeout: 15000 })
     await dlg.getByTestId('discussion-submit').click()
     const row = dlg.locator('.discussion-row').filter({ hasText: `md-material-${stamp}` })

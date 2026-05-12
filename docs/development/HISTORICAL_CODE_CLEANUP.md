@@ -310,23 +310,24 @@ For behavior-affecting cleanup, add:
 
 These are candidates for later cleanup, but only with stronger verification than this sweep required.
 
-### Candidate: schedule legacy read path
+### Candidate: schedule free-text display fallback
 
 Files:
 
-- `apps/backend/courseeval_backend/api/routers/subjects.py`
 - `apps/web/admin/src/components/CourseSchedulePicker.vue`
+- `apps/web/admin/src/utils/courseSchedule.js`
+- `apps/web/admin/src/utils/courseTimes.js`
 
 Why it still exists:
 
-- the backend can still read old `weekly_schedule` + date columns
-- the admin UI can still surface non-canonical schedule values
+- `course_times` is the single course-schedule source of truth
+- the schedule value inside each `course_times` item is still displayed as raw text when it is not in canonical picker format
 
 Removal precondition:
 
-- confirm all stored course rows have canonical `course_times` or canonical serialized schedule values
-- add or run a migration that rewrites old rows
-- remove the warning path only after read-side fallback is unnecessary
+- confirm all stored `course_times[].weekly_schedule` values use canonical picker format
+- add or run a migration that rewrites non-canonical schedule strings
+- remove raw schedule display fallback only after imported data can no longer carry free-text schedules
 
 ### Candidate: attachment directory fallback roots
 

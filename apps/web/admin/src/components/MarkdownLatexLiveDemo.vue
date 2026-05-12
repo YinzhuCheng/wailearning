@@ -22,7 +22,13 @@
       <div class="md-latex-live-demo__section">
         <div class="md-latex-live-demo__section-head">
           <span>卡片示例</span>
-          <el-button v-if="showCardSectionToggle" size="small" link @click="showCards = !showCards">
+          <el-button
+            v-if="showCardSectionToggle"
+            size="small"
+            link
+            data-testid="markdown-latex-demo-card-toggle"
+            @click="showCards = !showCards"
+          >
             {{ showCards ? '收起卡片示例' : '显示卡片示例' }}
           </el-button>
         </div>
@@ -33,7 +39,13 @@
       <div class="md-latex-live-demo__section">
         <div class="md-latex-live-demo__section-head">
           <span>插图示例</span>
-          <el-button v-if="showImageSectionToggle" size="small" link @click="showImage = !showImage">
+          <el-button
+            v-if="showImageSectionToggle"
+            size="small"
+            link
+            data-testid="markdown-latex-demo-image-toggle"
+            @click="showImage = !showImage"
+          >
             {{ showImage ? '收起插图示例' : '显示插图示例' }}
           </el-button>
         </div>

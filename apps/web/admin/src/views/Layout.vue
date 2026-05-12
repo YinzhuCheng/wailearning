@@ -264,16 +264,16 @@ import {
   Calendar,
   Clock,
   Collection,
-  DataAnalysis,
   Document,
   EditPen,
   Expand,
   Fold,
-  Histogram,
+  House,
   Reading,
   School,
   Setting,
   SwitchButton,
+  Trophy,
   User,
   UserFilled
 } from '@element-plus/icons-vue'
@@ -622,11 +622,11 @@ const teacherMenu = [
 /** Flat menu: student course routes are direct top-level entries for lower click depth. */
 const studentMenu = [
   { path: '/courses', label: '选课与进度', icon: School },
-  { path: '/course-home', label: '学习主页', icon: DataAnalysis },
+  { path: '/course-home', label: '学习主页', icon: House },
   { path: '/homework', label: '课程作业', icon: Document },
   { path: '/materials', label: '课程目录', icon: Collection },
   { path: '/learning-notes', label: '学习笔记', icon: EditPen },
-  { path: '/student-scores', label: '我的成绩', icon: Histogram }
+  { path: '/student-scores', label: '我的成绩', icon: Trophy }
 ]
 
 const adminMenu = [
