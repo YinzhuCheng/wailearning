@@ -27,7 +27,7 @@ async function apiStatus(pathname, { method = 'GET', token, headers = {}, body }
   return { status: res.status, text: await res.text() }
 }
 
-test.describe('security hardening follow-up E2E (3 cases)', () => {
+test.describe('security hardening follow-up E2E (6 cases)', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -133,5 +133,48 @@ test.describe('security hardening follow-up E2E (3 cases)', () => {
       await ctxA.close().catch(() => {})
       await ctxB.close().catch(() => {})
     }
+  })
+
+  test('05 class teacher cannot rebind visible required course to another class via direct API', async () => {
+    const s = scenario()
+    const token = await obtainAccessToken(s.class_teacher.username, s.password_teacher_student)
+    const before = await apiStatus(`/api/subjects/${s.course_required_id}`, { token })
+    expect(before.status).toBe(200)
+
+    const rebinding = await apiStatus(`/api/subjects/${s.course_required_id}`, {
+      method: 'PUT',
+      token,
+      body: { class_id: s.class_id_2 }
+    })
+    expect(rebinding.status).toBe(403)
+
+    const after = await apiStatus(`/api/subjects/${s.course_required_id}`, { token })
+    expect(after.status).toBe(200)
+    const payload = JSON.parse(after.text)
+    const ids = (payload.class_links || []).map(row => Number(row.class_id))
+    expect(ids).toContain(Number(s.class_id_1))
+    expect(ids).not.toContain(Number(s.class_id_2))
+  })
+
+  test('06 class teacher cannot hijack teacher-owned visible course by updating metadata', async () => {
+    const s = scenario()
+    const token = await obtainAccessToken(s.class_teacher.username, s.password_teacher_student)
+
+    const before = await apiStatus(`/api/subjects/${s.course_required_id}`, { token })
+    expect(before.status).toBe(200)
+    const beforePayload = JSON.parse(before.text)
+    expect(Number(beforePayload.teacher_id)).toBe(Number(s.teacher_user_id))
+
+    const hijack = await apiStatus(`/api/subjects/${s.course_required_id}`, {
+      method: 'PUT',
+      token,
+      body: { name: `E2E forbidden hijack ${Date.now()}` }
+    })
+    expect(hijack.status).toBe(403)
+
+    const after = await apiStatus(`/api/subjects/${s.course_required_id}`, { token })
+    expect(after.status).toBe(200)
+    const afterPayload = JSON.parse(after.text)
+    expect(Number(afterPayload.teacher_id)).toBe(Number(s.teacher_user_id))
   })
 })

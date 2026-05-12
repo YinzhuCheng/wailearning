@@ -668,12 +668,15 @@
                 "paths": [
                     "tests/backend/llm/test_llm_attachment_formats.py",
                     "tests/fixtures/llm_rar/",
+                    "tests/backend/files/",
+                    "apps/backend/courseeval_backend/attachments.py",
                     "apps/backend/courseeval_backend/domains/llm/attachments.py",
                     "apps/backend/courseeval_backend/attachment_compliance.py",
                     "apps/backend/courseeval_backend/llm_grading.py"
                 ],
                 "globs": [
                     "tests/fixtures/llm_rar/**",
+                    "tests/backend/files/**",
                     "apps/backend/courseeval_backend/domains/llm/**"
                 ]
             },
@@ -1141,6 +1144,8 @@
                     "apps/backend/courseeval_backend/api/routers/auth.py",
                     "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
                     "apps/backend/courseeval_backend/api/routers/files.py",
+                    "apps/backend/courseeval_backend/attachments.py",
+                    "apps/backend/courseeval_backend/attachment_compliance.py",
                     "apps/backend/courseeval_backend/api/routers/attendance.py",
                     "apps/backend/courseeval_backend/api/routers/users.py",
                     "apps/backend/courseeval_backend/api/routers/homework.py",
@@ -1189,6 +1194,7 @@
                     "apps/backend/courseeval_backend/api/routers/auth.py",
                     "apps/backend/courseeval_backend/api/routers/users.py",
                     "apps/backend/courseeval_backend/api/routers/subjects.py",
+                    "apps/backend/courseeval_backend/attachments.py",
                     "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
                     "apps/backend/courseeval_backend/core/auth.py",
                     "apps/backend/courseeval_backend/core/config.py"

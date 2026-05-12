@@ -744,6 +744,9 @@ def update_subject(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
 
+    if current_user.role != UserRole.ADMIN and int(course.teacher_id or 0) != int(current_user.id or 0):
+        raise HTTPException(status_code=403, detail="Only the assigned course teacher can update this course.")
+
     original_link_ids = set(subject_linked_class_ids(db, course.id))
     if not original_link_ids and course.class_id:
         original_link_ids = {int(course.class_id)}
@@ -760,6 +763,9 @@ def update_subject(
             setattr(course, field, value)
 
     if subject_data.course_type is not None:
+        next_course_type = (subject_data.course_type or "required").strip().lower()
+        if current_user.role == UserRole.CLASS_TEACHER and next_course_type == "elective":
+            raise HTTPException(status_code=403, detail="Class teachers cannot convert courses to electives.")
         course.course_type = subject_data.course_type
 
     if subject_data.remove_cover_image:
@@ -799,8 +805,16 @@ def update_subject(
     else:
         if subject_data.class_links is not None:
             pairs = [(int(x.class_id), x.enrollment_mode) for x in subject_data.class_links]
+            if current_user.role == UserRole.CLASS_TEACHER:
+                allowed_class_id = int(current_user.class_id or 0)
+                if not allowed_class_id or any(cid != allowed_class_id for cid, _ in pairs):
+                    raise HTTPException(status_code=403, detail="Class teachers can only bind courses to their own class.")
             _replace_subject_class_links(db, course, pairs)
         elif subject_data.class_id is not None:
+            if current_user.role == UserRole.CLASS_TEACHER:
+                allowed_class_id = int(current_user.class_id or 0)
+                if not allowed_class_id or int(subject_data.class_id) != allowed_class_id:
+                    raise HTTPException(status_code=403, detail="Class teachers can only bind courses to their own class.")
             _replace_subject_class_links(db, course, [(int(subject_data.class_id), "all_in_class")])
         else:
             refresh_subject_primary_class_id(course, db)

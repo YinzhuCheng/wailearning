@@ -71,6 +71,18 @@ def validate_attachment_upload(file: UploadFile) -> str:
     return extension
 
 
+def _looks_like_executable_payload(content: bytes) -> bool:
+    head = bytes(content[:512]).lstrip()
+    lower_head = head.lower()
+    return (
+        head.startswith(b"MZ")
+        or head.startswith(b"\x7fELF")
+        or lower_head.startswith(b"#!/bin/")
+        or lower_head.startswith(b"#! /bin/")
+        or b"<script language=\"jscript\"" in lower_head
+    )
+
+
 async def save_attachment(
     file: UploadFile,
     request: Request,
@@ -85,6 +97,8 @@ async def save_attachment(
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
     if size > MAX_ATTACHMENT_SIZE:
         raise HTTPException(status_code=400, detail="Attachment size must be 20 MB or smaller.")
+    if _looks_like_executable_payload(content):
+        raise HTTPException(status_code=400, detail="Executable file content is not allowed.")
 
     upload_filename = (file.filename or "").strip()
     assert_attachment_format_compliant(filename=upload_filename, extension=extension, content=content)

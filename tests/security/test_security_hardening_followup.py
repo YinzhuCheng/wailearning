@@ -14,7 +14,7 @@ from apps.backend.courseeval_backend.api.schemas import UserRole
 from apps.backend.courseeval_backend.core.auth import get_password_hash
 from apps.backend.courseeval_backend.core.config import Settings, settings
 from apps.backend.courseeval_backend.db.database import SessionLocal
-from apps.backend.courseeval_backend.db.models import Class, CourseMaterial, User
+from apps.backend.courseeval_backend.db.models import Class, CourseMaterial, SubjectClassLink, User
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
@@ -22,23 +22,47 @@ def _bearer_value(headers: dict[str, str]) -> str:
     return headers["Authorization"].split(" ", 1)[1]
 
 
-def _create_class_teacher() -> dict[str, object]:
+def _create_class_teacher(label: str = "class_teacher") -> dict[str, object]:
     db = SessionLocal()
     try:
-        klass = Class(name="security-class-teacher-class", grade=2026)
+        klass = Class(name=f"security-{label}-class", grade=2026)
         db.add(klass)
         db.flush()
         user = User(
-            username="security_class_teacher",
-            hashed_password=get_password_hash("class_teacher_pass"),
-            real_name="Security Class Teacher",
+            username=f"security_{label}",
+            hashed_password=get_password_hash(f"{label}_pass123"),
+            real_name=f"Security {label}",
             role=UserRole.CLASS_TEACHER.value,
             class_id=klass.id,
             is_active=True,
         )
         db.add(user)
         db.commit()
-        return {"user_id": user.id, "class_id": klass.id, "username": user.username, "password": "class_teacher_pass"}
+        return {"user_id": user.id, "class_id": klass.id, "username": user.username, "password": f"{label}_pass123"}
+    finally:
+        db.close()
+
+
+def _create_class(name: str) -> int:
+    db = SessionLocal()
+    try:
+        klass = Class(name=name, grade=2026)
+        db.add(klass)
+        db.commit()
+        return int(klass.id)
+    finally:
+        db.close()
+
+
+def _linked_class_ids(subject_id: int) -> set[int]:
+    db = SessionLocal()
+    try:
+        return {
+            int(row[0])
+            for row in db.query(SubjectClassLink.class_id)
+            .filter(SubjectClassLink.subject_id == subject_id)
+            .all()
+        }
     finally:
         db.close()
 
@@ -352,3 +376,204 @@ def test_hard20_teacher_cannot_browse_student_only_course_catalog(client: TestCl
 
     r = client.get("/api/subjects/course-catalog", headers=teacher_headers)
     assert r.status_code == 403
+
+
+def test_hard21_class_teacher_cannot_update_required_course_to_foreign_class_id(client: TestClient):
+    ct = _create_class_teacher("ct_update_foreign")
+    foreign_class_id = _create_class("security-ct-update-foreign")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    created = client.post(
+        "/api/subjects",
+        headers=ct_headers,
+        json={
+            "name": "ct owned update foreign class",
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+
+    r = client.put(f"/api/subjects/{subject_id}", headers=ct_headers, json={"class_id": foreign_class_id})
+    assert r.status_code == 403
+    assert _linked_class_ids(subject_id) == {int(ct["class_id"])}
+
+
+def test_hard22_class_teacher_cannot_update_required_course_with_foreign_class_links(client: TestClient):
+    ct = _create_class_teacher("ct_update_links")
+    foreign_class_id = _create_class("security-ct-update-link-foreign")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    created = client.post(
+        "/api/subjects",
+        headers=ct_headers,
+        json={
+            "name": "ct owned update class links",
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+
+    r = client.put(
+        f"/api/subjects/{subject_id}",
+        headers=ct_headers,
+        json={
+            "class_links": [
+                {"class_id": ct["class_id"], "enrollment_mode": "all_in_class"},
+                {"class_id": foreign_class_id, "enrollment_mode": "all_in_class"},
+            ]
+        },
+    )
+    assert r.status_code == 403
+    assert _linked_class_ids(subject_id) == {int(ct["class_id"])}
+
+
+def test_hard23_class_teacher_cannot_convert_class_bound_required_course_to_elective(client: TestClient):
+    ct = _create_class_teacher("ct_update_elective")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    created = client.post(
+        "/api/subjects",
+        headers=ct_headers,
+        json={
+            "name": "ct owned convert elective",
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+
+    r = client.put(f"/api/subjects/{subject_id}", headers=ct_headers, json={"course_type": "elective"})
+    assert r.status_code == 403
+    detail = client.get(f"/api/subjects/{subject_id}", headers=ct_headers)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["course_type"] == "required"
+    assert _linked_class_ids(subject_id) == {int(ct["class_id"])}
+
+
+def test_hard24_class_teacher_cannot_update_foreign_teacher_course_even_with_own_class_link(client: TestClient):
+    ct = _create_class_teacher("ct_foreign_teacher")
+    ctx = make_grading_course_with_homework()
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "foreign teacher own class linked",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.put(
+        f"/api/subjects/{created.json()['id']}",
+        headers=ct_headers,
+        json={"name": "ct should not mutate teacher-owned course"},
+    )
+    assert r.status_code == 403
+
+
+def test_hard25_e2e_dev_reset_wrong_bearer_still_rejects_when_seed_is_valid(client: TestClient):
+    ensure_admin()
+    settings.E2E_DEV_SEED_ENABLED = True
+    settings.E2E_DEV_SEED_TOKEN = "hardening-seed"
+    settings.E2E_DEV_REQUIRE_ADMIN_JWT = True
+
+    r = client.post(
+        "/api/e2e/dev/mock-llm/configure",
+        headers={"X-E2E-Seed-Token": "hardening-seed", "Authorization": "Bearer definitely.invalid.token"},
+        json={"profiles": {}},
+    )
+    assert r.status_code in (401, 403)
+
+
+def test_hard26_production_rejects_e2e_seed_even_with_strong_secret_and_database_url():
+    with pytest.raises(ValueError, match="E2E_DEV_SEED_ENABLED"):
+        Settings(
+            APP_ENV="production",
+            E2E_DEV_SEED_ENABLED=True,
+            SECRET_KEY="x" * 40,
+            DATABASE_URL="postgresql://courseeval:strong-pass@127.0.0.1:5432/courseeval_prod",
+        )
+
+
+def test_hard27_attachment_duplicate_db_references_with_same_basename_still_enforce_url_acl(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    other = make_grading_course_with_homework()
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    other_headers = login_api(client, other["teacher_username"], other["teacher_password"])
+
+    first = client.post(
+        "/api/files/upload",
+        headers=teacher_headers,
+        files={"file": ("collision-a.txt", b"first collision body", "text/plain")},
+    )
+    assert first.status_code == 200, first.text
+    first_url = first.json()["attachment_url"]
+    basename = first_url.rsplit("/", 1)[-1]
+
+    db = SessionLocal()
+    try:
+        db.add_all(
+            [
+                CourseMaterial(
+                    title="ACL collision first",
+                    content="attached",
+                    attachment_name="collision-a.txt",
+                    attachment_url=first_url,
+                    class_id=ctx["class_id"],
+                    subject_id=ctx["subject_id"],
+                    created_by=ctx["teacher_id"],
+                ),
+                CourseMaterial(
+                    title="ACL collision second same basename",
+                    content="attached",
+                    attachment_name="collision-b.txt",
+                    attachment_url=first_url,
+                    class_id=other["class_id"],
+                    subject_id=other["subject_id"],
+                    created_by=other["teacher_id"],
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    ambiguous = client.get(f"/api/files/download/{basename}", headers=teacher_headers)
+    assert ambiguous.status_code == 200, ambiguous.text
+
+    exact = client.get(
+        f"/api/files/download/{basename}",
+        headers=teacher_headers,
+        params={"attachment_url": first_url},
+    )
+    assert exact.status_code == 200, exact.text
+
+    foreign = client.get(
+        f"/api/files/download/{basename}",
+        headers=other_headers,
+        params={"attachment_url": first_url},
+    )
+    assert foreign.status_code == 403
+
+
+def test_hard28_upload_rejects_disguised_executable_content_with_safe_extension(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+
+    r = client.post(
+        "/api/files/upload",
+        headers=teacher_headers,
+        files={"file": ("payload.txt", b"MZ disguised executable", "text/plain")},
+    )
+    assert r.status_code == 400
