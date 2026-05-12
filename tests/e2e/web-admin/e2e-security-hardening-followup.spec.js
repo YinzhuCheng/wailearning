@@ -27,7 +27,7 @@ async function apiStatus(pathname, { method = 'GET', token, headers = {}, body }
   return { status: res.status, text: await res.text() }
 }
 
-test.describe('security hardening follow-up E2E (6 cases)', () => {
+test.describe('security hardening follow-up E2E (8 cases)', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -176,5 +176,33 @@ test.describe('security hardening follow-up E2E (6 cases)', () => {
     expect(after.status).toBe(200)
     const afterPayload = JSON.parse(after.text)
     expect(Number(afterPayload.teacher_id)).toBe(Number(s.teacher_user_id))
+  })
+
+  test('07 class teacher cannot delete teacher-owned visible course via direct API', async () => {
+    const s = scenario()
+    const token = await obtainAccessToken(s.class_teacher.username, s.password_teacher_student)
+
+    const before = await apiStatus(`/api/subjects/${s.course_required_id}`, { token })
+    expect(before.status).toBe(200)
+
+    const deletion = await apiStatus(`/api/subjects/${s.course_required_id}`, { method: 'DELETE', token })
+    expect(deletion.status).toBe(403)
+
+    const after = await apiStatus(`/api/subjects/${s.course_required_id}`, { token })
+    expect(after.status).toBe(200)
+  })
+
+  test('08 class teacher cannot sync teacher-owned visible course roster via direct API', async () => {
+    const s = scenario()
+    const token = await obtainAccessToken(s.class_teacher.username, s.password_teacher_student)
+
+    const before = await apiStatus(`/api/subjects/${s.course_required_id}`, { token })
+    expect(before.status).toBe(200)
+
+    const sync = await apiStatus(`/api/subjects/${s.course_required_id}/sync-enrollments`, {
+      method: 'POST',
+      token
+    })
+    expect(sync.status).toBe(403)
   })
 })

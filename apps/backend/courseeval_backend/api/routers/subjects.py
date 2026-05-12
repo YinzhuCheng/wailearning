@@ -14,6 +14,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     get_student_course_catalog_query,
     get_student_elective_catalog_query,
     get_student_profile_for_user,
+    is_course_instructor,
     prepare_student_course_context,
     refresh_subject_primary_class_id,
     remove_course_enrollment,
@@ -335,6 +336,11 @@ def _serialize_enrollment(enrollment: CourseEnrollment, db: Session) -> CourseEn
 
 def _can_create_course(current_user: User) -> bool:
     return current_user.role in [UserRole.ADMIN, UserRole.CLASS_TEACHER, UserRole.TEACHER]
+
+
+def _ensure_course_management_access(user: User, course: Subject) -> None:
+    if not is_course_instructor(user, course):
+        raise HTTPException(status_code=403, detail="Only the assigned course teacher can manage this course.")
 
 
 def _normalize_course_class_name(subject_data: SubjectCreate) -> str:
@@ -856,6 +862,7 @@ async def upload_subject_cover_image(
     course = db.query(Subject).filter(Subject.id == subject_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
+    _ensure_course_management_access(current_user, course)
 
     from apps.backend.courseeval_backend.attachments import save_course_cover_image
 
@@ -888,6 +895,7 @@ def delete_subject(
     course = db.query(Subject).filter(Subject.id == subject_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
+    _ensure_course_management_access(current_user, course)
 
     cover_url = course.cover_image_url
 
@@ -1005,6 +1013,7 @@ def sync_subject_enrollments(
     except PermissionError:
         raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
+    _ensure_course_management_access(current_user, course)
     created = sync_course_enrollments(course, db)
     db.commit()
     db.refresh(course)
@@ -1036,6 +1045,7 @@ def enroll_roster_students_on_subject(
     except PermissionError:
         raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
+    _ensure_course_management_access(current_user, course)
     ct_course = (course.course_type or "required").strip().lower()
     allowed_classes = _roster_class_ids_for_course(db, course)
     if ct_course != "elective" and not allowed_classes:
@@ -1128,12 +1138,13 @@ def update_subject_student_enrollment_type(
         raise HTTPException(status_code=403, detail="Students cannot modify course enrollment types.")
 
     try:
-        ensure_course_access_http(subject_id, current_user, db)
+        course = ensure_course_access_http(subject_id, current_user, db)
     except ValueError:
         raise HTTPException(status_code=404, detail="Course not found.")
     except PermissionError:
         raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
+    _ensure_course_management_access(current_user, course)
     enrollment_type = payload.enrollment_type.strip().lower()
     if enrollment_type not in {"required", "elective"}:
         raise HTTPException(status_code=400, detail="Enrollment type must be required or elective.")
@@ -1167,12 +1178,13 @@ def remove_subject_student(
         raise HTTPException(status_code=403, detail="Students cannot modify course rosters.")
 
     try:
-        ensure_course_access_http(subject_id, current_user, db)
+        course = ensure_course_access_http(subject_id, current_user, db)
     except ValueError:
         raise HTTPException(status_code=404, detail="Course not found.")
     except PermissionError:
         raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
+    _ensure_course_management_access(current_user, course)
     removed = remove_course_enrollment(subject_id, student_id, db)
     if not removed:
         raise HTTPException(status_code=404, detail="Course student not found.")

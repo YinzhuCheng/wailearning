@@ -798,6 +798,8 @@ def create_homework(
 
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
+        if not is_course_instructor(current_user, course):
+            raise HTTPException(status_code=403, detail="Only the assigned course teacher can create homework.")
         if course.class_id and course.class_id != data.class_id:
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
     elif current_user.role != UserRole.ADMIN and data.class_id not in allowed_class_ids:

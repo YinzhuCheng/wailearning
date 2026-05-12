@@ -14,7 +14,7 @@ from apps.backend.courseeval_backend.api.schemas import UserRole
 from apps.backend.courseeval_backend.core.auth import get_password_hash
 from apps.backend.courseeval_backend.core.config import Settings, settings
 from apps.backend.courseeval_backend.db.database import SessionLocal
-from apps.backend.courseeval_backend.db.models import Class, CourseMaterial, SubjectClassLink, User
+from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, CourseMaterial, Student, SubjectClassLink, User
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
@@ -63,6 +63,50 @@ def _linked_class_ids(subject_id: int) -> set[int]:
             .filter(SubjectClassLink.subject_id == subject_id)
             .all()
         }
+    finally:
+        db.close()
+
+
+def _extra_student_for_class(class_id: int, label: str) -> int:
+    db = SessionLocal()
+    try:
+        user = User(
+            username=f"security_student_{label}",
+            hashed_password=get_password_hash(f"{label}_pass123"),
+            real_name=f"Security Student {label}",
+            role=UserRole.STUDENT.value,
+            class_id=class_id,
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+        student = Student(name=f"Security Student {label}", student_no=user.username, class_id=class_id)
+        db.add(student)
+        db.flush()
+        user.student_id = student.id
+        db.commit()
+        return int(student.id)
+    finally:
+        db.close()
+
+
+def _enrollment_exists(subject_id: int, student_id: int) -> bool:
+    db = SessionLocal()
+    try:
+        return (
+            db.query(CourseEnrollment)
+            .filter(CourseEnrollment.subject_id == subject_id, CourseEnrollment.student_id == student_id)
+            .first()
+            is not None
+        )
+    finally:
+        db.close()
+
+
+def _material_count_for_subject(subject_id: int) -> int:
+    db = SessionLocal()
+    try:
+        return db.query(CourseMaterial).filter(CourseMaterial.subject_id == subject_id).count()
     finally:
         db.close()
 
@@ -577,3 +621,245 @@ def test_hard28_upload_rejects_disguised_executable_content_with_safe_extension(
         files={"file": ("payload.txt", b"MZ disguised executable", "text/plain")},
     )
     assert r.status_code == 400
+
+
+def test_hard29_class_teacher_cannot_delete_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_delete_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "ct visible delete guard",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    assert client.get(f"/api/subjects/{subject_id}", headers=ct_headers).status_code == 200
+    r = client.delete(f"/api/subjects/{subject_id}", headers=ct_headers)
+    assert r.status_code == 403
+    assert client.get(f"/api/subjects/{subject_id}", headers=admin_headers).status_code == 200
+
+
+def test_hard30_class_teacher_cannot_upload_cover_to_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_cover_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "ct visible cover guard",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(
+        f"/api/subjects/{subject_id}/cover-image",
+        headers=ct_headers,
+        files={"file": ("cover.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+    )
+    assert r.status_code == 403
+    detail = client.get(f"/api/subjects/{subject_id}", headers=admin_headers)
+    assert detail.status_code == 200, detail.text
+    assert not detail.json().get("cover_image_url")
+
+
+def test_hard31_class_teacher_cannot_sync_teacher_owned_visible_course_enrollments(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_sync_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "ct visible sync guard",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(f"/api/subjects/{created.json()['id']}/sync-enrollments", headers=ct_headers)
+    assert r.status_code == 403
+
+
+def test_hard32_class_teacher_cannot_roster_enroll_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_roster_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "ct visible roster guard",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+    student_id = _extra_student_for_class(int(ct["class_id"]), "ct_roster_visible")
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(f"/api/subjects/{subject_id}/roster-enroll", headers=ct_headers, json={"student_ids": [student_id]})
+    assert r.status_code == 403
+    assert not _enrollment_exists(subject_id, student_id)
+
+
+def test_hard33_class_teacher_cannot_change_enrollment_type_on_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_enroll_type_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "ct visible enrollment type guard",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+    student_id = _extra_student_for_class(int(ct["class_id"]), "ct_enroll_type_visible")
+    assert client.post(f"/api/subjects/{subject_id}/sync-enrollments", headers=admin_headers).status_code == 200
+    assert _enrollment_exists(subject_id, student_id)
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.put(
+        f"/api/subjects/{subject_id}/students/{student_id}/enrollment-type",
+        headers=ct_headers,
+        json={"enrollment_type": "elective"},
+    )
+    assert r.status_code == 403
+
+
+def test_hard34_class_teacher_cannot_remove_student_from_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_remove_student_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "ct visible remove student guard",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+    student_id = _extra_student_for_class(int(ct["class_id"]), "ct_remove_student_visible")
+    assert client.post(f"/api/subjects/{subject_id}/sync-enrollments", headers=admin_headers).status_code == 200
+    assert _enrollment_exists(subject_id, student_id)
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.delete(f"/api/subjects/{subject_id}/students/{student_id}", headers=ct_headers)
+    assert r.status_code == 403
+    assert _enrollment_exists(subject_id, student_id)
+
+
+def test_hard35_class_teacher_cannot_create_material_in_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_material_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "ct visible material guard",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    subject_id = created.json()["id"]
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    before = _material_count_for_subject(subject_id)
+    r = client.post(
+        "/api/materials",
+        headers=ct_headers,
+        json={
+            "title": "ct forbidden material",
+            "content": "should not publish",
+            "content_format": "plain",
+            "class_id": ct["class_id"],
+            "subject_id": subject_id,
+        },
+    )
+    assert r.status_code == 403
+    assert _material_count_for_subject(subject_id) == before
+
+
+def test_hard36_class_teacher_cannot_create_homework_in_teacher_owned_visible_course(client: TestClient):
+    ctx = make_grading_course_with_homework()
+    ct = _create_class_teacher("ct_homework_visible")
+    ensure_admin()
+    admin_headers = login_api(client, "pytest_admin", "pytest_admin_pass")
+    created = client.post(
+        "/api/subjects",
+        headers=admin_headers,
+        json={
+            "name": "ct visible homework guard",
+            "teacher_id": ctx["teacher_id"],
+            "class_id": ct["class_id"],
+            "course_type": "required",
+            "status": "active",
+        },
+    )
+    assert created.status_code == 200, created.text
+    ct_headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(
+        "/api/homeworks",
+        headers=ct_headers,
+        json={
+            "title": "ct forbidden homework",
+            "content": "should not assign",
+            "content_format": "plain",
+            "class_id": ct["class_id"],
+            "subject_id": created.json()["id"],
+            "due_date": None,
+            "max_score": 100,
+            "grade_precision": "integer",
+            "auto_grading_enabled": False,
+            "allow_late_submission": True,
+            "late_submission_affects_score": False,
+            "max_submissions": None,
+            "llm_routing_spec": None,
+        },
+    )
+    assert r.status_code == 403

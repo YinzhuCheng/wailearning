@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
 from apps.backend.courseeval_backend.attachments import delete_attachment_file_if_unreferenced
-from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, subject_linked_class_ids
+from apps.backend.courseeval_backend.domains.courses.access import (
+    ensure_course_access_http,
+    is_course_instructor,
+    subject_linked_class_ids,
+)
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import Class, CourseMaterial, CourseMaterialChapter, CourseMaterialSection, User, UserRole
@@ -302,6 +306,8 @@ def create_material(
 
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
+        if not is_course_instructor(current_user, course):
+            raise HTTPException(status_code=403, detail="Only the assigned course teacher can publish materials.")
         linked = set(subject_linked_class_ids(db, course.id))
         if linked:
             if data.class_id not in linked:
