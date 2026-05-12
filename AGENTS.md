@@ -202,6 +202,19 @@ When a workflow becomes common, fragile, or repeatedly useful, add or revise a
 repo-local skill as part of the same governance cycle, preferably backed by a
 script when the workflow can be automated.
 
+**Prefer skill-backed workflows by default.** Before planning non-trivial work,
+scan this table and use every task-relevant skill instead of relying on memory
+or ad hoc reconstruction. In particular, security hardening / red-team rounds
+should start from `skills/security-redteam-iteration/SKILL.md`, combine
+`permission-audit`, `admin-playwright-e2e`, `validation-selection`,
+`validation-ledger-maintenance`, and feature-specific skills as needed, and use
+the bundled scripts for mechanical numbering, ledger appends, CSV smoke checks,
+private-path scans, and static validation. The same principle applies outside
+red-team work: deployment, schema, API-surface, frontend/backend contract,
+UTF-8 editing, seed-surface, PostgreSQL release validation, roster identity,
+and local test triage work should use the corresponding repo-local skills and
+their scripts/checklists whenever they fit the task.
+
 | Skill | Use when |
 |-------|----------|
 | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) | Aligning docs, scripts, ops templates, package paths, service names, validation ledgers, or agent guidance with current implementation truth |
