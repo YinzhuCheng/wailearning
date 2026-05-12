@@ -3280,3 +3280,22 @@ expect(titles).toContainEqual(expect.stringContaining('E2E_UI'))
 
 This is a test-authoring pitfall. If the response payload visibly contains the
 expected substring, fix the matcher before changing product code.
+
+### Pitfall: private-path scanners can flag their own detection regexes
+
+Repository-local privacy scanners often contain literal examples or regular
+expressions for forbidden path shapes such as `C:/Users/...` or
+`C:\Users\...`. If the scanner simply scans all changed text files, including
+its own source, those rule definitions can appear as false positives.
+
+Mitigation:
+
+- Keep scanner self-tests or allowlist snippets for the rule definitions
+  themselves.
+- Allow explicitly redacted placeholders such as `<repo>/.agent-run/logs/...`
+  in tests and docs, but continue to flag real `.agent-run/logs/<run-id>`
+  artifact paths.
+- Still scan untracked files by default; otherwise new scripts and new skill
+  files are invisible until after they are staged.
+- Treat scanner self-hits as tooling false positives only when the matched line
+  is clearly a detection pattern or placeholder, not a real local path.

@@ -20,6 +20,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
 | [`reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), mapping, pitfalls |
 | [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Repeatable workflow for code-as-docs / docs-as-governance passes |
+| [`../skills/security-redteam-iteration/SKILL.md`](../skills/security-redteam-iteration/SKILL.md) | Iterative red-team hardening workflow with dense tests, fixes, docs, ledgers, pitfalls, validation, and commit discipline |
 | [`../skills/validation-selection/SKILL.md`](../skills/validation-selection/SKILL.md) | Change-scoped validation selection and honest validation reporting |
 | [`../skills/utf8-safe-editing/SKILL.md`](../skills/utf8-safe-editing/SKILL.md) | UTF-8-safe editing for multilingual / PowerShell-sensitive files |
 | [`../skills/permission-audit/SKILL.md`](../skills/permission-audit/SKILL.md) | Backend authorization, role-boundary, and course-access audit workflow |

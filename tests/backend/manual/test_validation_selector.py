@@ -169,6 +169,15 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_repo_local_skill_script_change_is_static_skill_governance(self):
+        payload = run_selector("--paths", "skills/security-redteam-iteration/scripts/suggest_next_ids.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.repo_local_skills", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_local_test_guard_change_is_static_selector_governance(self):
         payload = run_selector("--paths", "ops/scripts/dev/pytest_sqlite_guard.py")
 
