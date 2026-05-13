@@ -3779,3 +3779,25 @@ def test_hard132_class_teacher_cannot_regrade_teacher_owned_visible_homework_sub
     )
 
     assert r.status_code == 403
+
+
+def test_hard133_class_teacher_cannot_batch_update_teacher_owned_visible_homework_policy(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher("ct_homework_batch_policy_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible homework batch policy guard")
+    homework_id = _create_course_homework(subject_id, int(ct["class_id"]), ctx["teacher_id"], "ct batch policy forbidden homework")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(
+        "/api/homeworks/batch-late-submission",
+        headers=headers,
+        json={
+            "homework_ids": [homework_id],
+            "allow_late_submission": True,
+            "late_submission_affects_score": False,
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["updated"] == 0
+    assert homework_id in r.json()["forbidden_ids"]

@@ -674,6 +674,11 @@ def batch_update_late_submission_policy(
             except HTTPException:
                 forbidden.append(hid)
                 continue
+            try:
+                _ensure_homework_course_write_access(current_user, hw, db)
+            except HTTPException:
+                forbidden.append(hid)
+                continue
         elif current_user.role != UserRole.ADMIN and hw.class_id not in allowed_class_ids:
             forbidden.append(hid)
             continue
