@@ -1196,6 +1196,42 @@ Validation for this docs-only round:
 Next local commit in the requested plan: final durable-governance convergence
 and repository cleanup, then push only after that fifth commit.
 
+## Continuation Commit 5: Durable Governance Closeout
+
+The fifth requested local commit is the final closeout for this execution
+sequence:
+
+- Updated `AGENTS.md`, `docs/README.md`,
+  `skills/repository-normalization/SKILL.md`, and
+  `skills/boundary-governance/SKILL.md` so future normalization rounds close
+  with durable accepted/active/deferred boundary classifications rather than
+  private planning notes.
+- Reaffirmed that generated artifacts such as `.agent-run/`, `.pytest_cache/`,
+  `.pytest_tmp/`, and local SQLite scratch files are not source layout and must
+  not be committed.
+- Preserved `repository-normalization` as the broad orchestrator and
+  `boundary-governance` as the ownership/large-file routing skill; specialized
+  skills remain the source of truth for permission, API surface, schema,
+  seed/E2E, Playwright, PostgreSQL, UTF-8, and local-test hazards.
+
+Validation for this closeout round:
+
+- `python ops\scripts\dev\select_validation_targets.py --worktree --json`
+  reported docs-only static validation as acceptable and no unmatched paths.
+- `python ops\scripts\dev\check_repo_skills.py` passed.
+- `python ops\scripts\dev\check_docs_governance.py` passed with the known
+  historical missing-path warnings already tracked in this handoff.
+- `python ops\scripts\dev\check_repository_normalization.py` passed.
+- `python ops\scripts\dev\check_boundary_governance.py --details` passed with
+  existing large-file warnings.
+- `python ops\scripts\dev\check_structure_governance.py --details` passed.
+- `python ops\scripts\dev\lint_validation_registry.py` passed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed 81 tests.
+
+After this fifth commit is made, push branch
+`cursor/repository-normalization-schema-notifications`.
+
 ## Branch And Validation State For Handoff
 
 - Branch: `cursor/repository-normalization-schema-notifications`

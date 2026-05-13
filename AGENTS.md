@@ -249,6 +249,12 @@ tested workflows over keeping short but vague checklists. Do not delete a
 mature specialized skill merely because a broader governance skill mentions
 the same topic.
 
+When a repository-normalization sequence ends, close the loop in committed
+docs: record which boundaries are now accepted, which remain active follow-up,
+which are explicitly deferred, and what validation evidence supports that
+classification. Private notes, `.agent-run/` records, pytest caches, and local
+SQLite scratch files are not source layout and must not be committed.
+
 **Top-level and horizontal governance**
 
 | Skill | Use when |

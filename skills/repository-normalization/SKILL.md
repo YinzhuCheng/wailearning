@@ -53,6 +53,24 @@ and handoff preparation.
 9. Use `validation-selection` for target choice and
    `validation-ledger-maintenance` for durable evidence.
 
+## Closeout Conditions
+
+Before ending a repository-normalization sequence, make the state durable:
+
+- classify each touched boundary as accepted, active follow-up, or explicitly
+  deferred;
+- sync `AGENTS.md`, `docs/README.md`, architecture/reference docs, the active
+  handoff, and `docs/development/testing/agent-update-log.csv` when they are
+  part of the task surface;
+- record selector output and the static/runtime validation actually run;
+- keep private planning notes, `.agent-run/`, `.pytest_cache/`, `.pytest_tmp/`,
+  and other generated artifacts out of commits.
+
+Treat `check_boundary_governance.py --details` warnings as candidates, not as
+automatic refactor orders. A warning is closed only when the code is split with
+focused validation or when durable docs explain why the current boundary is
+accepted or deferred.
+
 ## De-Duplication Rule
 
 Keep the most precise, executable skill or script as the source of truth. Do
@@ -67,6 +85,9 @@ git status --short --branch
 python ops/scripts/dev/check_repo_skills.py
 python ops/scripts/dev/select_validation_targets.py --worktree
 python ops/scripts/dev/check_repository_normalization.py
+python ops/scripts/dev/check_docs_governance.py
+python ops/scripts/dev/check_boundary_governance.py --details
+python ops/scripts/dev/check_structure_governance.py --details
 python ops/scripts/dev/check_text_encoding.py --fail-on-suspicious <changed-file>
 git diff --check
 ```

@@ -60,6 +60,18 @@ this checklist.
   skill. Keep this skill focused on boundary discovery and safe routing.
 - Prefer a documented follow-up over a risky split without focused tests.
 
+## Current Large-File Interpretation
+
+As of the May 2026 repository-normalization closeout, current high-value
+backend candidates are `llm_grading.py`, `api/routers/homework.py`,
+`domains/seed/demo.py`, `bootstrap.py`, and dedicated `api/schemas.py`
+schema-boundary rounds. `api/routers/subjects.py` is below the backend router
+threshold after helper extraction and should be treated as an accepted HTTP/auth
+orchestration boundary unless new reusable course logic accumulates there.
+
+Large admin Vue views remain UI-boundary candidates, but split them only with a
+frontend build and targeted Playwright evidence in scope.
+
 ## Checks
 
 ```powershell

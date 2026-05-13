@@ -113,6 +113,9 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
   docs/boundary/structure governance or the richer specialized skill. When two
   skills or scripts overlap, preserve the more precise and executable one as
   the source of truth.
+- Close repository-normalization work in durable docs: classify accepted,
+  active, and deferred boundaries in architecture/handoff/governance docs before
+  treating local planning notes or warning lists as complete.
 - If behavior changes in code, update these documents in the same change set.
 - Contributors, including LLM agents, are expected to read the task-relevant documents before changing code, tests, structure, or deployment assets.
 - The documentation set is part of the implementation surface, not optional commentary.
