@@ -3801,3 +3801,151 @@ def test_hard133_class_teacher_cannot_batch_update_teacher_owned_visible_homewor
     assert r.status_code == 200, r.text
     assert r.json()["updated"] == 0
     assert homework_id in r.json()["forbidden_ids"]
+
+
+def test_hard134_class_teacher_cannot_list_teacher_owned_visible_homework_submissions(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_list_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard134 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.get(f"/api/homeworks/{ctx['homework_id']}/submissions", headers=headers)
+
+    assert r.status_code == 403
+
+
+def test_hard135_class_teacher_cannot_read_teacher_owned_visible_homework_submission_status(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_status_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard135 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+    submission_id = int(submission.json()["id"])
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.get(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/status",
+        headers=headers,
+    )
+
+    assert r.status_code == 403
+
+
+def test_hard136_class_teacher_cannot_read_teacher_owned_visible_homework_submission_history(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_history_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard136 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+    submission_id = int(submission.json()["id"])
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.get(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/history",
+        headers=headers,
+    )
+
+    assert r.status_code == 403
+
+
+def test_hard137_class_teacher_cannot_acknowledge_teacher_owned_visible_homework_appeal(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_appeal_ack_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard137 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+    submission_id = int(submission.json()["id"])
+
+    review = client.put(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/review",
+        headers=teacher_headers,
+        json={"review_score": 88, "review_comment": "teacher-reviewed before appeal"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/appeal",
+        headers=student_headers,
+        json={"reason_text": "hard137 appeal reason long enough for submission"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/appeal/acknowledge",
+        headers=headers,
+    )
+
+    assert r.status_code == 403
+
+    db = SessionLocal()
+    try:
+        row = db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == submission_id).first()
+        assert row is not None
+        assert row.status == "pending"
+    finally:
+        db.close()
+
+
+def test_hard138_class_teacher_cannot_download_teacher_owned_visible_homework_submissions(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_download_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard138 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+    submission_id = int(submission.json()["id"])
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/download",
+        headers=headers,
+        json={"submission_ids": [submission_id]},
+    )
+
+    assert r.status_code == 403
+
+
+def test_hard139_class_teacher_cannot_list_teacher_owned_visible_course_students_for_homework_status(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_course_students_visible")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.get(f"/api/homeworks/courses/{ctx['subject_id']}/students", headers=headers)
+
+    assert r.status_code == 403
+
+
+def test_hard140_class_teacher_cannot_list_teacher_owned_visible_student_homeworks_for_course(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_student_rows_visible")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.get(
+        f"/api/homeworks/courses/{ctx['subject_id']}/students/{ctx['student_id']}/homeworks",
+        headers=headers,
+    )
+
+    assert r.status_code == 403
