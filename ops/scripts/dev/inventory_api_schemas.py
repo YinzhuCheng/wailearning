@@ -21,6 +21,7 @@ from governance_common import read_text, tracked_or_walked_paths
 
 SCHEMA_PATH = "apps/backend/courseeval_backend/api/schemas.py"
 SCHEMA_MODULE = "apps.backend.courseeval_backend.api.schemas"
+SCHEMA_DEFS_PREFIX = "apps.backend.courseeval_backend.api.schema_defs."
 
 DOMAIN_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("auth-users", ("User", "Profile", "Login", "Token", "Password", "Gender", "Role")),
@@ -57,6 +58,12 @@ class SchemaClass:
 @dataclass(frozen=True)
 class SchemaImport:
     importer: str
+    names: list[str]
+
+
+@dataclass(frozen=True)
+class SchemaReExport:
+    module: str
     names: list[str]
 
 
@@ -167,6 +174,17 @@ def collect_model_rebuilds(tree: ast.Module) -> list[dict[str, Any]]:
     return sorted(rebuilds, key=lambda item: (item["line"], item["name"]))
 
 
+def collect_schema_reexports(tree: ast.Module) -> list[SchemaReExport]:
+    reexports: list[SchemaReExport] = []
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if not node.module or not node.module.startswith(SCHEMA_DEFS_PREFIX):
+            continue
+        reexports.append(SchemaReExport(node.module, sorted(alias.asname or alias.name for alias in node.names)))
+    return sorted(reexports, key=lambda item: item.module)
+
+
 def collect_schema_imports(repo_root: Path, paths: list[str]) -> list[SchemaImport]:
     imports: list[SchemaImport] = []
     for path in paths:
@@ -195,21 +213,29 @@ def build_inventory(repo_root: Path) -> dict[str, Any]:
     tree = ast.parse(text, filename=SCHEMA_PATH)
     paths = tracked_or_walked_paths(repo_root, include_untracked=True)
     classes = collect_classes(tree)
+    reexports = collect_schema_reexports(tree)
     imports = collect_schema_imports(repo_root, paths)
     defined = {item.name for item in classes}
+    reexported_names = {name for item in reexports for name in item.names}
+    public_names = defined | reexported_names
     imported_names = sorted({name for item in imports for name in item.names})
-    missing_imports = sorted(name for name in imported_names if name != "*" and name not in defined)
+    missing_imports = sorted(name for name in imported_names if name != "*" and name not in public_names)
     by_domain: dict[str, list[str]] = {}
     for item in classes:
         by_domain.setdefault(item.domain, []).append(item.name)
+    for name in reexported_names:
+        by_domain.setdefault(classify_domain(name), []).append(name)
     return {
         "schema_path": SCHEMA_PATH,
         "class_count": len(classes),
+        "reexport_count": len(reexported_names),
+        "public_name_count": len(public_names),
         "importer_count": len(imports),
         "imported_name_count": len(imported_names),
         "model_rebuilds": collect_model_rebuilds(tree),
         "domains": {key: sorted(value) for key, value in sorted(by_domain.items())},
         "classes": [asdict(item) for item in classes],
+        "reexports": [asdict(item) for item in reexports],
         "imports": [asdict(item) for item in imports],
         "missing_imports": missing_imports,
     }
@@ -219,6 +245,8 @@ def emit_markdown(inventory: dict[str, Any]) -> None:
     print(f"# API Schema Inventory: `{inventory['schema_path']}`")
     print()
     print(f"- schema classes/enums: {inventory['class_count']}")
+    print(f"- schema compatibility re-exports: {inventory['reexport_count']}")
+    print(f"- public schema names: {inventory['public_name_count']}")
     print(f"- importers: {inventory['importer_count']}")
     print(f"- imported schema names: {inventory['imported_name_count']}")
     print(f"- missing imported names: {len(inventory['missing_imports'])}")

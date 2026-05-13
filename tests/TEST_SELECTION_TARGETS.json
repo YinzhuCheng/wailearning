@@ -403,12 +403,14 @@
                     "ops/scripts/dev/governance_common.py",
                     "ops/scripts/dev/check_boundary_governance.py",
                     "ops/scripts/dev/inventory_api_schemas.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/",
                     "skills/boundary-governance/SKILL.md",
                     "skills/boundary-governance/agents/openai.yaml",
                     "docs/architecture/BACKEND_PACKAGE_STRUCTURE.md",
                     "docs/reference/CODE_MAP_AND_ENTRYPOINTS.md"
                 ],
                 "globs": [
+                    "apps/backend/courseeval_backend/api/schema_defs/*.py",
                     "apps/backend/courseeval_backend/domains/**/*.py"
                 ]
             },
@@ -569,6 +571,7 @@
                     "skills/api-surface-audit/SKILL.md",
                     "apps/backend/courseeval_backend/main.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/",
                     "apps/web/admin/src/api/index.js",
                     "apps/web/parent/src/api/index.js",
                     "docs/reference/CODE_MAP_AND_ENTRYPOINTS.md",
@@ -578,6 +581,7 @@
                 ],
                 "globs": [
                     "apps/backend/courseeval_backend/api/routers/*.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/*.py",
                     "skills/api-surface-audit/**"
                 ]
             },
@@ -642,6 +646,40 @@
             "notes": "This guardrail is read-only. It reports active pytest processes and the shared SQLite file state; it does not kill processes or delete test.sqlite."
         },
         {
+            "id": "backend.user_profile.appearance_styles",
+            "category": "backend-pytest",
+            "risk": "targeted",
+            "description": "Focused backend API regressions for user profile appearance presets, personal style save/select/clear flows, and appearance-related public settings.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "appearance",
+                "user-profile",
+                "backend-api"
+            ],
+            "commands": [
+                {
+                    "label": "pytest",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "pytest",
+                        "tests/backend/user_profile/test_appearance_styles.py",
+                        "-q"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/backend/user_profile/test_appearance_styles.py",
+                    "apps/backend/courseeval_backend/api/routers/appearance.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/appearance.py"
+                ],
+                "globs": []
+            },
+            "ledger_id": null,
+            "notes": "Use for appearance schema/router changes. This target is API-focused and does not replace admin frontend visual checks."
+        },
+        {
             "id": "backend.learning_notes.api",
             "category": "backend-pytest",
             "risk": "targeted",
@@ -670,6 +708,7 @@
                     "apps/backend/courseeval_backend/api/routers/learning_notes.py",
                     "apps/backend/courseeval_backend/api/routers/attendance.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/attendance.py",
                     "apps/backend/courseeval_backend/db/models.py",
                     "tests/scenarios/llm_scenario.py"
                 ],
@@ -713,6 +752,8 @@
                     "apps/backend/courseeval_backend/api/routers/points.py",
                     "apps/backend/courseeval_backend/api/routers/semesters.py",
                     "apps/backend/courseeval_backend/api/routers/settings.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/operations.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/points.py",
                     "apps/backend/courseeval_backend/api/routers/users.py",
                     "apps/backend/courseeval_backend/domains/courses/class_scope.py"
                 ],
@@ -916,6 +957,7 @@
                     "apps/backend/courseeval_backend/api/routers/users.py",
                     "apps/backend/courseeval_backend/api/routers/students.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/",
                     "apps/backend/courseeval_backend/domains/roster/reconciliation.py",
                     "apps/backend/courseeval_backend/domains/roster/sync.py",
                     "apps/backend/courseeval_backend/domains/roster/identity.py"
@@ -1131,6 +1173,7 @@
                     "apps/backend/courseeval_backend/llm_grading.py",
                     "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/",
                     "apps/backend/courseeval_backend/db/models.py"
                 ],
                 "globs": [
@@ -1170,6 +1213,7 @@
                     "apps/backend/courseeval_backend/api/routers/notifications.py",
                     "apps/backend/courseeval_backend/domains/courses/access.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/",
                     "apps/web/admin/src/views/Layout.vue",
                     "apps/web/admin/src/views/Notifications.vue"
                 ],

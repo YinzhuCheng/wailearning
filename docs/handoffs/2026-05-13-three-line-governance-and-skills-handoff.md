@@ -11,6 +11,11 @@ three-line governance round, structure the repo-local skills hierarchy, remove
 redundant simple skills/scripts only when a richer precise version already
 covers the behavior, and commit/push the result.
 
+Latest continuation request: proceed with the next planned repository
+normalization round from this handoff. The completed continuation focused on a
+low-risk `api/schemas.py` boundary split while preserving the public
+`apps.backend.courseeval_backend.api.schemas` import surface.
+
 Important preference for future agents: when two skills or scripts overlap,
 prefer preserving the more complex, precise, executable, and battle-tested
 workflow. Delete or shrink only the simple/vague duplicate. Do not remove a
@@ -108,6 +113,20 @@ Low-risk structure cleanup:
   dated, secret-free evidence under `docs/reports/artifacts/`; fresh local logs
   belong under ignored `.agent-run/`.
 
+Latest continuation boundary split:
+
+- Added `apps/backend/courseeval_backend/api/schema_defs/`.
+- Moved low-coupling API DTO groups for appearance, attendance,
+  operations/settings, and points into `schema_defs` modules.
+- Kept `apps/backend/courseeval_backend/api/schemas.py` as the compatibility
+  barrel for existing router, domain-helper, and test imports.
+- Updated `ops/scripts/dev/inventory_api_schemas.py` so inventory checks count
+  explicit `api.schema_defs` re-exports as public `api.schemas` names.
+- Updated `tests/TEST_SELECTION_TARGETS.json` and selector tests so
+  `api/schema_defs/*.py` changes select schema/API-specific static and targeted
+  checks instead of falling through to the broad backend-source conservative
+  PostgreSQL recommendation.
+
 ## Validation State
 
 The three-line governance report lists the full validation already performed
@@ -127,6 +146,40 @@ for this round. Key checks that passed include:
 - `.venv` pytest for manual-script API coverage;
 - `.venv` pytest for targeted course roster and core API surface tests;
 - `git diff --check`.
+
+Latest continuation validation:
+
+- `python -m py_compile` for `api/schemas.py`, the new `api/schema_defs`
+  modules, and `ops/scripts/dev/inventory_api_schemas.py` passed.
+- `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
+  passed with 155 local schema classes/enums, 31 compatibility re-exports, 186
+  public schema names, 24 importers, and 0 missing imports.
+- `python -m json.tool tests/TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python ops/scripts/dev/check_api_surface_governance.py` passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details` passed with
+  existing large-file warnings; `api/schemas.py` is now 1762 lines, down from
+  the prior 2040-line inventory.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported targeted/static validation as acceptable and no unmatched paths
+  after `api/schema_defs/` selector rules were added.
+- `python -m unittest tests.backend.manual.test_validation_selector -v` passed
+  71 tests.
+- Initial `python -m pytest ...` attempts failed because PowerShell resolved
+  `python` to system Python without pytest; pitfall memory matched Pitfall 81,
+  and the tests were rerun with `.venv\Scripts\python.exe`.
+- `.venv\Scripts\python.exe -m pytest tests/backend/user_profile/test_appearance_styles.py -q`
+  passed 3 tests.
+- `.venv\Scripts\python.exe -m pytest tests/backend/manual/test_manual_script_api_coverage.py -q`
+  passed 7 tests.
+- `.venv\Scripts\python.exe -m pytest tests/backend/learning_notes/test_learning_notes_api.py -q`
+  passed 15 tests.
+- `.venv\Scripts\python.exe -m pytest tests/behavior/test_notification_sync_api_edge_behavior.py -q`
+  passed 10 tests.
+- `.venv\Scripts\python.exe -m pytest tests/backend/homework/test_homework_llm_grading.py -q`
+  passed 16 tests.
+- `.venv\Scripts\python.exe -m pytest tests/backend/roster/test_student_user_api_roster_sync.py -q`
+  passed 11 tests.
 
 Before final commit/push, rerun the current minimal governance checks after
 this handoff edit:
@@ -154,9 +207,11 @@ Do not claim release-quality or full security-regression coverage until those
 targets are run or a maintainer explicitly accepts the narrower validation
 scope.
 
-Large files intentionally not split in this pass:
+Large files still intentionally not split or only partially split:
 
-- `apps/backend/courseeval_backend/api/schemas.py`
+- `apps/backend/courseeval_backend/api/schemas.py` is partially split; continue
+  moving cohesive DTO groups behind the same compatibility barrel only with
+  inventory and selector-backed validation.
 - `apps/backend/courseeval_backend/llm_grading.py`
 - `apps/backend/courseeval_backend/domains/seed/demo.py`
 - `apps/backend/courseeval_backend/api/routers/homework.py`
@@ -168,9 +223,10 @@ Recommended next work, in order:
 
 1. Run `repository-normalization` first, then route through
    `boundary-governance` for one focused large-file split.
-2. If splitting `api/schemas.py`, begin with
+2. Continue `api/schemas.py` only as small DTO-group moves into
+   `api/schema_defs/`, beginning with
    `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
-   and preserve compatibility imports or an explicit export barrel.
+   and preserving the `api.schemas` compatibility barrel.
 3. Consider extracting cohesive builders from `domains/seed/demo.py`, but only
    with seed/E2E and bootstrap-focused tests selected first.
 4. Consider splitting `llm_grading.py` only under a dedicated LLM/homework

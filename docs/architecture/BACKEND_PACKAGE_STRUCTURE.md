@@ -72,6 +72,7 @@ Subdirectories and files:
 
 - `api/routers/`
 - `api/schemas.py`
+- `api/schema_defs/`
 - `ops/scripts/dev/inventory_api_schemas.py` (read-only inventory for planned
   `api/schemas.py` boundary work)
 
@@ -88,7 +89,9 @@ Rules:
 - routers should avoid absorbing large business workflows,
 - request and response DTOs belong here unless there is a strong reason otherwise,
 - `api/schemas.py` is currently a deliberate schema barrel with many direct
-  imports. Treat it as high blast radius: run
+  imports. Some low-coupling DTO groups now live under `api/schema_defs/` and
+  are re-exported from `api.schemas` for compatibility. Treat additional
+  schema moves as high blast radius: run
   `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
   before any split, preserve imported names or provide a compatibility export,
   and validate FastAPI import/OpenAPI behavior after moving schema classes.
@@ -203,6 +206,9 @@ The following extractions are already in place:
 - score composition and score-appeal helpers moved into `domains/scores/`
 - demo seeding moved into `domains/seed/demo.py`
 - operation-log helpers moved into `services/logging.py`
+- low-coupling API DTO groups for appearance, attendance, operations/settings,
+  and points moved into `api/schema_defs/` while `api/schemas.py` remains the
+  compatibility barrel for existing router and test imports
 
 That is the intended pattern for subsequent rounds: extract coherent vertical slices without inventing alternate import roots.
 

@@ -4,6 +4,46 @@ from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from apps.backend.courseeval_backend.api.schema_defs.appearance import (
+    AppearancePresetResponse,
+    AppearanceStyleConfig,
+    UserAppearanceStateResponse,
+    UserAppearanceStyleCreate,
+    UserAppearanceStyleResponse,
+    UserAppearanceStyleUpdate,
+)
+from apps.backend.courseeval_backend.api.schema_defs.attendance import (
+    AttendanceCreate,
+    AttendanceListResponse,
+    AttendanceResponse,
+    AttendanceStatus,
+    AttendanceUpdate,
+)
+from apps.backend.courseeval_backend.api.schema_defs.operations import (
+    OperationLogListResponse,
+    OperationLogResponse,
+    SystemSettingResponse,
+    SystemSettingsResponse,
+    SystemSettingUpdate,
+)
+from apps.backend.courseeval_backend.api.schema_defs.points import (
+    PointAddRequest,
+    PointExchangeListResponse,
+    PointExchangeRequest,
+    PointExchangeResponse,
+    PointItemCreate,
+    PointItemResponse,
+    PointItemUpdate,
+    PointRankingResponse,
+    PointRecordListResponse,
+    PointRecordResponse,
+    PointRuleCreate,
+    PointRuleResponse,
+    PointRuleUpdate,
+    PointStatsResponse,
+    StudentPointResponse,
+)
+
 ContentFormatLiteral = Literal["markdown", "plain"]
 class UserRole(str, Enum):
     ADMIN = "admin"
@@ -15,13 +55,6 @@ class UserRole(str, Enum):
 class Gender(str, Enum):
     MALE = "male"
     FEMALE = "female"
-
-
-class AttendanceStatus(str, Enum):
-    PRESENT = "present"
-    ABSENT = "absent"
-    LATE = "late"
-    LEAVE = "leave"
 
 
 class UserBase(BaseModel):
@@ -1000,41 +1033,6 @@ class ScoreGradeAppealResponse(BaseModel):
         from_attributes = True
 
 
-class AttendanceBase(BaseModel):
-    student_id: int
-    class_id: int
-    subject_id: Optional[int] = None
-    date: str
-    status: AttendanceStatus
-    remark: Optional[str] = None
-
-
-class AttendanceCreate(AttendanceBase):
-    pass
-
-
-class AttendanceUpdate(BaseModel):
-    status: Optional[AttendanceStatus] = None
-    remark: Optional[str] = None
-
-
-class AttendanceResponse(AttendanceBase):
-    id: int
-    student_name: Optional[str] = None
-    class_name: Optional[str] = None
-    subject_name: Optional[str] = None
-    date: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-
-class AttendanceListResponse(BaseModel):
-    total: int
-    data: List[AttendanceResponse]
-
-
 class ClassRanking(BaseModel):
     class_id: int
     class_name: str
@@ -1058,282 +1056,6 @@ class StudentRanking(BaseModel):
     class_name: str
     avg_score: float
     rank: int
-
-
-class OperationLogResponse(BaseModel):
-    id: int
-    user_id: Optional[int] = None
-    username: Optional[str] = None
-    action: str
-    target_type: str
-    target_id: Optional[int] = None
-    target_name: Optional[str] = None
-    details: Optional[str] = None
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    result: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class OperationLogListResponse(BaseModel):
-    total: int
-    data: List[OperationLogResponse]
-
-
-class PointRuleBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    category: str
-    points: int
-    condition_type: str
-    condition_value: Optional[str] = None
-
-
-class PointRuleCreate(PointRuleBase):
-    pass
-
-
-class PointRuleUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    points: Optional[int] = None
-    condition_type: Optional[str] = None
-    condition_value: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class PointRuleResponse(PointRuleBase):
-    id: int
-    is_active: bool
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class StudentPointResponse(BaseModel):
-    id: int
-    student_id: int
-    total_points: int
-    available_points: int
-    total_earned: int
-    total_spent: int
-    student_name: Optional[str] = None
-    class_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class PointRecordResponse(BaseModel):
-    id: int
-    student_id: int
-    rule_id: Optional[int] = None
-    points: int
-    balance_after: int
-    source_type: str
-    source_id: Optional[int] = None
-    description: Optional[str] = None
-    operator_name: Optional[str] = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class PointRecordListResponse(BaseModel):
-    total: int
-    data: List[PointRecordResponse]
-
-
-class PointItemBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    item_type: str
-    points_cost: int
-    stock: int = -1
-    image_url: Optional[str] = None
-
-
-class PointItemCreate(PointItemBase):
-    pass
-
-
-class PointItemUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    item_type: Optional[str] = None
-    points_cost: Optional[int] = None
-    stock: Optional[int] = None
-    image_url: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class PointItemResponse(PointItemBase):
-    id: int
-    is_active: bool
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class PointExchangeResponse(BaseModel):
-    id: int
-    student_id: int
-    item_id: int
-    points_spent: int
-    quantity: int
-    status: str
-    exchange_time: datetime
-    pickup_time: Optional[datetime] = None
-    operator_name: Optional[str] = None
-    remark: Optional[str] = None
-    student_name: Optional[str] = None
-    item_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class PointExchangeListResponse(BaseModel):
-    total: int
-    data: List[PointExchangeResponse]
-
-
-class PointAddRequest(BaseModel):
-    student_id: int
-    points: int
-    description: str
-    source_type: str = "manual"
-    source_id: Optional[int] = None
-    rule_id: Optional[int] = None
-
-
-class PointExchangeRequest(BaseModel):
-    item_id: int
-    quantity: int = 1
-    student_id: Optional[int] = None
-
-
-class PointRankingResponse(BaseModel):
-    student_id: int
-    student_name: str
-    class_name: str
-    total_points: int
-    rank: int
-
-
-class PointStatsResponse(BaseModel):
-    total_students: int
-    active_students: int
-    total_points_distributed: int
-    total_points_exchanged: int
-    top_students: List[PointRankingResponse]
-
-
-class SystemSettingResponse(BaseModel):
-    id: int
-    setting_key: str
-    setting_value: Optional[str]
-    description: Optional[str]
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class SystemSettingUpdate(BaseModel):
-    setting_value: str
-
-
-class SystemSettingsResponse(BaseModel):
-    system_name: str
-    login_background: str
-    system_logo: str
-    system_intro: str
-    copyright: str
-    use_bing_background: bool
-    appearance_default_preset: str = "professional-blue"
-
-
-class AppearanceStyleConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    primary: str = "blue"
-    accent: str = "cyan"
-    shadow: str = "soft"
-    transparency: str = "balanced"
-    radius: str = "balanced"
-    density: str = "comfortable"
-    font_family: Literal["system", "song", "hei", "kai", "mono"] = "system"
-    font_scale: Literal["small", "medium", "large"] = "medium"
-
-
-class AppearancePresetResponse(BaseModel):
-    key: str
-    name: str
-    description: str
-    config: AppearanceStyleConfig
-
-
-class UserAppearanceStyleCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=80)
-    source: Literal["preset", "custom"] = "custom"
-    preset_key: Optional[str] = Field(default=None, max_length=80)
-    config: AppearanceStyleConfig
-    select_after_save: bool = True
-
-    @field_validator("name")
-    @classmethod
-    def strip_style_name(cls, value: str) -> str:
-        stripped = (value or "").strip()
-        if not stripped:
-            raise ValueError("Style name cannot be empty.")
-        return stripped
-
-
-class UserAppearanceStyleUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
-    source: Optional[Literal["preset", "custom"]] = None
-    preset_key: Optional[str] = Field(default=None, max_length=80)
-    config: Optional[AppearanceStyleConfig] = None
-
-    @field_validator("name")
-    @classmethod
-    def strip_optional_style_name(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return value
-        stripped = (value or "").strip()
-        if not stripped:
-            raise ValueError("Style name cannot be empty.")
-        return stripped
-
-
-class UserAppearanceStyleResponse(BaseModel):
-    id: int
-    user_id: int
-    name: str
-    source: str
-    preset_key: Optional[str] = None
-    config: AppearanceStyleConfig
-    is_selected: bool
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class UserAppearanceStateResponse(BaseModel):
-    system_default_preset: str = "professional-blue"
-    selected_style: Optional[UserAppearanceStyleResponse] = None
-    saved_styles: List[UserAppearanceStyleResponse] = Field(default_factory=list)
 
 
 class HomeworkBase(BaseModel):

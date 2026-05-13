@@ -242,6 +242,17 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_schema_defs_change_selects_schema_targets_without_full_fallback(self):
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/api/schema_defs/appearance.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.api_surface_governance", ids)
+        self.assertIn("static.boundary_governance", ids)
+        self.assertIn("backend.user_profile.appearance_styles", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_manual_script_api_coverage_change_selects_manual_api_target(self):
         payload = run_selector("--paths", "tests/backend/manual/test_manual_script_api_coverage.py")
 
