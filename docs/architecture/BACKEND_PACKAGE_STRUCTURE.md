@@ -198,6 +198,8 @@ The following extractions are already in place:
 - admin quota-policy helpers moved into `domains/llm/token_quota.py`
 - endpoint-group routing moved into `domains/llm/routing.py`
 - endpoint URL / response parsing helpers moved into `domains/llm/protocol.py`
+- homework grading prompt section markers and markdown field expansion helpers
+  moved into `domains/llm/grading_prompt.py`
 - course access and enrollment logic moved into `domains/courses/access.py`
 - class-scope query helpers shared by routers moved into `domains/courses/class_scope.py`
 - homework row cleanup moved into `domains/homework/cleanup.py`

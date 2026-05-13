@@ -377,6 +377,16 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_llm_grading_prompt_helper_selects_homework_llm_target(self):
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/domains/llm/grading_prompt.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.boundary_governance", ids)
+        self.assertIn("backend.homework.llm_grading", ids)
+        self.assertIn("behavior.homework_lifecycle_llm", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_discussion_router_prefers_pytest_hazard_tier_before_api_heavy_playwright(self):
         payload = run_selector("--paths", "apps/backend/courseeval_backend/api/routers/discussions.py")
 

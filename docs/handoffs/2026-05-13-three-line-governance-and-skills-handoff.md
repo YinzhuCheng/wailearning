@@ -473,3 +473,48 @@ extract one low-risk homework router helper without changing route shape,
 permissions, response models, or serialization semantics. Each must remain a
 separate bounded round with its own specialized read order, validation matrix,
 handoff/update-log row, and local commit.
+
+## Step 2.2 LLM Grading Prompt Split Update
+
+The current Step 2.2 round extracted a low-side-effect prompt construction
+boundary from `apps/backend/courseeval_backend/llm_grading.py`:
+
+- Added `apps/backend/courseeval_backend/domains/llm/grading_prompt.py`.
+- Moved stable scoring prompt section markers, LLM-assist disclosure addendum,
+  grading comment format suffix logic, and homework markdown field expansion
+  into the new helper module.
+- Kept `llm_grading.py` as the public grading orchestration, worker lifecycle,
+  quota, retry, endpoint failover, task-state, and notification boundary.
+- Did not intentionally change queue behavior, DB task state transitions,
+  endpoint routing, token quota accounting, notification behavior, prompt field
+  semantics, response parsing, route behavior, or browser-visible behavior.
+- Added selector coverage so changes to
+  `domains/llm/grading_prompt.py` select `backend.homework.llm_grading` and
+  `behavior.homework_lifecycle_llm`.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\llm_grading.py apps\backend\courseeval_backend\domains\llm\grading_prompt.py`
+  passed.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed 77 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_llm_grading.py -q`
+  passed 16 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\backend\llm\test_llm_attachment_formats.py -q`
+  passed 7 tests.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_homework_lifecycle_llm_behavior.py -q`
+  passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported no unmatched paths. It recommended Playwright review targets for
+  homework LLM admin scenarios; those were deferred because this round only
+  moved backend prompt helper code and did not change browser-visible behavior.
+- Structure, boundary, API surface, docs, repo-skill,
+  repository-normalization, text-encoding, diff, and SQLite guard checks passed
+  or only reported pre-existing historical warnings noted in the round log.
+
+Next requested queue item after the 2.2 commit is 2.3: extract one low-risk
+helper from `apps/backend/courseeval_backend/api/routers/homework.py`, keeping
+route paths, methods, auth, permissions, response models, status codes,
+student/teacher/admin visibility, and serialization semantics unchanged.

@@ -14,8 +14,8 @@ from sqlalchemy import func
 from sqlalchemy.orm.attributes import flag_modified
 
 from apps.backend.courseeval_backend.domains.homework.notifications import notify_student_homework_graded
-from apps.backend.courseeval_backend.domains.text_content_format import body_text_for_grading_llm, normalize_content_format
-from apps.backend.courseeval_backend.markdown_llm import append_markdown_with_dataurl_images_to_parts, expand_markdown_images_for_llm
+from apps.backend.courseeval_backend.domains.text_content_format import body_text_for_grading_llm
+from apps.backend.courseeval_backend.markdown_llm import append_markdown_with_dataurl_images_to_parts
 from apps.backend.courseeval_backend.domains.llm.attachments import (
     ITERATION_CONTEXT_MAX_PRIOR_ATTEMPTS,
     ITERATION_PRIOR_COMMENT_CHAR_MAX,
@@ -50,6 +50,17 @@ from apps.backend.courseeval_backend.domains.llm.quota import (
     record_usage_if_needed,
     release_quota_reservation,
     reserve_quota_tokens,
+)
+from apps.backend.courseeval_backend.domains.llm.grading_prompt import (
+    SECTION_ASSIGNMENT,
+    SECTION_ATTACHMENT,
+    SECTION_IMAGES,
+    SECTION_NOTES,
+    SECTION_PRIOR_SUBMISSION,
+    SECTION_STUDENT_BODY,
+    comment_format_system_suffix,
+    expand_homework_field_for_llm,
+    llm_assist_assignment_addendum,
 )
 from apps.backend.courseeval_backend.domains.llm.token_quota import (
     quota_calendar_for_timezone,
@@ -1026,15 +1037,6 @@ def _estimate_input_tokens_from_scoring_messages(
     return text_total + image_parts * max(1, int(per_image_tokens)) + overhead
 
 
-# Stable section markers for the scoring prompt (model + debugging)
-SECTION_ASSIGNMENT = "[SECTION:INSTRUCTOR_ASSIGNMENT]"
-SECTION_STUDENT_BODY = "[SECTION:STUDENT_TEXT_RESPONSE]"
-SECTION_ATTACHMENT = "[SECTION:ATTACHMENT_CONTENT]"
-SECTION_IMAGES = "[SECTION:STUDENT_IMAGES]"
-SECTION_NOTES = "[SECTION:PIPELINE_NOTES]"
-SECTION_PRIOR_SUBMISSION = "[SECTION:PRIOR_SUBMISSION_ROLLING]"
-
-
 def _attachment_block_meta_text(block: "MaterialBlock") -> str:
     """Short human-readable line for prompts (no raw base64)."""
     if block.block_type != "text" or not (block.origin or "").startswith("attachment"):
@@ -1807,6 +1809,7 @@ def _grade_with_endpoint_group(
 
 
 def _llm_assist_assignment_addendum(attempt: HomeworkAttempt) -> str:
+    return llm_assist_assignment_addendum(attempt)
     if not bool(getattr(attempt, "used_llm_assist", False)):
         return ""
     return (
@@ -1819,6 +1822,7 @@ def _llm_assist_assignment_addendum(attempt: HomeworkAttempt) -> str:
 
 
 def _comment_format_system_suffix(system_prompt: str) -> str:
+    return comment_format_system_suffix(system_prompt)
     base = (system_prompt or "").strip()
     if "Markdown" in base or "markdown" in base or "LaTeX" in base or "latex" in base:
         return base
@@ -1830,6 +1834,7 @@ def _comment_format_system_suffix(system_prompt: str) -> str:
 
 
 def _expand_homework_field_for_llm(homework: Homework, field: Optional[str], *, field_role: str) -> str:
+    return expand_homework_field_for_llm(homework, field, field_role=field_role)
     raw = field or ""
     if field_role == "content" and normalize_content_format(getattr(homework, "content_format", None)) == "plain":
         raw = body_text_for_grading_llm(content=raw, content_format="plain")
@@ -1842,7 +1847,7 @@ def _build_scoring_messages(
     config: CourseLLMConfig,
     material: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    system_prompt = _comment_format_system_suffix(
+    system_prompt = comment_format_system_suffix(
         config.system_prompt
         or (
             "你是一个严格遵守格式要求的课程作业评分助手。"
@@ -1853,10 +1858,10 @@ def _build_scoring_messages(
     response_language = homework.response_language or config.response_language or "zh-CN"
     teacher_prompt = config.teacher_prompt or ""
 
-    content_md = _expand_homework_field_for_llm(homework, homework.content, field_role="content")
-    ref_md = _expand_homework_field_for_llm(homework, homework.reference_answer, field_role="reference")
-    rubric_md = _expand_homework_field_for_llm(homework, homework.rubric_text, field_role="rubric")
-    rubric_staff_md = _expand_homework_field_for_llm(
+    content_md = expand_homework_field_for_llm(homework, homework.content, field_role="content")
+    ref_md = expand_homework_field_for_llm(homework, homework.reference_answer, field_role="reference")
+    rubric_md = expand_homework_field_for_llm(homework, homework.rubric_text, field_role="rubric")
+    rubric_staff_md = expand_homework_field_for_llm(
         homework, getattr(homework, "rubric_staff_only", None), field_role="rubric"
     )
 
@@ -1893,7 +1898,7 @@ def _build_scoring_messages(
     assignment_text = f"{SECTION_ASSIGNMENT}\n### 教师侧作业说明与材料\n{assignment_body}"
     if teacher_prompt.strip():
         assignment_text += f"\n\n### 教师补充提示（课程 LLM 配置）\n{teacher_prompt}"
-    assist_addendum = _llm_assist_assignment_addendum(attempt)
+    assist_addendum = llm_assist_assignment_addendum(attempt)
     if assist_addendum:
         assignment_text += "\n\n" + assist_addendum
     student_intro = (
@@ -2129,10 +2134,10 @@ def _build_student_material(
     attempt: HomeworkAttempt,
     config: CourseLLMConfig,
 ) -> dict[str, Any]:
-    content_md = _expand_homework_field_for_llm(homework, homework.content, field_role="content")
-    ref_md = _expand_homework_field_for_llm(homework, homework.reference_answer, field_role="reference")
-    rubric_md = _expand_homework_field_for_llm(homework, homework.rubric_text, field_role="rubric")
-    rubric_staff_md = _expand_homework_field_for_llm(
+    content_md = expand_homework_field_for_llm(homework, homework.content, field_role="content")
+    ref_md = expand_homework_field_for_llm(homework, homework.reference_answer, field_role="reference")
+    rubric_md = expand_homework_field_for_llm(homework, homework.rubric_text, field_role="rubric")
+    rubric_staff_md = expand_homework_field_for_llm(
         homework, getattr(homework, "rubric_staff_only", None), field_role="rubric"
     )
 
