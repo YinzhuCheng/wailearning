@@ -11,10 +11,10 @@ three-line governance round, structure the repo-local skills hierarchy, remove
 redundant simple skills/scripts only when a richer precise version already
 covers the behavior, and commit/push the result.
 
-Latest continuation request: proceed with the next planned repository
-normalization round from this handoff. The completed continuation focused on a
-low-risk `api/schemas.py` boundary split while preserving the public
-`apps.backend.courseeval_backend.api.schemas` import surface.
+Latest continuation request: close out Stage 2, prepare a committed handoff so
+the next agent can start the third major step, then commit and push. Stage 2 is
+complete through the requested 2.1, 2.2, and 2.3 bounded rounds; this closeout
+does not start Stage 3 implementation.
 
 Important preference for future agents: when two skills or scripts overlap,
 prefer preserving the more complex, precise, executable, and battle-tested
@@ -568,4 +568,91 @@ Validation for this round:
   diff, and SQLite guard checks passed or only reported known historical
   warnings.
 
-The queued Step 2 sequence is now complete through 2.3. No push was requested.
+The queued Step 2 sequence is now complete through 2.3.
+
+## Stage 2 Closeout
+
+Stage 2 should be treated as closed for planning purposes. The branch contains
+three local implementation commits for the requested 2.1-2.3 sequence:
+
+- `3232936` / `refactor: extract demo seed roster setup`
+- `8b66261` / `refactor: extract llm grading prompt helpers`
+- `106acec` / `refactor: extract homework serialization helpers`
+
+What Stage 2 proved:
+
+- The governance harness can support small, behavior-preserving extractions
+  from high-context backend files.
+- Each extraction kept the existing public entrypoint or router/facade boundary
+  intact.
+- Selector coverage was refined so new helper modules continue to choose the
+  relevant focused validation targets.
+- No known route shape, authorization, bootstrap, seed gate, LLM worker, quota,
+  queue, notification, or serialization behavior was intentionally changed.
+
+Residual Stage 2 validation limits:
+
+- Full release-quality coverage is still not claimed.
+- The full `tests\security\test_security_hardening_followup.py -q` file and
+  full `tests\security -q` run timed out during Step 2.3 before final reports.
+  Focused security and homework-adjacent subsets passed as documented above.
+- Broad PostgreSQL and Playwright release gates remain deferred unless the next
+  task explicitly asks for release validation.
+
+Do not continue adding more 2.x extraction commits under the assumption that
+Stage 2 is still open. If a future agent needs another backend split, start a
+new bounded round with a fresh plan, selector output, update-log row, handoff
+update, validation evidence, and commit.
+
+## Stage 3 Handoff
+
+The committed documents before this closeout do not contain a separate explicit
+"Stage 3" heading. Based on the remaining deferred governance targets in this
+handoff and
+[`../reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md`](../reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md),
+the next agent should treat Stage 3 as a new dedicated structure/boundary
+governance round after the completed backend helper pilot.
+
+Recommended Stage 3 entry options, in priority order:
+
+1. Backend router structure round for
+   `apps/backend/courseeval_backend/api/routers/subjects.py`.
+2. Admin SPA structure round for one large Vue view, starting with a single
+   bounded component extraction from the largest or most isolated view listed
+   in the three-line governance report.
+
+The next agent should choose exactly one Stage 3 entrypoint before editing.
+Do not mix backend-router and frontend-view work in the same first Stage 3
+commit.
+
+Stage 3 read order:
+
+1. `AGENTS.md`
+2. `docs/README.md`
+3. `docs/handoffs/2026-05-13-three-line-governance-and-skills-handoff.md`
+4. `docs/reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md`
+5. `skills/repository-normalization/SKILL.md`
+6. `skills/structure-governance/SKILL.md`
+7. `skills/boundary-governance/SKILL.md`
+8. `skills/validation-selection/SKILL.md`
+9. For backend router work: `skills/api-surface-audit/SKILL.md`,
+   `skills/permission-audit/SKILL.md`,
+   `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`, and
+   `docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`.
+10. For admin Vue work: `skills/frontend-backend-contract-audit/SKILL.md`,
+    `docs/development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md`, and the relevant
+    frontend package test/build docs.
+
+Stage 3 constraints:
+
+- Start with `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  from a clean tree, then run it again after edits.
+- Keep the first Stage 3 change small enough to validate in one local turn.
+- Preserve public API route paths, methods, status codes, response models,
+  authorization checks, and frontend request/response contracts.
+- For frontend work, preserve existing navigation, role visibility, API calls,
+  and browser-visible behavior unless the user explicitly asks for UX changes.
+- Update docs, selector metadata, tests, and this handoff in the same commit if
+  code paths or ownership boundaries change.
+- Append `docs/development/testing/agent-update-log.csv` before committing.
+- Keep `.agent-run/` ignored and uncommitted.
