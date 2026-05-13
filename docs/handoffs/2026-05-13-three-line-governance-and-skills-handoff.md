@@ -704,3 +704,60 @@ Deferred 3.1 validation:
   the subjects router changed. They were not run for this helper-only backend
   extraction because no browser-visible behavior, route contract, or frontend
   code changed.
+
+## Step 3.2 Subjects Class-Link Helper Split Update
+
+The current Step 3.2 round continued the Stage 3 subjects-router backend
+structure work:
+
+- Added `apps/backend/courseeval_backend/domains/courses/class_links.py`.
+- Moved course-create permission membership, default course-class naming,
+  required-course class-link replacement, and required-course duplicate
+  detection into the new helper module.
+- Kept roster student creation and enrollment mutation loops in
+  `api/routers/subjects.py`; those remain Step 3.3 candidates rather than part
+  of this class-link round.
+- Kept `api/routers/subjects.py` as the public `/api/subjects` router and HTTP
+  orchestration boundary.
+- Did not intentionally change route paths, HTTP methods, status codes,
+  response models, authorization checks, class-teacher restrictions, elective
+  rules, required-course duplicate semantics, class-link persistence, roster
+  writes, or frontend API contracts.
+- Added selector regression coverage proving `domains/courses/class_links.py`
+  selects the focused course/roster backend target.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\routers\subjects.py apps\backend\courseeval_backend\domains\courses\class_links.py`
+  passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported no unmatched paths and targeted/static validation available, with
+  Playwright review targets recommended because `subjects.py` changed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed 80 tests.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json`
+  passed.
+- `python ops/scripts/dev/lint_validation_registry.py`
+  passed.
+- `python ops/scripts/dev/check_api_surface_governance.py`
+  passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details`
+  passed with existing large-file warnings; `api/routers/subjects.py` is now
+  969 lines.
+- `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_subject_multi_class_links.py -q`
+  passed 6 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q`
+  passed 14 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_catalog_behavior.py -q`
+  passed 7 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_course_roster_homework_edge_behavior.py -q`
+  passed 13 tests with existing Pydantic deprecation warnings.
+
+Deferred 3.2 validation:
+
+- `admin.e2e.agent_followup_batch`,
+  `admin.e2e.discussion_cover_llm_tier3`, and
+  `admin.e2e.security_hardening_followup` were selector review targets because
+  the subjects router changed. They were not run for this helper-only backend
+  extraction because no browser-visible behavior, route contract, or frontend
+  code changed.

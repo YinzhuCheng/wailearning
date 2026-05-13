@@ -15,7 +15,6 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     get_student_profile_for_user,
     is_course_instructor,
     prepare_student_course_context,
-    refresh_subject_primary_class_id,
     remove_course_enrollment,
     subject_linked_class_ids,
     sync_course_enrollments,
@@ -56,6 +55,12 @@ from apps.backend.courseeval_backend.domains.courses.metadata import (
     serialize_course_times_for_storage,
     serialize_student_course_catalog_item,
 )
+from apps.backend.courseeval_backend.domains.courses.class_links import (
+    can_create_course,
+    normalize_course_class_name,
+    replace_subject_class_links,
+    required_course_duplicate,
+)
 from apps.backend.courseeval_backend.api.schemas import (
     AttachmentUploadResponse,
     CourseEnrollmentResponse,
@@ -73,49 +78,6 @@ from apps.backend.courseeval_backend.api.schemas import (
 
 
 router = APIRouter(prefix="/api/subjects", tags=["课程管理"])
-
-
-def _replace_subject_class_links(db: Session, course: Subject, link_items: list[tuple[int, str]]) -> None:
-    if not link_items:
-        raise HTTPException(status_code=400, detail="必修课至少需要绑定一个行政班级。")
-    db.query(SubjectClassLink).filter(SubjectClassLink.subject_id == course.id).delete(synchronize_session=False)
-    seen: set[int] = set()
-    for cid, mode in link_items:
-        cid_int = int(cid)
-        if cid_int in seen:
-            continue
-        seen.add(cid_int)
-        m = (mode or "all_in_class").strip().lower()
-        if m not in ("all_in_class", "roster_subset"):
-            m = "all_in_class"
-        class_row = db.query(Class).filter(Class.id == cid_int).first()
-        if not class_row:
-            raise HTTPException(status_code=400, detail="班级不存在。")
-        db.add(SubjectClassLink(subject_id=course.id, class_id=cid_int, enrollment_mode=m))
-    db.flush()
-    refresh_subject_primary_class_id(course, db)
-
-
-def _required_course_duplicate(
-    db: Session,
-    *,
-    name: str,
-    semester_id: Optional[int],
-    sorted_class_ids: tuple[int, ...],
-    exclude_subject_id: Optional[int] = None,
-) -> Optional[Subject]:
-    q = db.query(Subject).filter(Subject.name == name, Subject.semester_id == semester_id)
-    if exclude_subject_id is not None:
-        q = q.filter(Subject.id != exclude_subject_id)
-    for candidate in q.all():
-        if (candidate.course_type or "required").strip().lower() == "elective":
-            continue
-        existing_ids = tuple(sorted(subject_linked_class_ids(db, candidate.id)))
-        if not existing_ids and candidate.class_id:
-            existing_ids = tuple(sorted([int(candidate.class_id)]))
-        if existing_ids == sorted_class_ids:
-            return candidate
-    return None
 
 
 def _roster_class_ids_for_course(db: Session, course: Subject) -> set[int]:
@@ -152,19 +114,9 @@ def _serialize_enrollment(enrollment: CourseEnrollment, db: Session) -> CourseEn
     )
 
 
-def _can_create_course(current_user: User) -> bool:
-    return current_user.role in [UserRole.ADMIN, UserRole.CLASS_TEACHER, UserRole.TEACHER]
-
-
 def _ensure_course_management_access(user: User, course: Subject) -> None:
     if not is_course_instructor(user, course):
         raise HTTPException(status_code=403, detail="Only the assigned course teacher can manage this course.")
-
-
-def _normalize_course_class_name(subject_data: SubjectCreate) -> str:
-    if subject_data.class_name and subject_data.class_name.strip():
-        return subject_data.class_name.strip()
-    return f"{subject_data.name.strip()}课程班"
 
 
 def _create_roster_students(
@@ -416,7 +368,7 @@ def create_subject(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if not _can_create_course(current_user):
+    if not can_create_course(current_user):
         raise HTTPException(status_code=403, detail="You do not have permission to create courses.")
 
     target_teacher_id: Optional[int] = subject_data.teacher_id
@@ -483,7 +435,13 @@ def create_subject(
     if not link_plan:
         if not subject_data.students:
             raise HTTPException(status_code=400, detail="必修课请选择班级（或多班级），或上传花名册创建班级。")
-        class_obj = Class(name=_normalize_course_class_name(subject_data), grade=1)
+        class_obj = Class(
+            name=normalize_course_class_name(
+                course_name=subject_data.name,
+                class_name=subject_data.class_name,
+            ),
+            grade=1,
+        )
         db.add(class_obj)
         db.flush()
         link_plan = [(class_obj.id, "all_in_class")]
@@ -494,7 +452,7 @@ def create_subject(
         if not allowed_class_id or any(cid != allowed_class_id for cid in sorted_ids):
             raise HTTPException(status_code=403, detail="Class teachers can only create courses for their own class.")
 
-    if _required_course_duplicate(
+    if required_course_duplicate(
         db,
         name=subject_data.name,
         semester_id=semester_obj.id if semester_obj else None,
@@ -517,7 +475,7 @@ def create_subject(
     db.add(course)
     db.flush()
 
-    _replace_subject_class_links(db, course, link_plan)
+    replace_subject_class_links(db, course, link_plan)
 
     enrollment_overrides: list[tuple[Student, str]] = []
     if subject_data.students:
@@ -633,13 +591,13 @@ def update_subject(
                 allowed_class_id = int(current_user.class_id or 0)
                 if not allowed_class_id or any(cid != allowed_class_id for cid, _ in pairs):
                     raise HTTPException(status_code=403, detail="Class teachers can only bind courses to their own class.")
-            _replace_subject_class_links(db, course, pairs)
+            replace_subject_class_links(db, course, pairs)
         elif subject_data.class_id is not None:
             if current_user.role == UserRole.CLASS_TEACHER:
                 allowed_class_id = int(current_user.class_id or 0)
                 if not allowed_class_id or int(subject_data.class_id) != allowed_class_id:
                     raise HTTPException(status_code=403, detail="Class teachers can only bind courses to their own class.")
-            _replace_subject_class_links(db, course, [(int(subject_data.class_id), "all_in_class")])
+            replace_subject_class_links(db, course, [(int(subject_data.class_id), "all_in_class")])
         else:
             refresh_subject_primary_class_id(course, db)
 

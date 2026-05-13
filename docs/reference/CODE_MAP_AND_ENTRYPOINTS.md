@@ -43,6 +43,7 @@
 | [`llm_discussion.py`](../../apps/backend/courseeval_backend/llm_discussion.py) | Course discussion assistant context assembly |
 | [`attachments.py`](../../apps/backend/courseeval_backend/attachments.py) | Upload directory prep; attachment reference checks |
 | [`domains/courses/access.py`](../../apps/backend/courseeval_backend/domains/courses/access.py) | Course visibility queries, enrollment sync, `ensure_course_access_http` |
+| [`domains/courses/class_links.py`](../../apps/backend/courseeval_backend/domains/courses/class_links.py) | Required-course class-link replacement, duplicate detection, and course-create helper rules used by `api/routers/subjects.py` |
 | [`domains/courses/class_scope.py`](../../apps/backend/courseeval_backend/domains/courses/class_scope.py) | Shared class-scope helpers (`get_accessible_class_ids`, `apply_class_id_filter`) used by class-adjacent routers without router-to-router imports |
 | [`domains/courses/metadata.py`](../../apps/backend/courseeval_backend/domains/courses/metadata.py) | Course metadata normalization and response serialization helpers used by `api/routers/subjects.py` while the router keeps HTTP orchestration |
 | [`domains/homework/serialization.py`](../../apps/backend/courseeval_backend/domains/homework/serialization.py) | Pure homework response helpers for preview text and grading-task call-log extraction |
