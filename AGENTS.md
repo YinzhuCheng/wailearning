@@ -208,7 +208,7 @@ current task.
 | In-process LLM worker | [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](docs/architecture/ASYNC_TASKS_AND_WORKERS.md) |
 | Known gaps / risks | [`docs/known-issues-and-risks.md`](docs/known-issues-and-risks.md) |
 | Operational playbook | [`docs/agent-playbook.md`](docs/agent-playbook.md) |
-| Repo-local skills | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md), [`skills/security-redteam-iteration/SKILL.md`](skills/security-redteam-iteration/SKILL.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/validation-ledger-maintenance/SKILL.md`](skills/validation-ledger-maintenance/SKILL.md), [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md), [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md), [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md), [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md), [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md), [`skills/postgres-release-validation/SKILL.md`](skills/postgres-release-validation/SKILL.md), [`skills/frontend-backend-contract-audit/SKILL.md`](skills/frontend-backend-contract-audit/SKILL.md), [`skills/seed-surface-hardening/SKILL.md`](skills/seed-surface-hardening/SKILL.md) |
+| Repo-local skills | [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md), [`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md), [`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md), [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md), [`skills/security-redteam-iteration/SKILL.md`](skills/security-redteam-iteration/SKILL.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/validation-ledger-maintenance/SKILL.md`](skills/validation-ledger-maintenance/SKILL.md), [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md), [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md), [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md), [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md), [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md), [`skills/postgres-release-validation/SKILL.md`](skills/postgres-release-validation/SKILL.md), [`skills/frontend-backend-contract-audit/SKILL.md`](skills/frontend-backend-contract-audit/SKILL.md), [`skills/seed-surface-hardening/SKILL.md`](skills/seed-surface-hardening/SKILL.md) |
 
 ---
 
@@ -221,35 +221,66 @@ repo-local skill as part of the same governance cycle, preferably backed by a
 script when the workflow can be automated.
 
 **Prefer skill-backed workflows by default.** Before planning non-trivial work,
-scan this table and use every task-relevant skill instead of relying on memory
-or ad hoc reconstruction. In particular, security hardening / red-team rounds
-should start from `skills/security-redteam-iteration/SKILL.md`, combine
-`permission-audit`, `admin-playwright-e2e`, `validation-selection`,
-`validation-ledger-maintenance`, and feature-specific skills as needed, and use
-the bundled scripts for mechanical numbering, ledger appends, CSV smoke checks,
-private-path scans, and static validation. The same principle applies outside
-red-team work: deployment, schema, API-surface, frontend/backend contract,
-UTF-8 editing, seed-surface, PostgreSQL release validation, roster identity,
-and local test triage work should use the corresponding repo-local skills and
-their scripts/checklists whenever they fit the task.
+scan this section and use every task-relevant skill instead of relying on
+memory or ad hoc reconstruction. Keep the more precise, executable skill or
+script as the source of truth; if two skills overlap, use the richer specialized
+skill and keep the broader one as an orchestrator or router.
+
+**Keep skills layered, bounded, and de-duplicated.** Repo-local skills are a
+hierarchy, not a flat checklist dump:
+
+1. `repository-normalization` is the top-level router for repo-wide governance,
+   skill taxonomy, package/path/name drift, and three-line governance.
+2. `docs-governance`, `boundary-governance`, and `structure-governance` are
+   horizontal governance skills. They should route into specialized skills
+   instead of copying detailed domain rules.
+3. Specialized skills own their narrow risk domains, such as permissions,
+   API surface, frontend/backend contracts, data migration, deployment,
+   seed/E2E surfaces, PostgreSQL validation, Playwright, UTF-8 editing, and
+   local test triage.
+4. Validation skills own target choice, evidence, and ledger updates.
+
+When a task spans layers, call skills from broad to narrow: start with the
+top-level or horizontal skill to define scope, then use the specialized skill
+for high-risk domain rules, then use validation skills to choose and record
+checks. If a simple skill or script duplicates a richer, more executable one,
+delete or shrink the simple version; prefer preserving complex, precise,
+tested workflows over keeping short but vague checklists. Do not delete a
+mature specialized skill merely because a broader governance skill mentions
+the same topic.
+
+**Top-level and horizontal governance**
 
 | Skill | Use when |
 |-------|----------|
-| [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) | Aligning docs, scripts, ops templates, package paths, service names, validation ledgers, or agent guidance with current implementation truth |
+| [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) | Orchestrating repo-wide governance, skill taxonomy, package/path/name drift, and three-line governance routing |
+| [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md) | Refining README, AGENTS.md, docs, testing/development/deployment guidance, links, and repeatable documentation rules |
+| [`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md) | Clarifying feature, module, permission, data-flow, import, and ownership boundaries without risky broad refactors |
+| [`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md) | Organizing directory hierarchy, root files, duplicate semantic folders, structural references, and safe file moves |
+
+**Specialized audit and execution skills**
+
+| Skill | Use when |
+|-------|----------|
 | [`skills/security-redteam-iteration/SKILL.md`](skills/security-redteam-iteration/SKILL.md) | Continuing iterative security hardening rounds that add dense tests, include E2E, fix discovered bugs, update docs/ledgers/pitfalls, validate, and commit locally |
+| [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md) | Reviewing or changing authorization, role boundaries, course access, parent-code flows, or sensitive API behavior |
+| [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md) | Changing FastAPI routers, route prefixes, frontend API clients, API docs, or API regression tests |
+| [`skills/frontend-backend-contract-audit/SKILL.md`](skills/frontend-backend-contract-audit/SKILL.md) | Reviewing pagination caps, request bounds, route/query contracts, bulk limits, or Vue/FastAPI API-shape drift |
+| [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md) | Changing SQLAlchemy models, schema repair DDL, student identity audit/repair helpers, or no-Alembic schema documentation |
+| [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md) | Auditing or repairing `users.student_id`, roster/user drift, ambiguous legacy matches, class moves, or student-course enrollment repair |
+| [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md) | Changing deployment scripts, ops docs, `.env.production`, nginx/systemd templates, or server Git deploy wrappers |
+| [`skills/seed-surface-hardening/SKILL.md`](skills/seed-surface-hardening/SKILL.md) | Changing `/api/e2e/dev/*`, `INIT_DEFAULT_DATA`, first-admin bootstrap, seed tokens, public registration, or powerful demo/local surfaces |
+| [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md) | Running or debugging admin Playwright with the repository's external runner, seeded E2E helpers, and browser-harness guardrails |
+| [`skills/postgres-release-validation/SKILL.md`](skills/postgres-release-validation/SKILL.md) | Planning or running PostgreSQL-backed validation for schema-sensitive or release-quality backend confidence |
+| [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md) | Diagnosing local pytest, SQLite, Playwright, port, process, dependency, or Windows test-environment hazards |
+| [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md) | Editing multilingual or encoding-sensitive files from Windows PowerShell |
+
+**Validation and evidence skills**
+
+| Skill | Use when |
+|-------|----------|
 | [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md) | Choosing, running, or documenting change-scoped validation targets and selector output |
 | [`skills/validation-ledger-maintenance/SKILL.md`](skills/validation-ledger-maintenance/SKILL.md) | Adding or revising validation targets, wiring `ledger_id`, updating CSV ledger rows, or correcting selector/history drift |
-| [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md) | Editing multilingual or encoding-sensitive files from Windows PowerShell |
-| [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md) | Reviewing or changing authorization, role boundaries, course access, parent-code flows, or sensitive API behavior |
-| [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md) | Changing deployment scripts, ops docs, `.env.production`, nginx/systemd templates, or server Git deploy wrappers |
-| [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md) | Diagnosing local pytest, SQLite, Playwright, port, process, dependency, or Windows test-environment hazards |
-| [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md) | Running or debugging admin Playwright with the repository's external runner, seeded E2E helpers, and browser-harness guardrails |
-| [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md) | Changing SQLAlchemy models, schema repair DDL, student identity audit/repair helpers, or no-Alembic schema documentation |
-| [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md) | Changing FastAPI routers, route prefixes, frontend API clients, API docs, or API regression tests |
-| [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md) | Auditing or repairing `users.student_id`, roster/user drift, ambiguous legacy matches, class moves, or student-course enrollment repair |
-| [`skills/postgres-release-validation/SKILL.md`](skills/postgres-release-validation/SKILL.md) | Planning or running PostgreSQL-backed validation for schema-sensitive or release-quality backend confidence |
-| [`skills/frontend-backend-contract-audit/SKILL.md`](skills/frontend-backend-contract-audit/SKILL.md) | Reviewing pagination caps, request bounds, route/query contracts, bulk limits, or Vue/FastAPI API-shape drift |
-| [`skills/seed-surface-hardening/SKILL.md`](skills/seed-surface-hardening/SKILL.md) | Changing `/api/e2e/dev/*`, `INIT_DEFAULT_DATA`, first-admin bootstrap, seed tokens, public registration, or powerful demo/local surfaces |
 
 ---
 

@@ -28,7 +28,7 @@ from apps.backend.courseeval_backend.db.models import (
     User,
     UserRole,
 )
-from apps.backend.courseeval_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
+from apps.backend.courseeval_backend.domains.courses.class_scope import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import StudentCreate, StudentListResponse, StudentResponse, StudentUpdate
 from apps.backend.courseeval_backend.domains.roster.sync import (
     sync_student_user_from_roster_row,

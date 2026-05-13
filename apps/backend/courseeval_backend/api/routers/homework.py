@@ -49,7 +49,7 @@ from apps.backend.courseeval_backend.db.models import (
     User,
     UserRole,
 )
-from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
+from apps.backend.courseeval_backend.domains.courses.class_scope import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     HomeworkAttemptResponse,
     HomeworkBatchLateSubmissionUpdate,

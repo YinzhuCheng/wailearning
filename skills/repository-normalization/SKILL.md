@@ -1,43 +1,70 @@
 ---
 name: repository-normalization
-description: Use this when aligning CourseEval documentation, scripts, ops templates, and agent guidance with the current implementation without reviving retired package names or legacy fallbacks.
+description: Top-level CourseEval governance orchestrator for repository normalization, three-line governance, skill taxonomy, docs-as-governance, package/path/name drift, and deciding when to route into docs-governance, boundary-governance, structure-governance, validation-selection, validation-ledger-maintenance, or specialized audit skills.
 ---
 
 # Repository Normalization
 
 ## Purpose
 
-Keep CourseEval documentation and governance aligned with the current codebase.
-This skill covers code-as-docs checks, docs-as-governance updates, legacy-name
-cleanup, and handoff preparation.
+Coordinate CourseEval repository governance without becoming a duplicate of
+specialized skills. Use this as the top-level entrypoint for code-as-docs,
+docs-as-governance, package/name drift, three-line governance, skill taxonomy,
+and handoff preparation.
 
-## When to Use
+## Skill Layers
 
-Use this before or during changes to README, AGENTS.md, docs, ops templates,
-service names, package paths, environment-variable docs, validation ledgers, or
-agent workflows.
-
-## Inputs
-
-- Task description and intended changed files.
-- Current diff from `git status --short` and `git diff`.
-- Related code anchors, tests, scripts, or deployment templates.
+1. Top-level orchestrator: this skill.
+2. Horizontal governance: `skills/docs-governance/SKILL.md`,
+   `skills/boundary-governance/SKILL.md`, and
+   `skills/structure-governance/SKILL.md`.
+3. Specialized audit skills:
+   - permissions: `skills/permission-audit/SKILL.md`;
+   - API contracts: `skills/api-surface-audit/SKILL.md`;
+   - frontend/backend request contracts:
+     `skills/frontend-backend-contract-audit/SKILL.md`;
+   - schema/bootstrap/data repair: `skills/data-migration-audit/SKILL.md`;
+   - deployment/ops: `skills/deployment-governance/SKILL.md`;
+   - seed/E2E dev surface: `skills/seed-surface-hardening/SKILL.md`;
+   - Playwright: `skills/admin-playwright-e2e/SKILL.md`;
+   - PostgreSQL release gates: `skills/postgres-release-validation/SKILL.md`;
+   - UTF-8 editing: `skills/utf8-safe-editing/SKILL.md`;
+   - local failures: `skills/local-test-triage/SKILL.md`.
+4. Validation and evidence:
+   `skills/validation-selection/SKILL.md` and
+   `skills/validation-ledger-maintenance/SKILL.md`.
 
 ## Workflow
 
-1. Read `AGENTS.md`, `docs/README.md`, and the task-scoped docs listed there.
-2. Search code and tests before trusting documentation claims.
-3. Identify whether old names are historical records or active drift.
-4. Update docs in the same change set as any behavior, config, path, or service change.
-5. Prefer CSV/JSON/YAML for append-only structured ledgers; keep Markdown as the interpretation layer.
-6. For multilingual files on Windows, run the safe text workflow before editing.
-7. Add or update executable checks when a rule can be automated.
-8. End with a handoff note when the work spans multiple rounds or leaves known risks.
+1. Read `AGENTS.md`, `docs/README.md`, and task-scoped docs.
+2. Decide whether this is a three-line governance task:
+   - docs or process: use `docs-governance`;
+   - module/import/ownership boundary: use `boundary-governance`;
+   - root layout, moves, or directory hierarchy: use `structure-governance`.
+3. Route any high-risk domain to the specialized skill instead of copying its
+   rules here.
+4. Search code and tests before trusting documentation claims.
+5. Classify old names as historical records or active drift.
+6. Update docs in the same change set as behavior, config, path, or service
+   changes.
+7. Prefer CSV/JSON/YAML for append-only structured ledgers; keep Markdown as
+   the interpretation layer.
+8. Add or update executable checks when a repeated rule can be automated.
+9. Use `validation-selection` for target choice and
+   `validation-ledger-maintenance` for durable evidence.
+
+## De-Duplication Rule
+
+Keep the most precise, executable skill or script as the source of truth. Do
+not preserve a simple, broad checklist when a richer specialized skill or guard
+script covers the same behavior. If a broad skill is still useful, reduce it to
+routing, scope control, and validation coordination.
 
 ## Commands
 
 ```powershell
 git status --short --branch
+python ops/scripts/dev/check_repo_skills.py
 python ops/scripts/dev/select_validation_targets.py --worktree
 python ops/scripts/dev/check_repository_normalization.py
 python ops/scripts/dev/check_text_encoding.py --fail-on-suspicious <changed-file>
@@ -57,6 +84,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe
 - Retired names appear only in historical notes, append-only ledgers, or
   explicit "do not restore" warnings.
 - Documentation claims cite current code paths, config, tests, or scripts.
+- Skill references use existing `skills/<name>/SKILL.md` paths.
 - Validation failures are recorded with command, symptom, likely cause, and next step.
 
 ## Failure Handling
@@ -77,5 +105,9 @@ change is verified.
 - `docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`
 - `docs/development/testing/README.md`
 - `docs/operations/DEPLOYMENT_AND_OPERATIONS.md`
+- `skills/docs-governance/SKILL.md`
+- `skills/boundary-governance/SKILL.md`
+- `skills/structure-governance/SKILL.md`
+- `ops/scripts/dev/check_repo_skills.py`
 - `ops/scripts/dev/check_repository_normalization.py`
 - `ops/scripts/dev/check_text_encoding.py`

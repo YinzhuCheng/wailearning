@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
-from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
+from apps.backend.courseeval_backend.domains.courses.class_scope import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     RecentPostAuthorResponse,
     RecentPostGroupResponse,

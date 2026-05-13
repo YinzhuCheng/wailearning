@@ -185,7 +185,7 @@ def test_settings_public_and_all(client: TestClient, admin_headers: dict[str, st
 
 def test_dashboard_stats_direct_router_call():
     """Covers former test_dashboard.py DB + router call path (no HTTP)."""
-    from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
+    from apps.backend.courseeval_backend.domains.courses.class_scope import get_accessible_class_ids
     from apps.backend.courseeval_backend.api.routers.dashboard import get_dashboard_stats
 
     ensure_admin()

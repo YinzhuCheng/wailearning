@@ -1,32 +1,18 @@
 from typing import List
 
-from sqlalchemy import false as sql_false, select
-from sqlalchemy.orm import Query
+from sqlalchemy import select
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
-from apps.backend.courseeval_backend.domains.courses.access import get_accessible_class_ids_from_courses
+from apps.backend.courseeval_backend.domains.courses.class_scope import get_accessible_class_ids
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import Class, Student, Subject, SubjectClassLink, User, UserRole
 from apps.backend.courseeval_backend.api.schemas import ClassCreate, ClassResponse, ClassUpdate
 
 
 router = APIRouter(prefix="/api/classes", tags=["班级管理"])
-
-
-def apply_class_id_filter(query: Query, column, class_ids: List[int]) -> Query:
-    """Avoid SQL errors from IN () when the caller has no accessible classes."""
-    if not class_ids:
-        return query.filter(sql_false())
-    return query.filter(column.in_(class_ids))
-
-
-def get_accessible_class_ids(user: User, db: Session) -> List[int]:
-    if user.role == UserRole.ADMIN:
-        return [class_obj.id for class_obj in db.query(Class).all()]
-    return get_accessible_class_ids_from_courses(user, db)
 
 
 @router.get("", response_model=List[ClassResponse])

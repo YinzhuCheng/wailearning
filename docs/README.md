@@ -19,9 +19,15 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`known-issues-and-risks.md`](known-issues-and-risks.md) | Open risks, “待人工确认”, CI location honesty |
 | [`reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
 | [`reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), mapping, pitfalls |
-| [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Repeatable workflow for code-as-docs / docs-as-governance passes |
+| [`reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md`](reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md) | Three-line governance pass: docs, boundaries, structure, scripts, and residual risks |
+| [`handoffs/2026-05-13-three-line-governance-and-skills-handoff.md`](handoffs/2026-05-13-three-line-governance-and-skills-handoff.md) | Current branch handoff: mainline cleanup context, three-line governance, skills hierarchy, validation state, next targets |
+| [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Top-level governance orchestrator for repo normalization, skill taxonomy, and three-line routing |
+| [`../skills/docs-governance/SKILL.md`](../skills/docs-governance/SKILL.md) | Horizontal docs governance: documentation truth, link checks, reports, and repeated-pitfall-to-rule workflow |
+| [`../skills/boundary-governance/SKILL.md`](../skills/boundary-governance/SKILL.md) | Horizontal boundary governance: functional/module/permission/data-flow boundary discovery and low-risk extraction workflow |
+| [`../skills/structure-governance/SKILL.md`](../skills/structure-governance/SKILL.md) | Horizontal structure governance: root-file, directory hierarchy, file-move, and structural reference workflow |
 | [`../skills/security-redteam-iteration/SKILL.md`](../skills/security-redteam-iteration/SKILL.md) | Iterative red-team hardening workflow with dense tests, fixes, docs, ledgers, pitfalls, validation, and commit discipline |
 | [`../skills/validation-selection/SKILL.md`](../skills/validation-selection/SKILL.md) | Change-scoped validation selection and honest validation reporting |
+| [`../skills/validation-ledger-maintenance/SKILL.md`](../skills/validation-ledger-maintenance/SKILL.md) | Validation registry, `ledger_id`, CSV target/run history, and selector-history maintenance |
 | [`../skills/utf8-safe-editing/SKILL.md`](../skills/utf8-safe-editing/SKILL.md) | UTF-8-safe editing for multilingual / PowerShell-sensitive files |
 | [`../skills/permission-audit/SKILL.md`](../skills/permission-audit/SKILL.md) | Backend authorization, role-boundary, and course-access audit workflow |
 | [`../skills/deployment-governance/SKILL.md`](../skills/deployment-governance/SKILL.md) | Deployment script, env template, nginx/systemd, and ops-doc governance |
@@ -29,6 +35,10 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`../skills/admin-playwright-e2e/SKILL.md`](../skills/admin-playwright-e2e/SKILL.md) | Repo-supported admin Playwright E2E execution, external-runner usage, and browser-harness triage |
 | [`../skills/data-migration-audit/SKILL.md`](../skills/data-migration-audit/SKILL.md) | Schema repair, migration audit, and no-Alembic data-governance workflow |
 | [`../skills/api-surface-audit/SKILL.md`](../skills/api-surface-audit/SKILL.md) | FastAPI router, frontend API client, API-doc, and route-contract audit workflow |
+| [`../skills/frontend-backend-contract-audit/SKILL.md`](../skills/frontend-backend-contract-audit/SKILL.md) | Vue/FastAPI request contract, pagination, bounds, and response-shape audit workflow |
+| [`../skills/roster-identity-repair-playbook/SKILL.md`](../skills/roster-identity-repair-playbook/SKILL.md) | Student identity, `users.student_id`, roster drift, and repair workflow |
+| [`../skills/postgres-release-validation/SKILL.md`](../skills/postgres-release-validation/SKILL.md) | PostgreSQL-backed package/full-suite validation workflow |
+| [`../skills/seed-surface-hardening/SKILL.md`](../skills/seed-surface-hardening/SKILL.md) | E2E dev, default seed, first-admin, public registration, and local/demo surface hardening |
 
 ---
 
@@ -45,6 +55,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [architecture/BACKEND_PACKAGE_STRUCTURE.md](architecture/BACKEND_PACKAGE_STRUCTURE.md) | Layer model inside `courseeval_backend` |
 | [reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) | Structural migration rationale |
 | [reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), movement mapping, validation notes |
+| [reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md](reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md) | Three-line governance pass: docs, boundary, and structure findings plus safe cleanup evidence |
 | [reports/README.md](reports/README.md) | Boundary rules for dated audits and remediation reports |
 | [operations/DEPLOYMENT_AND_OPERATIONS.md](operations/DEPLOYMENT_AND_OPERATIONS.md) | Production layout, nginx, systemd, env templates |
 | [operations/ADMIN_BOOTSTRAP.md](operations/ADMIN_BOOTSTRAP.md) | Startup ordering, seed behavior |
@@ -96,6 +107,12 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
   update a repo-local skill as needed so future agents can execute it
   consistently; prefer adding a supporting script when the workflow can be
   automated.
+- Keep skill overlap intentional and layered: use
+  [../skills/repository-normalization/SKILL.md](../skills/repository-normalization/SKILL.md)
+  as the top-level governance orchestrator, then route through
+  docs/boundary/structure governance or the richer specialized skill. When two
+  skills or scripts overlap, preserve the more precise and executable one as
+  the source of truth.
 - If behavior changes in code, update these documents in the same change set.
 - Contributors, including LLM agents, are expected to read the task-relevant documents before changing code, tests, structure, or deployment assets.
 - The documentation set is part of the implementation surface, not optional commentary.

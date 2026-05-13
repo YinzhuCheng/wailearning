@@ -311,6 +311,161 @@
             "notes": "This intentionally avoids external PyYAML so skill sanity checks run in the normal repo environment."
         },
         {
+            "id": "static.docs_governance",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Static documentation-governance checks for required entrypoints, governance skill indexing, Markdown links, and likely stale path mentions.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "documentation",
+                "governance",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile docs governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/governance_common.py",
+                        "ops/scripts/dev/check_docs_governance.py"
+                    ]
+                },
+                {
+                    "label": "docs governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_docs_governance.py"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "ops/scripts/dev/governance_common.py",
+                    "ops/scripts/dev/check_docs_governance.py",
+                    "skills/docs-governance/SKILL.md",
+                    "skills/docs-governance/agents/openai.yaml",
+                    "AGENTS.md",
+                    "README.md",
+                    "docs/README.md",
+                    "docs/reports/README.md"
+                ],
+                "globs": [
+                    "docs/**/*.md"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "Warnings for intentionally historical path mentions must be reviewed before treating the target as failed."
+        },
+        {
+            "id": "static.boundary_governance",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Static boundary-governance checks for large files and suspicious backend import edges such as router-to-router imports.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "module-boundaries",
+                "import-boundaries",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile boundary governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/governance_common.py",
+                        "ops/scripts/dev/check_boundary_governance.py",
+                        "ops/scripts/dev/inventory_api_schemas.py"
+                    ]
+                },
+                {
+                    "label": "boundary governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_boundary_governance.py",
+                        "--details"
+                    ]
+                },
+                {
+                    "label": "api schema inventory",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/inventory_api_schemas.py",
+                        "--fail-on-missing-imports"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "ops/scripts/dev/governance_common.py",
+                    "ops/scripts/dev/check_boundary_governance.py",
+                    "ops/scripts/dev/inventory_api_schemas.py",
+                    "skills/boundary-governance/SKILL.md",
+                    "skills/boundary-governance/agents/openai.yaml",
+                    "docs/architecture/BACKEND_PACKAGE_STRUCTURE.md",
+                    "docs/reference/CODE_MAP_AND_ENTRYPOINTS.md"
+                ],
+                "globs": [
+                    "apps/backend/courseeval_backend/domains/**/*.py"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "Large-file findings are warnings and should usually become a documented follow-up unless a focused refactor task is in scope."
+        },
+        {
+            "id": "static.structure_governance",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Static structure-governance checks for root-file hygiene, duplicate root semantics, tiny docs, and safe structural cleanup.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "repository-structure",
+                "root-hygiene",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile structure governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/governance_common.py",
+                        "ops/scripts/dev/check_structure_governance.py"
+                    ]
+                },
+                {
+                    "label": "structure governance check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_structure_governance.py",
+                        "--details"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "ops/scripts/dev/governance_common.py",
+                    "ops/scripts/dev/check_structure_governance.py",
+                    "skills/structure-governance/SKILL.md",
+                    "skills/structure-governance/agents/openai.yaml",
+                    "docs/architecture/REPOSITORY_STRUCTURE.md",
+                    "docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md",
+                    "docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md",
+                    ".gitignore"
+                ],
+                "globs": [
+                    "docs/reports/*.md",
+                    "docs/reports/**/*.md"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "This target uses Git ignore rules so private `.env`, `.agent-run`, and other ignored local artifacts are not treated as source layout."
+        },
+        {
             "id": "static.schema_governance",
             "category": "static-check",
             "risk": "static",
@@ -525,6 +680,46 @@
             },
             "ledger_id": "backend.learning_notes.api",
             "notes": "Pair with the targeted Playwright learning-notes/attendance tier when browser-visible behavior or routing is affected."
+        },
+        {
+            "id": "backend.manual_script_api_coverage",
+            "category": "backend-pytest",
+            "risk": "targeted",
+            "description": "Manual-script replacement smoke coverage for admin API routes through in-process FastAPI TestClient.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "manual-script-migration",
+                "admin-api",
+                "backend-pytest"
+            ],
+            "commands": [
+                {
+                    "label": "pytest",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "pytest",
+                        "tests/backend/manual/test_manual_script_api_coverage.py",
+                        "-q"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/backend/manual/test_manual_script_api_coverage.py",
+                    "apps/backend/courseeval_backend/api/routers/classes.py",
+                    "apps/backend/courseeval_backend/api/routers/dashboard.py",
+                    "apps/backend/courseeval_backend/api/routers/logs.py",
+                    "apps/backend/courseeval_backend/api/routers/points.py",
+                    "apps/backend/courseeval_backend/api/routers/semesters.py",
+                    "apps/backend/courseeval_backend/api/routers/settings.py",
+                    "apps/backend/courseeval_backend/api/routers/users.py",
+                    "apps/backend/courseeval_backend/domains/courses/class_scope.py"
+                ],
+                "globs": []
+            },
+            "ledger_id": null,
+            "notes": "This target keeps former localhost manual smoke scripts represented in the validation selector. It is not a replacement for route-specific behavior/security tests."
         },
         {
             "id": "frontend.admin.build",

@@ -35,12 +35,13 @@
 | [`bootstrap.py`](../../apps/backend/courseeval_backend/bootstrap.py) | `ensure_schema_updates()` compatibility DDL; demo LLM preset seed; homework backfills |
 | [`db/database.py`](../../apps/backend/courseeval_backend/db/database.py) | `engine`, `SessionLocal`, `Base` declarative |
 | [`db/models.py`](../../apps/backend/courseeval_backend/db/models.py) | SQLAlchemy ORM models (large) |
-| [`api/schemas.py`](../../apps/backend/courseeval_backend/api/schemas.py) | Pydantic request/response models |
+| [`api/schemas.py`](../../apps/backend/courseeval_backend/api/schemas.py) | Pydantic request/response models; high-blast-radius schema barrel, inventory with [`inventory_api_schemas.py`](../../ops/scripts/dev/inventory_api_schemas.py) before splitting |
 | [`api/routers/*.py`](../../apps/backend/courseeval_backend/api/routers/) | HTTP routers (see §3) |
 | [`llm_grading.py`](../../apps/backend/courseeval_backend/llm_grading.py) | Grading orchestration, **in-process worker manager**, effective score aggregation |
 | [`llm_discussion.py`](../../apps/backend/courseeval_backend/llm_discussion.py) | Course discussion assistant context assembly |
 | [`attachments.py`](../../apps/backend/courseeval_backend/attachments.py) | Upload directory prep; attachment reference checks |
 | [`domains/courses/access.py`](../../apps/backend/courseeval_backend/domains/courses/access.py) | Course visibility queries, enrollment sync, `ensure_course_access_http` |
+| [`domains/courses/class_scope.py`](../../apps/backend/courseeval_backend/domains/courses/class_scope.py) | Shared class-scope helpers (`get_accessible_class_ids`, `apply_class_id_filter`) used by class-adjacent routers without router-to-router imports |
 | [`domains/seed/demo.py`](../../apps/backend/courseeval_backend/domains/seed/demo.py) | `seed_demo_course_bundle` — demo teachers/students/courses/homework |
 | [`services/logging.py`](../../apps/backend/courseeval_backend/services/logging.py) | `LogService` — persists login and actions to `operation_logs` |
 

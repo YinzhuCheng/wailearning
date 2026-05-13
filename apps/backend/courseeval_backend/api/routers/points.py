@@ -17,7 +17,7 @@ from apps.backend.courseeval_backend.core.auth import get_current_active_user
 from apps.backend.courseeval_backend.core.permissions import can_manage_students, is_admin
 from sqlalchemy import false as sql_false
 
-from apps.backend.courseeval_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
+from apps.backend.courseeval_backend.domains.courses.class_scope import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.courseeval_backend.domains.courses.access import get_student_profile_for_user
 from datetime import datetime
 

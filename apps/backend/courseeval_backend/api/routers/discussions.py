@@ -19,7 +19,7 @@ from apps.backend.courseeval_backend.domains.discussion_links import (
     validate_visible_linked_targets,
 )
 from apps.backend.courseeval_backend.domains.llm.discussion_ui import strip_llm_ui_prefix
-from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
+from apps.backend.courseeval_backend.domains.courses.class_scope import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     CourseDiscussionCreate,
     CourseDiscussionEntryResponse,

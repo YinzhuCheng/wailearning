@@ -9,7 +9,7 @@ from apps.backend.courseeval_backend.domains.courses.access import ensure_course
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import Attendance, Class, CourseEnrollment, Score, Student, Subject, User
 from apps.backend.courseeval_backend.api.schemas import ClassRanking, DashboardStats, ScoreResponse, StudentRanking
-from apps.backend.courseeval_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
+from apps.backend.courseeval_backend.domains.courses.class_scope import apply_class_id_filter, get_accessible_class_ids
 
 
 router = APIRouter(prefix="/api/dashboard", tags=["仪表盘"])

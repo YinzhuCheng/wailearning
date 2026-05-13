@@ -17,3 +17,7 @@ operations, or product rules.
   task-specific references in the same change.
 - Prefer one report file per maintenance round. Large structured run data
   belongs in CSV, JSON, or YAML with a Markdown index.
+- Committed raw logs are allowed only when intentionally preserved as historical
+  evidence, contain no private paths or secrets, and live under
+  `docs/reports/artifacts/` with a dated, descriptive name. Fresh local logs
+  belong under ignored `.agent-run/` instead.

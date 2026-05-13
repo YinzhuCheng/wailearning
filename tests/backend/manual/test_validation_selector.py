@@ -214,6 +214,51 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_docs_governance_change_selects_docs_static_target(self):
+        payload = run_selector("--paths", "ops/scripts/dev/check_docs_governance.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.docs_governance", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_boundary_governance_skill_change_selects_boundary_static_target(self):
+        payload = run_selector("--paths", "skills/boundary-governance/SKILL.md")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.repo_local_skills", ids)
+        self.assertIn("static.boundary_governance", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_api_schema_inventory_change_selects_boundary_static_target(self):
+        payload = run_selector("--paths", "ops/scripts/dev/inventory_api_schemas.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.boundary_governance", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_manual_script_api_coverage_change_selects_manual_api_target(self):
+        payload = run_selector("--paths", "tests/backend/manual/test_manual_script_api_coverage.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("backend.manual_script_api_coverage", ids)
+        self.assertEqual(payload["unmatched_paths"], [])
+
+    def test_structure_governance_report_change_selects_structure_static_target(self):
+        payload = run_selector("--paths", "docs/reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.docs_governance", ids)
+        self.assertIn("static.structure_governance", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_init_db_sql_maps_to_static_encoding_target(self):
         payload = run_selector("--paths", "ops/scripts/init_db.sql")
 
@@ -688,6 +733,33 @@ class ValidationSelectorTests(unittest.TestCase):
             issues = check_repo_skills(root)
 
         self.assertIn("skills/sample-skill/SKILL.md: contains TODO placeholder", issues)
+
+    def test_repo_local_skill_check_detects_missing_skill_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill_dir = root / "skills/sample-skill"
+            skill_dir.mkdir(parents=True)
+            write_text(
+                skill_dir / "SKILL.md",
+                (
+                    "---\n"
+                    "name: sample-skill\n"
+                    "description: Use this for a realistic sample skill validation case.\n"
+                    "---\n\n"
+                    "Use `skills/missing-skill/SKILL.md` when needed.\n"
+                ),
+            )
+            write_text(
+                skill_dir / "agents/openai.yaml",
+                'interface:\n  display_name: "Sample Skill"\n  short_description: "Sample skill metadata."\n  default_prompt: "Use this sample skill."\n',
+            )
+
+            issues = check_repo_skills(root)
+
+        self.assertIn(
+            "skills/sample-skill/SKILL.md: missing referenced skill `skills/missing-skill/SKILL.md`",
+            issues,
+        )
 
     def test_search_pitfalls_finds_postgres_restricted_token_guidance(self):
         blocks = build_corpus(REPO_ROOT, context_lines=1)

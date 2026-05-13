@@ -14,7 +14,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import Class, CourseMaterial, CourseMaterialChapter, CourseMaterialSection, User, UserRole
-from apps.backend.courseeval_backend.api.routers.classes import get_accessible_class_ids
+from apps.backend.courseeval_backend.domains.courses.class_scope import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     CourseMaterialCreate,
     CourseMaterialListResponse,

@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 NAME_RE = re.compile(r"^[a-z0-9-]{1,63}$")
+SKILL_REF_RE = re.compile(r"skills/[a-z0-9-]+/SKILL\.md")
 
 
 def parse_simple_frontmatter(path: Path) -> tuple[dict[str, str], list[str]]:
@@ -48,17 +49,23 @@ def check_skill(skill_dir: Path, repo_root: Path) -> list[str]:
         issues.append(f"{rel_dir}/SKILL.md: invalid skill name: {name}")
     if len(description) < 40:
         issues.append(f"{rel_dir}/SKILL.md: description is too short or missing")
-    if "TODO" in skill_file.read_text(encoding="utf-8"):
+    skill_text = skill_file.read_text(encoding="utf-8")
+    if "TODO" in skill_text:
         issues.append(f"{rel_dir}/SKILL.md: contains TODO placeholder")
 
     agents_file = skill_dir / "agents" / "openai.yaml"
     if agents_file.exists():
-        text = agents_file.read_text(encoding="utf-8")
+        agents_text = agents_file.read_text(encoding="utf-8")
         for key in ("display_name:", "short_description:", "default_prompt:"):
-            if key not in text:
+            if key not in agents_text:
                 issues.append(f"{rel_dir}/agents/openai.yaml: missing {key}")
-    elif skill_dir.name != "repository-normalization":
+    else:
         issues.append(f"{rel_dir}: missing agents/openai.yaml")
+
+    for match in SKILL_REF_RE.finditer(skill_text):
+        ref = match.group(0)
+        if not (repo_root / ref).exists():
+            issues.append(f"{rel_dir}/SKILL.md: missing referenced skill `{ref}`")
     return issues
 
 

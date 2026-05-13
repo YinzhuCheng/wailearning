@@ -2,7 +2,7 @@
 
 This report satisfies the “final output” requirement for the documentation system upgrade round. It is stored **in-repo** so agents can diff it like code.
 
-**Status note for future agents:** this file began as an early documentation-upgrade audit trail. Some rows below intentionally preserve the original observed failures, but the current full-suite baseline is newer and lives in [`development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md). When a row says “historical” or “mitigated”, do not treat the old failure as the current repository state.
+**Status note for future agents:** this file began as an early documentation-upgrade audit trail. Some rows below intentionally preserve the original observed failures, but the current full-suite baseline is newer and lives in [`../development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](../development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md). When a row says “historical” or “mitigated”, do not treat the old failure as the current repository state.
 
 ---
 
@@ -11,7 +11,7 @@ This report satisfies the “final output” requirement for the documentation s
 | Area | Current ground truth |
 |------|---------------------|
 | Product shell | FastAPI backend package `apps.backend.courseeval_backend`; Vue 3 admin + parent SPAs under `apps/web/*`. |
-| HTTP surface | Routers included explicitly from `main.py` (see [`reference/CODE_MAP_AND_ENTRYPOINTS.md`](reference/CODE_MAP_AND_ENTRYPOINTS.md)). |
+| HTTP surface | Routers included explicitly from `main.py` (see [`../reference/CODE_MAP_AND_ENTRYPOINTS.md`](../reference/CODE_MAP_AND_ENTRYPOINTS.md)). |
 | Persistence | SQLAlchemy models in `db/models.py`; startup uses `create_all` + `bootstrap.ensure_schema_updates()` (no Alembic tree in-repo snapshot). |
 | AuthZ | JWT staff/student users + separate parent-code flows; course scope primarily `domains/courses/access.py`; coarse role helpers in `core/permissions.py`. |
 | LLM grading async | DB-backed `HomeworkGradingTask` rows processed by **in-process** worker thread (`llm_grading.py` / `_WorkerManager`), gated by env vars. |
@@ -24,19 +24,19 @@ This report satisfies the “final output” requirement for the documentation s
 
 | 文件路径 | 更新类型 | 摘要 | 原因 |
 |----------|----------|------|------|
-| [`AGENTS.md`](../AGENTS.md) | 新增 | Root-level agent handbook：边界、grep 关键词、高风险模块、验证清单 | 用户要求 AGENTS；此前缺失 |
-| [`docs/agent-playbook.md`](agent-playbook.md) | 新增 | 流程型操作手册：读仓库顺序、bootstrap 顺序、测试命令 | 补足“如何做”而非仅“地图” |
-| [`docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`](reference/CODE_MAP_AND_ENTRYPOINTS.md) | 新增 | 路径级代码地图：后端入口、router 列表、前端关键路径、CI 路径 | 满足“落到路径” hard requirement |
-| [`docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) | 新增 | 角色、课程访问 helper、E2E 门 | 权限文档化 |
-| [`docs/reference/DATA_MODEL_ESSENTIALS.md`](reference/DATA_MODEL_ESSENTIALS.md) | 新增 | 核心表 / 模型分组与命名陷阱 | 数据模型速查 |
-| [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WORKERS.md) | 新增 | LLM worker 真实线程模型与任务表 | 对齐“无 Redis”现实 |
-| [`docs/known-issues-and-risks.md`](known-issues-and-risks.md) | 新增 | 已知风险、pytest sqlite 观察、CI 位置 | 不确定性与坑点集中登记 |
+| [`AGENTS.md`](../../AGENTS.md) | 新增 | Root-level agent handbook：边界、grep 关键词、高风险模块、验证清单 | 用户要求 AGENTS；此前缺失 |
+| [`docs/agent-playbook.md`](../agent-playbook.md) | 新增 | 流程型操作手册：读仓库顺序、bootstrap 顺序、测试命令 | 补足“如何做”而非仅“地图” |
+| [`docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`](../reference/CODE_MAP_AND_ENTRYPOINTS.md) | 新增 | 路径级代码地图：后端入口、router 列表、前端关键路径、CI 路径 | 满足“落到路径” hard requirement |
+| [`docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](../reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) | 新增 | 角色、课程访问 helper、E2E 门 | 权限文档化 |
+| [`docs/reference/DATA_MODEL_ESSENTIALS.md`](../reference/DATA_MODEL_ESSENTIALS.md) | 新增 | 核心表 / 模型分组与命名陷阱 | 数据模型速查 |
+| [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](../architecture/ASYNC_TASKS_AND_WORKERS.md) | 新增 | LLM worker 真实线程模型与任务表 | 对齐“无 Redis”现实 |
+| [`docs/known-issues-and-risks.md`](../known-issues-and-risks.md) | 新增 | 已知风险、pytest sqlite 观察、CI 位置 | 不确定性与坑点集中登记 |
 | [`docs/README.md`](README.md) | 补充 | “§0 Agent bundle” 与 reference 索引 | 导航升级 |
-| [`README.md`](../README.md) | 补充 | 指向 `AGENTS.md`；`python3` 启动提示 | 对齐 Linux agent 环境 |
-| [`docs/architecture/MAINTAINER_AGENT_GUIDE.md`](architecture/MAINTAINER_AGENT_GUIDE.md) | 补充 | 指向新 reference / playbook / known issues | 避免重复维护 |
-| [`docs/architecture/TROUBLESHOOTING.md`](architecture/TROUBLESHOOTING.md) | 补充 | pytest sqlite 损坏排查 | 实测失败入口 |
-| [`docs/development/DEVELOPMENT_AND_TESTING.md`](development/DEVELOPMENT_AND_TESTING.md) | 补充 | CI YAML 路径；解释 `python` vs `python3` | 命令真实性 |
-| [`docs/development/TEST_EXECUTION_PITFALLS.md`](development/TEST_EXECUTION_PITFALLS.md) | 补充 | `.pytest_tmp/test.sqlite` + metadata 导入次序坑 | 记录本轮实测 |
+| [`README.md`](../../README.md) | 补充 | 指向 `AGENTS.md`；`python3` 启动提示 | 对齐 Linux agent 环境 |
+| [`docs/architecture/MAINTAINER_AGENT_GUIDE.md`](../architecture/MAINTAINER_AGENT_GUIDE.md) | 补充 | 指向新 reference / playbook / known issues | 避免重复维护 |
+| [`docs/architecture/TROUBLESHOOTING.md`](../architecture/TROUBLESHOOTING.md) | 补充 | pytest sqlite 损坏排查 | 实测失败入口 |
+| [`docs/development/DEVELOPMENT_AND_TESTING.md`](../development/DEVELOPMENT_AND_TESTING.md) | 补充 | CI YAML 路径；解释 `python` vs `python3` | 命令真实性 |
+| [`docs/development/TEST_EXECUTION_PITFALLS.md`](../development/TEST_EXECUTION_PITFALLS.md) | 补充 | `.pytest_tmp/test.sqlite` + metadata 导入次序坑 | 记录本轮实测 |
 
 ---
 
@@ -55,7 +55,7 @@ This report satisfies the “final output” requirement for the documentation s
 | 标题 | 写入位置 | 涉及路径 | 风险 | 后续 |
 |------|-----------|----------|------|------|
 | pytest 持久 sqlite 文件损坏 | `TEST_EXECUTION_PITFALLS.md`, `known-issues-and-risks.md` | `tests/conftest.py`, `.pytest_tmp/test.sqlite` | 假阴性/假阳性测试 | 删除 sqlite；避免并发 pytest 共用同一个 sqlite 文件 |
-| `ensure_schema_updates` 报缺表 | `known-issues-and-risks.md`, `development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md` | `bootstrap.py`, `tests/db_reset.py` | 历史 CI 不稳定 | **已缓解**：`tests/db_reset.py` 在 `drop_all/create_all` 前导入 `db.models`，确保 `course_llm_configs` 等表进入 metadata |
+| `ensure_schema_updates` 报缺表 | `known-issues-and-risks.md`, `../development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md` | `bootstrap.py`, `tests/db_reset.py` | 历史 CI 不稳定 | **已缓解**：`tests/db_reset.py` 在 `drop_all/create_all` 前导入 `db.models`，确保 `course_llm_configs` 等表进入 metadata |
 | 无 `.github/workflows` | `known-issues-and-risks.md`, `AGENTS.md` | `ops/ci/` | 搜错自动化入口 | 若迁移至 GH Actions 需新增文档 |
 
 ---
@@ -70,7 +70,7 @@ This report satisfies the “final output” requirement for the documentation s
 
 **补充对照实验：** 手动新建 sqlite + `import models` + `create_all` + `ensure_schema_updates` 成功 — 记录在 `known-issues-and-risks.md` 作为证据。后续实现已把这个经验固化到 `tests/db_reset.py`。
 
-**后续完整基线（当前优先参考）：** [`development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) 记录了补齐依赖后的完整验证：PostgreSQL full tree **466 passed, 0 skipped**，SQLite-default full tree **423 passed, 43 skipped**，Full Playwright **303 passed**。这些数字会随新增测试变化；判断原则是 Postgres 强制运行应趋向 **0 skipped**，SQLite-default 的 Postgres-only skips 属于环境差异。
+**后续完整基线（当前优先参考）：** [`../development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](../development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) 记录了补齐依赖后的完整验证：PostgreSQL full tree **466 passed, 0 skipped**，SQLite-default full tree **423 passed, 43 skipped**，Full Playwright **303 passed**。这些数字会随新增测试变化；判断原则是 Postgres 强制运行应趋向 **0 skipped**，SQLite-default 的 Postgres-only skips 属于环境差异。
 
 ---
 

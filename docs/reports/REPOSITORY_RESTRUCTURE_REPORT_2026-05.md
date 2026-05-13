@@ -69,7 +69,7 @@ Collapsing test-local tooling into `tests/devtools/` reduces **surface area** wi
 
 ### Structural issues explicitly **not** solved here (defer / separate passes)
 
-These remain documented in [STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) and [REPOSITORY_STRUCTURE.md](REPOSITORY_STRUCTURE.md):
+These remain documented in [STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) and [REPOSITORY_STRUCTURE.md](../architecture/REPOSITORY_STRUCTURE.md):
 
 - Large backend orchestration modules (`llm_grading.py`, `bootstrap.py`, `llm_discussion.py`).
 - Further extraction into `domains/*` without changing import roots.
@@ -112,7 +112,7 @@ Meaning:
 ### Documentation files touched
 
 - [`README.md`](../../README.md) — repository layout block notes devtools location.
-- [`docs/architecture/REPOSITORY_STRUCTURE.md`](REPOSITORY_STRUCTURE.md) — high-level tree + Test Boundaries mention `tests/devtools/`.
+- [`docs/architecture/REPOSITORY_STRUCTURE.md`](../architecture/REPOSITORY_STRUCTURE.md) — high-level tree + Test Boundaries mention `tests/devtools/`.
 - [`docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md`](STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) — pattern labels + ASCII tree + Phase 2 guidance.
 - [`docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`](../reference/CODE_MAP_AND_ENTRYPOINTS.md) — map row points to `tests/devtools/`.
 - [`docs/development/TEST_SUITE_MAP.md`](../development/TEST_SUITE_MAP.md) — tree + dedicated subsection.

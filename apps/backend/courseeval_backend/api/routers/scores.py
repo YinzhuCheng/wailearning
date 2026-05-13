@@ -17,7 +17,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import CourseEnrollment, CourseExamWeight, CourseGradeScheme, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
 from apps.backend.courseeval_backend.core.permissions import is_student
-from apps.backend.courseeval_backend.api.routers.classes import apply_class_id_filter, get_accessible_class_ids
+from apps.backend.courseeval_backend.domains.courses.class_scope import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.courseeval_backend.domains.scores.composition import OTHER_DAILY_EXAM_TYPE, build_composition_for_student, get_scheme_dto, upsert_scheme
 from apps.backend.courseeval_backend.domains.scores.appeals import mark_score_appeal_notifications_handled, notify_teachers_score_grade_appeal
 from apps.backend.courseeval_backend.api.schemas import (

@@ -72,6 +72,8 @@ Subdirectories and files:
 
 - `api/routers/`
 - `api/schemas.py`
+- `ops/scripts/dev/inventory_api_schemas.py` (read-only inventory for planned
+  `api/schemas.py` boundary work)
 
 Responsibilities:
 
@@ -84,7 +86,12 @@ Rules:
 
 - routers may enforce authorization and orchestration,
 - routers should avoid absorbing large business workflows,
-- request and response DTOs belong here unless there is a strong reason otherwise.
+- request and response DTOs belong here unless there is a strong reason otherwise,
+- `api/schemas.py` is currently a deliberate schema barrel with many direct
+  imports. Treat it as high blast radius: run
+  `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
+  before any split, preserve imported names or provide a compatibility export,
+  and validate FastAPI import/OpenAPI behavior after moving schema classes.
 
 ### Layer 3: shared backend core
 
@@ -189,6 +196,7 @@ The following extractions are already in place:
 - endpoint-group routing moved into `domains/llm/routing.py`
 - endpoint URL / response parsing helpers moved into `domains/llm/protocol.py`
 - course access and enrollment logic moved into `domains/courses/access.py`
+- class-scope query helpers shared by routers moved into `domains/courses/class_scope.py`
 - homework row cleanup moved into `domains/homework/cleanup.py`
 - homework appeal and notification helpers moved into `domains/homework/appeals.py` and `domains/homework/notifications.py`
 - roster synchronization and reconciliation moved into `domains/roster/`
