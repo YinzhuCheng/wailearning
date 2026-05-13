@@ -398,7 +398,11 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["unmatched_paths"], [])
 
     def test_demo_seed_helper_change_selects_demo_course_seed_target(self):
-        payload = run_selector("--paths", "apps/backend/courseeval_backend/domains/seed/demo_users.py")
+        payload = run_selector(
+            "--paths",
+            "apps/backend/courseeval_backend/domains/seed/demo_users.py",
+            "apps/backend/courseeval_backend/domains/seed/demo_courses.py",
+        )
 
         ids = recommendation_ids(payload)
         self.assertIn("static.boundary_governance", ids)

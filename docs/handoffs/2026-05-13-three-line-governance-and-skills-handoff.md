@@ -998,6 +998,55 @@ value continuation order is:
 4. Only after those structure decisions settle, run a true Step 3 convergence
    round for docs / skills / governance-script noise classification.
 
+## Continuation Commit 1: Demo Course Helper Split
+
+The current continuation round completed the first requested local commit in
+the five-commit plan:
+
+- Added `apps/backend/courseeval_backend/domains/seed/demo_courses.py`.
+- Moved reusable demo course setup helpers out of
+  `domains/seed/demo.py`: course time JSON, required-course cover assignment,
+  LLM preset binding, grade-weight seeding, required-course creation,
+  `subject_class_links` setup, and required-course enrollment synchronization.
+- Kept `seed_demo_course_bundle(db)` in `domains/seed/demo.py` as the public
+  seed orchestration entrypoint.
+- Kept all demo text/content constants and homework/material/runtime activity
+  orchestration in `demo.py`.
+- Did not intentionally change `INIT_DEFAULT_DATA`, first-admin bootstrap,
+  public registration, E2E dev route gates, default demo users, course names,
+  homework/material content, enrollment semantics, LLM preset selection gates,
+  or seeded submission behavior.
+- Added selector coverage so
+  `apps/backend/courseeval_backend/domains/seed/demo_courses.py` selects
+  `backend.e2e_dev.demo_course_seed`.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\domains\seed\demo.py apps\backend\courseeval_backend\domains\seed\demo_courses.py`
+  passed.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops\scripts\dev\lint_validation_registry.py` passed.
+- `python ops\scripts\dev\select_validation_targets.py --worktree --json`
+  reported targeted/static validation as acceptable and no unmatched paths.
+- `python ops\scripts\dev\check_api_surface_governance.py` passed.
+- `python ops\scripts\dev\check_docs_governance.py` passed with the known
+  historical missing-path warnings already tracked in this handoff.
+- `python ops\scripts\dev\check_boundary_governance.py --details` passed with
+  existing large-file warnings; `domains/seed/demo.py` is now 2297 lines.
+- `python ops\scripts\dev\check_structure_governance.py --details` passed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed 81 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\e2e_dev\test_demo_course_seed.py -q`
+  passed 4 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_repair.py -q`
+  passed 3 tests with existing Pydantic deprecation warnings.
+- `python ops\scripts\dev\repo_line_health.py` completed and reported current
+  tracked text health metrics.
+
+Next local commit in the requested plan: continue `llm_grading.py` with one
+low-side-effect helper extraction, preferring result or execution shaping over
+queue, worker, retry, quota, or notification side effects.
+
 ## Branch And Validation State For Handoff
 
 - Branch: `cursor/repository-normalization-schema-notifications`

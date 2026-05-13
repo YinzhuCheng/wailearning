@@ -48,7 +48,8 @@
 | [`domains/courses/class_scope.py`](../../apps/backend/courseeval_backend/domains/courses/class_scope.py) | Shared class-scope helpers (`get_accessible_class_ids`, `apply_class_id_filter`) used by class-adjacent routers without router-to-router imports |
 | [`domains/courses/metadata.py`](../../apps/backend/courseeval_backend/domains/courses/metadata.py) | Course metadata normalization and response serialization helpers used by `api/routers/subjects.py` while the router keeps HTTP orchestration |
 | [`domains/homework/serialization.py`](../../apps/backend/courseeval_backend/domains/homework/serialization.py) | Pure homework response helpers for preview text and grading-task call-log extraction |
-| [`domains/seed/demo.py`](../../apps/backend/courseeval_backend/domains/seed/demo.py) | `seed_demo_course_bundle` — demo teachers/students/courses/homework |
+| [`domains/seed/demo.py`](../../apps/backend/courseeval_backend/domains/seed/demo.py) | `seed_demo_course_bundle` — demo seed orchestration entrypoint |
+| [`domains/seed/demo_courses.py`](../../apps/backend/courseeval_backend/domains/seed/demo_courses.py) | Demo course setup helpers: required-course construction, class links, LLM binding, course time JSON, grade weights, and enrollment sync |
 | [`services/logging.py`](../../apps/backend/courseeval_backend/services/logging.py) | `LogService` — persists login and actions to `operation_logs` |
 
 ---
@@ -57,6 +58,9 @@
 
 `domains/seed/demo.py` remains the public `seed_demo_course_bundle` entrypoint
 for demo course, material, homework, and runtime-activity orchestration.
+`domains/seed/demo_courses.py` owns reusable demo course setup that should stay
+behind that entrypoint: required-course construction, class links, course time
+JSON, LLM binding, grade weights, and required-course enrollment sync.
 `domains/seed/demo_users.py` owns the demo teacher accounts, demo class,
 student users, and roster-row construction used by that entrypoint.
 

@@ -1376,6 +1376,7 @@
                 "paths": [
                     "tests/backend/e2e_dev/test_demo_course_seed.py",
                     "apps/backend/courseeval_backend/domains/seed/demo.py",
+                    "apps/backend/courseeval_backend/domains/seed/demo_courses.py",
                     "apps/backend/courseeval_backend/domains/seed/demo_users.py"
                 ],
                 "globs": []
