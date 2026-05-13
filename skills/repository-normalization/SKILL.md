@@ -26,7 +26,7 @@ and handoff preparation.
    - schema/bootstrap/data repair: `skills/data-migration-audit/SKILL.md`;
    - deployment/ops: `skills/deployment-governance/SKILL.md`;
    - seed/E2E dev surface: `skills/seed-surface-hardening/SKILL.md`;
-   - Playwright: `skills/admin-playwright-e2e/SKILL.md`;
+   - Playwright: `skills/school-playwright-e2e/SKILL.md`;
    - PostgreSQL release gates: `skills/postgres-release-validation/SKILL.md`;
    - UTF-8 editing: `skills/utf8-safe-editing/SKILL.md`;
    - local failures: `skills/local-test-triage/SKILL.md`.

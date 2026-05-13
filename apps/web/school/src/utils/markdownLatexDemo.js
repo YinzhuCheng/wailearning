@@ -1,5 +1,5 @@
 /**
- * Canonical Markdown + KaTeX + semantic-card demo block for the admin SPA.
+ * Canonical Markdown + KaTeX + semantic-card demo block for the school SPA.
  *
  * The live demo starts with a lightweight base example and lets the viewer
  * expand the colored-card and image examples on demand.

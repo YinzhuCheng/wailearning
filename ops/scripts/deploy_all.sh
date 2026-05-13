@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Full stack: backend venv + admin SPA (npm run build) + parent portal + nginx reload.
-# If the admin UI looks outdated, common causes are: (1) this script was not run to completion,
+# Full stack: backend venv + school SPA (npm run build) + parent portal + nginx reload.
+# If the school UI looks outdated, common causes are: (1) this script was not run to completion,
 # (2) deploy ran from the wrong REPO_DIR / branch (SKIP_GIT=1 on stale tree), or (3) browser cache.
 # Prefer ops/scripts/redeploy.sh from the server clone so Git + deploy_all stay aligned.
 set -euo pipefail

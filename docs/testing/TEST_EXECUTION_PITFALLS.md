@@ -83,14 +83,14 @@ Interpretation rules:
 - Browser cache path: `<local-browser-cache>`
 - Tested after repository structure migration into:
   - `apps/backend/courseeval_backend/`
-  - `apps/web/admin/`
+  - `apps/web/school/`
   - `apps/web/parent/`
   - `ops/`
-  - `tests/e2e/web-admin/`
+  - `tests/e2e/web-school/`
 
 ### Additional session (Linux / cloud agent, May 2026)
 
-This session used Linux bash, the repository `.venv` for pytest, system-packaged Node/npm where needed, and Playwright driven from `apps/web/admin` (`npm run test:e2e`). Pitfalls 11–16 below come from that pass. They complement, rather than contradict, the Windows-focused items.
+This session used Linux bash, the repository `.venv` for pytest, system-packaged Node/npm where needed, and Playwright driven from `apps/web/school` (`npm run test:e2e`). Pitfalls 11–16 below come from that pass. They complement, rather than contradict, the Windows-focused items.
 
 ## Pitfall 1: PowerShell output can display mojibake
 
@@ -340,7 +340,7 @@ was much more reliable than trying to launch background services in one step and
 
 ### Symptom
 
-After moving E2E specs from `frontend/e2e/` to `tests/e2e/web-admin/`, Node module resolution for `@playwright/test` no longer worked automatically for the moved files.
+After moving E2E specs from `frontend/e2e/` to `tests/e2e/web-school/`, Node module resolution for `@playwright/test` no longer worked automatically for the moved files.
 
 ### Why it happened
 
@@ -348,7 +348,7 @@ The specs were no longer physically under the frontend package tree, so relative
 
 ### What worked
 
-The Playwright config had to set up module resolution explicitly from the admin frontend package context.
+The Playwright config had to set up module resolution explicitly from the school frontend package context.
 
 ### Recommendation
 
@@ -503,7 +503,7 @@ These are not documented as solved product defects; they are **risk surfaces** t
 - **Router-driven redirects**: admin accounts skip student-facing navigation assumptions; tests must mirror **actual role routing**, not an idealized “open any path” model.
 - **`expect.poll` footguns**: returning `undefined`/`null` can prevent predicate satisfaction until timeout; ensure the predicate returns a definite boolean or use assertions inside the callback carefully.
 
-## Pitfall 17: admin SPA router redirects hide student routes until course context exists
+## Pitfall 17: school SPA router redirects hide student routes until course context exists
 
 ### Symptom
 
@@ -511,7 +511,7 @@ Playwright navigates to `/points-display`, `/homework`, `/notifications`, etc., 
 
 ### Why it happens
 
-The admin SPA `router.beforeEach` redirects **admin users** away from many paths students use, and **students** may be forced through `/courses` until `selectedCourse` / enrollment context is resolved.
+The school SPA `router.beforeEach` redirects **admin users** away from many paths students use, and **students** may be forced through `/courses` until `selectedCourse` / enrollment context is resolved.
 
 ### Recommendation
 
@@ -880,7 +880,7 @@ they do not replace the earlier Playwright or PostgreSQL guidance above.
 
 ### Goal
 
-The audit goal was to inspect the admin SPA through Playwright screenshots while
+The audit goal was to inspect the school SPA through Playwright screenshots while
 using a production-aligned PostgreSQL database. SQLite was acceptable only for
 quick local smoke and was explicitly rejected as the main evidence source for
 UI/E2E behavior that depends on real persistence semantics.
@@ -909,7 +909,7 @@ The reliable approach in a restricted Windows automation environment was:
    - a local-only `SECRET_KEY`
 8. Seed data through `POST /api/e2e/dev/reset-scenario` with the same
    `X-E2E-Seed-Token`.
-9. Start Vite from `apps/web/admin` with
+9. Start Vite from `apps/web/school` with
    `VITE_PROXY_TARGET=http://127.0.0.1:<api-port>`.
 10. Use Playwright screenshots and DOM snapshots against the Vite URL.
 
@@ -976,15 +976,15 @@ the restricted sandbox/with the necessary execution approval. This is an
 environment restriction, not evidence that PostgreSQL, Vite, or the app is
 broken.
 
-### Pitfall G: Vite must be started from the admin app directory
+### Pitfall G: Vite must be started from the school app directory
 
 Starting Vite with the Vite binary path while the current working directory was
 the repository root produced a root URL that returned `404`. The fix was to set
-the frontend process working directory to `<repo>/apps/web/admin` before running
+the frontend process working directory to `<repo>/apps/web/school` before running
 Vite.
 
 This matters for custom audit scripts and external-server Playwright flows:
-`node <repo>/apps/web/admin/node_modules/vite/bin/vite.js` is not sufficient by
+`node <repo>/apps/web/school/node_modules/vite/bin/vite.js` is not sufficient by
 itself if the working directory is wrong.
 
 ### Pitfall H: repeated role login can hang if the previous session is still active
@@ -1074,21 +1074,21 @@ npm error path <repo>/package.json
 
 Cause:
 
-The admin frontend package lives under:
+The school frontend package lives under:
 
 ```text
-<repo>/apps/web/admin
+<repo>/apps/web/school
 ```
 
 The repository root is not the frontend package root and does not own the
-admin SPA `package.json`.
+school SPA `package.json`.
 
 Fix:
 
 Run the build from the frontend app directory:
 
 ```text
-cd <repo>/apps/web/admin
+cd <repo>/apps/web/school
 npm.cmd run build
 ```
 
@@ -1108,22 +1108,22 @@ Error: Project(s) "chromium" not found. Available projects: ""
 
 Cause:
 
-The Playwright config for the admin SPA is in:
+The Playwright config for the school SPA is in:
 
 ```text
-<repo>/apps/web/admin/playwright.config.cjs
+<repo>/apps/web/school/playwright.config.cjs
 ```
 
 Running `npx.cmd playwright test ... --project=chromium` from
-`<repo>/tests/e2e/web-admin` can fail to load that config. Without the config,
+`<repo>/tests/e2e/web-school` can fail to load that config. Without the config,
 the CLI does not know about the `chromium` project.
 
 Fix:
 
-Run maintained admin Playwright specs from:
+Run maintained school Playwright specs from:
 
 ```text
-<repo>/apps/web/admin
+<repo>/apps/web/school
 ```
 
 Use the configured test file name relative to the configured `testDir`, for
@@ -1149,10 +1149,10 @@ Make sure that arguments are regular expressions matching test files.
 
 Cause:
 
-The admin Playwright config sets:
+The school Playwright config sets:
 
 ```text
-testDir: ../../../tests/e2e/web-admin
+testDir: ../../../tests/e2e/web-school
 ```
 
 Passing a path outside that directory, such as an ignored local script under
@@ -1161,8 +1161,8 @@ runner. The config still scopes discovery around its `testDir`.
 
 Fix:
 
-For maintained tests, keep the spec under `<repo>/tests/e2e/web-admin` and run
-it by filename from `<repo>/apps/web/admin`.
+For maintained tests, keep the spec under `<repo>/tests/e2e/web-school` and run
+it by filename from `<repo>/apps/web/school`.
 
 For local screenshot experiments, either:
 
@@ -1183,13 +1183,13 @@ Symptom:
 ```text
 Error: Cannot find module '@playwright/test'
 Require stack:
-- <repo>/tests/e2e/web-admin/fixtures.cjs
+- <repo>/tests/e2e/web-school/fixtures.cjs
 - <artifact-dir>/...
 ```
 
 Cause:
 
-The admin Playwright config prepends the frontend `node_modules` directory to
+The school Playwright config prepends the frontend `node_modules` directory to
 `NODE_PATH` and calls `Module._initPaths()` before running tests. A direct local
 Node script does not inherit that setup unless it recreates it.
 
@@ -1199,8 +1199,8 @@ For local-only scripts, add the equivalent setup before importing E2E helpers:
 
 ```javascript
 const Module = require('module')
-const adminNodeModules = '<repo>/apps/web/admin/node_modules'
-process.env.NODE_PATH = [adminNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
+const schoolNodeModules = '<repo>/apps/web/school/node_modules'
+process.env.NODE_PATH = [schoolNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
 Module._initPaths()
 ```
 
@@ -1228,7 +1228,7 @@ TypeError: fetch failed
 
 Context:
 
-Admin Playwright defaults commonly bind the backend to `http://127.0.0.1:8012` and the SPA to
+School Playwright defaults commonly bind the backend to `http://127.0.0.1:8012` and the SPA to
 `http://127.0.0.1:3012`. Mock LLM traffic stays on-loopback under paths such as
 `/api/e2e/dev/mock-llm/<profile>/v1/`. This is **not** an external provider outage.
 
@@ -1312,7 +1312,7 @@ The installed `@playwright/test` major version may **not** support the `-q` flag
 Fix:
 
 - Remove `-q` and rely on Playwright’s default reporter, or
-- Use supported reporter flags for your installed version (see upstream Playwright release notes for `<REPO_ROOT>/apps/web/admin/node_modules/@playwright/test`).
+- Use supported reporter flags for your installed version (see upstream Playwright release notes for `<REPO_ROOT>/apps/web/school/node_modules/@playwright/test`).
 
 ### Pitfall 45: Many pytest “skips” are environment gates (PostgreSQL dialect), not optional quality
 
@@ -1407,20 +1407,20 @@ npm: command not found
 when attempting:
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 npx playwright test e2e-agent-hazard-tier-2-15.spec.js
 ```
 
 ### Context
 
-Cloud CI images optimized for Python may omit Node.js entirely. The repository’s Playwright specs live under `<REPO_ROOT>/tests/e2e/web-admin/` but execute via **`apps/web/admin/playwright.config.cjs`**, which requires **`npm ci`** / **`npm install`** inside **`apps/web/admin`** before **`npx playwright`** exists.
+Cloud CI images optimized for Python may omit Node.js entirely. The repository’s Playwright specs live under `<REPO_ROOT>/tests/e2e/web-school/` but execute via **`apps/web/school/playwright.config.cjs`**, which requires **`npm ci`** / **`npm install`** inside **`apps/web/school`** before **`npx playwright`** exists.
 
 ### Fix
 
 **Preferred (portable):** Install a supported **Node.js + npm** from your OS or from **https://nodejs.org** (LTS), then:
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 npm ci
 npx playwright install chromium
 ```
@@ -1430,7 +1430,7 @@ npx playwright install chromium
 ```bash
 sudo apt-get update
 sudo apt-get install -y nodejs npm
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 npm ci
 npx playwright install chromium
 ```
@@ -1455,11 +1455,11 @@ getByRole('link', { name: '我的课程' })
 
 ### Context
 
-The admin SPA (`apps/web/admin/src/views/Layout.vue`) grouped student navigation under **`课程学习`** until May 2026; the first child was renamed from **我的课程** to **选课与进度** (route `/courses` unchanged). **Current behavior:** the 「课程学习」 shell was **removed** — student links are **flat** top-level `el-menu-item` rows (same labels/paths as before). Older specs that hard-coded **我的课程** or assumed a parent expand step before **课程通知** will fail.
+The school SPA (`apps/web/school/src/views/Layout.vue`) grouped student navigation under **`课程学习`** until May 2026; the first child was renamed from **我的课程** to **选课与进度** (route `/courses` unchanged). **Current behavior:** the 「课程学习」 shell was **removed** — student links are **flat** top-level `el-menu-item` rows (same labels/paths as before). Older specs that hard-coded **我的课程** or assumed a parent expand step before **课程通知** will fail.
 
 ### Fix
 
-Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/e2e/web-admin/fixtures.cjs`, or role selectors anchored on `.elective-catalog-card`. If you must click the sidebar, match **`选课与进度`** / **`课程通知`** as **top-level** `menuitem` names or use stable **`data-testid`** hooks if added later.
+Prefer **`page.goto('/courses')`**, **`enterSeededRequiredCourse`** from `tests/e2e/web-school/fixtures.cjs`, or role selectors anchored on `.elective-catalog-card`. If you must click the sidebar, match **`选课与进度`** / **`课程通知`** as **top-level** `menuitem` names or use stable **`data-testid`** hooks if added later.
 
 ### Interpretation
 
@@ -1473,7 +1473,7 @@ Playwright scenarios around **`data-testid="header-notification-badge"`** time o
 
 ### Context
 
-- **`enterSeededRequiredCourse`** (`tests/e2e/web-admin/fixtures.cjs`) clicks the course-card primary button. After a student visits **`/courses`**, the UI may keep that button **disabled** until client enrollment reconciliation catches up — **re-clicking the card is unsafe** for routing-edge specs.
+- **`enterSeededRequiredCourse`** (`tests/e2e/web-school/fixtures.cjs`) clicks the course-card primary button. After a student visits **`/courses`**, the UI may keep that button **disabled** until client enrollment reconciliation catches up — **re-clicking the card is unsafe** for routing-edge specs.
 - Element Plus **`hover()`** on **`header-user-menu`** remains timing-sensitive; prefer **`click()`** on triggers when a dropdown must open. Notification routing assertions should use **sidebar** **`getByRole('menuitem', { name: /课程通知/ })`** (student menu) rather than a removed duplicate dropdown row.
 - **`Layout.vue`** updates **`headerUnreadCount`** from **`pollNotificationSync`** (route watcher + focus handler). Parallel **`fetch`** writes from the test can advance **`sync-status`** **before** the next **`pollNotificationSync`** completes — **`expect.poll`** pairing badge text with **`sync-status`** avoids flaky strict equality.
 
@@ -1485,7 +1485,7 @@ Playwright scenarios around **`data-testid="header-notification-badge"`** time o
 
 ### Interpretation
 
-These failures showed up while authoring **`tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js`** on a Linux agent with **`npm`** installed via **`apt-get install nodejs npm`** (see **Pitfall 48**). They are **harness timing / selector** issues unless **`sync-status`** itself diverges from list totals — in that case prefer **`tests/behavior/test_notification_sync_api_edge_behavior.py`** to isolate HTTP contracts first.
+These failures showed up while authoring **`tests/e2e/web-school/e2e-notification-header-sync-tier.spec.js`** on a Linux agent with **`npm`** installed via **`apt-get install nodejs npm`** (see **Pitfall 48**). They are **harness timing / selector** issues unless **`sync-status`** itself diverges from list totals — in that case prefer **`tests/behavior/test_notification_sync_api_edge_behavior.py`** to isolate HTTP contracts first.
 
 ### Pitfall 51: Teacher dashboard default course may not be the seeded required course
 
@@ -1503,7 +1503,7 @@ Before comparing UI to API for **`course_required_id`**, open **`header-course-s
 
 ### Interpretation
 
-Documented while authoring **`tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js`** case **02**.
+Documented while authoring **`tests/e2e/web-school/e2e-notification-sync-deep-tier.spec.js`** case **02**.
 
 ### Pitfall 52: Full Playwright suite + persistent SQLite — `students.parent_code` UNIQUE collisions on `reset-scenario`
 
@@ -1525,7 +1525,7 @@ Follow-on failures: timeouts on `page.goto`, missing table rows, logins that suc
 
 ### Context
 
-- Admin Playwright uses a **file-backed SQLite** URL (see `apps/web/admin/playwright.config.cjs`; Unix placeholder pattern like `/tmp/playwright_e2e_<port>.sqlite`).
+- School Playwright uses a **file-backed SQLite** URL (see `apps/web/school/playwright.config.cjs`; Unix placeholder pattern like `/tmp/playwright_e2e_<port>.sqlite`).
 - **`POST /api/e2e/dev/reset-scenario`** runs in many specs’ **`beforeEach`** hooks.
 - `Student.parent_code` is **`unique=True`** in `apps/backend/courseeval_backend/db/models.py`.
 - If seed assigns **`parent_code`** from a **small** derived space (historically a short prefix of `suffix`), repeated inserts into the **same** SQLite file across a long full-suite run increase collision probability (“birthday paradox” vs leftover rows).
@@ -1650,7 +1650,7 @@ even though **`X-E2E-Seed-Token`** is correct.
 
 The seed token alone proves possession of a shared CI secret; it does **not** prove an interactive admin session. When **`settings.E2E_DEV_REQUIRE_ADMIN_JWT`** is **true**, selected routes require **`Authorization: Bearer <admin JWT>`** in addition to the seed header. **`reset-scenario`** stays seed-only so **`globalSetup`** can run before any login.
 
-Playwright stores the post-reset admin token in **`process.env.E2E_DEV_ADMIN_BEARER`** via **`tests/e2e/web-admin/e2e-seed-headers.cjs`** (`refreshE2eAdminBearer`). Specs that duplicate **`seedHeaders()`** locally must either import **`seedHeaders`** from **`e2e-seed-headers.cjs`** or duplicate the merge logic.
+Playwright stores the post-reset admin token in **`process.env.E2E_DEV_ADMIN_BEARER`** via **`tests/e2e/web-school/e2e-seed-headers.cjs`** (`refreshE2eAdminBearer`). Specs that duplicate **`seedHeaders()`** locally must either import **`seedHeaders`** from **`e2e-seed-headers.cjs`** or duplicate the merge logic.
 
 ### Fix
 
@@ -1798,7 +1798,7 @@ Error: http://127.0.0.1:8012/api/health is already used
 
 ### Context
 
-Playwright `webServer` in **`apps/web/admin/playwright.config.cjs`** tries to bind **Vite** and **uvicorn**. A killed CLI may leave the child **`node`** (Vite) or Python server alive; **`fuser`** may be missing in the image.
+Playwright `webServer` in **`apps/web/school/playwright.config.cjs`** tries to bind **Vite** and **uvicorn**. A killed CLI may leave the child **`node`** (Vite) or Python server alive; **`fuser`** may be missing in the image.
 
 ### Fix
 
@@ -1820,7 +1820,7 @@ This is an **operator / environment** failure, not a test assertion failure. Doc
 
 ### Fix
 
-**`clickCourseSwitcherOption`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`**: click **切换课程**, visible **`.course-dropdown-menu`**, **force** click **`.course-option`**.
+**`clickCourseSwitcherOption`** in **`tests/e2e/web-school/future-advanced-coverage-helpers.cjs`**: click **切换课程**, visible **`.course-dropdown-menu`**, **force** click **`.course-option`**.
 
 ### Pitfall 65: Mock LLM `discuss_<suffix>` profile cursor drift in full Playwright run
 
@@ -1844,7 +1844,7 @@ Same numbered narrative as **FULL_PLAYWRIGHT_E2E_RUNBOOK.md** sections **Pitfall
 
 ### Symptom
 
-**`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** case **13**: **`movable.length >= 2`** fails at **1**, or reorder returns **405/422** after fixing counts.
+**`tests/e2e/web-school/e2e-tier4-stress-backlog.spec.js`** case **13**: **`movable.length >= 2`** fails at **1**, or reorder returns **405/422** after fixing counts.
 
 ### Context
 
@@ -1854,7 +1854,7 @@ Same numbered narrative as **FULL_PLAYWRIGHT_E2E_RUNBOOK.md** sections **Pitfall
 ### Fix
 
 - Seed **two non-uncategorized root chapters** (`parent_id=None`) for the required course in **`e2e_dev.py`** so **`nodes.filter(!is_uncategorized)`** has **≥ 2** entries at the root.
-- Call **`apiPostJson`** with **`ordered_chapter_ids`**, matching the SPA client (**`apps/web/admin/src/api/index.js`** → **`reorderChapters`**).
+- Call **`apiPostJson`** with **`ordered_chapter_ids`**, matching the SPA client (**`apps/web/school/src/api/index.js`** → **`reorderChapters`**).
 
 ### Interpretation
 
@@ -1894,7 +1894,7 @@ Cap sampled rows (**first `maxItems`**) and rely on **`expectNoPageHorizontalOve
 
 ### Symptom
 
-Authoring **`tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js`** (or similar API-heavy specs):
+Authoring **`tests/e2e/web-school/e2e-docs-gap-tier15.spec.js`** (or similar API-heavy specs):
 
 1. **`student_b`** “not enrolled in required course” — **`GET /api/homeworks/{id}/submission/me`** unexpectedly returns **200** because **`prepare_student_course_context`** + **`sync_student_course_enrollments`** auto-create **`CourseEnrollment`** for **all** students in the class when the required-course sync runs — **待人工确认** whether treating every roster student as implicitly enrolled is intended product-wise.
 
@@ -1918,7 +1918,7 @@ Documentation that says “enrollment must exist” should mention **class-wide 
 
 ### Symptom
 
-**`tests/e2e/web-admin/e2e-pitfall-guard-rails.spec.js`** case **01**, **`e2e-scenario-boundary-dynamic-complex.spec.js`** delete path, **`future-advanced-coverage.spec.js`** case **3**, **`e2e-scenario-resilience.spec.js`** batch-class paths:
+**`tests/e2e/web-school/e2e-pitfall-guard-rails.spec.js`** case **01**, **`e2e-scenario-boundary-dynamic-complex.spec.js`** delete path, **`future-advanced-coverage.spec.js`** case **3**, **`e2e-scenario-resilience.spec.js`** batch-class paths:
 
 - `waitForResponse` on **`DELETE /api/subjects/:id`** times out,
 - or `getByRole('dialog').filter({ has: button OK })` clicks the **wrong** overlay,
@@ -1932,7 +1932,7 @@ Element Plus **`ElMessageBox.confirm`** renders a **teleported** small modal wit
 
 Use a **MessageBox-scoped** primary button:
 
-- helper **`confirmElMessageBoxPrimary`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`** — waits for **`.el-message-box`** then clicks **`.el-message-box__btns .el-button--primary`**.
+- helper **`confirmElMessageBoxPrimary`** in **`tests/e2e/web-school/future-advanced-coverage-helpers.cjs`** — waits for **`.el-message-box`** then clicks **`.el-message-box__btns .el-button--primary`**.
 
 ### Interpretation
 
@@ -1972,12 +1972,12 @@ Before opening **从花名册进课**, **`DELETE /api/subjects/{course_required_
 
 **`scrollIntoViewIfNeeded`** on the **`tr`**, then **`expect(users-open-batch-class).toBeEnabled`**, then open dialog; pick target class via **visible** dropdown + **`getByRole('option')`** (filter input is **optional** — may not exist in all EP builds).
 
-### Pitfall 74: `npm run build` in `apps/web/admin` can fail with `vite: not found` on fresh agents
+### Pitfall 74: `npm run build` in `apps/web/school` can fail with `vite: not found` on fresh agents
 
 ### Symptom
 
 ```text
-> courseeval-admin@1.0.0 build
+> courseeval-school@1.0.0 build
 > vite build
 
 sh: 1: vite: not found
@@ -1985,13 +1985,13 @@ sh: 1: vite: not found
 
 ### Context
 
-The repository stores the admin SPA lockfile under **`<REPO_ROOT>/apps/web/admin/package-lock.json`**, but fresh cloud agents and Python-first CI images often start with **no `node_modules/` directory**. In that state, `npm run build` launches the package script correctly but fails because the local Vite binary from `devDependencies` is missing.
+The repository stores the school SPA lockfile under **`<REPO_ROOT>/apps/web/school/package-lock.json`**, but fresh cloud agents and Python-first CI images often start with **no `node_modules/` directory**. In that state, `npm run build` launches the package script correctly but fails because the local Vite binary from `devDependencies` is missing.
 
 This surfaced during a discussion-editor repair pass: the code change itself was valid, but the first build failed before Vite executed.
 
 ### Fix
 
-From **`<REPO_ROOT>/apps/web/admin`**:
+From **`<REPO_ROOT>/apps/web/school`**:
 
 ```bash
 npm ci
@@ -2020,7 +2020,7 @@ Installing **`@playwright/test`** via `npm ci` provides the runner but **not nec
 
 ### Fix
 
-From **`<REPO_ROOT>/apps/web/admin`**:
+From **`<REPO_ROOT>/apps/web/school`**:
 
 ```bash
 npx playwright install chromium
@@ -2058,7 +2058,7 @@ or the test verifies a posted short Markdown reply and sees raw source / plain t
 
 Reference regression guard:
 
-- `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js`
+- `tests/e2e/web-school/e2e-course-ui-markdown-reader.spec.js`
   - `material detail discussion keeps demo collapsed by default, shows live preview, and renders posted KaTeX`
 
 ### Interpretation
@@ -2079,7 +2079,7 @@ This is mostly **test expectation drift** caused by a deliberate UX change, not 
 
 This surfaced while adding a synchronized **top horizontal scrollbar** above an
 existing bottom-only wide-surface scroll area. The affected page
-(`apps/web/admin/src/views/Attendance.vue`) already had:
+(`apps/web/school/src/views/Attendance.vue`) already had:
 
 ```text
 <div class="sheet-scroll">
@@ -2296,7 +2296,7 @@ if "attachment_url" in payload.model_fields_set: ...
 Regression coverage:
 
 - `tests/backend/learning_notes/test_learning_notes_api.py`
-- `tests/e2e/web-admin/e2e-learning-notes-attendance-cover-tier20.spec.js`
+- `tests/e2e/web-school/e2e-learning-notes-attendance-cover-tier20.spec.js`
 
 ### Pitfall 83: Attendance single-create and date filters must parse `YYYY-MM-DD`, not pass raw strings to SQLite `DateTime`
 
@@ -2331,7 +2331,7 @@ Centralize attendance date parsing in the router:
 Regression coverage:
 
 - `tests/backend/learning_notes/test_learning_notes_api.py::test_ln11_attendance_single_create_parses_iso_date_string_for_sqlite`
-- `tests/e2e/web-admin/e2e-learning-notes-attendance-cover-tier20.spec.js` case 20
+- `tests/e2e/web-school/e2e-learning-notes-attendance-cover-tier20.spec.js` case 20
 
 ### Pitfall 84: Course-cover E2E should assert the enrolled course card, not assume catalog thumbnail placement
 
@@ -2510,7 +2510,7 @@ sqlite3.OperationalError: database is locked
 Context:
 
 Two separate Playwright CLI commands were started at the same time from
-`<repo>/apps/web/admin`, both using the default admin Playwright config or both
+`<repo>/apps/web/school`, both using the default school Playwright config or both
 using `node scripts/playwright-external-runner.cjs`.
 
 Relevant config shape:
@@ -2543,7 +2543,7 @@ owners are trying to manage one default environment.
 
 How to identify the target:
 
-For the admin Playwright config, helper `apiBase()` resolves to:
+For the school Playwright config, helper `apiBase()` resolves to:
 
 ```text
 http://127.0.0.1:<E2E_API_PORT>
@@ -3002,7 +3002,7 @@ Interpretation:
 
 Agent workflow rule:
 
-1. First run fast static checks such as `git diff --check` and `npm.cmd run build` from the admin frontend package to catch syntax/import regressions.
+1. First run fast static checks such as `git diff --check` and `npm.cmd run build` from the school frontend package to catch syntax/import regressions.
 2. If the targeted Playwright command fails with `spawn EPERM`, do not rewrite selectors or route code based on that result.
 3. Record the blocked command and the exact high-level failure (`spawn EPERM`) in this pitfalls document.
 4. Keep local absolute paths, user profile names, browser cache paths, or other machine-identifying details in an ignored local note under `.e2e-run/`, not in committed documentation.
@@ -3035,7 +3035,7 @@ Interpretation:
 
 - this is a local Playwright environment/bootstrap failure, not evidence that
   the changed UI behavior is broken;
-- the admin Playwright config defaults `E2E_PYTHON` to
+- the school Playwright config defaults `E2E_PYTHON` to
   `<repo>/.venv/Scripts/python.exe` on Windows;
 - a system Python without `uvicorn`, `fastapi`, and `sqlalchemy` is not a valid
   replacement unless project dependencies were installed into that interpreter;
@@ -3070,7 +3070,7 @@ this `webServer` bootstrap failure.
 
 ### Pitfall: Playwright managed `webServer` can hang during Windows teardown after all tests report `ok`
 
-On the Windows `cursor/beautify-ui` branch, targeted admin Playwright specs
+On the Windows `cursor/beautify-ui` branch, targeted school Playwright specs
 reported every browser test body as `ok`, but the outer CLI process did not exit
 before the local timeout. This is not a passing validation result.
 
@@ -3090,7 +3090,7 @@ the managed `webServer` command exit reliably.
 Fix/workaround now available for local Windows validation:
 
 ```powershell
-cd apps\web\admin
+cd apps\web\school
 $env:E2E_USE_REAL_WORKER='false'
 npm.cmd run test:e2e:external -- e2e-course-ui-markdown-reader.spec.js --project=chromium
 ```
@@ -3110,7 +3110,7 @@ Observed successful reruns:
 
 Additional guardrail: if using Playwright's own `DEBUG=pw:webserver`, ensure the
 backend child process does not inherit `DEBUG=pw:webserver` as its application
-`DEBUG` setting. The admin Playwright config now forces managed server child
+`DEBUG` setting. The school Playwright config now forces managed server child
 environments to `DEBUG=false` for that reason.
 
 Do not rewrite UI selectors or business code based solely on this cleanup hang.
@@ -3119,7 +3119,7 @@ needed.
 
 ### Pitfall: Playwright preflight must cover seed-time backend dependencies, not only uvicorn startup
 
-The managed admin Playwright path can pass a shallow `uvicorn` import check and
+The managed school Playwright path can pass a shallow `uvicorn` import check and
 still fail before the first browser assertion when `globalSetup` calls
 `POST /api/e2e/dev/reset-scenario`.
 
@@ -3187,7 +3187,7 @@ Fix pattern:
 - record every observed validation attempt that was started for a target, including blocked Playwright runs and environment failures;
 - increment `run_count` for blocked/failed/timed-out/interrupted/skipped attempts;
 - increment `pass_count` only for `result=passed`;
-- keep committed command rows repository-relative (`<repo>`, `<repo>/apps/web/admin`, `<python-with-requirements>`);
+- keep committed command rows repository-relative (`<repo>`, `<repo>/apps/web/school`, `<python-with-requirements>`);
 - put machine-specific paths, user profile names, browser cache paths, local database files, and exact private working directories in `.e2e-run/local-private-paths.md` or another ignored `.e2e-run/` note;
 - do not backfill historical pass counts from memory or branch names.
 
@@ -3305,7 +3305,7 @@ Verification pattern:
 Canonical regression files:
 
 - `tests/security/test_security_hardening_followup.py`
-- `tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`
+- `tests/e2e/web-school/e2e-security-hardening-followup.spec.js`
 
 The May 2026 ledger rows around `security.api_regression` document the observed
 red-to-green sequence. Extend the same tests before adding a new route that can
@@ -3370,9 +3370,9 @@ Verification pattern:
 If an alias mechanism is ever needed, design it explicitly in the registry,
 selector, lint script, and tests before using it in target metadata.
 
-### Pitfall: admin Playwright validation targets must use the external runner
+### Pitfall: school Playwright validation targets must use the external runner
 
-The admin Playwright registry used to mix direct `npx playwright test ...`
+The school Playwright registry used to mix direct `npx playwright test ...`
 commands with the repository-owned external runner. Direct commands can bypass
 the environment contract that the current Windows and agent workflows rely on:
 the runner starts FastAPI and Vite on the expected loopback ports, sets E2E seed
@@ -3381,7 +3381,7 @@ server mode, and cleans up only the processes it started.
 
 Current metadata rule:
 
-- every `category: "admin-playwright"` target in
+- every `category: "school-playwright"` target in
   `tests/TEST_SELECTION_TARGETS.json` must start with:
 
 ```json
@@ -3389,7 +3389,7 @@ Current metadata rule:
 ```
 
 - direct `npx playwright test ...` is still useful for manual local debugging,
-  but it should not be the committed selector command for admin Playwright
+  but it should not be the committed selector command for school Playwright
   targets unless the external-runner contract is intentionally changed.
 
 Verification pattern:
@@ -3400,11 +3400,11 @@ Verification pattern:
 ```
 
 The selector tests include a repository-wide check that all current
-`admin-playwright` targets use `node scripts/playwright-external-runner.cjs`.
+`school-playwright` targets use `node scripts/playwright-external-runner.cjs`.
 
 ### Pitfall: Playwright external-runner API readiness can time out before slow FastAPI startup finishes
 
-The repository admin Playwright external runner waits for `/api/health` with a
+The repository school Playwright external runner waits for `/api/health` with a
 fixed readiness window. In one May 2026 hardening run,
 `node scripts/playwright-external-runner.cjs e2e-security-hardening-followup.spec.js --project=chromium`
 failed with:
@@ -3496,7 +3496,7 @@ regular expression is evaluated against the full test title, including
 this command intended to run only cases 23 and 24:
 
 ```powershell
-node apps\web\admin\scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium --grep "23|24"
+node apps\web\school\scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium --grep "23|24"
 ```
 
 The suite title contained `24 cases`, so every test title matched through the
@@ -3510,7 +3510,7 @@ Mitigation:
   word from the `describe(...)` title. For example:
 
 ```powershell
-node apps\web\admin\scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium --grep "23 explicit null|24 switching"
+node apps\web\school\scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium --grep "23 explicit null|24 switching"
 ```
 
 - After a targeted Playwright run starts, check the `Running N tests` line

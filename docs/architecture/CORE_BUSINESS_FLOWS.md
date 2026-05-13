@@ -12,7 +12,7 @@ If you change router signatures, queue semantics, or worker startup, update this
 
 ## Conventions
 
-- **Admin SPA**: `apps/web/admin/` — Vue 3 + Element Plus; API calls go through `apps/web/admin/src/api/` helpers (axios) and typically hit `/api/*` via Vite dev proxy (`apps/web/admin/vite.config.js`: `VITE_PROXY_TARGET` defaults to `http://127.0.0.1:8001`).
+- **School SPA**: `apps/web/school/` — Vue 3 + Element Plus; API calls go through `apps/web/school/src/api/` helpers (axios) and typically hit `/api/*` via Vite dev proxy (`apps/web/school/vite.config.js`: `VITE_PROXY_TARGET` defaults to `http://127.0.0.1:8001`).
 - **Parent SPA**: `apps/web/parent/` — separate build; dev server defaults to port **5174** (`apps/web/parent/vite.config.js`); same `/api` proxy pattern.
 - **Backend**: FastAPI app assembled in `apps/backend/courseeval_backend/main.py`; route modules under `apps/backend/courseeval_backend/api/routers/`; Pydantic contracts in `apps/backend/courseeval_backend/api/schemas.py`.
 - **Course access**: Most course-scoped routes call `ensure_course_access` / `ensure_course_access_http` in `apps/backend/courseeval_backend/domains/courses/access.py`. The `_http` variant maps `PermissionError` → **403** and `ValueError` → **404** for consistent API behavior.
@@ -235,7 +235,7 @@ class plus global rows, so a multi-class required course does not leak another
 class's broadcast into a student's header badge, list, detail, or read-state
 rows.
 
-### Admin SPA behavior
+### School SPA behavior
 
 - Header badge + polling + `BroadcastChannel` — documented in [../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md).
 
@@ -261,9 +261,9 @@ Learning notes deliberately do **not** reuse `CourseMaterial` rows. When a note 
 
 The note discussion assistant reuses the course LLM routing stack (`ensure_course_llm_config` + `_call_discussion_with_routing`) only after the note is associated with a course. Student callers still must resolve to a roster row through the discussion binding helper before an assistant reply is attempted. Current implementation caveat: learning-note assistant replies do **not** reserve or write rows in `LLMQuotaReservation` / `LLMTokenUsageLog` because those quota rows are currently tied to `discussion_llm_jobs` or homework grading jobs. A robust future implementation should add a note-specific LLM job/usage attribution table or generalize quota attribution before claiming parity with course discussion billing.
 
-### Admin SPA
+### School SPA
 
-`apps/web/admin/src/views/LearningNotes.vue` exposes the teacher/student sidebar destination `/learning-notes`. It lets users create private notes, optionally copy course outline/materials from accessible courses, publish a note either to same-course users (when a course is selected) or to all authenticated users (when no course is selected), edit the note-local outline/resources, and participate in the note discussion. The composer now includes a structured internal-link picker backed by `/api/discussions/link-targets`, and persisted rows render those links as compact cards. Admin users are intentionally routed away by `adminHiddenPaths`; the feature was requested for teachers and students.
+`apps/web/school/src/views/LearningNotes.vue` exposes the teacher/student sidebar destination `/learning-notes`. It lets users create private notes, optionally copy course outline/materials from accessible courses, publish a note either to same-course users (when a course is selected) or to all authenticated users (when no course is selected), edit the note-local outline/resources, and participate in the note discussion. The composer now includes a structured internal-link picker backed by `/api/discussions/link-targets`, and persisted rows render those links as compact cards. Admin users are intentionally routed away by `adminHiddenPaths`; the feature was requested for teachers and students.
 
 ---
 
@@ -289,7 +289,7 @@ Implementation-aligned role / quota rule for discussion LLM:
 - those staff/admin discussion-LMM calls are **not** gated by student token caps and do not require a `requester_student_id`;
 - student-only hidden rubric / reference-answer leakage rules still apply: staff/admin invocation changes quota treatment, not content redaction boundaries.
 
-Admin SPA discussion list rendering:
+School SPA discussion list rendering:
 
 - each discussion row now serializes `author_avatar_url` alongside author identity fields;
 - the frontend discussion panel fetches authenticated avatar blobs when available and otherwise falls back to role-colored initials (or `助` for the assistant user).
@@ -314,7 +314,7 @@ Admin SPA discussion list rendering:
 ### Typical automation flow
 
 1. `POST /api/e2e/dev/reset-scenario` with `X-E2E-Seed-Token` seeds users/courses/homework for Playwright.
-2. “Powerful” endpoints (mock LLM, forced grading pump) may require **dual gate**: seed token **plus** admin JWT when `E2E_DEV_REQUIRE_ADMIN_JWT=true` — default in `apps/web/admin/playwright.config.cjs` for managed subprocesses.
+2. “Powerful” endpoints (mock LLM, forced grading pump) may require **dual gate**: seed token **plus** admin JWT when `E2E_DEV_REQUIRE_ADMIN_JWT=true` — default in `apps/web/school/playwright.config.cjs` for managed subprocesses.
 
 Details: [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) and [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
 

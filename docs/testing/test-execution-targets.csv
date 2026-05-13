@@ -9,54 +9,54 @@ Changes to payload.model_fields_set handling or any schema where explicit null s
 Changes to attendance create/list/stat endpoints or date parsing behavior.
 Changes to course access helpers used by learning-note public visibility.
 Changes to DB reset or schema bootstrap behavior that can affect focused backend tests.",cursor/beautify-ui,6a95aad,passed,2026-05-07,5,6
-frontend.admin.build,frontend-build,"Production build for the admin SPA package. This catches Vue/Vite import, syntax, bundling, and asset pipeline regressions before browser E2E is interpreted.",npm.cmd run build,<repo>/apps/web/admin,"apps/web/admin/package.json
-apps/web/admin/vite.config.js
-apps/web/admin/src/
-apps/web/admin/playwright.config.cjs
-tests/e2e/web-admin/","Changes under apps/web/admin/src/.
-Changes to admin frontend dependencies, package scripts, Vite config, or TypeScript/Vue build config.
+frontend.school.build,frontend-build,"Production build for the school SPA package. This catches Vue/Vite import, syntax, bundling, and asset pipeline regressions before browser E2E is interpreted.",npm.cmd run build,<repo>/apps/web/school,"apps/web/school/package.json
+apps/web/school/vite.config.js
+apps/web/school/src/
+apps/web/school/playwright.config.cjs
+tests/e2e/web-school/","Changes under apps/web/school/src/.
+Changes to school frontend dependencies, package scripts, Vite config, or TypeScript/Vue build config.
 Changes to frontend route definitions, shared API clients, or components used by E2E targets.
-Changes that add or remove static assets consumed by the admin SPA.",cursor/beautify-ui,this commit,passed,2026-05-09,10,10
-admin.e2e.course_ui_markdown_reader,admin-playwright,"Targeted admin Playwright suite for student course UI, Markdown/LaTeX demos, material reader navigation, materials layout, sidebar active-state mapping, and course-related redirect behavior.",node scripts/playwright-external-runner.cjs e2e-course-ui-markdown-reader.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js
-tests/e2e/web-admin/fixtures.cjs
-apps/web/admin/playwright.config.cjs
-apps/web/admin/src/views/Materials.vue
-apps/web/admin/src/views/MaterialRead.vue
-apps/web/admin/src/views/StudentCourseHome.vue
-apps/web/admin/src/components/CourseDiscussionPanel.vue
-apps/web/admin/src/router/index.js","Changes to material list, material detail dialog, material reader route, or material reader navigation controls.
+Changes that add or remove static assets consumed by the school SPA.",cursor/beautify-ui,this commit,passed,2026-05-09,10,10
+school.e2e.course_ui_markdown_reader,school-playwright,"Targeted school Playwright suite for student course UI, Markdown/LaTeX demos, material reader navigation, materials layout, sidebar active-state mapping, and course-related redirect behavior.",node scripts/playwright-external-runner.cjs e2e-course-ui-markdown-reader.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-course-ui-markdown-reader.spec.js
+tests/e2e/web-school/fixtures.cjs
+apps/web/school/playwright.config.cjs
+apps/web/school/src/views/Materials.vue
+apps/web/school/src/views/MaterialRead.vue
+apps/web/school/src/views/StudentCourseHome.vue
+apps/web/school/src/components/CourseDiscussionPanel.vue
+apps/web/school/src/router/index.js","Changes to material list, material detail dialog, material reader route, or material reader navigation controls.
 Changes to discussion composer Markdown/LaTeX preview, demo toggle behavior, row expansion, or posted Markdown rendering.
 Changes to admin sidebar active-route mapping, course student UI, or /teaching-calendar redirect behavior.
-Changes to Playwright global setup, E2E seed/reset helpers, seeded credentials, or admin webServer setup.",cursor/beautify-ui,this commit,timed out,2026-05-09,0,2
-admin.e2e.discussion_cover_llm_tier3,admin-playwright,"Targeted admin Playwright suite for discussion LLM assistant controls, long-body preview expansion/collapse, discussion pagination reset behavior, material-dialog discussion flow, and course cover API/UI surfaces.",node scripts/playwright-external-runner.cjs e2e-discussion-cover-llm-tier3.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js
-tests/e2e/web-admin/fixtures.cjs
-apps/web/admin/playwright.config.cjs
-apps/web/admin/src/components/CourseDiscussionPanel.vue
-apps/web/admin/src/views/HomeworkSubmission.vue
-apps/web/admin/src/views/HomeworkSubmissions.vue
-apps/web/admin/src/views/Materials.vue
-apps/web/admin/src/views/MyCourses.vue
-apps/web/admin/src/views/Subjects.vue","Changes to CourseDiscussionPanel.vue, discussion row truncation/expansion, discussion pagination, LLM composer behavior, or posted assistant polling.
+Changes to Playwright global setup, E2E seed/reset helpers, seeded credentials, or school webServer setup.",cursor/beautify-ui,this commit,timed out,2026-05-09,0,2
+school.e2e.discussion_cover_llm_tier3,school-playwright,"Targeted school Playwright suite for discussion LLM assistant controls, long-body preview expansion/collapse, discussion pagination reset behavior, material-dialog discussion flow, and course cover API/UI surfaces.",node scripts/playwright-external-runner.cjs e2e-discussion-cover-llm-tier3.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-discussion-cover-llm-tier3.spec.js
+tests/e2e/web-school/fixtures.cjs
+apps/web/school/playwright.config.cjs
+apps/web/school/src/components/CourseDiscussionPanel.vue
+apps/web/school/src/views/HomeworkSubmission.vue
+apps/web/school/src/views/HomeworkSubmissions.vue
+apps/web/school/src/views/Materials.vue
+apps/web/school/src/views/MyCourses.vue
+apps/web/school/src/views/Subjects.vue","Changes to CourseDiscussionPanel.vue, discussion row truncation/expansion, discussion pagination, LLM composer behavior, or posted assistant polling.
 Changes to homework submission/submissions pages that host course discussions.
 Changes to materials detail dialog discussion behavior.
 Changes to course cover upload/display behavior in course catalog, course cards, or materials page banners.
-Changes to Playwright global setup, E2E seed/reset helpers, seeded credentials, mock LLM helpers, or admin webServer setup.",cursor/beautify-ui,this commit,timed out,2026-05-09,0,2
-admin.e2e.learning_notes_attendance_cover_tier20,admin-playwright,"Targeted admin Playwright tier for newer learning-note, course-cover, and attendance/calendar surfaces. Covers learning-note private/public visibility, public unbound notes visible to authenticated users, course-bound public notes, copied course outline/material snapshots, copied-note editing with explicit null, discussion metadata, page_size validation, learning-notes UI tabs and default-private dialog, course-card cover visibility, /teaching-calendar redirect to embedded attendance, and course/date-scoped attendance filtering.",node scripts/playwright-external-runner.cjs e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-learning-notes-attendance-cover-tier20.spec.js
-tests/e2e/web-admin/fixtures.cjs
-tests/e2e/web-admin/future-advanced-coverage-helpers.cjs
-apps/web/admin/playwright.config.cjs
-apps/web/admin/src/views/LearningNotes.vue
-apps/web/admin/src/views/Attendance.vue
-apps/web/admin/src/views/MyCourses.vue
-apps/web/admin/src/views/StudentCourseHome.vue
-apps/web/admin/src/router/index.js
+Changes to Playwright global setup, E2E seed/reset helpers, seeded credentials, mock LLM helpers, or school webServer setup.",cursor/beautify-ui,this commit,timed out,2026-05-09,0,2
+school.e2e.learning_notes_attendance_cover_tier20,school-playwright,"Targeted school Playwright tier for newer learning-note, course-cover, and attendance/calendar surfaces. Covers learning-note private/public visibility, public unbound notes visible to authenticated users, course-bound public notes, copied course outline/material snapshots, copied-note editing with explicit null, discussion metadata, page_size validation, learning-notes UI tabs and default-private dialog, course-card cover visibility, /teaching-calendar redirect to embedded attendance, and course/date-scoped attendance filtering.",node scripts/playwright-external-runner.cjs e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-learning-notes-attendance-cover-tier20.spec.js
+tests/e2e/web-school/fixtures.cjs
+tests/e2e/web-school/future-advanced-coverage-helpers.cjs
+apps/web/school/playwright.config.cjs
+apps/web/school/src/views/LearningNotes.vue
+apps/web/school/src/views/Attendance.vue
+apps/web/school/src/views/MyCourses.vue
+apps/web/school/src/views/StudentCourseHome.vue
+apps/web/school/src/router/index.js
 apps/backend/courseeval_backend/api/routers/learning_notes.py
 apps/backend/courseeval_backend/api/routers/attendance.py
 apps/backend/courseeval_backend/api/routers/e2e_dev.py","Changes to learning notes API routes, schemas, visibility rules, copied chapters/resources, or note discussion behavior.
 Changes to attendance API routes, date parsing, course filtering, or teaching-calendar embedding.
 Changes to course cover upload/display semantics or course-card rendering.
 Changes to LearningNotes.vue, Attendance.vue, MyCourses.vue, StudentCourseHome.vue, or shared course-card components.
-Changes to admin SPA routing around /teaching-calendar, /attendance, /learning-notes, or course entry.
+Changes to school SPA routing around /teaching-calendar, /attendance, /learning-notes, or course entry.
 Changes to Playwright global setup, E2E seed/reset helpers, seeded credentials, or API base helpers.",cursor/beautify-ui,this commit,timed out,2026-05-09,2,3
 backend.e2e_dev.demo_course_seed,backend-pytest,"Focused backend coverage for default demo course seed data used by local installs and E2E reset helpers. This target verifies demo teachers, canonical student users and Student rows, required/elective courses, course LLM bindings, structured teaching calendar times, course materials, homework, prefilled submissions, multi-attempt homework history, course discussions with fake LLM assistant participation, and seeded student learning notes.",.venv\Scripts\python.exe -m pytest tests\backend\e2e_dev\test_demo_course_seed.py -q,<repo>,"apps/backend/courseeval_backend/domains/seed/demo.py
 apps/backend/courseeval_backend/api/routers/e2e_dev.py
@@ -69,17 +69,17 @@ Changes to Subject.course_times, weekly_schedule, course calendar serialization,
 Changes to homework submissions, attempts, iteration history, or LLM grading summary refresh behavior.
 Changes to course discussion or learning note models, routes, assistant-message serialization, or system LLM assistant user bootstrap.
 Changes to canonical student/user binding that affect demo users or reconcile_student_users_and_roster.",cursor/unify-student-identity-plan,this commit,passed,2026-05-09,3,4
-admin.e2e.core_flows_smoke,admin-playwright,"Core admin Playwright smoke for the managed FastAPI + Vite + Chromium path. Covers stable login selectors, invalid login behavior, admin landing, student required-course card and homework list, teacher materials and notifications routes, admin user grid, class-teacher home, and student course-home rendering.",npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-core-flows-smoke.spec.js
-tests/e2e/web-admin/global-setup.cjs
-tests/e2e/web-admin/fixtures.cjs
-apps/web/admin/playwright.config.cjs
+school.e2e.core_flows_smoke,school-playwright,"Core school Playwright smoke for the managed FastAPI + Vite + Chromium path. Covers stable login selectors, invalid login behavior, admin landing, student required-course card and homework list, teacher materials and notifications routes, admin user grid, class-teacher home, and student course-home rendering.",npx.cmd playwright test e2e-core-flows-smoke.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-core-flows-smoke.spec.js
+tests/e2e/web-school/global-setup.cjs
+tests/e2e/web-school/fixtures.cjs
+apps/web/school/playwright.config.cjs
 apps/backend/courseeval_backend/api/routers/e2e_dev.py
 apps/backend/courseeval_backend/core/auth.py
 ops/scripts/dev/playwright_preflight.py
 ops/scripts/dev/run_validation_target.py","Changes to Playwright global setup, fixtures, seed/reset helpers, seeded credentials, or API base helpers.
-Changes to apps/web/admin/playwright.config.cjs, managed webServer startup, E2E_PYTHON, E2E_DEV_SEED_TOKEN, or port handling.
+Changes to apps/web/school/playwright.config.cjs, managed webServer startup, E2E_PYTHON, E2E_DEV_SEED_TOKEN, or port handling.
 Changes to login, auth token handling, staff/student route guards, or first-load navigation.
-Changes to ops/scripts/dev/playwright_preflight.py or runner behavior for category: admin-playwright targets.
+Changes to ops/scripts/dev/playwright_preflight.py or runner behavior for category: school-playwright targets.
 Any claim that local Playwright infrastructure has been repaired after environment blockers.",cursor/unify-student-identity-plan,this commit,passed,2026-05-08,3,5
 static.repo_line_health,static-check,"Repository-wide text-line health metrics for documentation, tests, primary source, and supporting categories. This is not a behavioral test; it is a tracked metric command that helps future agents notice repository evolution and avoid confusing generated/lockfile growth with application-code growth.",python ops\scripts\dev\repo_line_health.py,<repo>,"ops/scripts/dev/repo_line_health.py
 docs/testing/DEVELOPMENT_AND_TESTING.md
@@ -227,8 +227,8 @@ behavior.notifications.sync_api_edge,behavior-pytest,"Behavior pytest target for
 apps/backend/courseeval_backend/api/routers/notifications.py
 apps/backend/courseeval_backend/domains/courses/access.py
 apps/backend/courseeval_backend/api/schemas.py
-apps/web/admin/src/views/Layout.vue
-apps/web/admin/src/views/Notifications.vue","Changes to notification list or sync-status behavior.
+apps/web/school/src/views/Layout.vue
+apps/web/school/src/views/Notifications.vue","Changes to notification list or sync-status behavior.
 Changes to read-state convergence, subject-scoped notification authorization, or course access helpers used by notification routes.
 Pair with notification Playwright tiers when browser state convergence or course switcher behavior changes.",cursor/repository-normalization,this commit,passed,2026-05-13,4,4
 behavior.course_roster_homework_edge,behavior-pytest,"Behavior pytest target for course, roster, homework, score appeal, and enrollment edge interactions.",.venv\Scripts\python.exe -m pytest tests\behavior\test_course_roster_homework_edge_behavior.py -q,<repo>,"tests/behavior/test_course_roster_homework_edge_behavior.py
@@ -238,12 +238,12 @@ apps/backend/courseeval_backend/api/routers/homework.py
 apps/backend/courseeval_backend/api/routers/subjects.py
 apps/backend/courseeval_backend/api/routers/students.py","Changes to course access, roster reconciliation, enrollment sync, homework authorization, score appeal edges, or student/class route behavior.
 Escalate to PostgreSQL full consideration when schema or broad course access helpers change.",cursor/repository-normalization,this commit,passed,2026-05-11,1,1
-admin.e2e.security_hardening_followup,admin-playwright,"Small browser-backed security hardening slice for localStorage role tampering, direct student API mutation attempts, and E2E dev seed-token-only rejection on powerful endpoints.",node scripts\playwright-external-runner.cjs e2e-security-hardening-followup.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-security-hardening-followup.spec.js
-tests/e2e/web-admin/e2e-seed-headers.cjs
-tests/e2e/web-admin/fixtures.cjs
-tests/e2e/web-admin/future-advanced-coverage-helpers.cjs
-apps/web/admin/src/views/Login.vue
-apps/web/admin/src/router/index.js
+school.e2e.security_hardening_followup,school-playwright,"Small browser-backed security hardening slice for localStorage role tampering, direct student API mutation attempts, and E2E dev seed-token-only rejection on powerful endpoints.",node scripts\playwright-external-runner.cjs e2e-security-hardening-followup.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-security-hardening-followup.spec.js
+tests/e2e/web-school/e2e-seed-headers.cjs
+tests/e2e/web-school/fixtures.cjs
+tests/e2e/web-school/future-advanced-coverage-helpers.cjs
+apps/web/school/src/views/Login.vue
+apps/web/school/src/router/index.js
 apps/backend/courseeval_backend/api/routers/auth.py
 apps/backend/courseeval_backend/api/routers/users.py
 apps/backend/courseeval_backend/api/routers/subjects.py
@@ -251,10 +251,10 @@ apps/backend/courseeval_backend/api/routers/e2e_dev.py
 apps/backend/courseeval_backend/core/auth.py
 apps/backend/courseeval_backend/core/config.py","Changes to browser auth storage handling, login token persistence, frontend route guards, /api/users authorization, /api/subjects mutation authorization, /api/e2e/dev gates, or E2E seed header helpers.
 Pair with security.api_regression for backend-only authorization changes.",cursor/repository-normalization,this commit,passed,2026-05-12,5,6
-admin.e2e.parent_portal_hardening,admin-playwright,"Browser-backed parent portal hardening suite for parent-code login binding, same-class elective homework/notification leakage, and parent Vite runner startup.",node scripts\playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-parent-portal-hardening.spec.js
-tests/e2e/web-admin/fixtures.cjs
-tests/e2e/web-admin/future-advanced-coverage-helpers.cjs
-apps/web/admin/scripts/playwright-external-runner.cjs
+school.e2e.parent_portal_hardening,school-playwright,"Browser-backed parent portal hardening suite for parent-code login binding, same-class elective homework/notification leakage, and parent Vite runner startup.",node scripts\playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-parent-portal-hardening.spec.js
+tests/e2e/web-school/fixtures.cjs
+tests/e2e/web-school/future-advanced-coverage-helpers.cjs
+apps/web/school/scripts/playwright-external-runner.cjs
 apps/web/parent/src/api/index.js
 apps/web/parent/src/router/index.js
 apps/web/parent/src/views/Login.vue
@@ -264,10 +264,10 @@ apps/web/parent/src/views/Notifications.vue
 apps/backend/courseeval_backend/api/routers/parent.py
 apps/backend/courseeval_backend/api/routers/e2e_dev.py","Changes to parent portal login, routing, API client, homework/notification UI, parent-code backend reads, E2E seed parent_code setup, or the external runner parent-UI startup path.
 Pair with security.api_regression for backend-only parent-code or parent-read authorization changes.",cursor/repository-normalization,this commit,passed,2026-05-12,1,2
-admin.e2e.notification_sync_deep_tier,admin-playwright,"Deeper notification sync Playwright tier for admin global totals, course switch discipline, localStorage poison healing, concurrent publishes, role/class isolation, mobile viewport, cold polling, delete races, multi-class course header-badge boundaries, admin-only global notification write scope, notification target-user denial, UI composer course/class scope, and explicit notification target-clearing updates.",node scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium,<repo>/apps/web/admin,"tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js
-tests/e2e/web-admin/future-advanced-coverage-helpers.cjs
-apps/web/admin/src/views/Layout.vue
-apps/web/admin/src/views/Notifications.vue
+school.e2e.notification_sync_deep_tier,school-playwright,"Deeper notification sync Playwright tier for admin global totals, course switch discipline, localStorage poison healing, concurrent publishes, role/class isolation, mobile viewport, cold polling, delete races, multi-class course header-badge boundaries, admin-only global notification write scope, notification target-user denial, UI composer course/class scope, and explicit notification target-clearing updates.",node scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-notification-sync-deep-tier.spec.js
+tests/e2e/web-school/future-advanced-coverage-helpers.cjs
+apps/web/school/src/views/Layout.vue
+apps/web/school/src/views/Notifications.vue
 apps/backend/courseeval_backend/api/routers/notifications.py
 apps/backend/courseeval_backend/domains/courses/access.py
 docs/frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md","Changes to notification header badge convergence, course switcher state, selected_course localStorage handling, notification list/sync-status/read-state routes, notification class/subject visibility, notification target fields, or multi-class course notification semantics.

@@ -104,7 +104,7 @@ class ValidationSelectorTests(unittest.TestCase):
 
         ids = recommendation_ids(payload)
         self.assertIn("backend.learning_notes.api", ids)
-        self.assertIn("admin.e2e.learning_notes_attendance_cover_tier20", ids)
+        self.assertIn("school.e2e.learning_notes_attendance_cover_tier20", ids)
         self.assertNotIn("full.pytest.postgres", ids)
         self.assertEqual(payload["unmatched_paths"], [])
         self.assertEqual(payload["non_full_validation"]["status"], "needs_review")
@@ -131,25 +131,25 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("fallback", target["history_reason"])
 
     def test_admin_homework_view_selects_build_and_homework_playwright_target(self):
-        payload = run_selector("--paths", "apps/web/admin/src/views/HomeworkSubmissions.vue")
+        payload = run_selector("--paths", "apps/web/school/src/views/HomeworkSubmissions.vue")
 
         ids = recommendation_ids(payload)
-        self.assertIn("frontend.admin.build", ids)
-        self.assertIn("admin.e2e.homework_comment_cover_tier4", ids)
-        self.assertNotIn("admin.e2e.full", ids)
+        self.assertIn("frontend.school.build", ids)
+        self.assertIn("school.e2e.homework_comment_cover_tier4", ids)
+        self.assertNotIn("school.e2e.full", ids)
         self.assertEqual(payload["unmatched_paths"], [])
 
-        e2e_target = recommendation(payload, "admin.e2e.homework_comment_cover_tier4")
+        e2e_target = recommendation(payload, "school.e2e.homework_comment_cover_tier4")
         self.assertTrue(e2e_target["requires_review_reason"])
         self.assertIn("homework", e2e_target["coverage_tags"])
 
     def test_playwright_harness_selects_full_playwright_and_marks_non_full_insufficient(self):
-        payload = run_selector("--paths", "tests/e2e/web-admin/global-setup.cjs")
+        payload = run_selector("--paths", "tests/e2e/web-school/global-setup.cjs")
 
         ids = recommendation_ids(payload)
-        self.assertIn("admin.e2e.full", ids)
+        self.assertIn("school.e2e.full", ids)
         self.assertEqual(payload["non_full_validation"]["status"], "not_sufficient")
-        self.assertIn("admin.e2e.full", payload["non_full_validation"]["reason"])
+        self.assertIn("school.e2e.full", payload["non_full_validation"]["reason"])
 
     def test_docs_only_change_is_static_and_non_full_acceptable_after_running_targets(self):
         payload = run_selector("--paths", "docs/testing/TEST_SUITE_MAP.md")
@@ -444,8 +444,8 @@ class ValidationSelectorTests(unittest.TestCase):
 
         ids = recommendation_ids(payload)
         self.assertIn("backend.e2e_dev.api_hazard_tier", ids)
-        self.assertIn("admin.e2e.discussion_cover_llm_tier3", ids)
-        self.assertNotIn("admin.e2e.docs_gap_tier15", ids)
+        self.assertIn("school.e2e.discussion_cover_llm_tier3", ids)
+        self.assertNotIn("school.e2e.docs_gap_tier15", ids)
 
     def test_runner_dry_run_writes_redacted_run_record(self):
         history_path = ".agent-run/test-selector-history-dry-run.jsonl"
@@ -468,7 +468,7 @@ class ValidationSelectorTests(unittest.TestCase):
 
     def test_runner_dry_run_does_not_preflight_missing_runtime_tools(self):
         result = run_validation_target(
-            "frontend.admin.build",
+            "frontend.school.build",
             "--dry-run",
             "--history",
             ".agent-run/test-selector-history-dry-run-no-preflight.jsonl",
@@ -482,7 +482,7 @@ class ValidationSelectorTests(unittest.TestCase):
 
     def test_runner_preflight_turns_dry_run_into_environment_check(self):
         result = run_validation_target(
-            "frontend.admin.build",
+            "frontend.school.build",
             "--dry-run",
             "--preflight",
             "--history",
@@ -566,7 +566,7 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("module", payload["summary"].lower())
 
     def test_runner_detects_playwright_targets_for_preflight(self):
-        self.assertTrue(target_needs_playwright_preflight({"category": "admin-playwright"}))
+        self.assertTrue(target_needs_playwright_preflight({"category": "school-playwright"}))
         self.assertFalse(target_needs_playwright_preflight({"category": "backend-pytest"}))
 
     def test_runner_classifies_spawn_eperm_as_environment_block(self):
@@ -650,7 +650,7 @@ class ValidationSelectorTests(unittest.TestCase):
         changed_paths = [
             {"status": "M", "path": "docs/README.md"},
             {"status": "M", "path": ".env.production"},
-            {"status": "M", "path": "apps/web/admin/src/assets/logo.png"},
+            {"status": "M", "path": "apps/web/school/src/assets/logo.png"},
             {"status": "D", "path": "docs/deleted.md"},
         ]
 
@@ -662,7 +662,7 @@ class ValidationSelectorTests(unittest.TestCase):
 
         self.assertIn("docs/README.md", expanded)
         self.assertIn(".env.production", expanded)
-        self.assertNotIn("apps/web/admin/src/assets/logo.png", expanded)
+        self.assertNotIn("apps/web/school/src/assets/logo.png", expanded)
         self.assertNotIn("docs/deleted.md", expanded)
         self.assertIn("expanded <changed-text-files> to 2 file(s)", notes)
 
@@ -744,7 +744,7 @@ class ValidationSelectorTests(unittest.TestCase):
         result = run_validation_profile(
             "selector-recommended",
             "--paths",
-            "apps/web/admin/src/views/HomeworkSubmissions.vue",
+            "apps/web/school/src/views/HomeworkSubmissions.vue",
             "--dry-run",
             "--history",
             ".agent-run/test-selector-profile-recommended-history.jsonl",
@@ -754,16 +754,16 @@ class ValidationSelectorTests(unittest.TestCase):
 
         self.assertEqual(payload["profile"], "selector-recommended")
         self.assertEqual(payload["result"], "passed_with_deferred_review")
-        self.assertIn("frontend.admin.build", runs_by_id)
-        self.assertEqual(runs_by_id["frontend.admin.build"]["action"], "executed")
-        self.assertIn("admin.e2e.homework_comment_cover_tier4", runs_by_id)
-        self.assertEqual(runs_by_id["admin.e2e.homework_comment_cover_tier4"]["action"], "skipped")
-        self.assertIn("requires operator review", runs_by_id["admin.e2e.homework_comment_cover_tier4"]["reason"])
-        self.assertEqual(payload["deferred_targets"][0]["target_id"], "admin.e2e.homework_comment_cover_tier4")
+        self.assertIn("frontend.school.build", runs_by_id)
+        self.assertEqual(runs_by_id["frontend.school.build"]["action"], "executed")
+        self.assertIn("school.e2e.homework_comment_cover_tier4", runs_by_id)
+        self.assertEqual(runs_by_id["school.e2e.homework_comment_cover_tier4"]["action"], "skipped")
+        self.assertIn("requires operator review", runs_by_id["school.e2e.homework_comment_cover_tier4"]["reason"])
+        self.assertEqual(payload["deferred_targets"][0]["target_id"], "school.e2e.homework_comment_cover_tier4")
 
     def test_profile_forwards_selector_changed_paths_to_target_history(self):
         history_path = ".agent-run/test-selector-profile-forward-history.jsonl"
-        changed_path = "apps/web/admin/src/views/HomeworkSubmissions.vue"
+        changed_path = "apps/web/school/src/views/HomeworkSubmissions.vue"
         result = run_validation_profile(
             "selector-recommended",
             "--paths",
@@ -777,7 +777,7 @@ class ValidationSelectorTests(unittest.TestCase):
 
         history_jsonl = REPO_ROOT / history_path
         entries = [json.loads(line) for line in history_jsonl.read_text(encoding="utf-8").splitlines() if line.strip()]
-        build_entry = next(entry for entry in entries if entry["target_id"] == "frontend.admin.build")
+        build_entry = next(entry for entry in entries if entry["target_id"] == "frontend.school.build")
 
         self.assertEqual(build_entry["changed_paths"], [{"status": "M", "path": changed_path}])
         self.assertEqual(
@@ -973,14 +973,14 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_registry_lint_rejects_null_ledger_id_when_target_has_committed_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\nadmin.e2e.sample\n")
+            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\nschool.e2e.sample\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
                     "targets": [
                         {
-                            "id": "admin.e2e.sample",
-                            "category": "admin-playwright",
+                            "id": "school.e2e.sample",
+                            "category": "school-playwright",
                             "risk": "targeted",
                             "working_directory": ".",
                             "commands": [{"label": "ok", "argv": ["npx.cmd", "playwright", "test", "sample.spec.js"]}],
@@ -994,19 +994,19 @@ class ValidationSelectorTests(unittest.TestCase):
 
             issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
-        self.assertIn("admin.e2e.sample: target has a committed ledger row but ledger_id is null", issues)
+        self.assertIn("school.e2e.sample: target has a committed ledger row but ledger_id is null", issues)
 
     def test_registry_lint_rejects_mismatched_ledger_id_when_target_has_own_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\nadmin.e2e.sample\nother.target\n")
+            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\nschool.e2e.sample\nother.target\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
                     "targets": [
                         {
-                            "id": "admin.e2e.sample",
-                            "category": "admin-playwright",
+                            "id": "school.e2e.sample",
+                            "category": "school-playwright",
                             "risk": "targeted",
                             "working_directory": ".",
                             "commands": [{"label": "ok", "argv": ["npx.cmd", "playwright", "test", "sample.spec.js"]}],
@@ -1021,11 +1021,11 @@ class ValidationSelectorTests(unittest.TestCase):
             issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
         self.assertIn(
-            "admin.e2e.sample: target has its own committed ledger row but ledger_id points elsewhere: other.target",
+            "school.e2e.sample: target has its own committed ledger row but ledger_id points elsewhere: other.target",
             issues,
         )
         self.assertIn(
-            "admin.e2e.sample: ledger_id must match target id unless an explicit alias mechanism is added: other.target",
+            "school.e2e.sample: ledger_id must match target id unless an explicit alias mechanism is added: other.target",
             issues,
         )
 
@@ -1061,18 +1061,18 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_registry_lint_accepts_external_runner_playwright_spec_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "apps/web/admin/scripts/playwright-external-runner.cjs", "// runner\n")
-            write_text(root / "tests/e2e/web-admin/sample.spec.js", "test('ok', () => {})\n")
+            write_text(root / "apps/web/school/scripts/playwright-external-runner.cjs", "// runner\n")
+            write_text(root / "tests/e2e/web-school/sample.spec.js", "test('ok', () => {})\n")
             write_text(root / "docs/testing/test-execution-targets.csv", "test_id\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
                     "targets": [
                         {
-                            "id": "admin.e2e.sample",
-                            "category": "admin-playwright",
+                            "id": "school.e2e.sample",
+                            "category": "school-playwright",
                             "risk": "targeted",
-                            "working_directory": "apps/web/admin",
+                            "working_directory": "apps/web/school",
                             "commands": [
                                 {
                                     "label": "playwright",
@@ -1094,17 +1094,17 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_registry_lint_rejects_missing_external_runner_playwright_spec_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "apps/web/admin/scripts/playwright-external-runner.cjs", "// runner\n")
+            write_text(root / "apps/web/school/scripts/playwright-external-runner.cjs", "// runner\n")
             write_text(root / "docs/testing/test-execution-targets.csv", "test_id\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
                     "targets": [
                         {
-                            "id": "admin.e2e.sample",
-                            "category": "admin-playwright",
+                            "id": "school.e2e.sample",
+                            "category": "school-playwright",
                             "risk": "targeted",
-                            "working_directory": "apps/web/admin",
+                            "working_directory": "apps/web/school",
                             "commands": [
                                 {
                                     "label": "playwright",
@@ -1122,13 +1122,13 @@ class ValidationSelectorTests(unittest.TestCase):
             issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
         self.assertIn(
-            "admin.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-admin/missing.spec.js",
+            "school.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-school/missing.spec.js",
             issues,
         )
 
     def test_repository_admin_playwright_targets_use_external_runner(self):
         registry = json.loads((REPO_ROOT / "tests/TEST_SELECTION_TARGETS.json").read_text(encoding="utf-8"))
-        targets = [target for target in registry["targets"] if target.get("category") == "admin-playwright"]
+        targets = [target for target in registry["targets"] if target.get("category") == "school-playwright"]
 
         self.assertGreater(len(targets), 0)
         for target in targets:
@@ -1139,7 +1139,7 @@ class ValidationSelectorTests(unittest.TestCase):
         registry = json.loads((REPO_ROOT / "tests/TEST_SELECTION_TARGETS.json").read_text(encoding="utf-8"))
         targets = {target["id"]: target for target in registry["targets"]}
 
-        argv = targets["admin.e2e.full"]["commands"][0]["argv"]
+        argv = targets["school.e2e.full"]["commands"][0]["argv"]
         self.assertEqual(argv, ["node", "scripts/playwright-external-runner.cjs"])
 
     def test_pytest_sqlite_guard_directory_scan_collects_pid_named_candidates(self):
@@ -1234,17 +1234,17 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_registry_lint_rejects_missing_playwright_spec_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "apps/web/admin/package.json", "{}\n")
+            write_text(root / "apps/web/school/package.json", "{}\n")
             write_text(root / "docs/testing/TEST_EXECUTION_LEDGER.md", "")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
                     "targets": [
                         {
-                            "id": "admin.e2e.sample",
-                            "category": "admin-playwright",
+                            "id": "school.e2e.sample",
+                            "category": "school-playwright",
                             "risk": "targeted",
-                            "working_directory": "apps/web/admin",
+                            "working_directory": "apps/web/school",
                             "commands": [
                                 {
                                     "label": "playwright",
@@ -1262,7 +1262,7 @@ class ValidationSelectorTests(unittest.TestCase):
             issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/TEST_EXECUTION_LEDGER.md")
 
         self.assertIn(
-            "admin.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-admin/missing.spec.js",
+            "school.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-school/missing.spec.js",
             issues,
         )
 

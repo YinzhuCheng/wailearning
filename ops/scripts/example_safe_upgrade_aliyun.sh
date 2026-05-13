@@ -62,8 +62,8 @@ rsync -a --delete \
   --exclude ".git" \
   --exclude "__pycache__" \
   --exclude ".pytest_cache" \
-  --exclude "apps/web/admin/node_modules" \
-  --exclude "apps/web/admin/dist" \
+  --exclude "apps/web/school/node_modules" \
+  --exclude "apps/web/school/dist" \
   --exclude "apps/web/parent/node_modules" \
   --exclude "apps/web/parent/dist" \
   --exclude "uploads" \
@@ -89,7 +89,7 @@ echo "==> 10. Run bootstrap/schema sync against existing database"
 
 echo "==> 11. Build frontend assets"
 (
-  cd "${SOURCE_DIR}/apps/web/admin"
+  cd "${SOURCE_DIR}/apps/web/school"
   npm ci
   npm run build
 )
@@ -100,7 +100,7 @@ echo "==> 11. Build frontend assets"
 )
 
 echo "==> 12. Publish frontend assets"
-rsync -a --delete "${SOURCE_DIR}/apps/web/admin/dist/" "${FRONTEND_BUILD_DIR}/"
+rsync -a --delete "${SOURCE_DIR}/apps/web/school/dist/" "${FRONTEND_BUILD_DIR}/"
 rsync -a --delete "${SOURCE_DIR}/apps/web/parent/dist/" "${PARENT_BUILD_DIR}/"
 
 echo "==> 13. Start backend"

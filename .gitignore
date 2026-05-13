@@ -48,9 +48,9 @@ logs/
 Thumbs.db
 
 # Frontend
-apps/web/admin/dist/
-apps/web/admin/.vite/
-apps/web/admin/test-results/
+apps/web/school/dist/
+apps/web/school/.vite/
+apps/web/school/test-results/
 frontend/
 
 # Parent Portal
@@ -58,7 +58,7 @@ apps/web/parent/dist/
 apps/web/parent/.vite/
 
 # E2E
-tests/e2e/web-admin/.cache/
+tests/e2e/web-school/.cache/
 .agent-run/
 .e2e-run/
 playwright-report/

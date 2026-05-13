@@ -4,10 +4,10 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-import MarkdownIt from '../../../apps/web/admin/node_modules/markdown-it/index.mjs'
-import { copyText } from '../../../apps/web/admin/src/utils/clipboard.js'
-import { MARKDOWN_IMAGE_EXAMPLE_MARKDOWN } from '../../../apps/web/admin/src/utils/markdownLatexDemo.js'
-import { createCourseMarkdownIt, renderCourseMarkdown } from '../../../apps/web/admin/src/utils/markdownIt.js'
+import MarkdownIt from '../../../apps/web/school/node_modules/markdown-it/index.mjs'
+import { copyText } from '../../../apps/web/school/src/utils/clipboard.js'
+import { MARKDOWN_IMAGE_EXAMPLE_MARKDOWN } from '../../../apps/web/school/src/utils/markdownLatexDemo.js'
+import { createCourseMarkdownIt, renderCourseMarkdown } from '../../../apps/web/school/src/utils/markdownIt.js'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const doubleDollar = String.fromCharCode(36, 36)

@@ -1,10 +1,10 @@
-# HTTP client: slow-response “system busy” hint (admin SPA)
+# HTTP client: slow-response “system busy” hint (school SPA)
 
 ## Purpose
 
 When the backend is under load or the network is slow, users may see an apparently frozen UI with no feedback until axios hits its **full request timeout** (e.g. 10s) or the browser gives up.
 
-The admin SPA therefore shows a **non-blocking** Element Plus message after a **first-byte delay threshold** (currently **3 seconds**):
+The school SPA therefore shows a **non-blocking** Element Plus message after a **first-byte delay threshold** (currently **3 seconds**):
 
 > 系统正忙，请等待。
 
@@ -14,7 +14,7 @@ The message stays open until the request **settles** (success, HTTP error, or ne
 
 | Item | Location |
 |------|----------|
-| Threshold constant | `apps/web/admin/src/api/index.js` — `SLOW_RESPONSE_THRESHOLD_MS = 3000` |
+| Threshold constant | `apps/web/school/src/api/index.js` — `SLOW_RESPONSE_THRESHOLD_MS = 3000` |
 | Message text | `SLOW_BUSY_MESSAGE` in the same file |
 | Logic | `attachSlowBusyWatcher` + `clearSlowBusyIfAny` on `http`, `httpQuiet`, and `httpPublic` axios instances |
 

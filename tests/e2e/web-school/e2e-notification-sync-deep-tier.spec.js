@@ -7,7 +7,7 @@
  * - **Concurrent API writes** + **delete-under-load** (SQLite E2E harness).
  *
  * Run incrementally only this file:
- *   cd <REPO_ROOT>/apps/web/admin && CI=1 E2E_PYTHON=<python> E2E_DEV_SEED_TOKEN=<seed> \
+ *   cd <REPO_ROOT>/apps/web/school && CI=1 E2E_PYTHON=<python> E2E_DEV_SEED_TOKEN=<seed> \
  *     npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
  */
 const { expect, test } = require('@playwright/test')

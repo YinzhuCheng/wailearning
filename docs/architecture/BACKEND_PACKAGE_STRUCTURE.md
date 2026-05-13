@@ -385,7 +385,7 @@ If future refactors move `main.py` or `bootstrap.py`, update:
 
 - `ops/systemd/courseeval-backend.service`
 - `ops/scripts/windows/start-backend.bat`
-- `apps/web/admin/playwright.config.cjs`
+- `apps/web/school/playwright.config.cjs`
 - developer docs and README examples
 
 in the same change set.

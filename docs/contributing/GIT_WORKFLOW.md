@@ -44,7 +44,7 @@ Practical deploy notes:
 - Set `SAFE_BACKUP_BEFORE_DEPLOY=1` when you want the script to capture a PostgreSQL dump plus shared files before it deploys.
 - Set `GIT_RESET_WORKTREE_BEFORE_FETCH=1` only when you intentionally want the server script to discard local tracked edits after saving a patch backup.
 - Set `GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0` when you want checkout conflicts to fail immediately instead of auto-stashing.
-- Set `FRONTEND_ONLY=1` when you intentionally want only the admin SPA rebuilt and deployed; this path reloads nginx but does not restart `courseeval-backend.service`.
+- Set `FRONTEND_ONLY=1` when you intentionally want only the school SPA rebuilt and deployed; this path reloads nginx but does not restart `courseeval-backend.service`.
 - Use `pull_and_deploy.sh` only when you want the simpler “sync current server clone to branch, then full deploy” wrapper and do not need `redeploy.sh`'s `SKIP_GIT` / `FRONTEND_ONLY` controls.
 
 Before committing deployment-script or Git-sync-script changes, run the

@@ -5,8 +5,8 @@
  * `data-testid="header-notification-badge"` / dropdown label convergence or course-scoped badge
  * switches driven by `Layout.vue` (`pollNotificationSync`, route/focus triggers).
  *
- * Requires: globalSetup seed (`E2E_DEV_SEED_TOKEN`), same contract as other web-admin E2E.
- * Run alone (Pitfall 41 — port contention): `cd <REPO_ROOT>/apps/web/admin && CI=1 npx playwright test e2e-notification-header-sync-tier.spec.js --project=chromium`
+ * Requires: globalSetup seed (`E2E_DEV_SEED_TOKEN`), same contract as other web-school E2E.
+ * Run alone (Pitfall 41 — port contention): `cd <REPO_ROOT>/apps/web/school && CI=1 npx playwright test e2e-notification-header-sync-tier.spec.js --project=chromium`
  */
 const { expect, test } = require('@playwright/test')
 const {

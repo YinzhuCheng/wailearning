@@ -26,7 +26,7 @@ ALLOWED_CATEGORIES = {
     "postgres-pytest",
     "frontend-build",
     "frontend-node-test",
-    "admin-playwright",
+    "school-playwright",
     "parent-playwright",
     "full-suite",
 }
@@ -88,9 +88,9 @@ def check_playwright_command_target_exists(repo_root: Path, argv: list[str]) -> 
             continue
         if not part.endswith((".spec.js", ".cjs")):
             continue
-        candidate = repo_root / "tests" / "e2e" / "web-admin" / part
+        candidate = repo_root / "tests" / "e2e" / "web-school" / part
         if not candidate.exists():
-            issues.append(f"referenced Playwright file does not exist: tests/e2e/web-admin/{part}")
+            issues.append(f"referenced Playwright file does not exist: tests/e2e/web-school/{part}")
     return issues
 
 

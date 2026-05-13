@@ -5,7 +5,7 @@
  * dual-gate acceptance patterns, and SQLite grading-queue bleed across resets.
  *
  * Run incrementally (repo root):
- *   cd apps/web/admin && npx playwright test ../../tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js --project=chromium
+ *   cd apps/web/school && npx playwright test ../../tests/e2e/web-school/e2e-docs-gap-tier15.spec.js --project=chromium
  *
  * Doc hooks: docs/architecture/CORE_BUSINESS_FLOWS.md, docs/testing/TEST_EXECUTION_PITFALLS.md (Pitfall 69).
  */

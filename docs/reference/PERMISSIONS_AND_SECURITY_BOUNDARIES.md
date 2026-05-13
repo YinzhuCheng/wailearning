@@ -95,7 +95,7 @@ admin include:
 
 Tests that guard this boundary live in
 `tests/security/test_security_hardening_followup.py` and
-`tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`. Extend those
+`tests/e2e/web-school/e2e-security-hardening-followup.spec.js`. Extend those
 files when adding a new course-owned mutation route.
 
 ---
@@ -268,7 +268,7 @@ This is a **supply-chain sensitive** surface — never weaken checks without sec
 
 ## 8. Frontend route `meta` (admin)
 
-`apps/web/admin/src/router/index.js` uses flags such as `requiresAdmin`, `requiresTeachingStaff`.
+`apps/web/school/src/router/index.js` uses flags such as `requiresAdmin`, `requiresTeachingStaff`.
 
 These control **navigation/UI**. They do **not** replace backend checks.
 

@@ -2,7 +2,7 @@
 
 ## Purpose (for humans and LLM agents)
 
-This repository stores long-form text in several places: homework instructions, student submission bodies, course materials, notifications, and discussion replies. Historically the admin UI assumed **Markdown** for most authoring surfaces, but some users need **plain text** where characters like `#`, `*`, or `_` must appear literally without being interpreted as Markdown.
+This repository stores long-form text in several places: homework instructions, student submission bodies, course materials, notifications, and discussion replies. Historically the school UI assumed **Markdown** for most authoring surfaces, but some users need **plain text** where characters like `#`, `*`, or `_` must appear literally without being interpreted as Markdown.
 
 This document describes the **optional format switch** implemented as `content_format` (or `body_format` for discussions) with allowed values:
 
@@ -47,16 +47,16 @@ Similarly, if a **student attempt** uses `content_format="plain"`, the attempt b
 
 Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain material bodies, plain prior student attempt excerpts, and plain historical discussion lines when building the thread context.
 
-## Admin SPA (Vue)
+## School SPA (Vue)
 
 ### Shared components
 
-- `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar, KaTeX usage hint, fixed **LaTeX live demo** (`MarkdownLatexLiveDemo.vue`), and live preview are hidden; the textarea remains monospace for editing. In Markdown mode the toolbar includes **行内公式** / **独立公式** snippets (`\(…\)`, `$$…$$`). Above the textarea, a **non-editable canonical example** (`apps/web/admin/src/utils/markdownLatexDemo.js`) is always rendered via `RichMarkdownDisplay` so authors see correct delimiter behavior before typing; below that, **您的内容预览** mirrors the editable textarea. Props `compact-demo` reduces padding / hides the collapsible raw-markdown panel when multiple Markdown fields stack in one dialog (homework rubric blocks still show the **same rendered** demo).
+- `MarkdownEditorPanel.vue`: optional `v-model:contentFormat` + `showFormatToggle`. When `plain` is selected, the Markdown toolbar, KaTeX usage hint, fixed **LaTeX live demo** (`MarkdownLatexLiveDemo.vue`), and live preview are hidden; the textarea remains monospace for editing. In Markdown mode the toolbar includes **行内公式** / **独立公式** snippets (`\(…\)`, `$$…$$`). Above the textarea, a **non-editable canonical example** (`apps/web/school/src/utils/markdownLatexDemo.js`) is always rendered via `RichMarkdownDisplay` so authors see correct delimiter behavior before typing; below that, **您的内容预览** mirrors the editable textarea. Props `compact-demo` reduces padding / hides the collapsible raw-markdown panel when multiple Markdown fields stack in one dialog (homework rubric blocks still show the **same rendered** demo).
 - `MarkdownLatexLiveDemo.vue`: reusable demo card + copy / insert actions. In large authoring surfaces (`MarkdownEditorPanel`) it is rendered immediately; in the discussion composer it is hidden behind an explicit **查看 Markdown + LaTeX 示例** toggle so the reply area does not start with a long instructional block.
-- `RichMarkdownDisplay.vue` + `apps/web/admin/src/utils/markdownIt.js`: shared Markdown + KaTeX render path. Important implementation detail: before calling `markdown-it`, the renderer temporarily replaces `\(`, `\)`, `\[`, `\]` with placeholder tokens and restores them in the generated HTML. Without that protection, `markdown-it` consumes the backslashes as Markdown escapes, so KaTeX never sees the promised delimiters. This placeholder round-trip is now part of the contract for editor preview, published discussion rows, material readers, and any other UI using `RichMarkdownDisplay` / `FeedbackRichText`.
+- `RichMarkdownDisplay.vue` + `apps/web/school/src/utils/markdownIt.js`: shared Markdown + KaTeX render path. Important implementation detail: before calling `markdown-it`, the renderer temporarily replaces `\(`, `\)`, `\[`, `\]` with placeholder tokens and restores them in the generated HTML. Without that protection, `markdown-it` consumes the backslashes as Markdown escapes, so KaTeX never sees the promised delimiters. This placeholder round-trip is now part of the contract for editor preview, published discussion rows, material readers, and any other UI using `RichMarkdownDisplay` / `FeedbackRichText`.
   Multiline display math whose delimiters live on their own lines is also protected as a complete block before Markdown rendering (`$$...$$` and `\[...\]`). Do not remove this block-level placeholder pass: Markdown-it `breaks: true` can otherwise split multiline formulas into `<br>` / paragraph boundaries before KaTeX auto-render scans the DOM.
 - `PlainOrMarkdownBlock.vue`: read-only display; delegates Markdown mode to `RichMarkdownDisplay` and uses `white-space: pre-wrap` for plain mode.
-- `apps/web/admin/src/utils/contentFormat.js`: mirrors backend normalization for client defaults.
+- `apps/web/school/src/utils/contentFormat.js`: mirrors backend normalization for client defaults.
 
 ### Screens touched
 
@@ -112,7 +112,7 @@ They assert round-trip persistence for homework update + student submission, dis
 6. **Dashboard `total_students` vs elective enrollment**  
    Earlier implementations counted every `Student` in the course class even when `subject_id` targeted an elective with partial `course_enrollments`. Symptoms: the **removed** teacher 「课程仪表盘」page showed “学生总数 = 班级人数” while **学生管理** listed fewer选课学生（演示种子「初等概率论」即如此）。  
    **Mitigated (API):** `GET /api/dashboard/stats?subject_id=…` counts `course_enrollments` rows for that subject. Regression guard: `tests/backend/integration/test_core_api_surface.py::test_dashboard_stats_subject_id_counts_enrollments_not_class_roster`.  
-   **UI note (May 2026):** The **`Dashboard.vue` SPA page was deleted**; agents must not expect `/dashboard` metrics cards — bookmark `/dashboard` redirects to **`/students`**. Teacher-facing enrollment parity is asserted in Playwright via **学生管理 · 课程学生名单** header counts (`tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js`).
+   **UI note (May 2026):** The **`Dashboard.vue` SPA page was deleted**; agents must not expect `/dashboard` metrics cards — bookmark `/dashboard` redirects to **`/students`**. Teacher-facing enrollment parity is asserted in Playwright via **学生管理 · 课程学生名单** header counts (`tests/e2e/web-school/e2e-course-ui-markdown-reader.spec.js`).
 
 7. **KaTeX delimiter literacy**  
    Authors sometimes paste math wrapped only in `[ ... ]`. `RichMarkdownDisplay` uses KaTeX `renderMathInElement` with `\(…\)`, `$…$`, `$$…$$`, `\[…\]` only—the demo block shipped with `MarkdownEditorPanel` / discussions spells this out and renders a live counter-example.
@@ -137,15 +137,15 @@ They assert round-trip persistence for homework update + student submission, dis
 
 11. **Discussion short-body rendering vs expand-only rendering**  
    A discussion row used to mount `PlainOrMarkdownBlock` **only when expanded**. Symptom: a newly posted short Markdown reply (including LaTeX) appeared as raw source in the list until the row was manually expanded — and because short rows are not truncated, there was no expand action at all, so users perceived this as “发布后渲染失败”.  
-   **Fix:** `CourseDiscussionPanel.vue` now renders the rich block immediately when the body is **not truncated**, and keeps the collapsed plain-text preview path only for long rows. Regression guard: `tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js` case **material detail discussion keeps demo collapsed by default, shows live preview, and renders posted KaTeX**.
+   **Fix:** `CourseDiscussionPanel.vue` now renders the rich block immediately when the body is **not truncated**, and keeps the collapsed plain-text preview path only for long rows. Regression guard: `tests/e2e/web-school/e2e-course-ui-markdown-reader.spec.js` case **material detail discussion keeps demo collapsed by default, shows live preview, and renders posted KaTeX**.
 
 12. **Markdown-it escaping of `\(...\)` and `\[...\]`**  
    The repository documentation and UI hints explicitly promise four delimiter families: `$...$`, `$$...$$`, `\(...\)`, `\[...\]`. In practice, `markdown-it` treats `\(` / `\[` as escape sequences and drops the backslashes before the DOM reaches `renderMathInElement`, so the preview can degrade to literal `(x^2)` text even though KaTeX support is configured.  
-   **Fix:** `apps/web/admin/src/utils/markdownIt.js::renderCourseMarkdown` now performs a placeholder round-trip around `md.render(...)`. `RichMarkdownDisplay.vue` and `FeedbackRichText.vue` both call that helper, so editor previews and published views preserve these delimiters consistently.
+   **Fix:** `apps/web/school/src/utils/markdownIt.js::renderCourseMarkdown` now performs a placeholder round-trip around `md.render(...)`. `RichMarkdownDisplay.vue` and `FeedbackRichText.vue` both call that helper, so editor previews and published views preserve these delimiters consistently.
 
-13. **Admin SPA `npm run build` without prior `npm install` (missing local `vite`)**  
-   Symptom (fresh clone / CI worktree / agent sandbox): from `<repo>/apps/web/admin`, `npm run build` fails immediately with `sh: 1: vite: not found` or equivalent because devDependencies (including `vite`) are not installed in that directory’s `node_modules`.  
-   **Fix:** run `npm install` in `<repo>/apps/web/admin` before `npm run build`. Long-term, automation should treat `apps/web/admin/package-lock.json` + `npm ci`/`npm install` as the gate for any Vue verification step. This is **not** a product bug; it is an environment precondition pitfall.
+13. **School SPA `npm run build` without prior `npm install` (missing local `vite`)**  
+   Symptom (fresh clone / CI worktree / agent sandbox): from `<repo>/apps/web/school`, `npm run build` fails immediately with `sh: 1: vite: not found` or equivalent because devDependencies (including `vite`) are not installed in that directory’s `node_modules`.  
+   **Fix:** run `npm install` in `<repo>/apps/web/school` before `npm run build`. Long-term, automation should treat `apps/web/school/package-lock.json` + `npm ci`/`npm install` as the gate for any Vue verification step. This is **not** a product bug; it is an environment precondition pitfall.
 
 14. **Discussion assistant row: duplicate “智能助教” label vs accessibility**  
    Before the chat-oriented layout pass, the UI rendered **both** the bold display name **智能助教** (`displayAuthorName`) **and** a plain `el-tag` also labeled **智能助教** for `message_kind === 'llm_assistant'`. Symptom: noisy duplicate labels and wasted horizontal space in the meta row.  

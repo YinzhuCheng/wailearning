@@ -28,7 +28,7 @@ repo/
       __init__.py
       courseeval_backend/         canonical FastAPI backend package
     web/
-      admin/                       admin SPA and Playwright config
+      admin/                       school SPA and Playwright config
       parent/                      parent-facing SPA
   docs/                            authoritative documentation tree
     reports/                       dated audits, remediation notes, and restructure reports
@@ -73,7 +73,7 @@ The repository contains multiple applications and therefore keeps application co
 That is intentional:
 
 - `apps/backend/courseeval_backend/` is the backend Python application package
-- `apps/web/admin/` is the admin web application
+- `apps/web/school/` is the admin web application
 - `apps/web/parent/` is the parent-facing web application
 
 The older root-level `app/` package was removed because it created two sources of truth:
@@ -190,22 +190,22 @@ These entrypoints are referenced by:
 
 If you rename or move backend entrypoint modules, update every operational surface in the same change set.
 
-## Admin Frontend Boundary
+## School Frontend Boundary
 
-The admin SPA lives in:
+The school SPA lives in:
 
-- `apps/web/admin/`
+- `apps/web/school/`
 
 This directory owns:
 
 - Vite application code,
 - frontend dependencies and lockfile,
 - frontend runtime config,
-- Playwright startup config for the admin app.
+- Playwright startup config for the school app.
 
 Playwright test specs do not live inside the frontend tree. They live in:
 
-- `tests/e2e/web-admin/`
+- `tests/e2e/web-school/`
 
 That split is intentional:
 
@@ -225,7 +225,7 @@ It remains a separate app because it has:
 - a distinct deployment surface,
 - and a smaller read-only role-oriented feature set.
 
-Do not collapse it into the admin frontend unless product and deployment boundaries truly disappear.
+Do not collapse it into the school frontend unless product and deployment boundaries truly disappear.
 
 ## Test Boundaries
 
@@ -233,7 +233,7 @@ Tests live under `tests/` and are grouped by style and purpose:
 
 - `tests/backend/` for focused backend regressions grouped by domain,
 - `tests/behavior/` for higher-level workflow and multi-actor behavior,
-- `tests/e2e/web-admin/` for browser E2E coverage,
+- `tests/e2e/web-school/` for browser E2E coverage,
 - `tests/fixtures/` for test assets,
 - `tests/scenarios/` for reusable scenario builders and stress helpers,
 - `tests/devtools/` for **non-pytest** Python utilities that operate on the test tree itself (for example, regenerating redundancy audit markdown). Files here must **not** match `test_*.py` so `pytest` discovery ignores them.

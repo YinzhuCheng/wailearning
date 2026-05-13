@@ -85,7 +85,7 @@ Protected test files matched by policy: **24**
 | `backend-user_profile` | 2 | 2 |
 | `backend-users` | 1 | 1 |
 | `behavior` | 15 | 15 |
-| `e2e-web-admin` | 28 | 28 |
+| `e2e-web-school` | 28 | 28 |
 | `uncategorized-python` | 4 | 2 |
 
 ### Test-case counts
@@ -109,7 +109,7 @@ Protected test files matched by policy: **24**
 | `backend-user_profile` | 12 | 12 |
 | `backend-users` | 3 | 3 |
 | `behavior` | 137 | 137 |
-| `e2e-web-admin` | 28 | 28 |
+| `e2e-web-school` | 28 | 28 |
 | `uncategorized-python` | 64 | 62 |
 
 ## Safe-Delete Candidates

@@ -313,7 +313,7 @@ def with_pytest_junitxml(argv: list[str], output_path: Path) -> list[str]:
 
 
 def target_needs_playwright_preflight(target: dict[str, Any]) -> bool:
-    return target.get("category") == "admin-playwright"
+    return target.get("category") == "school-playwright"
 
 
 def parse_junit_xml(path: Path, repo_root: Path | None = None) -> dict[str, Any] | None:

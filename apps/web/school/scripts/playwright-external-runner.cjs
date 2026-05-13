@@ -5,8 +5,8 @@ const http = require('http')
 const os = require('os')
 const path = require('path')
 
-const adminRoot = path.resolve(__dirname, '..')
-const repoRoot = path.resolve(adminRoot, '..', '..', '..')
+const schoolRoot = path.resolve(__dirname, '..')
+const repoRoot = path.resolve(schoolRoot, '..', '..', '..')
 const parentRoot = path.resolve(repoRoot, 'apps', 'web', 'parent')
 const isWindows = process.platform === 'win32'
 
@@ -28,9 +28,9 @@ const pythonExe =
   (isWindows
     ? path.join(repoRoot, '.venv', 'Scripts', 'python.exe')
     : path.join(repoRoot, '.venv', 'bin', 'python'))
-const viteBin = path.join(adminRoot, 'node_modules', 'vite', 'bin', 'vite.js')
+const viteBin = path.join(schoolRoot, 'node_modules', 'vite', 'bin', 'vite.js')
 const parentViteBin = path.join(parentRoot, 'node_modules', 'vite', 'bin', 'vite.js')
-const playwrightCli = path.join(adminRoot, 'node_modules', '@playwright', 'test', 'cli.js')
+const playwrightCli = path.join(schoolRoot, 'node_modules', '@playwright', 'test', 'cli.js')
 
 const useRealWorker = !['0', 'false', 'no', 'off'].includes(
   String(process.env.E2E_USE_REAL_WORKER || 'true').trim().toLowerCase()
@@ -150,7 +150,7 @@ async function main() {
   await waitFor(`${apiBase}/api/health`, 'api')
 
   launch('ui', 'node', [viteBin, '--host', '127.0.0.1', '--port', uiPort], {
-    cwd: adminRoot,
+    cwd: schoolRoot,
     env: serverEnv({
       VITE_PROXY_TARGET: apiBase
     })
@@ -169,7 +169,7 @@ async function main() {
   }
 
   const test = spawn(process.execPath, [playwrightCli, 'test', ...playwrightArgs], {
-    cwd: adminRoot,
+    cwd: schoolRoot,
     env: {
       ...process.env,
       DEBUG: 'false',

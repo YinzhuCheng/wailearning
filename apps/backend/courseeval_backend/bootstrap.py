@@ -48,7 +48,7 @@ DEFAULT_SYSTEM_SETTINGS = [
     ("system_intro", "University teaching management platform", "Short introduction shown on the login page."),
     ("copyright", "(c) 2026 CourseEval", "Footer copyright text."),
     ("use_bing_background", "true", "Whether the login page should use the daily Bing background."),
-    ("appearance_default_preset", "professional-blue", "Default admin appearance preset for users who follow system style."),
+    ("appearance_default_preset", "professional-blue", "Default school appearance preset for users who follow system style."),
 ]
 
 DEFAULT_LLM_PRESET_NAME = "gpt-5.4"
@@ -705,7 +705,7 @@ def _backfill_course_material_chapters() -> None:
 def _ensure_default_llm_endpoint_preset() -> None:
     """
     Seed the built-in LLM preset (name = DEFAULT_LLM_PRESET_NAME) when missing so new installs
-    match admin UI defaults. Does not overwrite an existing preset of the same name.
+    match school UI defaults. Does not overwrite an existing preset of the same name.
 
     When DEFAULT_LLM_API_KEY is set in the environment, first-boot seed performs live **text + vision**
     connectivity checks against `base_url` / `model_name` using a small bundled PNG as the image probe

@@ -29,12 +29,12 @@ Skipping step 1 causes agents to “fix” generated artifacts or propose forbid
 | Persistence | `db/models.py` + `bootstrap.py` (`ensure_schema_updates` if new columns) |
 | Homework scoring display | `domains/llm/grading_result.py` (`resolve_effective_submission_score`) + `llm_grading.py` (`refresh_submission_summary`) + `api/routers/homework.py` serializers |
 | LLM vendor calls | `domains/llm/` + `llm_grading.py` task processor |
-| Admin UI | `apps/web/admin/src/views/*.vue` + `apps/web/admin/src/api/index.js` |
+| School UI | `apps/web/school/src/views/*.vue` + `apps/web/school/src/api/index.js` |
 | Parent UI | `apps/web/parent/src/` |
 
 ### 2.2 Trace forward from UI click (homework example)
 
-1. Vue view calls API helper in `apps/web/admin/src/api/index.js` (axios instance `baseURL` = `/api` or `VITE_API_BASE_URL`).
+1. Vue view calls API helper in `apps/web/school/src/api/index.js` (axios instance `baseURL` = `/api` or `VITE_API_BASE_URL`).
 2. FastAPI router under `apps/backend/courseeval_backend/api/routers/homework.py`.
 3. Dependencies: DB session + current user; `ensure_course_access_http` or equivalent when course-scoped.
 4. Services / domains: homework domain modules under `domains/homework/` (when logic extracted from router).
@@ -91,7 +91,7 @@ Approximate sequence:
 ### 4.3 Playwright admin E2E
 
 ```bash
-cd apps/web/admin
+cd apps/web/school
 npm install
 npm run test:e2e
 ```
@@ -130,7 +130,7 @@ Agents must not invent certainty.
 
 1. **Adding “shortcut” imports** that bypass `apps.backend.courseeval_backend` namespace.
 2. **Changing demo seed** without updating `tests/backend/e2e_dev/test_demo_course_seed.py` expectations.
-3. **Editing only admin UI** for permission-sensitive actions — backend must reject unauthorized API calls.
+3. **Editing only school UI** for permission-sensitive actions — backend must reject unauthorized API calls.
 4. **Assuming Redis/Celery** — LLM grading uses DB-backed tasks + in-process worker (`llm_grading.py`).
 5. **Running destructive grep-replace** on Chinese copy without encoding hygiene (Windows).
 

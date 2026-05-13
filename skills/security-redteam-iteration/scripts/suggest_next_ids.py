@@ -35,7 +35,7 @@ def max_csv_int(path: Path, field: str) -> int:
 
 def collect(root: Path) -> dict[str, int | str]:
     hard_file = root / "tests/security/test_security_hardening_followup.py"
-    e2e_file = root / "tests/e2e/web-admin/e2e-security-hardening-followup.spec.js"
+    e2e_file = root / "tests/e2e/web-school/e2e-security-hardening-followup.spec.js"
     pitfall_file = root / "docs/testing/pitfall-index.csv"
     update_file = root / "docs/testing/agent-update-log.csv"
 

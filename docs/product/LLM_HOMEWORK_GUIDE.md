@@ -123,7 +123,7 @@ Demo seeding binds LLM presets for required and **each** elective showcase cours
 
 Homework instructions (`homeworks.content`) and student submission bodies (`homework_attempts.content`, mirrored on the submission summary) may be stored as either:
 
-- `markdown` (default): rendered in the admin SPA with the shared Markdown + KaTeX components.
+- `markdown` (default): rendered in the school SPA with the shared Markdown + KaTeX components.
 - `plain`: rendered as literal text (pre-wrapped) so characters like `#` are not interpreted as headings.
 
 When auto-grading is enabled, plain-text bodies are fenced for the LLM prompt builder so punctuation is not mis-parsed as Markdown structure. See [Content format: Markdown vs plain text](../product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md).

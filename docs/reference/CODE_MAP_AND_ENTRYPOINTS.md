@@ -19,7 +19,7 @@
 | [`ops/`](../../ops/) | nginx, systemd, CI YAML (`ops/ci/*.yml`), deploy shell scripts |
 | [`tests/devtools/`](../../tests/devtools/) | Test-tree maintenance scripts (not collected by pytest); start at [`tests/devtools/README.md`](../../tests/devtools/README.md) |
 | [`apps/backend/courseeval_backend/`](../../apps/backend/courseeval_backend/) | Canonical FastAPI package |
-| [`apps/web/admin/`](../../apps/web/admin/) | Admin SPA + Playwright |
+| [`apps/web/school/`](../../apps/web/school/) | School SPA + Playwright |
 | [`apps/web/parent/`](../../apps/web/parent/) | Parent SPA |
 
 ---
@@ -100,22 +100,22 @@ Routers live under `apps/backend/courseeval_backend/api/routers/`.
 
 ---
 
-## 4. Frontend — admin SPA
+## 4. Frontend — school SPA
 
 | Path | Role |
 |------|------|
-| [`apps/web/admin/package.json`](../../apps/web/admin/package.json) | Scripts: `dev`, `build`, `test:e2e` (Playwright) |
-| [`apps/web/admin/vite.config.js`](../../apps/web/admin/vite.config.js) | Dev server + proxy |
-| [`apps/web/admin/playwright.config.cjs`](../../apps/web/admin/playwright.config.cjs) | E2E ports (`E2E_API_PORT`, `E2E_UI_PORT`) |
-| [`apps/web/admin/src/main.js`](../../apps/web/admin/src/main.js) | Vue bootstrap |
-| [`apps/web/admin/src/router/index.js`](../../apps/web/admin/src/router/index.js) | Routes + `meta.requiresAdmin` style gates (UI only) |
-| [`apps/web/admin/src/api/index.js`](../../apps/web/admin/src/api/index.js) | Axios client, interceptors, validation error formatting |
-| [`apps/web/admin/src/stores/user.js`](../../apps/web/admin/src/stores/user.js) | Pinia user session |
-| [`apps/web/admin/src/views/HomeworkSubmissionReview.vue`](../../apps/web/admin/src/views/HomeworkSubmissionReview.vue) | Teacher **全页阅卷**：`/homework/:homeworkId/submissions/:submissionId` — renders latest submission body via `PlainOrMarkdownBlock`, score/comment editor, collapsible attempt history, LLM log dialog; backed by `GET /api/homeworks/{id}/submissions/{submission_id}/status`. |
-| [`apps/web/admin/src/views/Attendance.vue`](../../apps/web/admin/src/views/Attendance.vue) | Attendance management; embeds `TeachingCalendar.vue` so clicking a rendered course day selects the attendance date and reloads that day's records. Historical `/teaching-calendar` deep links redirect here; there is no retained standalone page component. |
-| [`apps/web/admin/src/views/LearningNotes.vue`](../../apps/web/admin/src/views/LearningNotes.vue) | Teacher/student learning notes at `/learning-notes`: private-by-default note CRUD, optional course outline/material copy, course-visible public notes, note outline/resource editing, and note discussion. |
-| [`apps/web/admin/src/views/*.vue`](../../apps/web/admin/src/views/) | Pages |
-| [`apps/web/admin/src/components/*.vue`](../../apps/web/admin/src/components/) | Shared UI (e.g. `MarkdownEditorPanel.vue`, `RichMarkdownDisplay.vue`) |
+| [`apps/web/school/package.json`](../../apps/web/school/package.json) | Scripts: `dev`, `build`, `test:e2e` (Playwright) |
+| [`apps/web/school/vite.config.js`](../../apps/web/school/vite.config.js) | Dev server + proxy |
+| [`apps/web/school/playwright.config.cjs`](../../apps/web/school/playwright.config.cjs) | E2E ports (`E2E_API_PORT`, `E2E_UI_PORT`) |
+| [`apps/web/school/src/main.js`](../../apps/web/school/src/main.js) | Vue bootstrap |
+| [`apps/web/school/src/router/index.js`](../../apps/web/school/src/router/index.js) | Routes + `meta.requiresAdmin` style gates (UI only) |
+| [`apps/web/school/src/api/index.js`](../../apps/web/school/src/api/index.js) | Axios client, interceptors, validation error formatting |
+| [`apps/web/school/src/stores/user.js`](../../apps/web/school/src/stores/user.js) | Pinia user session |
+| [`apps/web/school/src/views/HomeworkSubmissionReview.vue`](../../apps/web/school/src/views/HomeworkSubmissionReview.vue) | Teacher **全页阅卷**：`/homework/:homeworkId/submissions/:submissionId` — renders latest submission body via `PlainOrMarkdownBlock`, score/comment editor, collapsible attempt history, LLM log dialog; backed by `GET /api/homeworks/{id}/submissions/{submission_id}/status`. |
+| [`apps/web/school/src/views/Attendance.vue`](../../apps/web/school/src/views/Attendance.vue) | Attendance management; embeds `TeachingCalendar.vue` so clicking a rendered course day selects the attendance date and reloads that day's records. Historical `/teaching-calendar` deep links redirect here; there is no retained standalone page component. |
+| [`apps/web/school/src/views/LearningNotes.vue`](../../apps/web/school/src/views/LearningNotes.vue) | Teacher/student learning notes at `/learning-notes`: private-by-default note CRUD, optional course outline/material copy, course-visible public notes, note outline/resource editing, and note discussion. |
+| [`apps/web/school/src/views/*.vue`](../../apps/web/school/src/views/) | Pages |
+| [`apps/web/school/src/components/*.vue`](../../apps/web/school/src/components/) | Shared UI (e.g. `MarkdownEditorPanel.vue`, `RichMarkdownDisplay.vue`) |
 
 ---
 
@@ -136,7 +136,7 @@ Detail: [`product/PARENT_PORTAL.md`](../product/PARENT_PORTAL.md).
 |------|------|
 | [`tests/backend/`](../../tests/backend/) | Primary FastAPI integration/unit clusters |
 | [`tests/behavior/`](../../tests/behavior/) | Cross-cutting behavior specs |
-| [`tests/e2e/web-admin/`](../../tests/e2e/web-admin/) | Playwright specs (invoked from admin package) |
+| [`tests/e2e/web-school/`](../../tests/e2e/web-school/) | Playwright specs (invoked from school package) |
 | [`tests/postgres/`](../../tests/postgres/) | PG-specific tests (conditional skip) |
 | [`tests/db_reset.py`](../../tests/db_reset.py) | `reset_test_database_schema()` — `drop_all` + `create_all` |
 

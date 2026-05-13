@@ -8,7 +8,7 @@ Environment variables referenced below are documented field-by-field in [../arch
 
 ## Target Production Shape
 
-- Nginx serves the admin SPA at `/`
+- Nginx serves the school SPA at `/`
 - Nginx serves the parent portal at `/parent/`
 - Nginx proxies `/api/*` to FastAPI on `127.0.0.1:8001`
 - FastAPI runs under `gunicorn` with `uvicorn` workers and `systemd`
@@ -156,7 +156,7 @@ Implementation notes that matter operationally:
 
 - `deploy_backend.sh` creates `${APP_ROOT}/shared/uploads` and non-destructively syncs any legacy `${SOURCE_DIR}/uploads/` content there when present, leaving the old directory in place for manual cleanup
 - backend deployment installs `ops/systemd/courseeval-backend.service` and restarts `courseeval-backend.service`
-- frontend deployment builds from `apps/web/admin` and syncs `dist/` into `${ADMIN_WEB_ROOT}`
+- frontend deployment builds from `apps/web/school` and syncs `dist/` into `${ADMIN_WEB_ROOT}`
 - parent deployment builds from `apps/web/parent` and syncs `dist/` into `${PARENT_WEB_ROOT}`
 - both frontend deploy scripts also refresh the nginx site file from `ops/nginx/courseeval.example*.conf`
 - frontend-only deploy scripts reload nginx after publishing static assets, but they do not restart `courseeval-backend.service`
@@ -194,7 +194,7 @@ What `redeploy.sh` does:
 1. Resolves `REPO_DIR` with a production-first preference for `/opt/courseeval/source`.
 2. Fetches the exact remote branch refspec instead of trusting an older local remote-tracking ref.
 3. Optionally backs up database/shared data before deployment.
-4. Deploys either the full stack or only the admin SPA, depending on flags.
+4. Deploys either the full stack or only the school SPA, depending on flags.
 5. Runs `post_deploy_check.sh` against local health and, when configured, the public URL.
 
 Use `pull_and_deploy.sh` when you are already in the intended server clone and want a shorter Git-sync-plus-full-deploy wrapper without the extra `SKIP_GIT` / `FRONTEND_ONLY` branching used by `redeploy.sh`.
@@ -207,7 +207,7 @@ Useful variants:
 - `SAFE_BACKUP_BEFORE_DEPLOY=1` when you want a pre-upgrade database and shared-data backup.
 - `GIT_AUTO_STASH_ON_CHECKOUT_CONFLICT=0` when you want fail-fast behavior instead of auto-stash.
 - `SKIP_GIT=1` when the desired source tree is already staged into `REPO_DIR` and you explicitly do not want `redeploy.sh` to fetch or checkout anything.
-- `FRONTEND_ONLY=1` when you intentionally want only the admin SPA rebuilt and deployed; this path reloads nginx but does not restart the backend service.
+- `FRONTEND_ONLY=1` when you intentionally want only the school SPA rebuilt and deployed; this path reloads nginx but does not restart the backend service.
 - `APP_URL=https://...` when you want the post-deploy public check to hit a specific public hostname.
 - `API_HEALTH_URL=https://.../health` when the public `/health` check should target an explicit URL instead of deriving it from `APP_URL`.
 - `PUBLIC_API_HEALTH_URL=https://.../api/health` when public API health should not be derived from `APP_URL`.
@@ -242,7 +242,7 @@ After deployment:
 - run `curl http://127.0.0.1:8001/health`,
 - run `bash ops/scripts/post_deploy_check.sh` for local health, or set `APP_URL=https://...` so it also checks the public `/health` and `/api/health` paths,
 - run `sudo nginx -t`,
-- verify the admin frontend loads,
+- verify the school frontend loads,
 - verify the parent portal loads,
 - verify backend logs are clean,
 - confirm the repo `HEAD` matches the intended revision,

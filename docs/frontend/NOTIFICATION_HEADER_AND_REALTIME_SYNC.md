@@ -2,7 +2,7 @@
 
 ## Purpose (for humans and LLM agents)
 
-Course notifications are stored server-side (`notifications` + `notification_reads`). The admin SPA must:
+Course notifications are stored server-side (`notifications` + `notification_reads`). The school SPA must:
 
 1. Show **unread count on the header avatar** (badge) so users notice new items without opening the sidebar.
 2. Primary navigation to the inbox remains the **sidebar** (**课程通知** menu item at the student sidebar root for students — same route `/notifications`). The avatar menu keeps **个人设置** / **退出登录** only so notification discovery is not duplicated in two places.
@@ -21,7 +21,7 @@ This document ties together the Vue layout, the lightweight sync API, the `notif
 ### Client refresh triggers
 
 1. **Polling** from `Layout.vue`: calls `syncStatus` on an interval while the document is visible.
-2. **BroadcastChannel** (`broadcastNotificationChange` in `apps/web/admin/src/utils/notificationSync.js`): fired after publish/update/delete/mark-all in `Notifications.vue` so **other tabs** refetch.
+2. **BroadcastChannel** (`broadcastNotificationChange` in `apps/web/school/src/utils/notificationSync.js`): fired after publish/update/delete/mark-all in `Notifications.vue` so **other tabs** refetch.
 3. **In-tab emit** (`emitNotificationRefresh`): after a successful publish/update in `Notifications.vue`, the same tab calls `emitNotificationRefresh()` so `onNotificationRefresh` listeners reload the table **immediately** without waiting for the next poll.
 
 ### Header badge source
@@ -32,10 +32,10 @@ This document ties together the Vue layout, the lightweight sync API, the `notif
 
 | Concern | Path |
 |---------|------|
-| Poll + toast + badge | `apps/web/admin/src/views/Layout.vue` |
-| Default poll interval export | `apps/web/admin/src/utils/notificationSync.js` (`DEFAULT_NOTIFICATION_POLL_INTERVAL_MS`, default `12_000`) |
-| List UI + publish | `apps/web/admin/src/views/Notifications.vue` |
-| Sync API | `apps/web/admin/src/api/index.js` → `api.notifications.syncStatus` |
+| Poll + toast + badge | `apps/web/school/src/views/Layout.vue` |
+| Default poll interval export | `apps/web/school/src/utils/notificationSync.js` (`DEFAULT_NOTIFICATION_POLL_INTERVAL_MS`, default `12_000`) |
+| List UI + publish | `apps/web/school/src/views/Notifications.vue` |
+| Sync API | `apps/web/school/src/api/index.js` → `api.notifications.syncStatus` |
 | Backend sync | `GET /api/notifications/sync-status` in `apps/backend/courseeval_backend/api/routers/notifications.py` |
 
 ## UX details
@@ -114,23 +114,23 @@ This subsection records **machine-verified** suites that target the header badge
 
 ### Playwright (UI + API hybrid)
 
-- **File:** `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js` (**10** `test(...)` cases).
+- **File:** `tests/e2e/web-school/e2e-notification-header-sync-tier.spec.js` (**10** `test(...)` cases).
 - **What it proves beyond older notification E2E:**
   - The DOM under `data-testid="header-notification-badge"` reflects **`sync-status.unread_count`** after **`window.focus`**-equivalent polling (`dispatchEvent('focus')`), not only after API-only assertions.
   - Case **02** asserts unread appears on the **badge** and that **sidebar `课程通知`** reaches **`/notifications`** (replaces the former duplicate-dropdown label check).
   - **`header-course-switch`** changes which `subject_id` the layout passes into `syncStatus`, so the badge can drop to **hidden** when the elective scope has zero unread even if the required course still has unread rows server-side.
   - Route transitions (`/courses` → `/course-home`) still execute `watch(route)` hooks that call `pollNotificationSync()` — the spec deep-links `/course-home` instead of clicking **进入课程** twice (second click can remain **disabled** while enrollment reconciliation catches up; same failure family as catalog flip-flop pitfalls).
-- **Run command** (always from `apps/web/admin`; never from `<REPO_ROOT>/tests/e2e/...` alone — Playwright project discovery requires `playwright.config.cjs`):
+- **Run command** (always from `apps/web/school`; never from `<REPO_ROOT>/tests/e2e/...` alone — Playwright project discovery requires `playwright.config.cjs`):
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
   npx playwright test e2e-notification-header-sync-tier.spec.js --project=chromium
 ```
 
 ### Playwright deep tier (follow-up hazards)
 
-- **File:** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` (**24** `test(...)` cases).
+- **File:** `tests/e2e/web-school/e2e-notification-sync-deep-tier.spec.js` (**24** `test(...)` cases).
 - **Why it exists:** The first tier proved baseline badge wiring; this module stresses **role-specific** aggregation (**admin** global `sync-status` vs **teacher/student** course-scoped params), **corrupt `selected_course` localStorage** healing, **concurrent** teacher `POST`s, **teacher-owned vs other-teacher** notification isolation, **403** on inaccessible `subject_id`, **mobile viewport**, **full page reload** (`onMounted` → `pollNotificationSync` without relying on manual focus), **delete race** while the student notifications view loads, **multi-class course** badge behavior where students must not see another linked class's broadcast while the assigned teacher still sees the whole course scope, and global-notification write scope where ordinary teachers are rejected while admin global broadcasts still reach the student header badge.
 - **Lessons baked into the spec comments:**
   - Cases **21-22** add notification target-scope coverage: a teacher cannot
@@ -149,7 +149,7 @@ CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
 - **Run command:**
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
   npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
 ```

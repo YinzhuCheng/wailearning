@@ -119,12 +119,12 @@ Important package-root modules that still act as shared runtime boundaries:
 - `llm_discussion.py` for discussion-LLM runtime orchestration
 - `attachments.py` and `markdown_llm.py` for file and content adaptation concerns
 
-### Admin frontend
+### School frontend
 
-- Vue 3 SPA in `apps/web/admin/`
+- Vue 3 SPA in `apps/web/school/`
 - Element Plus component layer
 - Pinia state management
-- Playwright E2E coverage in `tests/e2e/web-admin/` with config in `apps/web/admin/playwright.config.cjs`
+- Playwright E2E coverage in `tests/e2e/web-school/` with config in `apps/web/school/playwright.config.cjs`
 
 ### Parent portal
 

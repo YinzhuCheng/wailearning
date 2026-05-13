@@ -2,7 +2,7 @@
  * Focused guard rails for the course-materials chapter outline.
  *
  * The materials tree is the first maintained multi-level outline surface in the
- * admin SPA. These tests verify that users can collapse and expand the outline
+ * school SPA. These tests verify that users can collapse and expand the outline
  * without losing the selected chapter path.
  */
 const { expect, test } = require('@playwright/test')

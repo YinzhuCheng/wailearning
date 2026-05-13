@@ -51,7 +51,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [`../skills/permission-audit/SKILL.md`](../skills/permission-audit/SKILL.md) | Backend authorization, role-boundary, and course-access audit workflow |
 | [`../skills/deployment-governance/SKILL.md`](../skills/deployment-governance/SKILL.md) | Deployment script, env template, nginx/systemd, and ops-doc governance |
 | [`../skills/local-test-triage/SKILL.md`](../skills/local-test-triage/SKILL.md) | Local pytest / SQLite / Playwright / process hazard triage |
-| [`../skills/admin-playwright-e2e/SKILL.md`](../skills/admin-playwright-e2e/SKILL.md) | Repo-supported admin Playwright E2E execution, external-runner usage, and browser-harness triage |
+| [`../skills/school-playwright-e2e/SKILL.md`](../skills/school-playwright-e2e/SKILL.md) | Repo-supported school Playwright E2E execution, external-runner usage, and browser-harness triage |
 | [`../skills/data-migration-audit/SKILL.md`](../skills/data-migration-audit/SKILL.md) | Schema repair, migration audit, and no-Alembic data-governance workflow |
 | [`../skills/api-surface-audit/SKILL.md`](../skills/api-surface-audit/SKILL.md) | FastAPI router, frontend API client, API-doc, and route-contract audit workflow |
 | [`../skills/frontend-backend-contract-audit/SKILL.md`](../skills/frontend-backend-contract-audit/SKILL.md) | Vue/FastAPI request contract, pagination, bounds, and response-shape audit workflow |
@@ -122,7 +122,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 - Keep skill overlap intentional and layered: use
   [../skills/repository-normalization/SKILL.md](../skills/repository-normalization/SKILL.md)
   as the top-level governance orchestrator, then route through
-  docs/boundary/structure governance or the richer specialized skill. When two
+  `docs-governance`, `boundary-governance`, `structure-governance`, or the richer specialized skill. When two
   skills or scripts overlap, preserve the more precise and executable one as
   the source of truth.
 - Close repository-normalization work in durable docs: classify accepted,

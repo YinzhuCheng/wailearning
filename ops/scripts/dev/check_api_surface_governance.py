@@ -144,7 +144,7 @@ def check_api_surface_governance(repo_root: Path) -> list[str]:
     issues.extend(
         check_required_tokens(
             repo_root,
-            "apps/web/admin/src/api/index.js",
+            "apps/web/school/src/api/index.js",
             ADMIN_CLIENT_ANCHORS,
         )
     )

@@ -296,7 +296,7 @@ const userStore = useUserStore()
 
 const adminHomePath = '/students'
 const mobileBreakpoint = 768
-const desktopSidebarStorageKey = 'courseeval-admin-sidebar-state'
+const desktopSidebarStorageKey = 'courseeval-school-sidebar-state'
 const isCollapsed = ref(false)
 const isSidebarHidden = ref(false)
 const isMobile = ref(false)

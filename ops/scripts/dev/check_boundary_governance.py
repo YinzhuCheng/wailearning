@@ -18,7 +18,7 @@ LARGE_THRESHOLDS = {
     "apps/backend/courseeval_backend/core/": 500,
     "apps/backend/courseeval_backend/db/": 1600,
     "apps/backend/courseeval_backend/": 900,
-    "apps/web/admin/src/": 900,
+    "apps/web/school/src/": 900,
     "apps/web/parent/src/": 900,
 }
 
@@ -112,7 +112,7 @@ def check_import_boundaries(edges: list[ImportEdge]) -> list[Finding]:
 def print_details(repo_root: Path, paths: list[str], edges: list[ImportEdge]) -> None:
     largest = []
     for path in paths:
-        if path.startswith(("apps/backend/courseeval_backend/", "apps/web/admin/src/", "apps/web/parent/src/")):
+        if path.startswith(("apps/backend/courseeval_backend/", "apps/web/school/src/", "apps/web/parent/src/")):
             suffix = Path(path).suffix
             if suffix in {".py", ".vue", ".js", ".ts"}:
                 largest.append((count_lines(repo_root, path), path))

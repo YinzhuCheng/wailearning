@@ -3,7 +3,7 @@
   "description": "Protection rules for high-value or high-difficulty tests. Audit tooling must treat these as do-not-delete unless a human explicitly overrides the policy.",
   "protected_globs": [
     {
-      "pattern": "tests/e2e/web-admin/**/*.spec.js",
+      "pattern": "tests/e2e/web-school/**/*.spec.js",
       "reason": "Browser E2E tests are high-difficulty and high-value coverage."
     },
     {

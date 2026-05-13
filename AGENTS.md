@@ -208,7 +208,7 @@ current task.
 | In-process LLM worker | [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](docs/architecture/ASYNC_TASKS_AND_WORKERS.md) |
 | Known gaps / risks | [`docs/governance/known-issues-and-risks.md`](docs/governance/known-issues-and-risks.md) |
 | Operational playbook | [`docs/agents/agent-playbook.md`](docs/agents/agent-playbook.md) |
-| Repo-local skills | [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md), [`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md), [`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md), [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md), [`skills/security-redteam-iteration/SKILL.md`](skills/security-redteam-iteration/SKILL.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/validation-ledger-maintenance/SKILL.md`](skills/validation-ledger-maintenance/SKILL.md), [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md), [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md), [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md), [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md), [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md), [`skills/postgres-release-validation/SKILL.md`](skills/postgres-release-validation/SKILL.md), [`skills/frontend-backend-contract-audit/SKILL.md`](skills/frontend-backend-contract-audit/SKILL.md), [`skills/seed-surface-hardening/SKILL.md`](skills/seed-surface-hardening/SKILL.md) |
+| Repo-local skills | [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md), [`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md), [`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md), [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md), [`skills/security-redteam-iteration/SKILL.md`](skills/security-redteam-iteration/SKILL.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/validation-ledger-maintenance/SKILL.md`](skills/validation-ledger-maintenance/SKILL.md), [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md), [`skills/school-playwright-e2e/SKILL.md`](skills/school-playwright-e2e/SKILL.md), [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md), [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md), [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md), [`skills/postgres-release-validation/SKILL.md`](skills/postgres-release-validation/SKILL.md), [`skills/frontend-backend-contract-audit/SKILL.md`](skills/frontend-backend-contract-audit/SKILL.md), [`skills/seed-surface-hardening/SKILL.md`](skills/seed-surface-hardening/SKILL.md) |
 
 ---
 
@@ -304,7 +304,7 @@ deleting them.
 
 | Skill | Use when |
 |-------|----------|
-| [`skills/security-redteam-iteration/SKILL.md`](skills/security-redteam-iteration/SKILL.md) | Continuing iterative security hardening rounds that add dense tests, include E2E, fix discovered bugs, update docs/ledgers/pitfalls, validate, and commit locally |
+| [`skills/security-redteam-iteration/SKILL.md`](skills/security-redteam-iteration/SKILL.md) | Continuing iterative security hardening rounds that add dense tests, include E2E, fix discovered bugs, update docs, ledgers, and pitfalls, validate, and commit locally |
 | [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md) | Reviewing or changing authorization, role boundaries, course access, parent-code flows, or sensitive API behavior |
 | [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md) | Changing FastAPI routers, route prefixes, frontend API clients, API docs, or API regression tests |
 | [`skills/frontend-backend-contract-audit/SKILL.md`](skills/frontend-backend-contract-audit/SKILL.md) | Reviewing pagination caps, request bounds, route/query contracts, bulk limits, or Vue/FastAPI API-shape drift |
@@ -312,7 +312,7 @@ deleting them.
 | [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md) | Auditing or repairing `users.student_id`, roster/user drift, ambiguous legacy matches, class moves, or student-course enrollment repair |
 | [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md) | Changing deployment scripts, ops docs, `.env.production`, nginx/systemd templates, or server Git deploy wrappers |
 | [`skills/seed-surface-hardening/SKILL.md`](skills/seed-surface-hardening/SKILL.md) | Changing `/api/e2e/dev/*`, `INIT_DEFAULT_DATA`, first-admin bootstrap, seed tokens, public registration, or powerful demo/local surfaces |
-| [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md) | Running or debugging admin Playwright with the repository's external runner, seeded E2E helpers, and browser-harness guardrails |
+| [`skills/school-playwright-e2e/SKILL.md`](skills/school-playwright-e2e/SKILL.md) | Running or debugging school Playwright with the repository's external runner, seeded E2E helpers, and browser-harness guardrails |
 | [`skills/postgres-release-validation/SKILL.md`](skills/postgres-release-validation/SKILL.md) | Planning or running PostgreSQL-backed validation for schema-sensitive or release-quality backend confidence |
 | [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md) | Diagnosing local pytest, SQLite, Playwright, port, process, dependency, or Windows test-environment hazards |
 | [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md) | Editing multilingual or encoding-sensitive files from Windows PowerShell |
@@ -387,7 +387,7 @@ under "Diff-based validation workflow".
 
 1. **Backend:** targeted `pytest` for touched package (from repo root). See [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md).
 2. **LLM paths:** run nearest tests under `tests/backend/llm/` or homework folders; watch for HTTP mocking patterns.
-3. **Frontend:** `npm run build` inside affected SPA (`apps/web/admin` or `apps/web/parent`) when changing TS/Vue.
+3. **Frontend:** `npm run build` inside affected SPA (`apps/web/school` or `apps/web/parent`) when changing TS/Vue.
 4. **Docs:** update CONFIGURATION_REFERENCE / CORE_BUSINESS_FLOWS / pitfalls when behavior or defaults shift.
 5. **Repository normalization:** for docs, ops, package, or naming changes, run
    `python ops/scripts/dev/check_repository_normalization.py` and explain any
@@ -397,9 +397,9 @@ under "Diff-based validation workflow".
 
 ## 9. Naming honesty (avoid agent confusion)
 
-- **Product name:** README branding is **CourseEval**; npm package may still show legacy names (`courseeval-admin`) — treat as historical artifact unless migrating build metadata.
+- **Product name:** README branding is **CourseEval**; npm package may still show legacy names (`courseeval-school`) — treat as historical artifact unless migrating build metadata.
 - **`Subject` vs “course”:** ORM model `Subject` maps to user-facing “course” in much of the UI and `/api/subjects` routes.
-- **Historical names:** `wailearning_backend`, `ddclass`, old deployment service names, and old domain examples are not current implementation names. If you find them outside intentionally historical notes or test ledgers, update the docs/code path rather than expanding compatibility.
+- **Historical names:** `wailearning_backend`, `ddclass`, old deployment service names, and old domain examples are not current implementation names. If you find them outside intentionally historical notes or test ledgers, update the documentation or code path rather than expanding compatibility.
 
 ---
 

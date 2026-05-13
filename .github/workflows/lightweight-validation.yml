@@ -82,7 +82,7 @@ jobs:
         run: python -m pytest -q
 
   admin-frontend-build:
-    name: Admin frontend build
+    name: School frontend build
     runs-on: ubuntu-latest
 
     steps:
@@ -94,14 +94,14 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: apps/web/admin/package-lock.json
+          cache-dependency-path: apps/web/school/package-lock.json
 
-      - name: Install admin frontend dependencies
-        working-directory: apps/web/admin
+      - name: Install school frontend dependencies
+        working-directory: apps/web/school
         run: npm ci
 
-      - name: Build admin frontend
-        working-directory: apps/web/admin
+      - name: Build school frontend
+        working-directory: apps/web/school
         run: npm run build
 
   parent-frontend-build:

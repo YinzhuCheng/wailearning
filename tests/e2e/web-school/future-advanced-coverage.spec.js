@@ -328,7 +328,7 @@ test.describe('Future advanced E2E coverage expansion', () => {
     }
   })
 
-  test('9. parent portal notification read-state stays isolated from student web-admin read-state when policies require separation', async () => {
+  test('9. parent portal notification read-state stays isolated from student web-school read-state when policies require separation', async () => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
     const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)

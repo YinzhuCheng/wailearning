@@ -1,13 +1,13 @@
 ---
-name: admin-playwright-e2e
-description: Use this when running, debugging, or documenting CourseEval admin Playwright E2E. Triggers include targeted spec runs, full admin browser validation, external-runner usage, seed/reset troubleshooting, port/process cleanup, and converting a repeatable browser workflow into durable repo guidance.
+name: school-playwright-e2e
+description: Use this when running, debugging, or documenting CourseEval school Playwright E2E. Triggers include targeted spec runs, full admin browser validation, external-runner usage, seed/reset troubleshooting, port/process cleanup, and converting a repeatable browser workflow into durable repo guidance.
 ---
 
-# Admin Playwright E2E
+# School Playwright E2E
 
 ## Purpose
 
-Run CourseEval admin Playwright with the repository's supported workflow instead
+Run CourseEval school Playwright with the repository's supported workflow instead
 of ad hoc browser commands. Prefer the repo's external runner for real runs so
 API/UI startup and teardown stay owned by one process.
 
@@ -16,11 +16,11 @@ API/UI startup and teardown stay owned by one process.
 1. Read `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`,
    `docs/testing/TEST_EXECUTION_PITFALLS.md`, and
    `docs/testing/DEVELOPMENT_AND_TESTING.md`.
-2. Confirm admin package dependencies and browsers exist in
-   `apps/web/admin/`.
-3. For a real targeted run, prefer the external runner from the admin package:
+2. Confirm school package dependencies and browsers exist in
+   `apps/web/school/`.
+3. For a real targeted run, prefer the external runner from the school package:
    `node scripts/playwright-external-runner.cjs <spec>.spec.js --project=chromium`
-4. Use `tests/e2e/web-admin/fixtures.cjs` and
+4. Use `tests/e2e/web-school/fixtures.cjs` and
    `future-advanced-coverage-helpers.cjs` patterns before inventing new seed,
    login, or API helper flows.
 5. If the browser scenario needs complex state, create it through seeded API
@@ -34,12 +34,12 @@ API/UI startup and teardown stay owned by one process.
 ## Commands
 
 ```powershell
-cd apps/web/admin
+cd apps/web/school
 npm.cmd ci
 npx.cmd playwright install chromium
 cd ..\..
 python ops/scripts/dev/playwright_preflight.py --json
-cd apps/web/admin
+cd apps/web/school
 node scripts/playwright-external-runner.cjs roster-and-users.spec.js --project=chromium
 node scripts/playwright-external-runner.cjs
 ```
@@ -61,9 +61,9 @@ node scripts/playwright-external-runner.cjs
 
 ## Related Files
 
-- `apps/web/admin/scripts/playwright-external-runner.cjs`
-- `apps/web/admin/playwright.config.cjs`
-- `tests/e2e/web-admin/fixtures.cjs`
-- `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
+- `apps/web/school/scripts/playwright-external-runner.cjs`
+- `apps/web/school/playwright.config.cjs`
+- `tests/e2e/web-school/fixtures.cjs`
+- `tests/e2e/web-school/future-advanced-coverage-helpers.cjs`
 - `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`
 - `docs/testing/TEST_EXECUTION_PITFALLS.md`

@@ -344,7 +344,7 @@ test.describe('E2E LLM hard scenarios', () => {
     }
   })
 
-  test('admin UI preset create+validate propagates to teacher course config and homework routing picker', async ({ page }) => {
+  test('school UI preset create+validate propagates to teacher course config and homework routing picker', async ({ page }) => {
     const s = scenario()
     const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
     const presetName = `E2E_UI_PRESET_${s.suffix}_${Date.now()}`

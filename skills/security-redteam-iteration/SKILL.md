@@ -8,7 +8,7 @@ description: Use this when continuing CourseEval iterative red-team hardening ro
 ## Purpose
 
 Run one complete CourseEval hardening iteration: choose high-value risk points,
-add dense tests, let tests expose bugs, fix narrowly, update docs/ledgers, run
+add dense tests, let tests expose bugs, fix narrowly, update docs and ledgers, run
 change-scoped validation, and commit locally.
 
 ## When to Use
@@ -91,7 +91,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File skills/security-redteam-
 ## Related Skills
 
 - `skills/permission-audit/SKILL.md`
-- `skills/admin-playwright-e2e/SKILL.md`
+- `skills/school-playwright-e2e/SKILL.md`
 - `skills/validation-selection/SKILL.md`
 - `skills/validation-ledger-maintenance/SKILL.md`
 - `skills/repository-normalization/SKILL.md`

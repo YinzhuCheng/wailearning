@@ -33,8 +33,8 @@ if [[ "${REPO_ROOT}" != "${SOURCE_DIR}" ]]; then
     --exclude ".git" \
     --exclude "__pycache__" \
     --exclude ".pytest_cache" \
-    --exclude "apps/web/admin/node_modules" \
-    --exclude "apps/web/admin/dist" \
+    --exclude "apps/web/school/node_modules" \
+    --exclude "apps/web/school/dist" \
     --exclude "apps/web/parent/node_modules" \
     --exclude "apps/web/parent/dist" \
     "${REPO_ROOT}/" "${SOURCE_DIR}/"
@@ -45,14 +45,14 @@ find "${SOURCE_DIR}" -type f -exec chmod 0644 {} +
 find "${SOURCE_DIR}/ops/scripts" -type f -name "*.sh" -exec chmod 0755 {} +
 chown -R "${APP_USER}:${APP_USER}" "${APP_ROOT}"
 
-pushd "${SOURCE_DIR}/apps/web/admin" >/dev/null
+pushd "${SOURCE_DIR}/apps/web/school" >/dev/null
 npm ci
 npm run build
 popd >/dev/null
 
 install -d -m 0755 /var/www/certbot
 install -d -m 0755 "${ADMIN_WEB_ROOT}"
-rsync -a --delete "${SOURCE_DIR}/apps/web/admin/dist/" "${ADMIN_WEB_ROOT}/"
+rsync -a --delete "${SOURCE_DIR}/apps/web/school/dist/" "${ADMIN_WEB_ROOT}/"
 
 if [[ -f "${CERT_DIR}/fullchain.pem" && -f "${CERT_DIR}/privkey.pem" ]]; then
   install -m 0644 "${HTTPS_TEMPLATE}" "${NGINX_SITE}"

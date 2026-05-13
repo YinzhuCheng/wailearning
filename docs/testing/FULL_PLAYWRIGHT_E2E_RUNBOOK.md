@@ -1,8 +1,8 @@
-# Full admin Playwright E2E runbook (`npm run test:e2e`)
+# Full school Playwright E2E runbook (`npm run test:e2e`)
 
 ## Purpose and audience
 
-This document exists primarily for **LLM coding agents** and automation operators who must run **`apps/web/admin`** → **`npm run test:e2e`** (full Playwright suite: all specs under `tests/e2e/web-admin/`, typically **single-worker serial** per `playwright.config.cjs`). Humans may skim headings and commands; agents should read the failure triage sections before rewriting product code.
+This document exists primarily for **LLM coding agents** and automation operators who must run **`apps/web/school`** → **`npm run test:e2e`** (full Playwright suite: all specs under `tests/e2e/web-school/`, typically **single-worker serial** per `playwright.config.cjs`). Humans may skim headings and commands; agents should read the failure triage sections before rewriting product code.
 
 **Goal:** reduce wasted steps on environment gaps, seed/token mismatches, selector ambiguity in complex DOM, layout geometry traps, and **SQLite persistence effects** across hundreds of `resetE2eScenario()` calls.
 
@@ -10,7 +10,7 @@ This document exists primarily for **LLM coding agents** and automation operator
 
 Cross-reference: [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (numbered pitfalls), [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md), [ENCODING_AND_MOJIBAKE_SAFETY.md](../contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
 
-Repo-local skill: [`../../skills/admin-playwright-e2e/SKILL.md`](../../skills/admin-playwright-e2e/SKILL.md)
+Repo-local skill: [`../../skills/school-playwright-e2e/SKILL.md`](../../skills/school-playwright-e2e/SKILL.md)
 for the condensed agent workflow when the full runbook is more detail than the
 current task needs.
 
@@ -21,8 +21,8 @@ current task needs.
 ### Repository paths (placeholders)
 
 - `<REPO_ROOT>` — git checkout root.
-- `<ADMIN_PKG>` — `<REPO_ROOT>/apps/web/admin` (the **only** directory that owns admin `package.json` for Playwright).
-- `<E2E_SQLITE>` — file path derived from Playwright config (commonly `/tmp/playwright_e2e_<E2E_API_PORT>.sqlite` on Unix; see `apps/web/admin/playwright.config.cjs`).
+- `<ADMIN_PKG>` — `<REPO_ROOT>/apps/web/school` (the **only** directory that owns admin `package.json` for Playwright).
+- `<E2E_SQLITE>` — file path derived from Playwright config (commonly `/tmp/playwright_e2e_<E2E_API_PORT>.sqlite` on Unix; see `apps/web/school/playwright.config.cjs`).
 
 ### Node / npm
 
@@ -33,14 +33,14 @@ sudo apt-get update
 sudo apt-get install -y nodejs npm
 ```
 
-Versions vary by distribution; they must satisfy `apps/web/admin/package-lock.json` expectations for `npm ci`.
+Versions vary by distribution; they must satisfy `apps/web/school/package-lock.json` expectations for `npm ci`.
 
 ### Frontend install location
 
 Run dependency install **inside** `<ADMIN_PKG>`, not only at `<REPO_ROOT>`:
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 npm ci
 ```
 
@@ -49,7 +49,7 @@ Anti-pattern: installing nothing under `<ADMIN_PKG>` then `npm run test:e2e` →
 ### Playwright browsers
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 npx playwright install chromium
 ```
 
@@ -101,9 +101,9 @@ export E2E_PYTHON=/usr/bin/python3
 export E2E_DEV_SEED_TOKEN=<same-value-as-backend>
 ```
 
-The backend must have **`E2E_DEV_SEED_ENABLED=true`** and matching **`E2E_DEV_SEED_TOKEN`** (Playwright `globalSetup` and `tests/e2e/web-admin/fixtures.cjs` call `POST /api/e2e/dev/reset-scenario` with header **`X-E2E-Seed-Token`**).
+The backend must have **`E2E_DEV_SEED_ENABLED=true`** and matching **`E2E_DEV_SEED_TOKEN`** (Playwright `globalSetup` and `tests/e2e/web-school/fixtures.cjs` call `POST /api/e2e/dev/reset-scenario` with header **`X-E2E-Seed-Token`**).
 
-When **`E2E_DEV_REQUIRE_ADMIN_JWT`** is enabled on the API (default **`true`** for the subprocess spawned by `apps/web/admin/playwright.config.cjs`), powerful `/api/e2e/dev/*` helpers (`mock-llm/configure`, `grading-state`, `process-grading`, `worker`, `mark-preset-validated`) also require an **admin Bearer**; **`fixtures.cjs`** refreshes it after each seed via **`e2e-seed-headers.cjs`**. See **Pitfall 55** in **`TEST_EXECUTION_PITFALLS.md`**.
+When **`E2E_DEV_REQUIRE_ADMIN_JWT`** is enabled on the API (default **`true`** for the subprocess spawned by `apps/web/school/playwright.config.cjs`), powerful `/api/e2e/dev/*` helpers (`mock-llm/configure`, `grading-state`, `process-grading`, `worker`, `mark-preset-validated`) also require an **admin Bearer**; **`fixtures.cjs`** refreshes it after each seed via **`e2e-seed-headers.cjs`**. See **Pitfall 55** in **`TEST_EXECUTION_PITFALLS.md`**.
 
 If the token is missing or mismatched, many tests **skip** or **`resetE2eScenario` throws** — do not assume the SPA regressed.
 
@@ -221,7 +221,7 @@ Do not immediately blame “browser randomness” when:
 
 `Layout.vue` uses **`el-dropdown` `trigger="hover"`** for **`data-testid="header-course-switch"`**. Tests that **`hover()`** then click menu text often flake with **element not visible / not stable** because Element Plus teleports the dropdown.
 
-**Harness:** **`clickCourseSwitcherOption(page, courseLabel)`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`** opens via **click**, anchors **`.course-dropdown-menu.filter({ visible: true })`**, then **`.click({ force: true })`** on **`.course-option`**. Avoid **`scrollIntoViewIfNeeded`** on poppers when animations fight stability.
+**Harness:** **`clickCourseSwitcherOption(page, courseLabel)`** in **`tests/e2e/web-school/future-advanced-coverage-helpers.cjs`** opens via **click**, anchors **`.course-dropdown-menu.filter({ visible: true })`**, then **`.click({ force: true })`** on **`.course-option`**. Avoid **`scrollIntoViewIfNeeded`** on poppers when animations fight stability.
 
 ### Shared mock-LLM cursor across specs (Pitfall 65)
 
@@ -231,7 +231,7 @@ In-memory mock profiles in **`e2e_dev.py`** advance on **every** **`POST .../moc
 
 ### `ElMessageBox` vs `el-dialog`, `el-select` visibility, roster, batch-class (Pitfalls 70–73)
 
-Full-suite passes (May 2026) reinforced that **`ElMessageBox.confirm`** must not be driven by the same locators as large **`el-dialog`** course editors. The shared harness uses **`confirmElMessageBoxPrimary`** in **`tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`**.
+Full-suite passes (May 2026) reinforced that **`ElMessageBox.confirm`** must not be driven by the same locators as large **`el-dialog`** course editors. The shared harness uses **`confirmElMessageBoxPrimary`** in **`tests/e2e/web-school/future-advanced-coverage-helpers.cjs`**.
 
 Roster table selection for **从花名册进课** may require a prior admin **`DELETE /api/subjects/{id}/students/{studentId}`** so **`student_b`** is not already **已在课** after **`sync_course_enrollments`**.
 
@@ -241,28 +241,28 @@ Roster table selection for **从花名册进课** may require a prior admin **`D
 
 ## Command reference
 
-Full Playwright (admin package):
+Full Playwright (school package):
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=/usr/bin/python3 E2E_DEV_SEED_TOKEN=<seed> npm run test:e2e
 ```
 
 Single spec (debug):
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 npx playwright test <spec-filename>.spec.js --project=chromium
 ```
 
 Parent portal targeted spec through the external runner:
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 node scripts/playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium
 ```
 
-The external runner starts the admin Vite app by default. It also starts the
+The external runner starts the school Vite app by default. It also starts the
 parent portal Vite app when the spec name contains `parent-portal` or when
 `E2E_PARENT_UI=1` is set. Override the parent port with
 `E2E_PARENT_UI_PORT`; Playwright reads the resulting base URL from

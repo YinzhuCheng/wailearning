@@ -4,7 +4,7 @@
  * Focus: global quota policy vs course LLM config boundaries, auth edges, seed contract, admin Settings
  * form persistence, and resilience patterns documented in TEST_EXECUTION_PITFALLS.md.
  *
- * Requires Playwright globalSetup (E2E_DEV_SEED_TOKEN) and the same reset contract as other web-admin E2E.
+ * Requires Playwright globalSetup (E2E_DEV_SEED_TOKEN) and the same reset contract as other web-school E2E.
  * Run serially with other Playwright jobs (CI=1 recommended) to avoid fixed-port contention on
  * <E2E_API_HOST>:8012 / <E2E_UI_HOST>:3012 (see Pitfall 41).
  */

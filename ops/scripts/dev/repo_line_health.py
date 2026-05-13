@@ -75,7 +75,7 @@ DOC_EXTENSIONS = {".md", ".rst", ".txt"}
 
 PRIMARY_SOURCE_PREFIXES = (
     "apps/backend/courseeval_backend/",
-    "apps/web/admin/src/",
+    "apps/web/school/src/",
     "apps/web/parent/src/",
 )
 

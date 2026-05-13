@@ -19,11 +19,11 @@ process.env.E2E_DEV_REQUIRE_ADMIN_JWT =
     : 'true'
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..')
-const adminRoot = __dirname
-const adminNodeModules = path.join(adminRoot, 'node_modules')
-const viteBin = path.join(adminNodeModules, 'vite', 'bin', 'vite.js')
+const schoolRoot = __dirname
+const schoolNodeModules = path.join(schoolRoot, 'node_modules')
+const viteBin = path.join(schoolNodeModules, 'vite', 'bin', 'vite.js')
 
-process.env.NODE_PATH = [adminNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
+process.env.NODE_PATH = [schoolNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
 Module._initPaths()
 const isWindows = process.platform === 'win32'
 const sqliteFile = isWindows
@@ -79,7 +79,7 @@ function buildUiCommand() {
   if (isWindows) {
     return `node ${quoteWindowsArg(viteBin)} --host 127.0.0.1 --port ${E2E_UI_PORT}`
   }
-  return `bash -lc 'cd "${adminRoot}" && exec env VITE_PROXY_TARGET=${apiBase} node "${viteBin}" --host 127.0.0.1 --port ${E2E_UI_PORT}'`
+  return `bash -lc 'cd "${schoolRoot}" && exec env VITE_PROXY_TARGET=${apiBase} node "${viteBin}" --host 127.0.0.1 --port ${E2E_UI_PORT}'`
 }
 
 function buildApiServerConfig() {
@@ -96,7 +96,7 @@ function buildApiServerConfig() {
 function buildUiServerConfig() {
   return {
     command: buildUiCommand(),
-    cwd: adminRoot,
+    cwd: schoolRoot,
     env: {
       DEBUG: 'false',
       VITE_PROXY_TARGET: apiBase
@@ -111,9 +111,9 @@ function buildUiServerConfig() {
  * @see {import('@playwright/test').PlaywrightTestConfig}
  */
 module.exports = defineConfig({
-  testDir: '../../../tests/e2e/web-admin',
+  testDir: '../../../tests/e2e/web-school',
   timeout: 60_000,
-  globalSetup: '../../../tests/e2e/web-admin/global-setup.cjs',
+  globalSetup: '../../../tests/e2e/web-school/global-setup.cjs',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

@@ -28,9 +28,9 @@ Fast orientation for humans and LLM agents editing this repository: **where to c
 | LLM grading + queue | `llm_grading.py`, `domains/llm/` |
 | DB models | `db/models.py`, `db/database.py` |
 | Startup / bootstrap | `main.py`, `bootstrap.py` |
-| Admin SPA | `apps/web/admin/src/` (views, `api/index.js`, Pinia stores) |
+| School SPA | `apps/web/school/src/` (views, `api/index.js`, Pinia stores) |
 | Parent SPA | `apps/web/parent/src/` |
-| Playwright E2E | `tests/e2e/web-admin/`, `apps/web/admin/playwright.config.cjs` |
+| Playwright E2E | `tests/e2e/web-school/`, `apps/web/school/playwright.config.cjs` |
 | Backend tests | `tests/backend/`, `tests/behavior/` |
 
 ---
@@ -61,7 +61,7 @@ Use these when locating behavior:
 ## Testing expectations
 
 - **pytest**: run from repo root; database selection documented in [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md).
-- **Playwright**: prefer `cd apps/web/admin && npm run test:e2e`; env contract in `playwright.config.cjs`. Failures often environmental — see [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
+- **Playwright**: prefer `cd apps/web/school && npm run test:e2e`; env contract in `playwright.config.cjs`. Failures often environmental — see [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ---
 

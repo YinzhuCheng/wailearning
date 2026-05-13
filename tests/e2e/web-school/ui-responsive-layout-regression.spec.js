@@ -1,5 +1,5 @@
 /**
- * Maintained responsive layout guard rails for the admin SPA.
+ * Maintained responsive layout guard rails for the school SPA.
  *
  * These checks preserve previously observed responsive-layout guard rails as
  * narrow Playwright assertions. They intentionally avoid screenshot comparison; the invariant is
@@ -11,7 +11,7 @@ const { loadE2eScenario, resetE2eScenario } = require('./fixtures.cjs')
 const { login } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
-const sidebarStateKey = 'courseeval-admin-sidebar-state'
+const sidebarStateKey = 'courseeval-school-sidebar-state'
 
 async function expectNoPageHorizontalOverflow(page) {
   await expect

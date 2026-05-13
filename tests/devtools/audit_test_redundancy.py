@@ -71,7 +71,7 @@ def is_protected(rel_path: str, rules: list[dict[str, str]]) -> tuple[bool, str 
 def classify_test_file(rel_path: str) -> tuple[str, str]:
     path = rel_path.replace("\\", "/")
     if path.endswith(".spec.js"):
-        return "e2e-web-admin", "javascript"
+        return "e2e-web-school", "javascript"
     if path.startswith("tests/behavior/") and path.endswith(".py"):
         return "behavior", "python"
     if path.startswith("tests/backend/") and path.endswith(".py"):

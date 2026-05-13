@@ -91,7 +91,7 @@ Example:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe-text-workflow.ps1 `
-  -Path apps\web\admin\src\views\Layout.vue -StartLine 1 -EndLine 120
+  -Path apps\web\school\src\views\Layout.vue -StartLine 1 -EndLine 120
 ```
 
 What this rule enforces:
@@ -122,8 +122,8 @@ Use `safe_show_text.py` when a terminal might render valid UTF-8 incorrectly:
 
 ```powershell
 python ops\scripts\dev\safe_show_text.py docs\contributing\ENCODING_AND_MOJIBAKE_SAFETY.md
-python ops\scripts\dev\safe_show_text.py apps\web\admin\src\views\Layout.vue --start-line 1 --end-line 120
-python ops\scripts\dev\safe_show_text.py tests\e2e\web-admin\e2e-scenario-resilience.spec.js --escape --start-line 1 --end-line 80
+python ops\scripts\dev\safe_show_text.py apps\web\school\src\views\Layout.vue --start-line 1 --end-line 120
+python ops\scripts\dev\safe_show_text.py tests\e2e\web-school\e2e-scenario-resilience.spec.js --escape --start-line 1 --end-line 80
 ```
 
 Normal mode decodes the file as UTF-8 and prints text. Escape mode prints
@@ -246,8 +246,8 @@ This audit did **not** find new suspicious mojibake sequences in the documentati
 
 Known hotspots identified during this audit include:
 
-- `tests/e2e/web-admin/e2e-llm-hard-scenarios.spec.js`
-- `tests/e2e/web-admin/e2e-scenario-resilience.spec.js`
+- `tests/e2e/web-school/e2e-llm-hard-scenarios.spec.js`
+- `tests/e2e/web-school/e2e-scenario-resilience.spec.js`
 
 Interpretation:
 

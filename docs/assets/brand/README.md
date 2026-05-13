@@ -28,9 +28,9 @@ This folder contains local, editable logo assets for CourseEval.
 
 - Canonical editable assets live in this folder.
 - Runtime copies are checked into:
-  - `apps/web/admin/src/assets/brand/`
+  - `apps/web/school/src/assets/brand/`
   - `apps/web/parent/src/assets/brand/`
-  - `apps/web/admin/public/courseeval-mark.svg`
+  - `apps/web/school/public/courseeval-mark.svg`
   - `apps/web/parent/public/courseeval-mark.svg`
 - The admin login page uses `courseeval-logo.svg` as the default logo unless
   `/api/settings/public` provides `system_logo`.

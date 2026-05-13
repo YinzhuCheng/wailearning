@@ -1,6 +1,6 @@
 # CourseEval
 
-CourseEval is a multi-role school and classroom management platform: FastAPI backend, Vue 3 admin SPA, separate parent portal SPA, PostgreSQL in production, LLM-assisted homework grading via an **in-process worker** that drains a **database-backed** task queue (no Redis/Celery broker in this codebase).
+CourseEval is a multi-role school and classroom management platform: FastAPI backend, Vue 3 school SPA, separate parent portal SPA, PostgreSQL in production, LLM-assisted homework grading via an **in-process worker** that drains a **database-backed** task queue (no Redis/Celery broker in this codebase).
 
 ## Who this is for
 
@@ -34,7 +34,7 @@ This repository expects contributors, including LLM coding agents, to read task-
 - Homework lifecycle with multiple attempts, late-submission rules, score candidates, teacher review, regrade, and student appeals.
 - Course material chapters, notifications (with header badge + sync API), attendance, semesters, scores, score-composition appeals, and points.
 - Parent portal served as a separate SPA (typically under `/parent/` behind nginx — see deployment doc).
-- API-first backend with `pytest` and Playwright E2E coverage (`tests/e2e/web-admin/`).
+- API-first backend with `pytest` and Playwright E2E coverage (`tests/e2e/web-school/`).
 
 ## LLM-assisted homework grading
 
@@ -57,7 +57,7 @@ The LLM subsystem is core product functionality, not an optional demo.
 
 ```text
 apps/backend/courseeval_backend/   Canonical FastAPI backend package
-apps/web/admin/                     Admin SPA and Playwright config
+apps/web/school/                     School SPA and Playwright config
 apps/web/parent/                    Parent-facing SPA
 docs/                               Documentation hub (start at docs/README.md)
 ops/                                CI, nginx, systemd, deployment scripts
@@ -99,10 +99,10 @@ ops\scripts\windows\start-backend.bat
 
 Default `DATABASE_URL` in `core/config.py` uses placeholder credentials — override for any shared environment (see [`docs/architecture/CONFIGURATION_REFERENCE.md`](docs/architecture/CONFIGURATION_REFERENCE.md)).
 
-### Admin frontend
+### School frontend
 
 ```bash
-cd apps/web/admin
+cd apps/web/school
 npm install
 npm run dev
 ```
@@ -159,20 +159,20 @@ python -m pytest
 python -m pytest tests/behavior -q
 ```
 
-Frontend E2E (from admin app):
+Frontend E2E (from school app):
 
 ```bash
-cd apps/web/admin
+cd apps/web/school
 npm install
 npx playwright install chromium
 npm run test:e2e
 ```
 
-Managed Playwright defaults use API port **8012** and UI port **3012** — see `apps/web/admin/playwright.config.cjs`. Read [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md) before treating failures as regressions.
+Managed Playwright defaults use API port **8012** and UI port **3012** — see `apps/web/school/playwright.config.cjs`. Read [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md) before treating failures as regressions.
 
 PostgreSQL-aligned validation (production-like DB semantics): see [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md) and [`docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`](docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 
-The **`future-advanced-coverage*.spec.js`** files under `tests/e2e/web-admin/` are normal runnable specs; indexing lives in [`docs/testing/TEST_SUITE_MAP.md`](docs/testing/TEST_SUITE_MAP.md).
+The **`future-advanced-coverage*.spec.js`** files under `tests/e2e/web-school/` are normal runnable specs; indexing lives in [`docs/testing/TEST_SUITE_MAP.md`](docs/testing/TEST_SUITE_MAP.md).
 
 ## Documentation hub
 

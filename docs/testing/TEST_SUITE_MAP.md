@@ -21,7 +21,7 @@ For concrete historical execution records, use the CSV tables in this directory.
     behavior/                 high-level multi-actor and workflow pytest suites
     postgres/                 PostgreSQL-only guards (skip unless Postgres: TEST_DATABASE_URL or COURSEEVAL_AUTO_PG_TESTS=1 after provision script)
     security/                 API authorization / abuse-edge regression (roles, tokens)
-    e2e/web-admin/            Playwright browser coverage for the admin SPA
+    e2e/web-school/            Playwright browser coverage for the school SPA
     frontend/                 lightweight frontend Node tests without backend/browser startup
     devtools/                 maintenance scripts that scan or rewrite test artifacts (not pytest-discovered; filenames must not start with `test_`)
     fixtures/                 static files used by tests
@@ -52,12 +52,12 @@ be too expensive or too environment-sensitive.
 
 Current tests:
 
-- [`tests/frontend/admin/markdown_latex_and_clipboard.test.mjs`](../../tests/frontend/admin/markdown_latex_and_clipboard.test.mjs) checks admin Markdown/LaTeX preprocessing, copy fallback behavior, and Playwright preflight JSON output.
+- [`tests/frontend/school/markdown_latex_and_clipboard.test.mjs`](../../tests/frontend/school/markdown_latex_and_clipboard.test.mjs) checks admin Markdown/LaTeX preprocessing, copy fallback behavior, and Playwright preflight JSON output.
 
 Run from the repository root:
 
 ```bash
-node --test tests/frontend/admin/markdown_latex_and_clipboard.test.mjs
+node --test tests/frontend/school/markdown_latex_and_clipboard.test.mjs
 ```
 
 ### Diff selector support files
@@ -74,7 +74,7 @@ developer command:
 - [`ops/scripts/dev/validation_history.py`](../../ops/scripts/dev/validation_history.py)
 
 The registry maps repository-relative changed paths to validation targets such
-as focused backend pytest files, admin frontend build, targeted Playwright, full
+as focused backend pytest files, school frontend build, targeted Playwright, full
 Playwright consideration, PostgreSQL package tests, and full PostgreSQL pytest.
 It now also carries coverage tags, target review reasons, and high-blast-radius
 fallback rules so selector output can distinguish `acceptable`, `needs_review`,
@@ -170,7 +170,7 @@ Subgroups:
 - `tests/backend/content_format/`
   - optional `content_format` / `body_format` persistence on homework, submissions, discussions, notifications
 
-### HTTP client UX (admin SPA)
+### HTTP client UX (school SPA)
 
 See [HTTP client slow-response busy hint](../frontend/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md) for the 3s “系统正忙，请等待。” message on `http` / `httpQuiet` / `httpPublic`.
 - `tests/backend/scores/`
@@ -204,9 +204,9 @@ Typical characteristics:
 - better at catching regressions in state convergence,
 - harder to triage when they fail because one bug can surface deep into the scenario.
 
-### `tests/e2e/web-admin/`
+### `tests/e2e/web-school/`
 
-This directory contains Playwright browser coverage for the admin frontend.
+This directory contains Playwright browser coverage for the school frontend.
 
 These tests are the closest to a user-visible workflow because they exercise:
 
@@ -216,17 +216,17 @@ These tests are the closest to a user-visible workflow because they exercise:
 - browser automation,
 - UI-to-API convergence.
 
-Additional targeted suite: **`e2e-discussion-cover-llm-tier3.spec.js`** — discussion LLM (`invoke_llm`), long reply preview (3 logical lines + expand), and course cover (API + UI). Run only that file with `npx playwright test e2e-discussion-cover-llm-tier3.spec.js` from `apps/web/admin` when iterating on those features.
+Additional targeted suite: **`e2e-discussion-cover-llm-tier3.spec.js`** — discussion LLM (`invoke_llm`), long reply preview (3 logical lines + expand), and course cover (API + UI). Run only that file with `npx playwright test e2e-discussion-cover-llm-tier3.spec.js` from `apps/web/school` when iterating on those features.
 
-Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases) — homework submission table **content/comment preview** truncation, **LLM grading** long comments + regrade + 429 recovery, **multi-role** API guards, and **course cover** flows (teacher/admin UI + API). **Case 01** now expects **「详情」** to open the full-page review route (`/homework/:id/submissions/:submissionId`) and asserts the long teacher comment in `.review-comment-card` instead of a dialog. Run alone with `npx playwright test e2e-homework-comment-cover-tier4.spec.js` from `apps/web/admin`.
+Another targeted suite: **`e2e-homework-comment-cover-tier4.spec.js`** (15 cases) — homework submission table **content/comment preview** truncation, **LLM grading** long comments + regrade + 429 recovery, **multi-role** API guards, and **course cover** flows (teacher/school UI + API). **Case 01** now expects **「详情」** to open the full-page review route (`/homework/:id/submissions/:submissionId`) and asserts the long teacher comment in `.review-comment-card` instead of a dialog. Run alone with `npx playwright test e2e-homework-comment-cover-tier4.spec.js` from `apps/web/school`.
 
-Another targeted suite: **`e2e-core-flows-smoke.spec.js`** — ten stability-focused journeys (invalid login stays on `/login`, student homework grid contains seeded title, teacher materials/notifications routes, admin user grid). Run alone with `npx playwright test e2e-core-flows-smoke.spec.js` from `apps/web/admin`.
+Another targeted suite: **`e2e-core-flows-smoke.spec.js`** — ten stability-focused journeys (invalid login stays on `/login`, student homework grid contains seeded title, teacher materials/notifications routes, admin user grid). Run alone with `npx playwright test e2e-core-flows-smoke.spec.js` from `apps/web/school`.
 
-Another targeted suite: **`e2e-course-ui-markdown-reader.spec.js`** (12 cases) — **`subject_id` enrollment counts** surfaced via **学生管理** header (dashboard UI removed), **Markdown LaTeX demo** (scoped `MarkdownEditorPanel`), **sidebar** controls, **materials** layout + **MaterialRead** + discussion card, and historical **`/teaching-calendar`** deep-link coverage. Current product behavior redirects `/teaching-calendar` to **`/attendance`**; the teaching calendar is embedded inside the attendance page instead of appearing as a separate sidebar item, and no standalone `TeachingCalendarPage.vue` remains. Student sidebar remains flat (no 「课程学习」 parent — items match former children; regression: submenu title count `0`). Run alone with `npx playwright test e2e-course-ui-markdown-reader.spec.js` from `apps/web/admin`.
+Another targeted suite: **`e2e-course-ui-markdown-reader.spec.js`** (12 cases) — **`subject_id` enrollment counts** surfaced via **学生管理** header (dashboard UI removed), **Markdown LaTeX demo** (scoped `MarkdownEditorPanel`), **sidebar** controls, **materials** layout + **MaterialRead** + discussion card, and historical **`/teaching-calendar`** deep-link coverage. Current product behavior redirects `/teaching-calendar` to **`/attendance`**; the teaching calendar is embedded inside the attendance page instead of appearing as a separate sidebar item, and no standalone `TeachingCalendarPage.vue` remains. Student sidebar remains flat (no 「课程学习」 parent — items match former children; regression: submenu title count `0`). Run alone with `npx playwright test e2e-course-ui-markdown-reader.spec.js` from `apps/web/school`.
 
-Additive API-heavy tier after documentation alignment: **`e2e-docs-gap-tier15.spec.js`** — **`/api/discussions`** validation (`page_size`, scope mismatch, **`invoke_llm`** teacher acceptance), cross-class homework submission guards, orphan-course homework list for **class_teacher**, **`page_size`** discipline (**students** list **`le=1000`**), dual-gate mock LLM + **`process-grading`**, end-to-end mock grading drain, **`sync-status`** shape. Run alone with `npx playwright test e2e-docs-gap-tier15.spec.js` from `apps/web/admin`.
+Additive API-heavy tier after documentation alignment: **`e2e-docs-gap-tier15.spec.js`** — **`/api/discussions`** validation (`page_size`, scope mismatch, **`invoke_llm`** teacher acceptance), cross-class homework submission guards, orphan-course homework list for **class_teacher**, **`page_size`** discipline (**students** list **`le=1000`**), dual-gate mock LLM + **`process-grading`**, end-to-end mock grading drain, **`sync-status`** shape. Run alone with `npx playwright test e2e-docs-gap-tier15.spec.js` from `apps/web/school`.
 
-Additive newer-surface tier: **`e2e-learning-notes-attendance-cover-tier20.spec.js`** (20 cases) — learning-note private/public visibility, all-authenticated public notes when `subject_id` is null, course-bound public notes, copied course outline/material snapshots, copied-note editing (`parent_id: null`, `chapter_id: null`, attachment clearing), note discussion metadata, `page_size` validation, learning-notes UI tabs/default-private dialog, student course-card cover visibility, `/teaching-calendar` redirect to embedded attendance calendar, and course/date-scoped attendance list behavior. Run alone with `npx playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium` from `apps/web/admin`.
+Additive newer-surface tier: **`e2e-learning-notes-attendance-cover-tier20.spec.js`** (20 cases) — learning-note private/public visibility, all-authenticated public notes when `subject_id` is null, course-bound public notes, copied course outline/material snapshots, copied-note editing (`parent_id: null`, `chapter_id: null`, attachment clearing), note discussion metadata, `page_size` validation, learning-notes UI tabs/default-private dialog, student course-card cover visibility, `/teaching-calendar` redirect to embedded attendance calendar, and course/date-scoped attendance list behavior. Run alone with `npx playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium` from `apps/web/school`.
 
 They also have the highest dependence on the local execution environment.
 
@@ -234,14 +234,14 @@ This directory also contains the **`future-advanced-coverage`** pair — thirty 
 
 Files:
 
-- `tests/e2e/web-admin/future-advanced-coverage.spec.js` — scenarios **1–15**
-- `tests/e2e/web-admin/future-advanced-coverage-2.spec.js` — scenarios **16–30**
+- `tests/e2e/web-school/future-advanced-coverage.spec.js` — scenarios **1–15**
+- `tests/e2e/web-school/future-advanced-coverage-2.spec.js` — scenarios **16–30**
 
-Helpers: `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
+Helpers: `tests/e2e/web-school/future-advanced-coverage-helpers.cjs`
 
-Runtime contract: same `apps/web/admin/playwright.config.cjs`, `tests/e2e/web-admin/global-setup.cjs`, `POST /api/e2e/dev/reset-scenario`, and `E2E_DEV_SEED_TOKEN` as other admin E2E specs.
+Runtime contract: same `apps/web/school/playwright.config.cjs`, `tests/e2e/web-school/global-setup.cjs`, `POST /api/e2e/dev/reset-scenario`, and `E2E_DEV_SEED_TOKEN` as other admin E2E specs.
 
-Targeted run from `apps/web/admin`:
+Targeted run from `apps/web/school`:
 
 ```bash
 npx playwright test future-advanced-coverage.spec.js future-advanced-coverage-2.spec.js
@@ -259,7 +259,7 @@ npx playwright test future-advanced-coverage.spec.js future-advanced-coverage-2.
 6. Admin batch user activation with stale filters — final active state matches API.
 7. Student notification deep-link with corrupted `selected_course` — rebind to accessible course only.
 8. Teacher concurrent max-submission edit vs student submit — cap enforcement after race.
-9. Parent portal vs student web-admin notification read-state isolation (per policy).
+9. Parent portal vs student web-school notification read-state isolation (per policy).
 10. Teacher duplicate attendance save retries — one row per student/date.
 11. Admin semester switch plus stale score composition tab — one valid composition.
 12. Teacher points award vs student redemption race — consistent balance and ranking.
@@ -323,32 +323,32 @@ RAR attachment regression assets:
   requires **`rar`** on `PATH` (same commands historically embedded in the test body); keep
   committed bytes UTF-8-clean and treat the directory as test assets, not runtime product data.
 
-Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — additive API/navigation checks (pagination boundaries, health, settings public, course entry). Run alone with `npx playwright test e2e-agent-followup-batch.spec.js` from `apps/web/admin`.
+Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — additive API/navigation checks (pagination boundaries, health, settings public, course entry). Run alone with `npx playwright test e2e-agent-followup-batch.spec.js` from `apps/web/school`.
 
 Another additive hazard file: **`e2e-agent-hazard-tier-15.spec.js`** (15 cases) — API-only checks for authz edges, LLM admin vs student boundaries, parallel `mark-all-read`, and E2E dev seed header gates. Same globalSetup contract as `e2e-postgres-hazard-tier.spec.js`; run serially (Pitfall 41).
 
 ### Coverage gap addressed in May 2026 (notification header badge + sync-status)
 
-Earlier Playwright suites exercised **`POST /api/notifications`** and list/mark-read flows extensively, but **did not systematically assert** the admin SPA header surfaces documented in [NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md):
+Earlier Playwright suites exercised **`POST /api/notifications`** and list/mark-read flows extensively, but **did not systematically assert** the school SPA header surfaces documented in [NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md):
 
 - `data-testid="header-notification-badge"` (Element Plus badge content vs `sync-status.unread_count`),
 - course-scoped unread when **`header-course-switch`** changes `selectedCourse` (maps to `subject_id` on `syncStatus`),
 - convergence after **`window.dispatchEvent(new Event('focus'))`** (same hook as user returning to the tab — exercises `pollNotificationSync` without waiting `DEFAULT_NOTIFICATION_POLL_INTERVAL_MS`).
 
-**New Playwright module (10 cases):** `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js`
+**New Playwright module (10 cases):** `tests/e2e/web-school/e2e-notification-header-sync-tier.spec.js`
 
-**Deeper follow-up (24 cases):** `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` — admin global totals vs list, teacher explicit course switch before badge asserts, corrupt `selected_course` healing, concurrent publishes, cross-teacher isolation, mobile viewport, reload-based cold poll, delete race on `/notifications`, multi-class course badge isolation, admin-only global notification write scope, notification target-user denial, UI composer course/class scope coverage, and explicit target-clearing update semantics. Cases 23-24 prove `target_student_id: null` clears a stored target and updates the course-scoped badge, while a student-to-user target switch without clearing the old target is rejected. Run alone:
+**Deeper follow-up (24 cases):** `tests/e2e/web-school/e2e-notification-sync-deep-tier.spec.js` — admin global totals vs list, teacher explicit course switch before badge asserts, corrupt `selected_course` healing, concurrent publishes, cross-teacher isolation, mobile viewport, reload-based cold poll, delete race on `/notifications`, multi-class course badge isolation, admin-only global notification write scope, notification target-user denial, UI composer course/class scope coverage, and explicit target-clearing update semantics. Cases 23-24 prove `target_student_id: null` clears a stored target and updates the course-scoped badge, while a student-to-user target switch without clearing the old target is rejected. Run alone:
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
   npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
 ```
 
-- Run from `<REPO_ROOT>/apps/web/admin` (same `playwright.config.cjs` as other admin E2E):
+- Run from `<REPO_ROOT>/apps/web/school` (same `playwright.config.cjs` as other admin E2E):
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
   npx playwright test e2e-notification-header-sync-tier.spec.js --project=chromium
 ```
@@ -425,16 +425,16 @@ boundary for teacher-owned visible courses:
 
 When adding a new course-owned mutation endpoint, add the backend assertion here
 first. The paired browser-backed direct-API guard is
-`tests/e2e/web-admin/e2e-security-hardening-followup.spec.js`; keep that file
+`tests/e2e/web-school/e2e-security-hardening-followup.spec.js`; keep that file
 small and reserve it for high-value API edges that benefit from the managed
 Playwright seed/login path. The paired spec currently also covers parent-code
 read leakage for same-class unenrolled elective homework and notifications.
 
 Parent SPA browser coverage lives in
-`tests/e2e/web-admin/e2e-parent-portal-hardening.spec.js`. It runs from the
-admin Playwright package but starts the parent Vite app through
+`tests/e2e/web-school/e2e-parent-portal-hardening.spec.js`. It runs from the
+school Playwright package but starts the parent Vite app through
 `scripts/playwright-external-runner.cjs` when this spec name is passed. Run it
-from `apps/web/admin` with:
+from `apps/web/school` with:
 
 ```bash
 node scripts/playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium
@@ -457,7 +457,7 @@ Read and run in this order:
 2. `tests/backend/llm/`
 3. `tests/backend/homework/test_homework_llm_grading.py`
 4. `tests/behavior/test_*llm*`
-5. `tests/e2e/web-admin/homework-llm-routing.spec.js`
+5. `tests/e2e/web-school/homework-llm-routing.spec.js`
 
 ### If you are changing course or roster behavior
 
@@ -466,7 +466,7 @@ Read and run in this order:
 1. `tests/backend/courses/`
 2. `tests/backend/roster/`
 3. `tests/behavior/test_multi_actor_timeline_behavior.py`
-4. `tests/e2e/web-admin/roster-and-users.spec.js` — roster enroll + paste/file import dialogs + admin batch class + assertion that **用户管理** does **not** show 「文件导入学生用户」 (removed; roster import lives under **学生管理** only).
+4. `tests/e2e/web-school/roster-and-users.spec.js` — roster enroll + paste/file import dialogs + admin batch class + assertion that **用户管理** does **not** show 「文件导入学生用户」 (removed; roster import lives under **学生管理** only).
 
 ### If you are changing homework, notifications, or materials
 
@@ -475,7 +475,7 @@ Read and run in this order:
 1. `tests/backend/homework/`
 2. `tests/scenarios/material_flow.py`
 3. `tests/behavior/test_material_chapters_notifications_homework_flow.py`
-4. `tests/e2e/web-admin/ui-homework-student-actions.spec.js`
+4. `tests/e2e/web-school/ui-homework-student-actions.spec.js`
 
 ## Which Tests Are Usually Easier To Pass
 
@@ -499,7 +499,7 @@ The more difficult or fragile categories are usually:
 
 ### 1. Playwright browser E2E
 
-Files under `tests/e2e/web-admin/` are the hardest operationally because they depend on:
+Files under `tests/e2e/web-school/` are the hardest operationally because they depend on:
 
 - backend boot,
 - frontend boot,

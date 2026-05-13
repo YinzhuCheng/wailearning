@@ -26,7 +26,7 @@ this checklist.
    When `api/schemas.py` is a candidate for splitting, also run:
    `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`.
 3. Classify findings:
-   - low-risk: pure helper extraction, docs/agent map clarification, import path
+   - low-risk: pure helper extraction, documentation or agent-map clarification, import path
      cleanup with direct tests;
    - medium-risk: moving domain helpers already isolated by tests;
    - high-risk: router splits, startup/bootstrap changes, permission helpers,

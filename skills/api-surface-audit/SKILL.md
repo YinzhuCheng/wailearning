@@ -18,7 +18,7 @@ Use this before changing:
 - `apps/backend/courseeval_backend/api/routers/*.py`
 - `apps/backend/courseeval_backend/main.py`
 - `apps/backend/courseeval_backend/api/schemas.py`
-- `apps/web/admin/src/api/index.js`
+- `apps/web/school/src/api/index.js`
 - `apps/web/parent/src/api/index.js`
 - API route docs, parent-code docs, E2E dev API docs, or API regression tests
 
@@ -78,7 +78,7 @@ python ops/scripts/dev/run_validation_target.py security.api_regression --timeou
 - `apps/backend/courseeval_backend/main.py`
 - `apps/backend/courseeval_backend/api/routers/`
 - `apps/backend/courseeval_backend/api/schemas.py`
-- `apps/web/admin/src/api/index.js`
+- `apps/web/school/src/api/index.js`
 - `apps/web/parent/src/api/index.js`
 - `docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`
 - `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`

@@ -26,7 +26,7 @@ Current default local dev port from `apps/web/parent/vite.config.js` is `5174` u
 
 ## Current Shape
 
-The portal is intentionally thinner than the admin frontend.
+The portal is intentionally thinner than the school frontend.
 
 - It is read-oriented.
 - It relies on parent-code verification rather than full JWT user login.
@@ -79,21 +79,21 @@ screens clear only parent-session local storage keys and redirect back to
 the submitted code, so a failed bind must not leave an older student context in
 the browser.
 
-Browser coverage for the parent SPA lives in the admin Playwright package so it
+Browser coverage for the parent SPA lives in the school Playwright package so it
 can reuse the existing seeded FastAPI runner. Use:
 
 ```bash
-cd apps/web/admin
+cd apps/web/school
 node scripts/playwright-external-runner.cjs e2e-parent-portal-hardening.spec.js --project=chromium
 ```
 
-The runner starts the normal admin Vite app by default and starts the parent
+The runner starts the normal school Vite app by default and starts the parent
 Vite app only for parent-portal specs or when `E2E_PARENT_UI=1` is set.
 
 ## Operational Notes
 
 - Parent codes are generated and managed from the main system.
-- The portal should be deployed together with the admin frontend during production rollouts.
+- The portal should be deployed together with the school frontend during production rollouts.
 - Because this is a separate SPA, a backend-only deploy does not update parent-facing static assets.
 
 ## Related Docs

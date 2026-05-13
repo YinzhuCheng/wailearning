@@ -13,7 +13,7 @@ fields.
 
 ## Workflow
 
-1. Identify the frontend caller, usually under `apps/web/admin/src/` or
+1. Identify the frontend caller, usually under `apps/web/school/src/` or
    `apps/web/parent/src/`.
 2. Find the matching backend router in
    `apps/backend/courseeval_backend/api/routers/`.
@@ -28,7 +28,7 @@ fields.
 ## Commands
 
 ```powershell
-rg -n "page_size|limit|api\\.|axios|fetch\\(" apps/web/admin/src apps/web/parent/src
+rg -n "page_size|limit|api\\.|axios|fetch\\(" apps/web/school/src apps/web/parent/src
 rg -n "Query\\(|page_size|limit|@router" apps/backend/courseeval_backend/api/routers
 .venv\Scripts\python.exe ops\scripts\dev\select_validation_targets.py --worktree
 ```
@@ -44,9 +44,9 @@ rg -n "Query\\(|page_size|limit|@router" apps/backend/courseeval_backend/api/rou
 
 ## Related Files
 
-- `apps/web/admin/src/api/index.js`
+- `apps/web/school/src/api/index.js`
 - `apps/web/parent/src/api/index.js`
 - `apps/backend/courseeval_backend/api/routers/`
 - `apps/backend/courseeval_backend/api/schemas.py`
-- `tests/e2e/web-admin/e2e-pitfall-guard-rails-batch2.spec.js`
+- `tests/e2e/web-school/e2e-pitfall-guard-rails-batch2.spec.js`
 - `docs/testing/TEST_EXECUTION_PITFALLS.md`

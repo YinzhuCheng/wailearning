@@ -2,7 +2,7 @@
  * Fifteen focused E2E/API checks derived from documented pitfalls and known
  * risk themes. Each test is intentionally narrow.
  *
- * Requires globalSetup + resetE2eScenario (same contract as other web-admin E2E).
+ * Requires globalSetup + resetE2eScenario (same contract as other web-school E2E).
  */
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario } = require('./fixtures.cjs')
@@ -56,7 +56,7 @@ test.describe('E2E pitfall guard rails (15 cases)', () => {
     }
   })
 
-  test('01 admin UI delete course uses MessageBox overlay confirm (not title-named dialog)', async ({ page }) => {
+  test('01 school UI delete course uses MessageBox overlay confirm (not title-named dialog)', async ({ page }) => {
     const s = scenario()
     const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
     const name = `E2E_guard_del_${s.suffix}_${Date.now()}`

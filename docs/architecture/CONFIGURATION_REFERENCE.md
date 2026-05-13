@@ -109,7 +109,7 @@ Never enable in production. `model_validator` rejects `E2E_DEV_SEED_ENABLED` whe
 |----------|---------|-------|
 | `E2E_DEV_SEED_ENABLED` | `false` | When true **and** non-production, `/api/e2e/*` routes are exposed (still check `expose_e2e_dev_api()`). |
 | `E2E_DEV_SEED_TOKEN` | `""` | Shared secret header `X-E2E-Seed-Token` for seed endpoints. |
-| `E2E_DEV_REQUIRE_ADMIN_JWT` | `false` | When true, powerful `/api/e2e/dev/*` routes also require `Authorization: Bearer` for an admin user. Playwright config defaults this to true for managed subprocesses; see `apps/web/admin/playwright.config.cjs`. |
+| `E2E_DEV_REQUIRE_ADMIN_JWT` | `false` | When true, powerful `/api/e2e/dev/*` routes also require `Authorization: Bearer` for an admin user. Playwright config defaults this to true for managed subprocesses; see `apps/web/school/playwright.config.cjs`. |
 | `E2E_DEV_ADMIN_USERNAME` | `""` | Credentials helper for automation (paired with password). |
 | `E2E_DEV_ADMIN_PASSWORD` | `""` | |
 
@@ -121,11 +121,11 @@ These are **client** environment variables read by Vite:
 
 | Variable | Admin default | Parent default | Purpose |
 |----------|---------------|----------------|---------|
-| `VITE_DEV_PORT` | `3000` (`apps/web/admin/vite.config.js`) | `5174` (`apps/web/parent/vite.config.js`) | Dev server port. |
+| `VITE_DEV_PORT` | `3000` (`apps/web/school/vite.config.js`) | `5174` (`apps/web/parent/vite.config.js`) | Dev server port. |
 | `VITE_PROXY_TARGET` | `http://127.0.0.1:8001` | same | Backend for `/api` proxy. |
 | `VITE_APP_BASE_PATH` | `/` | `/` | SPA base path for deployments under subpaths. |
 
-Playwright additionally defines `E2E_API_PORT` / `E2E_UI_PORT` (defaults **8012** / **3012**) inside `apps/web/admin/playwright.config.cjs` for managed test servers; see [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+Playwright additionally defines `E2E_API_PORT` / `E2E_UI_PORT` (defaults **8012** / **3012**) inside `apps/web/school/playwright.config.cjs` for managed test servers; see [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 
 ---
 

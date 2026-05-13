@@ -3,7 +3,7 @@
  * learning-note visibility/copy/edit/discussion, course cover card visibility,
  * and attendance-owned teaching-calendar routing.
  *
- * Run from apps/web/admin:
+ * Run from apps/web/school:
  *   npx playwright test e2e-learning-notes-attendance-cover-tier20.spec.js --project=chromium
  */
 const { expect, test } = require('@playwright/test')

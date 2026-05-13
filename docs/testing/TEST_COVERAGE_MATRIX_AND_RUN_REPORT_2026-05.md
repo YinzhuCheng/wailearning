@@ -12,7 +12,7 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 | Primary pytest roots | `tests/backend/`, `tests/behavior/`, `tests/security/`, `tests/backend/e2e_dev/` |
 | Default DB under pytest | File-backed SQLite at `<repo-root>/.pytest_tmp/test.sqlite` unless `TEST_DATABASE_URL` overrides (`tests/conftest.py`). |
 | Schema bootstrap in tests | `tests/db_reset.reset_test_database_schema()` → imports **`db.models`** then `drop_all`/`create_all`; then `bootstrap.ensure_schema_updates()`. |
-| Playwright | Specs in `tests/e2e/web-admin/`; config `apps/web/admin/playwright.config.cjs`; launches uvicorn on `E2E_API_PORT` (8012) + Vite admin UI on `E2E_UI_PORT` (3012) unless `PLAYWRIGHT_USE_EXTERNAL_SERVERS`. |
+| Playwright | Specs in `tests/e2e/web-school/`; config `apps/web/school/playwright.config.cjs`; launches uvicorn on `E2E_API_PORT` (8012) + Vite school UI on `E2E_UI_PORT` (3012) unless `PLAYWRIGHT_USE_EXTERNAL_SERVERS`. |
 | CI reference command | `python3 -m pytest -q` (`ops/ci/pr-pipeline.yml` sibling files under `ops/ci/`). |
 
 ---
@@ -30,7 +30,7 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 | Teacher vs student rubric redaction | Covered elsewhere | Duplicate high-value guard | same file | Strong | Admin impersonation not tested |
 | Demo seed LLM preset validation status | Outdated expectation (`validated` only) | Updated | `tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py` | Strong | Live vendor bootstrap differs |
 | SQLite metadata registration order | Missing → flaky | Fixed harness | `tests/db_reset.py` | Strong | Shared sqlite corruption still possible |
-| E2E login / invalid password | Partial | Yes | `tests/e2e/web-admin/e2e-core-flows-smoke.spec.js` | Strong | MFA not applicable |
+| E2E login / invalid password | Partial | Yes | `tests/e2e/web-school/e2e-core-flows-smoke.spec.js` | Strong | MFA not applicable |
 | E2E multi-role navigation | Partial | Yes | same file | Medium | Parent SPA separate tree |
 
 ---
@@ -42,7 +42,7 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 | `tests/db_reset.py` | Harness fix | Forces ORM mapper registration before DDL | Real SQLite engine |
 | `tests/backend/integration/test_core_api_surface.py` | API integration ×10 | Auth, homework ACL, rubric redaction, submission metadata keys | Real FastAPI `TestClient`, real DB |
 | `tests/backend/e2e_dev/test_demo_llm_seed_and_student_quota_edges.py` | Expectation alignment | Accepts `validated` **or** fallback `pending` preset `gpt-5.4` | Real seed + ORM |
-| `tests/e2e/web-admin/e2e-core-flows-smoke.spec.js` | Playwright ×10 | Login failure path, student homework grid w/ title match, materials/notifications routes | Real Chromium + dual servers + seeded HTTP |
+| `tests/e2e/web-school/e2e-core-flows-smoke.spec.js` | Playwright ×10 | Login failure path, student homework grid w/ title match, materials/notifications routes | Real Chromium + dual servers + seeded HTTP |
 
 ---
 
@@ -53,9 +53,9 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 | `python3 -m pytest tests/backend/integration/test_core_api_surface.py -q` | Validate new API suite | PASS |
 | `python3 -m pytest tests/backend -q` | Backend regression | **263 passed**, **2 skipped** (missing OS `unrar` **before** follow-up env install) |
 | `python3 -m pytest tests/behavior tests/security -q` | Higher-level flows | **158 passed**, **1 skipped** |
-| `npm install` + `npx playwright install chromium` (under `apps/web/admin`) | Browser deps | Success |
+| `npm install` + `npx playwright install chromium` (under `apps/web/school`) | Browser deps | Success |
 | `npx playwright test e2e-core-flows-smoke.spec.js` | Targeted E2E tier | **10 passed** |
-| `npm run build` (`apps/web/admin`) | SPA compile check | Success |
+| `npm run build` (`apps/web/school`) | SPA compile check | Success |
 
 ---
 
@@ -65,7 +65,7 @@ This document satisfies the “coverage matrix + run record” deliverable for t
 |-------|----------|-----|
 | `no such table: course_llm_configs` during pytest reset | Test harness / ordering | Import `db.models` inside `reset_test_database_schema()` |
 | `test_demo_seed_binds_llm...` expected always `validated` | Outdated test vs bootstrap without API key | Allow `pending` + assert preset name `gpt-5.4` |
-| Admin Playwright expected `/dashboard` but router sends `/students` | Test bug vs real UX | Assert authenticated layout instead of fixed path |
+| School Playwright expected `/dashboard` but router sends `/students` | Test bug vs real UX | Assert authenticated layout instead of fixed path |
 
 ---
 
@@ -78,7 +78,7 @@ The items previously listed as “deferred for runtime” were executed in an ag
 | Full Playwright `npm run test:e2e` | **303 tests passed** (~14 minutes, managed uvicorn + Vite + Chromium). Log artifact pattern: `/tmp/playwright-full.log` (example path). |
 | Postgres-only suites (`tests/postgres/*`) | PostgreSQL server installed (`postgresql` apt package), cluster started via `pg_ctlcluster 16 main start` when `invoke-rc.d` blocked automatic start during package configure (**policy-rc.d** pattern in minimal containers). Database + role created using `bash ops/scripts/dev/provision_postgres_pytest.sh`. Full tree: `TEST_DATABASE_URL=postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all python3 -m pytest tests/ -q` → **466 passed, 0 skipped**. |
 | `unrar` skips | `apt-get install unrar` — `tests/backend/llm/test_llm_attachment_formats.py` RAR walkers execute on both SQLite and Postgres passes. |
-| Vitest/Jest unit tests | Still **not declared** for admin SPA beyond Playwright — no change. |
+| Vitest/Jest unit tests | Still **not declared** for school SPA beyond Playwright — no change. |
 
 **Dual-database note:** Running `python3 -m pytest tests/` **without** `TEST_DATABASE_URL` still yields **43 skips** — these are **expected** `skipif` gates inside `tests/postgres/*` when `engine.dialect.name != postgresql`. This is not a failure; CI without Postgres mirrors that economy profile. A **complete** verification cycle runs **both** profiles (SQLite-default **and** Postgres-forced).
 
@@ -99,7 +99,7 @@ The items previously listed as “deferred for runtime” were executed in an ag
 
 1. Always prefer `python3 -m pytest` on Linux CI images.
 2. When debugging sqlite chaos, delete `.pytest_tmp/test.sqlite` **after** confirming no concurrent pytest.
-3. Playwright specs that need seeded IDs **must** call `resetE2eScenario()` — cache lives at `tests/e2e/web-admin/.cache/scenario.json`.
+3. Playwright specs that need seeded IDs **must** call `resetE2eScenario()` — cache lives at `tests/e2e/web-school/.cache/scenario.json`.
 4. Container PostgreSQL often requires **manual** `pg_ctlcluster <version> main start` after `apt-get install postgresql` when init scripts are blocked — verify with `pg_isready -h 127.0.0.1 -p 5432`.
 
 ---
@@ -124,7 +124,7 @@ python3 -m pytest tests/ -q
 unset TEST_DATABASE_URL
 python3 -m pytest tests/ -q
 
-cd apps/web/admin
+cd apps/web/school
 npm ci
 npx playwright install chromium
 npm run test:e2e

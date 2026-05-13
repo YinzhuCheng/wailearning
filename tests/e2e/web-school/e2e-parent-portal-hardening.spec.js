@@ -1,7 +1,7 @@
 /**
  * Parent portal browser-backed hardening.
  *
- * This spec intentionally runs from the admin Playwright package so it can
+ * This spec intentionally runs from the school Playwright package so it can
  * reuse the existing FastAPI seed/reset harness. The external runner starts
  * the parent Vite app when this spec name is passed.
  */

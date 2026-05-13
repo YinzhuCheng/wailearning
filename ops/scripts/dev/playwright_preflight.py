@@ -1,6 +1,6 @@
-"""Preflight checks for admin Playwright managed-server runs.
+"""Preflight checks for school Playwright managed-server runs.
 
-The admin Playwright config starts both FastAPI and Vite unless
+The school Playwright config starts both FastAPI and Vite unless
 ``PLAYWRIGHT_USE_EXTERNAL_SERVERS`` is enabled. This script checks the local
 runtime assumptions before the browser runner is invoked, so environment
 failures such as a missing repository virtualenv are diagnosed directly.
@@ -420,7 +420,7 @@ def main(argv: list[str]) -> int:
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print("# Admin Playwright Preflight")
+        print("# School Playwright Preflight")
         print(f"Repository: {payload['repo_root']}")
         print(f"Admin root: {payload['admin_root']}")
         print(f"Managed webServer: {payload['managed_web_server']}")

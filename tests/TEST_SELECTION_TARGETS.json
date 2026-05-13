@@ -570,7 +570,7 @@
                     "apps/backend/courseeval_backend/main.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
                     "apps/backend/courseeval_backend/api/schema_defs/",
-                    "apps/web/admin/src/api/index.js",
+                    "apps/web/school/src/api/index.js",
                     "apps/web/parent/src/api/index.js",
                     "docs/reference/CODE_MAP_AND_ENTRYPOINTS.md",
                     "docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md",
@@ -675,7 +675,7 @@
                 "globs": []
             },
             "ledger_id": null,
-            "notes": "Use for appearance schema/router changes. This target is API-focused and does not replace admin frontend visual checks."
+            "notes": "Use for appearance schema/router changes. This target is API-focused and does not replace school frontend visual checks."
         },
         {
             "id": "backend.learning_notes.api",
@@ -761,11 +761,11 @@
             "notes": "This target keeps former localhost manual smoke scripts represented in the validation selector. It is not a replacement for route-specific behavior/security tests."
         },
         {
-            "id": "frontend.admin.build",
+            "id": "frontend.school.build",
             "category": "frontend-build",
             "risk": "targeted",
-            "description": "Admin SPA production build. Catches Vue/Vite import, syntax, bundling, and asset pipeline regressions before browser E2E is interpreted.",
-            "working_directory": "apps/web/admin",
+            "description": "School SPA production build. Catches Vue/Vite import, syntax, bundling, and asset pipeline regressions before browser E2E is interpreted.",
+            "working_directory": "apps/web/school",
             "coverage_tags": [
                 "admin-frontend",
                 "build",
@@ -783,23 +783,23 @@
             ],
             "triggers": {
                 "paths": [
-                    "apps/web/admin/package.json",
-                    "apps/web/admin/package-lock.json",
-                    "apps/web/admin/vite.config.js",
-                    "apps/web/admin/playwright.config.cjs",
-                    "apps/web/admin/src/"
+                    "apps/web/school/package.json",
+                    "apps/web/school/package-lock.json",
+                    "apps/web/school/vite.config.js",
+                    "apps/web/school/playwright.config.cjs",
+                    "apps/web/school/src/"
                 ],
                 "globs": [
-                    "apps/web/admin/src/**",
-                    "apps/web/admin/*.config.js",
-                    "apps/web/admin/*.config.cjs"
+                    "apps/web/school/src/**",
+                    "apps/web/school/*.config.js",
+                    "apps/web/school/*.config.cjs"
                 ]
             },
-            "ledger_id": "frontend.admin.build",
-            "notes": "Recommended for admin frontend source/config changes. A Playwright spec-only change does not necessarily require rebuild unless shared helpers or config changed."
+            "ledger_id": "frontend.school.build",
+            "notes": "Recommended for school frontend source/config changes. A Playwright spec-only change does not necessarily require rebuild unless shared helpers or config changed."
         },
         {
-            "id": "frontend.admin.markdown_latex_clipboard",
+            "id": "frontend.school.markdown_latex_clipboard",
             "category": "frontend-node-test",
             "risk": "targeted",
             "description": "Node test coverage for admin Markdown/LaTeX preprocessing, clipboard fallback behavior, and Playwright preflight JSON diagnostics.",
@@ -817,36 +817,36 @@
                     "argv": [
                         "node",
                         "--test",
-                        "tests/frontend/admin/markdown_latex_and_clipboard.test.mjs"
+                        "tests/frontend/school/markdown_latex_and_clipboard.test.mjs"
                     ]
                 }
             ],
             "triggers": {
                 "paths": [
-                    "tests/frontend/admin/markdown_latex_and_clipboard.test.mjs",
-                    "apps/web/admin/src/utils/markdownIt.js",
-                    "apps/web/admin/src/utils/clipboard.js",
-                    "apps/web/admin/src/components/MarkdownLatexLiveDemo.vue",
+                    "tests/frontend/school/markdown_latex_and_clipboard.test.mjs",
+                    "apps/web/school/src/utils/markdownIt.js",
+                    "apps/web/school/src/utils/clipboard.js",
+                    "apps/web/school/src/components/MarkdownLatexLiveDemo.vue",
                     "ops/scripts/dev/playwright_preflight.py"
                 ],
                 "globs": [
-                    "tests/frontend/admin/**",
-                    "apps/web/admin/src/utils/markdown*.js",
-                    "apps/web/admin/src/utils/clipboard.js"
+                    "tests/frontend/school/**",
+                    "apps/web/school/src/utils/markdown*.js",
+                    "apps/web/school/src/utils/clipboard.js"
                 ]
             },
             "ledger_id": null,
             "notes": "This target is intentionally cheaper than Playwright and should run before browser E2E for Markdown/LaTeX or copy-button changes."
         },
         {
-            "id": "admin.e2e.learning_notes_attendance_cover_tier20",
-            "category": "admin-playwright",
+            "id": "school.e2e.learning_notes_attendance_cover_tier20",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "Targeted admin Playwright tier for learning-note, course-cover, teaching-calendar redirect, and attendance/calendar surfaces.",
-            "working_directory": "apps/web/admin",
+            "description": "Targeted school Playwright tier for learning-note, course-cover, teaching-calendar redirect, and attendance/calendar surfaces.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "learning-notes",
                 "attendance",
                 "course-cover"
@@ -864,21 +864,21 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-learning-notes-attendance-cover-tier20.spec.js",
-                    "apps/web/admin/src/views/LearningNotes.vue",
-                    "apps/web/admin/src/views/Attendance.vue",
-                    "apps/web/admin/src/views/MyCourses.vue",
-                    "apps/web/admin/src/views/StudentCourseHome.vue",
-                    "apps/web/admin/src/router/index.js",
+                    "tests/e2e/web-school/e2e-learning-notes-attendance-cover-tier20.spec.js",
+                    "apps/web/school/src/views/LearningNotes.vue",
+                    "apps/web/school/src/views/Attendance.vue",
+                    "apps/web/school/src/views/MyCourses.vue",
+                    "apps/web/school/src/views/StudentCourseHome.vue",
+                    "apps/web/school/src/router/index.js",
                     "apps/backend/courseeval_backend/api/routers/learning_notes.py",
                     "apps/backend/courseeval_backend/api/routers/attendance.py"
                 ],
                 "globs": [
-                    "apps/web/admin/src/**/LearningNotes*.vue",
-                    "apps/web/admin/src/**/Attendance*.vue"
+                    "apps/web/school/src/**/LearningNotes*.vue",
+                    "apps/web/school/src/**/Attendance*.vue"
                 ]
             },
-            "ledger_id": "admin.e2e.learning_notes_attendance_cover_tier20",
+            "ledger_id": "school.e2e.learning_notes_attendance_cover_tier20",
             "notes": "Does not replace full Playwright when shared E2E harness, auth, global setup, or broad routing changes."
         },
         {
@@ -1253,16 +1253,17 @@
                 "paths": [
                     "tests/behavior/test_notification_sync_api_edge_behavior.py",
                     "apps/backend/courseeval_backend/api/routers/notifications.py",
+                    "apps/backend/courseeval_backend/domains/homework/appeals.py",
+                    "apps/backend/courseeval_backend/domains/homework/notifications.py",
+                    "apps/backend/courseeval_backend/domains/scores/appeals.py",
                     "apps/backend/courseeval_backend/domains/courses/access.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
                     "apps/backend/courseeval_backend/api/schema_defs/",
                     "apps/backend/courseeval_backend/api/schema_defs/notifications.py",
-                    "apps/web/admin/src/views/Layout.vue",
-                    "apps/web/admin/src/views/Notifications.vue"
+                    "apps/web/school/src/views/Layout.vue",
+                    "apps/web/school/src/views/Notifications.vue"
                 ],
-                "globs": [
-                    "apps/backend/courseeval_backend/domains/notifications/**"
-                ]
+                "globs": []
             },
             "ledger_id": "behavior.notifications.sync_api_edge",
             "notes": "Use before or alongside notification header Playwright tiers when the invariant is mostly API/read-state behavior."
@@ -1419,9 +1420,9 @@
                     "apps/backend/courseeval_backend/api/routers/llm_settings.py",
                     "apps/backend/courseeval_backend/main.py",
                     "apps/backend/courseeval_backend/core/config.py",
-                    "tests/e2e/web-admin/e2e-seed-headers.cjs",
-                    "tests/e2e/web-admin/fixtures.cjs",
-                    "tests/e2e/web-admin/global-setup.cjs"
+                    "tests/e2e/web-school/e2e-seed-headers.cjs",
+                    "tests/e2e/web-school/fixtures.cjs",
+                    "tests/e2e/web-school/global-setup.cjs"
                 ],
                 "globs": [
                     "tests/backend/e2e_dev/**"
@@ -1484,14 +1485,14 @@
             "notes": "Does not replace full PostgreSQL validation for schema-sensitive authorization behavior."
         },
         {
-            "id": "admin.e2e.security_hardening_followup",
-            "category": "admin-playwright",
+            "id": "school.e2e.security_hardening_followup",
+            "category": "school-playwright",
             "risk": "targeted",
             "description": "Small browser-backed security hardening slice for localStorage role tampering, direct student API mutation attempts, and E2E dev seed-token-only rejection on powerful endpoints.",
-            "working_directory": "apps/web/admin",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "security",
                 "auth",
                 "e2e-dev"
@@ -1509,12 +1510,12 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-security-hardening-followup.spec.js",
-                    "tests/e2e/web-admin/e2e-seed-headers.cjs",
-                    "tests/e2e/web-admin/fixtures.cjs",
-                    "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs",
-                    "apps/web/admin/src/views/Login.vue",
-                    "apps/web/admin/src/router/index.js",
+                    "tests/e2e/web-school/e2e-security-hardening-followup.spec.js",
+                    "tests/e2e/web-school/e2e-seed-headers.cjs",
+                    "tests/e2e/web-school/fixtures.cjs",
+                    "tests/e2e/web-school/future-advanced-coverage-helpers.cjs",
+                    "apps/web/school/src/views/Login.vue",
+                    "apps/web/school/src/router/index.js",
                     "apps/backend/courseeval_backend/api/routers/auth.py",
                     "apps/backend/courseeval_backend/api/routers/users.py",
                     "apps/backend/courseeval_backend/api/routers/subjects.py",
@@ -1525,18 +1526,18 @@
                 ],
                 "globs": []
             },
-            "ledger_id": "admin.e2e.security_hardening_followup",
+            "ledger_id": "school.e2e.security_hardening_followup",
             "notes": "Keep this spec small; broader API security coverage belongs in security.api_regression."
         },
         {
-            "id": "admin.e2e.parent_portal_hardening",
-            "category": "admin-playwright",
+            "id": "school.e2e.parent_portal_hardening",
+            "category": "school-playwright",
             "risk": "targeted",
             "description": "Browser-backed parent portal hardening suite for parent-code login binding, same-class elective homework/notification leakage, and parent Vite runner startup.",
-            "working_directory": "apps/web/admin",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports. This target also starts the parent portal Vite app.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "parent-portal",
                 "security",
                 "course-access"
@@ -1554,10 +1555,10 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-parent-portal-hardening.spec.js",
-                    "tests/e2e/web-admin/fixtures.cjs",
-                    "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs",
-                    "apps/web/admin/scripts/playwright-external-runner.cjs",
+                    "tests/e2e/web-school/e2e-parent-portal-hardening.spec.js",
+                    "tests/e2e/web-school/fixtures.cjs",
+                    "tests/e2e/web-school/future-advanced-coverage-helpers.cjs",
+                    "apps/web/school/scripts/playwright-external-runner.cjs",
                     "apps/web/parent/src/api/index.js",
                     "apps/web/parent/src/router/index.js",
                     "apps/web/parent/src/views/Login.vue",
@@ -1571,18 +1572,18 @@
                     "apps/web/parent/src/**"
                 ]
             },
-            "ledger_id": "admin.e2e.parent_portal_hardening",
-            "notes": "Use for parent SPA validation. The spec runs from the admin Playwright package but uses PLAYWRIGHT_PARENT_BASE_URL for the parent app."
+            "ledger_id": "school.e2e.parent_portal_hardening",
+            "notes": "Use for parent SPA validation. The spec runs from the school Playwright package but uses PLAYWRIGHT_PARENT_BASE_URL for the parent app."
         },
         {
-            "id": "admin.e2e.discussion_cover_llm_tier3",
-            "category": "admin-playwright",
+            "id": "school.e2e.discussion_cover_llm_tier3",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "Targeted admin Playwright suite for discussion LLM assistant, long reply preview expansion, and course cover API/UI flows.",
-            "working_directory": "apps/web/admin",
+            "description": "Targeted school Playwright suite for discussion LLM assistant, long reply preview expansion, and course cover API/UI flows.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "discussions",
                 "llm",
                 "course-cover"
@@ -1600,29 +1601,29 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js",
-                    "apps/web/admin/src/components/CourseDiscussionPanel.vue",
-                    "apps/web/admin/src/views/MyCourses.vue",
+                    "tests/e2e/web-school/e2e-discussion-cover-llm-tier3.spec.js",
+                    "apps/web/school/src/components/CourseDiscussionPanel.vue",
+                    "apps/web/school/src/views/MyCourses.vue",
                     "apps/backend/courseeval_backend/api/routers/discussions.py",
                     "apps/backend/courseeval_backend/llm_discussion.py",
                     "apps/backend/courseeval_backend/api/routers/subjects.py"
                 ],
                 "globs": [
-                    "apps/web/admin/src/**/Discussion*.vue"
+                    "apps/web/school/src/**/Discussion*.vue"
                 ]
             },
-            "ledger_id": "admin.e2e.discussion_cover_llm_tier3",
+            "ledger_id": "school.e2e.discussion_cover_llm_tier3",
             "notes": "Escalate when shared E2E fixtures, route guards, or LLM seed helpers change."
         },
         {
-            "id": "admin.e2e.homework_comment_cover_tier4",
-            "category": "admin-playwright",
+            "id": "school.e2e.homework_comment_cover_tier4",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "Targeted admin Playwright suite for homework submission previews, long comments, LLM regrade/recovery, multi-role API guards, and course cover flows.",
-            "working_directory": "apps/web/admin",
+            "description": "Targeted school Playwright suite for homework submission previews, long comments, LLM regrade/recovery, multi-role API guards, and course cover flows.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "homework",
                 "llm",
                 "course-cover"
@@ -1640,30 +1641,30 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-homework-comment-cover-tier4.spec.js",
-                    "apps/web/admin/src/views/Homework.vue",
-                    "apps/web/admin/src/views/HomeworkSubmissions.vue",
-                    "apps/web/admin/src/views/HomeworkSubmissionReview.vue",
-                    "apps/web/admin/src/views/HomeworkSubmission.vue",
+                    "tests/e2e/web-school/e2e-homework-comment-cover-tier4.spec.js",
+                    "apps/web/school/src/views/Homework.vue",
+                    "apps/web/school/src/views/HomeworkSubmissions.vue",
+                    "apps/web/school/src/views/HomeworkSubmissionReview.vue",
+                    "apps/web/school/src/views/HomeworkSubmission.vue",
                     "apps/backend/courseeval_backend/api/routers/homework.py",
                     "apps/backend/courseeval_backend/llm_grading.py"
                 ],
                 "globs": [
-                    "apps/web/admin/src/**/Homework*.vue"
+                    "apps/web/school/src/**/Homework*.vue"
                 ]
             },
             "ledger_id": null,
             "notes": "Pair with backend homework/LLM pytest for API-heavy changes."
         },
         {
-            "id": "admin.e2e.core_flows_smoke",
-            "category": "admin-playwright",
+            "id": "school.e2e.core_flows_smoke",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "Admin Playwright smoke suite for login, seeded homework grid, teacher materials/notifications routes, and admin user grid.",
-            "working_directory": "apps/web/admin",
+            "description": "School Playwright smoke suite for login, seeded homework grid, teacher materials/notifications routes, and admin user grid.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "smoke",
                 "auth",
                 "routing"
@@ -1681,29 +1682,29 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-core-flows-smoke.spec.js",
-                    "apps/web/admin/src/views/Login.vue",
-                    "apps/web/admin/src/views/Layout.vue",
-                    "apps/web/admin/src/router/index.js",
+                    "tests/e2e/web-school/e2e-core-flows-smoke.spec.js",
+                    "apps/web/school/src/views/Login.vue",
+                    "apps/web/school/src/views/Layout.vue",
+                    "apps/web/school/src/router/index.js",
                     "apps/backend/courseeval_backend/api/routers/auth.py",
                     "apps/backend/courseeval_backend/api/routers/e2e_dev.py"
                 ],
                 "globs": [
-                    "apps/web/admin/src/api/**"
+                    "apps/web/school/src/api/**"
                 ]
             },
-            "ledger_id": "admin.e2e.core_flows_smoke",
+            "ledger_id": "school.e2e.core_flows_smoke",
             "notes": "Useful as a low-cost browser smoke when broad UI routing or auth surface changes, but not a replacement for route-specific suites."
         },
         {
-            "id": "admin.e2e.course_ui_markdown_reader",
-            "category": "admin-playwright",
+            "id": "school.e2e.course_ui_markdown_reader",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "Targeted admin Playwright suite for student course UI, markdown reader/demo, sidebar controls, materials layout, and teaching-calendar redirect behavior.",
-            "working_directory": "apps/web/admin",
+            "description": "Targeted school Playwright suite for student course UI, markdown reader/demo, sidebar controls, materials layout, and teaching-calendar redirect behavior.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "materials",
                 "markdown",
                 "course-access",
@@ -1722,31 +1723,31 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-course-ui-markdown-reader.spec.js",
-                    "apps/web/admin/src/views/MyCourses.vue",
-                    "apps/web/admin/src/views/StudentCourseHome.vue",
-                    "apps/web/admin/src/views/Materials.vue",
-                    "apps/web/admin/src/views/MaterialRead.vue",
-                    "apps/web/admin/src/components/MarkdownEditorPanel.vue",
-                    "apps/web/admin/src/router/index.js"
+                    "tests/e2e/web-school/e2e-course-ui-markdown-reader.spec.js",
+                    "apps/web/school/src/views/MyCourses.vue",
+                    "apps/web/school/src/views/StudentCourseHome.vue",
+                    "apps/web/school/src/views/Materials.vue",
+                    "apps/web/school/src/views/MaterialRead.vue",
+                    "apps/web/school/src/components/MarkdownEditorPanel.vue",
+                    "apps/web/school/src/router/index.js"
                 ],
                 "globs": [
-                    "apps/web/admin/src/**/Material*.vue",
-                    "apps/web/admin/src/**/Markdown*.vue"
+                    "apps/web/school/src/**/Material*.vue",
+                    "apps/web/school/src/**/Markdown*.vue"
                 ]
             },
-            "ledger_id": "admin.e2e.course_ui_markdown_reader",
+            "ledger_id": "school.e2e.course_ui_markdown_reader",
             "notes": "Use for browser-visible course reader, materials, markdown, or course-entry UI changes."
         },
         {
-            "id": "admin.e2e.docs_gap_tier15",
-            "category": "admin-playwright",
+            "id": "school.e2e.docs_gap_tier15",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "API-heavy admin Playwright tier for discussions validation, cross-class homework guards, LLM mock grading drain, and sync-status shape.",
-            "working_directory": "apps/web/admin",
+            "description": "API-heavy school Playwright tier for discussions validation, cross-class homework guards, LLM mock grading drain, and sync-status shape.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "discussions",
                 "homework",
                 "llm",
@@ -1765,7 +1766,7 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js"
+                    "tests/e2e/web-school/e2e-docs-gap-tier15.spec.js"
                 ],
                 "globs": []
             },
@@ -1773,14 +1774,14 @@
             "notes": "Keep this for the spec itself or when validating the browser-managed end-to-end composition. Most pure HTTP invariants should prefer backend.e2e_dev.api_hazard_tier or behavior pytest targets first."
         },
         {
-            "id": "admin.e2e.pitfall_guard_rails",
-            "category": "admin-playwright",
+            "id": "school.e2e.pitfall_guard_rails",
+            "category": "school-playwright",
             "risk": "targeted",
             "description": "Focused Playwright/API guard rails derived from documented pitfalls and known risk themes.",
-            "working_directory": "apps/web/admin",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "pitfalls",
                 "guard-rails"
             ],
@@ -1797,7 +1798,7 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-pitfall-guard-rails.spec.js"
+                    "tests/e2e/web-school/e2e-pitfall-guard-rails.spec.js"
                 ],
                 "globs": []
             },
@@ -1805,14 +1806,14 @@
             "notes": "Use for edits to the pitfall guard spec itself. Prefer narrower backend pytest targets for pure API behavior changes."
         },
         {
-            "id": "admin.e2e.ui_responsive_layout",
-            "category": "admin-playwright",
+            "id": "school.e2e.ui_responsive_layout",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "Responsive-layout Playwright guard rails for the admin SPA mobile breakpoint and course-catalog containment.",
-            "working_directory": "apps/web/admin",
+            "description": "Responsive-layout Playwright guard rails for the school SPA mobile breakpoint and course-catalog containment.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "responsive-layout",
                 "ui"
             ],
@@ -1829,7 +1830,7 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/ui-responsive-layout-regression.spec.js"
+                    "tests/e2e/web-school/ui-responsive-layout-regression.spec.js"
                 ],
                 "globs": []
             },
@@ -1837,14 +1838,14 @@
             "notes": "Use for edits to the responsive layout guard spec or layout changes that may affect mobile containment."
         },
         {
-            "id": "admin.e2e.llm_hard_scenarios",
-            "category": "admin-playwright",
+            "id": "school.e2e.llm_hard_scenarios",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "Targeted admin Playwright suite for hard LLM homework scenarios, preset routing, quota edges, and repaired regrade flows.",
-            "working_directory": "apps/web/admin",
+            "description": "Targeted school Playwright suite for hard LLM homework scenarios, preset routing, quota edges, and repaired regrade flows.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "homework",
                 "llm",
                 "routing"
@@ -1862,8 +1863,8 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-llm-hard-scenarios.spec.js",
-                    "apps/web/admin/src/views/Homework.vue",
+                    "tests/e2e/web-school/e2e-llm-hard-scenarios.spec.js",
+                    "apps/web/school/src/views/Homework.vue",
                     "apps/backend/courseeval_backend/api/routers/llm_settings.py",
                     "apps/backend/courseeval_backend/llm_grading.py"
                 ],
@@ -1873,14 +1874,14 @@
             "notes": "Use for browser-visible LLM routing and quota scenarios; pair with backend homework/LLM pytest for API-heavy implementation changes."
         },
         {
-            "id": "admin.e2e.scenario_resilience",
-            "category": "admin-playwright",
+            "id": "school.e2e.scenario_resilience",
+            "category": "school-playwright",
             "risk": "broad",
-            "description": "Broad admin Playwright resilience suite for stale state recovery, concurrent edits, enroll/drop idempotency, notifications, and appeal races.",
-            "working_directory": "apps/web/admin",
+            "description": "Broad school Playwright resilience suite for stale state recovery, concurrent edits, enroll/drop idempotency, notifications, and appeal races.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "High-cost browser tier with concurrency coverage; run when resilience selectors or the covered stale-state invariants change.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "concurrency",
                 "homework",
                 "notifications",
@@ -1899,7 +1900,7 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-scenario-resilience.spec.js"
+                    "tests/e2e/web-school/e2e-scenario-resilience.spec.js"
                 ],
                 "globs": []
             },
@@ -1907,14 +1908,14 @@
             "notes": "Do not use as a cheap default for unrelated changes. Prefer narrower backend behavior tests when a browser stale-state path is not involved."
         },
         {
-            "id": "admin.e2e.future_advanced_coverage_part1",
-            "category": "admin-playwright",
+            "id": "school.e2e.future_advanced_coverage_part1",
+            "category": "school-playwright",
             "risk": "broad",
             "description": "Future advanced coverage Playwright scenarios 1-15 for stale tabs, concurrency, LLM failover, notifications, materials, attendance, and multi-actor races.",
-            "working_directory": "apps/web/admin",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "High-difficulty Playwright scenarios are costly and environment-sensitive; run when touched invariants justify browser race coverage.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "concurrency",
                 "homework",
                 "llm",
@@ -1934,8 +1935,8 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/future-advanced-coverage.spec.js",
-                    "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs"
+                    "tests/e2e/web-school/future-advanced-coverage.spec.js",
+                    "tests/e2e/web-school/future-advanced-coverage-helpers.cjs"
                 ],
                 "globs": []
             },
@@ -1943,14 +1944,14 @@
             "notes": "Do not use as a cheap default. It is recommended mostly when the spec/helper itself changes or broad race-prone surfaces are under review."
         },
         {
-            "id": "admin.e2e.future_advanced_coverage_part2",
-            "category": "admin-playwright",
+            "id": "school.e2e.future_advanced_coverage_part2",
+            "category": "school-playwright",
             "risk": "broad",
             "description": "Future advanced coverage Playwright scenarios 16-30 for material races, stale homework, LLM policy changes, parent/student visibility, notifications, and score overrides.",
-            "working_directory": "apps/web/admin",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "High-difficulty Playwright scenarios are costly and environment-sensitive; run when touched invariants justify browser race coverage.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "concurrency",
                 "homework",
                 "llm",
@@ -1970,8 +1971,8 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/future-advanced-coverage-2.spec.js",
-                    "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs"
+                    "tests/e2e/web-school/future-advanced-coverage-2.spec.js",
+                    "tests/e2e/web-school/future-advanced-coverage-helpers.cjs"
                 ],
                 "globs": []
             },
@@ -1979,14 +1980,14 @@
             "notes": "Do not use as a cheap default. It is recommended mostly when the spec/helper itself changes or broad race-prone surfaces are under review."
         },
         {
-            "id": "admin.e2e.agent_followup_batch",
-            "category": "admin-playwright",
+            "id": "school.e2e.agent_followup_batch",
+            "category": "school-playwright",
             "risk": "targeted",
             "description": "Additive Playwright API/navigation checks for pagination boundaries, health, settings public, and course entry.",
-            "working_directory": "apps/web/admin",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "pagination",
                 "settings",
                 "course-access"
@@ -2004,10 +2005,10 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-agent-followup-batch.spec.js",
+                    "tests/e2e/web-school/e2e-agent-followup-batch.spec.js",
                     "apps/backend/courseeval_backend/api/routers/settings.py",
                     "apps/backend/courseeval_backend/api/routers/subjects.py",
-                    "apps/web/admin/src/views/MyCourses.vue"
+                    "apps/web/school/src/views/MyCourses.vue"
                 ],
                 "globs": []
             },
@@ -2015,14 +2016,14 @@
             "notes": "Use for small API/navigation edges; prefer pytest for pure API contract expansion."
         },
         {
-            "id": "admin.e2e.agent_hazard_tier15",
-            "category": "admin-playwright",
+            "id": "school.e2e.agent_hazard_tier15",
+            "category": "school-playwright",
             "risk": "targeted",
             "description": "API-heavy Playwright hazard tier for pagination 422 boundaries, LLM admin/student edges, parallel mark-all-read, E2E seed gates, forgot password, and disabled registration.",
-            "working_directory": "apps/web/admin",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "e2e-dev",
                 "llm",
                 "notifications",
@@ -2041,7 +2042,7 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-agent-hazard-tier-15.spec.js",
+                    "tests/e2e/web-school/e2e-agent-hazard-tier-15.spec.js",
                     "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
                     "apps/backend/courseeval_backend/api/routers/llm_settings.py",
                     "apps/backend/courseeval_backend/api/routers/notifications.py",
@@ -2053,14 +2054,14 @@
             "notes": "The backend TestClient hazard target is usually a cheaper first check for /api/e2e/dev route changes."
         },
         {
-            "id": "admin.e2e.notification_header_sync_tier",
-            "category": "admin-playwright",
+            "id": "school.e2e.notification_header_sync_tier",
+            "category": "school-playwright",
             "risk": "targeted",
-            "description": "Targeted admin Playwright suite for header notification badge, course switcher scoped sync-status, and focus-triggered convergence.",
-            "working_directory": "apps/web/admin",
+            "description": "Targeted school Playwright suite for header notification badge, course switcher scoped sync-status, and focus-triggered convergence.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "notifications",
                 "course-switcher"
             ],
@@ -2077,10 +2078,10 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js",
+                    "tests/e2e/web-school/e2e-notification-header-sync-tier.spec.js",
                     "docs/frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
-                    "apps/web/admin/src/views/Layout.vue",
-                    "apps/web/admin/src/views/Notifications.vue",
+                    "apps/web/school/src/views/Layout.vue",
+                    "apps/web/school/src/views/Notifications.vue",
                     "apps/backend/courseeval_backend/api/routers/notifications.py"
                 ],
                 "globs": []
@@ -2089,14 +2090,14 @@
             "notes": "Pair with behavior.notifications.sync_api_edge for API-state changes."
         },
         {
-            "id": "admin.e2e.notification_sync_deep_tier",
-            "category": "admin-playwright",
+            "id": "school.e2e.notification_sync_deep_tier",
+            "category": "school-playwright",
             "risk": "broad",
             "description": "Deeper notification sync Playwright tier for admin global totals, course switch discipline, localStorage poison healing, concurrent publishes, isolation, mobile viewport, cold polling, delete races, multi-class course badge boundaries, admin-only global notification write scope, notification target-user denial, UI composer course/class scope, and explicit notification target-clearing updates.",
-            "working_directory": "apps/web/admin",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "High-cost browser tier with concurrency and viewport coverage; run when notification UI/state convergence changes are material.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "notifications",
                 "course-switcher",
                 "mobile",
@@ -2115,16 +2116,16 @@
             ],
             "triggers": {
                 "paths": [
-                    "tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js",
+                    "tests/e2e/web-school/e2e-notification-sync-deep-tier.spec.js",
                     "docs/frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
-                    "apps/web/admin/src/views/Layout.vue",
-                    "apps/web/admin/src/views/Notifications.vue",
+                    "apps/web/school/src/views/Layout.vue",
+                    "apps/web/school/src/views/Notifications.vue",
                     "apps/backend/courseeval_backend/api/routers/notifications.py",
                     "apps/backend/courseeval_backend/domains/courses/access.py"
                 ],
                 "globs": []
             },
-            "ledger_id": "admin.e2e.notification_sync_deep_tier",
+            "ledger_id": "school.e2e.notification_sync_deep_tier",
             "notes": "Use after narrower notification API/header targets when changes affect convergence or multi-role isolation."
         },
         {
@@ -2221,15 +2222,15 @@
             "notes": "Recommended for high-blast-radius backend, schema, test reset, behavior/security, or release-quality claims. It is expensive and environment-dependent."
         },
         {
-            "id": "admin.e2e.full",
-            "category": "admin-playwright",
+            "id": "school.e2e.full",
+            "category": "school-playwright",
             "risk": "full",
-            "description": "Full admin Playwright E2E suite under apps/web/admin. Recommended when shared E2E harness, Playwright config, global setup, seed/reset, auth, or broad frontend routing changes make targeted evidence too weak.",
-            "working_directory": "apps/web/admin",
+            "description": "Full school Playwright E2E suite under apps/web/school. Recommended when shared E2E harness, Playwright config, global setup, seed/reset, auth, or broad frontend routing changes make targeted evidence too weak.",
+            "working_directory": "apps/web/school",
             "requires_review_reason": "High-cost browser profile with local browser, port, seed/reset, backend, and frontend dependencies; run serially unless isolated ports are configured.",
             "risk_escalation": "Required or strongly recommended for Playwright harness, global setup, admin router, auth layout, seed/reset, or broad frontend navigation changes.",
             "coverage_tags": [
-                "admin-playwright",
+                "school-playwright",
                 "playwright-harness",
                 "full-browser"
             ],
@@ -2244,22 +2245,22 @@
             ],
             "triggers": {
                 "paths": [
-                    "apps/web/admin/playwright.config.cjs",
-                    "tests/e2e/web-admin/global-setup.cjs",
-                    "tests/e2e/web-admin/fixtures.cjs",
-                    "tests/e2e/web-admin/future-advanced-coverage-helpers.cjs",
+                    "apps/web/school/playwright.config.cjs",
+                    "tests/e2e/web-school/global-setup.cjs",
+                    "tests/e2e/web-school/fixtures.cjs",
+                    "tests/e2e/web-school/future-advanced-coverage-helpers.cjs",
                     "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
                     "apps/backend/courseeval_backend/main.py",
-                    "apps/web/admin/src/router/index.js"
+                    "apps/web/school/src/router/index.js"
                 ],
                 "globs": [
-                    "tests/e2e/web-admin/**/*.cjs",
-                    "tests/e2e/web-admin/**/*.spec.js",
-                    "apps/web/admin/src/router/**"
+                    "tests/e2e/web-school/**/*.cjs",
+                    "tests/e2e/web-school/**/*.spec.js",
+                    "apps/web/school/src/router/**"
                 ]
             },
             "ledger_id": null,
-            "notes": "The current ledger records targeted Playwright but not a current full admin Playwright run for this branch. Treat this as a high-cost recommendation, not an automatic command to start."
+            "notes": "The current ledger records targeted Playwright but not a current full school Playwright run for this branch. Treat this as a high-cost recommendation, not an automatic command to start."
         }
     ],
     "fallback_rules": [
@@ -2310,28 +2311,28 @@
         },
         {
             "id": "admin-frontend-conservative",
-            "description": "Admin frontend source changes without a more specific Playwright target should receive full Playwright consideration after the build.",
+            "description": "School frontend source changes without a more specific Playwright target should receive full Playwright consideration after the build.",
             "if_any_path_matches": [
-                "apps/web/admin/src/*",
-                "apps/web/admin/src/**"
+                "apps/web/school/src/*",
+                "apps/web/school/src/**"
             ],
             "unless_recommended_categories": [
-                "admin-playwright"
+                "school-playwright"
             ],
             "recommend": [
-                "frontend.admin.build",
-                "admin.e2e.full"
+                "frontend.school.build",
+                "school.e2e.full"
             ]
         },
         {
             "id": "playwright-harness-conservative",
             "description": "Any shared Playwright harness/config change should receive full Playwright consideration.",
             "if_any_path_matches": [
-                "apps/web/admin/playwright.config.cjs",
-                "tests/e2e/web-admin/**/*.cjs"
+                "apps/web/school/playwright.config.cjs",
+                "tests/e2e/web-school/**/*.cjs"
             ],
             "recommend": [
-                "admin.e2e.full"
+                "school.e2e.full"
             ]
         }
     ]

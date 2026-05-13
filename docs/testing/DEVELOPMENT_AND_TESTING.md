@@ -74,7 +74,7 @@ Interpretation guidance:
 
 - `documentation` includes `docs/`, root `README.md`, root `AGENTS.md`, and Markdown/Text/RST files under app, ops, or tests folders.
 - `test_code` includes `tests/backend/`, `tests/behavior/`, `tests/e2e/`, `tests/postgres/`, `tests/security/`, `tests/scenarios/`, plus repository pytest bootstrapping files.
-- `primary_source` includes `apps/backend/courseeval_backend/`, `apps/web/admin/src/`, and `apps/web/parent/src/`.
+- `primary_source` includes `apps/backend/courseeval_backend/`, `apps/web/school/src/`, and `apps/web/parent/src/`.
 - `tooling` includes repository maintenance utilities such as `ops/scripts/` and `tests/devtools/`.
 - `generated_or_lock` is separated so files such as `package-lock.json` do not distort the main health trend.
 
@@ -277,7 +277,7 @@ Operational rules:
   registry rule, run a broader profile, or document why no runtime target is
   appropriate.
 - If the selector recommends no Playwright target for docs-only diffs, that is
-  expected. If it recommends no Playwright target for admin UI, E2E fixture,
+  expected. If it recommends no Playwright target for school UI, E2E fixture,
   Playwright config, route, auth, or seed changes, treat that as a registry gap.
 - If `non_full_validation.status` is `not_sufficient`, do not present targeted
   validation as complete evidence until the blocking reason is addressed or
@@ -305,7 +305,7 @@ and writes local artifacts under the ignored agent workspace:
 
 ```bash
 python ops/scripts/dev/run_validation_target.py static.validation_selector
-python ops/scripts/dev/run_validation_target.py frontend.admin.build --timeout-seconds 900
+python ops/scripts/dev/run_validation_target.py frontend.school.build --timeout-seconds 900
 python ops/scripts/dev/run_validation_target.py backend.learning_notes.api
 python ops/scripts/dev/run_validation_target.py static.validation_selector --dry-run
 ```
@@ -374,7 +374,7 @@ a profile-level summary under ignored `.agent-run/logs/`:
 
 ```bash
 python ops/scripts/dev/run_validation_profile.py static
-python ops/scripts/dev/run_validation_profile.py selector-recommended --paths apps/web/admin/src/views/HomeworkSubmissions.vue --dry-run
+python ops/scripts/dev/run_validation_profile.py selector-recommended --paths apps/web/school/src/views/HomeworkSubmissions.vue --dry-run
 python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk targeted
 python ops/scripts/dev/run_validation_profile.py selector-recommended --include-review-targets --max-risk broad
 ```
@@ -435,10 +435,10 @@ Known first-version limitations:
   detection beyond executable preflight, and machine-readable pytest/Playwright
   item-level result parsing remain follow-up work.
 
-### Admin frontend
+### School frontend
 
 ```bash
-cd apps/web/admin
+cd apps/web/school
 npm install
 npm run dev
 ```
@@ -471,12 +471,12 @@ Quick reminders for developers running locally:
 
 - Prefer `.env` at the repo root for backend variables (`Settings` reads `.env` with UTF-8 encoding).
 - Never commit real secrets; placeholder defaults exist for local ergonomics but fail validation when `APP_ENV` is production or `REQUIRE_STRONG_SECRETS=true`.
-- Frontend dev servers read `VITE_*` from `apps/web/admin/` or `apps/web/parent/` — see CONFIGURATION_REFERENCE **Frontend dev** section.
+- Frontend dev servers read `VITE_*` from `apps/web/school/` or `apps/web/parent/` — see CONFIGURATION_REFERENCE **Frontend dev** section.
 
 Playwright-specific additions (not part of `Settings`):
 
 - `PLAYWRIGHT_USE_EXTERNAL_SERVERS` — skip spawning managed uvicorn/vite when pointing at already-running servers.
-- `E2E_API_PORT`, `E2E_UI_PORT` — defaults **8012** / **3012** inside `apps/web/admin/playwright.config.cjs`.
+- `E2E_API_PORT`, `E2E_UI_PORT` — defaults **8012** / **3012** inside `apps/web/school/playwright.config.cjs`.
 - `E2E_PYTHON` — Python executable for the managed API subprocess.
 
 Dual gate for `/api/e2e/dev/*` — see [E2E Seed and Environment](#e2e-seed-and-environment) below and CONFIGURATION_REFERENCE (`E2E_DEV_REQUIRE_ADMIN_JWT`).
@@ -508,8 +508,8 @@ Current GitHub Actions scope:
   `python -m unittest tests.backend.manual.test_validation_selector -v`, and
   uploads `validation-selection.json` for pull requests;
 - `Backend quick pytest`: runs default quick backend `pytest`;
-- `Admin frontend build`: runs `npm ci` plus `npm run build` for
-  `apps/web/admin`;
+- `School frontend build`: runs `npm ci` plus `npm run build` for
+  `apps/web/school`;
 - `Parent frontend build`: runs `npm ci` plus `npm run build` for
   `apps/web/parent`.
 
@@ -583,19 +583,19 @@ For a domain-by-domain map of the backend suites, read [TEST_SUITE_MAP.md](TEST_
 Use browser tests for login flows, stale-tab behavior, deep links, and UI-to-backend convergence.
 
 ```bash
-cd apps/web/admin
+cd apps/web/school
 npx playwright install chromium
 npm run test:e2e
 ```
 
-The default config runs **all** spec files under `tests/e2e/web-admin/` sequentially (`workers: 1`). A complete green run is ~300+ tests / ~15 minutes on a warm agent — budget wall-clock accordingly when iterating.
+The default config runs **all** spec files under `tests/e2e/web-school/` sequentially (`workers: 1`). A complete green run is ~300+ tests / ~15 minutes on a warm agent — budget wall-clock accordingly when iterating.
 
 For environment variables, persistent SQLite behavior during long serial runs, selector strategy, and triage order when many specs fail together, read [FULL_PLAYWRIGHT_E2E_RUNBOOK.md](FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 
 Key files:
 
-- `apps/web/admin/playwright.config.cjs`
-- `tests/e2e/web-admin/`
+- `apps/web/school/playwright.config.cjs`
+- `tests/e2e/web-school/`
 - `docs/testing/TEST_EXECUTION_PITFALLS.md`
 - `tests/TEST_PROTECTION_RULES.json`
 
@@ -611,12 +611,12 @@ Before running Playwright on Windows, read the pitfalls document first. Known fa
 
 In this branch, the pair below is already implemented as normal runnable Playwright coverage:
 
-- `tests/e2e/web-admin/future-advanced-coverage.spec.js`
-- `tests/e2e/web-admin/future-advanced-coverage-2.spec.js`
+- `tests/e2e/web-school/future-advanced-coverage.spec.js`
+- `tests/e2e/web-school/future-advanced-coverage-2.spec.js`
 
 Shared helpers live in:
 
-- `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
+- `tests/e2e/web-school/future-advanced-coverage-helpers.cjs`
 
 Scenario index (cases 1–30), verification commands, and interpretation notes are consolidated in [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md) under the Playwright section — there is no separate env-gated “backlog” suite in this repository.
 
@@ -630,7 +630,7 @@ The repository includes an E2E-only reset API used by browser tests.
 
 **Dual gate for powerful dev routes (mock LLM, grading pump, preset shortcuts)**
 
-When `E2E_DEV_REQUIRE_ADMIN_JWT=true` (default in `apps/web/admin/playwright.config.cjs` for the managed API subprocess), the following endpoints require **both** header `X-E2E-Seed-Token` **and** a valid **administrator** `Authorization: Bearer <jwt>`:
+When `E2E_DEV_REQUIRE_ADMIN_JWT=true` (default in `apps/web/school/playwright.config.cjs` for the managed API subprocess), the following endpoints require **both** header `X-E2E-Seed-Token` **and** a valid **administrator** `Authorization: Bearer <jwt>`:
 
 - `POST /api/e2e/dev/mock-llm/configure`
 - `GET /api/e2e/dev/mock-llm/state`
@@ -641,7 +641,7 @@ When `E2E_DEV_REQUIRE_ADMIN_JWT=true` (default in `apps/web/admin/playwright.con
 
 `POST /api/e2e/dev/reset-scenario` remains **seed-token only** so automation can obtain credentials before any JWT exists.
 
-Playwright (`tests/e2e/web-admin/fixtures.cjs`, `global-setup.cjs`) calls `refreshE2eAdminBearer()` from `e2e-seed-headers.cjs` after each successful reset to store the seeded admin token in `process.env.E2E_DEV_ADMIN_BEARER` and merge it into shared `seedHeaders()` for specs that call powerful `/api/e2e/dev/*` routes.
+Playwright (`tests/e2e/web-school/fixtures.cjs`, `global-setup.cjs`) calls `refreshE2eAdminBearer()` from `e2e-seed-headers.cjs` after each successful reset to store the seeded admin token in `process.env.E2E_DEV_ADMIN_BEARER` and merge it into shared `seedHeaders()` for specs that call powerful `/api/e2e/dev/*` routes.
 
 To disable the admin JWT requirement (legacy tooling that only passes the seed header): set `E2E_DEV_REQUIRE_ADMIN_JWT=0` in the backend environment.
 
@@ -730,9 +730,9 @@ Recent behavior coverage includes scenarios such as:
 - quota exhaustion followed by recovery,
 - disable-then-reenable LLM grading flows.
 
-Browser note: `tests/e2e/web-admin/e2e-discussion-cover-llm-tier3.spec.js` (15 cases) exercises **discussion LLM assistant**, **long-body preview/collapse**, and **course cover** flows against the seeded scenario; `POST /api/e2e/dev/reset-scenario` now seeds a per-run **`discussion_llm_profile`** plus an enabled course LLM row wired to the mock chat endpoint so discussion jobs can complete without manual admin setup.
+Browser note: `tests/e2e/web-school/e2e-discussion-cover-llm-tier3.spec.js` (15 cases) exercises **discussion LLM assistant**, **long-body preview/collapse**, and **course cover** flows against the seeded scenario; `POST /api/e2e/dev/reset-scenario` now seeds a per-run **`discussion_llm_profile`** plus an enabled course LLM row wired to the mock chat endpoint so discussion jobs can complete without manual admin setup.
 
-Additional browser coverage: `tests/e2e/web-admin/e2e-homework-comment-cover-tier4.spec.js` (15 cases) stresses **homework submissions list** `content_preview` / `comment_preview` ellipsis behavior (teacher UI uses stable `data-testid`s), **LLM auto-grade** long comments, **regrade** and **429-then-success** mock paths, concurrent teacher/student API interactions, and **course cover** uploads (teacher UI + admin POST + student-visible banners).
+Additional browser coverage: `tests/e2e/web-school/e2e-homework-comment-cover-tier4.spec.js` (15 cases) stresses **homework submissions list** `content_preview` / `comment_preview` ellipsis behavior (teacher UI uses stable `data-testid`s), **LLM auto-grade** long comments, **regrade** and **429-then-success** mock paths, concurrent teacher/student API interactions, and **course cover** uploads (teacher UI + admin POST + student-visible banners).
 
 ## Practical Testing Rules
 
@@ -746,27 +746,27 @@ Additional browser coverage: `tests/e2e/web-admin/e2e-homework-comment-cover-tie
 
 When extending Playwright or threaded pytest coverage, the friction usually clusters around contract mismatches, router redirects by role, SQLite races, and Playwright locator ambiguity. Read the later pitfall entries in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) before debugging failures that look like flaky UI but are actually environment or selector-discipline issues.
 
-Further test-authoring lessons from the tier-4 stress E2E pass are recorded in the same document, including `apiBase` mismatches, JSON encoding mistakes, schema `ge=` limits, homework title DOM-vs-API mismatches, password-change token capture, and attachment ACL issues. A subsequent full `pytest` plus full admin Playwright pass on a Linux agent added notes about MessageBox accessibility, duplicate course-title rows, disabled-force click mistakes, `waitForResponse` races, password button labels, and Vite `goto` races. A later pitfall-guard follow-up added delete-list UI-vs-API truth and per-route `page_size` lessons.
+Further test-authoring lessons from the tier-4 stress E2E pass are recorded in the same document, including `apiBase` mismatches, JSON encoding mistakes, schema `ge=` limits, homework title DOM-vs-API mismatches, password-change token capture, and attachment ACL issues. A subsequent full `pytest` plus full school Playwright pass on a Linux agent added notes about MessageBox accessibility, duplicate course-title rows, disabled-force click mistakes, `waitForResponse` races, password button labels, and Vite `goto` races. A later pitfall-guard follow-up added delete-list UI-vs-API truth and per-route `page_size` lessons.
 
 ### Recommendations for new test samples (E2E and API)
 
-- **Confirm the contract first**: path, verb, query-vs-body shape, and Pydantic bounds should align with `apps/backend/courseeval_backend/api/routers/*.py` and `apps/backend/courseeval_backend/api/schemas.py`, and should mirror the admin client in `apps/web/admin/src/api` when in doubt.
+- **Confirm the contract first**: path, verb, query-vs-body shape, and Pydantic bounds should align with `apps/backend/courseeval_backend/api/routers/*.py` and `apps/backend/courseeval_backend/api/schemas.py`, and should mirror the admin client in `apps/web/school/src/api` when in doubt.
 - **Assert server state before UI**: use `page.request`, shared `apiGetJson`, or `expect.poll` on an API predicate, then reload or widen locators for the UI.
 - **Prefer stable hooks**: `data-testid`, course context helpers such as `enterSeededRequiredCourse`, and explicit `waitForResponse` registration before clicks are safer, especially for Element Plus dialogs and batch actions.
 - **Concurrency**: prefer API-only parallel storms when the UI disables controls; avoid `Promise.all` on clicks that may be no-ops when disabled (see Pitfall 22).
 - **Conditional scenarios**: if a test needs two movable material chapters, a parent code, or a class-teacher seed, use `test.skip` with a clear reason when the seed layout does not support it, and document the assumption in the spec comment.
-- **Playwright environment contract**: default managed E2E in this branch starts the API on `8012` and the admin UI on `3012`, uses `PLAYWRIGHT_USE_EXTERNAL_SERVERS` to opt out of managed servers, and accepts `E2E_PYTHON` plus `E2E_USE_REAL_WORKER` for backend-process control; keep docs and CI commands aligned with `apps/web/admin/playwright.config.cjs`.
+- **Playwright environment contract**: default managed E2E in this branch starts the API on `8012` and the school UI on `3012`, uses `PLAYWRIGHT_USE_EXTERNAL_SERVERS` to opt out of managed servers, and accepts `E2E_PYTHON` plus `E2E_USE_REAL_WORKER` for backend-process control; keep docs and CI commands aligned with `apps/web/school/playwright.config.cjs`.
 - **Regression placement**: put **API contract and idempotency** checks in `pytest` where possible; reserve Playwright for routing, visibility, and multi-tab behavior that HTTP tests cannot see.
 
 ### Sample hygiene: overlap, redundancy, and refinement targets
 
 This is judgment for maintainers, not an automatic delete list:
 
-- **`tests/e2e/web-admin/e2e-tier4-stress-backlog.spec.js`** and the **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
+- **`tests/e2e/web-school/e2e-tier4-stress-backlog.spec.js`** and the **`future-advanced-coverage*.spec.js`** family can overlap conceptually (multi-role, LLM, notifications). When adding scenarios, check for an existing spec that already proves the same **invariant**; extend or parameterize before copying a full new test.
 - Older E2E that still rely on `toBeHidden` on Element Plus dialogs alone are more fragile than patterns that confirm success via network response, navigation, and table-row state. Prefer aligning those tests with the authoritative-state-first rule rather than deleting them outright.
 - **`TEST_REDUNDANCY_AUDIT.md`** remains the formal gate for safe deletes; the audit's protected list intentionally keeps high-difficulty files, so do not clean up stress specs without reading that policy.
 
-### May 2026: lessons from a full `pytest` + full admin Playwright run (Linux agent)
+### May 2026: lessons from a full `pytest` + full school Playwright run (Linux agent)
 
 These notes **add** to the bullets above; they do not replace the redundancy audit or protection rules.
 
@@ -788,7 +788,7 @@ These notes **add** to the bullets above; they do not replace the redundancy aud
 
 ### May 2026 (second pass): pitfall-guard batch specs and `page_size` discipline
 
-- A second small Playwright file **`tests/e2e/web-admin/e2e-pitfall-guard-rails-batch2.spec.js`** was added to widen **`page_size` 422** coverage across **logs**, **points**, **parent scores/homework**, **homework submissions**, and **students** where router-specific `le` limits differ. Run it alone with:
+- A second small Playwright file **`tests/e2e/web-school/e2e-pitfall-guard-rails-batch2.spec.js`** was added to widen **`page_size` 422** coverage across **logs**, **points**, **parent scores/homework**, **homework submissions**, and **students** where router-specific `le` limits differ. Run it alone with:
   - `npx playwright test e2e-pitfall-guard-rails-batch2.spec.js`
 - When adding more list-endpoint tests, **parameterize `(path, max_page_size)`** from code or a tiny shared table in the spec; avoid magic `200` unless you confirmed `le` for that router.
 - **`e2e-pitfall-guard-rails.spec.js`** (15 cases) and **batch2** (10 cases) overlap conceptually with **`e2e-cross-cutting-tier3.spec.js`** HTTP-edge tests; new edges should **extend** batch2 or tier3, not fork a third file, unless the invariant is genuinely new.
@@ -810,7 +810,7 @@ The exhaustive narrative lives in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PI
 | Many `.el-select-dropdown` nodes stay hidden (teleported poppers) | **71**, visible filter / API setup | Prefer **`POST /api/subjects`** when testing delete/list invariants, not form picker ergonomics. |
 | Roster-enroll UI needs **`student_b`** **未在课** | **72**, admin `DELETE .../subjects/{id}/students/{sid}` first | Required-course sync may already enroll class roster. |
 | Batch调班 on huge **`/users`** table | **73**, scroll row, wait **`users-open-batch-class` enabled** | Optional **`filterable`** input may not exist — option click still works. |
-| Admin frontend build fails with `vite: not found` | **74**, missing `node_modules` under `apps/web/admin` | Run `npm ci` before `npm run build` on fresh agents. |
+| School frontend build fails with `vite: not found` | **74**, missing `node_modules` under `apps/web/school` | Run `npm ci` before `npm run build` on fresh agents. |
 | Playwright runner installed but Chromium missing | **75**, `Executable doesn't exist`, `playwright install` | Run `npx playwright install chromium` before targeted E2E. |
 | Discussion Markdown demo / preview expectation drift | **76**, `discussion-markdown-preview`, `查看 Markdown + LaTeX 示例` | Demo is collapsed by default; assert preview or click toggle first. |
 | Wrapper-based dual-scroll refactor broke Vue template structure | **77**, `Element is missing end tag` | Recount preserved scroll-container tags and run `npm run build` immediately. |
@@ -888,12 +888,12 @@ Default `pytest` without Postgres or **`unrar`** remains valid for fast loops bu
 1. **PostgreSQL + throwaway DB:** `sudo apt-get install -y postgresql postgresql-contrib` → `sudo pg_ctlcluster 16 main start` (version may differ) → `bash <REPO_ROOT>/ops/scripts/dev/provision_postgres_pytest.sh` (requires `sudo -u postgres`).
 2. **RAR extractors:** `sudo apt-get install -y unrar rar` (or `unrar-free` where `unrar` is unavailable).
 3. **pytest:** `python3 -m pip install -r <REPO_ROOT>/requirements.txt` then `cd <REPO_ROOT> && COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/ -q` → expect **0 skipped** when steps 1–2 succeeded; consult [`TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`](TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) for the latest representative `passed` count.
-4. **Node + Playwright (apt, not `nvm`):** `sudo apt-get install -y nodejs npm` — on Ubuntu 24.04 this typically yields **Node 18.x** and **npm 9.x**, sufficient for `<REPO_ROOT>/apps/web/admin/package.json`.
-5. **Admin deps + browser:** `cd <REPO_ROOT>/apps/web/admin && npm ci && npx playwright install chromium`.
+4. **Node + Playwright (apt, not `nvm`):** `sudo apt-get install -y nodejs npm` — on Ubuntu 24.04 this typically yields **Node 18.x** and **npm 9.x**, sufficient for `<REPO_ROOT>/apps/web/school/package.json`.
+5. **Admin deps + browser:** `cd <REPO_ROOT>/apps/web/school && npm ci && npx playwright install chromium`.
 6. **E2E run:** Use **`E2E_PYTHON`** pointing at an interpreter that has **`uvicorn`** on `PYTHONPATH` (repository **`.venv`** if present, else **`/usr/bin/python3`** after `pip install -r requirements.txt`). Example smoke:
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=/usr/bin/python3 E2E_DEV_SEED_TOKEN=test-playwright-seed \
   npx playwright test e2e-agent-hazard-tier-15.spec.js --project=chromium
 ```
@@ -989,7 +989,7 @@ The following files are **additive** regression nets. They do not replace the di
 
 - **`tests/postgres/test_postgres_llm_schema_and_policy.py`** — `information_schema` and FK-shape checks for LLM global policy vs course config (round-4 alignment).
 - **`tests/postgres/test_postgres_quota_api_and_constraints.py`** — fifteen **HTTP + raw SQL** checks: admin validation (`422` paths), teacher/student authorization edges, duplicate endpoint rows (`uq_course_llm_config_endpoint`), duplicate enrollment, orphan FK attempts, and metadata checks. Requires PostgreSQL (`TEST_DATABASE_URL`); skipped on SQLite.
-- **`tests/e2e/web-admin/e2e-postgres-hazard-tier.spec.js`** — fifteen **API + light UI** checks: global quota policy round-trip, legacy JSON keys on course PUT, student quota alignment after admin timezone change, bulk overrides, parallel duplicate GETs, Settings and Subjects LLM dialog smoke. Requires Playwright global setup (`E2E_DEV_SEED_TOKEN`). Run **serially** with other Playwright jobs (`CI=1` recommended).
+- **`tests/e2e/web-school/e2e-postgres-hazard-tier.spec.js`** — fifteen **API + light UI** checks: global quota policy round-trip, legacy JSON keys on course PUT, student quota alignment after admin timezone change, bulk overrides, parallel duplicate GETs, Settings and Subjects LLM dialog smoke. Requires Playwright global setup (`E2E_DEV_SEED_TOKEN`). Run **serially** with other Playwright jobs (`CI=1` recommended).
 
 Example commands:
 
@@ -998,12 +998,12 @@ Example commands:
 export TEST_DATABASE_URL='postgresql://<USER>:<PASSWORD>@127.0.0.1:5432/<DBNAME>'
 python3 -m pytest tests/postgres/ -q
 
-# E2E hazard tier (from admin frontend package root)
-cd <REPO_ROOT>/apps/web/admin
+# E2E hazard tier (from school frontend package root)
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-postgres-hazard-tier.spec.js --project=chromium
 ```
 
-Artifacts: Playwright may write `<REPO_ROOT>/apps/web/admin/test-results/` and `<REPO_ROOT>/apps/web/admin/playwright-report/`; these paths must remain **untracked** and must not be committed.
+Artifacts: Playwright may write `<REPO_ROOT>/apps/web/school/test-results/` and `<REPO_ROOT>/apps/web/school/playwright-report/`; these paths must remain **untracked** and must not be committed.
 
 #### 5. Full-suite regression runs (cloud agent, May 2026) and line-count inventory
 
@@ -1023,10 +1023,10 @@ Interpretation for agents:
 - The **skip class** is dominated by **`tests/postgres/*`** plus **`test_r3`** (`information_schema`). Treat “SQLite-only green” as **necessary but not sufficient** for schema-sensitive merges.
 - **Zero-skip CI:** install **`unrar`** (or `unrar-free`), run **`ops/scripts/dev/provision_postgres_pytest.sh`**, then set **`COURSEEVAL_AUTO_PG_TESTS=1`** (Linux agents) or **`TEST_DATABASE_URL`** explicitly (portable).
 
-**Not executed in the same session:** a full `npx playwright test` over **all** `tests/e2e/web-admin/*.spec.js` files (that run is hours-wide and belongs in a dedicated CI job). What **was** executed after the PostgreSQL pytest pass is the **additive** hazard file only:
+**Not executed in the same session:** a full `npx playwright test` over **all** `tests/e2e/web-school/*.spec.js` files (that run is hours-wide and belongs in a dedicated CI job). What **was** executed after the PostgreSQL pytest pass is the **additive** hazard file only:
 
 ```bash
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-postgres-hazard-tier.spec.js --project=chromium
 ```
 
@@ -1077,7 +1077,7 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 - **Confirm HTTP contracts before scripting:** Path, verb, query vs body, and **`Query(..., le=)`** bounds must match routers — copy-pasting `page_size=200` across routes causes false reds when one route allows **1000** (students) and another **100** (logs). Prefer a **small shared table** `(path, max_page_size)` in specs or grep routers once.
 - **Prefer stable hooks:** `data-testid`, seeded scenario helpers (`enterSeededRequiredCourse`), and API-first assertions before fragile UI copy.
 - **Overlap without deleting:** `e2e-pitfall-guard-rails*.spec.js`, `e2e-cross-cutting-tier*.spec.js`, and `future-advanced-coverage*.spec.js` intentionally overlap on invariants (pagination, auth). Before adding a file, **grep for the same invariant**; extend or parameterize rather than fork a fourth parallel guard file unless the scenario is genuinely new.
-- **Admin sidebar labels (LLM triage):** As of the `2026-05` navigation consolidation in `apps/web/admin/src/views/Layout.vue`, the student root entry **我的课程** was renamed **选课与进度** (route `/courses` unchanged). E2E that assert visible Chinese text for the old label may need to target **选课与进度** or rely on `page.goto('/courses')` / `data-testid` instead of menu title strings.
+- **Admin sidebar labels (LLM triage):** As of the `2026-05` navigation consolidation in `apps/web/school/src/views/Layout.vue`, the student root entry **我的课程** was renamed **选课与进度** (route `/courses` unchanged). E2E that assert visible Chinese text for the old label may need to target **选课与进度** or rely on `page.goto('/courses')` / `data-testid` instead of menu title strings.
 - **Samples that deserve refinement when touched:** Very broad Playwright regexes (e.g. `/密码/` on settings), **`textarea:first()`** on homework submit (discussion vs submission — use `homework-submit-content`), and **unscoped `tr:has-text(course)`** on **我的课程** (catalog vs cards — scope to `.elective-catalog-card`).
 - **Automated redundancy policy:** Deletions still go through [TEST_REDUNDANCY_AUDIT.md](TEST_REDUNDANCY_AUDIT.md) and `tests/TEST_PROTECTION_RULES.json`; overlap is a **review signal**, not an automatic delete list.
 
@@ -1093,12 +1093,12 @@ This subsection records lessons from a focused repair pass (pytest + Playwright 
 - `tests/postgres/test_postgres_dialect_guards.py` — dialect and transactional guards that **skip on SQLite** unless `TEST_DATABASE_URL` is PostgreSQL (see `tests/postgres/conftest.py`).
 - `tests/postgres/test_postgres_llm_schema_and_policy.py` — LLM **schema shape** guards (`information_schema`, FK `ON DELETE CASCADE`, nullable attribution columns).
 - `tests/postgres/test_postgres_quota_api_and_constraints.py` — fifteen **HTTP + SQL** hazard checks for quota policy, course LLM boundaries, uniqueness, and FK violations.
-- `tests/e2e/web-admin/e2e-agent-followup-batch.spec.js` — ten API/navigation checks complementary to pitfall rails.
-- `tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js` — ten **UI + API** checks for **`header-notification-badge`**, **`header-course-switch`** scoped **`sync-status`**, dropdown label convergence, and dual-tab polling (see [NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md), **Pitfall 50** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
-- `tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js` — fifteen **follow-up** checks (admin global sync vs list, teacher course-switch discipline, localStorage poison + reload paths, concurrent POST storms, cross-teacher isolation, alien `subject_id` **403**, mobile viewport, delete-under-navigation stress).
+- `tests/e2e/web-school/e2e-agent-followup-batch.spec.js` — ten API/navigation checks complementary to pitfall rails.
+- `tests/e2e/web-school/e2e-notification-header-sync-tier.spec.js` — ten **UI + API** checks for **`header-notification-badge`**, **`header-course-switch`** scoped **`sync-status`**, dropdown label convergence, and dual-tab polling (see [NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md), **Pitfall 50** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
+- `tests/e2e/web-school/e2e-notification-sync-deep-tier.spec.js` — fifteen **follow-up** checks (admin global sync vs list, teacher course-switch discipline, localStorage poison + reload paths, concurrent POST storms, cross-teacher isolation, alien `subject_id` **403**, mobile viewport, delete-under-navigation stress).
 - `tests/behavior/test_notification_sync_api_edge_behavior.py` — ten **pytest** checks aligning **`GET /api/notifications`** aggregates with **`GET /api/notifications/sync-status`**, concurrent publishes/reads, and student **403** on inaccessible **`subject_id`** (depends on notifications router using **`ensure_course_access_http`** — documented in the same notification doc).
-- `tests/e2e/web-admin/e2e-postgres-hazard-tier.spec.js` — fifteen **API + UI** checks for global quota vs course LLM (see subsection **4** above for commands).
-- `tests/e2e/web-admin/e2e-agent-hazard-tier-15.spec.js` — fifteen **API-only** Playwright checks (pagination `422` boundaries, LLM admin vs student, parallel `mark-all-read`, E2E seed header gates, `forgot-password` empty username, registration disabled). Same seed contract as other web-admin E2E; run **serially** (Pitfall 41).
+- `tests/e2e/web-school/e2e-postgres-hazard-tier.spec.js` — fifteen **API + UI** checks for global quota vs course LLM (see subsection **4** above for commands).
+- `tests/e2e/web-school/e2e-agent-hazard-tier-15.spec.js` — fifteen **API-only** Playwright checks (pagination `422` boundaries, LLM admin vs student, parallel `mark-all-read`, E2E seed header gates, `forgot-password` empty username, registration disabled). Same seed contract as other web-school E2E; run **serially** (Pitfall 41).
 - `tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py` — fifteen **pytest + TestClient** checks against `/api/e2e/dev/*` and cross-actor HTTP edges using the same DB reset as `test_e2e_dev_seed.py` (no Playwright; fast in CI when `E2E_DEV_SEED_ENABLED` is toggled per test).
 - `tests/security/test_security_regression.py` — twenty API security-boundary checks (admin vs teacher vs student, unauthenticated paths, invalid JWT).
 - `ops/scripts/dev/provision_postgres_pytest.sh` — idempotent **throwaway PostgreSQL** role+database for zero-skip full `pytest` (see Cross-platform smoke expectations above and **Pitfall 45** in [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)).
@@ -1111,11 +1111,11 @@ Security hardening follow-up files added during repository normalization:
   does not imply assigned-teacher management authority over subjects, roster
   operations, materials, homework, scores, attendance, notifications, or course
   LLM config.
-- `tests/e2e/web-admin/e2e-security-hardening-followup.spec.js` - small
+- `tests/e2e/web-school/e2e-security-hardening-followup.spec.js` - small
   browser-backed direct-API slice for the highest-value security hardening
   cases. Use `node scripts/playwright-external-runner.cjs
   e2e-security-hardening-followup.spec.js --project=chromium` from
-  `<repo>/apps/web/admin`; keep this file narrower than the backend security
+  `<repo>/apps/web/school`; keep this file narrower than the backend security
   suite.
 
 #### D. Agent hazard pass (additive, May 2026): new tests, pitfalls observed, worries, coverage gaps
@@ -1130,7 +1130,7 @@ cd <REPO_ROOT>
 python3 -m pytest tests/backend/e2e_dev/test_e2e_dev_api_hazard_tier.py -q
 
 # Playwright file (requires globalSetup + E2E_DEV_SEED_TOKEN; run alone — Pitfall 41)
-cd <REPO_ROOT>/apps/web/admin
+cd <REPO_ROOT>/apps/web/school
 CI=1 E2E_PYTHON=<REPO_ROOT>/.venv/bin/python npx playwright test e2e-agent-hazard-tier-15.spec.js --project=chromium
 ```
 

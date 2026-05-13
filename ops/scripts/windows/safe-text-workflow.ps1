@@ -18,7 +18,7 @@ file whose console rendering may be suspicious.
 
 .EXAMPLE
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe-text-workflow.ps1 `
-  -Path apps\web\admin\src\views\Layout.vue -StartLine 1 -EndLine 120
+  -Path apps\web\school\src\views\Layout.vue -StartLine 1 -EndLine 120
 
 .EXAMPLE
 . .\ops\scripts\windows\safe-text-workflow.ps1 -Path docs\contributing\ENCODING_AND_MOJIBAKE_SAFETY.md -Escape

@@ -18,7 +18,7 @@ See [`architecture/ASYNC_TASKS_AND_WORKERS.md`](../architecture/ASYNC_TASKS_AND_
 
 | Issue | Detail |
 |-------|--------|
-| Legacy npm identifiers | Admin `package.json` may still show historical package names (`courseeval-admin`) while README branding is CourseEval — cosmetic unless publishing packages. |
+| Legacy npm identifiers | Admin `package.json` may still show historical package names (`courseeval-school`) while README branding is CourseEval — cosmetic unless publishing packages. |
 | External bookmarks to removed `tools/testing/` | Narrative docs may still **mention** the old path when explaining migrations; actionable code/config must not reference it. Canonical utility location: `tests/devtools/audit_test_redundancy.py`. |
 
 ---

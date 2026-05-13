@@ -31,8 +31,8 @@ if [[ "${REPO_ROOT}" != "${SOURCE_DIR}" ]]; then
     --exclude ".git" \
     --exclude "__pycache__" \
     --exclude ".pytest_cache" \
-    --exclude "apps/web/admin/node_modules" \
-    --exclude "apps/web/admin/dist" \
+    --exclude "apps/web/school/node_modules" \
+    --exclude "apps/web/school/dist" \
     --exclude "apps/web/parent/node_modules" \
     --exclude "apps/web/parent/dist" \
     --exclude "uploads" \
