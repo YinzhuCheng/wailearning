@@ -28,6 +28,7 @@ from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.domains.homework.cleanup import purge_homework_row
 from apps.backend.courseeval_backend.domains.homework.appeals import mark_appeal_notifications_acknowledged, notify_teachers_grade_appeal
 from apps.backend.courseeval_backend.domains.homework.notifications import notify_student_homework_graded
+from apps.backend.courseeval_backend.domains.homework.serialization import preview_text, task_call_log
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 from apps.backend.courseeval_backend.llm_grading import (
     effective_score_display_zh,
@@ -255,13 +256,6 @@ def _task_for_error_and_log(
     return prev_failed or latest
 
 
-def _task_call_log(task: Optional[HomeworkGradingTask]) -> Optional[list]:
-    if not task or not isinstance(task.artifact_manifest, dict):
-        return None
-    log = task.artifact_manifest.get("llm_call_log")
-    return log if isinstance(log, list) else None
-
-
 def _best_candidate_for_attempt(db: Session, attempt_id: int) -> Optional[HomeworkScoreCandidate]:
     candidates = (
         db.query(HomeworkScoreCandidate)
@@ -319,15 +313,6 @@ def _attempt_allows_feedback_followup(
     return bool(task and task.status == "success")
 
 
-def _preview_text(value: Optional[str], limit: int = 180) -> Optional[str]:
-    if not value or not str(value).strip():
-        return None
-    s = str(value).strip().replace("\r\n", "\n").replace("\r", "\n")
-    if len(s) <= limit:
-        return s
-    return s[:limit].rstrip() + "…"
-
-
 def _submission_appeal_status(db: Session, submission_id: Optional[int]) -> Optional[str]:
     if not submission_id:
         return None
@@ -379,7 +364,7 @@ def _serialize_submission(db: Session, submission: HomeworkSubmission) -> Homewo
         latest_task_status=submission.latest_task_status,
         latest_task_error=submission.latest_task_error,
         latest_task_error_code=diag_task.error_code if diag_task else None,
-        latest_task_log=_task_call_log(diag_task),
+        latest_task_log=task_call_log(diag_task),
         appeal_status=_submission_appeal_status(db, submission.id),
         effective_score_attempt_seq=eff_seq,
         effective_score_note_zh=eff_note,
@@ -424,7 +409,7 @@ def _serialize_attempt(db: Session, attempt: HomeworkAttempt) -> HomeworkAttempt
         task_status=task.status if task else None,
         task_error=diag_task.error_message if diag_task else None,
         task_error_code=diag_task.error_code if diag_task else None,
-        task_log=_task_call_log(diag_task),
+        task_log=task_call_log(diag_task),
         score_source=best_candidate.source if best_candidate else None,
         allow_feedback_followup=allow_ff,
     )
@@ -474,19 +459,19 @@ def _serialize_submission_status(
         submitted_at=submission.submitted_at if submission else None,
         content=submission.content if submission else None,
         content_format=normalize_content_format(getattr(submission, "content_format", None)) if submission else "markdown",
-        content_preview=_preview_text(submission.content if submission else None),
+        content_preview=preview_text(submission.content if submission else None),
         attachment_name=submission.attachment_name if submission else None,
         attachment_url=submission.attachment_url if submission else None,
         used_llm_assist=bool(submission.used_llm_assist) if submission else None,
         review_score=submission.review_score if submission else None,
         review_comment=submission.review_comment if submission else None,
-        comment_preview=_preview_text(submission.review_comment if submission else None, 120),
+        comment_preview=preview_text(submission.review_comment if submission else None, 120),
         latest_attempt_id=submission.latest_attempt_id if submission else None,
         latest_attempt_is_late=latest_attempt.is_late if latest_attempt else None,
         latest_task_status=submission.latest_task_status if submission else None,
         latest_task_error=submission.latest_task_error if submission else None,
         latest_task_error_code=diag_task.error_code if diag_task else None,
-        latest_task_log=_task_call_log(diag_task),
+        latest_task_log=task_call_log(diag_task),
         attempt_count=len(submission.attempts) if submission else 0,
         appeal_status=_submission_appeal_status(db, submission.id if submission else None),
         effective_score_attempt_seq=eff_seq,

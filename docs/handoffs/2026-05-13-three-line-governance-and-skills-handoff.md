@@ -518,3 +518,54 @@ Next requested queue item after the 2.2 commit is 2.3: extract one low-risk
 helper from `apps/backend/courseeval_backend/api/routers/homework.py`, keeping
 route paths, methods, auth, permissions, response models, status codes,
 student/teacher/admin visibility, and serialization semantics unchanged.
+
+## Step 2.3 Homework Serialization Helper Split Update
+
+The current Step 2.3 round extracted one low-risk pure helper boundary from
+`apps/backend/courseeval_backend/api/routers/homework.py`:
+
+- Added `apps/backend/courseeval_backend/domains/homework/serialization.py`.
+- Moved `preview_text(...)` for status-list content/comment previews and
+  `task_call_log(...)` for grading-task `llm_call_log` extraction into the new
+  helper module.
+- Kept all route functions, route paths, HTTP methods, response models,
+  authorization checks, student/teacher/admin visibility, database queries,
+  submission creation, review, regrade, queue, and notification behavior in
+  their existing locations.
+- Added focused helper tests in
+  `tests/backend/homework/test_homework_serialization_helpers.py`.
+- Added selector regression coverage so `domains/homework/serialization.py`
+  continues to select `backend.homework.llm_grading` and
+  `behavior.homework_lifecycle_llm`.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\routers\homework.py apps\backend\courseeval_backend\domains\homework\serialization.py`
+  passed.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_serialization_helpers.py -q`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_llm_grading.py -q`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_homework_lifecycle_llm_behavior.py -q`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\backend\e2e_dev\test_e2e_dev_api_hazard_tier.py -q`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\security\test_security_regression.py -q`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\security\test_security_hardening_followup.py -q -k "hard36 or hard48 or hard49 or hard53 or hard67 or hard121 or hard122"`
+  passed 7 homework-adjacent hardening checks.
+- Full `tests\security\test_security_hardening_followup.py -q` was attempted
+  but timed out after 360 seconds; full `tests\security -q` was also attempted
+  and timed out before a final report. No active pytest process remained after
+  the timeout according to `pytest_sqlite_guard.py --json`.
+- Static boundary/API/docs/repo-skill/repository-normalization/text-encoding,
+  diff, and SQLite guard checks passed or only reported known historical
+  warnings.
+
+The queued Step 2 sequence is now complete through 2.3. No push was requested.

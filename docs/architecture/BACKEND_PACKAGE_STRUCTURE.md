@@ -204,6 +204,8 @@ The following extractions are already in place:
 - class-scope query helpers shared by routers moved into `domains/courses/class_scope.py`
 - homework row cleanup moved into `domains/homework/cleanup.py`
 - homework appeal and notification helpers moved into `domains/homework/appeals.py` and `domains/homework/notifications.py`
+- homework response preview and grading-task log serialization helpers moved
+  into `domains/homework/serialization.py`
 - roster synchronization and reconciliation moved into `domains/roster/`
 - score composition and score-appeal helpers moved into `domains/scores/`
 - demo seed orchestration lives in `domains/seed/demo.py`, with demo teacher,
