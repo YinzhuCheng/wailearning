@@ -812,3 +812,210 @@ Deferred 3.3 validation:
   the subjects router changed. They were not run for this helper-only backend
   extraction because no browser-visible behavior, route contract, or frontend
   code changed.
+
+## Remaining Gaps Against The Local Three-Step Plan
+
+The local private planning note under
+`.agent-run/repository-normalization-three-step-plan.md` is now partially
+complete but not finished. The plan's three high-level phases should not be
+treated as done just because several bounded extraction rounds have landed.
+
+### Step 1 Status: Mostly Successful Pilot, Not Fully Closed
+
+The schema-boundary harness pilot is largely proven, but the schema split phase
+ is not fully closed under the plan's own stop condition.
+
+Completed low-coupling schema moves:
+
+- `appearance`
+- `attendance`
+- `dashboard`
+- `files`
+- `notifications`
+- `operations`
+- `points`
+- `roster`
+
+Remaining Step 1 gaps:
+
+- `apps/backend/courseeval_backend/api/schemas.py` has not yet converged to
+  "mostly compatibility imports, shared primitives, and deliberate forward
+  reference / rebuild glue." It still contains additional DTO ownership that
+  the private plan classifies as unfinished schema-boundary work.
+- Candidate schema groups still not moved or not explicitly retired from the
+  plan:
+  - isolated `auth-users` DTO slices
+  - `scores`
+  - `llm`
+  - `classes-courses-subjects`
+  - `learning-notes`
+  - `discussions`
+  - `homework`
+  - material / chapter tree DTOs
+- Milestone 1 therefore remains only partially complete. A future agent should
+  decide whether to continue schema splitting or explicitly close the remaining
+  items as too coupled for this harness phase.
+
+### Step 2 Status: High-Value Backend Structure Work Is Partially Complete
+
+Several bounded large-file rounds are complete, but the main large-file harness
+ milestone is still open.
+
+Completed Step 2 extractions so far:
+
+- `domains/seed/demo_users.py`
+- `domains/llm/grading_prompt.py`
+- `domains/homework/serialization.py`
+- `domains/courses/metadata.py`
+- `domains/courses/class_links.py`
+- `domains/courses/enrollment.py`
+
+Remaining Step 2 backend gaps by target:
+
+- `apps/backend/courseeval_backend/domains/seed/demo.py`
+  - only the demo user/class/roster construction moved out;
+  - the private plan still expects additional bounded extraction rounds such as
+    `demo_courses.py`, `demo_homework.py`, `demo_materials.py`,
+    `demo_notifications.py`, or an explicit decision that some of those
+    responsibilities should remain in `demo.py`;
+  - `demo.py` still appears in boundary-governance output as one of the
+    repository's largest implementation files.
+- `apps/backend/courseeval_backend/llm_grading.py`
+  - only prompt helper logic moved to `domains/llm/grading_prompt.py`;
+  - queue lifecycle, worker orchestration, execution/result shaping,
+    notification side effects, and retry/quota-adjacent helpers remain in the
+    root orchestration file;
+  - the private plan still lists likely future extractions such as
+    `grading_queue.py`, `grading_worker.py`, `grading_execution.py`,
+    `grading_result.py`, and `grading_notifications.py`.
+- `apps/backend/courseeval_backend/api/routers/homework.py`
+  - only response serialization helper logic moved to
+    `domains/homework/serialization.py`;
+  - submission workflows, grading actions, permission-heavy workflow helpers,
+    and other reusable homework business rules remain in the router;
+  - the private plan still lists likely boundaries such as `submissions.py`,
+    `grading_actions.py`, and `permissions.py`.
+- `apps/backend/courseeval_backend/api/routers/subjects.py`
+  - this file is in much better shape after metadata, class-link, and
+    enrollment helper extraction;
+  - however, it is only "mostly reduced," not necessarily finished forever;
+  - a future agent should decide whether the remaining code is now primarily
+    HTTP orchestration, or whether further splits would still pay off.
+
+Remaining Step 2 frontend / UI large-file gap:
+
+- Large admin Vue views have not been meaningfully decomposed yet. Current
+  prominent candidates still include:
+  - `apps/web/admin/src/views/Materials.vue`
+  - `apps/web/admin/src/views/Subjects.vue`
+  - `apps/web/admin/src/views/LearningNotes.vue`
+  - `apps/web/admin/src/views/MyCourses.vue`
+  - `apps/web/admin/src/views/Layout.vue`
+  - `apps/web/admin/src/views/Students.vue`
+  - `apps/web/admin/src/views/Homework.vue`
+  - `apps/web/admin/src/views/HomeworkSubmissions.vue`
+  - `apps/web/admin/src/views/Scores.vue`
+  - `apps/web/admin/src/views/Settings.vue`
+
+Step 2 milestone implication:
+
+- Milestone 2 from the private plan is still open because seed, LLM grading,
+  homework router, and large admin view ownership boundaries are not yet fully
+  split or explicitly deferred with a stable long-term rationale.
+
+### Step 3 Status: Continuous Doc Updates Happened, But Final Harness Convergence Is Not Done
+
+The repository has been updated continuously during each bounded round, but the
+ plan's final "durable governance harness" convergence phase has not yet been
+ run as its own explicit closeout round.
+
+What already exists:
+
+- `AGENTS.md` is active and materially stronger than before this campaign.
+- `docs/README.md` routes agents into task-specific reading.
+- `skills/repository-normalization/SKILL.md`,
+  `skills/boundary-governance/SKILL.md`,
+  `skills/structure-governance/SKILL.md`, and
+  `skills/docs-governance/SKILL.md` exist and are being used as intended.
+- Selector coverage and regression tests have been expanded for every helper
+  extraction round above.
+- `docs/architecture/BACKEND_PACKAGE_STRUCTURE.md`,
+  `docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`,
+  this handoff, and `agent-update-log.csv` were kept current in each code round.
+
+What Step 3 still lacks:
+
+- A dedicated convergence pass that updates all durable governance documents
+  based on the final chosen ownership boundaries rather than only the latest
+  round's delta.
+- `docs/architecture/CORE_BUSINESS_FLOWS.md` still needs explicit follow-up
+  when the final backend ownership boundaries settle, especially if additional
+  `demo.py`, `llm_grading.py`, or `homework.py` splits land.
+- `docs/development/TEST_SUITE_MAP.md` has not been used as a primary closure
+  artifact for this normalization campaign and may need synchronization once the
+  remaining high-value structure work is finished.
+- `check_docs_governance.py` still reports known historical-path warnings in:
+  - `docs/development/HISTORICAL_CODE_CLEANUP.md`
+  - `docs/development/TEST_EXECUTION_PITFALLS.md`
+  - `docs/development/TEST_SUITE_MAP.md`
+  - `docs/handoffs/2026-05-11-recent-posts-and-student-binding-handoff.md`
+  These are currently tolerated and documented as historical/noise, but the
+  plan still expects a clearer classification pass rather than leaving them as
+  perpetual implicit background noise.
+- `check_boundary_governance.py --details` still emits many large-file warnings
+  that function as next-step candidates, but the repository has not yet
+  completed the private plan's desired convergence from "warning list" to
+  "clearly classified next boundaries or explicitly deferred non-goals."
+- The final broad-vs-specialized skill layering is working in practice, but a
+  future agent may still want one bounded docs/skills-only round to lock in the
+  exact stop conditions, read order, and delivery format language after the
+  remaining large-file work is done.
+
+### Milestone Summary Against The Private Plan
+
+- Milestone 1 "Schema Boundary Harness":
+  partially complete, not fully closed.
+- Milestone 2 "Backend Large-File Harness":
+  clearly incomplete.
+- Milestone 3 "Durable Governance Harness":
+  only partially complete; the repository has ongoing per-round updates, but no
+  final convergence round yet.
+
+## Recommended Next-Agent Sequence
+
+The next agent should not restart from the top of the private plan. The highest
+value continuation order is:
+
+1. Finish the remaining Step 2 backend ownership rounds before broad docs-only
+   cleanup:
+   - continue `domains/seed/demo.py` extraction in one bounded phase;
+   - continue `llm_grading.py` extraction in one bounded phase;
+   - continue `api/routers/homework.py` extraction in one bounded phase.
+2. Reassess whether `api/routers/subjects.py` now qualifies as "router keeps
+   HTTP orchestration, domains own reusable business logic" and stop if yes.
+3. Decide whether remaining Step 1 schema groups are still worth moving, or
+   whether they are now too coupled and should be explicitly deferred.
+4. Only after those structure decisions settle, run a true Step 3 convergence
+   round for docs / skills / governance-script noise classification.
+
+## Branch And Validation State For Handoff
+
+- Branch: `cursor/repository-normalization-schema-notifications`
+- Latest completed code commit before this handoff-only update:
+  `2c5c40c refactor: extract subjects enrollment helpers`
+- The branch was pushed after the 3.3 subjects-router extraction round.
+- Latest 3.3 targeted validation already completed successfully:
+  - selector JSON with no unmatched paths and expected Playwright review
+    targets;
+  - `tests.backend.manual.test_validation_selector` (81 tests);
+  - registry lint;
+  - API surface governance;
+  - boundary governance with existing large-file warnings only;
+  - `tests/backend/courses/test_student_course_roster_behavior.py`
+  - `tests/backend/roster/test_roster_enroll_and_batch_class.py`
+  - `tests/behavior/test_course_roster_homework_edge_behavior.py`
+  - `tests/backend/files`
+- Deferred review targets remain unchanged from prior rounds:
+  - `admin.e2e.agent_followup_batch`
+  - `admin.e2e.discussion_cover_llm_tier3`
+  - `admin.e2e.security_hardening_followup`
