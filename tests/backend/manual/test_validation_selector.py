@@ -18,6 +18,8 @@ from check_ci_baselines import check_ci_baselines  # noqa: E402
 from check_operator_scripts import check_scripts as check_operator_scripts  # noqa: E402
 from check_validation_policy_gate import evaluate_policy_gate  # noqa: E402
 from check_validation_capabilities import build_capabilities, evaluate_target_capabilities  # noqa: E402
+from check_validation_debt_registry import check_validation_debt_registry  # noqa: E402
+from check_validation_lane_budgets import evaluate_budget, load_budgets  # noqa: E402
 from check_repo_skills import check_repo_skills  # noqa: E402
 from check_schema_governance import check_schema_governance  # noqa: E402
 from sync_testing_governance_docs import check_docs as check_testing_governance_docs  # noqa: E402
@@ -887,6 +889,34 @@ class ValidationSelectorTests(unittest.TestCase):
 
     def test_pitfall_index_line_sync_check_passes_for_repository_docs(self):
         self.assertEqual(sync_pitfall_index_main(["--repo-root", str(REPO_ROOT), "--check"]), 0)
+
+    def test_validation_debt_registry_check_passes_for_repository_registry(self):
+        self.assertEqual(
+            check_validation_debt_registry(
+                REPO_ROOT,
+                "docs/testing/validation-debt-registry.csv",
+                "tests/TEST_SELECTION_TARGETS.json",
+            ),
+            [],
+        )
+
+    def test_validation_lane_budget_config_accepts_repository_lane(self):
+        budgets = load_budgets(REPO_ROOT / "docs/testing/validation-lane-budgets.json")
+        issues = evaluate_budget(
+            "backend-quick-pytest",
+            budgets["lanes"]["backend-quick-pytest"],
+            {
+                "tests": 10,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 2,
+                "passed": 8,
+                "deselected": 0,
+                "xfailed": 0,
+                "xpassed": 0,
+            },
+        )
+        self.assertEqual(issues, [])
 
     def test_operator_script_governance_check_passes_for_repository_scripts(self):
         self.assertEqual(check_operator_scripts(REPO_ROOT), [])

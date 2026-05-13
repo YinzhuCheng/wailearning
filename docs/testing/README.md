@@ -13,6 +13,8 @@ that agents append and tooling parses live here.
 | `test-execution-summary.csv` | Short scan aid for recent or important observed validation runs. |
 | `pitfall-index.csv` | Structured index for pitfalls recorded in Markdown docs. New pitfalls use increasing positive `pitfall_sequence`; legacy Markdown-only entries may use `0` and `Null`. |
 | `agent-update-log.csv` | One row per user-visible repository-changing conversation round, starting at sequence 1. Summaries stay short; details remain in docs, ledgers, and commits. |
+| `validation-debt-registry.csv` | Classification registry for high-cost or backlog-shaped validation targets and files so "not in this lane" is explicit policy instead of implied coverage. |
+| `validation-lane-budgets.json` | Per-lane skip/deselect/xfail budget thresholds for CI reporting and future enforcement. |
 
 ## Source Of Truth
 
@@ -50,6 +52,15 @@ Run:
 python ops/scripts/dev/sync_testing_governance_docs.py
 python ops/scripts/dev/sync_testing_governance_docs.py --check
 ```
+
+## Debt Visibility
+
+Use these when deciding whether skipped or deferred coverage is acceptable
+policy or visible debt:
+
+- [VALIDATION_DEBT_REGISTRY.md](VALIDATION_DEBT_REGISTRY.md)
+- [validation-debt-registry.csv](validation-debt-registry.csv)
+- [validation-lane-budgets.json](validation-lane-budgets.json)
 
 ## Topic Routes
 

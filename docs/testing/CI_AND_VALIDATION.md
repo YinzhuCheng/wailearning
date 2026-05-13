@@ -108,6 +108,13 @@ For the small testing-ledger explainer docs, the generated source is:
 
 - [`ops/scripts/dev/sync_testing_governance_docs.py`](../../ops/scripts/dev/sync_testing_governance_docs.py)
 
+Skip/deferred coverage visibility now has two committed anchors:
+
+- [`validation-debt-registry.csv`](validation-debt-registry.csv) for target/file
+  classification
+- [`validation-lane-budgets.json`](validation-lane-budgets.json) for lane-level
+  thresholds
+
 ## Agent Reporting Rule
 
 When reporting validation:

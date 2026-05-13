@@ -142,6 +142,25 @@
                     ]
                 },
                 {
+                    "label": "validation debt registry",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_validation_debt_registry.py"
+                    ]
+                },
+                {
+                    "label": "validation lane budget config",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_validation_lane_budgets.py",
+                        "--lane",
+                        "backend-quick-pytest",
+                        "--budgets",
+                        "docs/testing/validation-lane-budgets.json",
+                        "--validate-only"
+                    ]
+                },
+                {
                     "label": "runner smoke",
                     "argv": [
                         ".venv/Scripts/python.exe",
@@ -161,6 +180,8 @@
                     "ops/scripts/dev/lint_validation_registry.py",
                     "ops/scripts/dev/sync_testing_governance_docs.py",
                     "ops/scripts/dev/sync_pitfall_index_lines.py",
+                    "ops/scripts/dev/check_validation_debt_registry.py",
+                    "ops/scripts/dev/check_validation_lane_budgets.py",
                     "ops/scripts/dev/search_pitfalls.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
@@ -176,6 +197,8 @@
                     "docs/testing/test-execution-summary.csv",
                     "docs/testing/pitfall-index.csv",
                     "docs/testing/agent-update-log.csv",
+                    "docs/testing/validation-debt-registry.csv",
+                    "docs/testing/validation-lane-budgets.json",
                     "docs/testing/TEST_SUITE_MAP.md"
                 ],
                 "globs": [
@@ -186,6 +209,8 @@
                     "ops/scripts/dev/lint_validation_registry.py",
                     "ops/scripts/dev/sync_testing_governance_docs.py",
                     "ops/scripts/dev/sync_pitfall_index_lines.py",
+                    "ops/scripts/dev/check_validation_debt_registry.py",
+                    "ops/scripts/dev/check_validation_lane_budgets.py",
                     "ops/scripts/dev/search_pitfalls.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",

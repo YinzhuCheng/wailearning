@@ -100,7 +100,13 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run quick backend pytest
-        run: python -m pytest -q
+        run: |
+          python -m pytest -q --junitxml=backend-quick-pytest.xml | tee backend-quick-pytest.log
+          python ops/scripts/dev/check_validation_lane_budgets.py \
+            --lane backend-quick-pytest \
+            --budgets docs/testing/validation-lane-budgets.json \
+            --junitxml backend-quick-pytest.xml \
+            --log backend-quick-pytest.log
 
   admin-frontend-build:
     name: School frontend build
