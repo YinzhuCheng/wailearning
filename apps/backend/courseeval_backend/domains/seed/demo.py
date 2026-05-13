@@ -50,8 +50,16 @@ from apps.backend.courseeval_backend.db.models import (
 )
 from apps.backend.courseeval_backend.llm_grading import refresh_submission_summary
 from apps.backend.courseeval_backend.domains.roster.sync import reconcile_student_users_and_roster
+from apps.backend.courseeval_backend.domains.seed.demo_users import (
+    DEMO_CLASS_NAME as _CLASS_NAME,
+    DEMO_PASSWORD as _DEMO_PASSWORD,
+    DEMO_TEACHER_DISPLAY_NAME as _TEACHER_DISPLAY_NAME,
+    TEACHER_PRO_DISPLAY_NAME as _TEACHER_PRO_DISPLAY_NAME,
+    TEACHER_PRO_PASSWORD as _TEACHER_PRO_PASSWORD,
+    TEACHER_PRO_USERNAME as _TEACHER_PRO_USERNAME,
+    ensure_demo_roster_context,
+)
 
-_DEMO_PASSWORD = "111111"
 _SYSTEM_LLM_ASSISTANT_USERNAME = "__system_llm_assistant__"
 
 _DEMO_COURSE_COVER_DATA_URL = (
@@ -70,7 +78,6 @@ _DEMO_COURSE_COVER_DATA_URL = (
 
 _DEMO_NOTE_IMAGE_PATH = "/markdown-demo-card-image.svg"
 
-_CLASS_NAME = "人工智能1班"
 _COURSE_NAME = "数据挖掘"
 
 _LLM_COURSE_NAME = "大语言模型"
@@ -135,10 +142,6 @@ _LLM_PREFILL_BODIES = (
 
 我认为风险主要有两点：第一是幻觉，第二是过度依赖。如果作业完全照搬模型输出，就可能没有真正理解材料。""",
 )
-
-_TEACHER_PRO_USERNAME = "teacher_pro"
-_TEACHER_PRO_PASSWORD = "teacher_pro"
-_TEACHER_PRO_DISPLAY_NAME = "王概率（演示）"
 
 _PROB_COURSE_NAME = "初等概率论"
 _PROB_COURSE_DESCRIPTION = (
@@ -256,7 +259,6 @@ _PROB_PREFILL_BODIES = (
 """,
 )
 
-_TEACHER_DISPLAY_NAME = "李演示"
 _COURSE_TIMES = "2@7,8"
 _COURSE_DESCRIPTION = (
     "数据挖掘入门与实践（演示课程）。涵盖 Python 数据分析基础、特征与可视化、"
@@ -2346,102 +2348,10 @@ def seed_demo_course_bundle(db: Session) -> None:
     - students and teacher `teacher`: demo password defined by module constant `_DEMO_PASSWORD` (six repeated ``1`` digits).
     - teacher `teacher_pro`: password equals username (`teacher_pro`), via `_TEACHER_PRO_PASSWORD`.
     """
-    pwd_hash = get_password_hash(_DEMO_PASSWORD)
-
-    teacher = db.query(User).filter(User.username == "teacher").first()
-    if not teacher:
-        teacher = User(
-            username="teacher",
-            hashed_password=pwd_hash,
-            real_name=_TEACHER_DISPLAY_NAME,
-            role=UserRole.TEACHER.value,
-            class_id=None,
-            is_active=True,
-        )
-        db.add(teacher)
-        db.flush()
-        print("Created demo teacher 'teacher'.")
-    else:
-        print("Demo teacher 'teacher' already exists.")
-    teacher.real_name = _TEACHER_DISPLAY_NAME
-
-    teacher_pro_hash = get_password_hash(_TEACHER_PRO_PASSWORD)
-    teacher_pro = db.query(User).filter(User.username == _TEACHER_PRO_USERNAME).first()
-    if not teacher_pro:
-        teacher_pro = User(
-            username=_TEACHER_PRO_USERNAME,
-            hashed_password=teacher_pro_hash,
-            real_name=_TEACHER_PRO_DISPLAY_NAME,
-            role=UserRole.TEACHER.value,
-            class_id=None,
-            is_active=True,
-        )
-        db.add(teacher_pro)
-        db.flush()
-        print(f"Created demo teacher '{_TEACHER_PRO_USERNAME}'.")
-    else:
-        if teacher_pro.role != UserRole.TEACHER.value:
-            teacher_pro.role = UserRole.TEACHER.value
-        teacher_pro.hashed_password = teacher_pro_hash
-        teacher_pro.real_name = _TEACHER_PRO_DISPLAY_NAME
-        teacher_pro.class_id = None
-        teacher_pro.is_active = True
-        print(f"Demo teacher '{_TEACHER_PRO_USERNAME}' already exists; refreshed password/display fields.")
-
-    klass = db.query(Class).filter(Class.name == _CLASS_NAME).first()
-    if not klass:
-        klass = Class(name=_CLASS_NAME, grade=2026)
-        db.add(klass)
-        db.flush()
-        print(f"Created demo class '{_CLASS_NAME}'.")
-    else:
-        print(f"Demo class '{_CLASS_NAME}' already exists.")
-    student_specs = [
-        ("stu1", "学生一", "13800001001"),
-        ("stu2", "学生二", "13800001002"),
-        ("stu3", "学生三", "13800001003"),
-        ("stu4", "学生四", "13800001004"),
-        ("stu5", "学生五", "13800001005"),
-    ]
-    for uname, display, phone in student_specs:
-        u = db.query(User).filter(User.username == uname).first()
-        if not u:
-            u = User(
-                username=uname,
-                hashed_password=pwd_hash,
-                real_name=display,
-                role=UserRole.STUDENT.value,
-                class_id=klass.id,
-                is_active=True,
-            )
-            db.add(u)
-            db.flush()
-            print(f"Created demo student user '{uname}'.")
-        else:
-            if u.role != UserRole.STUDENT.value:
-                u.role = UserRole.STUDENT.value
-            if u.class_id != klass.id or not u.is_active:
-                u.class_id = klass.id
-                u.is_active = True
-            u.hashed_password = pwd_hash
-
-        st = db.query(Student).filter(Student.student_no == uname, Student.class_id == klass.id).first()
-        if not st:
-            db.add(
-                Student(
-                    name=display,
-                    student_no=uname,
-                    class_id=klass.id,
-                    teacher_id=teacher.id,
-                    phone=phone,
-                )
-            )
-            print(f"Created roster row for '{uname}'.")
-        else:
-            st.teacher_id = teacher.id
-            st.phone = phone
-            if (st.name or "") != display:
-                st.name = display
+    roster_context = ensure_demo_roster_context(db)
+    teacher = roster_context.teacher
+    teacher_pro = roster_context.teacher_pro
+    klass = roster_context.klass
 
     semester = (
         db.query(Semester)

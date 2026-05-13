@@ -204,7 +204,9 @@ The following extractions are already in place:
 - homework appeal and notification helpers moved into `domains/homework/appeals.py` and `domains/homework/notifications.py`
 - roster synchronization and reconciliation moved into `domains/roster/`
 - score composition and score-appeal helpers moved into `domains/scores/`
-- demo seeding moved into `domains/seed/demo.py`
+- demo seed orchestration lives in `domains/seed/demo.py`, with demo teacher,
+  class, student-user, and roster-row construction extracted to
+  `domains/seed/demo_users.py`
 - operation-log helpers moved into `services/logging.py`
 - low-coupling API DTO groups for appearance, attendance, dashboard, files,
   notifications, operations/settings, points, and roster moved into `api/schema_defs/` while `api/schemas.py` remains the
@@ -318,6 +320,7 @@ apps/backend/courseeval_backend/
       appeals.py
     seed/
       demo.py
+      demo_users.py
   services/
     logging.py
 ```

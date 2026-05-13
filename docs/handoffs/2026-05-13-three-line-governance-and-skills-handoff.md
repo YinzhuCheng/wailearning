@@ -427,3 +427,49 @@ large admin Vue views. Each must be a separate bounded round with its own
 specialized read order and validation matrix. Continue skill de-duplication
 only when the richer executable skill/script clearly covers the same workflow;
 prefer shrinking broad skills into routers over deleting specialized ones.
+
+## Step 2.1 Seed Demo Split Update
+
+The current Step 2.1 round extracted one low-risk construction phase from
+`apps/backend/courseeval_backend/domains/seed/demo.py`:
+
+- Added `apps/backend/courseeval_backend/domains/seed/demo_users.py`.
+- Moved demo teacher `teacher`, demo teacher `teacher_pro`, demo class, student
+  users `stu1`-`stu5`, and canonical roster-row construction into
+  `ensure_demo_roster_context(db)`.
+- Kept `seed_demo_course_bundle(db)` in `domains/seed/demo.py` as the public
+  entrypoint and orchestration boundary.
+- Did not change `INIT_DEFAULT_DATA`, first-admin bootstrap, public
+  registration, E2E dev route gates, seeded course semantics, or seeded
+  homework/material/runtime activity.
+- Added selector coverage so `domains/seed/demo_users.py` selects
+  `backend.e2e_dev.demo_course_seed` instead of relying only on generic domain
+  static checks.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\domains\seed\demo.py apps\backend\courseeval_backend\domains\seed\demo_users.py`
+  passed.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported targeted/static validation as acceptable and no unmatched paths.
+- `python -m unittest tests.backend.manual.test_validation_selector -v` passed
+  76 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\e2e_dev\test_demo_course_seed.py -q`
+  passed 4 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_identity_repair.py -q`
+  passed 3 tests with existing Pydantic deprecation warnings.
+- `python ops/scripts/dev/check_structure_governance.py --details` passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details` passed with
+  existing large-file warnings; `domains/seed/demo.py` is reduced from 2569 to
+  2479 lines.
+
+Next requested queue item after the 2.1 commit is 2.2: extract one low-side
+effect responsibility from `apps/backend/courseeval_backend/llm_grading.py`
+behind the existing facade, preferably prompt/result logic before queue,
+worker, retry, quota, or notification side effects. After that, 2.3 should
+extract one low-risk homework router helper without changing route shape,
+permissions, response models, or serialization semantics. Each must remain a
+separate bounded round with its own specialized read order, validation matrix,
+handoff/update-log row, and local commit.

@@ -1348,6 +1348,41 @@
             "notes": "Escalate to PostgreSQL full consideration when schema or broad course access helpers change."
         },
         {
+            "id": "backend.e2e_dev.demo_course_seed",
+            "category": "backend-pytest",
+            "risk": "targeted",
+            "description": "Focused backend coverage for default demo course seed data used by local installs and E2E reset helpers.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "e2e-dev",
+                "demo-seed",
+                "default-data",
+                "backend-pytest"
+            ],
+            "commands": [
+                {
+                    "label": "pytest",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "pytest",
+                        "tests/backend/e2e_dev/test_demo_course_seed.py",
+                        "-q"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/backend/e2e_dev/test_demo_course_seed.py",
+                    "apps/backend/courseeval_backend/domains/seed/demo.py",
+                    "apps/backend/courseeval_backend/domains/seed/demo_users.py"
+                ],
+                "globs": []
+            },
+            "ledger_id": "backend.e2e_dev.demo_course_seed",
+            "notes": "Use for default/demo seed data, seeded credentials, seeded courses, prefilled submissions, and demo roster construction. E2E dev route gate changes should also run backend.e2e_dev.api_hazard_tier."
+        },
+        {
             "id": "backend.e2e_dev.api_hazard_tier",
             "category": "backend-pytest",
             "risk": "targeted",

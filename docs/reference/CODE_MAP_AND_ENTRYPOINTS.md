@@ -48,6 +48,13 @@
 
 ---
 
+### Seed domain helpers
+
+`domains/seed/demo.py` remains the public `seed_demo_course_bundle` entrypoint
+for demo course, material, homework, and runtime-activity orchestration.
+`domains/seed/demo_users.py` owns the demo teacher accounts, demo class,
+student users, and roster-row construction used by that entrypoint.
+
 ## 3. HTTP routers (actual includes in `main.py`)
 
 Routers live under `apps/backend/courseeval_backend/api/routers/`.
