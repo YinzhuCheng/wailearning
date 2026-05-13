@@ -115,7 +115,19 @@ Default agent loop:
    python ops/scripts/dev/select_validation_targets.py --worktree --json
    ```
 
-3. For documentation-only or validation-tooling changes, run the static profile
+3. Use the repository default `strict` workflow unless the user explicitly asks
+   for a lighter guided route.
+
+   In the text-first workflow:
+
+   - `strict` means starting from the repository governance entrypoints,
+     reading the task-scoped docs and skills, using pitfall search before
+     classifying ambiguous failures, and updating docs plus durable ledgers in
+     the same repository-changing round;
+   - `guided` remains a lighter advisory route chosen explicitly by the user,
+     but guided evidence must never be reported as strict completion.
+
+4. For documentation-only or validation-tooling changes, run the static profile
    first:
 
    ```bash
@@ -129,14 +141,14 @@ Default agent loop:
    python ops/scripts/dev/run_validation_target.py static.validation_selector --timeout-seconds 120
    ```
 
-4. For ordinary product or test changes, either run the target IDs shown by the
+5. For ordinary product or test changes, either run the target IDs shown by the
    selector one by one, or use the selector-recommended profile:
 
    ```bash
    python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk targeted
    ```
 
-5. If the selector recommends a review-required target, decide explicitly
+6. If the selector recommends a review-required target, decide explicitly
    whether the environment is ready. Browser targets generally need Node,
    `node_modules`, Playwright browsers, clean ports, and a known backend/frontend
    startup mode:
@@ -145,7 +157,7 @@ Default agent loop:
    python ops/scripts/dev/run_validation_profile.py selector-recommended --worktree --max-risk broad --include-review-targets
    ```
 
-6. Read the final selector/profile status before claiming validation coverage:
+7. Read the final selector/profile status before claiming validation coverage:
 
    - `acceptable`: static/targeted evidence is a reasonable first-pass result
      for the current diff.

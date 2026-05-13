@@ -119,6 +119,12 @@ cleanup passes.
 
 Use this template in PR descriptions before promoting to this file:
 
+## 11. Agent-governance automation limitations (May 2026)
+
+| Issue | Detail |
+|------|--------|
+| Script-heavy governance routing is not reliable enough as the primary agent-control surface | A multi-round automation experiment showed that candidate-doc routers, prompt-driven governance scripts, and loop-style agent selection protocols are useful as design exploration but too fragile as a hard execution substrate for autonomous agents. Agents do not reliably behave like deterministic schema-bound function callers across many steps. The durable outcome is to keep the **workflow ideas** (strict/guided, pitfall-first triage, docs/ledger/update-log closeout) in text-first repository guidance rather than depend on a scripted router for primary control. See `docs/reports/AGENT_GOVERNANCE_AUTOMATION_EXPERIMENT_2026-05-14.md`. |
+
 ```text
 Title:
 Evidence (file/log line):

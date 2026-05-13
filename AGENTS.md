@@ -151,6 +151,32 @@ Start with:
 python ops/scripts/dev/select_validation_targets.py --worktree
 ```
 
+Use the repository default `strict` workflow unless the user explicitly asks
+for a lighter guided route.
+
+Strict mode means:
+
+- start from `AGENTS.md`, `docs/README.md`,
+  `docs/governance/repository-governance.md`,
+  `docs/testing/DEVELOPMENT_AND_TESTING.md`,
+  `docs/testing/CI_AND_VALIDATION.md`, and
+  `docs/testing/TEST_EXECUTION_PITFALLS.md`;
+- then read the task-scoped docs and skills already routed elsewhere in this
+  file;
+- if code behavior, permissions, config, validation flow, or workflow
+  contracts change, update committed docs in the same round;
+- use the pitfall search before classifying ambiguous failures;
+- use selector output and observed validation honestly;
+- update durable logs and ledgers when the round changed the repository.
+
+Guided mode means:
+
+- the user explicitly chose a lighter route;
+- startup docs still matter, but task-specific reading is advisory rather than
+  hard-locked;
+- the agent may choose a narrower reading path first and expand if needed;
+- guided evidence must never be reported as strict completion.
+
 Then use the detailed workflow in:
 
 - [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md)

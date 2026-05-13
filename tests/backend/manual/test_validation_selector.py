@@ -1471,6 +1471,6 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(target["history_status"], "stale")
         self.assertIn("different changed-path snapshot", target["history_reason"])
 
-
+                                        
 if __name__ == "__main__":
     unittest.main()

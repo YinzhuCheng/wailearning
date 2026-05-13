@@ -122,6 +122,7 @@ guessing.
 | [contributing/GIT_WORKFLOW.md](contributing/GIT_WORKFLOW.md) | Branch and contribution conventions |
 | [product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md](product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md) | Homework/submission `content_format` |
 | [testing/TEST_REDUNDANCY_AUDIT.md](testing/TEST_REDUNDANCY_AUDIT.md) | Test merge/delete policy |
+| [reports/AGENT_GOVERNANCE_AUTOMATION_EXPERIMENT_2026-05-14.md](reports/AGENT_GOVERNANCE_AUTOMATION_EXPERIMENT_2026-05-14.md) | Record of the prompt-routed agent-governance automation experiment, what worked, and why the repository retained text-first workflow guidance instead of a hard agent-control router |
 
 ---
 
