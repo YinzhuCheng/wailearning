@@ -18,8 +18,8 @@ Use skills from broad to narrow.
 ### 1. Top-level orchestrator
 
 - [`repository-normalization/SKILL.md`](repository-normalization/SKILL.md)
-  for repo-wide governance, skill taxonomy, package/path drift, and three-line
-  routing.
+  for repo-wide governance, skill taxonomy, package/path drift, and broad
+  governance routing.
 
 ### 2. Horizontal governance skills
 

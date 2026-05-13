@@ -40,6 +40,8 @@ governance**.
 5. Use `.agent-run/` for local-only logs, private paths, and machine-specific
    continuation notes; keep durable repository context in committed docs. See
    [`docs/agents/local-agent-workspace.md`](docs/agents/local-agent-workspace.md).
+   Use `.agent-run/plan/` for local private plan files and remove a plan file
+   after the plan is fully executed or superseded.
 6. Use the pitfall search before classifying local failures:
    `python ops/scripts/dev/search_pitfalls.py "<symptom>"`.
 7. Use the diff-based validation selector before broad manual test selection:
@@ -61,7 +63,8 @@ High-risk hard boundaries that stay explicit:
 4. Open the task-specific docs listed in `docs/README.md` under **Mandatory
    reading by task**.
 5. If this machine already has local continuation artifacts, read the
-   task-relevant files under `.agent-run/`.
+   task-relevant files under `.agent-run/`, especially `.agent-run/plan/` when
+   a local execution plan exists for the task.
 6. If the task is non-trivial, route into the appropriate skill from
    [`skills/README.md`](skills/README.md) before planning edits.
 

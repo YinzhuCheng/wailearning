@@ -50,7 +50,7 @@ guessing.
 | [`governance/known-issues-and-risks.md`](governance/known-issues-and-risks.md) | Open risks, ownership ambiguity, and active hazards |
 | [`testing/CI_AND_VALIDATION.md`](testing/CI_AND_VALIDATION.md) | Current CI entrypoints and how to interpret cloud versus local validation scope |
 | [`../skills/README.md`](../skills/README.md) | Full repo-local skill catalog and layering guide |
-| [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Top-level governance orchestrator for repo normalization, skill taxonomy, and three-line routing |
+| [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Top-level governance orchestrator for repo normalization, skill taxonomy, and governance routing |
 | [`../skills/docs-governance/SKILL.md`](../skills/docs-governance/SKILL.md) | Horizontal docs governance: documentation truth, link checks, reports, and repeated-pitfall-to-rule workflow |
 | [`../skills/boundary-governance/SKILL.md`](../skills/boundary-governance/SKILL.md) | Horizontal boundary governance: functional/module/permission/data-flow boundary discovery and low-risk extraction workflow |
 | [`../skills/structure-governance/SKILL.md`](../skills/structure-governance/SKILL.md) | Horizontal structure governance: root-file, directory hierarchy, file-move, and structural reference workflow |

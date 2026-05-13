@@ -9,8 +9,9 @@ Use this route when the failure shape suggests:
 - wrong local Python / npm entrypoint;
 - process-spawn or shell-environment behavior that fails before product code.
 
-This file is a **router and summary**, not the canonical pitfall ledger. The
-full historical narratives remain in
+This file is a **route, summary, and canonical home** for the Windows and
+encoding pitfall clusters that have already been migrated here. Historical
+entries that have not been moved yet still remain in
 [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
 
 ## Start Here

@@ -25,7 +25,10 @@ than the full pitfall encyclopedia:
 - [pitfalls-ledger-and-selector-tooling.md](pitfalls-ledger-and-selector-tooling.md)
 
 The canonical detailed pitfall body still lives in
-[TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+[TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) plus any canonical
+clusters already migrated into the topic docs above. Use the encyclopedia for
+unmigrated or mixed-surface entries; use the topic docs directly when the
+structured index already routes that cluster there.
 
 ## Rules
 

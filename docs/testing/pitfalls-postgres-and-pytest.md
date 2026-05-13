@@ -10,8 +10,9 @@ Use this route when the failure shape suggests:
 - full-suite skips that are actually missing-environment debt;
 - pytest collection or DB reset behavior that fails before business assertions.
 
-This file is a **router and summary**, not the canonical pitfall ledger. The
-full historical narratives remain in
+This file is a **route, summary, and canonical home** for the PostgreSQL and
+pytest pitfall clusters that have already been migrated here. Historical
+entries that have not been moved yet still remain in
 [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
 
 ## Start Here
@@ -260,3 +261,127 @@ placeholders such as:
 
 Local handoff files can contain machine-specific paths when the next operator on
 the same machine needs them, but committed docs should stay portable.
+
+
+## Additional migrated PostgreSQL and pytest blocks
+
+### Pitfall 42: PostgreSQL `IN (...)` lists reject a trailing comma
+
+Symptom:
+
+```text
+psycopg2.errors.SyntaxError: syntax error at or near ")"
+```
+
+Cause:
+
+In PostgreSQL, `WHERE column_name IN ('a', 'b',)` is invalid because of the trailing comma after the last literal. Some editors or copy-paste patterns introduce that comma when extending a list of legacy column names.
+
+Fix:
+
+Remove the trailing comma after the final element in the `IN` list (or use a tuple/array constructor that your dialect documents).
+
+### Pitfall 43: `Session.merge()` is not always a safe “upsert” in tests
+
+Symptom:
+
+```text
+sqlalchemy.exc.IntegrityError: UniqueViolation ... llm_student_token_overrides_student_id_key
+```
+
+Context:
+
+A test tries to model “update the per-student override twice” by calling `Session.merge(LLMStudentTokenOverride(...))` twice in the same session.
+
+Cause:
+
+`merge()` resolves identity using SQLAlchemy’s merge algorithm and the current session state. For rows keyed by a **natural unique column** (`student_id`) without a stable primary-key object already loaded, a second `merge()` can still emit an **INSERT** that collides with the first row, especially when the session’s identity map does not contain the persisted instance the test author assumed.
+
+Fix:
+
+- Prefer **`query(...).one()` then mutate attributes** and `commit()`, or
+- Call the **application service** (`apply_student_daily_token_overrides` / HTTP API) that already encodes upsert semantics, or
+- Use **`db.execute(update(...))`** with an explicit `WHERE student_id = :sid` in low-level constraint tests.
+
+Interpretation:
+
+This is usually a **test harness bug**, not evidence that the database unique constraint is wrong.
+
+### Pitfall 44: Playwright CLI `-q` / unknown option failures in CI
+
+Symptom:
+
+```text
+error: unknown option '-q'
+```
+
+Context:
+
+Some automation snippets suggest `npx playwright test ... -q` for quieter logs.
+
+Cause:
+
+The installed `@playwright/test` major version may **not** support the `-q` flag on the `playwright test` CLI entrypoint.
+
+Fix:
+
+- Remove `-q` and rely on Playwright’s default reporter, or
+- Use supported reporter flags for your installed version (see upstream Playwright release notes for `<REPO_ROOT>/apps/web/school/node_modules/@playwright/test`).
+
+### Pitfall 45: Many pytest “skips” are environment gates (PostgreSQL dialect), not optional quality
+
+Symptom:
+
+```text
+43 skipped
+```
+
+Context:
+
+- **`tests/postgres/*`** and **`test_r3`** in `test_regression_llm_quota_behavior.py` require a **PostgreSQL** engine (`information_schema`, transactional semantics).
+
+Cause:
+
+Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or **`COURSEEVAL_AUTO_PG_TESTS=1`** auto-pick is enabled — see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)).
+
+Fix:
+
+1. Install **`unrar`** or **`unrar-free`** so `tests/backend/llm/test_llm_attachment_formats.py` can execute the RAR walks (same tooling the product uses in `domains/llm/attachments.py`). The **`rar`** compressor is **not** required at pytest runtime anymore because regression archives live under **`tests/fixtures/llm_rar/`** (generated offline by maintainers).
+2. Run **`bash ops/scripts/dev/provision_postgres_pytest.sh`** (creates `courseeval_pytest_all` + role `courseeval_test`; needs `sudo -u postgres` when the cluster exists).
+3. Either `export TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all'`, or set **`COURSEEVAL_AUTO_PG_TESTS=1`** so `tests/conftest.py` probes that URL and switches `DATABASE_URL` before importing the app.
+4. Ensure PostgreSQL is **listening** (`pg_ctlcluster <ver> main start` or your distro equivalent). The provision script fails loudly when `sudo -u postgres` cannot connect.
+
+Interpretation:
+
+**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for a **Postgres-backed 0-skip** full pytest with the recipe above (Postgres executes the modules skipped by SQLite). The latest full-suite report currently records **466 passed, 0 skipped** for that profile and **423 passed, 43 skipped** for SQLite-default. Older notes that cite **432**, **417**, or fixed **45-skip** expectations describe earlier fixture layouts and should not be used as the current branch’s pass-count oracle.
+
+### Pitfall 46: disposable Linux / cloud-agent runners may lack `pytest` until `requirements.txt` is installed
+
+### Symptom
+
+Running the backend suite from `<REPO_ROOT>` fails before any test body executes:
+
+```text
+/usr/bin/python3: No module named pytest
+```
+
+Or the shell reports that `pytest` is not found when invoked as a bare executable.
+
+### Context
+
+Cursor cloud agents, minimal CI images, and fresh clones often do **not** ship with the repository `.venv` pre-created. The canonical developer workflow assumes `pip install -r requirements.txt` (or an equivalent venv step) before `python -m pytest`.
+
+### Fix
+
+At `<REPO_ROOT>`:
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m pytest tests/ -q
+```
+
+Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) Local Development Setup); the important invariant is that the **same interpreter** that runs pytest has project dependencies installed.
+
+### Interpretation
+
+This is **runner bootstrap debt**, not a failing test or a broken import path in `apps.backend.courseeval_backend`. Do not edit `tests/conftest.py` or `pytest.ini` to “fix” a missing `pytest` package on the system interpreter.

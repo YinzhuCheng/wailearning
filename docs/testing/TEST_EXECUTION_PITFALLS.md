@@ -14,11 +14,12 @@ For the repository-wide policy on Unicode-safe editing and for the current mojib
 
 ## Topic Routes
 
-`TEST_EXECUTION_PITFALLS.md` remains the **canonical execution encyclopedia**
-for historical pitfall entries, detailed narratives, and the structured
-`pitfall-index.csv` linkage. Use the topic routes below when you already know
-the failure class and want a narrower reading surface before diving back into
-the full encyclopedia.
+`TEST_EXECUTION_PITFALLS.md` remains the **primary execution encyclopedia**
+for historical pitfall entries, mixed-surface narratives, and the structured
+`pitfall-index.csv` linkage. Some canonical pitfall clusters now live in the
+topic docs below. Use the topic routes when you already know the failure class
+and want the narrower canonical surface before diving back into the full
+encyclopedia.
 
 - [pitfalls-windows-and-encoding.md](pitfalls-windows-and-encoding.md)
   for PowerShell, UTF-8, local shell, and machine-local text/tooling hazards.
@@ -32,9 +33,12 @@ the full encyclopedia.
   for validation-selector, CSV ledger, update-log, private-path scan, and
   append-tooling pitfalls.
 
-Use the topic docs as routers. Record new pitfall details here first unless a
-later repository-normalization round explicitly migrates the canonical pitfall
-body and the structured index together.
+Use the topic docs as routers and as canonical homes for clusters already
+migrated there. Record new pitfall details in the most specific canonical
+location:
+
+- use this file for new mixed-surface or not-yet-migrated entries;
+- use the matching topic doc when that cluster already lives there.
 
 ## Read This Before Running Tests
 
@@ -106,7 +110,8 @@ change set.
 Use this flow:
 
 1. Search first with `search_pitfalls.py`.
-2. Add or update the Markdown explanation in this file.
+2. Add or update the Markdown explanation in the most specific canonical
+   pitfall document.
 3. Add one matching row to `docs/testing/pitfall-index.csv`.
 4. Keep the durable mitigation in the most specific live location: this file, a
    guardrail script, a selector/runner rule, or a repo-local skill.
@@ -553,322 +558,22 @@ This includes:
 - the Windows local-binary, initdb, and throwaway-cluster lessons;
 - Linux `policy-rc.d` / cluster-start behavior;
 - full-suite dependency and zero-skip environment guidance.
-## Frontend Build And Playwright Invocation Directory Pitfalls
+## Additional Playwright invocation and runtime notes
 
-This subsection records command-invocation mistakes encountered while adding a
-focused UI outline guard. The product code was not the root cause; the failures
-came from running the right tools from the wrong directory or outside the test
-configuration boundary.
+Detailed frontend-package invocation, Playwright project-discovery, local Node
+module-resolution, and early runtime-port contention notes have been moved to
+[pitfalls-playwright-and-e2e.md](pitfalls-playwright-and-e2e.md).
 
-### Pitfall: root-level `npm.cmd run build` can fail with missing `package.json`
+This includes:
 
-Symptom:
+- frontend build and Playwright invocation directory pitfalls;
+- local screenshot-script module-resolution notes;
+- Pitfall 41 around `ECONNRESET` on default E2E ports.
+### Pitfalls 42-46: PostgreSQL and pytest environment semantics
 
-```text
-npm error enoent Could not read package.json
-npm error path <repo>/package.json
-```
-
-Cause:
-
-The school frontend package lives under:
-
-```text
-<repo>/apps/web/school
-```
-
-The repository root is not the frontend package root and does not own the
-school SPA `package.json`.
-
-Fix:
-
-Run the build from the frontend app directory:
-
-```text
-cd <repo>/apps/web/school
-npm.cmd run build
-```
-
-Interpretation:
-
-Do not treat this failure as a dependency install failure or a Vite failure.
-It is a working-directory failure. Re-run from the frontend package before
-changing code, reinstalling packages, or editing build configuration.
-
-### Pitfall: Playwright project names disappear when running from the spec directory
-
-Symptom:
-
-```text
-Error: Project(s) "chromium" not found. Available projects: ""
-```
-
-Cause:
-
-The Playwright config for the school SPA is in:
-
-```text
-<repo>/apps/web/school/playwright.config.cjs
-```
-
-Running `npx.cmd playwright test ... --project=chromium` from
-`<repo>/tests/e2e/web-school` can fail to load that config. Without the config,
-the CLI does not know about the `chromium` project.
-
-Fix:
-
-Run maintained school Playwright specs from:
-
-```text
-<repo>/apps/web/school
-```
-
-Use the configured test file name relative to the configured `testDir`, for
-example:
-
-```text
-npx.cmd playwright test ui-homework-history-outline-regression.spec.js --project=chromium
-```
-
-Interpretation:
-
-This is not evidence that Chromium is missing. It means the command did not
-load the project configuration.
-
-### Pitfall: path arguments outside configured `testDir` may report "No tests found"
-
-Symptom:
-
-```text
-Error: No tests found.
-Make sure that arguments are regular expressions matching test files.
-```
-
-Cause:
-
-The school Playwright config sets:
-
-```text
-testDir: ../../../tests/e2e/web-school
-```
-
-Passing a path outside that directory, such as an ignored local script under
-`<artifact-dir>`, does not necessarily behave like a one-off arbitrary spec
-runner. The config still scopes discovery around its `testDir`.
-
-Fix:
-
-For maintained tests, keep the spec under `<repo>/tests/e2e/web-school` and run
-it by filename from `<repo>/apps/web/school`.
-
-For local screenshot experiments, either:
-
-- temporarily add screenshot capture to a maintained spec and remove it before
-  commit; or
-- create an ignored local Node script that imports Playwright directly and also
-  recreates any module-resolution setup the Playwright config normally provides.
-
-Interpretation:
-
-Do not expand `testDir` just to run a local screenshot helper. Keep ignored
-artifacts ignored and keep maintained test discovery narrow.
-
-### Pitfall: local Node screenshot scripts may not inherit Playwright config module resolution
-
-Symptom:
-
-```text
-Error: Cannot find module '@playwright/test'
-Require stack:
-- <repo>/tests/e2e/web-school/fixtures.cjs
-- <artifact-dir>/...
-```
-
-Cause:
-
-The school Playwright config prepends the frontend `node_modules` directory to
-`NODE_PATH` and calls `Module._initPaths()` before running tests. A direct local
-Node script does not inherit that setup unless it recreates it.
-
-Fix:
-
-For local-only scripts, add the equivalent setup before importing E2E helpers:
-
-```javascript
-const Module = require('module')
-const schoolNodeModules = '<repo>/apps/web/school/node_modules'
-process.env.NODE_PATH = [schoolNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
-Module._initPaths()
-```
-
-Use placeholder paths in committed docs. Put real absolute paths only in ignored
-local notes.
-
-Interpretation:
-
-This failure does not mean `@playwright/test` is missing from the frontend app.
-It means the direct script skipped the configuration bootstrap that normally
-makes the package visible to shared E2E helpers.
-
-## What This Document Does Not Claim
-
-It does not claim SQLite and PostgreSQL accept the same SQL text for every ad hoc query embedded in tests.
-
-### Pitfall 41: Playwright `read ECONNRESET` / `TypeError: fetch failed` with default E2E ports
-
-Symptom:
-
-```text
-TypeError: fetch failed
-[cause]: Error: read ECONNRESET
-```
-
-Context:
-
-School Playwright defaults commonly bind the backend to `http://127.0.0.1:8012` and the SPA to
-`http://127.0.0.1:3012`. Mock LLM traffic stays on-loopback under paths such as
-`/api/e2e/dev/mock-llm/<profile>/v1/`. This is **not** an external provider outage.
-
-Cause:
-
-Two or more Playwright CLI processes (or stray `uvicorn` / `vite` processes) can race the same
-fixed ports. The browser then hits a half-dead server, a wrong process, or a torn-down connection,
-which surfaces as `ECONNRESET` rather than a clear HTTP error.
-
-Fix:
-
-- Run narrow E2E greps **serially** (one `npx playwright test ...` at a time).
-- Before blaming product code, check for duplicate listeners on `8012` / `3012` (or whatever
-  `E2E_API_PORT` / `PLAYWRIGHT_BASE_URL` you configured).
-- When you must parallelize automation, assign **distinct** backend and frontend ports per job and
-  isolate databases.
-
-Interpretation:
-
-This failure pattern is usually harness contention, not Codex rate limits and not remote LLM API
-instability.
-
-### Pitfall 42: PostgreSQL `IN (...)` lists reject a trailing comma
-
-Symptom:
-
-```text
-psycopg2.errors.SyntaxError: syntax error at or near ")"
-```
-
-Cause:
-
-In PostgreSQL, `WHERE column_name IN ('a', 'b',)` is invalid because of the trailing comma after the last literal. Some editors or copy-paste patterns introduce that comma when extending a list of legacy column names.
-
-Fix:
-
-Remove the trailing comma after the final element in the `IN` list (or use a tuple/array constructor that your dialect documents).
-
-### Pitfall 43: `Session.merge()` is not always a safe “upsert” in tests
-
-Symptom:
-
-```text
-sqlalchemy.exc.IntegrityError: UniqueViolation ... llm_student_token_overrides_student_id_key
-```
-
-Context:
-
-A test tries to model “update the per-student override twice” by calling `Session.merge(LLMStudentTokenOverride(...))` twice in the same session.
-
-Cause:
-
-`merge()` resolves identity using SQLAlchemy’s merge algorithm and the current session state. For rows keyed by a **natural unique column** (`student_id`) without a stable primary-key object already loaded, a second `merge()` can still emit an **INSERT** that collides with the first row, especially when the session’s identity map does not contain the persisted instance the test author assumed.
-
-Fix:
-
-- Prefer **`query(...).one()` then mutate attributes** and `commit()`, or
-- Call the **application service** (`apply_student_daily_token_overrides` / HTTP API) that already encodes upsert semantics, or
-- Use **`db.execute(update(...))`** with an explicit `WHERE student_id = :sid` in low-level constraint tests.
-
-Interpretation:
-
-This is usually a **test harness bug**, not evidence that the database unique constraint is wrong.
-
-### Pitfall 44: Playwright CLI `-q` / unknown option failures in CI
-
-Symptom:
-
-```text
-error: unknown option '-q'
-```
-
-Context:
-
-Some automation snippets suggest `npx playwright test ... -q` for quieter logs.
-
-Cause:
-
-The installed `@playwright/test` major version may **not** support the `-q` flag on the `playwright test` CLI entrypoint.
-
-Fix:
-
-- Remove `-q` and rely on Playwright’s default reporter, or
-- Use supported reporter flags for your installed version (see upstream Playwright release notes for `<REPO_ROOT>/apps/web/school/node_modules/@playwright/test`).
-
-### Pitfall 45: Many pytest “skips” are environment gates (PostgreSQL dialect), not optional quality
-
-Symptom:
-
-```text
-43 skipped
-```
-
-Context:
-
-- **`tests/postgres/*`** and **`test_r3`** in `test_regression_llm_quota_behavior.py` require a **PostgreSQL** engine (`information_schema`, transactional semantics).
-
-Cause:
-
-Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or **`COURSEEVAL_AUTO_PG_TESTS=1`** auto-pick is enabled — see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)).
-
-Fix:
-
-1. Install **`unrar`** or **`unrar-free`** so `tests/backend/llm/test_llm_attachment_formats.py` can execute the RAR walks (same tooling the product uses in `domains/llm/attachments.py`). The **`rar`** compressor is **not** required at pytest runtime anymore because regression archives live under **`tests/fixtures/llm_rar/`** (generated offline by maintainers).
-2. Run **`bash ops/scripts/dev/provision_postgres_pytest.sh`** (creates `courseeval_pytest_all` + role `courseeval_test`; needs `sudo -u postgres` when the cluster exists).
-3. Either `export TEST_DATABASE_URL='postgresql+psycopg2://courseeval_test:courseeval_test@127.0.0.1:5432/courseeval_pytest_all'`, or set **`COURSEEVAL_AUTO_PG_TESTS=1`** so `tests/conftest.py` probes that URL and switches `DATABASE_URL` before importing the app.
-4. Ensure PostgreSQL is **listening** (`pg_ctlcluster <ver> main start` or your distro equivalent). The provision script fails loudly when `sudo -u postgres` cannot connect.
-
-Interpretation:
-
-**SQLite-only green** is fast but **incomplete** for schema-sensitive merges; CI should aim for a **Postgres-backed 0-skip** full pytest with the recipe above (Postgres executes the modules skipped by SQLite). The latest full-suite report currently records **466 passed, 0 skipped** for that profile and **423 passed, 43 skipped** for SQLite-default. Older notes that cite **432**, **417**, or fixed **45-skip** expectations describe earlier fixture layouts and should not be used as the current branch’s pass-count oracle.
-
-### Pitfall 46: disposable Linux / cloud-agent runners may lack `pytest` until `requirements.txt` is installed
-
-### Symptom
-
-Running the backend suite from `<REPO_ROOT>` fails before any test body executes:
-
-```text
-/usr/bin/python3: No module named pytest
-```
-
-Or the shell reports that `pytest` is not found when invoked as a bare executable.
-
-### Context
-
-Cursor cloud agents, minimal CI images, and fresh clones often do **not** ship with the repository `.venv` pre-created. The canonical developer workflow assumes `pip install -r requirements.txt` (or an equivalent venv step) before `python -m pytest`.
-
-### Fix
-
-At `<REPO_ROOT>`:
-
-```bash
-python3 -m pip install -r requirements.txt
-python3 -m pytest tests/ -q
-```
-
-Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) Local Development Setup); the important invariant is that the **same interpreter** that runs pytest has project dependencies installed.
-
-### Interpretation
-
-This is **runner bootstrap debt**, not a failing test or a broken import path in `apps.backend.courseeval_backend`. Do not edit `tests/conftest.py` or `pytest.ini` to “fix” a missing `pytest` package on the system interpreter.
-
+Detailed PostgreSQL SQL, ORM, skip-policy, and pytest bootstrap narratives for
+Pitfalls 42-46 have been moved to
+[pitfalls-postgres-and-pytest.md](pitfalls-postgres-and-pytest.md).
 ### Pitfall 47: `GET /api/homework` is not the student homework list — the plural router is `/api/homeworks`
 
 ### Symptom

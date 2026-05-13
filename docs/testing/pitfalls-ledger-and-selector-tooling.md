@@ -11,8 +11,9 @@ Use this route when the failure shape suggests:
 - private-path scanner false positives;
 - evidence recording that reports only green runs and loses blocked context.
 
-This file is a **router and summary**, not the canonical pitfall ledger. The
-full historical narratives remain in
+This file is a **route, summary, and canonical home** for the ledger and
+selector-tooling pitfall clusters that have already been migrated here.
+Historical entries that have not been moved yet still remain in
 [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
 
 ## Start Here

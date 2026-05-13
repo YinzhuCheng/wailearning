@@ -24,15 +24,22 @@ Use `.agent-run/` for:
 - private absolute paths and machine-local notes;
 - local validation logs and runner artifacts;
 - screenshots and browser evidence;
-- temporary orchestrators, scratch planning notes, and local-only helper data;
+- temporary orchestrators, local plan files under `.agent-run/plan/`, and
+  other local-only helper data;
 - database, browser, or process evidence that would be noisy or unsafe in the
   tracked repository.
 
 Typical stable entrypoints include:
 
 - `.agent-run/local-private-paths.md`
+- `.agent-run/plan/` for task-scoped local plan files that should be deleted
+  after the plan is executed or explicitly superseded
 - `.agent-run/validation-history.jsonl`
 - task-scoped local scripts or notes needed only on this machine
+
+Do not treat any local planning note in `.agent-run/` as a durable repository
+entrypoint. If a plan becomes part of the repository contract, promote the
+durable part into committed docs and let the local note disappear.
 
 ## What Stays Out Of Commits
 
@@ -56,8 +63,11 @@ When continuing work on the same machine:
 1. Read `AGENTS.md` and `docs/README.md`.
 2. Open any task-relevant committed handoff or governance doc first.
 3. Then read task-relevant local notes under `.agent-run/`, especially
+   `.agent-run/plan/` for active local plans and
    `.agent-run/local-private-paths.md` when path setup matters.
-4. Keep new private notes local unless the information should become a durable
+4. Delete a completed or superseded local plan file instead of keeping stale
+   execution plans in `.agent-run/plan/`.
+5. Keep new private notes local unless the information should become a durable
    repository rule or handoff.
 
 ## Relationship To Other Ignored Paths

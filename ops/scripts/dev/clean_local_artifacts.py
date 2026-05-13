@@ -83,7 +83,6 @@ PROTECTED_DIR_PARTS = {
 
 AGENT_RUN_ROOT_KEEP_FILES = {
     "local-private-paths.md",
-    "repository-normalization-three-step-plan.md",
     "run-postgres-pytest.ps1",
     "use-local-env.cmd",
     "use-local-env.ps1",

@@ -1,6 +1,6 @@
 ---
 name: repository-normalization
-description: Top-level CourseEval governance orchestrator for repository normalization, three-line governance, skill taxonomy, docs-as-governance, package/path/name drift, and deciding when to route into docs-governance, boundary-governance, structure-governance, validation-selection, validation-ledger-maintenance, or specialized audit skills.
+description: Top-level CourseEval governance orchestrator for repository normalization, skill taxonomy, docs-as-governance, package/path/name drift, and deciding when to route into docs-governance, boundary-governance, structure-governance, validation-selection, validation-ledger-maintenance, or specialized audit skills.
 ---
 
 # Repository Normalization
@@ -9,8 +9,8 @@ description: Top-level CourseEval governance orchestrator for repository normali
 
 Coordinate CourseEval repository governance without becoming a duplicate of
 specialized skills. Use this as the top-level entrypoint for code-as-docs,
-docs-as-governance, package/name drift, three-line governance, skill taxonomy,
-and handoff preparation.
+docs-as-governance, package/name drift, skill taxonomy, and handoff
+preparation.
 
 ## Skill Layers
 
@@ -37,7 +37,7 @@ and handoff preparation.
 ## Workflow
 
 1. Read `AGENTS.md`, `docs/README.md`, and task-scoped docs.
-2. Decide whether this is a three-line governance task:
+2. Decide whether this is a broad governance-routing task:
    - docs or process: use `docs-governance`;
    - module/import/ownership boundary: use `boundary-governance`;
    - root layout, moves, or directory hierarchy: use `structure-governance`.

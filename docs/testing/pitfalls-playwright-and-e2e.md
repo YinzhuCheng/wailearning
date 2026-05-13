@@ -11,8 +11,9 @@ Use this route when the failure shape suggests:
   assertions;
 - seeded browser-scenario setup drift.
 
-This file is a **router and summary**, not the canonical pitfall ledger. The
-full historical narratives remain in
+This file is a **route, summary, and canonical home** for the Playwright and
+E2E pitfall clusters that have already been migrated here. Historical entries
+that have not been moved yet still remain in
 [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
 
 ## Start Here
@@ -209,3 +210,201 @@ startup batches.
 
 Defensive idempotency at insert time so startup reconciliation does not abort
 the whole process.
+
+
+## Additional migrated Playwright blocks
+
+## Frontend Build And Playwright Invocation Directory Pitfalls
+
+This subsection records command-invocation mistakes encountered while adding a
+focused UI outline guard. The product code was not the root cause; the failures
+came from running the right tools from the wrong directory or outside the test
+configuration boundary.
+
+### Pitfall: root-level `npm.cmd run build` can fail with missing `package.json`
+
+Symptom:
+
+```text
+npm error enoent Could not read package.json
+npm error path <repo>/package.json
+```
+
+Cause:
+
+The school frontend package lives under:
+
+```text
+<repo>/apps/web/school
+```
+
+The repository root is not the frontend package root and does not own the
+school SPA `package.json`.
+
+Fix:
+
+Run the build from the frontend app directory:
+
+```text
+cd <repo>/apps/web/school
+npm.cmd run build
+```
+
+Interpretation:
+
+Do not treat this failure as a dependency install failure or a Vite failure.
+It is a working-directory failure. Re-run from the frontend package before
+changing code, reinstalling packages, or editing build configuration.
+
+### Pitfall: Playwright project names disappear when running from the spec directory
+
+Symptom:
+
+```text
+Error: Project(s) "chromium" not found. Available projects: ""
+```
+
+Cause:
+
+The Playwright config for the school SPA is in:
+
+```text
+<repo>/apps/web/school/playwright.config.cjs
+```
+
+Running `npx.cmd playwright test ... --project=chromium` from
+`<repo>/tests/e2e/web-school` can fail to load that config. Without the config,
+the CLI does not know about the `chromium` project.
+
+Fix:
+
+Run maintained school Playwright specs from:
+
+```text
+<repo>/apps/web/school
+```
+
+Use the configured test file name relative to the configured `testDir`, for
+example:
+
+```text
+npx.cmd playwright test ui-homework-history-outline-regression.spec.js --project=chromium
+```
+
+Interpretation:
+
+This is not evidence that Chromium is missing. It means the command did not
+load the project configuration.
+
+### Pitfall: path arguments outside configured `testDir` may report "No tests found"
+
+Symptom:
+
+```text
+Error: No tests found.
+Make sure that arguments are regular expressions matching test files.
+```
+
+Cause:
+
+The school Playwright config sets:
+
+```text
+testDir: ../../../tests/e2e/web-school
+```
+
+Passing a path outside that directory, such as an ignored local script under
+`<artifact-dir>`, does not necessarily behave like a one-off arbitrary spec
+runner. The config still scopes discovery around its `testDir`.
+
+Fix:
+
+For maintained tests, keep the spec under `<repo>/tests/e2e/web-school` and run
+it by filename from `<repo>/apps/web/school`.
+
+For local screenshot experiments, either:
+
+- temporarily add screenshot capture to a maintained spec and remove it before
+  commit; or
+- create an ignored local Node script that imports Playwright directly and also
+  recreates any module-resolution setup the Playwright config normally provides.
+
+Interpretation:
+
+Do not expand `testDir` just to run a local screenshot helper. Keep ignored
+artifacts ignored and keep maintained test discovery narrow.
+
+### Pitfall: local Node screenshot scripts may not inherit Playwright config module resolution
+
+Symptom:
+
+```text
+Error: Cannot find module '@playwright/test'
+Require stack:
+- <repo>/tests/e2e/web-school/fixtures.cjs
+- <artifact-dir>/...
+```
+
+Cause:
+
+The school Playwright config prepends the frontend `node_modules` directory to
+`NODE_PATH` and calls `Module._initPaths()` before running tests. A direct local
+Node script does not inherit that setup unless it recreates it.
+
+Fix:
+
+For local-only scripts, add the equivalent setup before importing E2E helpers:
+
+```javascript
+const Module = require('module')
+const schoolNodeModules = '<repo>/apps/web/school/node_modules'
+process.env.NODE_PATH = [schoolNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
+Module._initPaths()
+```
+
+Use placeholder paths in committed docs. Put real absolute paths only in ignored
+local notes.
+
+Interpretation:
+
+This failure does not mean `@playwright/test` is missing from the frontend app.
+It means the direct script skipped the configuration bootstrap that normally
+makes the package visible to shared E2E helpers.
+
+## What This Document Does Not Claim
+
+It does not claim SQLite and PostgreSQL accept the same SQL text for every ad hoc query embedded in tests.
+
+### Pitfall 41: Playwright `read ECONNRESET` / `TypeError: fetch failed` with default E2E ports
+
+Symptom:
+
+```text
+TypeError: fetch failed
+[cause]: Error: read ECONNRESET
+```
+
+Context:
+
+School Playwright defaults commonly bind the backend to `http://127.0.0.1:8012` and the SPA to
+`http://127.0.0.1:3012`. Mock LLM traffic stays on-loopback under paths such as
+`/api/e2e/dev/mock-llm/<profile>/v1/`. This is **not** an external provider outage.
+
+Cause:
+
+Two or more Playwright CLI processes (or stray `uvicorn` / `vite` processes) can race the same
+fixed ports. The browser then hits a half-dead server, a wrong process, or a torn-down connection,
+which surfaces as `ECONNRESET` rather than a clear HTTP error.
+
+Fix:
+
+- Run narrow E2E greps **serially** (one `npx playwright test ...` at a time).
+- Before blaming product code, check for duplicate listeners on `8012` / `3012` (or whatever
+  `E2E_API_PORT` / `PLAYWRIGHT_BASE_URL` you configured).
+- When you must parallelize automation, assign **distinct** backend and frontend ports per job and
+  isolate databases.
+
+Interpretation:
+
+This failure pattern is usually harness contention, not Codex rate limits and not remote LLM API
+instability.

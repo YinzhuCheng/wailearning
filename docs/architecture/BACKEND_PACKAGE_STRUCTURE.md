@@ -178,7 +178,7 @@ Rules:
 
 ## Current Domain-Heavy Modules
 
-The following package-root modules are still substantial and should be treated as candidates for further extraction or slimming:
+The following package-root modules are still substantial and should be treated as candidates for future extraction or slimming when a task already justifies focused boundary work:
 
 - `llm_grading.py`
 - `llm_discussion.py`
@@ -309,7 +309,7 @@ Do not create vague buckets such as:
 
 ## Recommended Next Domain Extractions
 
-The next worthwhile structural reductions are:
+The next worthwhile structural reductions, when a scoped task needs them, are:
 
 1. `llm_grading.py` worker/execution/notification slices that can preserve the
    current queue, retry, quota, endpoint failover, and summary-refresh
@@ -362,7 +362,9 @@ apps/backend/courseeval_backend/
     logging.py
 ```
 
-Most of those directories now exist. The remaining work is to keep reducing the few heavy package-root orchestration modules without re-accumulating structural debt at the root.
+Most of those directories now exist. The ongoing rule is to reduce the few
+heavy package-root orchestration modules only through bounded, validation-backed
+changes, without re-accumulating structural debt at the root.
 
 ## Import Rules For Future Refactors
 
