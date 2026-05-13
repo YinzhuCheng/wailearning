@@ -23,6 +23,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     get_student_profile_for_user,
     is_course_instructor,
     prepare_student_course_context,
+    subject_linked_class_ids,
 )
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.domains.homework.cleanup import purge_homework_row
@@ -94,6 +95,15 @@ def _ensure_course_homework_status_access(subject_id: int, user: User, db: Sessi
     if not is_course_instructor(user, course):
         raise HTTPException(status_code=403, detail="Only the course instructor can view student homework status.")
     return course
+
+
+def _homework_subject_allows_class(db: Session, course: Subject, class_id: int) -> bool:
+    linked = set(subject_linked_class_ids(db, course.id))
+    if linked:
+        return int(class_id) in linked
+    if course.class_id:
+        return int(course.class_id) == int(class_id)
+    return True
 
 
 def _get_homework_or_404(homework_id: int, db: Session) -> Homework:
@@ -774,7 +784,7 @@ def create_homework(
         course = ensure_course_access_http(data.subject_id, current_user, db)
         if not is_course_instructor(current_user, course):
             raise HTTPException(status_code=403, detail="Only the assigned course teacher can create homework.")
-        if course.class_id and course.class_id != data.class_id:
+        if not _homework_subject_allows_class(db, course, data.class_id):
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
     elif current_user.role != UserRole.ADMIN and data.class_id not in allowed_class_ids:
         raise HTTPException(status_code=403, detail="You do not have access to this class.")
@@ -825,7 +835,7 @@ def update_homework(
 
     if data.subject_id is not None:
         course = ensure_course_access_http(data.subject_id, current_user, db)
-        if course.class_id and course.class_id != homework.class_id:
+        if not _homework_subject_allows_class(db, course, homework.class_id):
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
     if data.title is not None:

@@ -3549,3 +3549,117 @@ def test_hard124_teacher_can_retarget_course_notification_to_linked_secondary_cl
 
     assert r.status_code == 200, r.text
     assert _notification_scope(notification_id)[:2] == (subject_id, linked_class_id)
+
+
+def test_hard125_teacher_can_create_attendance_for_linked_secondary_class_course(client: TestClient):
+    teacher = _create_teacher("attendance_multiclass_create_teacher")
+    primary_class_id = _create_class("security-attendance-multiclass-primary")
+    linked_class_id = _create_class("security-attendance-multiclass-linked")
+    student_id = _extra_student_for_class(linked_class_id, "attendance_multiclass_linked_student")
+    subject_id = _create_subject("Attendance multiclass create", int(teacher["user_id"]), primary_class_id)
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=subject_id,
+                class_id=linked_class_id,
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.post(
+        "/api/attendance",
+        headers=headers,
+        json={
+            "student_id": student_id,
+            "class_id": linked_class_id,
+            "subject_id": subject_id,
+            "date": "2026-05-14T09:00:00Z",
+            "status": "present",
+            "remark": "hard125 linked class attendance",
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert _attendance_count_for_subject(subject_id) == 1
+
+
+def test_hard126_teacher_can_create_homework_for_linked_secondary_class_course(client: TestClient):
+    teacher = _create_teacher("homework_multiclass_create_teacher")
+    primary_class_id = _create_class("security-homework-multiclass-primary")
+    linked_class_id = _create_class("security-homework-multiclass-linked")
+    subject_id = _create_subject("Homework multiclass create", int(teacher["user_id"]), primary_class_id)
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=subject_id,
+                class_id=linked_class_id,
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.post(
+        "/api/homeworks",
+        headers=headers,
+        json={
+            "title": "hard126 linked class homework",
+            "content": "course teacher should be able to create homework for any linked class on the course",
+            "class_id": linked_class_id,
+            "subject_id": subject_id,
+            "max_score": 100,
+            "auto_grading_enabled": False,
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert int(r.json()["subject_id"]) == subject_id
+    assert int(r.json()["class_id"]) == linked_class_id
+
+
+def test_hard127_teacher_can_class_batch_attendance_for_linked_secondary_class_course(client: TestClient):
+    teacher = _create_teacher("attendance_multiclass_batch_teacher")
+    primary_class_id = _create_class("security-attendance-batch-multiclass-primary")
+    linked_class_id = _create_class("security-attendance-batch-multiclass-linked")
+    _extra_student_for_class(linked_class_id, "attendance_multiclass_batch_student")
+    subject_id = _create_subject("Attendance multiclass batch", int(teacher["user_id"]), primary_class_id)
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=subject_id,
+                class_id=linked_class_id,
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.post(
+        "/api/attendance/class-batch",
+        headers=headers,
+        json={
+            "class_id": linked_class_id,
+            "subject_id": subject_id,
+            "date": "2026-05-14T10:00:00Z",
+            "status": "late",
+            "remark": "hard127 linked class batch attendance",
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["success"] >= 1
+    assert r.json()["failed"] == 0

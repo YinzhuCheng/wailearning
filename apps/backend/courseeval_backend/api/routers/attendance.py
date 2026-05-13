@@ -5,7 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
-from apps.backend.courseeval_backend.domains.courses.access import ensure_course_access_http, is_course_instructor
+from apps.backend.courseeval_backend.domains.courses.access import (
+    ensure_course_access_http,
+    is_course_instructor,
+    subject_linked_class_ids,
+)
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import Attendance, Student, Subject, User, UserRole
 from apps.backend.courseeval_backend.domains.courses.class_scope import apply_class_id_filter, get_accessible_class_ids
@@ -23,6 +27,15 @@ def _ensure_attendance_write_access(current_user: User):
 def _ensure_attendance_course_write_access(current_user: User, course: Subject):
     if not is_course_instructor(current_user, course):
         raise HTTPException(status_code=403, detail="Only the assigned course teacher can modify course attendance.")
+
+
+def _attendance_subject_allows_class(db: Session, course: Subject, class_id: int) -> bool:
+    linked = set(subject_linked_class_ids(db, course.id))
+    if linked:
+        return int(class_id) in linked
+    if course.class_id:
+        return int(course.class_id) == int(class_id)
+    return True
 
 
 def _parse_attendance_date(value) -> datetime:
@@ -149,7 +162,7 @@ def create_attendance(
     if attendance_data.subject_id:
         course = ensure_course_access_http(attendance_data.subject_id, current_user, db)
         _ensure_attendance_course_write_access(current_user, course)
-        if course.class_id and course.class_id != attendance_data.class_id:
+        if not _attendance_subject_allows_class(db, course, attendance_data.class_id):
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
     try:
@@ -340,7 +353,7 @@ async def create_attendances_batch(
             if not is_course_instructor(current_user, course):
                 errors.append(f"Row {index}: only the assigned course teacher can modify course attendance.")
                 continue
-            if course.class_id and course.class_id != class_id:
+            if not _attendance_subject_allows_class(db, course, class_id):
                 errors.append(f"Row {index}: selected course does not belong to this class.")
                 continue
 
@@ -421,7 +434,7 @@ async def create_class_attendance_batch(
         except HTTPException:
             return {"success": 0, "failed": 1, "errors": ["No access to the selected course."]}
         _ensure_attendance_course_write_access(current_user, course)
-        if course.class_id and course.class_id != class_id:
+        if not _attendance_subject_allows_class(db, course, class_id):
             return {"success": 0, "failed": 1, "errors": ["Course does not belong to the selected class."]}
     else:
         class_ids = set(get_accessible_class_ids(current_user, db))
