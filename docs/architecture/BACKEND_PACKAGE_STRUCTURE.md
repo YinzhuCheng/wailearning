@@ -203,6 +203,8 @@ The following extractions are already in place:
 - course access and enrollment logic moved into `domains/courses/access.py`
 - required-course class-link replacement, duplicate detection, and course-create
   helper rules moved into `domains/courses/class_links.py`
+- course enrollment serialization, roster-student creation, and roster-enroll
+  helper loops moved into `domains/courses/enrollment.py`
 - class-scope query helpers shared by routers moved into `domains/courses/class_scope.py`
 - course metadata normalization and Subject response serialization helpers moved
   into `domains/courses/metadata.py`

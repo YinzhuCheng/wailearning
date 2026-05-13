@@ -761,3 +761,54 @@ Deferred 3.2 validation:
   the subjects router changed. They were not run for this helper-only backend
   extraction because no browser-visible behavior, route contract, or frontend
   code changed.
+
+## Step 3.3 Subjects Enrollment Helper Split Update
+
+The current Step 3.3 round completed the Stage 3 subjects-router backend
+structure work:
+
+- Added `apps/backend/courseeval_backend/domains/courses/enrollment.py`.
+- Moved course enrollment response serialization, roster-student creation, and
+  roster-enroll mutation loops into the new helper module.
+- Kept `api/routers/subjects.py` as the public `/api/subjects` router and HTTP
+  orchestration boundary for access checks, status mapping, and route
+  declarations.
+- Did not intentionally change route paths, HTTP methods, status codes,
+  response models, authorization checks, roster membership rules, enrollment
+  type semantics, student self-enroll/drop behavior, or frontend API
+  contracts.
+- Added selector regression coverage proving `domains/courses/enrollment.py`
+  selects the focused course/roster backend target.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\routers\subjects.py apps\backend\courseeval_backend\domains\courses\enrollment.py`
+  passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported no unmatched paths and targeted/static validation available, with
+  Playwright review targets recommended because `subjects.py` changed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json`
+  passed.
+- `python ops/scripts/dev/lint_validation_registry.py`
+  passed.
+- `python ops/scripts/dev/check_api_surface_governance.py`
+  passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details`
+  passed with existing large-file warnings only.
+- `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_roster_enroll_and_batch_class.py -q`
+  passed.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_course_roster_homework_edge_behavior.py -q`
+  passed.
+
+Deferred 3.3 validation:
+
+- `admin.e2e.agent_followup_batch`,
+  `admin.e2e.discussion_cover_llm_tier3`, and
+  `admin.e2e.security_hardening_followup` were selector review targets because
+  the subjects router changed. They were not run for this helper-only backend
+  extraction because no browser-visible behavior, route contract, or frontend
+  code changed.
