@@ -38,8 +38,9 @@
 | [`api/schemas.py`](../../apps/backend/courseeval_backend/api/schemas.py) | Pydantic request/response compatibility barrel; imports and re-exports split DTO groups while preserving current router/test import paths |
 | [`api/schema_defs/`](../../apps/backend/courseeval_backend/api/schema_defs/) | Domain-grouped API schema definitions currently holding appearance, attendance, dashboard, files, notifications, operations/settings, points, and roster DTOs |
 | [`api/routers/*.py`](../../apps/backend/courseeval_backend/api/routers/) | HTTP routers (see §3) |
-| [`llm_grading.py`](../../apps/backend/courseeval_backend/llm_grading.py) | Grading orchestration, **in-process worker manager**, effective score aggregation |
+| [`llm_grading.py`](../../apps/backend/courseeval_backend/llm_grading.py) | Grading orchestration, **in-process worker manager**, summary refresh, and compatibility exports for grading helpers |
 | [`domains/llm/grading_prompt.py`](../../apps/backend/courseeval_backend/domains/llm/grading_prompt.py) | Homework grading prompt section markers, LLM-assist disclosure text, and markdown field expansion helpers |
+| [`domains/llm/grading_result.py`](../../apps/backend/courseeval_backend/domains/llm/grading_result.py) | Homework grading score normalization, per-attempt candidate precedence, and cross-attempt effective-score selection helpers |
 | [`llm_discussion.py`](../../apps/backend/courseeval_backend/llm_discussion.py) | Course discussion assistant context assembly |
 | [`attachments.py`](../../apps/backend/courseeval_backend/attachments.py) | Upload directory prep; attachment reference checks |
 | [`domains/courses/access.py`](../../apps/backend/courseeval_backend/domains/courses/access.py) | Course visibility queries, enrollment sync, `ensure_course_access_http` |

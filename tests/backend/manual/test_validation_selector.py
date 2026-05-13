@@ -412,7 +412,11 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["unmatched_paths"], [])
 
     def test_llm_grading_prompt_helper_selects_homework_llm_target(self):
-        payload = run_selector("--paths", "apps/backend/courseeval_backend/domains/llm/grading_prompt.py")
+        payload = run_selector(
+            "--paths",
+            "apps/backend/courseeval_backend/domains/llm/grading_prompt.py",
+            "apps/backend/courseeval_backend/domains/llm/grading_result.py",
+        )
 
         ids = recommendation_ids(payload)
         self.assertIn("static.boundary_governance", ids)

@@ -200,6 +200,8 @@ The following extractions are already in place:
 - endpoint URL / response parsing helpers moved into `domains/llm/protocol.py`
 - homework grading prompt section markers and markdown field expansion helpers
   moved into `domains/llm/grading_prompt.py`
+- homework score normalization, candidate precedence, and effective-score
+  selection helpers moved into `domains/llm/grading_result.py`
 - course access and enrollment logic moved into `domains/courses/access.py`
 - required-course class-link replacement, duplicate detection, and course-create
   helper rules moved into `domains/courses/class_links.py`

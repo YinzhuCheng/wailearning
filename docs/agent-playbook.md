@@ -27,7 +27,7 @@ Skipping step 1 causes agents to “fix” generated artifacts or propose forbid
 | HTTP shape / validation | `apps/backend/courseeval_backend/api/schemas.py` + relevant `api/routers/*.py` |
 | Who can call an API | Router dependency (`get_current_user`) + `domains/courses/access.py` + `core/permissions.py` |
 | Persistence | `db/models.py` + `bootstrap.py` (`ensure_schema_updates` if new columns) |
-| Homework scoring display | `llm_grading.py` (`resolve_effective_submission_score`, `refresh_submission_summary`) + `api/routers/homework.py` serializers |
+| Homework scoring display | `domains/llm/grading_result.py` (`resolve_effective_submission_score`) + `llm_grading.py` (`refresh_submission_summary`) + `api/routers/homework.py` serializers |
 | LLM vendor calls | `domains/llm/` + `llm_grading.py` task processor |
 | Admin UI | `apps/web/admin/src/views/*.vue` + `apps/web/admin/src/api/index.js` |
 | Parent UI | `apps/web/parent/src/` |

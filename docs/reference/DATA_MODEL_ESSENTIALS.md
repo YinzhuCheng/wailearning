@@ -91,7 +91,7 @@ Effects for agents:
 | `HomeworkGradingTask` | `homework_grading_tasks` | Async LLM grading tasks |
 | `HomeworkGradeAppeal` | `homework_grade_appeals` | Appeals |
 
-**Effective score (product semantics):** aggregation crosses attempts according to eligibility rules implemented in `llm_grading.py` (`resolve_effective_submission_score`, `attempt_eligible_for_effective_score_aggregate`). Summary row still reflects **latest** attempt body for UX — see [`../architecture/CORE_BUSINESS_FLOWS.md`](../architecture/CORE_BUSINESS_FLOWS.md).
+**Effective score (product semantics):** aggregation crosses attempts according to eligibility rules implemented in `domains/llm/grading_result.py` (`resolve_effective_submission_score`, `attempt_eligible_for_effective_score_aggregate`) and re-exported by `llm_grading.py` for existing callers. Summary row still reflects **latest** attempt body for UX — see [`../architecture/CORE_BUSINESS_FLOWS.md`](../architecture/CORE_BUSINESS_FLOWS.md).
 
 ---
 

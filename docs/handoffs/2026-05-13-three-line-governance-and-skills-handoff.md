@@ -1043,9 +1043,66 @@ Validation for this round:
 - `python ops\scripts\dev\repo_line_health.py` completed and reported current
   tracked text health metrics.
 
-Next local commit in the requested plan: continue `llm_grading.py` with one
-low-side-effect helper extraction, preferring result or execution shaping over
-queue, worker, retry, quota, or notification side effects.
+## Continuation Commit 2: LLM Grading Result Helper Split
+
+The current continuation round completed the second requested local commit in
+the five-commit plan:
+
+- Added `apps/backend/courseeval_backend/domains/llm/grading_result.py`.
+- Moved homework score normalization, single-attempt candidate precedence,
+  late/on-time effective-score eligibility, and cross-attempt
+  effective-score selection helpers out of `llm_grading.py`.
+- Kept `llm_grading.py` as the public grading orchestration, in-process worker,
+  queue, retry, quota, endpoint routing, notification, summary refresh, and
+  compatibility export boundary.
+- Kept the user-facing effective-score explanation text in `llm_grading.py` to
+  avoid unrelated visible-string churn in this bounded helper extraction.
+- Did not intentionally change task queue behavior, worker lifecycle, quota
+  accounting, retry policy, endpoint failover, score precedence semantics,
+  summary refresh fields, route behavior, or browser-visible behavior.
+- Added selector coverage so
+  `apps/backend/courseeval_backend/domains/llm/grading_result.py` selects
+  `backend.homework.llm_grading`, `backend.llm.attachment_formats`, and
+  `behavior.homework_lifecycle_llm` through the existing LLM domain mapping.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\llm_grading.py apps\backend\courseeval_backend\domains\llm\grading_result.py`
+  passed.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops\scripts\dev\lint_validation_registry.py` passed.
+- `python ops\scripts\dev\select_validation_targets.py --worktree --json`
+  reported no unmatched paths and targeted/static validation available, with
+  Playwright review targets `admin.e2e.homework_comment_cover_tier4` and
+  `admin.e2e.llm_hard_scenarios` recommended because `llm_grading.py` changed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed 81 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_llm_grading.py -q`
+  passed 16 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\backend\llm\test_llm_attachment_formats.py -q`
+  passed 7 tests.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_homework_lifecycle_llm_behavior.py -q`
+  passed 4 tests with existing Pydantic deprecation warnings.
+- `python ops\scripts\dev\check_api_surface_governance.py` passed.
+- `python ops\scripts\dev\check_docs_governance.py` passed with the known
+  historical missing-path warnings already tracked in this handoff.
+- `python ops\scripts\dev\check_boundary_governance.py --details` passed with
+  existing large-file warnings; `llm_grading.py` is now 2155 lines.
+- `python ops\scripts\dev\check_structure_governance.py --details`,
+  `python ops\scripts\dev\check_repo_skills.py`,
+  `python ops\scripts\dev\check_repository_normalization.py`,
+  `python ops\scripts\dev\check_schema_governance.py`,
+  `python ops\scripts\dev\pytest_sqlite_guard.py --json`,
+  `python ops\scripts\dev\repo_line_health.py`,
+  `python ops\scripts\dev\check_text_encoding.py --skip-if-empty ...`, and
+  `git diff --check` passed or only reported known CRLF normalization warnings
+  for `tests/TEST_SELECTION_TARGETS.json`.
+
+Next local commit in the requested plan: extract one low-risk helper from
+`apps/backend/courseeval_backend/api/routers/homework.py`, keeping route paths,
+methods, auth, permissions, response models, status codes, student/teacher/admin
+visibility, submission/review/regrade behavior, queue behavior, notification
+behavior, and serialized field semantics unchanged.
 
 ## Branch And Validation State For Handoff
 
