@@ -161,6 +161,13 @@
                     ]
                 },
                 {
+                    "label": "high-risk path metadata",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_high_risk_path_metadata.py"
+                    ]
+                },
+                {
                     "label": "runner smoke",
                     "argv": [
                         ".venv/Scripts/python.exe",
@@ -182,10 +189,12 @@
                     "ops/scripts/dev/sync_pitfall_index_lines.py",
                     "ops/scripts/dev/check_validation_debt_registry.py",
                     "ops/scripts/dev/check_validation_lane_budgets.py",
+                    "ops/scripts/dev/check_high_risk_path_metadata.py",
                     "ops/scripts/dev/search_pitfalls.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
                     "tests/TEST_SELECTION_TARGETS.json",
+                    "docs/governance/high-risk-path-metadata.json",
                     "docs/testing/DEVELOPMENT_AND_TESTING.md",
                     "docs/testing/TEST_EXECUTION_LEDGER.md",
                     "docs/testing/TEST_EXECUTION_TARGETS.md",
@@ -211,6 +220,7 @@
                     "ops/scripts/dev/sync_pitfall_index_lines.py",
                     "ops/scripts/dev/check_validation_debt_registry.py",
                     "ops/scripts/dev/check_validation_lane_budgets.py",
+                    "ops/scripts/dev/check_high_risk_path_metadata.py",
                     "ops/scripts/dev/search_pitfalls.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",

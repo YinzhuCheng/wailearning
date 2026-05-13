@@ -48,6 +48,7 @@ guessing.
 | [`governance/repository-governance.md`](governance/repository-governance.md) | Full repository governance model and where durable rules live |
 | [`governance/agent-update-log.md`](governance/agent-update-log.md) | Per-round update-log contract and append policy |
 | [`governance/known-issues-and-risks.md`](governance/known-issues-and-risks.md) | Open risks, ownership ambiguity, and active hazards |
+| [`governance/high-risk-path-metadata.json`](governance/high-risk-path-metadata.json) | Committed owner/risk/validation metadata for the highest-risk repository paths |
 | [`testing/CI_AND_VALIDATION.md`](testing/CI_AND_VALIDATION.md) | Current CI entrypoints and how to interpret cloud versus local validation scope |
 | [`../skills/README.md`](../skills/README.md) | Full repo-local skill catalog and layering guide |
 | [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Top-level governance orchestrator for repo normalization, skill taxonomy, and governance routing |

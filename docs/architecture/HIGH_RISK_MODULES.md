@@ -91,6 +91,7 @@ Route with:
 ## Related Files
 
 - `AGENTS.md`
+- `docs/governance/high-risk-path-metadata.json`
 - `docs/architecture/CORE_BUSINESS_FLOWS.md`
 - `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`
 - `docs/operations/ADMIN_BOOTSTRAP.md`

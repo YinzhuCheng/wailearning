@@ -37,6 +37,7 @@ from validation_history import (
 
 DEFAULT_REGISTRY = "tests/TEST_SELECTION_TARGETS.json"
 DEFAULT_LEDGER = "docs/testing/test-execution-targets.csv"
+DEFAULT_HIGH_RISK_METADATA = "docs/governance/high-risk-path-metadata.json"
 RISK_ORDER = {
     "static": 0,
     "targeted": 1,
@@ -169,6 +170,16 @@ def load_registry(repo_root: Path, registry_path: str) -> dict[str, Any]:
     if duplicate_ids:
         raise ValueError(f"duplicate target id(s) in {registry_path}: {', '.join(duplicate_ids)}")
     return data
+
+
+def load_high_risk_path_metadata(repo_root: Path, metadata_path: str) -> list[dict[str, Any]]:
+    path = repo_root / metadata_path
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    rows = payload.get("paths", [])
+    return rows if isinstance(rows, list) else []
 
 
 def parse_ledger(repo_root: Path, ledger_path: str) -> dict[str, dict[str, str]]:
@@ -567,6 +578,7 @@ def build_json_result(
     recommendations: list[Recommendation],
     unmatched: list[str],
     notes: list[str],
+    matched_high_risk_metadata: list[dict[str, Any]],
 ) -> dict[str, Any]:
     non_full_summary = build_non_full_validation_summary(recommendations, unmatched, changed_paths)
     required_validation = build_required_validation_summary(recommendations)
@@ -576,6 +588,7 @@ def build_json_result(
         "non_full_validation": non_full_summary,
         "required_validation": required_validation,
         "changed_paths": [{"status": item.status, "path": item.path} for item in changed_paths],
+        "matched_high_risk_paths": matched_high_risk_metadata,
         "recommendations": [
             {
                 "id": item.target_id,
@@ -621,6 +634,7 @@ def render_markdown(
     recommendations: list[Recommendation],
     unmatched: list[str],
     notes: list[str],
+    matched_high_risk_metadata: list[dict[str, Any]],
 ) -> str:
     non_full_summary = build_non_full_validation_summary(recommendations, unmatched, changed_paths)
     required_validation = build_required_validation_summary(recommendations)
@@ -633,6 +647,18 @@ def render_markdown(
     lines.append(f"Non-full validation reason: {non_full_summary['reason']}")
     lines.append(f"Required validation status: `{required_validation['status']}`")
     lines.append(f"Required validation reason: {required_validation['reason']}")
+    lines.append("")
+
+    lines.append("## High-Risk Path Metadata")
+    lines.append("")
+    if matched_high_risk_metadata:
+        for item in matched_high_risk_metadata:
+            families = ", ".join(f"`{value}`" for value in item.get("required_validation_families", []))
+            lines.append(
+                f"- `{item['path']}` owner=`{item['owner_area']}` risk=`{item['risk_class']}` migration=`{item['migration_sensitivity']}` required-families={families}"
+            )
+    else:
+        lines.append("- No committed high-risk path metadata matched the current diff.")
     lines.append("")
 
     lines.append("## Changed Paths")
@@ -762,6 +788,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--repo-root", default=".", help="Repository root. Defaults to current directory.")
     parser.add_argument("--registry", default=DEFAULT_REGISTRY, help=f"Target registry path. Defaults to {DEFAULT_REGISTRY}.")
     parser.add_argument("--ledger", default=DEFAULT_LEDGER, help=f"Execution ledger path. Defaults to {DEFAULT_LEDGER}.")
+    parser.add_argument("--high-risk-metadata", default=DEFAULT_HIGH_RISK_METADATA, help=f"High-risk path metadata JSON path. Defaults to {DEFAULT_HIGH_RISK_METADATA}.")
     parser.add_argument("--history", default=DEFAULT_HISTORY, help=f"Ignored JSONL run history path. Defaults to {DEFAULT_HISTORY}.")
     parser.add_argument("--no-history", action="store_true", help="Do not read ignored structured run history.")
     parser.add_argument("--base", default=None, help="Base ref for git diff. Defaults to upstream when available.")
@@ -783,6 +810,7 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     repo_root = Path(args.repo_root).resolve()
     registry = load_registry(repo_root, args.registry)
+    high_risk_metadata = load_high_risk_path_metadata(repo_root, args.high_risk_metadata)
     ledger_entries = parse_ledger(repo_root, args.ledger)
     structured_history = {} if args.no_history else latest_records_by_target(load_history_entries(repo_root, args.history))
 
@@ -802,17 +830,28 @@ def main(argv: list[str]) -> int:
             return 2
 
     recommendations, unmatched, notes = select_targets(registry, changed_paths, ledger_entries, structured_history)
+    matched_high_risk_metadata = []
+    for item in high_risk_metadata:
+        path = normalize_path(str(item.get("path") or ""))
+        if not path:
+            continue
+        matched = any(
+            changed.path == path or changed.path.startswith(path + "/")
+            for changed in changed_paths
+        )
+        if matched:
+            matched_high_risk_metadata.append(item)
 
     if args.json:
         print(
             json.dumps(
-                build_json_result(registry, changed_paths, recommendations, unmatched, notes),
+                build_json_result(registry, changed_paths, recommendations, unmatched, notes, matched_high_risk_metadata),
                 ensure_ascii=False,
                 indent=2,
             )
         )
     else:
-        print(render_markdown(registry, changed_paths, recommendations, unmatched, notes))
+        print(render_markdown(registry, changed_paths, recommendations, unmatched, notes, matched_high_risk_metadata))
     return 0
 
 

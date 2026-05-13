@@ -20,6 +20,7 @@ from check_validation_policy_gate import evaluate_policy_gate  # noqa: E402
 from check_validation_capabilities import build_capabilities, evaluate_target_capabilities  # noqa: E402
 from check_validation_debt_registry import check_validation_debt_registry  # noqa: E402
 from check_validation_lane_budgets import evaluate_budget, load_budgets  # noqa: E402
+from check_high_risk_path_metadata import check_high_risk_path_metadata  # noqa: E402
 from check_repo_skills import check_repo_skills  # noqa: E402
 from check_schema_governance import check_schema_governance  # noqa: E402
 from sync_testing_governance_docs import check_docs as check_testing_governance_docs  # noqa: E402
@@ -917,6 +918,22 @@ class ValidationSelectorTests(unittest.TestCase):
             },
         )
         self.assertEqual(issues, [])
+
+    def test_high_risk_path_metadata_check_passes_for_repository_metadata(self):
+        self.assertEqual(
+            check_high_risk_path_metadata(
+                REPO_ROOT,
+                "docs/governance/high-risk-path-metadata.json",
+                "tests/TEST_SELECTION_TARGETS.json",
+            ),
+            [],
+        )
+
+    def test_selector_reports_matched_high_risk_path_metadata(self):
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/db/models.py")
+
+        matched = payload["matched_high_risk_paths"]
+        self.assertTrue(any(item["path"] == "apps/backend/courseeval_backend/db/" for item in matched), matched)
 
     def test_operator_script_governance_check_passes_for_repository_scripts(self):
         self.assertEqual(check_operator_scripts(REPO_ROOT), [])

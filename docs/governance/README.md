@@ -19,3 +19,4 @@ Primary entry point:
 - [known-issues-and-risks.md](known-issues-and-risks.md)
 - [repository-governance.md](repository-governance.md)
 - [agent-update-log.md](agent-update-log.md)
+- [high-risk-path-metadata.json](high-risk-path-metadata.json)
