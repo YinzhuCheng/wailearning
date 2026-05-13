@@ -44,6 +44,9 @@ governance**.
    `python ops/scripts/dev/search_pitfalls.py "<symptom>"`.
 7. Use the diff-based validation selector before broad manual test selection:
    `python ops/scripts/dev/select_validation_targets.py --worktree`.
+8. After validation finishes, run
+   `python ops/scripts/dev/clean_local_artifacts.py` and apply it when the
+   dry-run is limited to reproducible cache or local housekeeping targets.
 
 High-risk hard boundaries that stay explicit:
 
@@ -54,11 +57,12 @@ High-risk hard boundaries that stay explicit:
 
 1. Read this file.
 2. Read [`docs/README.md`](docs/README.md).
-3. Open the task-specific docs listed in `docs/README.md` under **Mandatory
+3. Read [`docs/governance/repository-governance.md`](docs/governance/repository-governance.md).
+4. Open the task-specific docs listed in `docs/README.md` under **Mandatory
    reading by task**.
-4. If this machine already has local continuation artifacts, read the
+5. If this machine already has local continuation artifacts, read the
    task-relevant files under `.agent-run/`.
-5. If the task is non-trivial, route into the appropriate skill from
+6. If the task is non-trivial, route into the appropriate skill from
    [`skills/README.md`](skills/README.md) before planning edits.
 
 Detailed operational defaults, tracing workflow, and documentation-maintenance
