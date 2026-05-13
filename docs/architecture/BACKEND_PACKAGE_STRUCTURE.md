@@ -202,6 +202,8 @@ The following extractions are already in place:
   moved into `domains/llm/grading_prompt.py`
 - course access and enrollment logic moved into `domains/courses/access.py`
 - class-scope query helpers shared by routers moved into `domains/courses/class_scope.py`
+- course metadata normalization and Subject response serialization helpers moved
+  into `domains/courses/metadata.py`
 - homework row cleanup moved into `domains/homework/cleanup.py`
 - homework appeal and notification helpers moved into `domains/homework/appeals.py` and `domains/homework/notifications.py`
 - homework response preview and grading-task log serialization helpers moved

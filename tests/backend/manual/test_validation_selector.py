@@ -367,6 +367,16 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_course_metadata_helper_selects_course_roster_target(self):
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/domains/courses/metadata.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.boundary_governance", ids)
+        self.assertIn("backend.courses.student_course_roster_behavior", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_demo_seed_helper_change_selects_demo_course_seed_target(self):
         payload = run_selector("--paths", "apps/backend/courseeval_backend/domains/seed/demo_users.py")
 

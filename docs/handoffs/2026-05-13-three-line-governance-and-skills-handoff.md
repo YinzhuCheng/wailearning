@@ -656,3 +656,51 @@ Stage 3 constraints:
   code paths or ownership boundaries change.
 - Append `docs/development/testing/agent-update-log.csv` before committing.
 - Keep `.agent-run/` ignored and uncommitted.
+
+## Step 3.1 Subjects Metadata Helper Split Update
+
+The current Step 3.1 round started Stage 3 with the prioritized backend router
+entrypoint, `apps/backend/courseeval_backend/api/routers/subjects.py`:
+
+- Added `apps/backend/courseeval_backend/domains/courses/metadata.py`.
+- Moved course time normalization/storage serialization, semester resolution,
+  `SubjectResponse` serialization, and student course-catalog item
+  serialization into the new domain helper.
+- Kept `api/routers/subjects.py` as the public `/api/subjects` router and HTTP
+  orchestration boundary.
+- Did not intentionally change route paths, HTTP methods, status codes,
+  response models, authorization checks, frontend API contracts, course create
+  semantics, update semantics, elective self-enroll/drop semantics, or roster
+  behavior.
+- Added selector regression coverage proving `domains/courses/metadata.py`
+  continues to select the focused course/roster backend target instead of
+  falling through to broad PostgreSQL fallback.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\routers\subjects.py apps\backend\courseeval_backend\domains\courses\metadata.py`
+  passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported no unmatched paths and targeted/static validation available, with
+  Playwright review targets recommended because `subjects.py` changed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed 79 tests.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python ops/scripts/dev/check_api_surface_governance.py` passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details` passed with
+  existing large-file warnings; `api/routers/subjects.py` is now 1011 lines,
+  down from the Stage 3 baseline of 1193 lines.
+- `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q`
+  passed 14 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_course_roster_homework_edge_behavior.py -q`
+  passed 13 tests with existing Pydantic deprecation warnings.
+
+Deferred 3.1 validation:
+
+- `admin.e2e.agent_followup_batch`,
+  `admin.e2e.discussion_cover_llm_tier3`, and
+  `admin.e2e.security_hardening_followup` were selector review targets because
+  the subjects router changed. They were not run for this helper-only backend
+  extraction because no browser-visible behavior, route contract, or frontend
+  code changed.
