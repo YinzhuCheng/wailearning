@@ -230,7 +230,7 @@ Additive newer-surface tier: **`e2e-learning-notes-attendance-cover-tier20.spec.
 
 They also have the highest dependence on the local execution environment.
 
-This directory also contains the **`future-advanced-coverage`** pair — thirty higher-difficulty Playwright scenarios split across two files (not a separate “backlog” pipeline; they run with the rest of `npm run test:e2e`).
+This directory also contains the **`future-advanced-coverage`** pair ? thirty higher-difficulty Playwright scenarios split across two files. They still run under the same Playwright package, but governance now classifies them as **explicit backlog debt** rather than routine maintained proof; see [VALIDATION_DEBT_REGISTRY.md](VALIDATION_DEBT_REGISTRY.md).
 
 Files:
 

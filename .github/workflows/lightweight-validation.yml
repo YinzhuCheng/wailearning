@@ -37,6 +37,7 @@ jobs:
             ops/scripts/dev/lint_validation_registry.py \
             ops/scripts/dev/check_ci_baselines.py \
             ops/scripts/dev/check_validation_capabilities.py \
+            ops/scripts/dev/check_high_risk_path_metadata.py \
             ops/scripts/dev/check_validation_policy_gate.py \
             ops/scripts/dev/sync_testing_governance_docs.py \
             ops/scripts/dev/sync_pitfall_index_lines.py \
@@ -44,6 +45,7 @@ jobs:
             tests/backend/manual/test_validation_selector.py
           python -m json.tool tests/TEST_SELECTION_TARGETS.json >/dev/null
           python ops/scripts/dev/check_ci_baselines.py
+          python ops/scripts/dev/check_high_risk_path_metadata.py
           python ops/scripts/dev/sync_testing_governance_docs.py --check
           python ops/scripts/dev/sync_pitfall_index_lines.py --check
           python ops/scripts/dev/check_repository_normalization.py
