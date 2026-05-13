@@ -237,7 +237,7 @@ rows.
 
 ### Admin SPA behavior
 
-- Header badge + polling + `BroadcastChannel` — documented in [../development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md).
+- Header badge + polling + `BroadcastChannel` — documented in [../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md).
 
 ---
 
@@ -316,7 +316,7 @@ Admin SPA discussion list rendering:
 1. `POST /api/e2e/dev/reset-scenario` with `X-E2E-Seed-Token` seeds users/courses/homework for Playwright.
 2. “Powerful” endpoints (mock LLM, forced grading pump) may require **dual gate**: seed token **plus** admin JWT when `E2E_DEV_REQUIRE_ADMIN_JWT=true` — default in `apps/web/admin/playwright.config.cjs` for managed subprocesses.
 
-Details: [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_AND_TESTING.md) and [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md).
+Details: [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) and [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ---
 
@@ -332,4 +332,4 @@ Details: [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_
 
 - Deployment shape — [../operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md)
 - Full env reference — [CONFIGURATION_REFERENCE.md](CONFIGURATION_REFERENCE.md)
-- Test layers and commands — [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_AND_TESTING.md)
+- Test layers and commands — [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md)

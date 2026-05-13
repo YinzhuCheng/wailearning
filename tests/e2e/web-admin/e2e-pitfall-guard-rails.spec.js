@@ -1,6 +1,6 @@
 /**
- * Fifteen focused E2E/API checks derived from documented pitfalls (TEST_EXECUTION_PITFALLS 32–37)
- * and TEST_INFERRED_RISKS_AND_FOLLOWUPS themes. Each test is intentionally narrow.
+ * Fifteen focused E2E/API checks derived from documented pitfalls and known
+ * risk themes. Each test is intentionally narrow.
  *
  * Requires globalSetup + resetE2eScenario (same contract as other web-admin E2E).
  */

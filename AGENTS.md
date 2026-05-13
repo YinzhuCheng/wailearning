@@ -31,17 +31,17 @@ CourseEval treats **code as documentation** and **documentation as governance**.
 1. **Code is the source of truth.** If docs disagree with code, update docs (unless explicitly tasked to fix product bugs).
 2. **Read task-scoped docs before editing.** Gate lists live in [`docs/README.md`](docs/README.md) §5 (“Mandatory reading by task”).
 3. **Package boundary:** canonical backend import root is `apps.backend.courseeval_backend`. Do not add alternate top-level packages or rename this casually — see [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md).
-4. **Never weaken `/api/e2e/dev/*` gates** without reading [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md) E2E sections — production still mounts the router but handlers return **404** unless `expose_e2e_dev_api()` is true (`main.py`).
+4. **Never weaken `/api/e2e/dev/*` gates** without reading [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md) E2E sections — production still mounts the router but handlers return **404** unless `expose_e2e_dev_api()` is true (`main.py`).
 5. **Frontend hiding ≠ authorization.** Every sensitive mutation must be enforced in FastAPI routers / domain helpers (`domains/courses/access.py`, homework routers, etc.).
 6. **Do not revive removed legacy fallbacks.** Student identity resolves through `users.student_id`; course/class access resolves through `CourseEnrollment` and `subject_class_links`. Do not reintroduce `wailearning_backend`, `Subject.class_id` access fallbacks, or username/student-number guessing as normal feature behavior.
-7. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
+7. **UTF-8 safety:** editing multilingual strings from Windows PowerShell requires [`docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
 8. **Local agent workspace:** `.agent-run/` is the ignored, local-only workspace for private absolute paths, temporary orchestrators, logs, screenshots, and validation planning notes. Read task-relevant local files when continuing work on this machine, especially `.agent-run/local-private-paths.md` if present. Keep handoff-worthy repository context in committed docs when the task needs it, and keep machine-local notes private under `.agent-run/`. Never commit `.agent-run/` contents. Older local notes may still say `.e2e-run/`; in this worktree that role has been superseded by `.agent-run/` while `.e2e-run/` remains ignored for compatibility.
 9. **Failure triage starts with pitfall search.** Before classifying any command,
    test, Playwright, PostgreSQL, encoding, port, process, selector, or local
    environment failure, search the pitfall memory first: run
    `python ops/scripts/dev/search_pitfalls.py "<error text or symptom>"`, then
-   inspect [`docs/development/TEST_EXECUTION_PITFALLS.md`](docs/development/TEST_EXECUTION_PITFALLS.md),
-   [`docs/development/testing/pitfall-index.csv`](docs/development/testing/pitfall-index.csv),
+   inspect [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md),
+   [`docs/testing/pitfall-index.csv`](docs/testing/pitfall-index.csv),
    [`docs/architecture/TROUBLESHOOTING.md`](docs/architecture/TROUBLESHOOTING.md),
    and the task-relevant skill. Do not guess, rewrite product code, or label a
    failure as product/test/environment until the existing pitfall memory has
@@ -90,7 +90,7 @@ current task.
 5. **Preserve text encoding.** Treat Windows PowerShell rendering as
    display-only until verified. When editing multilingual or encoding-sensitive
    files, follow
-   [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md):
+   [`docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md):
    use UTF-8-safe display/write helpers, patch around ASCII anchors when
    practical, and verify suspicious glyphs by bytes or escaped output rather
    than by terminal appearance. If a CLI-side encoding adjustment is needed to
@@ -109,7 +109,7 @@ current task.
    automation point so a later agent can code it instead of rediscovering the
    same failure.
    Every newly recorded pitfall must also be indexed in
-   `docs/development/testing/pitfall-index.csv` with:
+   `docs/testing/pitfall-index.csv` with:
    `pitfall_sequence`, `source_commit_sha`, `document_path`, `heading`,
    `category`, `status`, and `notes`. New pitfall sequences are positive
    integers that increase by one. Historical Markdown-only pitfalls that predate
@@ -127,7 +127,7 @@ current task.
    new.
 6a. **Record each conversation round in the update log.** At the end of every
    user-visible work round that changes repository files, append one row to
-   `docs/development/testing/agent-update-log.csv`. Use a positive increasing
+   `docs/testing/agent-update-log.csv`. Use a positive increasing
    `update_sequence` starting at 1, include the most recent committed hash at
    the start of that round as `source_commit_sha`, summarize the request and
    changed files, and mark whether code, tests, docs, pitfalls, and validation
@@ -194,20 +194,20 @@ current task.
 | Topic | Document |
 |-------|----------|
 | Directory truth vs local artifacts | [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md) |
-| Bounded repo-tree moves (devtools consolidation) | [`docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) |
+| Repository structure and file placement | [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md) |
 | Layering inside backend package | [`docs/architecture/BACKEND_PACKAGE_STRUCTURE.md`](docs/architecture/BACKEND_PACKAGE_STRUCTURE.md) |
 | Endpoints & surface areas | [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md) |
 | Vertical slices (homework, LLM, notifications) | [`docs/architecture/CORE_BUSINESS_FLOWS.md`](docs/architecture/CORE_BUSINESS_FLOWS.md) |
 | Env vars / defaults | [`docs/architecture/CONFIGURATION_REFERENCE.md`](docs/architecture/CONFIGURATION_REFERENCE.md) |
 | LLM entities & worker | [`docs/product/LLM_HOMEWORK_GUIDE.md`](docs/product/LLM_HOMEWORK_GUIDE.md) |
 | Parent JWT vs parent-code | [`docs/product/PARENT_PORTAL.md`](docs/product/PARENT_PORTAL.md) |
-| Tests & Playwright | [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md), [`docs/development/TEST_EXECUTION_PITFALLS.md`](docs/development/TEST_EXECUTION_PITFALLS.md) |
+| Tests & Playwright | [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md), [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md) |
 | File-level entrypoints & routers | [`docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`](docs/reference/CODE_MAP_AND_ENTRYPOINTS.md) |
 | Roles & permission helpers | [`docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) |
 | ORM tables / naming notes | [`docs/reference/DATA_MODEL_ESSENTIALS.md`](docs/reference/DATA_MODEL_ESSENTIALS.md) |
 | In-process LLM worker | [`docs/architecture/ASYNC_TASKS_AND_WORKERS.md`](docs/architecture/ASYNC_TASKS_AND_WORKERS.md) |
-| Known gaps / risks | [`docs/known-issues-and-risks.md`](docs/known-issues-and-risks.md) |
-| Operational playbook | [`docs/agent-playbook.md`](docs/agent-playbook.md) |
+| Known gaps / risks | [`docs/governance/known-issues-and-risks.md`](docs/governance/known-issues-and-risks.md) |
+| Operational playbook | [`docs/agents/agent-playbook.md`](docs/agents/agent-playbook.md) |
 | Repo-local skills | [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md), [`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md), [`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md), [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md), [`skills/security-redteam-iteration/SKILL.md`](skills/security-redteam-iteration/SKILL.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/validation-ledger-maintenance/SKILL.md`](skills/validation-ledger-maintenance/SKILL.md), [`skills/utf8-safe-editing/SKILL.md`](skills/utf8-safe-editing/SKILL.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md), [`skills/admin-playwright-e2e/SKILL.md`](skills/admin-playwright-e2e/SKILL.md), [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md), [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md), [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md), [`skills/postgres-release-validation/SKILL.md`](skills/postgres-release-validation/SKILL.md), [`skills/frontend-backend-contract-audit/SKILL.md`](skills/frontend-backend-contract-audit/SKILL.md), [`skills/seed-surface-hardening/SKILL.md`](skills/seed-surface-hardening/SKILL.md) |
 
 ---
@@ -255,12 +255,48 @@ which are explicitly deferred, and what validation evidence supports that
 classification. Private notes, `.agent-run/` records, pytest caches, and local
 SQLite scratch files are not source layout and must not be committed.
 
+After local validation, automatically clean high-confidence reproducible Python
+caches and scratch artifacts when they are no longer needed for active
+debugging. Use `python ops/scripts/dev/clean_local_artifacts.py` first to
+review the allowlisted target list, then use
+`python ops/scripts/dev/clean_local_artifacts.py --apply` when the dry-run is
+limited to disposable cache paths. The script must stay allowlist based and
+must not traverse or remove virtualenvs, `node_modules`, frontend bundles,
+logs, CSV ledgers, update records, handoffs, reports, pitfall records,
+validation history, Playwright traces/screenshots/videos, uploads, source
+fixtures, migration evidence, or any file that could explain a failure. Logs,
+reports, ledgers, and screenshots are evidence first; clean them only after a
+human explicitly decides they are no longer needed or their useful findings have
+been copied into committed docs, ledgers, or the final handoff.
+The same script also keeps `.agent-run/` tidy: fixed root entrypoints such as
+`.agent-run/local-private-paths.md`, `.agent-run/validation-history.jsonl`, and
+task-scoped runner scripts remain at stable paths, while other root-level local
+files are archived under `.agent-run/archive/root-files/<timestamp>/` instead
+of being deleted. Keep `.agent-run/` top-level directories sparse: use
+`.agent-run/archive/` for old local run directories and bulky database/runtime
+evidence, `.agent-run/logs/` for runner/debug logs, `.agent-run/screenshots/`
+for screenshots, and `.agent-run/tools/` for local helper binaries or shims.
+Legacy top-level directories such as `debug-*`, `test-selector-*`,
+`postgres-validation`, `pg-initdb-probe`, `playwright-timeout-triage`, and
+`local-tools` should be moved into those canonical folders by the cleanup
+script rather than left as root clutter. Disposable subdirectories under
+`.agent-run/tmp/` may be removed after the script's age threshold when no active
+run depends on them, and an empty `.agent-run/tmp/` root can be removed; logs,
+screenshots, uploads, validation history, and committed-ledger evidence remain
+preservation-first.
+Screenshots must live under `.agent-run/screenshots/<task-or-date>/`, not in
+`.agent-run/`, `.agent-run/uploads*`, or loose in `.agent-run/screenshots/`.
+When creating screenshots, create a task/run subdirectory first. If loose image
+files appear directly under `.agent-run/screenshots/`, the cleanup script should
+archive them under `.agent-run/screenshots/unfiled/<timestamp>/` rather than
+deleting them.
+
 **Top-level and horizontal governance**
 
 | Skill | Use when |
 |-------|----------|
 | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) | Orchestrating repo-wide governance, skill taxonomy, package/path/name drift, and three-line governance routing |
-| [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md) | Refining README, AGENTS.md, docs, testing/development/deployment guidance, links, and repeatable documentation rules |
+| [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md) | Refining README, AGENTS.md, docs, testing/contributing/frontend/deployment guidance, links, and repeatable documentation rules |
 | [`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md) | Clarifying feature, module, permission, data-flow, import, and ownership boundaries without risky broad refactors |
 | [`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md) | Organizing directory hierarchy, root files, duplicate semantic folders, structural references, and safe file moves |
 
@@ -339,17 +375,17 @@ Basic loop from the repository root:
 
 Runner artifacts and structured history live under ignored `.agent-run/`. They
 are useful local evidence, but they are not durable project history. Only update
-[`docs/development/TEST_EXECUTION_LEDGER.md`](docs/development/TEST_EXECUTION_LEDGER.md)
+[`docs/testing/TEST_EXECUTION_LEDGER.md`](docs/testing/TEST_EXECUTION_LEDGER.md)
 after reviewing an actual run result; selector planning output alone is not a
 ledger entry. Detailed semantics, commands, and limitations are in
-[`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md)
+[`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md)
 under "Diff-based validation workflow".
 
 ---
 
 ## 8. Verification checklist after edits
 
-1. **Backend:** targeted `pytest` for touched package (from repo root). See [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md).
+1. **Backend:** targeted `pytest` for touched package (from repo root). See [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md).
 2. **LLM paths:** run nearest tests under `tests/backend/llm/` or homework folders; watch for HTTP mocking patterns.
 3. **Frontend:** `npm run build` inside affected SPA (`apps/web/admin` or `apps/web/parent`) when changing TS/Vue.
 4. **Docs:** update CONFIGURATION_REFERENCE / CORE_BUSINESS_FLOWS / pitfalls when behavior or defaults shift.
@@ -375,4 +411,4 @@ GitHub Actions now has a lightweight entrypoint at [`.github/workflows/lightweig
 
 ---
 
-When in doubt, open [`docs/agent-playbook.md`](docs/agent-playbook.md) for step-by-step workflows and [`docs/known-issues-and-risks.md`](docs/known-issues-and-risks.md) for unresolved hazards.
+When in doubt, open [`docs/agents/agent-playbook.md`](docs/agents/agent-playbook.md) for step-by-step workflows and [`docs/governance/known-issues-and-risks.md`](docs/governance/known-issues-and-risks.md) for unresolved hazards.

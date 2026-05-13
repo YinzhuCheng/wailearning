@@ -19,10 +19,10 @@ from pathlib import Path
 
 
 DEFAULT_PATHS = [
-    "docs/development/TEST_EXECUTION_PITFALLS.md",
-    "docs/development/testing/pitfall-index.csv",
+    "docs/testing/TEST_EXECUTION_PITFALLS.md",
+    "docs/testing/pitfall-index.csv",
     "docs/architecture/TROUBLESHOOTING.md",
-    "docs/development/DEVELOPMENT_AND_TESTING.md",
+    "docs/testing/DEVELOPMENT_AND_TESTING.md",
 ]
 
 TOKEN_RE = re.compile(r"[a-z0-9_.:/\\-]+|[\u4e00-\u9fff]+", re.IGNORECASE)

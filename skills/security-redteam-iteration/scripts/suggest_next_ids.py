@@ -36,8 +36,8 @@ def max_csv_int(path: Path, field: str) -> int:
 def collect(root: Path) -> dict[str, int | str]:
     hard_file = root / "tests/security/test_security_hardening_followup.py"
     e2e_file = root / "tests/e2e/web-admin/e2e-security-hardening-followup.spec.js"
-    pitfall_file = root / "docs/development/testing/pitfall-index.csv"
-    update_file = root / "docs/development/testing/agent-update-log.csv"
+    pitfall_file = root / "docs/testing/pitfall-index.csv"
+    update_file = root / "docs/testing/agent-update-log.csv"
 
     max_hard = max_regex(hard_file, r"def\s+test_hard(\d+)_")
     max_e2e = max_regex(e2e_file, r"test\('(\d+)\s")

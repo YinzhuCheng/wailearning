@@ -39,19 +39,19 @@ Most failures are **environment or harness**, not application logic.
 
 | Symptom | Likely cause | Detail |
 |---------|--------------|--------|
-| Port already in use (`3012`, `8012`, etc.) | Stale `node` / `uvicorn` | [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md) for port hygiene |
-| Seed returns `404` | `E2E_DEV_SEED_ENABLED` false or wrong token | [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_AND_TESTING.md) |
+| Port already in use (`3012`, `8012`, etc.) | Stale `node` / `uvicorn` | [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md) for port hygiene |
+| Seed returns `404` | `E2E_DEV_SEED_ENABLED` false or wrong token | [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) |
 | Powerful `/api/e2e/dev/*` returns `401` or `403` | Dual gate requires admin JWT plus seed header | same |
 | Element Plus dropdowns behave flakily | Hover-trigger menus, teleported poppers | pitfalls doc for course switcher / dialog patterns |
 | Full suite timeouts on layout tests | Too many `boundingBox()` calls | pitfalls doc for sampling strategy |
 
-Full runbook: [../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+Full runbook: [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 
 ---
 
 ## pytest failures only on SQLite or only on PostgreSQL
 
-- Some tests require PostgreSQL (`TEST_DATABASE_URL`); see [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_AND_TESTING.md).
+- Some tests require PostgreSQL (`TEST_DATABASE_URL`); see [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md).
 - SQLite has different concurrency and timestamp semantics; do not assume parity.
 
 ---
@@ -60,10 +60,10 @@ Full runbook: [../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../development/FUL
 
 | Symptom | Likely cause | Mitigation |
 |---------|--------------|------------|
-| `sqlite3.OperationalError: no such table: ...` inside `ensure_schema_updates()` right after `reset_test_database_schema()` | Stale or corrupted `<repo-root>/.pytest_tmp/test*.sqlite`, import/metadata ordering edge, or concurrent pytest processes sharing the same SQLite artifact | Run `python ops/scripts/dev/pytest_sqlite_guard.py`, delete the affected `test*.sqlite` artifact, and rerun a **single** pytest process; read [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md) under the persistent pytest SQLite file section |
+| `sqlite3.OperationalError: no such table: ...` inside `ensure_schema_updates()` right after `reset_test_database_schema()` | Stale or corrupted `<repo-root>/.pytest_tmp/test*.sqlite`, import/metadata ordering edge, or concurrent pytest processes sharing the same SQLite artifact | Run `python ops/scripts/dev/pytest_sqlite_guard.py`, delete the affected `test*.sqlite` artifact, and rerun a **single** pytest process; read [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md) under the persistent pytest SQLite file section |
 | `UNIQUE constraint failed: users.username` across many tests | Shared SQLite state plus tests expecting an empty DB | Same as above; avoid parallel pytest without isolated `TEST_DATABASE_URL`. |
 
-Full risk notes: [../known-issues-and-risks.md](../known-issues-and-risks.md).
+Full risk notes: [../governance/known-issues-and-risks.md](../governance/known-issues-and-risks.md).
 
 ---
 
@@ -71,7 +71,7 @@ Full risk notes: [../known-issues-and-risks.md](../known-issues-and-risks.md).
 
 | Symptom | Likely cause | Where to read |
 |---------|--------------|---------------|
-| Docs or bookmarks reference `tools/testing/audit_test_redundancy.py` but the path does not exist | The repository consolidated test maintenance scripts under `tests/devtools/` (2026-05 layout pass) | [REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](../reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md), [`tests/devtools/README.md`](../../tests/devtools/README.md) |
+| Docs or bookmarks reference `tools/testing/audit_test_redundancy.py` but the path does not exist | Test maintenance scripts live under `tests/devtools/` | [`tests/devtools/README.md`](../../tests/devtools/README.md) |
 
 Executable surfaces (`*.py`, CI YAML, shell) should not reference the legacy path. Use `rg 'tools/testing' -g '*.{py,yml,yaml,sh,bat,cjs,js,json}'` from the repo root when verifying migrations.
 
@@ -96,4 +96,4 @@ Executable surfaces (`*.py`, CI YAML, shell) should not reference the legacy pat
 
 1. Reduce scope: one pytest module or one Playwright file.
 2. Confirm env printed by `playwright.config.cjs` / backend settings (non-secret fields only).
-3. Search [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md) for the HTTP status or error string.
+3. Search [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md) for the HTTP status or error string.

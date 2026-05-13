@@ -21,7 +21,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe
   -Path apps\web\admin\src\views\Layout.vue -StartLine 1 -EndLine 120
 
 .EXAMPLE
-. .\ops\scripts\windows\safe-text-workflow.ps1 -Path docs\development\ENCODING_AND_MOJIBAKE_SAFETY.md -Escape
+. .\ops\scripts\windows\safe-text-workflow.ps1 -Path docs\contributing\ENCODING_AND_MOJIBAKE_SAFETY.md -Escape
 #>
 
 [CmdletBinding()]

@@ -52,4 +52,4 @@ git diff --check
 - `ops/nginx/`
 - `ops/systemd/courseeval-backend.service`
 - `docs/operations/DEPLOYMENT_AND_OPERATIONS.md`
-- `docs/development/GIT_WORKFLOW.md`
+- `docs/contributing/GIT_WORKFLOW.md`

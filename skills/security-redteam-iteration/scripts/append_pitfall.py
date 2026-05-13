@@ -38,12 +38,12 @@ def main() -> int:
     parser.add_argument("--category", required=True)
     parser.add_argument("--notes", required=True)
     parser.add_argument("--status", default="active")
-    parser.add_argument("--document-path", default="docs/development/TEST_EXECUTION_PITFALLS.md")
+    parser.add_argument("--document-path", default="docs/testing/TEST_EXECUTION_PITFALLS.md")
     parser.add_argument("--source-commit")
     args = parser.parse_args()
 
     root = repo_root()
-    index_path = root / "docs/development/testing/pitfall-index.csv"
+    index_path = root / "docs/testing/pitfall-index.csv"
     doc_path = root / args.document_path
     line = find_heading_line(doc_path, args.heading)
     row = {

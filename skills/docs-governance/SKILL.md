@@ -1,6 +1,6 @@
 ---
 name: docs-governance
-description: Use when refining CourseEval README, AGENTS.md, docs, testing/development/deployment guidance, documentation links, or repeatable agent workflows so documentation reflects current implementation and repeated pitfalls become governance rules or scripts.
+description: Use when refining CourseEval README, AGENTS.md, docs, testing/contributing/frontend/deployment guidance, documentation links, or repeatable agent workflows so documentation reflects current implementation and repeated pitfalls become governance rules or scripts.
 ---
 
 # Docs Governance
@@ -34,8 +34,9 @@ their domain.
    - a repo-local skill under `skills/`;
    - a precise rule in `AGENTS.md`, `docs/README.md`, or the task-specific doc.
 5. Keep dated run reports under `docs/reports/`; keep active guidance in
-   `docs/architecture/`, `docs/development/`, `docs/operations/`, or
-   `docs/product/`.
+   the topic directory such as `docs/architecture/`, `docs/contributing/`,
+   `docs/frontend/`, `docs/governance/`, `docs/operations/`,
+   `docs/product/`, or `docs/testing/`.
 6. If documentation is moved, update inbound links and hub indexes in the same
    change.
 7. Route specialized work instead of copying its rules:

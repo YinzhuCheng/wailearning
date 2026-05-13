@@ -8,10 +8,10 @@ from common import repo_root
 
 
 DEFAULT_FILES = [
-    "docs/development/testing/test-execution-runs.csv",
-    "docs/development/testing/test-execution-summary.csv",
-    "docs/development/testing/pitfall-index.csv",
-    "docs/development/testing/agent-update-log.csv",
+    "docs/testing/test-execution-runs.csv",
+    "docs/testing/test-execution-summary.csv",
+    "docs/testing/pitfall-index.csv",
+    "docs/testing/agent-update-log.csv",
 ]
 
 

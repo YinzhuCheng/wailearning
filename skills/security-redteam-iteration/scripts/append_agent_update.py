@@ -48,7 +48,7 @@ def main() -> int:
     args = parser.parse_args()
 
     root = repo_root()
-    path = root / "docs/development/testing/agent-update-log.csv"
+    path = root / "docs/testing/agent-update-log.csv"
     row = {
         "update_sequence": str(next_sequence(path)),
         "source_commit_sha": args.source_commit,

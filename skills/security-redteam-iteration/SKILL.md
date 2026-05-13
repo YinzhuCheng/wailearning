@@ -20,11 +20,11 @@ previous "test, fix, docs, ledger, commit without push" workflow.
 ## Workflow
 
 1. Preflight: read `AGENTS.md`, `docs/README.md`,
-   `docs/development/testing/README.md`, `docs/development/TEST_SUITE_MAP.md`,
-   `docs/development/TEST_EXECUTION_PITFALLS.md`, and feature-specific docs.
+   `docs/testing/README.md`, `docs/testing/TEST_SUITE_MAP.md`,
+   `docs/testing/TEST_EXECUTION_PITFALLS.md`, and feature-specific docs.
    Capture the starting commit hash for `agent-update-log.csv` and new pitfalls.
-2. Select risks from recent failures, `docs/reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md`,
-   and current code. Prefer boundaries around role vs ownership, parent-code,
+2. Select risks from recent failures, current pitfalls/known issues, and
+   current code. Prefer boundaries around role vs ownership, parent-code,
    course enrollment, class links, bulk APIs, status re-entry, dashboard
    aggregation, notification state, seed/dev APIs, and UI cache bypass.
 3. Design a compact batch, usually 8-12 tests. Use pytest for dense API/data

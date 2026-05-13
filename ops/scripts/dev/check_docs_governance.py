@@ -21,10 +21,16 @@ REQUIRED_DOCS = (
     "README.md",
     "AGENTS.md",
     "docs/README.md",
+    "docs/agents/README.md",
+    "docs/agents/agent-playbook.md",
     "docs/architecture/REPOSITORY_STRUCTURE.md",
     "docs/architecture/BACKEND_PACKAGE_STRUCTURE.md",
+    "docs/contributing/README.md",
+    "docs/frontend/README.md",
+    "docs/governance/README.md",
     "docs/reference/CODE_MAP_AND_ENTRYPOINTS.md",
-    "docs/known-issues-and-risks.md",
+    "docs/governance/known-issues-and-risks.md",
+    "docs/testing/README.md",
 )
 
 REQUIRED_SKILL_LINKS = (
@@ -94,6 +100,32 @@ def check_required_indexes(repo_root: Path) -> list[Finding]:
     return findings
 
 
+def check_docs_directory_readmes(repo_root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    docs_root = repo_root / "docs"
+    if not docs_root.exists():
+        return findings
+    for directory in sorted(path for path in docs_root.rglob("*") if path.is_dir()):
+        rel = directory.relative_to(repo_root).as_posix()
+        if not (directory / "README.md").exists():
+            findings.append(Finding("error", "missing-directory-readme", rel, "docs directory lacks README.md"))
+    return findings
+
+
+def check_docs_root_files(repo_root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    docs_root = repo_root / "docs"
+    if not docs_root.exists():
+        return findings
+    for path in sorted(item for item in docs_root.iterdir() if item.is_file()):
+        if path.name != "README.md":
+            rel = path.relative_to(repo_root).as_posix()
+            findings.append(
+                Finding("error", "unexpected-docs-root-file", rel, "docs root files must move into a topic folder")
+            )
+    return findings
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", default=".", help="Repository root. Defaults to current directory.")
@@ -107,6 +139,8 @@ def main(argv: list[str]) -> int:
     paths = tracked_or_walked_paths(repo_root, include_untracked=True)
     docs = [path for path in text_paths(repo_root, paths) if Path(path).suffix in {".md", ".rst"}]
     findings = check_required_indexes(repo_root)
+    findings.extend(check_docs_directory_readmes(repo_root))
+    findings.extend(check_docs_root_files(repo_root))
     findings.extend(check_markdown_links(repo_root, docs))
     print_findings(findings, json_output=args.json)
     print(f"checked_docs={len(docs)} findings={len(findings)}")

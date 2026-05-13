@@ -14,11 +14,10 @@ This repository expects contributors, including LLM coding agents, to read task-
 
 **Minimum rule**
 
-- Before changing repository structure or file placement, read [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md), [`docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md`](docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md), and (for the latest consolidation mapping) [`docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md).
+- Before changing repository structure or file placement, read [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md) and, for backend package layout, [`docs/architecture/BACKEND_PACKAGE_STRUCTURE.md`](docs/architecture/BACKEND_PACKAGE_STRUCTURE.md).
 - Before changing backend or product behavior, read [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md), [`docs/architecture/CORE_BUSINESS_FLOWS.md`](docs/architecture/CORE_BUSINESS_FLOWS.md), and any feature-specific doc such as [`docs/product/LLM_HOMEWORK_GUIDE.md`](docs/product/LLM_HOMEWORK_GUIDE.md).
-- Before running tests or diagnosing failures, read [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md) and [`docs/development/TEST_EXECUTION_PITFALLS.md`](docs/development/TEST_EXECUTION_PITFALLS.md).
-- Before editing multilingual files from Windows + PowerShell, read [`docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md).
-- When assessing structural risk or full-suite follow-ups inferred from tests, see [`docs/reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md`](docs/reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md).
+- Before running tests or diagnosing failures, read [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md) and [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md).
+- Before editing multilingual files from Windows + PowerShell, read [`docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
 - Before deployment or service changes, read [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md) and [`docs/operations/ADMIN_BOOTSTRAP.md`](docs/operations/ADMIN_BOOTSTRAP.md).
 - Before touching parent-facing flows, read [`docs/product/PARENT_PORTAL.md`](docs/product/PARENT_PORTAL.md).
 
@@ -169,11 +168,11 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Managed Playwright defaults use API port **8012** and UI port **3012** — see `apps/web/admin/playwright.config.cjs`. Read [`docs/development/TEST_EXECUTION_PITFALLS.md`](docs/development/TEST_EXECUTION_PITFALLS.md) before treating failures as regressions.
+Managed Playwright defaults use API port **8012** and UI port **3012** — see `apps/web/admin/playwright.config.cjs`. Read [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md) before treating failures as regressions.
 
-PostgreSQL-aligned validation (production-like DB semantics): see [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md) and [`docs/development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`](docs/development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+PostgreSQL-aligned validation (production-like DB semantics): see [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md) and [`docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`](docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 
-The **`future-advanced-coverage*.spec.js`** files under `tests/e2e/web-admin/` are normal runnable specs; indexing lives in [`docs/development/TEST_SUITE_MAP.md`](docs/development/TEST_SUITE_MAP.md).
+The **`future-advanced-coverage*.spec.js`** files under `tests/e2e/web-admin/` are normal runnable specs; indexing lives in [`docs/testing/TEST_SUITE_MAP.md`](docs/testing/TEST_SUITE_MAP.md).
 
 ## Documentation hub
 
@@ -191,7 +190,7 @@ All detailed documentation: [`docs/README.md`](docs/README.md).
 - [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md)
 - [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md)
 - [`docs/product/LLM_HOMEWORK_GUIDE.md`](docs/product/LLM_HOMEWORK_GUIDE.md)
-- [`docs/development/DEVELOPMENT_AND_TESTING.md`](docs/development/DEVELOPMENT_AND_TESTING.md)
+- [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md)
 - [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md)
 
 ## Limitations and honesty

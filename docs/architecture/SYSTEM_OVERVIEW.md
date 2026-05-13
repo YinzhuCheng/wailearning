@@ -170,7 +170,7 @@ Router registration order is visible in `apps/backend/courseeval_backend/main.py
 
 **E2E / automation (never exposed in production)**
 
-- `/api/e2e` — gated by `settings.expose_e2e_dev_api()` (returns **404** when disabled — router still registered so tests can toggle `E2E_DEV_SEED_ENABLED` without reloading `main`). See `api/routers/e2e_dev.py` and [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_AND_TESTING.md).
+- `/api/e2e` — gated by `settings.expose_e2e_dev_api()` (returns **404** when disabled — router still registered so tests can toggle `E2E_DEV_SEED_ENABLED` without reloading `main`). See `api/routers/e2e_dev.py` and [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md).
 
 Cross-cutting flow diagrams (submission → DB queue → worker → UI) live in [CORE_BUSINESS_FLOWS.md](CORE_BUSINESS_FLOWS.md).
 

@@ -12,7 +12,7 @@ Treat terminal mojibake as untrusted until verified by UTF-8-aware tooling.
 
 ## Workflow
 
-1. Read `docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`.
+1. Read `docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`.
 2. Inspect suspicious files with UTF-8-safe helpers instead of trusting the
    PowerShell console rendering.
 3. Prefer `apply_patch` around stable ASCII anchors for manual edits.
@@ -40,7 +40,7 @@ git diff --check
 
 ## Related Files
 
-- `docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`
+- `docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`
 - `ops/scripts/windows/safe-text-workflow.ps1`
 - `ops/scripts/dev/check_text_encoding.py`
 - `ops/scripts/dev/safe_show_text.py`

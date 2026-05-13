@@ -103,9 +103,9 @@ Schema repair (`ensure_schema_updates()` in `apps/backend/courseeval_backend/boo
 - **Without `DEFAULT_LLM_API_KEY`**: the row is created with `validation_status=pending`, validation steps marked skipped, and `is_active=false`. This avoids claiming remote connectivity was proven offline.
 - **With `DEFAULT_LLM_API_KEY` set during first insert**: the bootstrap issues live HTTP checks for **text and vision** paths. Vision validation uploads the same conceptual payload as an administrator validating with a logo image: a **bundled minimal PNG** bytes payload encoded as a `data:image/png;base64,...` URL. Only an all-green check run marks the preset validated and active.
 
-For the relationship between this bootstrap, demo data seeding, and local pytest (where outbound LLM calls are typically absent), see the「Demo seed and `DEFAULT_LLM_API_KEY`」section in [Test execution pitfalls](../development/TEST_EXECUTION_PITFALLS.md).
+For the relationship between this bootstrap, demo data seeding, and local pytest (where outbound LLM calls are typically absent), see the「Demo seed and `DEFAULT_LLM_API_KEY`」section in [Test execution pitfalls](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ## Related Docs
 
 - [Deployment and Operations](DEPLOYMENT_AND_OPERATIONS.md)
-- [Development and Testing](../development/DEVELOPMENT_AND_TESTING.md)
+- [Development and Testing](../testing/DEVELOPMENT_AND_TESTING.md)

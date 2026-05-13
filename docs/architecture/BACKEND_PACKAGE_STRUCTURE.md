@@ -11,10 +11,6 @@ It is intended for maintainers and LLM coding agents that need to answer two rec
 1. Where should a backend change go?
 2. Which layer should own a new piece of code?
 
-For the repository-wide assessment of whether the backend package is still too flat, and for the recommended migration order, also read:
-
-- [../reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](../reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
-
 ## Canonical Package Root
 
 The backend package root is:

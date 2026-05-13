@@ -152,7 +152,7 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("admin.e2e.full", payload["non_full_validation"]["reason"])
 
     def test_docs_only_change_is_static_and_non_full_acceptable_after_running_targets(self):
-        payload = run_selector("--paths", "docs/development/TEST_SUITE_MAP.md")
+        payload = run_selector("--paths", "docs/testing/TEST_SUITE_MAP.md")
 
         ids = recommendation_ids(payload)
         self.assertIn("static.encoding_text_tools", ids)
@@ -282,8 +282,8 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("backend.manual_script_api_coverage", ids)
         self.assertEqual(payload["unmatched_paths"], [])
 
-    def test_structure_governance_report_change_selects_structure_static_target(self):
-        payload = run_selector("--paths", "docs/reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md")
+    def test_structure_governance_doc_change_selects_structure_static_target(self):
+        payload = run_selector("--paths", "docs/architecture/REPOSITORY_STRUCTURE.md")
 
         ids = recommendation_ids(payload)
         self.assertIn("static.encoding_text_tools", ids)
@@ -501,7 +501,7 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_runner_uses_explicit_changed_paths_for_history_attribution(self):
         history_path = ".agent-run/test-selector-history-explicit-paths.jsonl"
         changed_paths = [
-            {"status": "M", "path": "docs/development/TEST_SUITE_MAP.md"},
+            {"status": "M", "path": "docs/testing/TEST_SUITE_MAP.md"},
             {"status": "??", "path": "notes/new-note.md"},
         ]
         result = run_validation_target(
@@ -786,7 +786,7 @@ class ValidationSelectorTests(unittest.TestCase):
         )
 
     def test_selector_uses_matching_structured_history_as_fresh_evidence(self):
-        changed_path = "docs/development/TEST_SUITE_MAP.md"
+        changed_path = "docs/testing/TEST_SUITE_MAP.md"
         history_path = ".agent-run/test-selector-structured-history.jsonl"
         changed_paths = [{"status": "M", "path": changed_path}]
         record = {
@@ -817,7 +817,7 @@ class ValidationSelectorTests(unittest.TestCase):
         issues = lint_registry(
             REPO_ROOT,
             "tests/TEST_SELECTION_TARGETS.json",
-            "docs/development/testing/test-execution-targets.csv",
+            "docs/testing/test-execution-targets.csv",
         )
 
         self.assertEqual(issues, [])
@@ -929,7 +929,7 @@ class ValidationSelectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_text(
-                root / "docs/development/testing/test-execution-targets.csv",
+                root / "docs/testing/test-execution-targets.csv",
                 "\n".join(
                     [
                         "test_id,last_branch,last_commit,last_result,last_run_date,pass_count,run_count",
@@ -939,7 +939,7 @@ class ValidationSelectorTests(unittest.TestCase):
                 ),
             )
 
-            parsed = parse_ledger(root, "docs/development/testing/test-execution-targets.csv")
+            parsed = parse_ledger(root, "docs/testing/test-execution-targets.csv")
 
         self.assertEqual(parsed["static.sample"]["last_result"], "passed")
         self.assertEqual(parsed["static.sample"]["pass_count"], "2")
@@ -947,7 +947,7 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_registry_lint_accepts_csv_ledger_ids(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\nstatic.sample\n")
+            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\nstatic.sample\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -966,14 +966,14 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
         self.assertEqual(issues, [])
 
     def test_registry_lint_rejects_null_ledger_id_when_target_has_committed_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\nadmin.e2e.sample\n")
+            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\nadmin.e2e.sample\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -992,14 +992,14 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
         self.assertIn("admin.e2e.sample: target has a committed ledger row but ledger_id is null", issues)
 
     def test_registry_lint_rejects_mismatched_ledger_id_when_target_has_own_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\nadmin.e2e.sample\nother.target\n")
+            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\nadmin.e2e.sample\nother.target\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -1018,7 +1018,7 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
         self.assertIn(
             "admin.e2e.sample: target has its own committed ledger row but ledger_id points elsewhere: other.target",
@@ -1032,7 +1032,7 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_registry_lint_rejects_mismatched_ledger_id_even_without_own_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\nother.target\n")
+            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\nother.target\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -1051,7 +1051,7 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
         self.assertIn(
             "behavior.sample: ledger_id must match target id unless an explicit alias mechanism is added: other.target",
@@ -1063,7 +1063,7 @@ class ValidationSelectorTests(unittest.TestCase):
             root = Path(tmp)
             write_text(root / "apps/web/admin/scripts/playwright-external-runner.cjs", "// runner\n")
             write_text(root / "tests/e2e/web-admin/sample.spec.js", "test('ok', () => {})\n")
-            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\n")
+            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -1087,7 +1087,7 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
         self.assertEqual(issues, [])
 
@@ -1095,7 +1095,7 @@ class ValidationSelectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_text(root / "apps/web/admin/scripts/playwright-external-runner.cjs", "// runner\n")
-            write_text(root / "docs/development/testing/test-execution-targets.csv", "test_id\n")
+            write_text(root / "docs/testing/test-execution-targets.csv", "test_id\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -1119,7 +1119,7 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/testing/test-execution-targets.csv")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/test-execution-targets.csv")
 
         self.assertIn(
             "admin.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-admin/missing.spec.js",
@@ -1176,7 +1176,7 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_registry_lint_rejects_unknown_fallback_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_text(root / "docs/testing/TEST_EXECUTION_LEDGER.md", "")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -1201,14 +1201,14 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/TEST_EXECUTION_LEDGER.md")
 
         self.assertIn("broken: recommend references unknown target id: missing.target", issues)
 
     def test_registry_lint_rejects_missing_literal_trigger_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_text(root / "docs/testing/TEST_EXECUTION_LEDGER.md", "")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -1227,7 +1227,7 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/TEST_EXECUTION_LEDGER.md")
 
         self.assertIn("backend.sample: trigger path does not exist: apps/backend/missing.py", issues)
 
@@ -1235,7 +1235,7 @@ class ValidationSelectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_text(root / "apps/web/admin/package.json", "{}\n")
-            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "")
+            write_text(root / "docs/testing/TEST_EXECUTION_LEDGER.md", "")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -1259,7 +1259,7 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/TEST_EXECUTION_LEDGER.md")
 
         self.assertIn(
             "admin.e2e.sample: referenced Playwright file does not exist: tests/e2e/web-admin/missing.spec.js",
@@ -1269,7 +1269,7 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_registry_lint_rejects_missing_ledger_id(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_text(root / "docs/development/TEST_EXECUTION_LEDGER.md", "### Test ID: `other.target`\n")
+            write_text(root / "docs/testing/TEST_EXECUTION_LEDGER.md", "### Test ID: `other.target`\n")
             write_json(
                 root / "tests/TEST_SELECTION_TARGETS.json",
                 {
@@ -1288,12 +1288,12 @@ class ValidationSelectorTests(unittest.TestCase):
                 },
             )
 
-            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/development/TEST_EXECUTION_LEDGER.md")
+            issues = lint_registry(root, "tests/TEST_SELECTION_TARGETS.json", "docs/testing/TEST_EXECUTION_LEDGER.md")
 
         self.assertIn("static.sample: ledger_id not found in ledger: static.sample", issues)
 
     def test_selector_marks_structured_history_stale_for_different_diff_signature(self):
-        changed_path = "docs/development/TEST_SUITE_MAP.md"
+        changed_path = "docs/testing/TEST_SUITE_MAP.md"
         history_path = ".agent-run/test-selector-structured-history-stale.jsonl"
         recorded_paths = [{"status": "M", "path": "ops/scripts/dev/select_validation_targets.py"}]
         record = {

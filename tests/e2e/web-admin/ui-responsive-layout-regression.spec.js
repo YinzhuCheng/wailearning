@@ -1,9 +1,8 @@
 /**
  * Maintained responsive layout guard rails for the admin SPA.
  *
- * These checks convert the PostgreSQL-backed screenshot findings documented in
- * docs/development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md into narrow Playwright
- * assertions. They intentionally avoid screenshot comparison; the invariant is
+ * These checks preserve previously observed responsive-layout guard rails as
+ * narrow Playwright assertions. They intentionally avoid screenshot comparison; the invariant is
  * physical layout containment at the mobile breakpoint plus preservation of the
  * desktop course-catalog table.
  */

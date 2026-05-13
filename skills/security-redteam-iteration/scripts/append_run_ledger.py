@@ -36,7 +36,7 @@ def main() -> int:
     for key, value in row.items():
         reject_private_markers(str(value), key)
 
-    path = root / "docs/development/testing/test-execution-runs.csv"
+    path = root / "docs/testing/test-execution-runs.csv"
     with path.open("a", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS)
         writer.writerow(row)

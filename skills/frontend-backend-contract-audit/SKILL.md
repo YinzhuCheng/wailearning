@@ -49,4 +49,4 @@ rg -n "Query\\(|page_size|limit|@router" apps/backend/courseeval_backend/api/rou
 - `apps/backend/courseeval_backend/api/routers/`
 - `apps/backend/courseeval_backend/api/schemas.py`
 - `tests/e2e/web-admin/e2e-pitfall-guard-rails-batch2.spec.js`
-- `docs/development/TEST_EXECUTION_PITFALLS.md`
+- `docs/testing/TEST_EXECUTION_PITFALLS.md`

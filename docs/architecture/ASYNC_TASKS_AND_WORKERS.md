@@ -71,7 +71,7 @@ Before / during execution, quota policies gate token reservations (`domains/llm/
 | Stuck `processing` | Stale seconds; kill orphaned workers; DB inspection |
 | Unexpected score | Effective aggregate rule vs latest attempt body — see `refresh_submission_summary` |
 
-Cross-links: [`architecture/TROUBLESHOOTING.md`](../architecture/TROUBLESHOOTING.md), [`development/TEST_EXECUTION_PITFALLS.md`](../development/TEST_EXECUTION_PITFALLS.md).
+Cross-links: [`architecture/TROUBLESHOOTING.md`](../architecture/TROUBLESHOOTING.md), [`testing/TEST_EXECUTION_PITFALLS.md`](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ---
 

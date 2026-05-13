@@ -126,7 +126,7 @@ Homework instructions (`homeworks.content`) and student submission bodies (`home
 - `markdown` (default): rendered in the admin SPA with the shared Markdown + KaTeX components.
 - `plain`: rendered as literal text (pre-wrapped) so characters like `#` are not interpreted as headings.
 
-When auto-grading is enabled, plain-text bodies are fenced for the LLM prompt builder so punctuation is not mis-parsed as Markdown structure. See [Content format: Markdown vs plain text](../development/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md).
+When auto-grading is enabled, plain-text bodies are fenced for the LLM prompt builder so punctuation is not mis-parsed as Markdown structure. See [Content format: Markdown vs plain text](../product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md).
 
 When homework auto-grading is enabled:
 
@@ -240,5 +240,5 @@ Useful operational signals include:
 ## Related Docs
 
 - [System Overview](../architecture/SYSTEM_OVERVIEW.md)
-- [Development and Testing](../development/DEVELOPMENT_AND_TESTING.md)
+- [Development and Testing](../testing/DEVELOPMENT_AND_TESTING.md)
 - [Deployment and Operations](../operations/DEPLOYMENT_AND_OPERATIONS.md)

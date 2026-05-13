@@ -4,7 +4,7 @@
 
 Fast orientation for humans and LLM agents editing this repository: **where to change behavior**, **what to grep**, and **what breaks easily**. This is not a substitute for reading feature-specific docs (LLM, parent portal, notifications); it prevents blind edits.
 
-**Newer deep maps:** see [`AGENTS.md`](../../AGENTS.md) (repo root), [`../agent-playbook.md`](../agent-playbook.md), [`../reference/CODE_MAP_AND_ENTRYPOINTS.md`](../reference/CODE_MAP_AND_ENTRYPOINTS.md), [`../known-issues-and-risks.md`](../known-issues-and-risks.md), plus [`ASYNC_TASKS_AND_WORKERS.md`](ASYNC_TASKS_AND_WORKERS.md) for the grading worker thread model.
+**Newer deep maps:** see [`AGENTS.md`](../../AGENTS.md) (repo root), [`../agents/agent-playbook.md`](../agents/agent-playbook.md), [`../reference/CODE_MAP_AND_ENTRYPOINTS.md`](../reference/CODE_MAP_AND_ENTRYPOINTS.md), [`../governance/known-issues-and-risks.md`](../governance/known-issues-and-risks.md), plus [`ASYNC_TASKS_AND_WORKERS.md`](ASYNC_TASKS_AND_WORKERS.md) for the grading worker thread model.
 
 ---
 
@@ -13,7 +13,7 @@ Fast orientation for humans and LLM agents editing this repository: **where to c
 1. [REPOSITORY_STRUCTURE.md](REPOSITORY_STRUCTURE.md) — what is source vs artifact.
 2. [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) — capabilities and route families.
 3. [CORE_BUSINESS_FLOWS.md](CORE_BUSINESS_FLOWS.md) — vertical slices with code anchors.
-4. Task-specific: [../product/LLM_HOMEWORK_GUIDE.md](../product/LLM_HOMEWORK_GUIDE.md), [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md).
+4. Task-specific: [../product/LLM_HOMEWORK_GUIDE.md](../product/LLM_HOMEWORK_GUIDE.md), [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ---
 
@@ -60,8 +60,8 @@ Use these when locating behavior:
 
 ## Testing expectations
 
-- **pytest**: run from repo root; database selection documented in [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_AND_TESTING.md).
-- **Playwright**: prefer `cd apps/web/admin && npm run test:e2e`; env contract in `playwright.config.cjs`. Failures often environmental — see [../development/TEST_EXECUTION_PITFALLS.md](../development/TEST_EXECUTION_PITFALLS.md).
+- **pytest**: run from repo root; database selection documented in [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md).
+- **Playwright**: prefer `cd apps/web/admin && npm run test:e2e`; env contract in `playwright.config.cjs`. Failures often environmental — see [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ---
 
@@ -71,7 +71,7 @@ If you change:
 
 - a **default port**, env var, or startup gate → update [CONFIGURATION_REFERENCE.md](CONFIGURATION_REFERENCE.md) and the root [README.md](../../README.md) quick start if user-visible.
 - a **route prefix** or major flow → update [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) and [CORE_BUSINESS_FLOWS.md](CORE_BUSINESS_FLOWS.md).
-- **E2E harness** behavior → update [../development/DEVELOPMENT_AND_TESTING.md](../development/DEVELOPMENT_AND_TESTING.md) and pitfalls.
+- **E2E harness** behavior → update [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) and pitfalls.
 
 ---
 

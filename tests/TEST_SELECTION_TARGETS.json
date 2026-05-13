@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "description": "Machine-readable conservative mapping from changed repository paths to validation targets. This registry drives ops/scripts/dev/select_validation_targets.py. It complements docs/development/testing/test-execution-targets.csv, test-execution-runs.csv, pitfall-index.csv, and agent-update-log.csv; it does not replace the ledger of observed runs.",
+    "description": "Machine-readable conservative mapping from changed repository paths to validation targets. This registry drives ops/scripts/dev/select_validation_targets.py. It complements docs/testing/test-execution-targets.csv, test-execution-runs.csv, pitfall-index.csv, and agent-update-log.csv; it does not replace the ledger of observed runs.",
     "defaults": {
         "repo_root_placeholder": "<repo>",
         "selection_policy": "conservative",
@@ -146,15 +146,14 @@
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
                     "tests/TEST_SELECTION_TARGETS.json",
-                    "docs/development/DEVELOPMENT_AND_TESTING.md",
-                    "docs/development/VALIDATION_AUTOMATION_HANDOFF_2026-05-08.md",
-                    "docs/development/TEST_EXECUTION_LEDGER.md",
-                    "docs/development/testing/test-execution-targets.csv",
-                    "docs/development/testing/test-execution-runs.csv",
-                    "docs/development/testing/test-execution-summary.csv",
-                    "docs/development/testing/pitfall-index.csv",
-                    "docs/development/testing/agent-update-log.csv",
-                    "docs/development/TEST_SUITE_MAP.md"
+                    "docs/testing/DEVELOPMENT_AND_TESTING.md",
+                    "docs/testing/TEST_EXECUTION_LEDGER.md",
+                    "docs/testing/test-execution-targets.csv",
+                    "docs/testing/test-execution-runs.csv",
+                    "docs/testing/test-execution-summary.csv",
+                    "docs/testing/pitfall-index.csv",
+                    "docs/testing/agent-update-log.csv",
+                    "docs/testing/TEST_SUITE_MAP.md"
                 ],
                 "globs": [
                     "ops/scripts/dev/select_validation_targets.py",
@@ -166,7 +165,7 @@
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
                     "tests/TEST_SELECTION_TARGETS.json",
-                    "docs/development/testing/*.csv"
+                    "docs/testing/*.csv"
                 ]
             },
             "ledger_id": "static.validation_selector",
@@ -219,7 +218,7 @@
                     "ops/scripts/lib/git_sync_server.sh",
                     "ops/scripts/dev/check_operator_scripts.py",
                     "docs/operations/DEPLOYMENT_AND_OPERATIONS.md",
-                    "docs/development/GIT_WORKFLOW.md"
+                    "docs/contributing/GIT_WORKFLOW.md"
                 ],
                 "globs": [
                     "ops/scripts/*.sh",
@@ -253,9 +252,9 @@
             "triggers": {
                 "paths": [
                     "ops/scripts/dev/repo_line_health.py",
-                    "docs/development/DEVELOPMENT_AND_TESTING.md",
+                    "docs/testing/DEVELOPMENT_AND_TESTING.md",
                     "docs/reference/CODE_MAP_AND_ENTRYPOINTS.md",
-                    "docs/development/TEST_EXECUTION_LEDGER.md",
+                    "docs/testing/TEST_EXECUTION_LEDGER.md",
                     ".gitignore"
                 ],
                 "globs": [
@@ -455,13 +454,12 @@
                     "skills/structure-governance/SKILL.md",
                     "skills/structure-governance/agents/openai.yaml",
                     "docs/architecture/REPOSITORY_STRUCTURE.md",
-                    "docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md",
-                    "docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md",
+                    "docs/architecture/BACKEND_PACKAGE_STRUCTURE.md",
                     ".gitignore"
                 ],
                 "globs": [
-                    "docs/reports/*.md",
-                    "docs/reports/**/*.md"
+                    "docs/architecture/*.md",
+                    "docs/reports/README.md"
                 ]
             },
             "ledger_id": null,
@@ -515,7 +513,7 @@
                     "apps/backend/courseeval_backend/bootstrap.py",
                     "docs/reference/DATA_MODEL_ESSENTIALS.md",
                     "docs/operations/ADMIN_BOOTSTRAP.md",
-                    "docs/known-issues-and-risks.md",
+                    "docs/governance/known-issues-and-risks.md",
                     "tests/backend/manual/test_validation_selector.py"
                 ],
                 "globs": [
@@ -576,7 +574,7 @@
                     "apps/web/parent/src/api/index.js",
                     "docs/reference/CODE_MAP_AND_ENTRYPOINTS.md",
                     "docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md",
-                    "docs/development/DEVELOPMENT_AND_TESTING.md",
+                    "docs/testing/DEVELOPMENT_AND_TESTING.md",
                     "tests/backend/manual/test_validation_selector.py"
                 ],
                 "globs": [
@@ -633,9 +631,9 @@
                 "paths": [
                     "ops/scripts/dev/pytest_sqlite_guard.py",
                     "skills/local-test-triage/SKILL.md",
-                    "docs/development/DEVELOPMENT_AND_TESTING.md",
-                    "docs/development/TEST_EXECUTION_PITFALLS.md",
-                    "docs/known-issues-and-risks.md",
+                    "docs/testing/DEVELOPMENT_AND_TESTING.md",
+                    "docs/testing/TEST_EXECUTION_PITFALLS.md",
+                    "docs/governance/known-issues-and-risks.md",
                     "tests/backend/manual/test_validation_selector.py"
                 ],
                 "globs": [
@@ -1775,6 +1773,70 @@
             "notes": "Keep this for the spec itself or when validating the browser-managed end-to-end composition. Most pure HTTP invariants should prefer backend.e2e_dev.api_hazard_tier or behavior pytest targets first."
         },
         {
+            "id": "admin.e2e.pitfall_guard_rails",
+            "category": "admin-playwright",
+            "risk": "targeted",
+            "description": "Focused Playwright/API guard rails derived from documented pitfalls and known risk themes.",
+            "working_directory": "apps/web/admin",
+            "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+            "coverage_tags": [
+                "admin-playwright",
+                "pitfalls",
+                "guard-rails"
+            ],
+            "commands": [
+                {
+                    "label": "playwright targeted",
+                    "argv": [
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
+                        "e2e-pitfall-guard-rails.spec.js",
+                        "--project=chromium"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/e2e/web-admin/e2e-pitfall-guard-rails.spec.js"
+                ],
+                "globs": []
+            },
+            "ledger_id": null,
+            "notes": "Use for edits to the pitfall guard spec itself. Prefer narrower backend pytest targets for pure API behavior changes."
+        },
+        {
+            "id": "admin.e2e.ui_responsive_layout",
+            "category": "admin-playwright",
+            "risk": "targeted",
+            "description": "Responsive-layout Playwright guard rails for the admin SPA mobile breakpoint and course-catalog containment.",
+            "working_directory": "apps/web/admin",
+            "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+            "coverage_tags": [
+                "admin-playwright",
+                "responsive-layout",
+                "ui"
+            ],
+            "commands": [
+                {
+                    "label": "playwright targeted",
+                    "argv": [
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
+                        "ui-responsive-layout-regression.spec.js",
+                        "--project=chromium"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/e2e/web-admin/ui-responsive-layout-regression.spec.js"
+                ],
+                "globs": []
+            },
+            "ledger_id": null,
+            "notes": "Use for edits to the responsive layout guard spec or layout changes that may affect mobile containment."
+        },
+        {
             "id": "admin.e2e.llm_hard_scenarios",
             "category": "admin-playwright",
             "risk": "targeted",
@@ -2016,7 +2078,7 @@
             "triggers": {
                 "paths": [
                     "tests/e2e/web-admin/e2e-notification-header-sync-tier.spec.js",
-                    "docs/development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
+                    "docs/frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
                     "apps/web/admin/src/views/Layout.vue",
                     "apps/web/admin/src/views/Notifications.vue",
                     "apps/backend/courseeval_backend/api/routers/notifications.py"
@@ -2054,7 +2116,7 @@
             "triggers": {
                 "paths": [
                     "tests/e2e/web-admin/e2e-notification-sync-deep-tier.spec.js",
-                    "docs/development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
+                    "docs/frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md",
                     "apps/web/admin/src/views/Layout.vue",
                     "apps/web/admin/src/views/Notifications.vue",
                     "apps/backend/courseeval_backend/api/routers/notifications.py",

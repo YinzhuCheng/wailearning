@@ -60,7 +60,7 @@ Before ending a repository-normalization sequence, make the state durable:
 - classify each touched boundary as accepted, active follow-up, or explicitly
   deferred;
 - sync `AGENTS.md`, `docs/README.md`, architecture/reference docs, the active
-  handoff, and `docs/development/testing/agent-update-log.csv` when they are
+  handoff, and `docs/testing/agent-update-log.csv` when they are
   part of the task surface;
 - record selector output and the static/runtime validation actually run;
 - keep private planning notes, `.agent-run/`, `.pytest_cache/`, `.pytest_tmp/`,
@@ -123,8 +123,8 @@ change is verified.
 
 - `AGENTS.md`
 - `docs/README.md`
-- `docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md`
-- `docs/development/testing/README.md`
+- `docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`
+- `docs/testing/README.md`
 - `docs/operations/DEPLOYMENT_AND_OPERATIONS.md`
 - `skills/docs-governance/SKILL.md`
 - `skills/boundary-governance/SKILL.md`

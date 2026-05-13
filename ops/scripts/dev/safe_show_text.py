@@ -7,7 +7,7 @@ point is shown as a Python escape sequence.
 
 Examples:
 
-    python ops/scripts/dev/safe_show_text.py docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md
+    python ops/scripts/dev/safe_show_text.py docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md
     python ops/scripts/dev/safe_show_text.py apps/web/admin/src/views/Layout.vue --escape --start-line 1 --end-line 80
 """
 

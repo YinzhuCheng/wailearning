@@ -36,7 +36,7 @@ from validation_history import (
 
 
 DEFAULT_REGISTRY = "tests/TEST_SELECTION_TARGETS.json"
-DEFAULT_LEDGER = "docs/development/testing/test-execution-targets.csv"
+DEFAULT_LEDGER = "docs/testing/test-execution-targets.csv"
 RISK_ORDER = {
     "static": 0,
     "targeted": 1,

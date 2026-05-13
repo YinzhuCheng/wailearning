@@ -13,9 +13,9 @@ guardrails when practical.
 
 ## Workflow
 
-1. Read `docs/development/DEVELOPMENT_AND_TESTING.md`,
-   `docs/development/TEST_EXECUTION_PITFALLS.md`, and
-   `docs/known-issues-and-risks.md`.
+1. Read `docs/testing/DEVELOPMENT_AND_TESTING.md`,
+   `docs/testing/TEST_EXECUTION_PITFALLS.md`, and
+   `docs/governance/known-issues-and-risks.md`.
 2. Check whether a failure is environment-shaped: missing module, port
    collision, missing browser, stale Playwright process, corrupted SQLite file,
    or concurrent pytest processes.
@@ -55,6 +55,6 @@ python ops/scripts/dev/run_validation_target.py <target-id> --timeout-seconds 12
 - `tests/conftest.py`
 - `tests/db_reset.py`
 - `ops/scripts/dev/pytest_sqlite_guard.py`
-- `docs/development/TEST_EXECUTION_PITFALLS.md`
-- `docs/known-issues-and-risks.md`
+- `docs/testing/TEST_EXECUTION_PITFALLS.md`
+- `docs/governance/known-issues-and-risks.md`
 - `ops/scripts/dev/run_validation_target.py`

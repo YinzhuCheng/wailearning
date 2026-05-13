@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 
-LEDGER_MD = Path("docs/development/TEST_EXECUTION_LEDGER.md")
-SUMMARY_MD = Path("docs/development/TEST_EXECUTION_SUMMARY.md")
-OUT_DIR = Path("docs/development/testing")
+LEDGER_MD = Path("docs/testing/TEST_EXECUTION_LEDGER.md")
+SUMMARY_MD = Path("docs/testing/TEST_EXECUTION_SUMMARY.md")
+OUT_DIR = Path("docs/testing")
 TARGETS_CSV = OUT_DIR / "test-execution-targets.csv"
 RUNS_CSV = OUT_DIR / "test-execution-runs.csv"
 SUMMARY_CSV = OUT_DIR / "test-execution-summary.csv"
@@ -248,17 +248,16 @@ that agents append and tooling parses live here.
     LEDGER_MD.write_text(
         """# Test Execution Ledger
 
-The detailed execution ledger has been moved to CSV tables under
-[`testing/`](testing/):
+The detailed execution ledger has been moved to CSV tables in this directory:
 
-- [`testing/test-execution-targets.csv`](testing/test-execution-targets.csv)
+- [`test-execution-targets.csv`](test-execution-targets.csv)
   stores one row per validation target.
-- [`testing/test-execution-runs.csv`](testing/test-execution-runs.csv) stores
+- [`test-execution-runs.csv`](test-execution-runs.csv) stores
   append-only observed run history.
-- [`testing/test-execution-summary.csv`](testing/test-execution-summary.csv)
+- [`test-execution-summary.csv`](test-execution-summary.csv)
   stores the concise recent/important run summary.
 
-Use [`testing/README.md`](testing/README.md) for maintenance rules. Keep this
+Use [`README.md`](README.md) for maintenance rules. Keep this
 Markdown file as a stable entry point for existing links and human guidance.
 
 ## Counting Semantics
@@ -273,9 +272,9 @@ Markdown file as a stable entry point for existing links and human guidance.
 ## Current Source Of Truth
 
 For target metadata and last-run fields, use
-[`testing/test-execution-targets.csv`](testing/test-execution-targets.csv).
+[`test-execution-targets.csv`](test-execution-targets.csv).
 For individual run evidence, use
-[`testing/test-execution-runs.csv`](testing/test-execution-runs.csv).
+[`test-execution-runs.csv`](test-execution-runs.csv).
 """,
         encoding="utf-8",
         newline="\n",
@@ -285,16 +284,16 @@ For individual run evidence, use
         """# Test Execution Summary
 
 The concise recent/important validation summary now lives in
-[`testing/test-execution-summary.csv`](testing/test-execution-summary.csv).
+[`test-execution-summary.csv`](test-execution-summary.csv).
 
 Keep this Markdown file as a stable entry point for existing documentation
 links. Add new observed summary rows to the CSV table, and keep detailed target
 metadata plus run history in:
 
-- [`testing/test-execution-targets.csv`](testing/test-execution-targets.csv)
-- [`testing/test-execution-runs.csv`](testing/test-execution-runs.csv)
+- [`test-execution-targets.csv`](test-execution-targets.csv)
+- [`test-execution-runs.csv`](test-execution-runs.csv)
 
-See [`testing/README.md`](testing/README.md) for maintenance rules.
+See [`README.md`](README.md) for maintenance rules.
 """,
         encoding="utf-8",
         newline="\n",

@@ -32,7 +32,7 @@ Use this before changing:
 ## Workflow
 
 1. Read `docs/reference/DATA_MODEL_ESSENTIALS.md`,
-   `docs/operations/ADMIN_BOOTSTRAP.md`, and `docs/known-issues-and-risks.md`.
+   `docs/operations/ADMIN_BOOTSTRAP.md`, and `docs/governance/known-issues-and-risks.md`.
 2. Compare `db/models.py` with `bootstrap.ensure_schema_updates()`.
 3. For new columns/tables used by existing deployments, add idempotent DDL to
    `ensure_schema_updates()` or document why `create_all` is sufficient.
@@ -76,7 +76,7 @@ python ops/scripts/dev/run_validation_target.py static.schema_governance --timeo
 - `apps/backend/courseeval_backend/db/models.py`
 - `apps/backend/courseeval_backend/bootstrap.py`
 - `docs/reference/DATA_MODEL_ESSENTIALS.md`
-- `docs/known-issues-and-risks.md`
+- `docs/governance/known-issues-and-risks.md`
 - `ops/scripts/dev/check_schema_governance.py`
 - `ops/scripts/dev/audit_student_identity.py`
 - `ops/scripts/dev/repair_student_identity.py`

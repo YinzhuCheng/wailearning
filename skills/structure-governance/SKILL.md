@@ -20,9 +20,9 @@ evidence.
 
 ## Workflow
 
-1. Read `AGENTS.md`, `docs/README.md`, `docs/architecture/REPOSITORY_STRUCTURE.md`,
-   `docs/reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md`, and
-   `docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`.
+1. Read `AGENTS.md`, `docs/README.md`,
+   `docs/architecture/REPOSITORY_STRUCTURE.md`, and, for backend package
+   layout, `docs/architecture/BACKEND_PACKAGE_STRUCTURE.md`.
 2. Run:
    `python ops/scripts/dev/check_structure_governance.py --details`.
 3. Apply low-risk structural cleanup first:

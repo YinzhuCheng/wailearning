@@ -14,10 +14,10 @@ rows are reviewed project history.
 ## Workflow
 
 1. Read `skills/validation-selection/SKILL.md` and the testing ledger section
-   in `docs/development/DEVELOPMENT_AND_TESTING.md`.
+   in `docs/testing/DEVELOPMENT_AND_TESTING.md`.
 2. For a registry target, decide whether it already has durable run history:
    if yes, `ledger_id` must match the target id; if no, leave `ledger_id` null.
-3. Add target rows to `docs/development/testing/test-execution-targets.csv`
+3. Add target rows to `docs/testing/test-execution-targets.csv`
    only when the target should become durable metadata. Add run rows only for
    commands that actually executed.
 4. Never point one target's `ledger_id` at an unrelated target as an informal
@@ -48,8 +48,8 @@ git diff --check
 ## Related Files
 
 - `tests/TEST_SELECTION_TARGETS.json`
-- `docs/development/testing/test-execution-targets.csv`
-- `docs/development/testing/test-execution-runs.csv`
+- `docs/testing/test-execution-targets.csv`
+- `docs/testing/test-execution-runs.csv`
 - `ops/scripts/dev/lint_validation_registry.py`
 - `ops/scripts/dev/select_validation_targets.py`
 - `tests/backend/manual/test_validation_selector.py`

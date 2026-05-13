@@ -4,10 +4,6 @@
 
 This document defines the current repository layout after the full backend namespace migration.
 
-For the current branch-state assessment of repository-level structural debt, migration order, and risk themes, also read:
-
-- [../reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](../reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
-
 It is written for both human contributors and LLM coding agents. Read it before:
 
 - moving files,
@@ -252,12 +248,21 @@ Do not move the root `conftest.py` into an app-local subtree unless pytest invoc
 Documentation lives under `docs/` and is organized by topic, not by arbitrary chronology:
 
 - `docs/architecture/` for structural and system-shape documents,
-- `docs/development/` for developer workflow and test authoring,
+- `docs/agents/` for LLM-agent operating playbooks,
+- `docs/contributing/` for Git, encoding, and contributor workflow,
+- `docs/frontend/` for browser/UI-state behavior,
+- `docs/governance/` for active risks, unresolved ownership, and durable
+  repository rules,
 - `docs/operations/` for deployment and operational behavior,
-- `docs/product/` for feature behavior and user-facing workflow.
+- `docs/product/` for feature behavior and user-facing workflow,
+- `docs/reference/` for lookup maps and compact domain references,
+- `docs/testing/` for validation runbooks, pitfalls, maps, and CSV ledgers,
+- `docs/development/` as a sparse compatibility bucket only when a document
+  truly does not fit a more specific topic folder,
+- `docs/handoffs/` for explicit user-requested committed handoffs,
 - `docs/reports/` for dated audits, restructure reports, remediation reports,
   and other historical runbooks that should stay searchable but should not
-  clutter the active architecture/development indices.
+  clutter the active topic indices.
 
 Keep active guidance in the topic directory. Move completed audit trails and
 dated pass reports to `docs/reports/`, then update `docs/README.md`, `AGENTS.md`,

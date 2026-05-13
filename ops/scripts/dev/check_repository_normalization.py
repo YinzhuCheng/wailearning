@@ -41,16 +41,13 @@ REQUIRED_PATHS = (
 
 HISTORICAL_PATH_PREFIXES = (
     "docs/handoffs/",
-    "docs/development/testing/",
+    "docs/testing/",
 )
 
-HISTORICAL_PATHS = {
-    "docs/development/UI_BEAUTIFY_HANDOFF_2026-05-10.md",
-}
+HISTORICAL_PATHS: set[str] = set()
 
 ALLOWED_WARNING_PATHS = {
     "AGENTS.md",
-    "docs/development/HISTORICAL_CODE_CLEANUP.md",
     "ops/scripts/dev/check_repository_normalization.py",
 }
 

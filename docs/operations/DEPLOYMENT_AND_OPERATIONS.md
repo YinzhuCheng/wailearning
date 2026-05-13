@@ -297,4 +297,4 @@ sudo journalctl -u postgresql -n 100 --no-pager
 
 - [LLM and Homework Guide](../product/LLM_HOMEWORK_GUIDE.md)
 - [Admin Bootstrap and Demo Seed](ADMIN_BOOTSTRAP.md)
-- [Git Workflow](../development/GIT_WORKFLOW.md)
+- [Git Workflow](../contributing/GIT_WORKFLOW.md)

@@ -4,7 +4,7 @@
  *
  * Prerequisites: Playwright globalSetup with ``E2E_DEV_SEED_TOKEN`` (same contract as
  * ``e2e-postgres-hazard-tier.spec.js``). Run **serially** with other Playwright jobs on the default
- * ports (see ``docs/development/TEST_EXECUTION_PITFALLS.md`` Pitfall 41: ECONNRESET from parallel
+ * ports (see ``docs/testing/TEST_EXECUTION_PITFALLS.md`` Pitfall 41: ECONNRESET from parallel
  * webServer / fixed-port contention on ``<E2E_API_HOST>:8012``).
  */
 const { expect, test } = require('@playwright/test')

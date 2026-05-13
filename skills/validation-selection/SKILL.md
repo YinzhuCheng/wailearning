@@ -53,5 +53,5 @@ python ops/scripts/dev/lint_validation_registry.py
 - `ops/scripts/dev/select_validation_targets.py`
 - `ops/scripts/dev/run_validation_target.py`
 - `ops/scripts/dev/run_validation_profile.py`
-- `docs/development/DEVELOPMENT_AND_TESTING.md`
-- `docs/development/testing/README.md`
+- `docs/testing/DEVELOPMENT_AND_TESTING.md`
+- `docs/testing/README.md`

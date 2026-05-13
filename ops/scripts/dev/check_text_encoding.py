@@ -9,7 +9,7 @@ Examples:
 
     python ops/scripts/dev/check_text_encoding.py
     python ops/scripts/dev/check_text_encoding.py --fail-on-suspicious
-    python ops/scripts/dev/check_text_encoding.py docs/development/ENCODING_AND_MOJIBAKE_SAFETY.md
+    python ops/scripts/dev/check_text_encoding.py docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md
 """
 
 from __future__ import annotations

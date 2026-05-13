@@ -7,7 +7,7 @@
  * Run incrementally (repo root):
  *   cd apps/web/admin && npx playwright test ../../tests/e2e/web-admin/e2e-docs-gap-tier15.spec.js --project=chromium
  *
- * Doc hooks: docs/architecture/CORE_BUSINESS_FLOWS.md, docs/development/TEST_EXECUTION_PITFALLS.md (Pitfall 69).
+ * Doc hooks: docs/architecture/CORE_BUSINESS_FLOWS.md, docs/testing/TEST_EXECUTION_PITFALLS.md (Pitfall 69).
  */
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario } = require('./fixtures.cjs')

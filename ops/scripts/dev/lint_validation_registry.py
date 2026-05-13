@@ -16,7 +16,7 @@ from typing import Any
 
 
 DEFAULT_REGISTRY = "tests/TEST_SELECTION_TARGETS.json"
-DEFAULT_LEDGER = "docs/development/testing/test-execution-targets.csv"
+DEFAULT_LEDGER = "docs/testing/test-execution-targets.csv"
 ALLOWED_RISKS = {"static", "targeted", "broad", "full"}
 ALLOWED_CATEGORIES = {
     "static-check",

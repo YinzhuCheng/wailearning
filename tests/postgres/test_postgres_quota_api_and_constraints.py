@@ -6,8 +6,8 @@ These tests intentionally exercise paths that are easy to break when schema or p
 semantics drift (global-only calendar, course attribution, FK uniqueness). They require a
 PostgreSQL engine (``TEST_DATABASE_URL``); on SQLite the module is skipped at collection time.
 
-See ``docs/development/TEST_EXECUTION_PITFALLS.md`` (Pitfall 42: trailing commas in ``IN (...)``)
-and the long-form PostgreSQL cloud-agent notes in ``docs/development/DEVELOPMENT_AND_TESTING.md``.
+See ``docs/testing/TEST_EXECUTION_PITFALLS.md`` (Pitfall 42: trailing commas in ``IN (...)``)
+and the long-form PostgreSQL cloud-agent notes in ``docs/testing/DEVELOPMENT_AND_TESTING.md``.
 """
 
 from __future__ import annotations

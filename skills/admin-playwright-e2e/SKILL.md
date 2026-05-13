@@ -13,9 +13,9 @@ API/UI startup and teardown stay owned by one process.
 
 ## Workflow
 
-1. Read `docs/development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`,
-   `docs/development/TEST_EXECUTION_PITFALLS.md`, and
-   `docs/development/DEVELOPMENT_AND_TESTING.md`.
+1. Read `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`,
+   `docs/testing/TEST_EXECUTION_PITFALLS.md`, and
+   `docs/testing/DEVELOPMENT_AND_TESTING.md`.
 2. Confirm admin package dependencies and browsers exist in
    `apps/web/admin/`.
 3. For a real targeted run, prefer the external runner from the admin package:
@@ -65,5 +65,5 @@ node scripts/playwright-external-runner.cjs
 - `apps/web/admin/playwright.config.cjs`
 - `tests/e2e/web-admin/fixtures.cjs`
 - `tests/e2e/web-admin/future-advanced-coverage-helpers.cjs`
-- `docs/development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`
-- `docs/development/TEST_EXECUTION_PITFALLS.md`
+- `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`
+- `docs/testing/TEST_EXECUTION_PITFALLS.md`

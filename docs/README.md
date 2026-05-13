@@ -4,6 +4,29 @@ This directory is the authoritative documentation home for the repository. The r
 
 ---
 
+## Directory map
+
+Every subdirectory under `docs/` has its own `README.md` that defines its
+scope. Keep new documents in the most specific topic folder first.
+
+| Directory | Use for |
+|-----------|---------|
+| [agents/](agents/README.md) | LLM-agent playbooks and autonomous-workflow guidance |
+| [architecture/](architecture/README.md) | System structure, package boundaries, configuration maps, troubleshooting |
+| [assets/](assets/README.md) | Committed documentation assets only |
+| [contributing/](contributing/README.md) | Git, encoding, and contributor workflow |
+| [development/](development/README.md) | Sparse compatibility bucket; prefer a specific topic folder |
+| [frontend/](frontend/README.md) | Browser/UI-state behavior and frontend interaction contracts |
+| [governance/](governance/README.md) | Active risks, ownership ambiguity, durable repository rules |
+| [handoffs/](handoffs/README.md) | Explicit user-requested committed handoffs |
+| [operations/](operations/README.md) | Deployment, bootstrap, runtime operations |
+| [product/](product/README.md) | Product behavior and domain concepts |
+| [reference/](reference/README.md) | Lookup maps, permissions, and data model references |
+| [reports/](reports/README.md) | Dated reports that remain useful historical evidence |
+| [testing/](testing/README.md) | Test runbooks, pitfalls, validation maps, CSV ledgers |
+
+---
+
 ## 0. LLM agent bundle (read before autonomous edits)
 
 These files intentionally overlap with human-oriented docs — **verbosity is a feature** for coding agents.
@@ -11,16 +34,12 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | Document | Role |
 |----------|------|
 | [`AGENTS.md`](../AGENTS.md) (repository root) | Primary agent gate: boundaries, grep keywords, risky modules |
-| [`agent-playbook.md`](agent-playbook.md) | Procedural workflows: tracing features, bootstrap order, verification |
+| [`agents/agent-playbook.md`](agents/agent-playbook.md) | Procedural workflows: tracing features, bootstrap order, verification |
 | [`reference/CODE_MAP_AND_ENTRYPOINTS.md`](reference/CODE_MAP_AND_ENTRYPOINTS.md) | File-level map of routers, SPAs, tests, CI YAML |
 | [`reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) | Roles, course access helpers, JWT vs parent-code |
 | [`reference/DATA_MODEL_ESSENTIALS.md`](reference/DATA_MODEL_ESSENTIALS.md) | ORM tables grouped by domain |
 | [`architecture/ASYNC_TASKS_AND_WORKERS.md`](architecture/ASYNC_TASKS_AND_WORKERS.md) | LLM grading worker (DB queue + thread pool) |
-| [`known-issues-and-risks.md`](known-issues-and-risks.md) | Open risks, “待人工确认”, CI location honesty |
-| [`reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md`](reports/DOCUMENTATION_UPGRADE_REPORT_2026-05.md) | Audit trail for this documentation pass |
-| [`reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), mapping, pitfalls |
-| [`reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md`](reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md) | Three-line governance pass: docs, boundaries, structure, scripts, and residual risks |
-| [`handoffs/2026-05-13-three-line-governance-and-skills-handoff.md`](handoffs/2026-05-13-three-line-governance-and-skills-handoff.md) | Current branch handoff: mainline cleanup context, three-line governance, skills hierarchy, validation state, next targets |
+| [`governance/known-issues-and-risks.md`](governance/known-issues-and-risks.md) | Open risks, “待人工确认”, CI location honesty |
 | [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Top-level governance orchestrator for repo normalization, skill taxonomy, and three-line routing |
 | [`../skills/docs-governance/SKILL.md`](../skills/docs-governance/SKILL.md) | Horizontal docs governance: documentation truth, link checks, reports, and repeated-pitfall-to-rule workflow |
 | [`../skills/boundary-governance/SKILL.md`](../skills/boundary-governance/SKILL.md) | Horizontal boundary governance: functional/module/permission/data-flow boundary discovery and low-risk extraction workflow |
@@ -53,9 +72,6 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [architecture/TROUBLESHOOTING.md](architecture/TROUBLESHOOTING.md) | Symptom-first links into pitfalls and ops docs |
 | [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md) | Source vs artifact; import namespace contract |
 | [architecture/BACKEND_PACKAGE_STRUCTURE.md](architecture/BACKEND_PACKAGE_STRUCTURE.md) | Layer model inside `courseeval_backend` |
-| [reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md) | Structural migration rationale |
-| [reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) | Bounded repo-tree consolidation (`tests/devtools/`), movement mapping, validation notes |
-| [reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md](reports/THREE_LINE_GOVERNANCE_REPORT_2026-05-13.md) | Three-line governance pass: docs, boundary, and structure findings plus safe cleanup evidence |
 | [reports/README.md](reports/README.md) | Boundary rules for dated audits and remediation reports |
 | [operations/DEPLOYMENT_AND_OPERATIONS.md](operations/DEPLOYMENT_AND_OPERATIONS.md) | Production layout, nginx, systemd, env templates |
 | [operations/ADMIN_BOOTSTRAP.md](operations/ADMIN_BOOTSTRAP.md) | Startup ordering, seed behavior |
@@ -71,28 +87,24 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 
 ---
 
-## 3. Development, testing, and quality
+## 3. Contributing, frontend, testing, and quality
 
 | Document | Purpose |
 |----------|---------|
-| [development/FULL_TEST_SUITE_REMEDIATION_REPORT_2026-05-06.md](development/FULL_TEST_SUITE_REMEDIATION_REPORT_2026-05-06.md) | **Round report:** full-suite audit commands, elective/catalog test alignment, coverage matrix excerpt |
-| [development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md](development/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) | Matrix + command log for the 2026-05 full-stack test remediation pass |
-| [development/testing/README.md](development/testing/README.md) | **Structured execution tables:** CSV target metadata, append-only run history, and recent summary rows for incremental-test decisions |
-| [development/TEST_EXECUTION_LEDGER.md](development/TEST_EXECUTION_LEDGER.md) | Stable human entry point for the CSV execution ledger |
-| [development/TEST_EXECUTION_SUMMARY.md](development/TEST_EXECUTION_SUMMARY.md) | Stable human entry point for the CSV recent validation summary |
-| [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md) | Local workflow, pytest/Playwright layers, E2E dual gate |
-| [development/TEST_SUITE_MAP.md](development/TEST_SUITE_MAP.md) | What lives where in `tests/` |
-| [development/TEST_EXECUTION_PITFALLS.md](development/TEST_EXECUTION_PITFALLS.md) | **Large** — Windows/PowerShell, ports, Element Plus, SQLite vs PG |
-| [development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md) | Full admin E2E environment contract |
-| [development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](development/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md) | Header badge, sync API, sidebar navigation notes |
-| [development/ENCODING_AND_MOJIBAKE_SAFETY.md](development/ENCODING_AND_MOJIBAKE_SAFETY.md) | UTF-8 / PowerShell display traps |
-| [development/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md](development/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md) | Homework/submission `content_format` |
-| [development/GIT_WORKFLOW.md](development/GIT_WORKFLOW.md) | Branch and contribution conventions |
-| [development/HISTORICAL_CODE_CLEANUP.md](development/HISTORICAL_CODE_CLEANUP.md) | When legacy-looking code is still required |
-| [development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md](development/UI_UX_AUDIT_AND_RESPONSIVE_REPAIR.md) | Admin SPA responsive / UX notes |
-| [development/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md](development/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md) | HTTP client UX hint behavior |
-| [development/TEST_REDUNDANCY_AUDIT.md](development/TEST_REDUNDANCY_AUDIT.md) | Test merge/delete policy |
-| [reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) | Risks inferred from coverage |
+| [testing/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md](testing/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md) | Matrix + command log for the 2026-05 full-stack test remediation pass |
+| [testing/README.md](testing/README.md) | **Structured execution tables:** CSV target metadata, append-only run history, and recent summary rows for incremental-test decisions |
+| [testing/TEST_EXECUTION_LEDGER.md](testing/TEST_EXECUTION_LEDGER.md) | Stable human entry point for the CSV execution ledger |
+| [testing/TEST_EXECUTION_SUMMARY.md](testing/TEST_EXECUTION_SUMMARY.md) | Stable human entry point for the CSV recent validation summary |
+| [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md) | Local workflow, pytest/Playwright layers, E2E dual gate |
+| [testing/TEST_SUITE_MAP.md](testing/TEST_SUITE_MAP.md) | What lives where in `tests/` |
+| [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md) | **Large** — Windows/PowerShell, ports, Element Plus, SQLite vs PG |
+| [testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md) | Full admin E2E environment contract |
+| [frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md) | Header badge, sync API, sidebar navigation notes |
+| [contributing/ENCODING_AND_MOJIBAKE_SAFETY.md](contributing/ENCODING_AND_MOJIBAKE_SAFETY.md) | UTF-8 / PowerShell display traps |
+| [product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md](product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md) | Homework/submission `content_format` |
+| [contributing/GIT_WORKFLOW.md](contributing/GIT_WORKFLOW.md) | Branch and contribution conventions |
+| [frontend/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md](frontend/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md) | HTTP client UX hint behavior |
+| [testing/TEST_REDUNDANCY_AUDIT.md](testing/TEST_REDUNDANCY_AUDIT.md) | Test merge/delete policy |
 
 ---
 
@@ -119,10 +131,12 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 - If behavior changes in code, update these documents in the same change set.
 - Contributors, including LLM agents, are expected to read the task-relevant documents before changing code, tests, structure, or deployment assets.
 - The documentation set is part of the implementation surface, not optional commentary.
-- For database-related tests and “zero-skip” full `pytest` claims, see the **full regression prerequisites** in [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md).
+- For database-related tests and “zero-skip” full `pytest` claims, see the **full regression prerequisites** in [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md).
 - Large structured ledgers belong in CSV/JSON/YAML; Markdown should link to
   them and explain interpretation rules. The current test execution ledgers
-  live under [development/testing/](development/testing/).
+  live under [testing/](testing/).
+- The `docs/` root should contain only this hub README. Put every other
+  document in a topic folder with its own `README.md`.
 - For repository naming, package, service, and ops-template normalization
   checks, run `python ops/scripts/dev/check_repository_normalization.py`.
 
@@ -138,8 +152,7 @@ Read:
 
 1. [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md)
 2. [architecture/SYSTEM_OVERVIEW.md](architecture/SYSTEM_OVERVIEW.md)
-3. [reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md](reports/STRUCTURE_AUDIT_AND_MIGRATION_PLAN.md)
-4. [reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md](reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) (most recent file-tree consolidation notes; read when touching `tests/devtools/` or top-level layout)
+3. [architecture/BACKEND_PACKAGE_STRUCTURE.md](architecture/BACKEND_PACKAGE_STRUCTURE.md) when touching backend package layout
 
 Why:
 
@@ -154,7 +167,6 @@ Read:
 1. [architecture/SYSTEM_OVERVIEW.md](architecture/SYSTEM_OVERVIEW.md)
 2. [architecture/CORE_BUSINESS_FLOWS.md](architecture/CORE_BUSINESS_FLOWS.md)
 3. the relevant product document such as [product/LLM_HOMEWORK_GUIDE.md](product/LLM_HOMEWORK_GUIDE.md) or [product/PARENT_PORTAL.md](product/PARENT_PORTAL.md)
-4. [reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md) when working near fragile areas
 
 Why:
 
@@ -165,9 +177,9 @@ Why:
 
 Read:
 
-1. [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md)
-2. [development/ENCODING_AND_MOJIBAKE_SAFETY.md](development/ENCODING_AND_MOJIBAKE_SAFETY.md)
-3. [development/TEST_EXECUTION_PITFALLS.md](development/TEST_EXECUTION_PITFALLS.md)
+1. [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md)
+2. [contributing/ENCODING_AND_MOJIBAKE_SAFETY.md](contributing/ENCODING_AND_MOJIBAKE_SAFETY.md)
+3. [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md)
 4. [architecture/TROUBLESHOOTING.md](architecture/TROUBLESHOOTING.md) for a short symptom index
 
 Why:
@@ -199,23 +211,22 @@ Why:
 2. [architecture/CORE_BUSINESS_FLOWS.md](architecture/CORE_BUSINESS_FLOWS.md)
 3. [architecture/REPOSITORY_STRUCTURE.md](architecture/REPOSITORY_STRUCTURE.md)
 4. [product/LLM_HOMEWORK_GUIDE.md](product/LLM_HOMEWORK_GUIDE.md)
-5. [reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md](reports/TEST_INFERRED_RISKS_AND_FOLLOWUPS.md)
 
 ### Local development
 
-1. [development/DEVELOPMENT_AND_TESTING.md](development/DEVELOPMENT_AND_TESTING.md)
-2. [development/ENCODING_AND_MOJIBAKE_SAFETY.md](development/ENCODING_AND_MOJIBAKE_SAFETY.md)
-3. [development/TEST_SUITE_MAP.md](development/TEST_SUITE_MAP.md)
-4. [development/TEST_REDUNDANCY_AUDIT.md](development/TEST_REDUNDANCY_AUDIT.md)
-5. [development/TEST_EXECUTION_PITFALLS.md](development/TEST_EXECUTION_PITFALLS.md)
+1. [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md)
+2. [contributing/ENCODING_AND_MOJIBAKE_SAFETY.md](contributing/ENCODING_AND_MOJIBAKE_SAFETY.md)
+3. [testing/TEST_SUITE_MAP.md](testing/TEST_SUITE_MAP.md)
+4. [testing/TEST_REDUNDANCY_AUDIT.md](testing/TEST_REDUNDANCY_AUDIT.md)
+5. [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md)
 6. [architecture/MAINTAINER_AGENT_GUIDE.md](architecture/MAINTAINER_AGENT_GUIDE.md)
 
 ### Autonomous agent onboarding (Codex / Cursor / cloud agents)
 
 1. [AGENTS.md](../AGENTS.md)
-2. [agent-playbook.md](agent-playbook.md)
+2. [agents/agent-playbook.md](agents/agent-playbook.md)
 3. [reference/CODE_MAP_AND_ENTRYPOINTS.md](reference/CODE_MAP_AND_ENTRYPOINTS.md)
-4. [known-issues-and-risks.md](known-issues-and-risks.md)
+4. [governance/known-issues-and-risks.md](governance/known-issues-and-risks.md)
 5. [architecture/CORE_BUSINESS_FLOWS.md](architecture/CORE_BUSINESS_FLOWS.md)
 
 ### Production deployment

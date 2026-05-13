@@ -125,7 +125,7 @@ These are **client** environment variables read by Vite:
 | `VITE_PROXY_TARGET` | `http://127.0.0.1:8001` | same | Backend for `/api` proxy. |
 | `VITE_APP_BASE_PATH` | `/` | `/` | SPA base path for deployments under subpaths. |
 
-Playwright additionally defines `E2E_API_PORT` / `E2E_UI_PORT` (defaults **8012** / **3012**) inside `apps/web/admin/playwright.config.cjs` for managed test servers; see [../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../development/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+Playwright additionally defines `E2E_API_PORT` / `E2E_UI_PORT` (defaults **8012** / **3012**) inside `apps/web/admin/playwright.config.cjs` for managed test servers; see [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 
 ---
 

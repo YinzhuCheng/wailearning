@@ -68,7 +68,7 @@ DOC_ANCHORS = {
         "FastAPI dependencies + domain helpers enforce authorization": "backend authorization source of truth",
         "settings.expose_e2e_dev_api()": "E2E dev API gate",
     },
-    "docs/development/DEVELOPMENT_AND_TESTING.md": {
+    "docs/testing/DEVELOPMENT_AND_TESTING.md": {
         "Confirm the contract first": "API test-authoring contract guidance",
         "apps/backend/courseeval_backend/api/routers/*.py": "router path guidance",
     },

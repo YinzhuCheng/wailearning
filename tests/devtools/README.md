@@ -16,7 +16,7 @@ It exists so maintenance tooling stays **inside `tests/`** instead of competing 
 
 | Script | Output / effect |
 |--------|-----------------|
-| [`audit_test_redundancy.py`](audit_test_redundancy.py) | Rewrites [`docs/development/TEST_REDUNDANCY_AUDIT.md`](../../docs/development/TEST_REDUNDANCY_AUDIT.md) |
+| [`audit_test_redundancy.py`](audit_test_redundancy.py) | Rewrites [`docs/testing/TEST_REDUNDANCY_AUDIT.md`](../../docs/testing/TEST_REDUNDANCY_AUDIT.md) |
 
 Run from repository root:
 
@@ -26,5 +26,4 @@ python3 tests/devtools/audit_test_redundancy.py
 
 ## Deeper documentation
 
-- [`docs/development/TEST_SUITE_MAP.md`](../../docs/development/TEST_SUITE_MAP.md) — full `tests/` layout and devtools semantics.
-- [`docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md`](../../docs/reports/REPOSITORY_RESTRUCTURE_REPORT_2026-05.md) — migration mapping from legacy `tools/testing/` and verification commands.
+- [`docs/testing/TEST_SUITE_MAP.md`](../../docs/testing/TEST_SUITE_MAP.md) — full `tests/` layout and devtools semantics.

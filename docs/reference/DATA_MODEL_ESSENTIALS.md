@@ -152,4 +152,4 @@ Current LLM caveat: `learning_note_discussion_entries` can receive assistant rep
 
 ## 8. 待人工确认
 
-- Whether every auxiliary table has parity coverage in `ensure_schema_updates` for greenfield SQLite installs under adversarial import orders — if pytest flakes arise, capture stack traces in [`../known-issues-and-risks.md`](../known-issues-and-risks.md).
+- Whether every auxiliary table has parity coverage in `ensure_schema_updates` for greenfield SQLite installs under adversarial import orders — if pytest flakes arise, capture stack traces in [`../governance/known-issues-and-risks.md`](../governance/known-issues-and-risks.md).

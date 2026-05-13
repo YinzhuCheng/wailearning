@@ -10,7 +10,8 @@ operations, or product rules.
 ## Rules
 
 - Keep active guidance in the topic directory such as `docs/architecture/`,
-  `docs/development/`, `docs/operations/`, or `docs/product/`.
+  `docs/contributing/`, `docs/frontend/`, `docs/governance/`,
+  `docs/operations/`, `docs/product/`, or `docs/testing/`.
 - Move completed audit trails and dated pass reports here when they are useful
   history but no longer the primary operating guide.
 - After moving a report, update `docs/README.md`, `AGENTS.md`, and any
