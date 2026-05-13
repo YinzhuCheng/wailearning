@@ -239,7 +239,7 @@ Files:
 
 Helpers: `tests/e2e/web-school/future-advanced-coverage-helpers.cjs`
 
-Runtime contract: same `apps/web/school/playwright.config.cjs`, `tests/e2e/web-school/global-setup.cjs`, `POST /api/e2e/dev/reset-scenario`, and `E2E_DEV_SEED_TOKEN` as other admin E2E specs.
+Runtime contract: same `apps/web/school/playwright.config.cjs`, `tests/e2e/web-school/global-setup.cjs`, `POST /api/e2e/dev/reset-scenario`, and `E2E_DEV_SEED_TOKEN` as other school E2E specs.
 
 Targeted run from `apps/web/school`:
 
@@ -345,7 +345,7 @@ CI=1 E2E_PYTHON=<python-with-requirements> E2E_DEV_SEED_TOKEN=<seed> \
   npx playwright test e2e-notification-sync-deep-tier.spec.js --project=chromium
 ```
 
-- Run from `<REPO_ROOT>/apps/web/school` (same `playwright.config.cjs` as other admin E2E):
+- Run from `<REPO_ROOT>/apps/web/school` (same `playwright.config.cjs` as other school E2E):
 
 ```bash
 cd <REPO_ROOT>/apps/web/school

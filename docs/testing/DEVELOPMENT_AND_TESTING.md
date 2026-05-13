@@ -446,7 +446,7 @@ npm run dev
 Optional Windows convenience launcher:
 
 ```bat
-ops\scripts\windows\start-admin-frontend.bat
+ops\scripts\windows\start-school-frontend.bat
 ```
 
 ### Parent portal
@@ -499,7 +499,7 @@ The repository also has a lightweight GitHub Actions entrypoint at
 [`../../.github/workflows/lightweight-validation.yml`](../../.github/workflows/lightweight-validation.yml).
 It is intentionally a first cloud gate, not full validation. On pull requests it
 runs selector/tooling checks, emits a diff-based validation recommendation,
-runs quick backend `pytest`, and builds the admin and parent frontends.
+runs quick backend `pytest`, and builds the school and parent frontends.
 
 Current GitHub Actions scope:
 

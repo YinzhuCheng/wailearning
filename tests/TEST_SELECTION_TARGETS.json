@@ -2016,6 +2016,48 @@
             "notes": "Use for small API/navigation edges; prefer pytest for pure API contract expansion."
         },
         {
+            "id": "school.e2e.cross_cutting_edge",
+            "category": "school-playwright",
+            "risk": "targeted",
+            "description": "Cross-cutting school Playwright edge suite for multi-role interleaving, token lifecycle, validation-boundary responses, and API-plus-UI convergence under concurrency.",
+            "working_directory": "apps/web/school",
+            "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+            "coverage_tags": [
+                "school-playwright",
+                "auth",
+                "concurrency",
+                "multi-role",
+                "api-ui-convergence"
+            ],
+            "commands": [
+                {
+                    "label": "playwright targeted",
+                    "argv": [
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
+                        "e2e-cross-cutting-edge.spec.js",
+                        "--project=chromium"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/e2e/web-school/e2e-cross-cutting-edge.spec.js",
+                    "apps/web/school/src/views/Login.vue",
+                    "apps/web/school/src/views/Layout.vue",
+                    "apps/web/school/src/views/Notifications.vue",
+                    "apps/web/school/src/router/index.js",
+                    "apps/backend/courseeval_backend/api/routers/auth.py",
+                    "apps/backend/courseeval_backend/api/routers/notifications.py",
+                    "apps/backend/courseeval_backend/api/routers/e2e_dev.py",
+                    "apps/backend/courseeval_backend/core/auth.py"
+                ],
+                "globs": []
+            },
+            "ledger_id": "school.e2e.cross_cutting_edge",
+            "notes": "Use when the spec itself changes or when auth, notification convergence, or multi-role browser/API edge handling needs a targeted browser check."
+        },
+        {
             "id": "school.e2e.agent_hazard_tier15",
             "category": "school-playwright",
             "risk": "targeted",

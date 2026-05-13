@@ -88,7 +88,7 @@ Approximate sequence:
 - Forces `INIT_DEFAULT_DATA=false` during tests.
 - Disables LLM worker by default (`TEST_ENABLE_LLM_GRADING_WORKER` overrides).
 
-### 4.3 Playwright admin E2E
+### 4.3 Playwright school E2E
 
 ```bash
 cd apps/web/school

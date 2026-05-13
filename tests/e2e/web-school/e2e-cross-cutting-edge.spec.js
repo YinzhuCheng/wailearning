@@ -1,7 +1,7 @@
 /**
  * Cross-cutting E2E: multi-role interleaving, cold parallel login, token lifecycle,
  * validation boundaries (422/400/403), API+UI convergence under concurrency.
- * Uses the same globalSetup + reset-scenario contract as other admin E2E specs.
+ * Uses the same globalSetup + reset-scenario contract as other school E2E specs.
  */
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')

@@ -73,7 +73,7 @@ The repository contains multiple applications and therefore keeps application co
 That is intentional:
 
 - `apps/backend/courseeval_backend/` is the backend Python application package
-- `apps/web/school/` is the admin web application
+- `apps/web/school/` is the main school web application for admin, teacher, and student roles
 - `apps/web/parent/` is the parent-facing web application
 
 The older root-level `app/` package was removed because it created two sources of truth:

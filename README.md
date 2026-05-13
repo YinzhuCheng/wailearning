@@ -50,7 +50,7 @@ The LLM subsystem is core product functionality, not an optional demo.
 - Backend: FastAPI, SQLAlchemy, PostgreSQL (production reference), Pydantic v2
 - Frontend: Vue 3, Vite, Element Plus, Pinia, ECharts
 - Parent portal: Vue 3 + Vite (separate app)
-- Testing: `pytest`, Playwright (Chromium for admin E2E)
+- Testing: `pytest`, Playwright (Chromium for school E2E)
 - Deployment: Nginx, `gunicorn`, `uvicorn`, `systemd` (see `ops/`)
 
 ## Repository layout
@@ -110,7 +110,7 @@ npm run dev
 Windows convenience launcher:
 
 ```bat
-ops\scripts\windows\start-admin-frontend.bat
+ops\scripts\windows\start-school-frontend.bat
 ```
 
 Default local URL: `http://127.0.0.1:3000` unless `VITE_DEV_PORT` overrides. API proxy target defaults to `http://127.0.0.1:8001` (`VITE_PROXY_TARGET`).

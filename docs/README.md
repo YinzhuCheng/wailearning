@@ -98,7 +98,7 @@ These files intentionally overlap with human-oriented docs — **verbosity is a 
 | [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md) | Local workflow, pytest/Playwright layers, E2E dual gate |
 | [testing/TEST_SUITE_MAP.md](testing/TEST_SUITE_MAP.md) | What lives where in `tests/` |
 | [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md) | **Large** — Windows/PowerShell, ports, Element Plus, SQLite vs PG |
-| [testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md) | Full admin E2E environment contract |
+| [testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md) | Full school E2E environment contract |
 | [frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md) | Header badge, sync API, sidebar navigation notes |
 | [contributing/ENCODING_AND_MOJIBAKE_SAFETY.md](contributing/ENCODING_AND_MOJIBAKE_SAFETY.md) | UTF-8 / PowerShell display traps |
 | [product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md](product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md) | Homework/submission `content_format` |

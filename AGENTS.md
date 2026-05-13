@@ -407,7 +407,7 @@ under "Diff-based validation workflow".
 
 Cloud pipeline definitions (Alibaba DevOps style YAML) live under [`ops/ci/`](ops/ci/); `pr-pipeline.yml` uses `python3 -m pytest -q`.
 
-GitHub Actions now has a lightweight entrypoint at [`.github/workflows/lightweight-validation.yml`](.github/workflows/lightweight-validation.yml). It runs selector/tooling checks, emits a diff-based validation recommendation for pull requests, runs quick backend `pytest`, and builds the admin and parent frontends. Treat it as the first cloud gate, not as full production-aligned validation. PostgreSQL-backed pytest, RAR-dependent attachment coverage, and Playwright E2E remain local/manual or future cloud-profile work unless a later workflow explicitly adds those environments.
+GitHub Actions now has a lightweight entrypoint at [`.github/workflows/lightweight-validation.yml`](.github/workflows/lightweight-validation.yml). It runs selector/tooling checks, emits a diff-based validation recommendation for pull requests, runs quick backend `pytest`, and builds the school and parent frontends. Treat it as the first cloud gate, not as full production-aligned validation. PostgreSQL-backed pytest, RAR-dependent attachment coverage, and Playwright E2E remain local/manual or future cloud-profile work unless a later workflow explicitly adds those environments.
 
 ---
 
