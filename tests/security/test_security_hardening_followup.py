@@ -3691,3 +3691,47 @@ def test_hard129_class_teacher_cannot_delete_teacher_owned_visible_homework(clie
     r = client.delete(f"/api/homeworks/{homework_id}", headers=headers)
 
     assert r.status_code == 403
+
+
+def test_hard130_linked_secondary_class_homework_remains_readable_after_create(client: TestClient):
+    teacher = _create_teacher("homework_multiclass_read_teacher")
+    primary_class_id = _create_class("security-homework-multiclass-read-primary")
+    linked_class_id = _create_class("security-homework-multiclass-read-linked")
+    student = _extra_student_account_for_class(linked_class_id, "homework_multiclass_read_student")
+    subject_id = _create_subject("Homework multiclass read", int(teacher["user_id"]), primary_class_id)
+    _enroll_student(subject_id, int(student["student_id"]), linked_class_id)
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=subject_id,
+                class_id=linked_class_id,
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    teacher_headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+    created = client.post(
+        "/api/homeworks",
+        headers=teacher_headers,
+        json={
+            "title": "hard130 linked class readable homework",
+            "content": "this homework should remain readable after creation",
+            "class_id": linked_class_id,
+            "subject_id": subject_id,
+            "max_score": 100,
+            "auto_grading_enabled": False,
+        },
+    )
+    assert created.status_code == 200, created.text
+    homework_id = int(created.json()["id"])
+
+    teacher_detail = client.get(f"/api/homeworks/{homework_id}", headers=teacher_headers)
+    student_headers = login_api(client, str(student["username"]), str(student["password"]))
+    student_detail = client.get(f"/api/homeworks/{homework_id}", headers=student_headers)
+
+    assert teacher_detail.status_code == 200, teacher_detail.text
+    assert student_detail.status_code == 200, student_detail.text

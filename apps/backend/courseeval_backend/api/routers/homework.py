@@ -129,12 +129,7 @@ def _ensure_homework_access(homework: Homework, current_user: User, db: Session)
     allowed_class_ids = get_accessible_class_ids(current_user, db)
     if homework.subject_id:
         course_row = db.query(Subject).filter(Subject.id == homework.subject_id).first()
-        if (
-            course_row
-            and course_row.class_id is not None
-            and homework.class_id is not None
-            and int(course_row.class_id) != int(homework.class_id)
-        ):
+        if course_row and homework.class_id is not None and not _homework_subject_allows_class(db, course_row, homework.class_id):
             raise HTTPException(
                 status_code=403,
                 detail="Homework class does not match its course class (data integrity issue).",
