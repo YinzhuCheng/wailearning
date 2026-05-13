@@ -169,3 +169,21 @@ See [`architecture/REPOSITORY_STRUCTURE.md`](../architecture/REPOSITORY_STRUCTUR
   while external DevOps examples still live under [`ops/ci/`](../../ops/ci/).
   PostgreSQL-backed pytest, RAR-dependent attachment coverage, and Playwright
   E2E are not yet fully cloud-orchestrated.
+
+---
+
+## 10. Expanded grep map
+
+Use this section when the short grep map in `AGENTS.md` is not enough.
+
+| Intent | Keywords / symbols |
+|--------|---------------------|
+| Course visibility | `get_accessible_courses_query`, `ensure_course_access_http`, `prepare_student_course_context` |
+| Instructor checks | `is_course_instructor`, `subject_teacher_user_ids` |
+| Homework serialization | `_serialize_homework`, `_serialize_submission`, `effective_score_note_zh`, `resolve_effective_submission_score` |
+| Grading queue | `HomeworkGradingTask`, `queue_grading_task`, `claim_grading_tasks_batch`, `process_grading_task`, `process_next_grading_task` |
+| Worker lifecycle | `start_grading_worker`, `worker_manager`, `_WorkerManager` |
+| Quota | `precheck_quota`, `reserve_quota_tokens`, `LLMGlobalQuotaPolicy` |
+| Demo seed | `seed_demo_course_bundle`, `INIT_DEFAULT_DATA`, `domains/seed/demo.py` |
+| Schema repair | `ensure_schema_updates`, `bootstrap.py` |
+| E2E seed | `expose_e2e_dev_api`, `E2E_DEV_SEED_ENABLED`, `/api/e2e/dev/` |

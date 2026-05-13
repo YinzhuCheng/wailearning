@@ -74,6 +74,41 @@ Interpretation rules:
   reasoning, classify the failure from primary evidence, and add a pitfall if
   the trap is repeatable.
 
+## Recording New Pitfalls
+
+When a failure reveals a genuinely new repeatable trap, record it in the same
+change set.
+
+Use this flow:
+
+1. Search first with `search_pitfalls.py`.
+2. Add or update the Markdown explanation in this file.
+3. Add one matching row to `docs/testing/pitfall-index.csv`.
+4. Keep the durable mitigation in the most specific live location: this file, a
+   guardrail script, a selector/runner rule, or a repo-local skill.
+
+Structured index fields:
+
+- `pitfall_sequence`
+- `source_commit_sha`
+- `document_path`
+- `heading`
+- `category`
+- `status`
+- `notes`
+
+Sequence rules:
+
+- new pitfalls use increasing positive integers;
+- legacy Markdown-only pitfalls may remain `pitfall_sequence=0` with
+  `source_commit_sha=Null`;
+- use the most recent committed hash at the time the new pitfall is recorded as
+  `source_commit_sha`.
+
+Use [`../../skills/local-test-triage/SKILL.md`](../../skills/local-test-triage/SKILL.md)
+when the main problem is failure classification rather than authoring the
+pitfall entry itself.
+
 ## Scope of the Recorded Session
 
 - Host shell: Windows PowerShell

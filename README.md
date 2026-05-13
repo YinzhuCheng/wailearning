@@ -1,85 +1,74 @@
 # CourseEval
 
-CourseEval is a multi-role school and classroom management platform: FastAPI backend, Vue 3 school SPA, separate parent portal SPA, PostgreSQL in production, LLM-assisted homework grading via an **in-process worker** that drains a **database-backed** task queue (no Redis/Celery broker in this codebase).
+CourseEval is a multi-role school and classroom management platform with a
+FastAPI backend, a Vue 3 school web app, a separate parent portal, PostgreSQL
+as the production reference database, and LLM-assisted homework grading built
+around database-backed grading-task rows plus an in-process worker.
 
-## Who this is for
+## Who should start here
 
-- **Deployers / ops**: production layout under `ops/`, nginx + systemd — start at [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md).
-- **Backend / frontend developers**: explicit Python package root `apps.backend.courseeval_backend`, Vue apps under `apps/web/` — start at [`docs/architecture/MAINTAINER_AGENT_GUIDE.md`](docs/architecture/MAINTAINER_AGENT_GUIDE.md).
-- **LLM coding agents and automation**: treat [`docs/README.md`](docs/README.md) as the documentation hub; follow the “read before work” list below. **Start with [`AGENTS.md`](AGENTS.md)** for a condensed agent-oriented gate (maps, risky modules, verification expectations).
+- Developers: start with this README, then use [docs/README.md](docs/README.md)
+  for task-specific reading.
+- Operators: start with
+  [docs/operations/DEPLOYMENT_AND_OPERATIONS.md](docs/operations/DEPLOYMENT_AND_OPERATIONS.md).
+- LLM coding agents: start with [AGENTS.md](AGENTS.md), then use
+  [docs/README.md](docs/README.md).
 
-## Read before work
+## What CourseEval provides
 
-This repository expects contributors, including LLM coding agents, to read task-relevant documentation before changing code. The file tree alone is not the source of truth.
-
-**Minimum rule**
-
-- Before changing repository structure or file placement, read [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md) and, for backend package layout, [`docs/architecture/BACKEND_PACKAGE_STRUCTURE.md`](docs/architecture/BACKEND_PACKAGE_STRUCTURE.md).
-- Before changing backend or product behavior, read [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md), [`docs/architecture/CORE_BUSINESS_FLOWS.md`](docs/architecture/CORE_BUSINESS_FLOWS.md), and any feature-specific doc such as [`docs/product/LLM_HOMEWORK_GUIDE.md`](docs/product/LLM_HOMEWORK_GUIDE.md).
-- Before running tests or diagnosing failures, read [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md) and [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md).
-- Before editing multilingual files from Windows + PowerShell, read [`docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
-- Before deployment or service changes, read [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md) and [`docs/operations/ADMIN_BOOTSTRAP.md`](docs/operations/ADMIN_BOOTSTRAP.md).
-- Before touching parent-facing flows, read [`docs/product/PARENT_PORTAL.md`](docs/product/PARENT_PORTAL.md).
-
-**Practical expectation**
-
-- If you skip the relevant docs, you are likely to misread compatibility layers, confuse local artifacts for source layout, or waste time on known Windows/PowerShell test traps.
-- If you discover a new behavior constraint, environment pitfall, or operational rule while working, update the corresponding document in the same change set.
-
-## Highlights
-
-- Multi-role access for admins, class teachers, subject teachers, students, and parent-code users (parents do not use staff JWT accounts — see parent portal doc).
-- Class, student, user, and roster management with reconciliation between user accounts and student roster rows.
-- Required and elective course flows, enrollment repair, batch class moves, and enrollment blocking.
-- Homework lifecycle with multiple attempts, late-submission rules, score candidates, teacher review, regrade, and student appeals.
-- Course material chapters, notifications (with header badge + sync API), attendance, semesters, scores, score-composition appeals, and points.
-- Parent portal served as a separate SPA (typically under `/parent/` behind nginx — see deployment doc).
-- API-first backend with `pytest` and Playwright E2E coverage (`tests/e2e/web-school/`).
+- Roles: admin, class teacher, subject teacher, student, and parent-code users
+  with distinct access paths.
+- Course operations: class, student, user, roster, required-course, elective,
+  and enrollment-management workflows.
+- Homework workflows: publication, submission attempts, review, regrade, and
+  appeal flows.
+- LLM-assisted grading: endpoint presets, course-level grading configuration,
+  quota policy, async task processing, and teacher review tools.
+- School workflows: materials, discussions, notifications, attendance,
+  semesters, scores, and points.
+- Parent portal: a separate read-oriented SPA for parent-code access to student
+  information.
 
 ## LLM-assisted homework grading
 
-The LLM subsystem is core product functionality, not an optional demo.
+LLM grading is a first-class product workflow, not a sidecar demo. Admins
+manage reusable endpoint presets and quota policy, teachers configure grading
+behavior per course, and async grading runs through `HomeworkGradingTask` rows
+drained by the in-process worker.
 
-- Admins manage reusable endpoint presets under `/api/llm-settings`.
-- Teachers configure LLM behavior per course (prompts, endpoint order, token boundaries).
-- Admins manage global quota policy (timezone, caps, concurrency).
-- Async grading uses table-backed `HomeworkGradingTask` rows; the worker runs in-process — see [`docs/product/LLM_HOMEWORK_GUIDE.md`](docs/product/LLM_HOMEWORK_GUIDE.md) and [`docs/architecture/CORE_BUSINESS_FLOWS.md`](docs/architecture/CORE_BUSINESS_FLOWS.md).
+For architecture and behavior details, use:
+
+- [docs/product/LLM_HOMEWORK_GUIDE.md](docs/product/LLM_HOMEWORK_GUIDE.md)
+- [docs/architecture/CORE_BUSINESS_FLOWS.md](docs/architecture/CORE_BUSINESS_FLOWS.md)
 
 ## Tech stack
 
-- Backend: FastAPI, SQLAlchemy, PostgreSQL (production reference), Pydantic v2
-- Frontend: Vue 3, Vite, Element Plus, Pinia, ECharts
-- Parent portal: Vue 3 + Vite (separate app)
-- Testing: `pytest`, Playwright (Chromium for school E2E)
-- Deployment: Nginx, `gunicorn`, `uvicorn`, `systemd` (see `ops/`)
+- Backend: FastAPI, SQLAlchemy, PostgreSQL, Pydantic v2
+- School frontend: Vue 3, Vite, Element Plus, Pinia, ECharts
+- Parent portal: Vue 3 + Vite
+- Testing: `pytest`, Playwright
+- Operations: Nginx, `gunicorn`, `uvicorn`, `systemd`
 
 ## Repository layout
 
 ```text
 apps/backend/courseeval_backend/   Canonical FastAPI backend package
-apps/web/school/                     School SPA and Playwright config
-apps/web/parent/                    Parent-facing SPA
-docs/                               Documentation hub (start at docs/README.md)
-ops/                                CI, nginx, systemd, deployment scripts
-tests/                              Backend, behavior, browser E2E suites, and test-tree maintenance helpers (`tests/devtools/`)
+apps/web/school/                   School SPA and Playwright config
+apps/web/parent/                   Parent-facing SPA
+docs/                              Documentation hub
+ops/                               CI, deployment, and runtime operations
+tests/                             Backend, behavior, and browser E2E suites
 ```
 
-Repository-boundary rules:
-
-- The repository root should contain only repository-level entry files and configuration such as `README.md`, `LICENSE`, `requirements.txt`, `pytest.ini`, and the root `conftest.py`.
-- Windows convenience launchers live under `ops/scripts/windows/` instead of being scattered across the root or app folders.
-- The backend import namespace is intentionally explicit: `apps.backend.courseeval_backend`. Do not reintroduce a root compatibility package or a second shorter alias.
-- Local runtime artifacts such as `frontend/`, `.pytest_tmp/`, `.e2e-run/`, `test-results/`, and `uploads/` are not part of the source layout even if they appear on a developer machine.
-
-See [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md).
+For repository boundary and placement rules, use
+[docs/architecture/REPOSITORY_STRUCTURE.md](docs/architecture/REPOSITORY_STRUCTURE.md).
 
 ## Quick start
 
-Paths below assume a POSIX shell from the **repository root** (`cd` to this repo first). On Windows, use `ops\scripts\windows\*.bat` where noted.
+Commands below assume the repository root as the working directory unless the
+section says otherwise.
 
 ### Backend
-
-Use `python3` on environments where `python` is not aliased (common on Linux servers and some CI images). The reference CI snippet in [`ops/ci/pr-pipeline.yml`](ops/ci/pr-pipeline.yml) invokes `python3` explicitly.
 
 ```bash
 python3 -m venv .venv
@@ -94,10 +83,10 @@ Windows convenience launcher:
 ops\scripts\windows\start-backend.bat
 ```
 
+Local API docs:
+
 - Swagger UI: `http://127.0.0.1:8001/docs`
 - ReDoc: `http://127.0.0.1:8001/redoc`
-
-Default `DATABASE_URL` in `core/config.py` uses placeholder credentials — override for any shared environment (see [`docs/architecture/CONFIGURATION_REFERENCE.md`](docs/architecture/CONFIGURATION_REFERENCE.md)).
 
 ### School frontend
 
@@ -113,8 +102,6 @@ Windows convenience launcher:
 ops\scripts\windows\start-school-frontend.bat
 ```
 
-Default local URL: `http://127.0.0.1:3000` unless `VITE_DEV_PORT` overrides. API proxy target defaults to `http://127.0.0.1:8001` (`VITE_PROXY_TARGET`).
-
 ### Parent portal
 
 ```bash
@@ -129,37 +116,21 @@ Windows convenience launcher:
 ops\scripts\windows\start-parent-frontend.bat
 ```
 
-Default local URL: `http://127.0.0.1:5174` unless `VITE_DEV_PORT` overrides.
-
 ## Configuration
 
-Authoritative field list and semantics: [`docs/architecture/CONFIGURATION_REFERENCE.md`](docs/architecture/CONFIGURATION_REFERENCE.md) (generated from [`apps/backend/courseeval_backend/core/config.py`](apps/backend/courseeval_backend/core/config.py)).
-
-Commonly touched variables:
-
-| Area | Variables |
-|------|-----------|
-| Core | `DATABASE_URL`, `SECRET_KEY`, `APP_ENV`, `REQUIRE_STRONG_SECRETS` |
-| Bootstrap | `INIT_ADMIN_*`, `INIT_DEFAULT_DATA`, `ALLOW_PUBLIC_REGISTRATION`, `PUBLIC_REGISTRATION_VALIDATE_CLASS_EXISTS` |
-| HTTP safety | `BACKEND_CORS_ORIGINS`, `TRUSTED_HOSTS` |
-| Process | `HOST`, `PORT`, `GUNICORN_WORKERS`, `LOG_LEVEL` |
-| LLM worker | `ENABLE_LLM_GRADING_WORKER`, `LLM_GRADING_WORKER_LEADER`, `LLM_GRADING_WORKER_POLL_SECONDS`, `LLM_GRADING_TASK_STALE_SECONDS`, `DEFAULT_LLM_API_KEY` |
-| Links in notifications | `FRONTEND_ADMIN_BASE_URL` |
-| Auth UX hardening | `FORGOT_PASSWORD_USERNAME_COOLDOWN_SECONDS`, `FORGOT_PASSWORD_MAX_REQUESTS_PER_IP_PER_HOUR` |
-| E2E only | `E2E_DEV_SEED_ENABLED`, `E2E_DEV_SEED_TOKEN`, `E2E_DEV_REQUIRE_ADMIN_JWT`, `E2E_DEV_ADMIN_USERNAME`, `E2E_DEV_ADMIN_PASSWORD` |
-
-Admin bootstrap and demo seed behavior: [`docs/operations/ADMIN_BOOTSTRAP.md`](docs/operations/ADMIN_BOOTSTRAP.md).
+Use [docs/architecture/CONFIGURATION_REFERENCE.md](docs/architecture/CONFIGURATION_REFERENCE.md)
+as the authoritative configuration reference for backend settings, frontend dev
+variables, bootstrap flags, and E2E-only environment variables.
 
 ## Testing
 
 Backend:
 
 ```bash
-python -m pytest
-python -m pytest tests/behavior -q
+python3 -m pytest
 ```
 
-Frontend E2E (from school app):
+School E2E:
 
 ```bash
 cd apps/web/school
@@ -168,55 +139,27 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Managed Playwright defaults use API port **8012** and UI port **3012** — see `apps/web/school/playwright.config.cjs`. Read [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md) before treating failures as regressions.
+For detailed validation workflow, PostgreSQL-aligned runs, Playwright
+environment setup, and suite maps, use:
 
-PostgreSQL-aligned validation (production-like DB semantics): see [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md) and [`docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`](docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
+- [docs/testing/DEVELOPMENT_AND_TESTING.md](docs/testing/DEVELOPMENT_AND_TESTING.md)
+- [docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md)
+- [docs/testing/TEST_SUITE_MAP.md](docs/testing/TEST_SUITE_MAP.md)
 
-The **`future-advanced-coverage*.spec.js`** files under `tests/e2e/web-school/` are normal runnable specs; indexing lives in [`docs/testing/TEST_SUITE_MAP.md`](docs/testing/TEST_SUITE_MAP.md).
+## Documentation
 
-## Documentation hub
+Use [docs/README.md](docs/README.md) as the documentation hub. It routes to
+architecture, product, operations, testing, governance, and agent-specific
+workflow docs.
 
-All detailed documentation: [`docs/README.md`](docs/README.md).
+## License and credits
 
-**New / central architecture entries**
-
-- [`docs/architecture/CORE_BUSINESS_FLOWS.md`](docs/architecture/CORE_BUSINESS_FLOWS.md) — submission → queue → worker → UI
-- [`docs/architecture/CONFIGURATION_REFERENCE.md`](docs/architecture/CONFIGURATION_REFERENCE.md) — env vars and Vite dev variables
-- [`docs/architecture/MAINTAINER_AGENT_GUIDE.md`](docs/architecture/MAINTAINER_AGENT_GUIDE.md) — grep keywords and risky modules
-- [`docs/architecture/TROUBLESHOOTING.md`](docs/architecture/TROUBLESHOOTING.md) — symptom-first index
-
-**Existing entry points**
-
-- [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md)
-- [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md)
-- [`docs/product/LLM_HOMEWORK_GUIDE.md`](docs/product/LLM_HOMEWORK_GUIDE.md)
-- [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md)
-- [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md)
-
-## Limitations and honesty
-
-- **Async grading** uses SQL queue rows + in-process worker threads; scaling limits differ from a dedicated worker fleet — see LLM guide.
-- **SQLite** (used in some tests / default Playwright DB) is not fully equivalent to PostgreSQL for concurrency and timestamp edge cases.
-- **E2E dev API** (`/api/e2e/*`) must never be enabled in production; defense in depth returns 404 when `expose_e2e_dev_api()` is false.
-- **Subject vs “course”**: persistence model uses `Subject`; UI copy often says “course”. Code and migrations use `Subject` — grep both when debugging enrollments.
-
-## Production notes
-
-- Set `APP_ENV=production` and use a strong `SECRET_KEY` (and non-placeholder `DATABASE_URL`).
-- Disable public registration unless you explicitly need student self-registration.
-- Keep only one grading-worker leader in multi-instance deployments (`LLM_GRADING_WORKER_LEADER`).
-- Complete deployment only after backend, frontends, health checks, and logs confirm the intended revision.
-
-See [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md).
-
-## License and attribution
-
-This project is open source under the Apache License 2.0. Copyright 2024 CourseEval. See [`LICENSE`](LICENSE).
+This project is open source under the Apache License 2.0. See
+[LICENSE](LICENSE).
 
 Original author and initial contributor: `joyapple`
 
 Subsequent contributors: `HaihuaXie`, `YinzhuCheng`
 
-Third-party components include FastAPI, Vue.js, Element Plus, SQLAlchemy, PostgreSQL, and ECharts, each under its own license.
-
-Bug reports and discussions: [GitHub Issues](https://github.com/joyapple/CourseEval/issues).
+Third-party components include FastAPI, Vue.js, Element Plus, SQLAlchemy,
+PostgreSQL, and ECharts, each under its own license.

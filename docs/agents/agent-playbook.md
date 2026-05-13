@@ -18,6 +18,38 @@ Skipping step 1 causes agents to “fix” generated artifacts or propose forbid
 
 ---
 
+## 1.1 Operational defaults for autonomous work
+
+Use these defaults unless the user gives a narrower instruction for the current
+task:
+
+1. Read `AGENTS.md`, `docs/README.md`, and the task-scoped docs before editing.
+2. Execute ordinary repository reads, edits, validation discovery, and Git
+   operations directly; ask only when an action is destructive,
+   privacy-sensitive, or materially outside the task boundary.
+3. Preserve documentation detail when it acts as process memory for future
+   agents. Shorten only when the removed material is obsolete, contradictory, or
+   duplicative enough to cause confusion.
+4. Update committed docs in the same change set when behavior, permissions,
+   configuration, routing, validation flow, or operational workflow changes.
+5. Keep machine-specific evidence local under `.agent-run/`; use
+   [`local-agent-workspace.md`](local-agent-workspace.md) for the workspace
+   contract.
+6. For repeated execution traps, prefer converting the lesson into a committed
+   script, skill, selector rule, or pitfall entry rather than leaving it as
+   ad hoc reasoning.
+7. Before committing, scan for private-path leaks and run the narrowest useful
+   validation starting with the diff selector in
+   `docs/testing/DEVELOPMENT_AND_TESTING.md`.
+
+Related policy docs:
+
+- [`../governance/repository-governance.md`](../governance/repository-governance.md)
+- [`../governance/agent-update-log.md`](../governance/agent-update-log.md)
+- [`local-agent-workspace.md`](local-agent-workspace.md)
+
+---
+
 ## 2. Standard workflow for a feature touch
 
 ### 2.1 Locate the slice

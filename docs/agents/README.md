@@ -17,3 +17,4 @@ test ledgers here. Keep those in `docs/product/`, `docs/architecture/`,
 Start with:
 
 - [agent-playbook.md](agent-playbook.md)
+- [local-agent-workspace.md](local-agent-workspace.md)

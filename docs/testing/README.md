@@ -26,9 +26,7 @@ that agents append and tooling parses live here.
    `../TEST_EXECUTION_PITFALLS.md`; keep CSV notes short and factual.
 5. Use UTF-8 and the repository safe-text workflow before editing these files
    from Windows PowerShell.
-6. When adding a new pitfall to Markdown, add a matching row to
-   `pitfall-index.csv` in the same change set. Use the most recent committed
-   hash as `source_commit_sha`.
-7. At the end of every repository-changing conversation round, append one row
-   to `agent-update-log.csv` before committing. Use the most recent committed
-   hash from the start of the round as `source_commit_sha`.
+6. Follow the pitfall recording policy in `TEST_EXECUTION_PITFALLS.md` when
+   adding or reclassifying a pitfall.
+7. Follow the per-round update-log policy in
+   `../governance/agent-update-log.md` when appending `agent-update-log.csv`.
