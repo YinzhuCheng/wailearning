@@ -118,6 +118,9 @@ Latest continuation boundary split:
 - Added `apps/backend/courseeval_backend/api/schema_defs/`.
 - Moved low-coupling API DTO groups for appearance, attendance,
   operations/settings, and points into `schema_defs` modules.
+- Latest follow-up moved notification request/response/sync DTOs into
+  `api/schema_defs/notifications.py` and kept all `api.schemas`
+  compatibility imports intact, including `NotificationBase`.
 - Kept `apps/backend/courseeval_backend/api/schemas.py` as the compatibility
   barrel for existing router, domain-helper, and test imports.
 - Updated `ops/scripts/dev/inventory_api_schemas.py` so inventory checks count
@@ -181,8 +184,42 @@ Latest continuation validation:
 - `.venv\Scripts\python.exe -m pytest tests/backend/roster/test_student_user_api_roster_sync.py -q`
   passed 11 tests.
 
-Before final commit/push, rerun the current minimal governance checks after
-this handoff edit:
+Latest notification schema split validation:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\schemas.py apps\backend\courseeval_backend\api\schema_defs\notifications.py ops\scripts\dev\inventory_api_schemas.py`
+  passed.
+- `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
+  passed with 149 local schema classes/enums, 37 compatibility re-exports, 186
+  public schema names, 24 importers, and 0 missing imports.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python ops/scripts/dev/check_api_surface_governance.py` passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details` passed with
+  existing large-file warnings; `api/schemas.py` is now 1685 lines.
+- `python ops/scripts/dev/check_schema_governance.py` passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported targeted/static validation as acceptable and no unmatched paths.
+- `python -m unittest tests.backend.manual.test_validation_selector -v` passed
+  72 tests after adding a notification schema selector regression.
+- `.venv\Scripts\python.exe -m pytest tests/behavior/test_notification_sync_api_edge_behavior.py -q`
+  passed 10 tests.
+- `.venv\Scripts\python.exe -m pytest tests/backend/homework/test_homework_llm_grading.py -q`
+  passed 16 tests.
+- `.venv\Scripts\python.exe -m pytest tests/backend/learning_notes/test_learning_notes_api.py -q`
+  passed 15 tests.
+- `.venv\Scripts\python.exe -m pytest tests/backend/roster/test_student_user_api_roster_sync.py -q`
+  passed 11 tests.
+- `python ops/scripts/dev/check_docs_governance.py` passed with existing
+  historical missing-path warnings.
+- `python ops/scripts/dev/check_repo_skills.py`,
+  `python ops/scripts/dev/check_repository_normalization.py`, and
+  `python ops/scripts/dev/check_structure_governance.py --details` passed.
+- `python ops/scripts/dev/check_text_encoding.py --skip-if-empty ...` scanned
+  8 changed text files with 0 decode errors and 0 suspicious files.
+- `git diff --check` passed with only Windows line-ending normalization
+  warnings for CSV/JSON files.
+
+For future handoff-only edits in this branch, the minimal governance rerun is:
 
 ```powershell
 python ops/scripts/dev/check_docs_governance.py
@@ -226,7 +263,8 @@ Recommended next work, in order:
 2. Continue `api/schemas.py` only as small DTO-group moves into
    `api/schema_defs/`, beginning with
    `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
-   and preserving the `api.schemas` compatibility barrel.
+   and preserving the `api.schemas` compatibility barrel. Notifications have
+   already been split; prefer another cohesive low-coupling group next.
 3. Consider extracting cohesive builders from `domains/seed/demo.py`, but only
    with seed/E2E and bootstrap-focused tests selected first.
 4. Consider splitting `llm_grading.py` only under a dedicated LLM/homework

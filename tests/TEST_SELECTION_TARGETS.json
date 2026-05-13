@@ -1214,6 +1214,7 @@
                     "apps/backend/courseeval_backend/domains/courses/access.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
                     "apps/backend/courseeval_backend/api/schema_defs/",
+                    "apps/backend/courseeval_backend/api/schema_defs/notifications.py",
                     "apps/web/admin/src/views/Layout.vue",
                     "apps/web/admin/src/views/Notifications.vue"
                 ],
