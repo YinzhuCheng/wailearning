@@ -19,6 +19,7 @@ from apps.backend.courseeval_backend.api.schema_defs.attendance import (
     AttendanceStatus,
     AttendanceUpdate,
 )
+from apps.backend.courseeval_backend.api.schema_defs.files import AttachmentUploadResponse
 from apps.backend.courseeval_backend.api.schema_defs.notifications import (
     NotificationBase,
     NotificationCreate,
@@ -498,13 +499,6 @@ class TokenData(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
-
-
-class AttachmentUploadResponse(BaseModel):
-    attachment_name: str
-    attachment_url: str
-    content_type: Optional[str] = None
-    size: int
 
 
 class ChangePasswordRequest(BaseModel):

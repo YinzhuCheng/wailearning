@@ -121,6 +121,10 @@ Latest continuation boundary split:
 - Latest follow-up moved notification request/response/sync DTOs into
   `api/schema_defs/notifications.py` and kept all `api.schemas`
   compatibility imports intact, including `NotificationBase`.
+- Current follow-up moved the file upload response DTO
+  `AttachmentUploadResponse` into `api/schema_defs/files.py` and kept
+  `api.schemas` compatibility imports intact for `files` and `subjects`
+  routers.
 - Kept `apps/backend/courseeval_backend/api/schemas.py` as the compatibility
   barrel for existing router, domain-helper, and test imports.
 - Updated `ops/scripts/dev/inventory_api_schemas.py` so inventory checks count
@@ -129,6 +133,9 @@ Latest continuation boundary split:
   `api/schema_defs/*.py` changes select schema/API-specific static and targeted
   checks instead of falling through to the broad backend-source conservative
   PostgreSQL recommendation.
+- Added `backend.files.attachment_api` so file schema/router changes select the
+  focused `tests/backend/files` API regression instead of relying on the LLM
+  attachment-format target.
 
 ## Validation State
 
@@ -219,6 +226,33 @@ Latest notification schema split validation:
 - `git diff --check` passed with only Windows line-ending normalization
   warnings for CSV/JSON files.
 
+Latest files schema split validation:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\schemas.py apps\backend\courseeval_backend\api\schema_defs\files.py`
+  passed.
+- `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
+  passed with 148 local schema classes/enums, 38 compatibility re-exports, 186
+  public schema names, 24 importers, and 0 missing imports.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python ops/scripts/dev/check_api_surface_governance.py` passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details` passed with
+  existing large-file warnings; `api/schemas.py` is now 1679 lines.
+- `python ops/scripts/dev/check_schema_governance.py` passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported targeted/static validation as acceptable and no unmatched paths.
+- `python -m unittest tests.backend.manual.test_validation_selector -v` passed
+  73 tests after adding a files schema selector regression.
+- `.venv\Scripts\python.exe -m pytest tests\backend\files -q` passed 5 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_llm_grading.py -q`
+  passed 16 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\learning_notes\test_learning_notes_api.py -q`
+  passed 15 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q`
+  passed 11 tests.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q`
+  passed 10 tests.
+
 For future handoff-only edits in this branch, the minimal governance rerun is:
 
 ```powershell
@@ -263,8 +297,10 @@ Recommended next work, in order:
 2. Continue `api/schemas.py` only as small DTO-group moves into
    `api/schema_defs/`, beginning with
    `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
-   and preserving the `api.schemas` compatibility barrel. Notifications have
-   already been split; prefer another cohesive low-coupling group next.
+   and preserving the `api.schemas` compatibility barrel. Notifications and
+   files have already been split; prefer another cohesive low-coupling group
+   next, with `dashboard` only after accounting for its `ScoreResponse`
+   dependency.
 3. Consider extracting cohesive builders from `domains/seed/demo.py`, but only
    with seed/E2E and bootstrap-focused tests selected first.
 4. Consider splitting `llm_grading.py` only under a dedicated LLM/homework
