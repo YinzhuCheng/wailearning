@@ -1098,11 +1098,63 @@ Validation for this round:
   `git diff --check` passed or only reported known CRLF normalization warnings
   for `tests/TEST_SELECTION_TARGETS.json`.
 
-Next local commit in the requested plan: extract one low-risk helper from
-`apps/backend/courseeval_backend/api/routers/homework.py`, keeping route paths,
-methods, auth, permissions, response models, status codes, student/teacher/admin
-visibility, submission/review/regrade behavior, queue behavior, notification
-behavior, and serialized field semantics unchanged.
+## Continuation Commit 3: Homework Submission Rules Helper Split
+
+The current continuation round completed the third requested local commit in
+the five-commit plan:
+
+- Added `apps/backend/courseeval_backend/domains/homework/submission_rules.py`.
+- Moved only the pure homework submission-attempt late detection and
+  counts-toward-final-score policy helpers out of `api/routers/homework.py`.
+- Kept `api/routers/homework.py` as the route path, method, auth, permission,
+  HTTP exception, request/response model, submission/review/regrade, queue,
+  notification, and serialization boundary.
+- Did not intentionally change student/teacher/admin visibility, late
+  submission policy semantics, final-score eligibility semantics, queue
+  behavior, notification behavior, status codes, response fields, or
+  browser-visible behavior.
+- Added helper-level pytest coverage for missing due dates, mixed timezone
+  late detection, and late-policy final-score eligibility.
+- Added selector coverage so
+  `apps/backend/courseeval_backend/domains/homework/submission_rules.py` is
+  treated like the existing homework serialization helper and selects the
+  homework/LLM backend behavior targets.
+
+Validation for this round:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\routers\homework.py apps\backend\courseeval_backend\domains\homework\submission_rules.py`
+  passed.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops\scripts\dev\lint_validation_registry.py` passed.
+- `python ops\scripts\dev\select_validation_targets.py --worktree --json`
+  reported no unmatched paths, with Playwright review target
+  `admin.e2e.homework_comment_cover_tier4` recommended because the homework
+  router changed; it was deferred as backend-helper-only review with no
+  browser-visible behavior change.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed 81 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_submission_rules.py -q`
+  passed 2 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_llm_grading.py -q`
+  passed 16 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_homework_lifecycle_llm_behavior.py -q`
+  passed 4 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\backend\courses\test_student_course_roster_behavior.py -q`
+  passed 14 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_course_roster_homework_edge_behavior.py -q`
+  passed 13 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\backend\e2e_dev\test_e2e_dev_api_hazard_tier.py -q`
+  passed 24 tests with existing Pydantic deprecation warnings.
+- `.venv\Scripts\python.exe -m pytest tests\security\test_security_regression.py -q`
+  passed 22 tests with existing Pydantic deprecation warnings.
+- An earlier aggregate pytest command for the same backend/behavior/security
+  target group timed out before returning a final status and was not used as
+  pass evidence; the targets were rerun individually as listed above.
+
+Next local commit in the requested plan: classify remaining normalization
+boundaries in durable docs, especially the now-smaller `api/routers/subjects.py`,
+the remaining `api/schemas.py` DTO groups, and the large-file backend/frontend
+gaps that should be deferred rather than split opportunistically.
 
 ## Branch And Validation State For Handoff
 

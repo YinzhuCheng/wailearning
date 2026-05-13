@@ -29,6 +29,10 @@ from apps.backend.courseeval_backend.domains.homework.cleanup import purge_homew
 from apps.backend.courseeval_backend.domains.homework.appeals import mark_appeal_notifications_acknowledged, notify_teachers_grade_appeal
 from apps.backend.courseeval_backend.domains.homework.notifications import notify_student_homework_graded
 from apps.backend.courseeval_backend.domains.homework.serialization import preview_text, task_call_log
+from apps.backend.courseeval_backend.domains.homework.submission_rules import (
+    attempt_counts_toward_final_score,
+    attempt_is_late,
+)
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 from apps.backend.courseeval_backend.llm_grading import (
     effective_score_display_zh,
@@ -207,21 +211,6 @@ def _ensure_homework_submission_open(
     if payload.attachment_url and (not submission or payload.attachment_url != submission.attachment_url):
         delete_attachment_file(payload.attachment_url)
     raise HTTPException(status_code=400, detail="已超过作业截止时间，不能再提交或修改。")
-
-
-def _is_late_attempt(homework: Homework, submitted_at: datetime) -> bool:
-    if not homework.due_date:
-        return False
-    due_date = homework.due_date
-    if due_date.tzinfo and not submitted_at.tzinfo:
-        submitted_at = submitted_at.replace(tzinfo=due_date.tzinfo)
-    elif submitted_at.tzinfo and not due_date.tzinfo:
-        due_date = due_date.replace(tzinfo=submitted_at.tzinfo)
-    return submitted_at > due_date
-
-
-def _counts_toward_final_score(homework: Homework, is_late: bool) -> bool:
-    return (not is_late) or (not homework.late_submission_affects_score)
 
 
 def _latest_task_for_attempt(db: Session, attempt_id: Optional[int]) -> Optional[HomeworkGradingTask]:
@@ -1034,8 +1023,8 @@ def submit_homework(
         raise HTTPException(status_code=400, detail="Please provide submission content or an attachment.")
 
     submitted_at = datetime.now(timezone.utc)
-    is_late = _is_late_attempt(homework, submitted_at)
-    counts_toward = _counts_toward_final_score(homework, is_late)
+    is_late = attempt_is_late(homework, submitted_at)
+    counts_toward = attempt_counts_toward_final_score(homework, is_late)
 
     submission.content = next_content
     submission.content_format = next_content_format

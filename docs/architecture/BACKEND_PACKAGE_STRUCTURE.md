@@ -214,6 +214,8 @@ The following extractions are already in place:
 - homework appeal and notification helpers moved into `domains/homework/appeals.py` and `domains/homework/notifications.py`
 - homework response preview and grading-task log serialization helpers moved
   into `domains/homework/serialization.py`
+- homework submission attempt late/counts-toward-final-score rules moved into
+  `domains/homework/submission_rules.py`
 - roster synchronization and reconciliation moved into `domains/roster/`
 - score composition and score-appeal helpers moved into `domains/scores/`
 - demo seed orchestration lives in `domains/seed/demo.py`, with demo teacher,

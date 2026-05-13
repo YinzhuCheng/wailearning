@@ -426,7 +426,11 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["unmatched_paths"], [])
 
     def test_homework_serialization_helper_selects_homework_llm_target(self):
-        payload = run_selector("--paths", "apps/backend/courseeval_backend/domains/homework/serialization.py")
+        payload = run_selector(
+            "--paths",
+            "apps/backend/courseeval_backend/domains/homework/serialization.py",
+            "apps/backend/courseeval_backend/domains/homework/submission_rules.py",
+        )
 
         ids = recommendation_ids(payload)
         self.assertIn("static.boundary_governance", ids)
