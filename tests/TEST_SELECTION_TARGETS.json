@@ -102,6 +102,7 @@
                         "ops/scripts/dev/validation_history.py",
                         "ops/scripts/dev/check_repo_skills.py",
                         "ops/scripts/dev/lint_validation_registry.py",
+                        "ops/scripts/dev/sync_testing_governance_docs.py",
                         "ops/scripts/dev/search_pitfalls.py",
                         "tests/backend/manual/test_validation_selector.py"
                     ]
@@ -125,6 +126,22 @@
                     ]
                 },
                 {
+                    "label": "testing governance doc sync",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/sync_testing_governance_docs.py",
+                        "--check"
+                    ]
+                },
+                {
+                    "label": "pitfall index line sync",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/sync_pitfall_index_lines.py",
+                        "--check"
+                    ]
+                },
+                {
                     "label": "runner smoke",
                     "argv": [
                         ".venv/Scripts/python.exe",
@@ -142,12 +159,18 @@
                     "ops/scripts/dev/validation_history.py",
                     "ops/scripts/dev/check_repo_skills.py",
                     "ops/scripts/dev/lint_validation_registry.py",
+                    "ops/scripts/dev/sync_testing_governance_docs.py",
+                    "ops/scripts/dev/sync_pitfall_index_lines.py",
                     "ops/scripts/dev/search_pitfalls.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
                     "tests/TEST_SELECTION_TARGETS.json",
                     "docs/testing/DEVELOPMENT_AND_TESTING.md",
                     "docs/testing/TEST_EXECUTION_LEDGER.md",
+                    "docs/testing/TEST_EXECUTION_TARGETS.md",
+                    "docs/testing/TEST_EXECUTION_RUNS.md",
+                    "docs/testing/TEST_EXECUTION_SUMMARY.md",
+                    "docs/testing/PITFALL_INDEX.md",
                     "docs/testing/test-execution-targets.csv",
                     "docs/testing/test-execution-runs.csv",
                     "docs/testing/test-execution-summary.csv",
@@ -161,6 +184,8 @@
                     "ops/scripts/dev/run_validation_profile.py",
                     "ops/scripts/dev/validation_history.py",
                     "ops/scripts/dev/lint_validation_registry.py",
+                    "ops/scripts/dev/sync_testing_governance_docs.py",
+                    "ops/scripts/dev/sync_pitfall_index_lines.py",
                     "ops/scripts/dev/search_pitfalls.py",
                     "ops/scripts/dev/migrate_test_ledgers_to_csv.py",
                     "tests/backend/manual/test_validation_selector.py",
@@ -228,6 +253,53 @@
             },
             "ledger_id": null,
             "notes": "This target does not execute Bash or contact services. Use it as a governance guardrail before Linux-only syntax/runtime checks."
+        },
+        {
+            "id": "static.ci_baseline_governance",
+            "category": "static-check",
+            "risk": "static",
+            "description": "Static governance checks for aligned CI runtime baselines and canonical install/test commands across GitHub Actions and reference external pipelines.",
+            "working_directory": ".",
+            "coverage_tags": [
+                "ci-baselines",
+                "validation-tooling",
+                "static"
+            ],
+            "commands": [
+                {
+                    "label": "compile CI baseline check",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "-m",
+                        "py_compile",
+                        "ops/scripts/dev/check_ci_baselines.py"
+                    ]
+                },
+                {
+                    "label": "CI baseline governance",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/check_ci_baselines.py"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    ".github/workflows/lightweight-validation.yml",
+                    "ops/ci/pr-pipeline.yml",
+                    "ops/ci/master-pipeline.yml",
+                    "ops/ci/branch-pipeline.yml",
+                    "ops/scripts/dev/check_ci_baselines.py",
+                    "docs/testing/CI_AND_VALIDATION.md"
+                ],
+                "globs": [
+                    ".github/workflows/*.yml",
+                    ".github/workflows/*.yaml",
+                    "ops/ci/*.yml"
+                ]
+            },
+            "ledger_id": null,
+            "notes": "Use this static target when CI entrypoints, runtime-version baselines, or CI validation docs change."
         },
         {
             "id": "static.repo_line_health",
@@ -766,6 +838,7 @@
             "risk": "targeted",
             "description": "School SPA production build. Catches Vue/Vite import, syntax, bundling, and asset pipeline regressions before browser E2E is interpreted.",
             "working_directory": "apps/web/school",
+            "required_capabilities": [],
             "coverage_tags": [
                 "admin-frontend",
                 "build",
@@ -887,6 +960,9 @@
             "risk": "targeted",
             "description": "Focused backend attachment extraction and classification tests for text, Office, zip, and RAR handling.",
             "working_directory": ".",
+            "required_capabilities": [
+                "rar-extraction"
+            ],
             "coverage_tags": [
                 "llm",
                 "attachments",
@@ -2176,6 +2252,9 @@
             "risk": "broad",
             "description": "PostgreSQL-only pytest package for dialect-specific schema, constraint, and transaction behavior.",
             "working_directory": ".",
+            "required_capabilities": [
+                "postgres-test-env"
+            ],
             "requires_review_reason": "Requires a live throwaway PostgreSQL database and TEST_DATABASE_URL; the selector does not provision it.",
             "coverage_tags": [
                 "postgres-schema",
@@ -2220,6 +2299,9 @@
             "risk": "full",
             "description": "Full pytest tree under PostgreSQL, intended for release-quality backend validation and zero PostgreSQL-only skips.",
             "working_directory": ".",
+            "required_capabilities": [
+                "postgres-test-env"
+            ],
             "requires_review_reason": "Expensive environment-dependent full backend profile; requires PostgreSQL and supported attachment extractors before it can prove zero-skip validation.",
             "risk_escalation": "Required or strongly recommended for schema, auth/security, DB reset, bootstrap, or broad backend changes.",
             "coverage_tags": [
@@ -2267,8 +2349,12 @@
             "id": "school.e2e.full",
             "category": "school-playwright",
             "risk": "full",
+            "policy_requirement": "required-review",
             "description": "Full school Playwright E2E suite under apps/web/school. Recommended when shared E2E harness, Playwright config, global setup, seed/reset, auth, or broad frontend routing changes make targeted evidence too weak.",
             "working_directory": "apps/web/school",
+            "required_capabilities": [
+                "playwright-managed"
+            ],
             "requires_review_reason": "High-cost browser profile with local browser, port, seed/reset, backend, and frontend dependencies; run serially unless isolated ports are configured.",
             "risk_escalation": "Required or strongly recommended for Playwright harness, global setup, admin router, auth layout, seed/reset, or broad frontend navigation changes.",
             "coverage_tags": [

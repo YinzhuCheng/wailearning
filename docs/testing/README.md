@@ -14,6 +14,43 @@ that agents append and tooling parses live here.
 | `pitfall-index.csv` | Structured index for pitfalls recorded in Markdown docs. New pitfalls use increasing positive `pitfall_sequence`; legacy Markdown-only entries may use `0` and `Null`. |
 | `agent-update-log.csv` | One row per user-visible repository-changing conversation round, starting at sequence 1. Summaries stay short; details remain in docs, ledgers, and commits. |
 
+## Source Of Truth
+
+- Target definitions:
+  `tests/TEST_SELECTION_TARGETS.json` is the machine routing source for selector
+  policy and target commands. `test-execution-targets.csv` is the durable
+  per-target ledger for observed metadata and counters.
+- Execution history:
+  `test-execution-runs.csv` is the append-only source of observed validation
+  attempts.
+- Pitfall index:
+  `pitfall-index.csv` is the structured source for searchable pitfall metadata,
+  while the canonical explanatory bodies stay in
+  `TEST_EXECUTION_PITFALLS.md` and the narrower topic-route pitfall docs.
+- Coverage summary:
+  `test-execution-summary.csv` is the rolling concise summary source.
+  Dated narrative reports such as `TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`
+  are historical evidence, not rolling source tables.
+
+## Generated Views
+
+These small explainer entrypoints are generated from
+`ops/scripts/dev/sync_testing_governance_docs.py` and should not be edited by
+hand:
+
+- `TEST_EXECUTION_LEDGER.md`
+- `TEST_EXECUTION_TARGETS.md`
+- `TEST_EXECUTION_RUNS.md`
+- `TEST_EXECUTION_SUMMARY.md`
+- `PITFALL_INDEX.md`
+
+Run:
+
+```bash
+python ops/scripts/dev/sync_testing_governance_docs.py
+python ops/scripts/dev/sync_testing_governance_docs.py --check
+```
+
 ## Topic Routes
 
 Use these when you already know the failure class and want a narrower entry

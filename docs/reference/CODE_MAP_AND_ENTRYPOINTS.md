@@ -146,7 +146,7 @@ Detail: [`product/PARENT_PORTAL.md`](../product/PARENT_PORTAL.md).
 
 | Path | Role |
 |------|------|
-| [`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml) | Reference CI: `python3 -m pytest -q` |
+| [`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml) | Reference CI: Python `3.11`, `python -m pip install -r requirements.txt`, `python -m pytest -q` |
 | [`ops/systemd/courseeval-backend.service`](../../ops/systemd/courseeval-backend.service) | systemd unit template |
 | [`ops/nginx/courseeval.example.conf`](../../ops/nginx/courseeval.example.conf) | Example nginx |
 | [`ops/scripts/deploy_backend.sh`](../../ops/scripts/deploy_backend.sh) | Deploy helper |

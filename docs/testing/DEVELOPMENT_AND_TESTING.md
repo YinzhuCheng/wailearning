@@ -498,9 +498,9 @@ This repository stores example Alibaba DevOps-style pipeline YAML under
 PR pipeline runs:
 
 ```bash
-python3 -m pip install --upgrade pip
-pip3 install -r requirements.txt
-python3 -m pytest -q
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pytest -q
 ```
 
 The repository also has a lightweight GitHub Actions entrypoint at
@@ -513,7 +513,8 @@ Current GitHub Actions scope:
 
 - `Python selector tooling`: validates selector scripts and
   `tests/TEST_SELECTION_TARGETS.json`, runs
-  `python -m unittest tests.backend.manual.test_validation_selector -v`, and
+  `python -m unittest tests.backend.manual.test_validation_selector -v`,
+  checks generated testing-governance docs and pitfall-index line sync, and
   uploads `validation-selection.json` for pull requests;
 - `Backend quick pytest`: runs default quick backend `pytest`;
 - `School frontend build`: runs `npm ci` plus `npm run build` for

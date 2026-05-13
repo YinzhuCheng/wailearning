@@ -50,6 +50,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default="docs/testing/pitfall-index.csv",
         help="Pitfall index path relative to repo root.",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Fail instead of rewriting when pitfall-index.csv line numbers are stale.",
+    )
     return parser.parse_args(argv)
 
 
@@ -65,6 +70,7 @@ def main(argv: list[str]) -> int:
         rows = list(csv.DictReader(handle))
 
     updated_rows: list[dict[str, str]] = []
+    changed = False
     for row in rows:
         document_path = str(row.get("document_path") or "").strip().replace("\\", "/")
         heading = str(row.get("heading") or "").strip()
@@ -76,8 +82,17 @@ def main(argv: list[str]) -> int:
             raise SystemExit(f"document_path does not exist: {document_path}")
         line_number = find_heading_line(doc_path, heading)
         new_row = {field: str(row.get(field, "") or "") for field in FIELDS}
+        if new_row.get("line", "") != str(line_number):
+            changed = True
         new_row["line"] = str(line_number)
         updated_rows.append(new_row)
+
+    if args.check:
+        if changed:
+            print(f"pitfall index line sync check failed: {index_path.relative_to(repo_root).as_posix()} has stale line references")
+            return 1
+        print(f"pitfall index line sync check passed: rows={len(updated_rows)}")
+        return 0
 
     with index_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS)

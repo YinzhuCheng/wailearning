@@ -43,6 +43,18 @@ RISK_ORDER = {
     "broad": 2,
     "full": 3,
 }
+DEFAULT_POLICY_REQUIREMENT_BY_CATEGORY = {
+    "static-check": "required",
+    "backend-pytest": "required",
+    "behavior-pytest": "required",
+    "frontend-build": "required",
+    "frontend-node-test": "required",
+    "security-pytest": "required-review",
+    "postgres-pytest": "required-review",
+    "school-playwright": "recommended",
+    "parent-playwright": "recommended",
+    "full-suite": "required-review",
+}
 
 
 @dataclass(frozen=True)
@@ -69,6 +81,18 @@ class Recommendation:
     @property
     def risk(self) -> str:
         return str(self.target.get("risk", "targeted"))
+
+    @property
+    def policy_requirement(self) -> str:
+        category = str(self.target.get("category", ""))
+        return str(
+            self.target.get("policy_requirement")
+            or DEFAULT_POLICY_REQUIREMENT_BY_CATEGORY.get(category, "recommended")
+        )
+
+    @property
+    def policy_class(self) -> str:
+        return str(self.target.get("policy_class") or self.target.get("category") or "unknown")
 
 
 def normalize_path(path: str) -> str:
@@ -364,6 +388,48 @@ def build_non_full_validation_summary(
     }
 
 
+def build_required_validation_summary(recommendations: list[Recommendation]) -> dict[str, Any]:
+    def serialize(items: list[Recommendation]) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": item.target_id,
+                "category": item.target.get("category"),
+                "risk": item.risk,
+                "policy_requirement": item.policy_requirement,
+                "policy_class": item.policy_class,
+                "requires_review_reason": item.target.get("requires_review_reason"),
+                "matched_paths": item.matched_paths,
+                "reasons": item.reasons,
+            }
+            for item in items
+        ]
+
+    required_targets = [item for item in recommendations if item.policy_requirement == "required"]
+    required_review_targets = [item for item in recommendations if item.policy_requirement == "required-review"]
+    optional_targets = [item for item in recommendations if item.policy_requirement == "recommended"]
+
+    if required_review_targets:
+        status = "review_required"
+        reason = "review-required validation target(s) were selected for this diff"
+    elif required_targets:
+        status = "auto_runnable_required"
+        reason = "auto-runnable required validation target(s) were selected for this diff"
+    else:
+        status = "no_required_targets"
+        reason = "the current diff selected only recommended validation targets"
+
+    required_policy_classes = sorted({item.policy_class for item in [*required_targets, *required_review_targets]})
+
+    return {
+        "status": status,
+        "reason": reason,
+        "required_policy_classes": required_policy_classes,
+        "required_targets": serialize(required_targets),
+        "required_review_targets": serialize(required_review_targets),
+        "optional_targets": serialize(optional_targets),
+    }
+
+
 def ensure_recommendation(
     recommendations: dict[str, Recommendation],
     target_by_id: dict[str, dict[str, Any]],
@@ -503,16 +569,20 @@ def build_json_result(
     notes: list[str],
 ) -> dict[str, Any]:
     non_full_summary = build_non_full_validation_summary(recommendations, unmatched, changed_paths)
+    required_validation = build_required_validation_summary(recommendations)
     return {
         "registry_version": registry.get("version"),
         "selection_policy": registry.get("defaults", {}).get("selection_policy"),
         "non_full_validation": non_full_summary,
+        "required_validation": required_validation,
         "changed_paths": [{"status": item.status, "path": item.path} for item in changed_paths],
         "recommendations": [
             {
                 "id": item.target_id,
                 "category": item.target.get("category"),
                 "risk": item.risk,
+                "policy_requirement": item.policy_requirement,
+                "policy_class": item.policy_class,
                 "description": item.target.get("description"),
                 "working_directory": item.target.get("working_directory"),
                 "commands": item.target.get("commands", []),
@@ -553,6 +623,7 @@ def render_markdown(
     notes: list[str],
 ) -> str:
     non_full_summary = build_non_full_validation_summary(recommendations, unmatched, changed_paths)
+    required_validation = build_required_validation_summary(recommendations)
     lines: list[str] = []
     lines.append("# Validation Target Recommendation")
     lines.append("")
@@ -560,6 +631,8 @@ def render_markdown(
     lines.append(f"Selection policy: `{registry.get('defaults', {}).get('selection_policy', 'unknown')}`")
     lines.append(f"Non-full validation status: `{non_full_summary['status']}`")
     lines.append(f"Non-full validation reason: {non_full_summary['reason']}")
+    lines.append(f"Required validation status: `{required_validation['status']}`")
+    lines.append(f"Required validation reason: {required_validation['reason']}")
     lines.append("")
 
     lines.append("## Changed Paths")
@@ -581,6 +654,8 @@ def render_markdown(
             lines.append("")
             lines.append(f"- Category: `{item.target.get('category')}`")
             lines.append(f"- Risk: `{item.risk}`")
+            lines.append(f"- Policy requirement: `{item.policy_requirement}`")
+            lines.append(f"- Policy class: `{item.policy_class}`")
             lines.append(f"- Working directory: `{item.target.get('working_directory')}`")
             if item.target.get("coverage_tags"):
                 tags = ", ".join(f"`{tag}`" for tag in item.target.get("coverage_tags", []))
@@ -633,6 +708,17 @@ def render_markdown(
             if item.target.get("notes"):
                 lines.append(f"- Notes: {item.target.get('notes')}")
             lines.append("")
+
+    lines.append("## Required Validation Policy")
+    lines.append("")
+    lines.append(f"- Status: `{required_validation['status']}`")
+    lines.append(f"- Reason: {required_validation['reason']}")
+    if required_validation["required_policy_classes"]:
+        classes = ", ".join(f"`{value}`" for value in required_validation["required_policy_classes"])
+        lines.append(f"- Required policy classes: {classes}")
+    else:
+        lines.append("- Required policy classes: none")
+    lines.append("")
 
     lines.append("## Fallback Notes")
     lines.append("")

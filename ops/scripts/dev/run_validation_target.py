@@ -30,6 +30,7 @@ from validation_history import (
     changed_paths_signature,
     git_worktree_changed_paths,
 )
+from check_validation_capabilities import build_capabilities, evaluate_target_capabilities, required_capability_names
 
 
 DEFAULT_REGISTRY = "tests/TEST_SELECTION_TARGETS.json"
@@ -316,6 +317,10 @@ def target_needs_playwright_preflight(target: dict[str, Any]) -> bool:
     return target.get("category") == "school-playwright"
 
 
+def target_needs_capability_preflight(target: dict[str, Any]) -> bool:
+    return bool(required_capability_names(target))
+
+
 def parse_junit_xml(path: Path, repo_root: Path | None = None) -> dict[str, Any] | None:
     if not path.exists():
         return None
@@ -581,6 +586,62 @@ def run_playwright_preflight(
     )
 
 
+def run_capability_preflight(
+    *,
+    repo_root: Path,
+    artifact_dir: Path,
+    target: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    label = "validation capabilities"
+    stdout_path = artifact_dir / "00-validation-capabilities-stdout.log"
+    stderr_path = artifact_dir / "00-validation-capabilities-stderr.log"
+    report = build_capabilities(repo_root, include_private=False)
+    stdout_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    evaluations = evaluate_target_capabilities(report, target)
+    failing = [item for item in evaluations if str(item.get("status")) == "fail"]
+    warnings = [item for item in evaluations if str(item.get("status")) == "warn"]
+    if failing:
+        result = RESULT_BLOCKED
+        failure_class = "environment"
+        return_code = 1
+        summary = "required capability is unavailable: " + "; ".join(
+            f"{item['name']} ({item['reason']})" for item in failing
+        )
+        stderr_path.write_text(summary + "\n", encoding="utf-8")
+    else:
+        result = RESULT_PASSED
+        failure_class = None
+        return_code = 0
+        if warnings:
+            summary = "capability warnings: " + "; ".join(
+                f"{item['name']} ({item['reason']})" for item in warnings
+            )
+            stderr_path.write_text(summary + "\n", encoding="utf-8")
+        else:
+            summary = ""
+            stderr_path.write_text("", encoding="utf-8")
+
+    record = make_command_record(
+        repo_root=repo_root,
+        label=label,
+        execution_argv=[sys.executable, "ops/scripts/dev/check_validation_capabilities.py", "--json"],
+        raw_argv=[sys.executable, "ops/scripts/dev/check_validation_capabilities.py", "--json"],
+        working_directory=repo_root,
+        result=result,
+        failure_class=failure_class,
+        return_code=return_code,
+        duration=0.0,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+    )
+    if summary:
+        record["summary"] = summary
+    record["required_capabilities"] = evaluations
+    record["capability_report"] = report
+    return record, report
+
+
 def summarize_stdout(path: Path) -> str:
     if not path.exists():
         return ""
@@ -621,6 +682,7 @@ def run_target(args: argparse.Namespace) -> int:
     overall_result = RESULT_PASSED
     failure_class: str | None = None
     notes: list[str] = []
+    capability_report: dict[str, Any] | None = None
 
     changed_paths, changed_path_notes = resolve_changed_paths(repo_root, args)
     notes.extend(changed_path_notes)
@@ -629,6 +691,18 @@ def run_target(args: argparse.Namespace) -> int:
         overall_result = RESULT_BLOCKED
         failure_class = "orchestrator"
         notes.append("target has no commands")
+
+    if target_needs_capability_preflight(target) and command_should_be_preflighted(args) and commands:
+        capability_record, capability_report = run_capability_preflight(
+            repo_root=repo_root,
+            artifact_dir=artifact_dir,
+            target=target,
+        )
+        command_records.append(capability_record)
+        if capability_record["result"] != RESULT_PASSED:
+            overall_result = capability_record["result"]
+            failure_class = capability_record["failure_class"]
+            commands = []
 
     if target_needs_playwright_preflight(target) and command_should_be_preflighted(args) and commands:
         preflight_record = run_playwright_preflight(
@@ -731,6 +805,7 @@ def run_target(args: argparse.Namespace) -> int:
         "summary": summary,
         "notes": "; ".join(sorted(set(notes))),
         "commands": command_records,
+        "capability_report": capability_report,
         "artifact_dir": repo_placeholder_path(repo_root, artifact_dir),
         "private_paths_redacted": True,
     }

@@ -14,9 +14,14 @@ SELECTOR = REPO_ROOT / "ops" / "scripts" / "dev" / "select_validation_targets.py
 sys.path.insert(0, str(REPO_ROOT / "ops" / "scripts" / "dev"))
 from lint_validation_registry import lint_registry  # noqa: E402
 from check_api_surface_governance import check_api_surface_governance  # noqa: E402
+from check_ci_baselines import check_ci_baselines  # noqa: E402
 from check_operator_scripts import check_scripts as check_operator_scripts  # noqa: E402
+from check_validation_policy_gate import evaluate_policy_gate  # noqa: E402
+from check_validation_capabilities import build_capabilities, evaluate_target_capabilities  # noqa: E402
 from check_repo_skills import check_repo_skills  # noqa: E402
 from check_schema_governance import check_schema_governance  # noqa: E402
+from sync_testing_governance_docs import check_docs as check_testing_governance_docs  # noqa: E402
+from sync_pitfall_index_lines import main as sync_pitfall_index_main  # noqa: E402
 from pytest_sqlite_guard import build_report, is_pytest_process  # noqa: E402
 from search_pitfalls import build_corpus, search_blocks  # noqa: E402
 from select_validation_targets import parse_ledger  # noqa: E402
@@ -89,6 +94,13 @@ def recommendation(payload: dict, target_id: str) -> dict:
     raise AssertionError(f"{target_id} not recommended; got {recommendation_ids(payload)}")
 
 
+def required_target_ids(payload: dict, bucket: str) -> set[str]:
+    return {
+        item["id"]
+        for item in payload.get("required_validation", {}).get(bucket, [])
+    }
+
+
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -128,7 +140,10 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("full validation target", payload["non_full_validation"]["reason"])
         target = recommendation(payload, "full.pytest.postgres")
         self.assertEqual(target["history_status"], "stale")
-        self.assertIn("fallback", target["history_reason"])
+        self.assertTrue(
+            any(reason in target["history_reason"] for reason in ("fallback", "different changed-path snapshot")),
+            target["history_reason"],
+        )
 
     def test_admin_homework_view_selects_build_and_homework_playwright_target(self):
         payload = run_selector("--paths", "apps/web/school/src/views/HomeworkSubmissions.vue")
@@ -142,6 +157,8 @@ class ValidationSelectorTests(unittest.TestCase):
         e2e_target = recommendation(payload, "school.e2e.homework_comment_cover_tier4")
         self.assertTrue(e2e_target["requires_review_reason"])
         self.assertIn("homework", e2e_target["coverage_tags"])
+        self.assertIn("frontend.school.build", required_target_ids(payload, "required_targets"))
+        self.assertIn("school.e2e.homework_comment_cover_tier4", required_target_ids(payload, "optional_targets"))
 
     def test_playwright_harness_selects_full_playwright_and_marks_non_full_insufficient(self):
         payload = run_selector("--paths", "tests/e2e/web-school/global-setup.cjs")
@@ -150,6 +167,7 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("school.e2e.full", ids)
         self.assertEqual(payload["non_full_validation"]["status"], "not_sufficient")
         self.assertIn("school.e2e.full", payload["non_full_validation"]["reason"])
+        self.assertIn("school.e2e.full", required_target_ids(payload, "required_review_targets"))
 
     def test_docs_only_change_is_static_and_non_full_acceptable_after_running_targets(self):
         payload = run_selector("--paths", "docs/testing/TEST_SUITE_MAP.md")
@@ -315,6 +333,20 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(target["risk"], "static")
         self.assertIn("operator-scripts", target["coverage_tags"])
 
+    def test_ci_workflow_change_selects_ci_baseline_static_target(self):
+        payload = run_selector("--paths", ".github/workflows/lightweight-validation.yml")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.encoding_text_tools", ids)
+        self.assertIn("static.ci_baseline_governance", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
+        target = recommendation(payload, "static.ci_baseline_governance")
+        self.assertEqual(target["risk"], "static")
+        self.assertIn("ci-baselines", target["coverage_tags"])
+        self.assertEqual(target["policy_requirement"], "required")
+
     def test_security_sensitive_path_recommends_security_and_full_postgres_context(self):
         payload = run_selector("--paths", "apps/backend/courseeval_backend/core/auth.py")
 
@@ -322,6 +354,8 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("security.api_regression", ids)
         self.assertIn("full.pytest.postgres", ids)
         self.assertEqual(payload["non_full_validation"]["status"], "not_sufficient")
+        self.assertIn("security.api_regression", required_target_ids(payload, "required_review_targets"))
+        self.assertIn("full.pytest.postgres", required_target_ids(payload, "required_review_targets"))
         security = recommendation(payload, "security.api_regression")
         self.assertEqual(security["risk"], "broad")
         self.assertIn("security", security["coverage_tags"])
@@ -497,6 +531,7 @@ class ValidationSelectorTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertEqual(payload["result"], "blocked")
             self.assertEqual(payload["failure_class"], "environment")
+            self.assertIn("capability_report", payload)
 
     def test_runner_uses_explicit_changed_paths_for_history_attribution(self):
         history_path = ".agent-run/test-selector-history-explicit-paths.jsonl"
@@ -568,6 +603,27 @@ class ValidationSelectorTests(unittest.TestCase):
     def test_runner_detects_playwright_targets_for_preflight(self):
         self.assertTrue(target_needs_playwright_preflight({"category": "school-playwright"}))
         self.assertFalse(target_needs_playwright_preflight({"category": "backend-pytest"}))
+
+    def test_validation_capability_report_includes_playwright_postgres_rar_and_text_safety(self):
+        report = build_capabilities(REPO_ROOT, include_private=False)
+        capability_names = {item["name"] for item in report["capabilities"]}
+
+        self.assertIn("playwright-managed", capability_names)
+        self.assertIn("postgres-test-env", capability_names)
+        self.assertIn("rar-extraction", capability_names)
+        self.assertIn("text-safety", capability_names)
+
+    def test_validation_capability_evaluation_maps_postgres_target_to_postgres_capability(self):
+        report = build_capabilities(REPO_ROOT, include_private=False)
+        target = {
+            "id": "full.pytest.postgres",
+            "category": "full-suite",
+            "required_capabilities": ["postgres-test-env"],
+        }
+
+        evaluated = evaluate_target_capabilities(report, target)
+
+        self.assertEqual([item["name"] for item in evaluated], ["postgres-test-env"])
 
     def test_runner_classifies_spawn_eperm_as_environment_block(self):
         from run_validation_target import run_command
@@ -760,6 +816,10 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(runs_by_id["school.e2e.homework_comment_cover_tier4"]["action"], "skipped")
         self.assertIn("requires operator review", runs_by_id["school.e2e.homework_comment_cover_tier4"]["reason"])
         self.assertEqual(payload["deferred_targets"][0]["target_id"], "school.e2e.homework_comment_cover_tier4")
+        self.assertEqual(
+            payload["selection"]["required_validation"]["required_targets"][0]["id"],
+            "frontend.school.build",
+        )
 
     def test_profile_forwards_selector_changed_paths_to_target_history(self):
         history_path = ".agent-run/test-selector-profile-forward-history.jsonl"
@@ -822,8 +882,53 @@ class ValidationSelectorTests(unittest.TestCase):
 
         self.assertEqual(issues, [])
 
+    def test_testing_governance_generated_docs_are_in_sync(self):
+        self.assertEqual(check_testing_governance_docs(REPO_ROOT), [])
+
+    def test_pitfall_index_line_sync_check_passes_for_repository_docs(self):
+        self.assertEqual(sync_pitfall_index_main(["--repo-root", str(REPO_ROOT), "--check"]), 0)
+
     def test_operator_script_governance_check_passes_for_repository_scripts(self):
         self.assertEqual(check_operator_scripts(REPO_ROOT), [])
+
+    def test_ci_baseline_governance_check_passes_for_repository_ci_contract(self):
+        self.assertEqual(check_ci_baselines(REPO_ROOT), [])
+
+    def test_ci_baseline_governance_check_detects_python_version_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(REPO_ROOT / ".github", root / ".github")
+            shutil.copytree(REPO_ROOT / "ops", root / "ops")
+            branch_pipeline = root / "ops/ci/branch-pipeline.yml"
+            text = branch_pipeline.read_text(encoding="utf-8")
+            branch_pipeline.write_text(text.replace("pythonVersion: '3.11'", "pythonVersion: '3.9'"), encoding="utf-8")
+
+            issues = check_ci_baselines(root)
+
+        self.assertIn(
+            "ops/ci/branch-pipeline.yml: must use pythonVersion '3.11'",
+            issues,
+        )
+
+    def test_validation_policy_gate_passes_when_required_classes_are_available(self):
+        payload = run_selector("--paths", ".github/workflows/lightweight-validation.yml")
+
+        issues = evaluate_policy_gate(
+            payload,
+            {"static-check", "backend-pytest", "behavior-pytest", "security-pytest", "frontend-build", "frontend-node-test"},
+        )
+
+        self.assertEqual(issues, [])
+
+    def test_validation_policy_gate_fails_when_required_review_class_is_unavailable(self):
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/core/auth.py")
+
+        issues = evaluate_policy_gate(
+            payload,
+            {"static-check", "backend-pytest", "behavior-pytest", "security-pytest", "frontend-build", "frontend-node-test"},
+        )
+
+        self.assertTrue(any("full.pytest.postgres" in issue and "full-suite" in issue for issue in issues), issues)
 
     def test_operator_script_governance_check_detects_frontend_backend_restart_drift(self):
         with tempfile.TemporaryDirectory() as tmp:

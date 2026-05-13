@@ -22,8 +22,10 @@ Current lightweight workflow:
 
 Current scope:
 
+- CI baseline governance for runtime-version and command drift;
 - selector/tooling checks;
 - diff-based validation recommendation artifacts for pull requests;
+- selector policy gating against the lightweight CI lane capabilities;
 - quick backend `pytest`;
 - school frontend build;
 - parent frontend build.
@@ -42,11 +44,21 @@ Cloud pipeline examples remain under:
 
 - [`ops/ci/`](../../ops/ci/)
 
-The reference PR pipeline uses:
+Current aligned baseline:
+
+- Python `3.11` across GitHub Actions backend jobs and `ops/ci/*.yml`;
+- Node `20` across GitHub Actions frontend jobs;
+- canonical backend install/test commands:
 
 ```bash
-python3 -m pytest -q
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pytest -q
 ```
+
+The baseline drift guard lives in:
+
+- [`ops/scripts/dev/check_ci_baselines.py`](../../ops/scripts/dev/check_ci_baselines.py)
 
 ## Local Validation Entry
 
@@ -75,6 +87,26 @@ validation. A green lightweight workflow does **not** by itself prove:
 
 Use local/manual validation to close those gaps when the task scope requires
 it.
+
+On pull requests, the selector output is now also checked against the
+lightweight lane's available validation classes. If the diff requires a class
+that the lane does not provide, such as `full-suite` / PostgreSQL-heavy
+validation, the policy gate fails even though the lightweight jobs themselves
+remain intentionally narrow.
+
+For local or future CI environment diagnosis, prefer the shared capability
+probe first:
+
+```bash
+python ops/scripts/dev/check_validation_capabilities.py --json
+```
+
+This report centralizes Playwright managed-server readiness, PostgreSQL test
+environment readiness, RAR extractor availability, and text-safety warnings.
+
+For the small testing-ledger explainer docs, the generated source is:
+
+- [`ops/scripts/dev/sync_testing_governance_docs.py`](../../ops/scripts/dev/sync_testing_governance_docs.py)
 
 ## Agent Reporting Rule
 

@@ -30,6 +30,7 @@ ALLOWED_CATEGORIES = {
     "parent-playwright",
     "full-suite",
 }
+ALLOWED_POLICY_REQUIREMENTS = {"required", "required-review", "recommended"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -128,6 +129,9 @@ def lint_registry(repo_root: Path, registry_path: str, ledger_path: str) -> list
         risk = str(target.get("risk") or "")
         category = str(target.get("category") or "")
         working_directory = str(target.get("working_directory") or "")
+        policy_requirement = target.get("policy_requirement")
+        policy_class = target.get("policy_class")
+        required_capabilities = target.get("required_capabilities")
 
         if not target.get("id"):
             issues.append(f"{target_id}: missing `id`")
@@ -135,6 +139,19 @@ def lint_registry(repo_root: Path, registry_path: str, ledger_path: str) -> list
             issues.append(f"{target_id}: invalid category `{category}`")
         if risk not in ALLOWED_RISKS:
             issues.append(f"{target_id}: invalid risk `{risk}`")
+        if policy_requirement is not None and (
+            not isinstance(policy_requirement, str) or policy_requirement not in ALLOWED_POLICY_REQUIREMENTS
+        ):
+            issues.append(f"{target_id}: invalid policy_requirement `{policy_requirement}`")
+        if policy_requirement == "required-review" and not target.get("requires_review_reason"):
+            issues.append(f"{target_id}: required-review targets must define requires_review_reason")
+        if policy_class is not None and (not isinstance(policy_class, str) or not policy_class.strip()):
+            issues.append(f"{target_id}: policy_class must be a non-empty string when present")
+        if required_capabilities is not None and (
+            not isinstance(required_capabilities, list)
+            or not all(isinstance(value, str) and value.strip() for value in required_capabilities)
+        ):
+            issues.append(f"{target_id}: required_capabilities must be a string list when present")
         if not working_directory:
             issues.append(f"{target_id}: missing `working_directory`")
         elif not (repo_root / working_directory).exists():

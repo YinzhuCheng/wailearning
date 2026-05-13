@@ -108,9 +108,11 @@ Approximate sequence:
 |-------|---------|
 | Single file | `python3 -m pytest path/to/test_file.py -q` |
 | Backend subset | `python3 -m pytest tests/backend -q` |
-| CI parity | `python3 -m pytest -q` (see [`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml)) |
+| CI parity | `python -m pytest -q` with Python `3.11` (see [`ops/ci/pr-pipeline.yml`](../../ops/ci/pr-pipeline.yml)) |
 
-**Interpreter:** Linux/macOS automation often lacks `python` on PATH; prefer **`python3`** (CI uses `python3` explicitly).
+**Interpreter:** Linux/macOS automation can lack `python` on PATH, so `python3`
+may still be useful locally. The repository CI baseline itself is now Python
+`3.11` plus the canonical `python -m ...` form.
 
 ### 4.2 Environment variables tests rely on
 
