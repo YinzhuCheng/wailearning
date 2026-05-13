@@ -3478,3 +3478,74 @@ def test_hard122_homework_appeal_system_notification_targets_teacher_users_only(
             assert row.notification_kind == "grade_appeal"
     finally:
         db.close()
+
+
+def test_hard123_teacher_can_publish_course_notification_to_linked_secondary_class(client: TestClient):
+    teacher = _create_teacher("notif_multiclass_publish_teacher")
+    primary_class_id = _create_class("security-notif-multiclass-primary")
+    linked_class_id = _create_class("security-notif-multiclass-linked")
+    subject_id = _create_subject("Notification multiclass publish", int(teacher["user_id"]), primary_class_id)
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=subject_id,
+                class_id=linked_class_id,
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.post(
+        "/api/notifications",
+        headers=headers,
+        json={
+            "title": "hard123 linked class publish",
+            "content": "course teacher should be able to target any linked class on the course",
+            "class_id": linked_class_id,
+            "subject_id": subject_id,
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert _notification_scope(int(r.json()["id"]))[:2] == (subject_id, linked_class_id)
+
+
+def test_hard124_teacher_can_retarget_course_notification_to_linked_secondary_class(client: TestClient):
+    teacher = _create_teacher("notif_multiclass_retarget_teacher")
+    primary_class_id = _create_class("security-notif-multiclass-retarget-primary")
+    linked_class_id = _create_class("security-notif-multiclass-retarget-linked")
+    subject_id = _create_subject("Notification multiclass retarget", int(teacher["user_id"]), primary_class_id)
+    db = SessionLocal()
+    try:
+        db.add(
+            SubjectClassLink(
+                subject_id=subject_id,
+                class_id=linked_class_id,
+                enrollment_mode="all_in_class",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    notification_id = _create_notification(
+        subject_id,
+        primary_class_id,
+        int(teacher["user_id"]),
+        "hard124 linked class retarget",
+    )
+    headers = login_api(client, str(teacher["username"]), str(teacher["password"]))
+
+    r = client.put(
+        f"/api/notifications/{notification_id}",
+        headers=headers,
+        json={"class_id": linked_class_id},
+    )
+
+    assert r.status_code == 200, r.text
+    assert _notification_scope(notification_id)[:2] == (subject_id, linked_class_id)

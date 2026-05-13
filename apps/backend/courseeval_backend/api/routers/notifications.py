@@ -47,6 +47,15 @@ def _ensure_notification_course_publish_access(user: User, course) -> None:
         raise HTTPException(status_code=403, detail="Only the assigned course teacher can publish course notifications.")
 
 
+def _notification_subject_allows_class(db: Session, course, class_id: int) -> bool:
+    linked = set(subject_linked_class_ids(db, course.id))
+    if linked:
+        return int(class_id) in linked
+    if course.class_id:
+        return int(course.class_id) == int(class_id)
+    return True
+
+
 def _ensure_notification_write_scope(user: User, subject_id: Optional[int], class_id: Optional[int]) -> None:
     if is_admin(user):
         return
@@ -368,7 +377,7 @@ def create_notification(
     if data.subject_id:
         course = ensure_course_access_http(data.subject_id, current_user, db)
         _ensure_notification_course_publish_access(current_user, course)
-        if effective_class_id and course.class_id and course.class_id != effective_class_id:
+        if effective_class_id and not _notification_subject_allows_class(db, course, effective_class_id):
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
     elif effective_class_id:
         class_ids = get_accessible_class_ids(current_user, db)
@@ -454,7 +463,7 @@ def update_notification(
         course = ensure_course_access_http(effective_subject_id, current_user, db)
         _ensure_notification_course_publish_access(current_user, course)
         target_class_id = effective_class_id
-        if target_class_id and course.class_id and course.class_id != target_class_id:
+        if target_class_id and not _notification_subject_allows_class(db, course, target_class_id):
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
     elif "class_id" in requested_fields and data.class_id is not None and data.class_id != 0:
         class_ids = get_accessible_class_ids(current_user, db)
