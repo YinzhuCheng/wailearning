@@ -97,6 +97,14 @@ def _ensure_course_homework_status_access(subject_id: int, user: User, db: Sessi
     return course
 
 
+def _ensure_homework_course_write_access(current_user: User, homework: Homework, db: Session) -> None:
+    if homework.subject_id is None:
+        return
+    course = ensure_course_access_http(homework.subject_id, current_user, db)
+    if not is_course_instructor(current_user, course):
+        raise HTTPException(status_code=403, detail="Only the assigned course teacher can update homework.")
+
+
 def _homework_subject_allows_class(db: Session, course: Subject, class_id: int) -> bool:
     linked = set(subject_linked_class_ids(db, course.id))
     if linked:
@@ -832,9 +840,12 @@ def update_homework(
         raise HTTPException(status_code=403, detail="Only teachers can update homework.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_course_write_access(current_user, homework, db)
 
     if data.subject_id is not None:
         course = ensure_course_access_http(data.subject_id, current_user, db)
+        if not is_course_instructor(current_user, course):
+            raise HTTPException(status_code=403, detail="Only the assigned course teacher can update homework.")
         if not _homework_subject_allows_class(db, course, homework.class_id):
             raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
@@ -915,6 +926,10 @@ def delete_homework(
         raise HTTPException(status_code=403, detail="Only teachers can delete homework.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    if homework.subject_id is not None:
+        course = ensure_course_access_http(homework.subject_id, current_user, db)
+        if not is_course_instructor(current_user, course):
+            raise HTTPException(status_code=403, detail="Only the assigned course teacher can delete homework.")
     purge_homework_row(db, homework)
     db.commit()
     return {"message": "Homework deleted successfully."}

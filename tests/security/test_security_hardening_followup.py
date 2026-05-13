@@ -3663,3 +3663,31 @@ def test_hard127_teacher_can_class_batch_attendance_for_linked_secondary_class_c
     assert r.status_code == 200, r.text
     assert r.json()["success"] >= 1
     assert r.json()["failed"] == 0
+
+
+def test_hard128_class_teacher_cannot_update_teacher_owned_visible_homework(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher("ct_homework_update_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible homework update guard")
+    homework_id = _create_course_homework(subject_id, int(ct["class_id"]), ctx["teacher_id"], "ct update forbidden homework")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.put(
+        f"/api/homeworks/{homework_id}",
+        headers=headers,
+        json={"title": "ct should not update this homework"},
+    )
+
+    assert r.status_code == 403
+
+
+def test_hard129_class_teacher_cannot_delete_teacher_owned_visible_homework(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher("ct_homework_delete_visible")
+    subject_id = _create_visible_teacher_owned_course(client, ctx, ct, "ct visible homework delete guard")
+    homework_id = _create_course_homework(subject_id, int(ct["class_id"]), ctx["teacher_id"], "ct delete forbidden homework")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.delete(f"/api/homeworks/{homework_id}", headers=headers)
+
+    assert r.status_code == 403
