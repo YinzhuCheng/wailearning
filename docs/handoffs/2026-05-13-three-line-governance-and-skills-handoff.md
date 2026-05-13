@@ -316,6 +316,43 @@ Latest roster schema split validation:
 - `.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q`
   passed 10 tests.
 
+## Step 1 Closeout
+
+The Step 1 low-risk schema harness pilot is complete as of commit `5f062c5`.
+The goal of this pilot was not to exhaustively empty `api/schemas.py`; it was
+to prove a repeatable bounded governance loop for schema boundary work:
+
+- move exactly one cohesive DTO group per round;
+- keep `apps.backend.courseeval_backend.api.schemas` as the public
+  compatibility barrel;
+- avoid router import churn, route behavior changes, authorization changes, and
+  response-shape changes;
+- add precise validation-selector coverage for each moved `api/schema_defs/`
+  file;
+- run inventory, governance checks, selector tests, targeted pytest, docs, and
+  ledgers before committing.
+
+That loop has now been demonstrated across appearance, attendance,
+operations/settings, points, notifications, files, dashboard, and roster DTO
+groups. The latest inventory after roster split reports 186 public schema names
+and 0 missing imported names, so compatibility exports remain intact.
+
+Residual Step 1 risk is deliberately bounded rather than fully eliminated:
+
+- `api/schemas.py` remains large at roughly 1631 lines.
+- Remaining DTO groups include medium/high-coupling areas such as auth/users,
+  classes/courses/subjects, scores, LLM settings, discussions, learning notes,
+  homework, material/chapter tree DTOs, and shared student primitives.
+- Further schema movement should be treated as a dedicated bounded schema
+  round, not as part of the main continuation. Avoid moving recursive or
+  behavior-adjacent DTOs opportunistically while doing Step 2.
+- Full release/security coverage was not claimed; see Deferred Risks below.
+
+Recommendation for the next agent: treat Step 1 as closed for planning
+purposes and start Step 2. Only return to schema splitting if a later task has
+a narrow DTO group, a clear selector target, and enough time for the same
+inventory/validation/handoff loop.
+
 For future handoff-only edits in this branch, the minimal governance rerun is:
 
 ```powershell
@@ -353,23 +390,40 @@ Large files still intentionally not split or only partially split:
 
 ## Next Round Targets
 
-Recommended next work, in order:
+Recommended next work for the next agent is Step 2 of the local three-step
+plan: use the harness for high-value structure governance.
+
+Start with `apps/backend/courseeval_backend/domains/seed/demo.py`, not another
+schema split, unless the user explicitly redirects. The next agent should:
 
 1. Run `repository-normalization` first, then route through
-   `boundary-governance` for one focused large-file split.
-2. Continue `api/schemas.py` only as small DTO-group moves into
-   `api/schema_defs/`, beginning with
-   `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
-   and preserving the `api.schemas` compatibility barrel. Notifications, files,
-   dashboard, and roster have already been split; prefer another cohesive
-   low-coupling group next and avoid moving `ScoreResponse` in the same round
-   as unrelated DTOs.
-3. Consider extracting cohesive builders from `domains/seed/demo.py`, but only
-   with seed/E2E and bootstrap-focused tests selected first.
-4. Consider splitting `llm_grading.py` only under a dedicated LLM/homework
-   validation matrix.
-5. For frontend structure work, split large admin views by presentational
-   subcomponents and run build plus targeted Playwright smoke.
-6. Continue skill de-duplication only when the richer executable skill/script
-   clearly covers the same workflow. Prefer shrinking broad skills into routers
-   over deleting specialized ones.
+   `structure-governance`, `boundary-governance`, and
+   `seed-surface-hardening`.
+2. Read `AGENTS.md`, `docs/README.md`,
+   `skills/repository-normalization/SKILL.md`,
+   `skills/structure-governance/SKILL.md`,
+   `skills/seed-surface-hardening/SKILL.md`,
+   `skills/validation-selection/SKILL.md`,
+   `docs/operations/ADMIN_BOOTSTRAP.md`,
+   `docs/architecture/CONFIGURATION_REFERENCE.md`, and E2E dev / seed sections
+   of `docs/development/DEVELOPMENT_AND_TESTING.md`.
+3. Keep `seed_demo_course_bundle` as the public entrypoint.
+4. Do not change seed semantics, `INIT_DEFAULT_DATA`, first-admin bootstrap,
+   public registration, or E2E dev gate behavior.
+5. Extract one seed construction phase per round from
+   `domains/seed/demo.py`, preferring pure builders/helpers before
+   orchestration. Candidate modules include `demo_users.py`, `demo_courses.py`,
+   `demo_homework.py`, `demo_materials.py`, `demo_notifications.py`, and a
+   narrowly scoped `demo_helpers.py` only for real shared helpers.
+6. Select validation before editing with
+   `python ops/scripts/dev/select_validation_targets.py --worktree --json`;
+   expect seed/E2E/bootstrap-focused pytest targets and static structure /
+   repository-normalization checks. Use Playwright only when browser-visible
+   seed behavior or seeded UI assumptions materially change.
+
+After the seed split sequence is complete or blocked, the later Step 2 targets
+are `llm_grading.py`, `api/routers/homework.py`, `api/routers/subjects.py`, and
+large admin Vue views. Each must be a separate bounded round with its own
+specialized read order and validation matrix. Continue skill de-duplication
+only when the richer executable skill/script clearly covers the same workflow;
+prefer shrinking broad skills into routers over deleting specialized ones.
