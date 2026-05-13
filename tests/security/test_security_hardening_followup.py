@@ -3735,3 +3735,47 @@ def test_hard130_linked_secondary_class_homework_remains_readable_after_create(c
 
     assert teacher_detail.status_code == 200, teacher_detail.text
     assert student_detail.status_code == 200, student_detail.text
+
+
+def test_hard131_class_teacher_cannot_review_teacher_owned_visible_homework_submission(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_review_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard131 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+    submission_id = int(submission.json()["id"])
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.put(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/review",
+        headers=headers,
+        json={"review_score": 95, "review_comment": "ct should not review"},
+    )
+
+    assert r.status_code == 403
+
+
+def test_hard132_class_teacher_cannot_regrade_teacher_owned_visible_homework_submission(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=True, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_regrade_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard132 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+    submission_id = int(submission.json()["id"])
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/regrade",
+        headers=headers,
+        json={},
+    )
+
+    assert r.status_code == 403

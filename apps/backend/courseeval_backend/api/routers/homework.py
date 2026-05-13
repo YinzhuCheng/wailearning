@@ -105,6 +105,20 @@ def _ensure_homework_course_write_access(current_user: User, homework: Homework,
         raise HTTPException(status_code=403, detail="Only the assigned course teacher can update homework.")
 
 
+def _ensure_homework_submission_management_access(
+    current_user: User,
+    homework: Homework,
+    db: Session,
+    *,
+    detail: str,
+) -> None:
+    if homework.subject_id is None:
+        return
+    course = ensure_course_access_http(homework.subject_id, current_user, db)
+    if not is_course_instructor(current_user, course):
+        raise HTTPException(status_code=403, detail=detail)
+
+
 def _homework_subject_allows_class(db: Session, course: Subject, class_id: int) -> bool:
     linked = set(subject_linked_class_ids(db, course.id))
     if linked:
@@ -1098,6 +1112,12 @@ def get_homework_submissions(
         raise HTTPException(status_code=403, detail="Only teachers can view homework submissions.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can view homework submissions.",
+    )
     submissions = (
         db.query(HomeworkSubmission)
         .filter(HomeworkSubmission.homework_id == homework.id)
@@ -1153,6 +1173,12 @@ def get_homework_submission_status_single(
         raise HTTPException(status_code=403, detail="Only teachers can view homework submissions.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can view homework submissions.",
+    )
     submission = (
         db.query(HomeworkSubmission)
         .filter(
@@ -1195,6 +1221,12 @@ def batch_regrade_homework_submissions(
         raise HTTPException(status_code=403, detail="Only teachers can regrade homework submissions.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can regrade homework submissions.",
+    )
     if not homework.auto_grading_enabled:
         raise HTTPException(status_code=400, detail="This homework does not have auto grading enabled.")
 
@@ -1317,6 +1349,12 @@ def acknowledge_grade_appeal(
         raise HTTPException(status_code=403, detail="Only teachers can acknowledge appeals.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can acknowledge appeals.",
+    )
     appeal = (
         db.query(HomeworkGradeAppeal)
         .filter(
@@ -1346,6 +1384,12 @@ def get_homework_submission_history(
         raise HTTPException(status_code=403, detail="Only teachers can view homework histories.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can view homework histories.",
+    )
     submission = (
         db.query(HomeworkSubmission)
         .filter(
@@ -1371,6 +1415,12 @@ def review_homework_submission(
         raise HTTPException(status_code=403, detail="Only teachers can review homework submissions.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can review homework submissions.",
+    )
     submission = (
         db.query(HomeworkSubmission)
         .filter(
@@ -1430,6 +1480,12 @@ def regrade_homework_submission(
         raise HTTPException(status_code=403, detail="Only teachers can regrade homework submissions.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can regrade homework submissions.",
+    )
     if not homework.auto_grading_enabled:
         raise HTTPException(status_code=400, detail="This homework does not have auto grading enabled.")
 
@@ -1463,6 +1519,12 @@ def download_homework_submissions(
         raise HTTPException(status_code=403, detail="Only teachers can download homework submissions.")
 
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can download homework submissions.",
+    )
     if not payload.submission_ids:
         raise HTTPException(status_code=400, detail="Please select at least one submission.")
 

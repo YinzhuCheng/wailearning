@@ -321,9 +321,9 @@ def test_second_task_hits_token_cap_after_first_billed(client: TestClient):
         db.close()
 
 
-# --- 9) Second class teacher (same class) can read submission list (matches teacher) ---
+# --- 9) Class teacher visibility does not imply submission-management access ---
 
-def test_class_teacher_sees_submissions_alongside_course_teacher(client: TestClient):
+def test_class_teacher_cannot_read_submissions_for_visible_course(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework()
     h, sid, cid = ctx["homework_id"], ctx["subject_id"], None
@@ -351,8 +351,7 @@ def test_class_teacher_sees_submissions_alongside_course_teacher(client: TestCli
     _submit(client, h, login_api(client, ctx["student_username"], ctx["student_password"]), "h")
     ch = login_api(client, u, "cpt")
     r = client.get(f"/api/homeworks/{h}/submissions", headers=ch)
-    assert r.status_code == 200, r.text
-    assert r.json()["total"] >= 1
+    assert r.status_code == 403, r.text
 
 
 # --- 10) Auto fails with 401; teacher can still score manually after ---
