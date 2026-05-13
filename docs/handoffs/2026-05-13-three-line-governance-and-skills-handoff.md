@@ -125,6 +125,10 @@ Latest continuation boundary split:
   `AttachmentUploadResponse` into `api/schema_defs/files.py` and kept
   `api.schemas` compatibility imports intact for `files` and `subjects`
   routers.
+- Current follow-up moved dashboard DTOs `ClassRanking`, `DashboardStats`,
+  and `StudentRanking` into `api/schema_defs/dashboard.py`. `DashboardStats`
+  keeps its `ScoreResponse` relationship through a forward reference rebuilt
+  from the compatibility barrel after `ScoreResponse` is defined.
 - Kept `apps/backend/courseeval_backend/api/schemas.py` as the compatibility
   barrel for existing router, domain-helper, and test imports.
 - Updated `ops/scripts/dev/inventory_api_schemas.py` so inventory checks count
@@ -253,6 +257,34 @@ Latest files schema split validation:
 - `.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q`
   passed 10 tests.
 
+Latest dashboard schema split validation:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\schemas.py apps\backend\courseeval_backend\api\schema_defs\dashboard.py`
+  passed.
+- `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
+  passed with 145 local schema classes/enums, 41 compatibility re-exports, 186
+  public schema names, 24 importers, and 0 missing imports.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python ops/scripts/dev/check_api_surface_governance.py` passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details` passed with
+  existing large-file warnings; `api/schemas.py` is now 1656 lines.
+- `python ops/scripts/dev/check_schema_governance.py` passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported targeted/static validation as acceptable and no unmatched paths.
+- `python -m unittest tests.backend.manual.test_validation_selector -v` passed
+  74 tests after adding a dashboard schema selector regression.
+- `.venv\Scripts\python.exe -m pytest tests\backend\integration\test_core_api_surface.py tests\backend\scores\test_score_composition.py -q`
+  passed 17 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_llm_grading.py -q`
+  passed 16 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\learning_notes\test_learning_notes_api.py -q`
+  passed 15 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q`
+  passed 11 tests.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q`
+  passed 10 tests.
+
 For future handoff-only edits in this branch, the minimal governance rerun is:
 
 ```powershell
@@ -297,10 +329,10 @@ Recommended next work, in order:
 2. Continue `api/schemas.py` only as small DTO-group moves into
    `api/schema_defs/`, beginning with
    `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
-   and preserving the `api.schemas` compatibility barrel. Notifications and
-   files have already been split; prefer another cohesive low-coupling group
-   next, with `dashboard` only after accounting for its `ScoreResponse`
-   dependency.
+   and preserving the `api.schemas` compatibility barrel. Notifications, files,
+   and dashboard have already been split; prefer another cohesive
+   low-coupling group next and avoid moving `ScoreResponse` in the same round
+   as unrelated DTOs.
 3. Consider extracting cohesive builders from `domains/seed/demo.py`, but only
    with seed/E2E and bootstrap-focused tests selected first.
 4. Consider splitting `llm_grading.py` only under a dedicated LLM/homework

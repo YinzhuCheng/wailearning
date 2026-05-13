@@ -19,6 +19,7 @@ from apps.backend.courseeval_backend.api.schema_defs.attendance import (
     AttendanceStatus,
     AttendanceUpdate,
 )
+from apps.backend.courseeval_backend.api.schema_defs.dashboard import ClassRanking, DashboardStats, StudentRanking
 from apps.backend.courseeval_backend.api.schema_defs.files import AttachmentUploadResponse
 from apps.backend.courseeval_backend.api.schema_defs.notifications import (
     NotificationBase,
@@ -1035,31 +1036,6 @@ class ScoreGradeAppealResponse(BaseModel):
         from_attributes = True
 
 
-class ClassRanking(BaseModel):
-    class_id: int
-    class_name: str
-    avg_score: float
-    rank: int
-
-
-class DashboardStats(BaseModel):
-    total_students: int
-    total_classes: int
-    total_scores: int = 0
-    avg_score: float
-    attendance_rate: float = 0.0
-    recent_scores: List[ScoreResponse] = []
-    class_rankings: List[ClassRanking] = []
-
-
-class StudentRanking(BaseModel):
-    student_id: int
-    student_name: str
-    class_name: str
-    avg_score: float
-    rank: int
-
-
 class HomeworkBase(BaseModel):
     title: str
     content: Optional[str] = None
@@ -1677,3 +1653,4 @@ class CourseMaterialHomeworkLinkCreate(BaseModel):
 
 CourseMaterialChapterNode.model_rebuild()
 LearningNoteChapterNode.model_rebuild()
+DashboardStats.model_rebuild(_types_namespace={"ScoreResponse": ScoreResponse})

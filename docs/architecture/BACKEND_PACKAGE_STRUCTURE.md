@@ -206,7 +206,7 @@ The following extractions are already in place:
 - score composition and score-appeal helpers moved into `domains/scores/`
 - demo seeding moved into `domains/seed/demo.py`
 - operation-log helpers moved into `services/logging.py`
-- low-coupling API DTO groups for appearance, attendance, files,
+- low-coupling API DTO groups for appearance, attendance, dashboard, files,
   notifications, operations/settings, and points moved into `api/schema_defs/` while `api/schemas.py` remains the
   compatibility barrel for existing router and test imports
 

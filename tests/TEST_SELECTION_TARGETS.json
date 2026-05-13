@@ -1170,6 +1170,7 @@
                     "tests/backend/integration/test_core_api_surface.py",
                     "tests/backend/scores/test_score_composition.py",
                     "apps/backend/courseeval_backend/api/routers/dashboard.py",
+                    "apps/backend/courseeval_backend/api/schema_defs/dashboard.py",
                     "apps/backend/courseeval_backend/api/routers/scores.py",
                     "apps/backend/courseeval_backend/domains/scores/composition.py",
                     "apps/backend/courseeval_backend/domains/scores/appeals.py",

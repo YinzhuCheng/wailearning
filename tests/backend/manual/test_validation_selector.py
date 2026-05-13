@@ -345,6 +345,17 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("backend.scores.dashboard_course_scope", ids)
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_dashboard_schema_defs_change_selects_score_dashboard_target(self):
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/api/schema_defs/dashboard.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.api_surface_governance", ids)
+        self.assertIn("static.boundary_governance", ids)
+        self.assertIn("backend.scores.dashboard_course_scope", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_discussion_router_prefers_pytest_hazard_tier_before_api_heavy_playwright(self):
         payload = run_selector("--paths", "apps/backend/courseeval_backend/api/routers/discussions.py")
 
