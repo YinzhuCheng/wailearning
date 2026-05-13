@@ -1151,10 +1151,50 @@ Validation for this round:
   target group timed out before returning a final status and was not used as
   pass evidence; the targets were rerun individually as listed above.
 
-Next local commit in the requested plan: classify remaining normalization
-boundaries in durable docs, especially the now-smaller `api/routers/subjects.py`,
-the remaining `api/schemas.py` DTO groups, and the large-file backend/frontend
-gaps that should be deferred rather than split opportunistically.
+## Continuation Commit 4: Remaining Boundary Classification
+
+The current continuation round completed the fourth requested local commit in
+the five-commit plan as a docs-only classification pass:
+
+- Classified `apps/backend/courseeval_backend/api/routers/subjects.py` as
+  below the backend router large-file threshold after metadata, class-link, and
+  enrollment helper extraction. Treat it as an HTTP/auth orchestration boundary
+  unless new reusable course business rules accumulate there.
+- Classified `apps/backend/courseeval_backend/api/schemas.py` as a high-blast
+  compatibility barrel rather than opportunistic cleanup. The remaining groups
+  reported by `inventory_api_schemas.py` are auth/users,
+  classes/courses/subjects, discussions/recent posts, homework, learning notes,
+  LLM settings, materials, scores, and shared student DTOs, with five
+  `model_rebuild()` compatibility points.
+- Kept backend large-file follow-up focused on `llm_grading.py`,
+  `api/routers/homework.py`, `domains/seed/demo.py`, and `bootstrap.py`.
+- Kept frontend large Vue views as deferred UI-boundary work that needs build
+  and targeted Playwright evidence before decomposition.
+- Updated `BACKEND_PACKAGE_STRUCTURE.md`, the three-line governance report,
+  known issues/risks, this handoff, and `agent-update-log.csv`.
+
+Validation for this docs-only round:
+
+- `python ops\scripts\dev\inventory_api_schemas.py --fail-on-missing-imports`
+  passed and reported 142 local schema classes/enums, 44 compatibility
+  re-exports, 186 public schema names, 26 importers, and 0 missing imported
+  names.
+- `python ops\scripts\dev\select_validation_targets.py --worktree --json`
+  reported docs-only static validation as acceptable and no unmatched paths.
+- `python ops\scripts\dev\check_docs_governance.py` passed with the known
+  historical missing-path warnings already tracked in this handoff.
+- `python ops\scripts\dev\check_boundary_governance.py --details` passed with
+  existing large-file warnings; `api/routers/subjects.py` is no longer listed
+  as a large backend router finding.
+- `python ops\scripts\dev\check_structure_governance.py --details`,
+  `python ops\scripts\dev\check_schema_governance.py`,
+  `python ops\scripts\dev\check_repository_normalization.py`, and
+  `python ops\scripts\dev\check_repo_skills.py` passed.
+- `python -m unittest tests.backend.manual.test_validation_selector -v`
+  passed 81 tests.
+
+Next local commit in the requested plan: final durable-governance convergence
+and repository cleanup, then push only after that fifth commit.
 
 ## Branch And Validation State For Handoff
 

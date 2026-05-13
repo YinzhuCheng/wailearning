@@ -112,6 +112,8 @@ cleanup passes.
 | Dated reports live in `docs/reports/` | Historical audit and restructure reports were moved out of active architecture/development folders. When editing one, update `docs/README.md`, `AGENTS.md`, and the report index together. |
 | Web favicon uses public SVG assets | Both SPAs now read `/courseeval-mark.svg` from `public/`. If the favicon changes again, update both `apps/web/*/public/` copies and rerun both frontend builds. |
 | Root-local runtime artifacts are not source layout | `__pycache__/`, `.pytest_cache/`, `.pytest_tmp/`, `node_modules/`, `dist/`, and `.agent-run/` are working artifacts or ignored paths. Do not normalize them into committed source structure. |
+| `subjects.py` is no longer a priority split target | After metadata, class-link, and enrollment helper extraction, `api/routers/subjects.py` is below the backend router large-file threshold. Future work should treat it as an HTTP/auth orchestration boundary unless new reusable course business rules accumulate there. |
+| Remaining schema DTOs are coupled | `api/schemas.py` still owns auth/users, classes/courses/subjects, discussions, homework, learning notes, LLM, materials, scores, and shared student DTOs plus model-rebuild glue. Continue schema splitting only as dedicated schema-boundary work with inventory and compatibility-export validation. |
 
 ## 10. How to add new entries
 

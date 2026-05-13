@@ -108,17 +108,20 @@ user-visible behavior and needs focused tests.
 
 | Area | Current finding |
 |------|-----------------|
-| Backend | `domains/seed/demo.py`, `llm_grading.py`, `api/schemas.py`, `api/routers/homework.py`, `bootstrap.py`, `api/routers/subjects.py` exceed governance thresholds. |
+| Backend | `domains/seed/demo.py`, `llm_grading.py`, `api/schemas.py`, `api/routers/homework.py`, and `bootstrap.py` exceed governance thresholds. `api/routers/subjects.py` has since been reduced below the router threshold and should be treated as a closed HTTP orchestration boundary unless new reusable course logic accumulates there. |
 | Admin SPA | `Materials.vue`, `Subjects.vue`, `LearningNotes.vue`, `MyCourses.vue`, `Layout.vue`, `Students.vue`, `CourseDiscussionPanel.vue`, and related views exceed governance thresholds. |
 
 Recommended next boundary work:
 
-1. Split `api/schemas.py` by response/request domain only after running
+1. Treat `api/schemas.py` as high-blast-radius schema-boundary work. Split a
+   remaining DTO group only after running
    `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
    and preserving compatibility imports or a deliberate export barrel. The
    current hard forward-reference points are `SubjectCreate.model_rebuild()`,
    `CourseMaterialChapterNode.model_rebuild()`, and
-   `LearningNoteChapterNode.model_rebuild()`.
+   `LearningNoteChapterNode.model_rebuild()`; later inventory runs also report
+   `CourseRosterStudentInput.model_rebuild()` and
+   `DashboardStats.model_rebuild()` as compatibility glue to preserve.
 2. Extract cohesive demo-seed builders from `domains/seed/demo.py`.
 3. Split `llm_grading.py` only with LLM/homework queue tests selected first.
 4. Split large admin views by presentational subcomponents after a frontend

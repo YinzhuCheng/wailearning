@@ -95,6 +95,14 @@ Rules:
   `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
   before any split, preserve imported names or provide a compatibility export,
   and validate FastAPI import/OpenAPI behavior after moving schema classes.
+- As of the May 2026 repository-normalization pass, `api/schemas.py` still owns
+  several coupled DTO groups: auth/users, classes/courses/subjects,
+  discussions/recent posts, homework, learning notes, LLM settings, materials,
+  scores, shared student DTOs, and the forward-reference rebuild glue for
+  course roster, subject create, material chapter, learning-note chapter, and
+  dashboard schemas. Do not continue splitting these opportunistically. Move a
+  remaining group only when the target router/domain test scope is clear and
+  the compatibility barrel remains intact.
 
 ### Layer 3: shared backend core
 
@@ -307,11 +315,29 @@ Do not create vague buckets such as:
 
 The next worthwhile structural reductions are:
 
-1. `llm_grading.py`
-2. `api/routers/homework.py`
-3. `api/routers/subjects.py`
-4. `api/routers/scores.py`
-5. `bootstrap.py`
+1. `llm_grading.py` worker/execution/notification slices that can preserve the
+   current queue, retry, quota, endpoint failover, and summary-refresh
+   behavior.
+2. `api/routers/homework.py` workflow slices such as submissions, grading
+   actions, and permission-heavy helper groups, each with homework/LLM/security
+   validation selected first.
+3. `domains/seed/demo.py` demo homework/material/notification builders, while
+   keeping `seed_demo_course_bundle(db)` as the public seed orchestration
+   entrypoint.
+4. `bootstrap.py` startup/schema/default-data orchestration slices, only with
+   schema-governance and bootstrap/default-data tests in scope.
+
+The following candidates are explicitly deferred for now:
+
+- `api/routers/subjects.py` is now below the backend router large-file
+  threshold after metadata, class-link, and enrollment helper extraction. Treat
+  it as an HTTP/auth orchestration boundary unless new reusable course business
+  logic accumulates there.
+- `api/routers/scores.py` is not currently a large-file governance finding.
+  Split it only when a concrete score-composition or appeal boundary emerges.
+- `api/schemas.py` remains a compatibility barrel plus coupled DTO ownership.
+  Continue schema splits only as dedicated schema-boundary work, not as a
+  side-effect of unrelated router or domain refactors.
 
 The likely extraction shape is:
 
