@@ -39,7 +39,7 @@ Most failures are **environment or harness**, not application logic.
 
 | Symptom | Likely cause | Detail |
 |---------|--------------|--------|
-| Port already in use (`3012`, `8012`, etc.) | Stale `node` / `uvicorn` | [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md) for port hygiene |
+| Port already in use (`3012`, `8012`, etc.) | Stale `node` / `uvicorn` | [../testing/pitfalls-playwright-and-e2e.md](../testing/pitfalls-playwright-and-e2e.md) for port hygiene and Playwright harness startup |
 | Seed returns `404` | `E2E_DEV_SEED_ENABLED` false or wrong token | [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) |
 | Powerful `/api/e2e/dev/*` returns `401` or `403` | Dual gate requires admin JWT plus seed header | same |
 | Element Plus dropdowns behave flakily | Hover-trigger menus, teleported poppers | pitfalls doc for course switcher / dialog patterns |
@@ -51,7 +51,7 @@ Full runbook: [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWR
 
 ## pytest failures only on SQLite or only on PostgreSQL
 
-- Some tests require PostgreSQL (`TEST_DATABASE_URL`); see [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md).
+- Some tests require PostgreSQL (`TEST_DATABASE_URL`); see [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) and [../testing/pitfalls-postgres-and-pytest.md](../testing/pitfalls-postgres-and-pytest.md).
 - SQLite has different concurrency and timestamp semantics; do not assume parity.
 
 ---
@@ -60,7 +60,7 @@ Full runbook: [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWR
 
 | Symptom | Likely cause | Mitigation |
 |---------|--------------|------------|
-| `sqlite3.OperationalError: no such table: ...` inside `ensure_schema_updates()` right after `reset_test_database_schema()` | Stale or corrupted `<repo-root>/.pytest_tmp/test*.sqlite`, import/metadata ordering edge, or concurrent pytest processes sharing the same SQLite artifact | Run `python ops/scripts/dev/pytest_sqlite_guard.py`, delete the affected `test*.sqlite` artifact, and rerun a **single** pytest process; read [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md) under the persistent pytest SQLite file section |
+| `sqlite3.OperationalError: no such table: ...` inside `ensure_schema_updates()` right after `reset_test_database_schema()` | Stale or corrupted `<repo-root>/.pytest_tmp/test*.sqlite`, import/metadata ordering edge, or concurrent pytest processes sharing the same SQLite artifact | Run `python ops/scripts/dev/pytest_sqlite_guard.py`, delete the affected `test*.sqlite` artifact, and rerun a **single** pytest process; read [../testing/pitfalls-postgres-and-pytest.md](../testing/pitfalls-postgres-and-pytest.md) for the SQLite/PostgreSQL harness route |
 | `UNIQUE constraint failed: users.username` across many tests | Shared SQLite state plus tests expecting an empty DB | Same as above; avoid parallel pytest without isolated `TEST_DATABASE_URL`. |
 
 Full risk notes: [../governance/known-issues-and-risks.md](../governance/known-issues-and-risks.md).
@@ -96,4 +96,4 @@ Executable surfaces (`*.py`, CI YAML, shell) should not reference the legacy pat
 
 1. Reduce scope: one pytest module or one Playwright file.
 2. Confirm env printed by `playwright.config.cjs` / backend settings (non-secret fields only).
-3. Search [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md) for the HTTP status or error string.
+3. Search [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md) for the HTTP status or error string, then route into the narrower topic doc when the failure class is clear.

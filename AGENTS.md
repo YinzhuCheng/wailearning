@@ -72,20 +72,20 @@ triggers live in [`docs/agents/agent-playbook.md`](docs/agents/agent-playbook.md
 
 Use the nearest authoritative doc or skill for the task type:
 
-| Task type | Start with |
-|----------|------------|
-| Docs, links, entrypoint wording, or governance-doc edits | [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md), [`docs/governance/repository-governance.md`](docs/governance/repository-governance.md) |
-| Module boundaries, permission/data-flow boundaries, or low-risk extractions | [`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md), [`docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) |
-| Repository/path/layout changes | [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md), [`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md) |
-| Repo-wide governance, naming/path drift, entrypoint cleanup | [`docs/governance/repository-governance.md`](docs/governance/repository-governance.md), [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) |
-| Backend/API contract changes | [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md), [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md) |
-| Permissions/course access/sensitive role behavior | [`docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md), [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md) |
-| Schema/bootstrap/student identity | [`docs/operations/ADMIN_BOOTSTRAP.md`](docs/operations/ADMIN_BOOTSTRAP.md), [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md), [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md) |
-| School Playwright or browser-harness work | [`docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`](docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md), [`skills/school-playwright-e2e/SKILL.md`](skills/school-playwright-e2e/SKILL.md) |
-| Local pytest/Playwright/SQLite/process failures | [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md), [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md) |
-| Validation target choice and evidence | [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md), [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md), [`skills/validation-ledger-maintenance/SKILL.md`](skills/validation-ledger-maintenance/SKILL.md) |
-| Deployment/ops/runtime config | [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md), [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md) |
-| Full skill catalog and layering | [`skills/README.md`](skills/README.md) |
+| Task type | Read first | Skill | Validate first |
+|----------|------------|-------|----------------|
+| Docs, links, entrypoint wording, or governance-doc edits | [`docs/governance/repository-governance.md`](docs/governance/repository-governance.md) | [`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md) | `static.docs_governance` |
+| Module boundaries, permission/data-flow boundaries, or low-risk extractions | [`docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) | [`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md) | `static.boundary_governance` |
+| Repository/path/layout changes | [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md) | [`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md) | `static.structure_governance` |
+| Repo-wide governance, naming/path drift, entrypoint cleanup | [`docs/governance/repository-governance.md`](docs/governance/repository-governance.md) | [`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md) | `check_repository_normalization.py` |
+| Backend/API contract changes | [`docs/architecture/SYSTEM_OVERVIEW.md`](docs/architecture/SYSTEM_OVERVIEW.md) | [`skills/api-surface-audit/SKILL.md`](skills/api-surface-audit/SKILL.md) | `static.api_surface_governance` |
+| Permissions/course access/sensitive role behavior | [`docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) | [`skills/permission-audit/SKILL.md`](skills/permission-audit/SKILL.md) | `security.api_regression` |
+| Schema/bootstrap/student identity | [`docs/operations/ADMIN_BOOTSTRAP.md`](docs/operations/ADMIN_BOOTSTRAP.md) | [`skills/data-migration-audit/SKILL.md`](skills/data-migration-audit/SKILL.md) / [`skills/roster-identity-repair-playbook/SKILL.md`](skills/roster-identity-repair-playbook/SKILL.md) | `static.schema_governance` |
+| School Playwright or browser-harness work | [`docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`](docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md) | [`skills/school-playwright-e2e/SKILL.md`](skills/school-playwright-e2e/SKILL.md) | `frontend.school.build` plus the nearest `school.e2e.*` target |
+| Local pytest/Playwright/SQLite/process failures | [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md) or the matching topic route | [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md) | `static.local_test_guardrails` when the issue is harness-shaped |
+| Validation target choice and evidence | [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md) | [`skills/validation-selection/SKILL.md`](skills/validation-selection/SKILL.md) / [`skills/validation-ledger-maintenance/SKILL.md`](skills/validation-ledger-maintenance/SKILL.md) | `static.validation_selector` |
+| Deployment/ops/runtime config | [`docs/operations/DEPLOYMENT_AND_OPERATIONS.md`](docs/operations/DEPLOYMENT_AND_OPERATIONS.md) | [`skills/deployment-governance/SKILL.md`](skills/deployment-governance/SKILL.md) | `static.operator_scripts_governance` when operator scripts or templates move |
+| Full skill catalog and layering | [`skills/README.md`](skills/README.md) | route from there | use the routed validation entrypoint |
 
 ## High-risk areas
 
@@ -127,6 +127,10 @@ python ops/scripts/dev/search_pitfalls.py "<error text or symptom>"
 Then route through:
 
 - [`docs/testing/TEST_EXECUTION_PITFALLS.md`](docs/testing/TEST_EXECUTION_PITFALLS.md)
+- [`docs/testing/pitfalls-windows-and-encoding.md`](docs/testing/pitfalls-windows-and-encoding.md)
+- [`docs/testing/pitfalls-playwright-and-e2e.md`](docs/testing/pitfalls-playwright-and-e2e.md)
+- [`docs/testing/pitfalls-postgres-and-pytest.md`](docs/testing/pitfalls-postgres-and-pytest.md)
+- [`docs/testing/pitfalls-ledger-and-selector-tooling.md`](docs/testing/pitfalls-ledger-and-selector-tooling.md)
 - [`docs/architecture/TROUBLESHOOTING.md`](docs/architecture/TROUBLESHOOTING.md)
 - [`skills/local-test-triage/SKILL.md`](skills/local-test-triage/SKILL.md)
 

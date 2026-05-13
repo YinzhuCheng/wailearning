@@ -20,6 +20,10 @@ from pathlib import Path
 
 DEFAULT_PATHS = [
     "docs/testing/TEST_EXECUTION_PITFALLS.md",
+    "docs/testing/pitfalls-windows-and-encoding.md",
+    "docs/testing/pitfalls-playwright-and-e2e.md",
+    "docs/testing/pitfalls-postgres-and-pytest.md",
+    "docs/testing/pitfalls-ledger-and-selector-tooling.md",
     "docs/testing/pitfall-index.csv",
     "docs/architecture/TROUBLESHOOTING.md",
     "docs/testing/DEVELOPMENT_AND_TESTING.md",

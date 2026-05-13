@@ -110,6 +110,10 @@ guessing.
 | [testing/CI_AND_VALIDATION.md](testing/CI_AND_VALIDATION.md) | Current cloud entrypoints, CI scope, and validation reporting rules |
 | [testing/TEST_SUITE_MAP.md](testing/TEST_SUITE_MAP.md) | What lives where in `tests/` |
 | [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md) | Large execution encyclopedia: Windows/PowerShell, ports, Element Plus, SQLite vs PG, Playwright, CI hazards |
+| [testing/pitfalls-windows-and-encoding.md](testing/pitfalls-windows-and-encoding.md) | Narrow route for Windows shell, UTF-8, and local execution traps |
+| [testing/pitfalls-playwright-and-e2e.md](testing/pitfalls-playwright-and-e2e.md) | Narrow route for Playwright harness, E2E startup, selector, and UI race traps |
+| [testing/pitfalls-postgres-and-pytest.md](testing/pitfalls-postgres-and-pytest.md) | Narrow route for PostgreSQL, pytest environment gates, and SQLite vs PG semantics |
+| [testing/pitfalls-ledger-and-selector-tooling.md](testing/pitfalls-ledger-and-selector-tooling.md) | Narrow route for selector, CSV ledger, BOM, and append-tooling pitfalls |
 | [testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md) | Full school E2E environment contract |
 | [frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md) | Header badge, sync API, and sidebar navigation notes |
 | [frontend/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md](frontend/HTTP_CLIENT_SLOW_RESPONSE_BUSY_HINT.md) | HTTP client UX hint behavior |

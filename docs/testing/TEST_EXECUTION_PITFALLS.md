@@ -12,6 +12,30 @@ For the repository-wide policy on Unicode-safe editing and for the current mojib
 
 - [ENCODING_AND_MOJIBAKE_SAFETY.md](../contributing/ENCODING_AND_MOJIBAKE_SAFETY.md)
 
+## Topic Routes
+
+`TEST_EXECUTION_PITFALLS.md` remains the **canonical execution encyclopedia**
+for historical pitfall entries, detailed narratives, and the structured
+`pitfall-index.csv` linkage. Use the topic routes below when you already know
+the failure class and want a narrower reading surface before diving back into
+the full encyclopedia.
+
+- [pitfalls-windows-and-encoding.md](pitfalls-windows-and-encoding.md)
+  for PowerShell, UTF-8, local shell, and machine-local text/tooling hazards.
+- [pitfalls-playwright-and-e2e.md](pitfalls-playwright-and-e2e.md)
+  for Playwright harness, Vite/webServer, E2E ports, selector races, and UI
+  authoring traps.
+- [pitfalls-postgres-and-pytest.md](pitfalls-postgres-and-pytest.md)
+  for PostgreSQL provisioning, dialect differences, SQLite vs PostgreSQL test
+  semantics, and full-suite environment gates.
+- [pitfalls-ledger-and-selector-tooling.md](pitfalls-ledger-and-selector-tooling.md)
+  for validation-selector, CSV ledger, update-log, private-path scan, and
+  append-tooling pitfalls.
+
+Use the topic docs as routers. Record new pitfall details here first unless a
+later repository-normalization round explicitly migrates the canonical pitfall
+body and the structured index together.
+
 ## Read This Before Running Tests
 
 If you are about to run tests, especially as an LLM coding agent on Windows + PowerShell, check these first:
@@ -109,426 +133,37 @@ Use [`../../skills/local-test-triage/SKILL.md`](../../skills/local-test-triage/S
 when the main problem is failure classification rather than authoring the
 pitfall entry itself.
 
-## Scope of the Recorded Session
-
-- Host shell: Windows PowerShell
-- Repository root: `<repo>`
-- Python runtime: repository `.venv`
-- Frontend package runner: `npm.cmd` / `npx.cmd`
-- Browser cache path: `<local-browser-cache>`
-- Tested after repository structure migration into:
-  - `apps/backend/courseeval_backend/`
-  - `apps/web/school/`
-  - `apps/web/parent/`
-  - `ops/`
-  - `tests/e2e/web-school/`
-
-### Additional session (Linux / cloud agent, May 2026)
-
-This session used Linux bash, the repository `.venv` for pytest, system-packaged Node/npm where needed, and Playwright driven from `apps/web/school` (`npm run test:e2e`). Pitfalls 11–16 below come from that pass. They complement, rather than contradict, the Windows-focused items.
-
-## Pitfall 1: PowerShell output can display mojibake
-
-### Symptom
-
-Chinese output shown in the terminal may render as mojibake even when the underlying file content is correct.
-
-### Why it matters
-
-- Terminal copy-paste is not trustworthy for Chinese strings.
-- Batch files, YAML comments, and legacy script files are especially easy to corrupt if edited by copying text from PowerShell output.
-
-### Safe handling strategy
-
-- Do not copy Chinese text from terminal output back into repository files.
-- Prefer patch-based file edits over terminal-mediated rewrite flows.
-- When touching files that may already contain Chinese text, treat the file content on disk as authoritative, not the shell rendering.
-- If a file appears garbled in the shell, inspect it through a safer path before editing.
-
-### Extension: repository UTF-8 helpers for PowerShell sessions and text I/O
-
-The branch now includes explicit helper scripts so agents do not have to
-rediscover the same PowerShell encoding setup every time.
-
-For the current Windows PowerShell process, run:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
-```
-
-For an already-open interactive shell, dot-source instead:
-
-```powershell
-. .\ops\scripts\windows\set-utf8-session.ps1
-```
-
-What the script changes:
-
-- console code page `65001`;
-- `[Console]::OutputEncoding`;
-- `[Console]::InputEncoding`;
-- `$OutputEncoding`;
-- `PYTHONUTF8`;
-- `PYTHONIOENCODING`;
-- `LESSCHARSET`.
-
-This reduces display and child-process decoding friction, but it does not turn
-PowerShell output into the source of truth. If a multilingual string matters,
-inspect it through:
-
-```powershell
-python ops\scripts\dev\safe_show_text.py <path> --start-line <n> --end-line <m>
-python ops\scripts\dev\safe_show_text.py <path> --escape --start-line <n> --end-line <m>
-```
-
-For generated or trusted full-file writes, use:
-
-```powershell
-python ops\scripts\dev\safe_write_text.py <path> --stdin --replace
-```
-
-For tracked-file audits, use:
-
-```powershell
-python ops\scripts\dev\check_text_encoding.py
-python ops\scripts\dev\check_text_encoding.py <path>
-```
-
-Interpretation:
-
-- `set-utf8-session.ps1` is an environment mitigation, not a content repair.
-- `safe_show_text.py --escape` is the preferred CLI view when terminal glyphs
-  are suspect.
-- `safe_write_text.py` is for deliberate full-file writes from trusted input; it
-  must not be used to pipe already-garbled terminal text into source files.
-- `check_text_encoding.py` scans `git ls-files` by default and intentionally
-  ignores `.e2e-run/` private notes. Use placeholders such as `<repo>` in
-  committed docs and keep real machine paths in `.e2e-run/`.
-
-## Pitfall 2: `npm` PowerShell shim may be blocked by execution policy
-
-### Symptom
-
-Running `npm run ...` directly from PowerShell can fail with script-execution-policy errors because `npm.ps1` is blocked.
-
-### What worked
-
-Use `npm.cmd` or `npx.cmd` explicitly.
-
-Example:
-
-```powershell
-& 'C:\Program Files\nodejs\npm.cmd' run test:e2e
-& 'C:\Program Files\nodejs\npx.cmd' playwright test --list
-```
-
-### Recommendation
-
-Any automation intended for Windows PowerShell should prefer `.cmd` entrypoints when invoking Node package tools.
-
-## Pitfall 3: sandboxed Node child-process spawning can fail with `EPERM`
-
-### Symptom
-
-Playwright and Vite failed inside the default sandbox with errors such as:
-
-- `spawn EPERM`
-- Vite/esbuild startup failure
-- Playwright worker fork failure
-
-### Where it happened
-
-- Playwright internal worker processes
-- Playwright `webServer` startup mode
-- Vite config loading via esbuild
-
-### Operational conclusion
-
-This was an execution-environment limitation, not a repository-code regression.
-
-### What worked
-
-The browser suite had to be run outside the default sandbox on isolated ports, with the backend and frontend started explicitly first.
-
-### Recommendation
-
-If Playwright fails immediately with process-spawn `EPERM`, treat it as an environment problem first, not as an application problem.
-
-## Pitfall 4: Playwright `webServer` auto-start was too fragile for this environment
-
-### Symptom
-
-Even after the repository structure was fixed, Playwright startup remained unreliable when it was allowed to manage backend/frontend servers itself.
-
-### Root causes observed
-
-- sandbox restrictions on subprocess creation
-- stale ports responding from older processes
-- frontend dev server returning misleading non-application responses
-
-### What worked
-
-Introduce a mode where Playwright does not start `webServer` itself and instead reuses pre-started external servers.
-
-Operationally this required:
-
-- isolated API/UI ports
-- explicit health checks
-- explicit `E2E_API_URL`
-- explicit `PLAYWRIGHT_BASE_URL`
-- explicit `PLAYWRIGHT_USE_EXTERNAL_SERVERS=1`
-
-### Recommendation
-
-For long or important Windows E2E runs, prefer:
-
-1. start backend explicitly
-2. start Vite explicitly
-3. verify API `200`
-4. verify UI root returns a real `200`, not just "a port is open"
-5. run Playwright against those servers
-
-## Pitfall 5: a `404` from the UI port is not a valid readiness signal
-
-### Symptom
-
-At one point the UI port returned `404`, which looked like "the server is reachable", but the actual SPA was not serving correctly for the intended test session.
-
-### Why this is dangerous
-
-- A stale process or wrong server can occupy the target port.
-- The browser tests may then time out on missing controls rather than failing at startup.
-- This can waste significant debugging time because the failure presents as missing DOM state instead of incorrect environment boot.
-
-### Recommendation
-
-Treat a UI dev server as healthy only if the root page returns `200` and renders the expected app shell.
-
-Do not accept "some HTTP response exists" as sufficient readiness.
-
-## Pitfall 6: old listening processes can silently poison later test runs
-
-### Symptom
-
-Ports previously used by older frontend or backend processes may remain occupied, causing later runs to hit stale services instead of the newly started test stack.
-
-### Consequences
-
-- false-positive readiness checks
-- wrong database backing the test run
-- UI selectors timing out because the browser is looking at an old page
-
-### What worked
-
-- use isolated ports for each serious rerun
-- explicitly verify both API and UI against the intended process
-- avoid reusing 3012/8012 blindly if earlier test attempts may have left residue
-
-## Pitfall 7: pytest temporary-directory behavior on Windows can fail before business assertions run
-
-### Symptom
-
-Backend tests initially failed in pytest temp-directory setup/cleanup with `PermissionError` and directory-numbering failures unrelated to application logic.
-
-Observed failure shapes included:
-
-- cleanup of basetemp failing
-- temp root under `%TEMP%` inaccessible
-- numbered temp dir creation failing on Windows
-- pytest helper symlink behavior not behaving well in this environment
-
-### Important distinction
-
-These were test-runner infrastructure failures, not backend logic failures.
-
-### What was needed
-
-Repository-level pytest bootstrapping had to force a safer Windows temp-root strategy and soften problematic Windows temp-dir behavior for this environment.
-
-### Recommendation
-
-When backend tests fail before test bodies run, inspect pytest temp-path behavior first before blaming the product code.
-
-## Pitfall 8: background process survival differs between direct execution and detached PowerShell sessions
-
-### Symptom
-
-A backend command that stayed alive when run interactively did not necessarily stay alive when launched as a hidden detached process from a separate automation step.
-
-### Consequence
-
-Health checks could fail even though the exact same command was valid.
-
-### What worked
-
-Using a single controlling script that:
-
-- starts the backend,
-- starts the frontend,
-- waits for health,
-- runs the browser tests,
-- then tears everything down
-
-was much more reliable than trying to launch background services in one step and test them in later independent shell calls.
-
-## Pitfall 9: migrated test files may lose implicit Node module resolution
-
-### Symptom
-
-After moving E2E specs from `frontend/e2e/` to `tests/e2e/web-school/`, Node module resolution for `@playwright/test` no longer worked automatically for the moved files.
-
-### Why it happened
-
-The specs were no longer physically under the frontend package tree, so relative module lookup assumptions changed.
-
-### What worked
-
-The Playwright config had to set up module resolution explicitly from the school frontend package context.
-
-### Recommendation
-
-Whenever tests are moved outside the owning package root, re-check module resolution immediately with `playwright test --list` before attempting the full suite.
-
-## Pitfall 10: `git` index updates may need elevated execution in this environment
-
-### Symptom
-
-Some `git` operations failed with:
-
-- inability to create `.git/index.lock`
-
-### Practical effect
-
-Normal local staging may fail even though file changes are correct on disk.
-
-### Recommendation
-
-If `git add` or related index-writing commands fail with index-lock permission errors in this environment, treat that as an execution-permission problem rather than a repository-integrity problem.
-
-## Pitfall 11: Playwright `webServer` on Linux uses `python3` without project packages
-
-### Symptom
-
-Playwright fails immediately when starting the API, with stderr similar to:
-
-- `No module named uvicorn`
-
-### Why it happens
-
-The Playwright config may spawn the backend with the system `python3`. That interpreter often does not have `requirements.txt` installed, while the repository expects a local virtual environment.
-
-### What worked
-
-- Point the API command at `.venv/bin/python` when that path exists, or set `E2E_PYTHON` to an interpreter that has backend dependencies installed.
-
-### Relationship to other guidance
-
-This is the same operational idea as checklist item 1 ("use the repository `.venv`"), but it applies specifically to **who** starts uvicorn when tests use managed `webServer`.
-
-## Pitfall 12: Element Plus default locale vs Chinese button labels in tests
-
-### Symptom
-
-A test waits for `getByRole('button', { name: '确定' })` or `关闭`, but Playwright reports strict-mode violations or timeouts. The dialog may show **OK** / **Cancel**, or the header close button may expose a different accessible name (for example **关闭此对话框**).
-
-### Why it matters
-
-Without registering a Chinese locale for Element Plus, `ElMessageBox.confirm` and similar components follow English defaults even when surrounding UI copy is Chinese.
-
-### Safe handling strategy
-
-- Register Element Plus `zh-cn` (or match tests to the actual accessible names rendered in your locale), or use narrow selectors (for example `name: '关闭', exact: true` vs the header close button).
-
-## Pitfall 13: Playwright strict mode and duplicate text matches
-
-### Symptom
-
-`expect(locator).toBeVisible()` fails with **strict mode violation**: one locator resolved to **two or more** elements (for example the same homework title in the page subtitle and in a table cell).
-
-### Recommendation
-
-Prefer `.first()` only when intentionally accepting ambiguity, or better:
-
-- role-based locators (`getByRole('cell', { name: ... })`),
-- scoped locators (table body vs header),
-- or `data-testid` hooks.
-
-### Extension (May 2026): duplicate `data-testid` values inside one overlay
-
-The homework publish dialog mounts **multiple** `MarkdownEditorPanel` instances (assignment body + rubric blocks). Each embeds `MarkdownLatexLiveDemo` with the same `data-testid="markdown-latex-demo-render"`. Playwright strict mode then rejects `page.getByTestId('markdown-latex-demo-render')` even though each node is visible.
-
-**Fix pattern:** scope under the intended panel, for example `dialog.locator('.md-panel').first()` for the **assignment body** panel, then chain `.getByTestId('markdown-latex-demo-render')`.
-
-### Extension (May 2026): Element Plus `el-radio-button` intercepts clicks on the native `<input type="radio">`
-
-Symptom: `getByRole('radio', { name: '纯文本' }).click()` retries until timeout because **`<span class="el-radio-button__inner">` intercepts pointer events**.
-
-**Fix pattern:** click the visible button chrome instead, for example `panel.locator('.md-panel__format .el-radio-button').filter({ hasText: '纯文本' })`.
-
-### Extension (May 2026): `MaterialRead` title vs chapter navigation ordering
-
-If `material` is assigned only **after** `buildSequence()` finishes (DFS over chapters × list calls), the reader toolbar can appear while `.material-read-title` is still absent for multiple seconds. Assertions that require the title should either wait longer or (preferably) rely on product behavior that assigns `material` immediately after `GET /materials/{id}` and treats chapter DFS failures as non-fatal for the article body.
-
-### Extension (May 2026): sidebar `default-active` vs nested routes (`/materials/read/:id`)
-
-`Layout.vue` drives `el-menu` with `sidebarMenuActivePath`: `/materials/read/<id>` maps to **`/materials`** so 「课程资料」 stays highlighted; homework submission URLs under `/homework/<id>/…` map back to **`/homework`**. If you add another nested child of `/materials` or `/homework`, extend that computed or Playwright “which menu item is active” assertions will drift. **As of the full-page submission review change,** paths like `/homework/<id>/submissions/<submissionId>` also resolve to the **`/homework`** menu highlight (same rule: any prefix under `/homework/<id>/` that is not `students` maps to `/homework`). **Student rail (May 2026):** the 「课程学习」 `el-sub-menu` shell was removed — student sidebar entries (**选课与进度**, **课程作业**, **课程通知**, …) are **top-level** `menuitem` nodes; specs must not `click()` an expand row labeled 「课程学习」 before reaching **课程通知**.
-
-### Extension (May 2026): homework 「详情」 is a full route, not a dialog
-
-`HomeworkSubmissions.vue` used to open an `el-dialog` titled **提交详情与评分**; it now `router.push`es to **`/homework/:id/submissions/:submissionId`** (query preserved, e.g. `student_id`, for the **返回提交列表** back button). Specs that waited for `getByRole('dialog')` and nested locators should instead assert a URL like `toHaveURL(/\/homework\/\d+\/submissions\/\d+/)` and use `page.getByTestId('homework-submission-detail-body')` on the **page** (the test id still marks the latest summary body container).
-
-### Extension (May 2026): teacher 「课程仪表盘」 deleted — update Playwright landing URLs
-
-The SPA **`Dashboard.vue`** page and **`/dashboard`** metrics UI were removed; **`/dashboard` permanently redirects to `/students`** via `router/index.js`. Historical specs that did `page.goto('/dashboard')` to warm teacher shells must migrate to **`/students`** (or another stable teacher route). Waiting for `/course-home|/dashboard` after a student course switch should instead allow **`/course-home|/courses`** (students never land on `/students` for normal flows). Symptom before migration: strict URL assertions time out because teachers now remain on `/students`, not `/dashboard`.
-
-## Pitfall 14: `textarea:first()` on the homework submit page is often the wrong control
-
-### Symptom
-
-Submission-related E2E polls the API forever: attempt count stays `0`, or POST `/api/homeworks/{id}/submission` never fires as expected.
-
-### Why it happens
-
-The homework submit view renders **CourseDiscussionPanel** (with its own textarea) **above** the homework submission form. `page.locator('textarea').first()` fills the discussion draft, not `homework-submit-content`.
-
-### Recommendation
-
-Target the homework body field explicitly, for example `getByTestId('homework-submit-content')`, for any flow that must submit homework rather than post a discussion reply.
-
-## Pitfall 15: client `page_size` larger than the API allows
-
-### Symptom
-
-The materials UI shows an empty table even though seeded data exists, or E2E cannot find a known material title.
-
-### Why it happens
-
-List endpoints validate `page_size` with an upper bound (for example `le=100`). A client request with `page_size=200` may return **422**; the UI may not surface the validation error clearly.
-
-### Recommendation
-
-Keep client requests aligned with FastAPI/Pydantic limits. When debugging empty lists, inspect network responses for 422 before assuming seed or routing bugs.
-
-## Pitfall 16: duplicate `course_enrollments` rows during startup reconciliation (often seen with SQLite)
-
-### Symptom
-
-Backend crashes during application lifespan or pytest/E2E startup with:
-
-- `sqlite3.IntegrityError: UNIQUE constraint failed: course_enrollments.subject_id, course_enrollments.student_id`
-
-### Interpretation
-
-Multiple reconciliation paths can attempt to insert the same enrollment for the same student and course. SQLite may surface the race more readily during startup batches.
-
-### What worked in practice
-
-Defensive idempotency at insert time (for example nested transactions / savepoints and treating duplicate key as "already enrolled") so startup reconciliation does not abort the whole process.
-
-### Recommendation
-
-When this appears, treat it first as **reconciliation idempotency**, not as corrupted business data, until proven otherwise.
-
+## Windows, encoding, and local shell notes
+
+Detailed Windows / PowerShell / UTF-8 / temp-path execution narratives have
+been moved to
+[pitfalls-windows-and-encoding.md](pitfalls-windows-and-encoding.md).
+
+This includes:
+
+- the scope of the original Windows session;
+- PowerShell mojibake and safe UTF-8 helper usage;
+- `npm.ps1` execution-policy issues;
+- sandbox `EPERM` child-process startup failures;
+- stale readiness and old-process contamination;
+- pytest temp-directory behavior on Windows;
+- background process lifetime differences;
+- Node module resolution after test moves;
+- `git` index-lock / execution-permission issues.
+## Playwright, E2E, and browser-authoring notes
+
+Detailed Playwright / E2E / selector / browser-authoring narratives for the
+first Linux-cloud session and the early strict-mode/browser-contract pitfalls
+have been moved to
+[pitfalls-playwright-and-e2e.md](pitfalls-playwright-and-e2e.md).
+
+This includes:
+
+- the additional Linux / cloud-agent session note;
+- Pitfalls 11-16 around managed `webServer`, locale, duplicate selectors,
+  wrong textareas, `page_size`, and startup reconciliation drift;
+- early browser-authoring extensions that are easier to route from the narrower
+  Playwright topic doc.
 ## Remaining unease after advanced E2E and behavior passes (May 2026)
 
 These are not documented as solved product defects; they are **risk surfaces** that stayed uncomfortable while authoring higher-difficulty tests:
@@ -906,191 +541,18 @@ $env:PLAYWRIGHT_BROWSERS_PATH='C:\Users\<user>\AppData\Local\ms-playwright'
 7. If a single concurrency scenario fails after a long mostly-green run, rerun that one case in isolation before treating it as a deterministic regression.
 8. On Linux/CI, if the browser suite fails to boot the API, verify `uvicorn` runs under the project venv before assuming application regressions.
 
-## Incremental Field Notes: PostgreSQL-Aligned UI/UX Audit on Windows
+## PostgreSQL, SQLite, and full-suite environment notes
 
-This subsection records a later UI/UX audit setup pass where the operator needed
-real browser screenshots against a PostgreSQL-backed backend, not the default
-SQLite-backed Playwright webServer path. These notes are intentionally additive:
-they do not replace the earlier Playwright or PostgreSQL guidance above.
+Detailed PostgreSQL provisioning, SQL dialect, full-suite dependency, and
+PostgreSQL-aligned UI/UX audit notes have been moved to
+[pitfalls-postgres-and-pytest.md](pitfalls-postgres-and-pytest.md).
 
-### Goal
+This includes:
 
-The audit goal was to inspect the school SPA through Playwright screenshots while
-using a production-aligned PostgreSQL database. SQLite was acceptable only for
-quick local smoke and was explicitly rejected as the main evidence source for
-UI/E2E behavior that depends on real persistence semantics.
-
-### What worked
-
-The reliable approach in a restricted Windows automation environment was:
-
-1. Use an ignored artifact directory such as `<repo>/.e2e-run/postgres-runtime/`.
-2. Download an official EDB PostgreSQL Windows x64 binary zip into that ignored
-   directory. The pass used PostgreSQL `16.13`.
-3. Extract the archive locally and use the bundled `initdb.exe`,
-   `postgres.exe`, `psql.exe`, and `pg_isready.exe` from
-   `<artifact-dir>/pgsql/bin/`.
-4. Initialize a local throwaway cluster in an ignored data directory, for
-   example `<artifact-dir>/data-clean`, with local trust auth.
-5. Run PostgreSQL on a non-production loopback port, for example
-   `127.0.0.1:15432`.
-6. Create a clearly disposable database such as `courseeval_uiux_audit`.
-7. Start the backend with:
-   - `DATABASE_URL=postgresql://postgres@127.0.0.1:15432/courseeval_uiux_audit`
-   - `E2E_DEV_SEED_ENABLED=true`
-   - `E2E_DEV_SEED_TOKEN=<test token>`
-   - `INIT_DEFAULT_DATA=false`
-   - `ENABLE_LLM_GRADING_WORKER=false`
-   - a local-only `SECRET_KEY`
-8. Seed data through `POST /api/e2e/dev/reset-scenario` with the same
-   `X-E2E-Seed-Token`.
-9. Start Vite from `apps/web/school` with
-   `VITE_PROXY_TARGET=http://127.0.0.1:<api-port>`.
-10. Use Playwright screenshots and DOM snapshots against the Vite URL.
-
-### Pitfall A: local machine may have no PostgreSQL service, Docker, psql, or winget
-
-The pass first checked for:
-
-- a running PostgreSQL service,
-- `psql.exe` / `postgres.exe` / `pg_ctl.exe`,
-- Docker,
-- `winget`,
-- `DATABASE_URL` / `TEST_DATABASE_URL`.
-
-None were available in that environment. Do not assume a Windows machine already
-has a database runtime just because the repository is PostgreSQL-first.
-
-### Pitfall B: Chocolatey can exist but still be unusable for PostgreSQL install
-
-Chocolatey was installed, but `choco install postgresql` failed because the shell
-did not have administrator access to Chocolatey system directories and could not
-write `lib-bad` or clear package lock state.
-
-Avoid treating "Chocolatey exists" as equivalent to "the agent can install a
-system PostgreSQL service." If Chocolatey needs admin rights, prefer a
-user-directory binary archive when the task only needs a temporary local
-database.
-
-### Pitfall C: `pg_ctl` can fail on restricted Windows tokens
-
-`initdb.exe` completed the cluster initialization but emitted Windows restricted
-token errors at the end. `pg_ctl.exe start` also failed with restricted token
-errors. The cluster files were still usable.
-
-What worked was direct `postgres.exe -D <data-dir> -h 127.0.0.1 -p <port>` rather
-than `pg_ctl.exe`, provided the process was launched in a context that could keep
-it alive for the audit.
-
-### Pitfall D: PostgreSQL writes normal LOG output to stderr
-
-When wrapping `postgres.exe` with PowerShell, normal PostgreSQL startup lines can
-arrive on stderr. If a wrapper script sets `$ErrorActionPreference = 'Stop'`,
-PowerShell may treat a harmless startup LOG line as a native command error and
-exit before PostgreSQL finishes starting.
-
-For wrapper scripts around `postgres.exe`, either avoid `Stop` for native stderr
-or redirect/handle stderr deliberately.
-
-### Pitfall E: background process lifetime can differ by launcher
-
-Several background launch attempts returned a process id but did not leave a
-listening PostgreSQL server for the next command. Direct foreground startup
-proved PostgreSQL itself was valid, but hidden `Start-Process`, `cmd /c`, and
-PowerShell job patterns were unreliable in that sandboxed automation context.
-
-When cross-command background processes are unreliable, use one orchestrator
-process that starts PostgreSQL, backend, frontend, and Playwright inside the same
-lifetime. In this pass, a local ignored Node script performed that orchestration.
-
-### Pitfall F: Node child process spawn may be blocked in the default sandbox
-
-The orchestrator initially failed with `spawn EPERM`, matching the broader
-Playwright webServer `EPERM` pitfall. The fix was to run the orchestrator outside
-the restricted sandbox/with the necessary execution approval. This is an
-environment restriction, not evidence that PostgreSQL, Vite, or the app is
-broken.
-
-### Pitfall G: Vite must be started from the school app directory
-
-Starting Vite with the Vite binary path while the current working directory was
-the repository root produced a root URL that returned `404`. The fix was to set
-the frontend process working directory to `<repo>/apps/web/school` before running
-Vite.
-
-This matters for custom audit scripts and external-server Playwright flows:
-`node <repo>/apps/web/school/node_modules/vite/bin/vite.js` is not sufficient by
-itself if the working directory is wrong.
-
-### Pitfall H: repeated role login can hang if the previous session is still active
-
-A screenshot script that logs in as admin and then navigates to `/login` to log
-in as teacher/student can hang or redirect unexpectedly if the app immediately
-redirects an already-authenticated user away from `/login`.
-
-The robust helper should clear `localStorage` and `sessionStorage` before each
-fresh role login, then navigate to `/login` and submit credentials.
-
-### Pitfall I: PostgreSQL recovery after forced audit timeouts can add startup delay
-
-Several interrupted experiments left the throwaway cluster needing crash
-recovery. `pg_isready` reported `rejecting connections` before eventually
-accepting connections. For clean audit runs, either shut PostgreSQL down
-gracefully or reinitialize a new throwaway data directory such as
-`data-clean`.
-
-### Pitfall J: DOM snapshots and screenshots can disagree during page startup
-
-A UI audit can produce a JSON snapshot showing that page text, buttons, and
-routes exist while the paired screenshot is still blank or partially painted.
-This usually means the screenshot was taken before the stable visual container
-was visible, not that the JSON snapshot is wrong.
-
-For login and other app-shell entry pages, do not rely on `page.goto(...)`
-alone. Add stable page-level test IDs in product code and wait for the visible
-panel before capture. Example pattern:
-
-```javascript
-await page.goto('/login', { waitUntil: 'domcontentloaded' })
-await page.getByTestId('login-panel').waitFor({ state: 'visible', timeout: 30000 })
-await page.waitForTimeout(300)
-await capture(page, 'login')
-```
-
-The exact script path should be documented as `<repo>/...` or
-`<artifact-dir>/...` in committed docs. If the machine-specific path matters for
-a handoff, put it in an ignored local note instead.
-
-### Artifact hygiene
-
-Keep all of the following out of tracked source:
-
-- downloaded PostgreSQL zips,
-- extracted PostgreSQL binaries,
-- local data directories,
-- audit launch scripts,
-- screenshots,
-- runtime logs,
-- seeded scenario JSON files.
-
-Use ignored directories such as `.e2e-run/`. If a temporary spec is created under
-`tests/e2e/...` for experimentation, delete it before committing unless it is a
-deliberate maintained test.
-
-### Privacy hygiene
-
-Do not paste user-specific absolute paths into committed documentation. Use
-placeholders such as:
-
-- `<repo>`
-- `<user-home>`
-- `<artifact-dir>`
-- `<api-port>`
-- `<ui-port>`
-
-Local handoff files can contain machine-specific paths when the next operator on
-the same machine needs them, but committed docs should stay portable.
-
+- the PostgreSQL-aligned Windows audit field notes;
+- the Windows local-binary, initdb, and throwaway-cluster lessons;
+- Linux `policy-rc.d` / cluster-start behavior;
+- full-suite dependency and zero-skip environment guidance.
 ## Frontend Build And Playwright Invocation Directory Pitfalls
 
 This subsection records command-invocation mistakes encountered while adding a
@@ -3369,209 +2831,18 @@ Mitigation:
   the mitigation close to the encoding guidance instead of leaving it as only a
   chat transcript note.
 
-### Pitfall: validation targets must not borrow unrelated ledger IDs
+## Ledger and selector tooling notes
 
-The validation selector reads `ledger_id` from
-`tests/TEST_SELECTION_TARGETS.json` and joins it to
-`docs/testing/test-execution-targets.csv`. During the
-repository-normalization hardening pass, several behavior pytest targets were
-found pointing at unrelated existing ledger rows, for example a notification
-API target using a Playwright discussion target's ledger id.
+Detailed selector, ledger, update-log, and private-path-scan pitfalls have
+been moved to
+[pitfalls-ledger-and-selector-tooling.md](pitfalls-ledger-and-selector-tooling.md).
 
-Why this is dangerous:
+This includes:
 
-- selector output can show stale or unrelated pass history as if it covered the
-  current target;
-- a target without its own committed row can appear more trustworthy than it
-  is;
-- future agents may skip the correct validation because another target's
-  ledger row happened to be green.
-
-Current rule:
-
-- `ledger_id` must be `null` or exactly equal to the target's own `id`;
-- if a target has durable run history, add a matching row to
-  `test-execution-targets.csv` and set `ledger_id` to the same id;
-- do not use another target's ledger row as an informal alias.
-
-Verification pattern:
-
-```powershell
-.venv\Scripts\python.exe -m json.tool tests\TEST_SELECTION_TARGETS.json
-.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py
-.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v
-```
-
-If an alias mechanism is ever needed, design it explicitly in the registry,
-selector, lint script, and tests before using it in target metadata.
-
-### Pitfall: school Playwright validation targets must use the external runner
-
-The school Playwright registry used to mix direct `npx playwright test ...`
-commands with the repository-owned external runner. Direct commands can bypass
-the environment contract that the current Windows and agent workflows rely on:
-the runner starts FastAPI and Vite on the expected loopback ports, sets E2E seed
-environment variables, waits for readiness, invokes Playwright with external
-server mode, and cleans up only the processes it started.
-
-Current metadata rule:
-
-- every `category: "school-playwright"` target in
-  `tests/TEST_SELECTION_TARGETS.json` must start with:
-
-```json
-["node", "scripts/playwright-external-runner.cjs"]
-```
-
-- direct `npx playwright test ...` is still useful for manual local debugging,
-  but it should not be the committed selector command for school Playwright
-  targets unless the external-runner contract is intentionally changed.
-
-Verification pattern:
-
-```powershell
-.venv\Scripts\python.exe ops\scripts\dev\lint_validation_registry.py
-.venv\Scripts\python.exe -m unittest tests.backend.manual.test_validation_selector -v
-```
-
-The selector tests include a repository-wide check that all current
-`school-playwright` targets use `node scripts/playwright-external-runner.cjs`.
-
-### Pitfall: Playwright external-runner API readiness can time out before slow FastAPI startup finishes
-
-The repository school Playwright external runner waits for `/api/health` with a
-fixed readiness window. In one May 2026 hardening run,
-`node scripts/playwright-external-runner.cjs e2e-security-hardening-followup.spec.js --project=chromium`
-failed with:
-
-```text
-api did not become ready at http://127.0.0.1:<local-port>/api/health within 120000ms
-```
-
-The FastAPI log printed `Application startup complete` immediately after the
-runner had already given up. A repeat run on the same changed code reached the
-tests and later passed after a test-side matcher correction, so the first
-failure was an environment/startup timing hazard, not evidence of a product
-regression.
-
-Mitigation:
-
-- Treat this specific failure shape as an observed run and record it, but check
-  for residual `uvicorn`/`node` processes before rerunning.
-- Prefer a second external-runner attempt on the same isolated ports when the
-  only failure is readiness timeout and the API completes startup right after
-  the timeout.
-- If this recurs frequently, extend the runner's API readiness timeout or add a
-  startup-progress diagnostic before the timeout fires; do not silently
-  classify the target as product-failed without a request reaching the app.
-
-### Pitfall: Playwright array containment does not apply asymmetric string matchers to array elements
-
-In Playwright/Jest-style `expect`, `toContain(expect.stringContaining("..."))`
-checks whether the array contains that matcher object; it does not apply the
-matcher to each string element. During the parent-portal hardening E2E, the
-array contained a seeded title with `E2E_UI`, but the assertion failed:
-
-```javascript
-expect(titles).toContain(expect.stringContaining('E2E_UI'))
-```
-
-Use one of these patterns instead:
-
-```javascript
-expect(titles.some(title => title.includes('E2E_UI'))).toBe(true)
-expect(titles).toContainEqual(expect.stringContaining('E2E_UI'))
-```
-
-This is a test-authoring pitfall. If the response payload visibly contains the
-expected substring, fix the matcher before changing product code.
-
-### Pitfall: private-path scanners can flag their own detection regexes
-
-Repository-local privacy scanners often contain literal examples or regular
-expressions for forbidden path shapes such as `C:/Users/...` or
-`C:\Users\...`. If the scanner simply scans all changed text files, including
-its own source, those rule definitions can appear as false positives.
-
-Mitigation:
-
-- Keep scanner self-tests or allowlist snippets for the rule definitions
-  themselves.
-- Allow explicitly redacted placeholders such as `<repo>/.agent-run/logs/...`
-  in tests and docs, but continue to flag real `.agent-run/logs/<run-id>`
-  artifact paths.
-- Still scan untracked files by default; otherwise new scripts and new skill
-  files are invisible until after they are staged.
-- Treat scanner self-hits as tooling false positives only when the matched line
-  is clearly a detection pattern or placeholder, not a real local path.
-
-### Pitfall 87: agent update append script must read BOM-prefixed CSV headers
-
-`docs/testing/agent-update-log.csv` may start with a UTF-8 BOM.
-If a helper opens it with plain `encoding="utf-8"`, `csv.DictReader` sees the
-first header as `\ufeffupdate_sequence` instead of `update_sequence`. A sequence
-calculation that looks up `row["update_sequence"]` then sees no values and can
-append a duplicate `update_sequence=1` even when the ledger already contains
-higher rows.
-
-Mitigation:
-
-- Use `encoding="utf-8-sig"` for CSV helpers that read repository ledger
-  headers.
-- Inspect the tail of `agent-update-log.csv` after using append helpers; the
-  sequence must increase monotonically by one.
-- Treat a duplicate low sequence as a transcription/tooling error and correct
-  the newly appended row before commit.
-
-### Pitfall 88: Playwright grep can accidentally match describe text and run the whole spec
-
-The admin external runner passes `--grep` through to Playwright, where the
-regular expression is evaluated against the full test title, including
-`describe(...)` text. During the notification update-clearing hardening round,
-this command intended to run only cases 23 and 24:
-
-```powershell
-node apps\web\school\scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium --grep "23|24"
-```
-
-The suite title contained `24 cases`, so every test title matched through the
-describe text and the runner executed all 24 cases. The long unintended run
-then hit unrelated browser/SQLite pressure: several course-card lookups failed
-after backend `QueuePool` exhaustion, obscuring the actual two new cases.
-
-Mitigation:
-
-- Grep on a distinctive case-title phrase, not just a bare number or a common
-  word from the `describe(...)` title. For example:
-
-```powershell
-node apps\web\school\scripts\playwright-external-runner.cjs e2e-notification-sync-deep-tier.spec.js --project=chromium --grep "23 explicit null|24 switching"
-```
-
-- After a targeted Playwright run starts, check the `Running N tests` line
-  before interpreting failures. If `N` is much larger than intended, stop and
-  rerun with a narrower grep before changing product code.
-- Do not over-anchor with `^23` unless you have verified Playwright's full
-  title starts with the case number; a too-strict anchor can produce
-  `No tests found`.
-
-### Pitfall 89: CSV ledger rewrites must not add a UTF-8 BOM to the header
-
-PowerShell `Set-Content -Encoding utf8` can rewrite repository CSV ledgers with
-a UTF-8 BOM. For ledgers such as
-`docs/testing/test-execution-targets.csv`, registry tooling reads
-the first header literally, so `test_id` becomes `\ufefftest_id`. The registry
-lint then reports every configured `ledger_id` as missing, and selector history
-can degrade from `stale` to `not-recorded`.
-
-Mitigation:
-
-- Prefer repository append/update helpers or CSV libraries that preserve the
-  existing encoding.
-- If a full-file rewrite is unavoidable, write UTF-8 without BOM, for example
-  with `.NET` `System.Text.UTF8Encoding($false)` from PowerShell.
-- After touching CSV ledgers, run `lint_validation_registry.py` and the
-  validation selector unit tests before assuming widespread missing-ledger
-  failures are real product or registry issues.
-- Inspect the first bytes when all ledger ids appear missing. `239 187 191`
-  (`EF BB BF`) at the start of a CSV ledger indicates a BOM.
+- validation-target `ledger_id` drift,
+- school Playwright external-runner target rules,
+- external-runner API readiness timing,
+- Playwright grep over-selection,
+- array matcher containment confusion,
+- private-path scanner self-matches,
+- BOM-sensitive update-log and CSV ledger pitfalls.

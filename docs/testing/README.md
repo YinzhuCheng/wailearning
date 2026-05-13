@@ -14,6 +14,19 @@ that agents append and tooling parses live here.
 | `pitfall-index.csv` | Structured index for pitfalls recorded in Markdown docs. New pitfalls use increasing positive `pitfall_sequence`; legacy Markdown-only entries may use `0` and `Null`. |
 | `agent-update-log.csv` | One row per user-visible repository-changing conversation round, starting at sequence 1. Summaries stay short; details remain in docs, ledgers, and commits. |
 
+## Topic Routes
+
+Use these when you already know the failure class and want a narrower entry
+than the full pitfall encyclopedia:
+
+- [pitfalls-windows-and-encoding.md](pitfalls-windows-and-encoding.md)
+- [pitfalls-playwright-and-e2e.md](pitfalls-playwright-and-e2e.md)
+- [pitfalls-postgres-and-pytest.md](pitfalls-postgres-and-pytest.md)
+- [pitfalls-ledger-and-selector-tooling.md](pitfalls-ledger-and-selector-tooling.md)
+
+The canonical detailed pitfall body still lives in
+[TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md).
+
 ## Rules
 
 1. Record only observed executions. Selector output, dry-run planning, and typed
@@ -30,3 +43,13 @@ that agents append and tooling parses live here.
    adding or reclassifying a pitfall.
 7. Follow the per-round update-log policy in
    `../governance/agent-update-log.md` when appending `agent-update-log.csv`.
+
+## Ledger entrypoints
+
+Use these stable explainers before editing the corresponding CSV:
+
+- [TEST_EXECUTION_TARGETS.md](TEST_EXECUTION_TARGETS.md)
+- [TEST_EXECUTION_RUNS.md](TEST_EXECUTION_RUNS.md)
+- [TEST_EXECUTION_SUMMARY.md](TEST_EXECUTION_SUMMARY.md)
+- [PITFALL_INDEX.md](PITFALL_INDEX.md)
+- [../governance/agent-update-log.md](../governance/agent-update-log.md)

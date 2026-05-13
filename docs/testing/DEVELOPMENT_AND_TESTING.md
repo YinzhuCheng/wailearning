@@ -13,6 +13,14 @@ Read in this order first:
 5. [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
 6. the feature-specific document for the workflow you are about to touch
 
+When the failure class is already obvious, start from the narrower pitfall
+route before opening the full encyclopedia:
+
+- [pitfalls-windows-and-encoding.md](pitfalls-windows-and-encoding.md)
+- [pitfalls-playwright-and-e2e.md](pitfalls-playwright-and-e2e.md)
+- [pitfalls-postgres-and-pytest.md](pitfalls-postgres-and-pytest.md)
+- [pitfalls-ledger-and-selector-tooling.md](pitfalls-ledger-and-selector-tooling.md)
+
 Why this is mandatory:
 
 - the repository has strict package-boundary rules that are easy to misread if you only inspect paths

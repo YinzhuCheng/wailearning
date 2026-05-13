@@ -8,7 +8,7 @@ This document exists primarily for **LLM coding agents** and automation operator
 
 **Implicit premise:** full-suite runs often mean **one backend process** plus a **file-backed SQLite database** reused for the entire CLI session. Many “single spec green, full suite red” outcomes are **state accumulation + harness ambiguity**, not necessarily broken business logic.
 
-Cross-reference: [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (numbered pitfalls), [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md), [ENCODING_AND_MOJIBAKE_SAFETY.md](../contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
+Cross-reference: [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (canonical numbered pitfalls), [pitfalls-playwright-and-e2e.md](pitfalls-playwright-and-e2e.md) (narrower Playwright route), [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md), [ENCODING_AND_MOJIBAKE_SAFETY.md](../contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
 
 Repo-local skill: [`../../skills/school-playwright-e2e/SKILL.md`](../../skills/school-playwright-e2e/SKILL.md)
 for the condensed agent workflow when the full runbook is more detail than the
