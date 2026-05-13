@@ -36,7 +36,7 @@
 | [`db/database.py`](../../apps/backend/courseeval_backend/db/database.py) | `engine`, `SessionLocal`, `Base` declarative |
 | [`db/models.py`](../../apps/backend/courseeval_backend/db/models.py) | SQLAlchemy ORM models (large) |
 | [`api/schemas.py`](../../apps/backend/courseeval_backend/api/schemas.py) | Pydantic request/response compatibility barrel; imports and re-exports split DTO groups while preserving current router/test import paths |
-| [`api/schema_defs/`](../../apps/backend/courseeval_backend/api/schema_defs/) | Domain-grouped API schema definitions currently holding appearance, attendance, dashboard, files, notifications, operations/settings, and points DTOs |
+| [`api/schema_defs/`](../../apps/backend/courseeval_backend/api/schema_defs/) | Domain-grouped API schema definitions currently holding appearance, attendance, dashboard, files, notifications, operations/settings, points, and roster DTOs |
 | [`api/routers/*.py`](../../apps/backend/courseeval_backend/api/routers/) | HTTP routers (see §3) |
 | [`llm_grading.py`](../../apps/backend/courseeval_backend/llm_grading.py) | Grading orchestration, **in-process worker manager**, effective score aggregation |
 | [`llm_discussion.py`](../../apps/backend/courseeval_backend/llm_discussion.py) | Course discussion assistant context assembly |

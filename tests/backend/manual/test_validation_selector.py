@@ -356,6 +356,17 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
         self.assertEqual(payload["unmatched_paths"], [])
 
+    def test_roster_schema_defs_change_selects_roster_target(self):
+        payload = run_selector("--paths", "apps/backend/courseeval_backend/api/schema_defs/roster.py")
+
+        ids = recommendation_ids(payload)
+        self.assertIn("static.api_surface_governance", ids)
+        self.assertIn("static.boundary_governance", ids)
+        self.assertIn("backend.roster.student_user_api_sync", ids)
+        self.assertNotIn("full.pytest.postgres", ids)
+        self.assertEqual(payload["non_full_validation"]["status"], "acceptable")
+        self.assertEqual(payload["unmatched_paths"], [])
+
     def test_discussion_router_prefers_pytest_hazard_tier_before_api_heavy_playwright(self):
         payload = run_selector("--paths", "apps/backend/courseeval_backend/api/routers/discussions.py")
 

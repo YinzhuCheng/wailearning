@@ -53,6 +53,11 @@ from apps.backend.courseeval_backend.api.schema_defs.points import (
     PointStatsResponse,
     StudentPointResponse,
 )
+from apps.backend.courseeval_backend.api.schema_defs.roster import (
+    CourseEnrollmentResponse,
+    CourseEnrollmentTypeUpdate,
+    CourseRosterStudentInput,
+)
 
 ContentFormatLiteral = Literal["markdown", "plain"]
 class UserRole(str, Enum):
@@ -700,37 +705,6 @@ class StudentCourseCatalogItem(SubjectResponse):
     can_self_enroll_elective: bool = False
 
 
-class CourseEnrollmentResponse(BaseModel):
-    id: int
-    subject_id: int
-    student_id: int
-    class_id: int
-    enrollment_type: str = "required"
-    can_remove: bool
-    created_at: datetime
-    student_name: Optional[str] = None
-    student_no: Optional[str] = None
-    class_name: Optional[str] = None
-    student_user_id: Optional[int] = None
-
-    class Config:
-        from_attributes = True
-
-
-class CourseRosterStudentInput(BaseModel):
-    name: str
-    student_no: str
-    gender: Optional[Gender] = None
-    enrollment_type: Optional[str] = None
-    phone: Optional[str] = None
-    parent_phone: Optional[str] = None
-    address: Optional[str] = None
-
-
-class CourseEnrollmentTypeUpdate(BaseModel):
-    enrollment_type: str
-
-
 class SubjectRosterEnrollRequest(BaseModel):
     """Add enrollments only for students already on the course class roster (same class_id)."""
 
@@ -876,6 +850,7 @@ class UserBatchSetClassResponse(BaseModel):
     errors: List[UserBatchSetClassError] = Field(default_factory=list)
 
 
+CourseRosterStudentInput.model_rebuild(_types_namespace={"Gender": Gender})
 SubjectCreate.model_rebuild()
 
 

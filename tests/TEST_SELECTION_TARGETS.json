@@ -998,6 +998,7 @@
                     "apps/backend/courseeval_backend/api/routers/students.py",
                     "apps/backend/courseeval_backend/api/schemas.py",
                     "apps/backend/courseeval_backend/api/schema_defs/",
+                    "apps/backend/courseeval_backend/api/schema_defs/roster.py",
                     "apps/backend/courseeval_backend/domains/roster/reconciliation.py",
                     "apps/backend/courseeval_backend/domains/roster/sync.py",
                     "apps/backend/courseeval_backend/domains/roster/identity.py"

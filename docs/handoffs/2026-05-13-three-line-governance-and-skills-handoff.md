@@ -129,6 +129,11 @@ Latest continuation boundary split:
   and `StudentRanking` into `api/schema_defs/dashboard.py`. `DashboardStats`
   keeps its `ScoreResponse` relationship through a forward reference rebuilt
   from the compatibility barrel after `ScoreResponse` is defined.
+- Current follow-up moved roster DTOs `CourseEnrollmentResponse`,
+  `CourseRosterStudentInput`, and `CourseEnrollmentTypeUpdate` into
+  `api/schema_defs/roster.py`. `CourseRosterStudentInput` keeps its `Gender`
+  relationship through a forward reference rebuilt from the compatibility
+  barrel after `Gender` is defined.
 - Kept `apps/backend/courseeval_backend/api/schemas.py` as the compatibility
   barrel for existing router, domain-helper, and test imports.
 - Updated `ops/scripts/dev/inventory_api_schemas.py` so inventory checks count
@@ -285,6 +290,32 @@ Latest dashboard schema split validation:
 - `.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q`
   passed 10 tests.
 
+Latest roster schema split validation:
+
+- `python -m py_compile apps\backend\courseeval_backend\api\schemas.py apps\backend\courseeval_backend\api\schema_defs\roster.py`
+  passed.
+- `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
+  passed with 142 local schema classes/enums, 44 compatibility re-exports, 186
+  public schema names, 24 importers, and 0 missing imports.
+- `python -m json.tool tests\TEST_SELECTION_TARGETS.json` passed.
+- `python ops/scripts/dev/lint_validation_registry.py` passed.
+- `python ops/scripts/dev/check_api_surface_governance.py` passed.
+- `python ops/scripts/dev/check_boundary_governance.py --details` passed with
+  existing large-file warnings; `api/schemas.py` is now 1631 lines.
+- `python ops/scripts/dev/check_schema_governance.py` passed.
+- `python ops/scripts/dev/select_validation_targets.py --worktree --json`
+  reported targeted/static validation as acceptable and no unmatched paths.
+- `python -m unittest tests.backend.manual.test_validation_selector -v` passed
+  75 tests after adding a roster schema selector regression.
+- `.venv\Scripts\python.exe -m pytest tests\backend\roster\test_student_user_api_roster_sync.py -q`
+  passed 11 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_llm_grading.py -q`
+  passed 16 tests.
+- `.venv\Scripts\python.exe -m pytest tests\backend\learning_notes\test_learning_notes_api.py -q`
+  passed 15 tests.
+- `.venv\Scripts\python.exe -m pytest tests\behavior\test_notification_sync_api_edge_behavior.py -q`
+  passed 10 tests.
+
 For future handoff-only edits in this branch, the minimal governance rerun is:
 
 ```powershell
@@ -330,7 +361,7 @@ Recommended next work, in order:
    `api/schema_defs/`, beginning with
    `python ops/scripts/dev/inventory_api_schemas.py --fail-on-missing-imports`
    and preserving the `api.schemas` compatibility barrel. Notifications, files,
-   and dashboard have already been split; prefer another cohesive
+   dashboard, and roster have already been split; prefer another cohesive
    low-coupling group next and avoid moving `ScoreResponse` in the same round
    as unrelated DTOs.
 3. Consider extracting cohesive builders from `domains/seed/demo.py`, but only

@@ -207,7 +207,7 @@ The following extractions are already in place:
 - demo seeding moved into `domains/seed/demo.py`
 - operation-log helpers moved into `services/logging.py`
 - low-coupling API DTO groups for appearance, attendance, dashboard, files,
-  notifications, operations/settings, and points moved into `api/schema_defs/` while `api/schemas.py` remains the
+  notifications, operations/settings, points, and roster moved into `api/schema_defs/` while `api/schemas.py` remains the
   compatibility barrel for existing router and test imports
 
 That is the intended pattern for subsequent rounds: extract coherent vertical slices without inventing alternate import roots.
