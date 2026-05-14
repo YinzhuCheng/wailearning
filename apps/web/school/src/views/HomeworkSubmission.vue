@@ -67,9 +67,13 @@
             <span v-else class="muted-text">暂无评分</span>
           </el-descriptions-item>
           <el-descriptions-item v-if="appealStatusLabel" label="申诉" :span="2">
-            <el-tag v-if="historySummary?.appeal_status === 'pending'" type="warning" size="small">申诉待处理</el-tag>
-            <el-tag v-else-if="historySummary?.appeal_status === 'acknowledged'" type="info" size="small">教师已阅</el-tag>
-            <el-tag v-else-if="historySummary?.appeal_status === 'resolved'" type="success" size="small">已处理</el-tag>
+            <el-tag
+              v-if="historySummary?.appeal_status"
+              :type="getAppealStatusTagType(historySummary.appeal_status)"
+              size="small"
+            >
+              {{ getAppealStatusLabel(historySummary.appeal_status, { verbose: true }) }}
+            </el-tag>
             <span v-else class="muted-text">—</span>
           </el-descriptions-item>
         </el-descriptions>
@@ -332,6 +336,7 @@ import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
+import { getAppealStatusLabel, getAppealStatusTagType } from '@/utils/appealNotificationActions'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 import { normalizeContentFormat } from '@/utils/contentFormat'
 

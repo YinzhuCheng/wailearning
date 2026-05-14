@@ -192,9 +192,13 @@
             </el-table-column>
             <el-table-column label="申诉" width="100">
               <template #default="{ row }">
-                <el-tag v-if="row.appeal_status === 'pending'" type="warning" size="small">待处理</el-tag>
-                <el-tag v-else-if="row.appeal_status === 'acknowledged'" type="info" size="small">已阅</el-tag>
-                <el-tag v-else-if="row.appeal_status === 'resolved'" type="success" size="small">已处理</el-tag>
+                <el-tag
+                  v-if="row.appeal_status"
+                  :type="getAppealStatusTagType(row.appeal_status)"
+                  size="small"
+                >
+                  {{ getAppealStatusLabel(row.appeal_status) }}
+                </el-tag>
                 <span v-else class="muted-text">—</span>
               </template>
             </el-table-column>
@@ -391,6 +395,7 @@ import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import RichMarkdownDisplay from '@/components/RichMarkdownDisplay.vue'
 import { useUserStore } from '@/stores/user'
+import { getAppealStatusLabel, getAppealStatusTagType } from '@/utils/appealNotificationActions'
 import { downloadAttachment } from '@/utils/attachments'
 import { isMarkdownFormat } from '@/utils/contentFormat'
 

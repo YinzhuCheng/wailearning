@@ -78,13 +78,13 @@
           <el-table-column v-if="showAppealActionColumn" label="申诉" width="110">
             <template #default="{ row }">
               <el-button
-                v-if="row.notification_kind === 'grade_appeal' && row.related_homework_id && row.related_student_id && row.appeal_status !== 'resolved'"
+                v-if="canOpenAppealFromRow(row)"
                 type="primary"
                 link
                 size="small"
-                @click.stop="goGradeAppeal(row)"
+                @click.stop="openAppealFromRow(row)"
               >
-                处理
+                {{ appealActionLabel(row) }}
               </el-button>
               <span v-else class="muted-text">—</span>
             </template>
@@ -204,7 +204,9 @@
           <el-button type="primary" @click="gotoUsersResetFromDetail">打开密码重置（用户管理）</el-button>
         </el-descriptions-item>
         <el-descriptions-item v-if="canOpenAppealFromDetail" label="申诉处理" :span="2">
-          <el-button type="primary" @click="goGradeAppeal(currentNotification)">打开对应作业评分页</el-button>
+          <el-button type="primary" @click="openAppealFromRow(currentNotification)">
+            {{ detailAppealActionLabel }}
+          </el-button>
         </el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
           <el-button v-if="currentNotification.attachment_url" type="primary" link @click="openAttachment(currentNotification)">
@@ -226,6 +228,14 @@ import api from '@/api'
 import MarkdownEditorPanel from '@/components/MarkdownEditorPanel.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
+import {
+  buildAppealNotificationRoute,
+  buildAppealRouteSelectedCourse,
+  canOpenAppealNotification,
+  getAppealActionLabel,
+  getAppealReadonlyLabel,
+  isScoreAppealNotification
+} from '@/utils/appealNotificationActions'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 import { normalizeContentFormat } from '@/utils/contentFormat'
 import {
@@ -307,41 +317,37 @@ const showManageColumn = computed(
       (isClassTeacherView.value ? Boolean(currentClassId.value) : Boolean(selectedCourse.value)))
 )
 
+const canOpenAppealFromRow = row =>
+  canOpenAppealNotification(row, { isStudent: userStore.isStudent })
+
+const appealActionLabel = row => getAppealActionLabel(row)
+
 const canOpenAppealFromDetail = computed(
-  () =>
-    currentNotification.value?.notification_kind === 'grade_appeal' &&
-    currentNotification.value?.related_homework_id &&
-    currentNotification.value?.related_student_id &&
-    currentNotification.value?.appeal_status !== 'resolved' &&
-    !userStore.isStudent
+  () => canOpenAppealFromRow(currentNotification.value)
 )
 
-const canOpenScoreAppealFromDetail = computed(
-  () =>
-    currentNotification.value?.notification_kind === 'score_grade_appeal' &&
-    currentNotification.value?.subject_id &&
-    currentNotification.value?.appeal_status !== 'resolved' &&
-    !userStore.isStudent
-)
-
-const goGradeAppeal = row => {
-  if (!row?.related_homework_id || !row?.related_student_id) return
-  router.push({
-    path: `/homework/${row.related_homework_id}/submissions`,
-    query: { student_id: String(row.related_student_id) }
-  })
+const openAppealFromRow = row => {
+  const route = buildAppealNotificationRoute(row)
+  if (!route) {
+    return
+  }
+  const selectedCourseForRoute = buildAppealRouteSelectedCourse(row)
+  if (selectedCourseForRoute) {
+    userStore.setSelectedCourse(selectedCourseForRoute)
+  }
+  router.push(route)
 }
 
-const goScoreAppeal = row => {
-  if (!row?.subject_id) return
-  userStore.selectCourse({
-    id: row.subject_id,
-    name: row.subject_name || '',
-    class_id: row.class_id || null,
-    class_name: row.class_name || ''
-  })
-  router.push('/scores')
-}
+const detailAppealActionLabel = computed(() => {
+  if (!currentNotification.value) return '打开申诉'
+  if (getAppealActionLabel(currentNotification.value) === '查看') {
+    return getAppealReadonlyLabel(currentNotification.value)
+  }
+  if (isScoreAppealNotification(currentNotification.value)) {
+    return '处理对应成绩申诉'
+  }
+  return '处理对应作业评分页'
+})
 
 const form = reactive({
   title: '',

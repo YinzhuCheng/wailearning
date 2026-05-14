@@ -133,17 +133,34 @@
             <el-button size="small" @click="loadAppeals">刷新</el-button>
           </div>
         </template>
+        <el-alert
+          v-if="focusedAppealStatus && isTerminalAppealStatus(focusedAppealStatus)"
+          type="info"
+          :closable="false"
+          class="appeal-focus-banner"
+          :title="appealFocusBannerTitle"
+        />
         <el-table :data="appeals" empty-text="暂无申诉">
-          <el-table-column prop="id" label="编号" width="70" />
+          <el-table-column prop="id" label="编号" width="70">
+            <template #default="{ row }">
+              <span
+                :data-testid="`score-appeal-row-${row.id}`"
+                :class="{ 'appeal-row-focus': Number(route.query.appeal_id || 0) === Number(row.id) }"
+              >
+                {{ row.id }}
+              </span>
+            </template>
+          </el-table-column>
           <el-table-column prop="student_name" label="学生" width="100" />
           <el-table-column prop="semester" label="学期" width="120" />
           <el-table-column prop="target_component" label="申诉对象" min-width="120" />
           <el-table-column prop="reason_text" label="理由" min-width="160" show-overflow-tooltip />
           <el-table-column prop="status" label="状态" width="100" />
+          <el-table-column prop="teacher_response" label="教师回复" min-width="180" show-overflow-tooltip />
           <el-table-column label="操作" width="100">
             <template #default="{ row }">
               <el-button
-                v-if="row.status === 'pending'"
+                v-if="isActionableAppealStatus(row.status)"
                 type="primary"
                 link
                 @click="openAppealDialog(row)"
@@ -385,17 +402,23 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import DualHorizontalScroll from '@/components/DualHorizontalScroll.vue'
 import { useUserStore } from '@/stores/user'
+import {
+  getAppealStatusLabel,
+  isActionableAppealStatus,
+  isTerminalAppealStatus
+} from '@/utils/appealNotificationActions'
 
 const OTHER_DAILY = '其他平时分'
 
 const userStore = useUserStore()
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -424,6 +447,8 @@ const compositionLoading = ref(false)
 const classCompositions = ref([])
 const appeals = ref([])
 const appealResolve = reactive({ appealId: null, response: '', loading: false })
+const focusedAppealStatus = ref('')
+const focusedAppealResponse = ref('')
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 
@@ -566,12 +591,50 @@ const loadClassCompositions = async () => {
 }
 
 const loadAppeals = async () => {
+  const routeSubjectId = Number(route.query.subject_id || 0)
+  if (
+    routeSubjectId &&
+    (!selectedCourse.value || Number(selectedCourse.value.id) !== routeSubjectId)
+  ) {
+    const courses = await userStore.fetchTeachingCourses(false)
+    const matchedCourse = courses.find(row => Number(row.id) === routeSubjectId)
+    if (matchedCourse) {
+      userStore.setSelectedCourse(matchedCourse)
+    }
+  }
   if (!selectedCourse.value) {
     appeals.value = []
+    focusedAppealStatus.value = ''
+    focusedAppealResponse.value = ''
     return
   }
   appeals.value = await api.scores.listAppeals({ subject_id: selectedCourse.value.id })
+  const appealId = Number(route.query.appeal_id || 0)
+  focusedAppealStatus.value = ''
+  focusedAppealResponse.value = ''
+  if (appealId) {
+    const target = appeals.value.find(row => Number(row.id) === appealId)
+    if (target) {
+      await nextTick()
+      const node = document.querySelector(`[data-testid="score-appeal-row-${appealId}"]`)
+      node?.scrollIntoView({ block: 'center', behavior: 'auto' })
+      focusedAppealStatus.value = String(target.status || '')
+      focusedAppealResponse.value = String(target.teacher_response || '')
+      if (isActionableAppealStatus(target.status)) {
+        openAppealDialog(target)
+      }
+    }
+  }
 }
+
+const appealFocusBannerTitle = computed(() => {
+  if (!focusedAppealStatus.value || !isTerminalAppealStatus(focusedAppealStatus.value)) return ''
+  const response = focusedAppealResponse.value.trim()
+  const statusLabel = getAppealStatusLabel(focusedAppealStatus.value, { verbose: true }) || focusedAppealStatus.value
+  return response
+    ? `已定位到目标申诉；当前状态：${statusLabel}；教师回复：${response}`
+    : `已定位到目标申诉；当前状态：${statusLabel}`
+})
 
 const resetForm = () => {
   form.student_id = null
@@ -950,6 +1013,15 @@ watch(selectedCourse, async () => {
 .totals-card,
 .appeals-card {
   margin-bottom: 20px;
+}
+
+.appeal-focus-banner {
+  margin-bottom: 12px;
+}
+
+.appeal-row-focus {
+  font-weight: 700;
+  color: var(--el-color-primary);
 }
 
 .scheme-hint {

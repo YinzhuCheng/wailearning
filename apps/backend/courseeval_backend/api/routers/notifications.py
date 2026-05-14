@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import ObjectDeletedError
 
 from apps.backend.courseeval_backend.attachments import delete_attachment_file_if_unreferenced
+from apps.backend.courseeval_backend.domains.appeal_notifications import resolve_notification_appeal_status
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
 from apps.backend.courseeval_backend.domains.courses.access import (
     ensure_course_access_http,
@@ -23,10 +24,8 @@ from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.db.models import (
     Class,
     CourseEnrollment,
-    HomeworkGradeAppeal,
     Notification,
     NotificationRead,
-    ScoreGradeAppeal,
     Student,
     User,
     UserRole,
@@ -214,26 +213,11 @@ def _visible_notifications_query(current_user: User, db: Session, subject_id: Op
     return query
 
 
-def _serialize_notification(notification: Notification, current_user: User, db: Session) -> NotificationResponse:
+def _build_notification_response(notification: Notification, current_user: User, db: Session) -> NotificationResponse:
     read_record = db.query(NotificationRead).filter(
         NotificationRead.notification_id == notification.id,
         NotificationRead.user_id == current_user.id,
     ).first()
-    appeal_status = None
-    if notification.related_appeal_id is not None:
-        appeal_row = (
-            db.query(HomeworkGradeAppeal.status)
-            .filter(HomeworkGradeAppeal.id == notification.related_appeal_id)
-            .first()
-        )
-        appeal_status = appeal_row[0] if appeal_row else None
-    elif notification.related_score_appeal_id is not None:
-        score_appeal_row = (
-            db.query(ScoreGradeAppeal.status)
-            .filter(ScoreGradeAppeal.id == notification.related_score_appeal_id)
-            .first()
-        )
-        appeal_status = score_appeal_row[0] if score_appeal_row else None
     return NotificationResponse(
         id=notification.id,
         title=notification.title,
@@ -249,7 +233,8 @@ def _serialize_notification(notification: Notification, current_user: User, db: 
         related_homework_id=notification.related_homework_id,
         related_student_id=notification.related_student_id,
         related_appeal_id=notification.related_appeal_id,
-        appeal_status=appeal_status,
+        related_score_appeal_id=notification.related_score_appeal_id,
+        appeal_status=resolve_notification_appeal_status(notification, db),
         target_user_id=notification.target_user_id,
         notification_kind=notification.notification_kind or "general",
         created_by=notification.created_by,
@@ -289,7 +274,7 @@ def get_notifications(
     out = []
     for notification in notifications:
         try:
-            out.append(_serialize_notification(notification, current_user, db))
+            out.append(_build_notification_response(notification, current_user, db))
         except ObjectDeletedError:
             # Concurrent DELETE can expire ORM rows between OFFSET/LIMIT fetch and serialization (SQLite E2E stress).
             continue
@@ -371,7 +356,7 @@ def get_notification(
         if notification.target_user_id is not None and int(notification.target_user_id) != int(current_user.id):
             raise HTTPException(status_code=403, detail="You do not have access to this notification.")
 
-    return _serialize_notification(notification, current_user, db)
+    return _build_notification_response(notification, current_user, db)
 
 
 @router.post("", response_model=NotificationResponse)
@@ -428,6 +413,7 @@ def create_notification(
         related_homework_id=data.related_homework_id,
         related_student_id=data.related_student_id,
         related_appeal_id=data.related_appeal_id,
+        related_score_appeal_id=data.related_score_appeal_id,
         target_user_id=data.target_user_id,
         notification_kind=data.notification_kind or "general",
         created_by=current_user.id,
@@ -435,7 +421,7 @@ def create_notification(
     db.add(notification)
     db.commit()
     db.refresh(notification)
-    return _serialize_notification(notification, current_user, db)
+    return _build_notification_response(notification, current_user, db)
 
 
 @router.put("/{notification_id}", response_model=NotificationResponse)
@@ -523,6 +509,10 @@ def update_notification(
         notification.target_student_id = data.target_student_id
     if "target_user_id" in requested_fields:
         notification.target_user_id = data.target_user_id
+    if "related_appeal_id" in requested_fields:
+        notification.related_appeal_id = data.related_appeal_id
+    if "related_score_appeal_id" in requested_fields:
+        notification.related_score_appeal_id = data.related_score_appeal_id
     if data.notification_kind is not None:
         nk = (data.notification_kind or "").strip()
         if nk == "password_reset_request":
@@ -533,7 +523,7 @@ def update_notification(
 
     db.commit()
     db.refresh(notification)
-    return _serialize_notification(notification, current_user, db)
+    return _build_notification_response(notification, current_user, db)
 
 
 @router.delete("/{notification_id}")

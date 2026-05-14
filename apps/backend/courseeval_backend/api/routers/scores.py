@@ -506,7 +506,7 @@ def respond_score_grade_appeal(
         raise HTTPException(status_code=400, detail="无效的处理状态。")
     appeal.teacher_response = payload.teacher_response.strip()
     appeal.status = next_status
-    mark_score_appeal_notifications_handled(db, appeal.id)
+    mark_score_appeal_notifications_handled(db, appeal.id, appeal.status)
     db.commit()
     db.refresh(appeal)
     return _serialize_score_appeal(db, appeal)

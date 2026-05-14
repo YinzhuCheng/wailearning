@@ -27,12 +27,16 @@
           </div>
           <div class="review-meta-item">
             <span class="review-meta-label">申诉</span>
-            <el-tag v-if="detailRow.appeal_status === 'pending'" type="warning" size="small">待处理</el-tag>
-            <el-tag v-else-if="detailRow.appeal_status === 'acknowledged'" type="info" size="small">已阅</el-tag>
-            <el-tag v-else-if="detailRow.appeal_status === 'resolved'" type="success" size="small">已处理</el-tag>
+            <el-tag
+              v-if="detailRow.appeal_status"
+              :type="getAppealStatusTagType(detailRow.appeal_status)"
+              size="small"
+            >
+              {{ getAppealStatusLabel(detailRow.appeal_status) }}
+            </el-tag>
             <span v-else class="muted">—</span>
             <el-button
-              v-if="detailRow.appeal_status === 'pending'"
+              v-if="isActionableAppealStatus(detailRow.appeal_status)"
               size="small"
               type="primary"
               link
@@ -261,6 +265,11 @@ import api from '@/api'
 import FeedbackRichText from '@/components/FeedbackRichText.vue'
 import PlainOrMarkdownBlock from '@/components/PlainOrMarkdownBlock.vue'
 import { useUserStore } from '@/stores/user'
+import {
+  getAppealStatusLabel,
+  getAppealStatusTagType,
+  isActionableAppealStatus
+} from '@/utils/appealNotificationActions'
 import { downloadAttachment } from '@/utils/attachments'
 import { isMarkdownFormat } from '@/utils/contentFormat'
 

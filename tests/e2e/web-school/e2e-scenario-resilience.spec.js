@@ -1013,6 +1013,46 @@ test.describe('E2E resilience scenarios', () => {
       .toBe(1)
   })
 
+  test('teacher notifications score-appeal deep-link stays actionable after appeal resolves', async ({ page }) => {
+    const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const semesters = await apiGetJson('/api/semesters', teacherToken)
+    const semester = semesters[0]?.name || '2026春季'
+    const reasonText = `E2E score appeal deeplink ${s.suffix}_${Date.now()}`
+
+    const created = await apiPostJson(`/api/scores/appeals?subject_id=${s.course_required_id}`, studentToken, {
+      semester,
+      target_component: 'total',
+      reason_text: reasonText,
+      score_id: null
+    })
+
+    await apiPutJson(`/api/scores/appeals/${created.id}`, teacherToken, {
+      teacher_response: 'resolved from red-team regression',
+      status: 'resolved'
+    })
+
+    await login(page, s.teacher_own.username, s.teacher_own.password)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await page.goto('/notifications', { waitUntil: 'load', timeout: 60000 })
+
+    const targetRow = page.locator('tr').filter({ has: page.getByRole('button', { name: '查看' }) }).first()
+    await expect(targetRow).toBeVisible({ timeout: 30000 })
+    await expect(targetRow).toContainText('成绩构成申诉')
+    const action = targetRow.getByRole('button', { name: '查看' })
+    await expect(action).toBeVisible({ timeout: 10000 })
+    await action.click()
+
+    await expect(page).toHaveURL(
+      new RegExp(`/scores\\?appeal_id=${created.id}&subject_id=${s.course_required_id}|/scores\\?subject_id=${s.course_required_id}&appeal_id=${created.id}`),
+      { timeout: 20000 }
+    )
+    await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
+    await expect(page.locator(`[data-testid="score-appeal-row-${created.id}"]`)).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.appeal-focus-banner')).toContainText('resolved', { timeout: 20000 })
+  })
+
   test('student deep-link to student scores recovers from a stale invalid selected_course cache', async ({ page }) => {
     const s = scenario()
 

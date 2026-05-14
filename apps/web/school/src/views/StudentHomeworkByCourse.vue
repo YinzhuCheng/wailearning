@@ -52,8 +52,13 @@
         </el-table-column>
         <el-table-column label="申诉" width="100">
           <template #default="{ row }">
-            <el-tag v-if="row.appeal_status === 'pending'" type="warning" size="small">待处理</el-tag>
-            <el-tag v-else-if="row.appeal_status" type="info" size="small">{{ row.appeal_status }}</el-tag>
+            <el-tag
+              v-if="row.appeal_status"
+              :type="getAppealStatusTagType(row.appeal_status)"
+              size="small"
+            >
+              {{ getAppealStatusLabel(row.appeal_status) }}
+            </el-tag>
             <span v-else class="muted-text">—</span>
           </template>
         </el-table-column>
@@ -90,6 +95,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { getAppealStatusLabel, getAppealStatusTagType } from '@/utils/appealNotificationActions'
 
 const router = useRouter()
 const route = useRoute()

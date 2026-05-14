@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from apps.backend.courseeval_backend.domains.appeal_notifications import sync_appeal_notification_projection
 from apps.backend.courseeval_backend.domains.courses.access import subject_teacher_user_ids
 from apps.backend.courseeval_backend.db.models import Notification, ScoreGradeAppeal, Subject
 
@@ -19,21 +20,22 @@ def notify_teachers_score_grade_appeal(
     class_id = course.class_id if course else None
     teacher_ids = subject_teacher_user_ids(db, int(appeal.subject_id))
     created: list[Notification] = []
-    title = "成绩构成申诉待处理"
+    title = "成绩构成申诉"
     excerpt = (appeal.reason_text or "").strip()
     if len(excerpt) > 500:
-        excerpt = excerpt[:500] + "…"
-    body_lines = [
-        f"学生 {student_name} 提交了成绩申诉。",
-        f"申诉编号：{appeal.id}",
-        f"学期：{appeal.semester}",
-        f"申诉对象：{appeal.target_component}",
-        "申诉理由：",
-        excerpt or "（无）",
-        "",
-        "请在「成绩管理」中查看学生成绩构成并处理。",
-    ]
-    content = "\n".join(body_lines)
+        excerpt = excerpt[:500] + "..."
+    content = "\n".join(
+        [
+            f"学生 {student_name} 提交了成绩申诉。",
+            f"申诉编号：{appeal.id}",
+            f"学期：{appeal.semester}",
+            f"申诉对象：{appeal.target_component}",
+            "申诉理由：",
+            excerpt or "（无）",
+            "",
+            "请在“成绩管理”中查看学生成绩构成并处理。",
+        ]
+    )
 
     for uid in teacher_ids:
         existing = (
@@ -46,15 +48,15 @@ def notify_teachers_score_grade_appeal(
             .first()
         )
         if existing:
-            existing.title = title
-            existing.content = content
             existing.class_id = class_id
             existing.subject_id = appeal.subject_id
             existing.related_student_id = appeal.student_id
             existing.created_by = creator_user_id
+            sync_appeal_notification_projection(existing, status=appeal.status, content=content)
             created.append(existing)
             continue
-        n = Notification(
+
+        notification = Notification(
             title=title,
             content=content,
             priority="important",
@@ -70,14 +72,15 @@ def notify_teachers_score_grade_appeal(
             notification_kind="score_grade_appeal",
             created_by=creator_user_id,
         )
-        db.add(n)
-        created.append(n)
+        sync_appeal_notification_projection(notification, status=appeal.status, content=content)
+        db.add(notification)
+        created.append(notification)
+
     return created
 
 
-def mark_score_appeal_notifications_handled(db: Session, appeal_id: int) -> None:
+def mark_score_appeal_notifications_handled(db: Session, appeal_id: int, status: str) -> None:
     rows = db.query(Notification).filter(Notification.related_score_appeal_id == appeal_id).all()
-    for n in rows:
-        if n.notification_kind == "score_grade_appeal" and not str(n.title or "").startswith("【已处理】"):
-            n.title = "【已处理】" + str(n.title or "")
-            n.content = (n.content or "") + "\n\n【系统】教师已回复该申诉。"
+    for notification in rows:
+        if notification.notification_kind == "score_grade_appeal":
+            sync_appeal_notification_projection(notification, status=status)

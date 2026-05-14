@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:appeals": "node scripts/test-appeal-notification-actions.cjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:external": "node scripts/playwright-external-runner.cjs",

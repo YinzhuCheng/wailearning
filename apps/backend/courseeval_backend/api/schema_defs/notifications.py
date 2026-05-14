@@ -20,7 +20,7 @@ class NotificationBase(BaseModel):
     related_homework_id: Optional[int] = None
     related_student_id: Optional[int] = None
     related_appeal_id: Optional[int] = None
-    appeal_status: Optional[str] = None
+    related_score_appeal_id: Optional[int] = None
     target_user_id: Optional[int] = None
     notification_kind: str = "general"
 
@@ -51,6 +51,7 @@ class NotificationUpdate(BaseModel):
     related_homework_id: Optional[int] = None
     related_student_id: Optional[int] = None
     related_appeal_id: Optional[int] = None
+    related_score_appeal_id: Optional[int] = None
     target_user_id: Optional[int] = None
     notification_kind: Optional[str] = None
 
@@ -64,8 +65,25 @@ class NotificationUpdate(BaseModel):
         return normalize_content_format(value if isinstance(value, str) else None)
 
 
-class NotificationResponse(NotificationBase):
+class NotificationResponse(BaseModel):
     id: int
+    title: str
+    content: Optional[str] = None
+    content_format: ContentFormatLiteral = "markdown"
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    priority: str = "normal"
+    is_pinned: bool = False
+    class_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    target_student_id: Optional[int] = None
+    related_homework_id: Optional[int] = None
+    related_student_id: Optional[int] = None
+    related_appeal_id: Optional[int] = None
+    related_score_appeal_id: Optional[int] = None
+    appeal_status: Optional[str] = None
+    target_user_id: Optional[int] = None
+    notification_kind: str = "general"
     created_by: int
     created_at: datetime
     updated_at: datetime

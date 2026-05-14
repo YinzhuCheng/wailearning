@@ -375,3 +375,114 @@ def test_pending_score_appeal_notification_exposes_appeal_status_to_clients():
     rows = [row for row in listed.json().get("data", []) if row.get("notification_kind") == "score_grade_appeal"]
     assert rows
     assert any(row.get("appeal_status") == "pending" for row in rows)
+    assert any(row.get("related_score_appeal_id") for row in rows)
+
+
+def test_resolved_score_appeal_notification_keeps_target_id_for_read_only_deeplink():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+
+    created = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_h,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "score appeal read-only deep-link"},
+    )
+    assert created.status_code == 200, created.text
+    appeal_id = created.json()["id"]
+
+    resolved = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=teacher_h,
+        json={"teacher_response": "resolved", "status": "resolved"},
+    )
+    assert resolved.status_code == 200, resolved.text
+
+    listed = client.get("/api/notifications", headers=teacher_h)
+    assert listed.status_code == 200, listed.text
+    rows = [row for row in listed.json().get("data", []) if row.get("notification_kind") == "score_grade_appeal"]
+    assert rows
+    assert any(
+        row.get("appeal_status") == "resolved" and int(row.get("related_score_appeal_id") or 0) == int(appeal_id)
+        for row in rows
+    )
+
+
+def test_homework_appeal_notification_list_and_detail_keep_same_acknowledged_status():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "list detail parity"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 76, "review_comment": "before parity appeal"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": "please check parity between notification list and detail"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    ack = client.post(f"/api/homeworks/{hid}/submissions/{sub_id}/appeal/acknowledge", headers=teacher_h)
+    assert ack.status_code == 200, ack.text
+
+    listed = client.get("/api/notifications", headers=teacher_h)
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json().get("data", []) if item.get("notification_kind") == "grade_appeal")
+    assert row.get("appeal_status") == "acknowledged"
+
+    detail = client.get(f"/api/notifications/{row['id']}", headers=teacher_h)
+    assert detail.status_code == 200, detail.text
+    assert detail.json().get("appeal_status") == "acknowledged"
+
+
+def test_rejected_score_appeal_notification_exposes_terminal_status_and_consistent_detail():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+
+    created = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_h,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "score appeal rejected projection"},
+    )
+    assert created.status_code == 200, created.text
+    appeal_id = created.json()["id"]
+
+    rejected = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=teacher_h,
+        json={"teacher_response": "rejected with explanation", "status": "rejected"},
+    )
+    assert rejected.status_code == 200, rejected.text
+
+    listed = client.get("/api/notifications", headers=teacher_h)
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json().get("data", []) if item.get("notification_kind") == "score_grade_appeal")
+    assert row.get("appeal_status") == "rejected"
+    assert int(row.get("related_score_appeal_id") or 0) == int(appeal_id)
+    assert "已拒绝" in str(row.get("title") or "")
+
+    detail = client.get(f"/api/notifications/{row['id']}", headers=teacher_h)
+    assert detail.status_code == 200, detail.text
+    assert detail.json().get("appeal_status") == "rejected"
+    assert "已拒绝" in str(detail.json().get("title") or "")
+    assert "待处理" not in str(detail.json().get("content") or "")
