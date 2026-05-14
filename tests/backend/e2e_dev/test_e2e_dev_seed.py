@@ -73,3 +73,59 @@ def test_e2e_seed_ok_when_enabled(client: TestClient):
     body = r.json()
     assert "suffix" in body
     assert "course_required_id" in body
+
+
+def test_e2e_seed_builds_material_reader_showcase_shape(client: TestClient):
+    settings.E2E_DEV_SEED_ENABLED = True
+    settings.E2E_DEV_SEED_TOKEN = "tok-e2e-2"
+    r = client.post("/api/e2e/dev/reset-scenario", headers={"X-E2E-Seed-Token": "tok-e2e-2"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    db = SessionLocal()
+    try:
+        chapter_rows = db.execute(
+            text(
+                """
+                SELECT title, is_uncategorized
+                FROM course_material_chapters
+                WHERE subject_id = :subject_id
+                ORDER BY id
+                """
+            ),
+            {"subject_id": body["course_required_id"]},
+        ).mappings().all()
+        assert any(row["is_uncategorized"] for row in chapter_rows)
+        assert sum(1 for row in chapter_rows if not row["is_uncategorized"]) >= 2
+
+        homework_link_rows = db.execute(
+            text(
+                """
+                SELECT c.is_uncategorized AS is_uncategorized, l.homework_id
+                FROM course_material_homework_links AS l
+                JOIN course_material_chapters AS c ON c.id = l.chapter_id
+                WHERE c.subject_id = :subject_id
+                ORDER BY l.id
+                """
+            ),
+            {"subject_id": body["course_required_id"]},
+        ).mappings().all()
+        assert any(not row["is_uncategorized"] for row in homework_link_rows)
+        assert any(row["is_uncategorized"] for row in homework_link_rows)
+
+        material_rows = db.execute(
+            text(
+                """
+                SELECT c.is_uncategorized AS is_uncategorized, COUNT(*) AS material_count
+                FROM course_material_sections AS s
+                JOIN course_material_chapters AS c ON c.id = s.chapter_id
+                WHERE c.subject_id = :subject_id
+                GROUP BY c.id, c.is_uncategorized
+                """
+            ),
+            {"subject_id": body["course_required_id"]},
+        ).mappings().all()
+        assert any((not row["is_uncategorized"]) and int(row["material_count"]) >= 2 for row in material_rows)
+        assert any(row["is_uncategorized"] for row in material_rows)
+    finally:
+        db.close()

@@ -557,6 +557,15 @@ const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.
 const expandedStorageKey = computed(() =>
   selectedCourse.value?.id ? `courseeval-materials-expanded-chapters:${selectedCourse.value.id}` : null
 )
+const currentCourseScope = computed(() => {
+  if (!selectedCourse.value) {
+    return {}
+  }
+  return {
+    subject_id: selectedCourse.value.id,
+    ...(selectedCourse.value.class_id != null ? { class_id: selectedCourse.value.class_id } : {})
+  }
+})
 
 const isCourseInstructor = computed(() => {
   const c = selectedCourse.value
@@ -822,13 +831,16 @@ const loadMaterials = async () => {
   loading.value = true
   try {
     const result = await api.materials.list({
-      class_id: selectedCourse.value.class_id,
-      subject_id: selectedCourse.value.id,
+      ...currentCourseScope.value,
       chapter_id: selectedChapterId.value || undefined,
       page: 1,
       page_size: 100
     })
     materials.value = result?.data || []
+    if (userStore.isStudent && materials.value.length && !currentMaterial.value && !detailVisible.value) {
+      openMaterialRead(materials.value[0])
+      return
+    }
   } finally {
     loading.value = false
   }

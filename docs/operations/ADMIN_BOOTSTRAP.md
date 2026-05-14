@@ -57,6 +57,26 @@ Current required-course seed behavior:
 - Several Markdown course materials are placed under the chapter tree. They include a course-running checklist, Wine dataset field notes, environment FAQ, DataFrame quality-check lab notes, standardization board notes, an EDA report template, and a classroom discussion record.
 - The first homework remains the same assignment conceptually, but demo submissions are no longer one-line placeholders. The seed writes realistic Markdown submissions for `stu1` through `stu5`: some complete, some partial, and some with ordinary environment/configuration problems. This makes the teacher submission list, detail view, content preview, and LLM/manual grading surfaces look like a course that has already run for several weeks.
 
+Additional reading-page showcase behavior:
+
+- the probability elective now intentionally keeps chapter-linked homework,
+  multiple chapter materials, and uncategorized material/homework so the
+  student reading page can render **本章作业 / 本章资料 / 未归档资料 / 未归档作业**
+  from one seeded course;
+- the E2E reset scenario also seeds a minimal reader-showcase structure for its
+  required course, so local screenshot automation can prove the same layout
+  contract without depending on the larger demo bundle.
+
+### E2E reader-showcase seed
+
+`POST /api/e2e/dev/reset-scenario` now creates:
+
+- two structured root chapters plus the uncategorized chapter;
+- one structured chapter with a linked homework and multiple materials;
+- one uncategorized material and one uncategorized homework link;
+- a screenshot-friendly path for
+  `npm run capture:student-material-reader` in `apps/web/school`.
+
 Idempotency detail:
 
 - The demo seed inserts missing chapters/materials/submissions and refreshes seeded material bodies by title.

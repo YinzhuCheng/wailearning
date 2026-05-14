@@ -105,7 +105,7 @@
                 <h2 class="panel-title">课程目录</h2>
                 <p class="panel-desc">章节目录与最近资料</p>
               </div>
-              <el-button text type="primary" class="panel-link" @click="router.push('/materials')">查看全部</el-button>
+              <el-button text type="primary" class="panel-link" @click="openMaterialsReaderHome">查看全部</el-button>
             </header>
             <el-skeleton :loading="loading" animated :rows="2">
               <div v-if="materialOutlineRows.length" class="material-outline" data-testid="course-home-material-outline">
@@ -138,7 +138,7 @@
                       </el-icon>
                     </button>
                     <span v-else class="material-outline__toggle-spacer" aria-hidden="true" />
-                    <button class="material-outline__title" type="button" @click="router.push('/materials')">
+                    <button class="material-outline__title" type="button" @click="openChapterReader(row.id)">
                       <span>{{ row.title }}</span>
                       <el-tag v-if="row.is_uncategorized" size="small" type="info">默认</el-tag>
                     </button>
@@ -147,7 +147,7 @@
               </div>
               <template v-if="!materials.length">
                 <p class="empty-inline">暂无资料。</p>
-                <el-button text type="primary" size="small" class="empty-cta empty-cta--text" @click="router.push('/materials')">
+                <el-button text type="primary" size="small" class="empty-cta empty-cta--text" @click="openMaterialsReaderHome">
                   去资料库
                 </el-button>
               </template>
@@ -267,6 +267,21 @@ const visibleMaterialOutlineRows = (nodes, depth = 0, rows = []) => {
 
 const materialOutlineRows = computed(() => visibleMaterialOutlineRows(materialChapterTree.value))
 
+const firstReadableMaterialId = computed(() => {
+  const firstMaterial = materialsPreview.value?.[0] || materials.value?.[0]
+  return firstMaterial?.id || null
+})
+
+const currentCourseScope = computed(() => {
+  if (!selectedCourse.value) {
+    return {}
+  }
+  return {
+    subject_id: selectedCourse.value.id,
+    ...(selectedCourse.value.class_id != null ? { class_id: selectedCourse.value.class_id } : {})
+  }
+})
+
 const isMaterialOutlineExpanded = id => materialOutlineExpandedIds.value.includes(id)
 
 const toggleMaterialOutline = id => {
@@ -287,10 +302,45 @@ const collapseMaterialOutline = () => {
 
 const openMaterialRead = item => {
   if (!item?.id) {
+    if (firstReadableMaterialId.value) {
+      router.push({ name: 'MaterialRead', params: { id: firstReadableMaterialId.value } })
+      return
+    }
     router.push('/materials')
     return
   }
   router.push({ name: 'MaterialRead', params: { id: item.id } })
+}
+
+const openMaterialsReaderHome = () => {
+  if (firstReadableMaterialId.value) {
+    router.push({ name: 'MaterialRead', params: { id: firstReadableMaterialId.value } })
+    return
+  }
+  router.push('/materials')
+}
+
+const openChapterReader = async chapterId => {
+  if (!selectedCourse.value || !chapterId) {
+    openMaterialsReaderHome()
+    return
+  }
+  try {
+    const result = await api.materials.list({
+      ...currentCourseScope.value,
+      chapter_id: chapterId,
+      page: 1,
+      page_size: 1
+    })
+    const first = result?.data?.[0]
+    if (first?.id) {
+      router.push({ name: 'MaterialRead', params: { id: first.id } })
+      return
+    }
+  } catch (error) {
+    console.error('打开章节阅读失败', error)
+  }
+  openMaterialsReaderHome()
 }
 
 const formatCourseTimeTitle = courseTime =>
@@ -335,15 +385,13 @@ const loadWorkspace = async () => {
   try {
     const [materialsResult, chapterTreeResult, homeworksResult, notificationsResult] = await Promise.all([
       api.materials.list({
-        class_id: selectedCourse.value.class_id,
-        subject_id: selectedCourse.value.id,
+        ...currentCourseScope.value,
         page: 1,
         page_size: 5
       }),
       api.materialChapters.tree({ subject_id: selectedCourse.value.id }),
       api.homework.list({
-        class_id: selectedCourse.value.class_id,
-        subject_id: selectedCourse.value.id,
+        ...currentCourseScope.value,
         page: 1,
         page_size: 5
       }),

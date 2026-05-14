@@ -31,6 +31,7 @@ from apps.backend.courseeval_backend.db.models import (
     CourseLLMConfigEndpoint,
     CourseMaterial,
     CourseMaterialChapter,
+    CourseMaterialHomeworkLink,
     CourseMaterialSection,
     Gender,
     Homework,
@@ -332,6 +333,21 @@ def reset_e2e_scenario(
     db.add(hw)
     db.flush()
 
+    hw_extra = Homework(
+        title=f"E2E扩展作业_{suffix}",
+        content="用于阅读页展示未归档作业和章节作业入口。",
+        class_id=c1.id,
+        subject_id=course_req.id,
+        max_score=100.0,
+        grade_precision="integer",
+        auto_grading_enabled=True,
+        allow_late_submission=True,
+        late_submission_affects_score=False,
+        created_by=t_own.id,
+    )
+    db.add(hw_extra)
+    db.flush()
+
     unc = (
         db.query(CourseMaterialChapter)
         .filter(
@@ -385,6 +401,62 @@ def reset_e2e_scenario(
             sort_order=0,
         )
     )
+
+    mat_a2 = CourseMaterial(
+        title=f"E2E章节A补充资料_{suffix}",
+        content="用于在阅读页展示“本章资料”的第二条入口。",
+        class_id=c1.id,
+        subject_id=course_req.id,
+        created_by=t_own.id,
+    )
+    mat_b1 = CourseMaterial(
+        title=f"E2E章节B资料_{suffix}",
+        content="用于目录页点击章节后切换到另一个章节资料。",
+        class_id=c1.id,
+        subject_id=course_req.id,
+        created_by=t_own.id,
+    )
+    mat_loose = CourseMaterial(
+        title=f"E2E未归档资料_{suffix}",
+        content="用于阅读页展示未归档资料入口。",
+        class_id=c1.id,
+        subject_id=course_req.id,
+        created_by=t_own.id,
+    )
+    db.add_all([mat_a2, mat_b1, mat_loose])
+    db.flush()
+    db.add_all([
+        CourseMaterialSection(
+            material_id=mat_a2.id,
+            chapter_id=ch_extra_a.id,
+            sort_order=1,
+        ),
+        CourseMaterialSection(
+            material_id=mat_b1.id,
+            chapter_id=ch_extra_b.id,
+            sort_order=0,
+        ),
+        CourseMaterialSection(
+            material_id=mat_loose.id,
+            chapter_id=unc.id,
+            sort_order=0,
+        ),
+    ])
+    db.flush()
+
+    db.add_all([
+        CourseMaterialHomeworkLink(
+            chapter_id=ch_extra_a.id,
+            homework_id=hw.id,
+            sort_order=0,
+        ),
+        CourseMaterialHomeworkLink(
+            chapter_id=unc.id,
+            homework_id=hw_extra.id,
+            sort_order=0,
+        ),
+    ])
+    db.flush()
 
     # Course LLM for discussion assistant + grading E2E: mock chat completions (plain text for discussion prompts).
     api_self_port = (os.environ.get("E2E_API_PORT") or "8012").strip()
@@ -471,6 +543,7 @@ def reset_e2e_scenario(
         "course_other_teacher_id": course_other.id,
         "course_orphan_id": course_orphan.id,
         "homework_id": hw.id,
+        "homework_extra_id": hw_extra.id,
         "material_discussion_id": mat_disc.id,
         "discussion_llm_profile": disc_profile,
         "user_ids_for_batch": [u_plain.id, u_b.id],

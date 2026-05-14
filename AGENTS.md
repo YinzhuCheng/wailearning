@@ -53,6 +53,10 @@ governance**.
    `npm.cmd run capture:homework-layout` from `apps/web/school` for the
    maintained homework-layout simulation and screenshot workflow; default
    output is `pics/homework-layout-fixed.png`.
+   Use `apps/web/school/scripts/capture-student-material-reader-runner.cjs`
+   plus `npm.cmd run capture:student-material-reader` from `apps/web/school`
+   for the maintained student reading-page simulation and screenshot workflow;
+   default output is `pics/student-material-reader-fixed.png`.
    Use committed handoff documents under [`docs/handoffs/`](docs/handoffs/README.md)
    when the user asks for cross-session continuation. The current appeal-notification
    system hardening handoff is

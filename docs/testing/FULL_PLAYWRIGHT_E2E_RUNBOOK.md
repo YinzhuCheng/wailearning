@@ -82,6 +82,27 @@ Local-output rule:
 - files under `pics/` are normally not pushed to remotes unless the user
   explicitly asks for that.
 
+For the student material-reader / course-catalog regression, use the maintained
+student reading-page capture command:
+
+```bash
+cd <REPO_ROOT>/apps/web/school
+npm run capture:student-material-reader
+```
+
+What this does:
+
+- starts the school backend and Vite frontend through the supported external
+  runner path;
+- calls `POST /api/e2e/dev/reset-scenario` with the current seed token;
+- uses the seeded reader-showcase course shape with chapter-linked homework,
+  multiple chapter materials, uncategorized material, and uncategorized
+  homework;
+- logs in as the seeded student and captures `/materials/read/:id`;
+- writes the screenshot to
+  `<REPO_ROOT>/pics/student-material-reader-fixed.png` unless another output
+  path is passed.
+
 ### Python backend invoked by `webServer`
 
 Playwright `webServer` starts uvicorn. The interpreter must have **`requirements.txt`** installed:

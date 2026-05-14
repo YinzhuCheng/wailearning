@@ -376,6 +376,9 @@ _PROB_CHAPTER_TREE = (
 """,
                     },
                 ),
+                "homework_links": (
+                    {"title_contains": "第一次作业", "sort_order": 0},
+                ),
             },
             {
                 "title": "1.2 古典概型与组合计数",
@@ -499,6 +502,9 @@ $$
                         "sort_order": 20,
                         "content": _PROB_READER_SHOWCASE,
                     },
+                ),
+                "homework_links": (
+                    {"title_contains": "第一次作业", "sort_order": 0},
                 ),
             },
         ),
@@ -653,6 +659,9 @@ N \sim Poisson(\lambda)
 :::
 """,
                     },
+                ),
+                "homework_links": (
+                    {"title_contains": "第二次作业", "sort_order": 0},
                 ),
             },
         ),
@@ -1894,6 +1903,13 @@ def _seed_llm_elective_course(
         hw.auto_grading_enabled = True
         hw.due_date = hw.due_date or due
 
+    _ensure_demo_homework_link(
+        db,
+        chapter_id=unc.id,
+        homework_id=hw.id if hw else None,
+        sort_order=0,
+    )
+
     hw_row = (
         db.query(Homework)
         .filter(Homework.subject_id == course.id, Homework.title == _LLM_HOMEWORK_TITLE)
@@ -2056,6 +2072,24 @@ def _seed_probability_elective_course(
         class_id=klass.id,
         teacher_id=teacher_pro.id,
         tree=tuple(_PROB_CHAPTER_TREE),
+    )
+
+    prob_unc = _get_or_create_uncategorized_chapter(db, subject_id=course.id)
+    _ensure_demo_material(
+        db,
+        subject=course,
+        class_id=klass.id,
+        created_by=teacher_pro.id,
+        chapter_id=prob_unc.id,
+        title="未归档补充阅读：概率术语速查",
+        content="## 未归档补充阅读\n\n这是一条故意留在未归档目录中的演示资料，用于验证学生阅读页里的未归档入口。",
+        sort_order=90,
+    )
+    _ensure_demo_homework_link(
+        db,
+        chapter_id=prob_unc.id,
+        homework_id=hw2.id if hw2 else None,
+        sort_order=90,
     )
 
     hw2_row = (

@@ -63,6 +63,12 @@ Discussion LLM (`llm_discussion.py`) also wraps plain homework bodies, plain mat
 - **Homework submission** (`HomeworkSubmission.vue`): label renamed to **正文**; editor supports Markdown/plain; history timeline uses `PlainOrMarkdownBlock`.
 - **Homework authoring** (`Homework.vue`): assignment body editor toggles format; homework detail uses `PlainOrMarkdownBlock` for instructions.
 - **Materials** (`Materials.vue` + `MaterialRead.vue`): authoring uses the same Markdown panel; table rows expose **阅读页** linking to `/materials/read/:id` with prev/next navigation while the modal detail dialog keeps quick preview + discussion threading. **Full-page reader (`MaterialRead.vue`) also mounts `CourseDiscussionPanel` below the article** so behavior matches the modal: thread bodies render via `PlainOrMarkdownBlock` (Markdown + KaTeX vs plain); composer shows the same Markdown/LaTeX live demo when reply format is Markdown. Orphan materials (`discussion_requires_context=true`) show the existing warning card instead of the thread composer.
+  Student navigation contract: student-side **课程目录** entry points should
+  prefer the full-page reader instead of the teacher-oriented management hub
+  when readable materials exist.
+  Reader action contract: `MaterialRead.vue` may render **本章作业**,
+  **本章资料**, **未归档资料**, and **未归档作业** blocks below the article body
+  when chapter metadata and uncategorized entries exist.
 - **Notifications** (`Notifications.vue`): compose + detail (non-password-reset) respect `content_format`.
 - **Teacher submissions** (`HomeworkSubmissions.vue` + `HomeworkSubmissionReview.vue`): the **list** still uses `PlainOrMarkdownBlock` in the **历史** dialog for expanded attempt bodies. **「详情」** no longer opens a 720px dialog: it **navigates to** `HomeworkSubmissionReview.vue` at **`/homework/:homeworkId/submissions/:submissionId`** (query params such as `student_id` are preserved for return navigation). The review page uses the same render stack for the latest summary body, embeds a score/comment form, a collapsible per-attempt history timeline, and a **返回提交列表** control. The teacher-only API **`GET /api/homeworks/{homework_id}/submissions/{submission_id}/status`** returns a single `HomeworkSubmissionStatusResponse` row for that page (avoids paging the full class roster). **Pitfall:** older Playwright specs that waited for `getByRole('dialog')` after clicking **详情** must be updated to assert `toHaveURL(/\/homework\/\d+\/submissions\/\d+/)` and target `data-testid="homework-submission-detail-body"` on the **page** (not inside a dialog).
 - **Discussions** (`CourseDiscussionPanel.vue` + `DiscussionAuthorAvatar.vue`): radio group **回复格式** before posting; choosing **Markdown** now shows two separate affordances:
@@ -120,6 +126,13 @@ They assert round-trip persistence for homework update + student submission, dis
 8. **Course materials reading navigation**  
    Full-page reader lives at `<admin-base>/materials/read/:id` (`MaterialRead.vue`). Prev/next order is **DFS chapter tree × API sort order per chapter** (same sequencing logic as the list endpoint). After `GET /materials/{id}`, the reader **attempts to align `selected_course`** with `material.subject_id` using `fetchTeachingCourses` so deep links work even when `localStorage.selected_course` was cleared (Playwright `login()` clears storage). If the material’s subject is not in the teacher/student course list, the UI still redirects back to `/materials`. The article (`material.title` / body) is bound **before** chapter DFS completes so readers see the heading immediately; DFS failures downgrade to “导航不完整” rather than blocking the article.  
    **Discussion parity:** the reader intentionally includes **`CourseDiscussionPanel`** (same props contract as `Materials.vue` detail dialog: `target-type="material"`, `subject_id`, `class_id`, `discussion_requires_context`, `is-student`). Agents must not assume “reading mode” is article-only; regression tests should assert the discussion card is present on `/materials/read/:id` when the material is course-scoped.
+   Student directory routing: `StudentCourseHome.vue` should send student
+   “查看全部”, empty-state, and chapter-entry actions to `/materials/read/:id`
+   whenever a readable material exists.
+   Reader chapter context: `currentChapterHomeworkLinks` and
+   `currentChapterMaterials` describe the active chapter, while
+   `looseMaterialEntries` and `looseHomeworkLinks` represent the uncategorized
+   bucket surfaced in the same reader.
 
 9. **Teacher + student sidebars: removal of single-child submenu shells**  
    Historically `Layout.vue` wrapped **teacher** routes under 「日常教学」 (`teacher-daily`) and **student** routes under 「课程学习」 (`student-learning`), each forcing an extra expand click despite containing only one logical group. Both are now **flat `el-menu-item` rows** at the sidebar root (same paths and labels as the former children). **`default-openeds` / `homeworkMenuOpenIndices` no longer references `teacher-daily` or `student-learning`.** Admin 「学期与配置」 / 「消息与审计」 and **班主任「班级教学」** groupings remain as nested menus where multiple unrelated destinations still benefit from grouping.  

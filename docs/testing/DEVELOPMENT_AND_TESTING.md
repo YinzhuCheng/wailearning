@@ -640,6 +640,25 @@ Contract:
 - `pics/` is local-only by default and should not be pushed unless the user
   explicitly asks.
 
+Use the committed student material-reader screenshot flow when you need a
+reproducible student reading-page screenshot that proves student catalog entry,
+chapter-linked actions, and uncategorized reader blocks:
+
+```bash
+cd apps/web/school
+npm run capture:student-material-reader
+```
+
+Contract:
+
+- the command starts backend + frontend through the maintained external-runner
+  path;
+- it resets the E2E scenario, opens a seeded `/materials/read/:id` page, and
+  captures the student reader;
+- default output is `<repo>/pics/student-material-reader-fixed.png`;
+- `pics/` remains local-only by default unless the user explicitly asks to
+  push screenshots.
+
 Before running Playwright on Windows, read the pitfalls document first. Known false-failure causes include:
 
 - `npm.ps1` execution-policy blocking,

@@ -110,6 +110,79 @@
           </div>
         </article>
 
+        <section
+          v-if="currentChapterHomeworkLinks.length || currentChapterMaterials.length || looseMaterialEntries.length || looseHomeworkLinks.length"
+          class="material-read-links"
+        >
+          <div v-if="currentChapterHomeworkLinks.length" class="material-read-links__block">
+            <div class="material-read-links__head">
+              <strong>本章作业</strong>
+            </div>
+            <div class="material-read-links__chips">
+              <el-button
+                v-for="link in currentChapterHomeworkLinks"
+                :key="`hw-${link.link_id}`"
+                size="small"
+                type="primary"
+                plain
+                @click="openHomeworkLink(link)"
+              >
+                {{ link.title }}
+              </el-button>
+            </div>
+          </div>
+
+          <div v-if="currentChapterMaterials.length" class="material-read-links__block">
+            <div class="material-read-links__head">
+              <strong>本章资料</strong>
+            </div>
+            <div class="material-read-links__chips">
+              <el-button
+                v-for="entry in currentChapterMaterials"
+                :key="`mat-${entry.id}`"
+                size="small"
+                @click="goEntry(entry.id)"
+              >
+                {{ entry.title }}
+              </el-button>
+            </div>
+          </div>
+
+          <div v-if="looseMaterialEntries.length" class="material-read-links__block">
+            <div class="material-read-links__head">
+              <strong>未归档资料</strong>
+            </div>
+            <div class="material-read-links__chips">
+              <el-button
+                v-for="entry in looseMaterialEntries"
+                :key="`loose-${entry.id}`"
+                size="small"
+                @click="goEntry(entry.id)"
+              >
+                {{ entry.title }}
+              </el-button>
+            </div>
+          </div>
+
+          <div v-if="looseHomeworkLinks.length" class="material-read-links__block">
+            <div class="material-read-links__head">
+              <strong>未归档作业</strong>
+            </div>
+            <div class="material-read-links__chips">
+              <el-button
+                v-for="link in looseHomeworkLinks"
+                :key="`loose-hw-${link.link_id}`"
+                size="small"
+                type="primary"
+                plain
+                @click="openHomeworkLink(link)"
+              >
+                {{ link.title }}
+              </el-button>
+            </div>
+          </div>
+        </section>
+
         <section v-if="material.attachment_url" class="material-read-note" aria-label="配套附件">
           <strong class="material-read-note__title">配套附件</strong>
           <p class="material-read-note__body">如需原始讲义、PDF、课件或表格文件，可从这里下载。</p>
@@ -163,12 +236,22 @@ const materialPresentationStyle = ref(getMaterialPresentationStyle())
 const outlineTree = ref([])
 const discussionSection = ref(null)
 const isOutlineCollapsed = ref(false)
+const chapterHomeworkLinks = ref({})
+const looseMaterialEntries = ref([])
+const looseHomeworkLinks = ref([])
+const uncategorizedChapterId = ref(null)
 
 const flattenChaptersDfs = (nodes, depth = 0) => {
   const out = []
   const walk = (list, level) => {
     for (const n of list || []) {
-      out.push({ id: n.id, title: n.title, is_uncategorized: Boolean(n.is_uncategorized), depth: level })
+      out.push({
+        id: n.id,
+        title: n.title,
+        is_uncategorized: Boolean(n.is_uncategorized),
+        depth: level,
+        homework_links: n.homework_links || []
+      })
       if (n.children?.length) walk(n.children, level + 1)
     }
   }
@@ -179,20 +262,27 @@ const flattenChaptersDfs = (nodes, depth = 0) => {
 const buildSequence = async () => {
   const course = userStore.selectedCourse
   const classId = course?.class_id || material.value?.class_id
-  if (!course?.id || !classId) {
+  if (!course?.id) {
     sequence.value = []
     outlineTree.value = []
+    chapterHomeworkLinks.value = {}
+    looseMaterialEntries.value = []
+    looseHomeworkLinks.value = []
+    uncategorizedChapterId.value = null
     return
   }
   const treeRes = await api.materialChapters.tree({ subject_id: course.id })
   const chapters = flattenChaptersDfs(treeRes?.nodes || [])
+  uncategorizedChapterId.value = chapters.find(ch => ch.is_uncategorized)?.id ?? null
   const seq = []
   const outline = []
+  const chapterLinks = {}
   for (const ch of chapters) {
+    chapterLinks[ch.id] = ch.homework_links || []
     const rows = await loadAllPages(pager =>
       api.materials.list({
-        class_id: classId,
         subject_id: course.id,
+        ...(classId != null ? { class_id: classId } : {}),
         chapter_id: ch.id,
         ...pager
       })
@@ -222,6 +312,17 @@ const buildSequence = async () => {
       })
     }
   }
+  const looseHomework = (chapters.find(ch => ch.is_uncategorized)?.homework_links || []).map(link => ({ ...link }))
+  const looseEntries = seq
+    .filter(entry => entry.chapterId === uncategorizedChapterId.value)
+    .map((entry, idx) => ({
+      ...entry,
+      chapterTitle: '资料库 / 未归档',
+      indexLabel: `${idx + 1}`.padStart(2, '0')
+    }))
+  chapterHomeworkLinks.value = chapterLinks
+  looseMaterialEntries.value = looseEntries
+  looseHomeworkLinks.value = looseHomework
   sequence.value = seq
   outlineTree.value = outline
 }
@@ -273,6 +374,29 @@ const currentChapterTitle = computed(() => {
   return cur?.chapterTitle || '当前章节'
 })
 
+const currentChapterId = computed(() => {
+  const cur = sequence.value.find(x => String(x.id) === String(material.value?.id))
+  return cur?.chapterId ?? null
+})
+
+const currentChapterHomeworkLinks = computed(() => {
+  const chapterId = currentChapterId.value
+  if (!chapterId || chapterId === uncategorizedChapterId.value) {
+    return []
+  }
+  return chapterHomeworkLinks.value[chapterId] || []
+})
+
+const currentChapterMaterials = computed(() => {
+  const chapterId = currentChapterId.value
+  if (!chapterId || chapterId === uncategorizedChapterId.value) {
+    return []
+  }
+  return sequence.value.filter(
+    entry => entry.chapterId === chapterId && String(entry.id) !== String(material.value?.id)
+  )
+})
+
 const loadMaterial = async () => {
   const id = Number(route.params.id)
   if (!Number.isFinite(id)) {
@@ -320,6 +444,10 @@ const loadMaterial = async () => {
 }
 
 const goBack = () => {
+  if (userStore.isStudent) {
+    router.push('/course-home')
+    return
+  }
   router.push('/materials')
 }
 
@@ -335,6 +463,17 @@ const goNext = () => {
 
 const goEntry = id => {
   router.replace({ name: 'MaterialRead', params: { id } })
+}
+
+const openHomeworkLink = link => {
+  if (!link?.homework_id) {
+    return
+  }
+  if (userStore.isStudent) {
+    router.push(`/homework/${link.homework_id}/submit`)
+    return
+  }
+  router.push(`/homework/${link.homework_id}/submissions`)
 }
 
 const downloadAttach = () => {
@@ -638,6 +777,32 @@ onBeforeUnmount(() => {
   border: 1px solid color-mix(in srgb, var(--wa-color-primary-200) 84%, transparent);
   border-radius: var(--wa-radius-xl);
   background: color-mix(in srgb, var(--wa-color-primary-50) 82%, #fff);
+}
+
+.material-read-links {
+  width: min(100%, 860px);
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.material-read-links__block {
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--wa-border-subtle) 86%, transparent);
+  border-radius: var(--wa-radius-lg);
+  background: color-mix(in srgb, var(--wa-color-surface) 94%, var(--wa-color-bg-soft));
+}
+
+.material-read-links__head {
+  margin-bottom: 10px;
+  color: var(--wa-color-text);
+}
+
+.material-read-links__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .material-read-note__title {
