@@ -240,6 +240,23 @@ def test_cannot_bind_unvalidated_preset(client: TestClient, admin_headers, teach
     assert "vision" in r.json().get("detail", "").lower()
 
 
+def test_course_config_accepts_null_max_output_tokens(client: TestClient, teacher_headers, teacher_course_context):
+    sid = teacher_course_context["subject_id"]
+    r = client.put(
+        f"/api/llm-settings/courses/{sid}",
+        headers=teacher_headers,
+        json={
+            "is_enabled": False,
+            "max_input_tokens": 16000,
+            "max_output_tokens": None,
+            "endpoints": [],
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["max_output_tokens"] is None
+
+
 def test_student_403_on_llm_routes(client: TestClient, teacher_course_context: dict):
     """Students must not list presets or read course LLM (API returns 403)."""
     db = SessionLocal()

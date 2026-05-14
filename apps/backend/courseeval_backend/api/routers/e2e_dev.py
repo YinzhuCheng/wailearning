@@ -404,7 +404,7 @@ def reset_e2e_scenario(
         subject_id=course_req.id,
         is_enabled=True,
         max_input_tokens=16000,
-        max_output_tokens=800,
+        max_output_tokens=None,
     )
     db.add(llm_cfg)
     db.flush()

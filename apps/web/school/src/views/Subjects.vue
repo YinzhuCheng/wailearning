@@ -445,6 +445,7 @@
 
           <el-form-item label="输出 token 上限">
             <el-input-number v-model="llmForm.max_output_tokens" :min="1" :step="100" style="width: 100%" />
+            <div class="attachment-help">留空表示不限制输出长度。</div>
           </el-form-item>
 
           <el-alert
@@ -632,13 +633,21 @@ const llmForm = reactive({
   is_enabled: false,
   response_language: '',
   max_input_tokens: 16000,
-  max_output_tokens: 1200,
+  max_output_tokens: null,
   system_prompt: '',
   teacher_prompt: '',
   endpoints: [],
   // API-only group routing: shown read-only; saving flat endpoints will not clear it unless you switch to flat-only save path
   groups: []
 })
+
+const normalizeNullableNumber = value => {
+  if (value === '' || value === null || value === undefined) {
+    return null
+  }
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
 
 const llmStepLabel = s => {
   if (s === 'passed') return '通过'
@@ -1132,15 +1141,13 @@ const resetLlmForm = () => {
     is_enabled: false,
     response_language: '',
     max_input_tokens: 16000,
-    max_output_tokens: 1200,
+    max_output_tokens: null,
     system_prompt: '',
     teacher_prompt: '',
     endpoints: [],
     groups: []
   })
 }
-
-const normalizeNullableNumber = value => value || null
 
 const applyLlmConfig = config => {
   resetLlmForm()
@@ -1151,7 +1158,7 @@ const applyLlmConfig = config => {
   llmForm.is_enabled = Boolean(config.is_enabled)
   llmForm.response_language = config.response_language || ''
   llmForm.max_input_tokens = config.max_input_tokens ?? 16000
-  llmForm.max_output_tokens = config.max_output_tokens ?? 1200
+  llmForm.max_output_tokens = config.max_output_tokens ?? null
   llmForm.system_prompt = config.system_prompt || ''
   llmForm.teacher_prompt = config.teacher_prompt || ''
   llmForm.endpoints = (config.endpoints || []).map(item => ({
@@ -1230,7 +1237,7 @@ const saveLlmConfig = async () => {
       is_enabled: llmForm.is_enabled,
       response_language: llmForm.response_language?.trim() || null,
       max_input_tokens: llmForm.max_input_tokens,
-      max_output_tokens: llmForm.max_output_tokens,
+      max_output_tokens: normalizeNullableNumber(llmForm.max_output_tokens),
       system_prompt: llmForm.system_prompt?.trim() || null,
       teacher_prompt: llmForm.teacher_prompt?.trim() || null,
       ...(

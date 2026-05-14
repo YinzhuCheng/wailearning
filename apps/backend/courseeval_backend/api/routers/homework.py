@@ -1121,7 +1121,7 @@ def submit_homework(
     submission.latest_task_error = None
 
     if homework.auto_grading_enabled:
-        queue_grading_task(db, attempt, "new_submission")
+        queue_grading_task(db, attempt, "new_submission", billed_user_id=None)
 
     refresh_submission_summary(db, submission)
     db.commit()
@@ -1291,7 +1291,7 @@ def batch_regrade_homework_submissions(
             )
             skipped += 1
             continue
-        queue_grading_task(db, attempt, "regrade")
+        queue_grading_task(db, attempt, "regrade", billed_user_id=current_user.id)
         refresh_submission_summary(db, sub)
         results.append(HomeworkBatchRegradeItemResult(submission_id=sub.id, status="queued", reason=None))
         queued += 1
@@ -1572,7 +1572,7 @@ def regrade_homework_submission(
         raise HTTPException(status_code=404, detail="Homework submission not found.")
 
     attempt = _resolve_target_attempt(db, submission, payload.attempt_id)
-    queue_grading_task(db, attempt, "regrade")
+    queue_grading_task(db, attempt, "regrade", billed_user_id=current_user.id)
     refresh_submission_summary(db, submission)
     db.commit()
     db.refresh(submission)

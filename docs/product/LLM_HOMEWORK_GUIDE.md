@@ -43,7 +43,10 @@ The LLM feature set is built around four layers:
 
 - `LLMTokenUsageLog`
   Records successful usage per student and per course.
-- Student overrides and global quota policy control the effective daily budget. Course IDs remain on logs for attribution, but the student cap is one system-wide daily pool.
+- Student overrides and global quota policy control the effective daily budget for student-billed homework grading.
+- Student-submission auto-grading is billed against the student's daily input-token pool.
+- Teacher/class-teacher/admin-triggered homework regrades are billed to the triggering staff actor instead of the student; the current product behavior does not enforce a separate daily cap for those staff-triggered regrades.
+- Homework output tokens are not counted toward the billed total by default; billing uses input tokens only.
 
 ## Admin Workflow
 
@@ -119,6 +122,8 @@ During `ensure_schema_updates()`, `_ensure_default_llm_endpoint_preset()` may in
 
 Demo seeding binds LLM presets for required and **each** elective showcase course when possible, enables matching automatic grading on elective homework (including **初等概率论**), splits demo rubrics across student vs staff fields, fills「参考答案或思路」, inserts three sample submissions without scores on the required homework, and two Markdown/LaTeX-rich submissions on the probability elective for enrolled students **stu1** and **stu2**. Elective **初等概率论** deliberately enrolls only **stu1, stu2, stu4** so **stu3**/**stu5** remain unenrolled until they self-enroll from the catalog—agents validating enrollment counts must not assume whole-class rows for electives.
 
+The demo/e2e default course LLM config leaves `max_output_tokens` empty. That means the backend does not send `max_tokens` for homework grading requests unless a teacher explicitly sets a cap later.
+
 ### Optional text format (`content_format`)
 
 Homework instructions (`homeworks.content`) and student submission bodies (`homework_attempts.content`, mirrored on the submission summary) may be stored as either:
@@ -149,6 +154,12 @@ Teachers can still:
 - batch regrade,
 - inspect failures and logs,
 - resolve student appeals.
+
+Regrade billing rule:
+
+- normal student-submission auto-grading remains student-billed;
+- teacher-triggered regrade or batch regrade is billed to the triggering teacher/staff actor instead of the student;
+- student quota views therefore should not increase simply because a teacher reran grading on an existing submission.
 
 ## Attachment Handling
 
@@ -183,6 +194,7 @@ Quota behavior is easy to describe incorrectly, so the practical rules matter:
 - Global admin policy provides the default daily cap, estimation parameters, and grading concurrency.
 - Per-student overrides can replace the default daily cap.
 - Course IDs remain on usage logs and student summaries for attribution. They do not create independent course quota pools.
+- Teacher/admin/class-teacher homework regrades are outside the student cap path and are billed to the triggering staff actor.
 - Per-student overrides can split outcomes between students on the same course.
 - A student does **not** need a separately pre-created quota row to "be eligible". Once the account resolves to the bound `Student` row, quota reads and billing use the global default cap unless an explicit `LLMStudentTokenOverride` exists.
 

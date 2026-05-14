@@ -1477,7 +1477,7 @@ class CourseLLMConfigUpdate(BaseModel):
     is_enabled: bool = False
     response_language: Optional[str] = None
     max_input_tokens: int = Field(default=16000, ge=1000)
-    max_output_tokens: int = Field(default=1000, ge=1)
+    max_output_tokens: Optional[int] = Field(default=None, ge=1)
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointSelection] = Field(default_factory=list)
@@ -1511,7 +1511,7 @@ class CourseLLMConfigResponse(BaseModel):
     is_enabled: bool = False
     response_language: Optional[str] = None
     max_input_tokens: int = 16000
-    max_output_tokens: int = 1000
+    max_output_tokens: Optional[int] = None
     system_prompt: Optional[str] = None
     teacher_prompt: Optional[str] = None
     endpoints: List[CourseLLMConfigEndpointResponse] = Field(default_factory=list)

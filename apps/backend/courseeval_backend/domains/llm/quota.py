@@ -17,6 +17,8 @@ from apps.backend.courseeval_backend.db.models import (
     LLMDiscussionTokenUsageLog,
     LLMQuotaReservation,
     LLMTokenUsageLog,
+    User,
+    UserRole,
 )
 from apps.backend.courseeval_backend.domains.llm.token_quota import (
     resolve_effective_daily_student_tokens,
@@ -73,6 +75,16 @@ def get_student_quota_usage_snapshot(
     return snap
 
 
+def homework_grading_user_is_quota_exempt(user: User | None) -> bool:
+    if user is None:
+        return False
+    return (user.role or "").strip() in {
+        UserRole.ADMIN.value,
+        UserRole.TEACHER.value,
+        UserRole.CLASS_TEACHER.value,
+    }
+
+
 def quota_delta_violations(
     db: Session,
     config: CourseLLMConfig,
@@ -110,7 +122,10 @@ def get_used_tokens_for_scope(
         LLMTokenUsageLog.timezone == timezone_name,
     )
     if student_id is not None:
-        query = query.filter(LLMTokenUsageLog.student_id == student_id)
+        query = query.filter(
+            LLMTokenUsageLog.student_id == student_id,
+            func.coalesce(LLMTokenUsageLog.billed_user_id, 0) == 0,
+        )
     if subject_id is not None:
         query = query.filter(LLMTokenUsageLog.subject_id == subject_id)
     total = 0
@@ -152,7 +167,10 @@ def sum_reserved_tokens(
         LLMQuotaReservation.timezone == timezone_name,
     )
     if student_id is not None:
-        q = q.filter(LLMQuotaReservation.student_id == student_id)
+        q = q.filter(
+            LLMQuotaReservation.student_id == student_id,
+            func.coalesce(LLMQuotaReservation.billed_user_id, 0) == 0,
+        )
     if subject_id is not None:
         q = q.filter(LLMQuotaReservation.subject_id == subject_id)
     val = q.scalar()
@@ -247,23 +265,29 @@ def reserve_quota_tokens(
     estimated_tokens: int,
 ) -> tuple[bool, Optional[str]]:
     usage_date, timezone_name = resolve_global_quota_calendar(db)
+    billed_user = None
+    if task.billed_user_id:
+        billed_user = db.query(User).filter(User.id == task.billed_user_id).first()
+    quota_exempt = homework_grading_user_is_quota_exempt(billed_user)
 
     def _try_insert_reservation(sess: Session) -> tuple[bool, Optional[str]]:
         release_quota_reservation(sess, task.id)
-        ok, err = quota_precheck_in_session(
-            sess,
-            config,
-            student_id=task.student_id,
-            subject_id=task.subject_id,
-            estimated_tokens=estimated_tokens,
-        )
-        if not ok:
-            return ok, err
+        if not quota_exempt:
+            ok, err = quota_precheck_in_session(
+                sess,
+                config,
+                student_id=task.student_id,
+                subject_id=task.subject_id,
+                estimated_tokens=estimated_tokens,
+            )
+            if not ok:
+                return ok, err
         sess.add(
             LLMQuotaReservation(
                 task_id=task.id,
                 student_id=task.student_id,
                 subject_id=task.subject_id,
+                billed_user_id=task.billed_user_id,
                 usage_date=usage_date,
                 timezone=timezone_name,
                 reserved_tokens=int(estimated_tokens),
@@ -271,6 +295,9 @@ def reserve_quota_tokens(
         )
         sess.flush()
         return True, None
+
+    if quota_exempt:
+        return _try_insert_reservation(db)
 
     if engine.dialect.name == "postgresql":
         keys = pg_quota_advisory_keys(
@@ -333,17 +360,18 @@ def record_usage_if_needed(
             task_id=task.id,
             subject_id=task.subject_id,
             student_id=task.student_id,
+            billed_user_id=task.billed_user_id,
             usage_date=usage_date,
             timezone=timezone_name,
             input_tokens=prompt_tokens,
-            output_tokens=completion_tokens,
-            total_tokens=total_tokens,
+            output_tokens=None,
+            total_tokens=prompt_for_quota,
             billing_note=billing_note,
         )
     )
     task.billed_input_tokens = prompt_tokens
-    task.billed_output_tokens = completion_tokens
-    task.billed_total_tokens = total_tokens
+    task.billed_output_tokens = None
+    task.billed_total_tokens = prompt_for_quota
 
 
 def release_discussion_quota_reservation(db: Session, job_id: int) -> None:

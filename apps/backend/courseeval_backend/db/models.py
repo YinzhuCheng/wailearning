@@ -581,6 +581,7 @@ class HomeworkGradingTask(Base):
     homework_id = Column(Integer, ForeignKey("homeworks.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    billed_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     status = Column(String, nullable=False, default="queued")
     queue_reason = Column(String, nullable=True)
     error_code = Column(String, nullable=True)
@@ -602,6 +603,7 @@ class HomeworkGradingTask(Base):
     homework = relationship("Homework")
     student = relationship("Student")
     subject = relationship("Subject")
+    billed_user = relationship("User", foreign_keys=[billed_user_id])
 
 
 class LLMEndpointPreset(Base):
@@ -639,7 +641,7 @@ class CourseLLMConfig(Base):
     is_enabled = Column(Boolean, default=False)
     response_language = Column(String, nullable=True)
     max_input_tokens = Column(Integer, nullable=False, default=16000)
-    max_output_tokens = Column(Integer, nullable=False, default=1000)
+    max_output_tokens = Column(Integer, nullable=True, default=None)
     system_prompt = Column(Text, nullable=True)
     teacher_prompt = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -708,6 +710,7 @@ class LLMTokenUsageLog(Base):
     task_id = Column(Integer, ForeignKey("homework_grading_tasks.id"), nullable=False, unique=True)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    billed_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     usage_date = Column(String, nullable=False)
     timezone = Column(String, nullable=False, default="UTC")
     input_tokens = Column(Integer, nullable=True)
@@ -719,6 +722,7 @@ class LLMTokenUsageLog(Base):
     task = relationship("HomeworkGradingTask")
     subject = relationship("Subject")
     student = relationship("Student")
+    billed_user = relationship("User", foreign_keys=[billed_user_id])
 
 
 class LLMQuotaReservation(Base):
@@ -733,6 +737,7 @@ class LLMQuotaReservation(Base):
     task_id = Column(Integer, ForeignKey("homework_grading_tasks.id"), nullable=False, unique=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    billed_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     usage_date = Column(String, nullable=False)
     timezone = Column(String, nullable=False, default="UTC")
     reserved_tokens = Column(Integer, nullable=False)

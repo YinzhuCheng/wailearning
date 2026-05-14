@@ -524,6 +524,7 @@ def queue_grading_task(
     db: Session,
     attempt: HomeworkAttempt,
     queue_reason: str = "new_submission",
+    billed_user_id: int | None = None,
 ) -> HomeworkGradingTask:
     existing_task = (
         db.query(HomeworkGradingTask)
@@ -554,6 +555,7 @@ def queue_grading_task(
         homework_id=attempt.homework_id,
         student_id=attempt.student_id,
         subject_id=attempt.subject_id,
+        billed_user_id=billed_user_id,
         status="queued",
         queue_reason=queue_reason,
     )
@@ -1250,7 +1252,18 @@ def _maybe_queue_auto_retry(db: Session, attempt: HomeworkAttempt, error_code: s
     )
     if int(failed_count or 0) > _MAX_AUTO_RETRY_TASKS_PER_ATTEMPT:
         return
-    queue_grading_task(db, attempt, queue_reason=f"auto_retry_after_{error_code}")
+    latest_failed = (
+        db.query(HomeworkGradingTask)
+        .filter(HomeworkGradingTask.attempt_id == attempt.id, HomeworkGradingTask.status == "failed")
+        .order_by(HomeworkGradingTask.id.desc())
+        .first()
+    )
+    queue_grading_task(
+        db,
+        attempt,
+        queue_reason=f"auto_retry_after_{error_code}",
+        billed_user_id=latest_failed.billed_user_id if latest_failed else None,
+    )
     db.commit()
 
 
@@ -1339,8 +1352,9 @@ def _request_grade_from_endpoint(
         "model": preset.model_name,
         "messages": _build_scoring_messages(homework, attempt, config, material),
         "temperature": 0.2,
-        "max_tokens": config.max_output_tokens or 1200,
     }
+    if config.max_output_tokens:
+        payload["max_tokens"] = int(config.max_output_tokens)
     endpoint_url = _build_chat_completion_url(preset.base_url)
     if task is not None:
         _append_llm_call_log(
