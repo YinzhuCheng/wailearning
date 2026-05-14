@@ -1,0 +1,198 @@
+cat > /root/deploy_ddclass_repo_structure.sh <<'DEPLOY_SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+#===============================================================================
+# 目标部署分支
+#===============================================================================
+GIT_REPO='https://github.com/YinzhuCheng/wailearning.git'
+GIT_BRANCH='cursor/repository-normalization-schema-notifications'
+
+PUBLIC_IP='47.242.58.29'
+
+APP_ROOT='/opt/dd-class'
+REPO="${APP_ROOT}/source"
+ENV="${APP_ROOT}/shared/.env.production"
+
+DB_USER='ddclass'
+DB_NAME='ddclass'
+DB_PASSWORD='chengyinzhu'
+
+SECRET_KEY='chengyinzhuchengyinzhuchengyinzhuchengyinzhu'
+
+INIT_ADMIN_USERNAME='chengyinzhu'
+INIT_ADMIN_PASSWORD='chengyinzhu'
+INIT_ADMIN_REAL_NAME='System Administrator'
+
+# 先用占位符；上线前替换为真实 key
+DEFAULT_LLM_API_KEY='key'
+
+#===============================================================================
+# root 检查
+#===============================================================================
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "请用 root 执行"
+  exit 1
+fi
+
+#===============================================================================
+# 清理 Git 安全目录问题
+#===============================================================================
+git config --global --add safe.directory "${REPO}" || true
+
+#===============================================================================
+# 拉取并强制切换到正确分支
+# 注意：这会丢弃 /opt/dd-class/source 里的本地未提交改动
+#===============================================================================
+mkdir -p "${APP_ROOT}"
+
+if [[ -d "${REPO}/.git" ]]; then
+  echo "==> 使用已有仓库，强制切换到 ${GIT_BRANCH}"
+  git -C "${REPO}" config --global --add safe.directory "${REPO}" || true
+  git -C "${REPO}" remote set-url origin "${GIT_REPO}" || true
+  git -C "${REPO}" fetch origin
+  git -C "${REPO}" reset --hard || true
+  git -C "${REPO}" clean -fd || true
+  git -C "${REPO}" checkout -B "${GIT_BRANCH}" "origin/${GIT_BRANCH}"
+  git -C "${REPO}" reset --hard "origin/${GIT_BRANCH}"
+else
+  echo "==> 克隆仓库 ${GIT_REPO}"
+  rm -rf "${REPO}"
+  git clone "${GIT_REPO}" "${REPO}"
+  git -C "${REPO}" checkout -B "${GIT_BRANCH}" "origin/${GIT_BRANCH}"
+fi
+
+cd "${REPO}"
+
+echo "==> 当前分支与提交"
+git branch --show-current
+git rev-parse --short HEAD
+
+#===============================================================================
+# 安装/确认服务器依赖
+#===============================================================================
+echo "==> 安装/确认服务器依赖"
+bash ops/scripts/setup_server.sh
+
+#===============================================================================
+# 写入生产环境变量
+# 注意：不要包含 CHANGE_ME，否则 deploy_backend.sh 会拒绝部署
+#===============================================================================
+echo "==> 写入 ${ENV}"
+mkdir -p "${APP_ROOT}/shared"
+
+cat > "${ENV}" <<ENV_FILE
+APP_NAME=DD-CLASS API
+APP_ENV=production
+DEBUG=false
+HOST=127.0.0.1
+PORT=8001
+
+DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@127.0.0.1:5432/${DB_NAME}
+SECRET_KEY=${SECRET_KEY}
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+BACKEND_CORS_ORIGINS=http://${PUBLIC_IP},http://127.0.0.1,http://localhost
+TRUSTED_HOSTS=${PUBLIC_IP},127.0.0.1,localhost
+
+INIT_ADMIN_USERNAME=${INIT_ADMIN_USERNAME}
+INIT_ADMIN_PASSWORD=${INIT_ADMIN_PASSWORD}
+INIT_ADMIN_REAL_NAME=${INIT_ADMIN_REAL_NAME}
+INIT_DEFAULT_DATA=true
+
+DEFAULT_LLM_API_KEY=${DEFAULT_LLM_API_KEY}
+
+GUNICORN_WORKERS=3
+LOG_LEVEL=info
+ENV_FILE
+
+chmod 640 "${ENV}"
+
+echo "==> 当前 .env.production 内容如下"
+sed -n '1,220p' "${ENV}"
+
+#===============================================================================
+# 初始化 PostgreSQL
+# 可重复执行：会创建或更新用户、数据库和权限
+#===============================================================================
+echo "==> 初始化 PostgreSQL"
+systemctl enable postgresql
+systemctl start postgresql
+
+sudo -u postgres psql \
+  -v db_user="${DB_USER}" \
+  -v db_password="${DB_PASSWORD}" \
+  -v db_name="${DB_NAME}" \
+  -f ops/scripts/init_db.sql
+
+#===============================================================================
+# 部署后端
+#===============================================================================
+echo "==> 部署后端"
+bash ops/scripts/deploy_backend.sh
+
+echo "==> 等待后端启动"
+sleep 3
+
+echo "==> 后端状态"
+systemctl status ddclass-backend --no-pager -l || true
+
+echo "==> 后端日志最近 80 行"
+journalctl -u ddclass-backend --no-pager -n 80 || true
+
+#===============================================================================
+# 部署管理端前端
+#===============================================================================
+echo "==> 部署管理端前端"
+bash ops/scripts/deploy_frontend.sh
+
+#===============================================================================
+# 部署家长端前端
+#===============================================================================
+echo "==> 部署家长端前端"
+bash ops/scripts/deploy_parent_portal.sh
+
+#===============================================================================
+# 检查 Nginx
+#===============================================================================
+echo "==> 检查 Nginx"
+nginx -t
+systemctl reload nginx
+
+#===============================================================================
+# 访问测试
+#===============================================================================
+echo "==> 端口监听情况"
+ss -lntp | grep -E '(:80|:8001)' || true
+
+echo
+echo "==> 健康检查：后端本机"
+curl -i "http://127.0.0.1:8001/health" || true
+
+echo
+echo "==> 健康检查：公网 Nginx"
+curl -i "http://${PUBLIC_IP}/health" || true
+
+echo
+echo "==> 管理端首页"
+curl -I "http://${PUBLIC_IP}/" || true
+
+echo
+echo "==> 家长端首页"
+curl -I "http://${PUBLIC_IP}/parent/" || true
+
+echo
+echo "=============================================="
+echo "部署流程执行完毕"
+echo "目标分支: ${GIT_BRANCH}"
+echo "后台地址: http://${PUBLIC_IP}/"
+echo "家长端地址: http://${PUBLIC_IP}/parent/"
+echo "健康检查: http://${PUBLIC_IP}/health"
+echo "初始管理员账号: ${INIT_ADMIN_USERNAME}"
+echo "初始管理员密码: ${INIT_ADMIN_PASSWORD}"
+echo "LLM API Key 当前为占位符: ${DEFAULT_LLM_API_KEY}"
+echo "=============================================="
+DEPLOY_SCRIPT
+
+bash /root/deploy_ddclass_repo_structure.sh
