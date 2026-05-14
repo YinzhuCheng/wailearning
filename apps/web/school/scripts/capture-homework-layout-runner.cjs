@@ -17,7 +17,9 @@ const child = spawn(
     windowsHide: true,
     env: {
       ...process.env,
-      PLAYWRIGHT_USE_EXTERNAL_SERVERS: 'true'
+      PLAYWRIGHT_USE_EXTERNAL_SERVERS: 'true',
+      E2E_API_PORT: process.env.E2E_API_PORT || '8112',
+      E2E_UI_PORT: process.env.E2E_UI_PORT || '3112',
     }
   }
 )

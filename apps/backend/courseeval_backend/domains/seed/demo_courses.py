@@ -20,6 +20,7 @@ from apps.backend.courseeval_backend.db.models import (
     SubjectClassLink,
     User,
 )
+from apps.backend.courseeval_backend.llm_grading import UNLIMITED_OUTPUT_TOKEN_SENTINEL
 
 _DEMO_COURSE_COVER_DATA_URL = (
     "data:image/svg+xml;utf8,"
@@ -89,6 +90,7 @@ def ensure_demo_subject_llm_binding(
             created_by=teacher_id,
             updated_by=teacher_id,
             is_enabled=bool(enable_auto_grading),
+            max_output_tokens=UNLIMITED_OUTPUT_TOKEN_SENTINEL,
         )
         db.add(cfg)
         db.flush()

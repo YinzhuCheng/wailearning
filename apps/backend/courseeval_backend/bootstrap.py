@@ -10,6 +10,7 @@ from apps.backend.courseeval_backend.core.auth import get_password_hash
 from apps.backend.courseeval_backend.core.config import settings
 from apps.backend.courseeval_backend.domains.courses.access import sync_course_enrollments
 from apps.backend.courseeval_backend.domains.seed.demo import seed_demo_course_bundle
+from apps.backend.courseeval_backend.llm_grading import UNLIMITED_OUTPUT_TOKEN_SENTINEL
 from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
 from apps.backend.courseeval_backend.semester_utils import DEFAULT_SEMESTERS, normalize_semester_name
 from apps.backend.courseeval_backend.domains.roster.sync import reconcile_student_users_and_roster
@@ -936,7 +937,7 @@ def backfill_homework_grading_data(db) -> None:
             ensured_subject_ids.add(int(homework.subject_id))
             config = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == homework.subject_id).first()
             if not config:
-                db.add(CourseLLMConfig(subject_id=homework.subject_id))
+                db.add(CourseLLMConfig(subject_id=homework.subject_id, max_output_tokens=UNLIMITED_OUTPUT_TOKEN_SENTINEL))
                 updated_configs += 1
 
     submissions = db.query(HomeworkSubmission).all()

@@ -388,9 +388,9 @@ const canInvokeLlm = computed(() =>
 
 const llmModeHint = computed(() => {
   if (userStore.isStudent) {
-    return '将附带「@LLM」并消耗你的全站 LLM 日额度；输出长度由教师在课程 LLM 设置中的 max_output_tokens 控制。'
+    return '将附带「@LLM」并消耗你的全站 LLM 日额度；教师若为课程设置输出上限则会生效，留空时默认不限制输出长度。'
   }
-  return '将附带「@LLM」并调用课程智能助教；教师/班主任/管理员发起的讨论助教请求不受学生 token 日额度限制，输出长度仍由课程 LLM 设置中的 max_output_tokens 控制。'
+  return '将附带「@LLM」并调用课程智能助教；教师/班主任/管理员发起的讨论助教请求不受学生 token 日额度限制，课程输出上限留空时默认不限制输出长度。'
 })
 
 const appendDraftSnippet = snippet => {

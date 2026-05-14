@@ -20,6 +20,7 @@ from apps.backend.courseeval_backend.llm_grading import (
     get_quota_usage_snapshot,
     get_student_quota_usage_snapshot,
     purge_invalid_course_llm_endpoints_for_preset,
+    UNLIMITED_OUTPUT_TOKEN_SENTINEL,
     validate_text_connectivity,
     validate_vision_connectivity,
 )
@@ -140,7 +141,7 @@ def _serialize_course_config(config: CourseLLMConfig, db: Optional[Session] = No
         is_enabled=bool(config.is_enabled),
         response_language=config.response_language,
         max_input_tokens=config.max_input_tokens,
-        max_output_tokens=config.max_output_tokens,
+        max_output_tokens=None if (config.max_output_tokens or 0) >= UNLIMITED_OUTPUT_TOKEN_SENTINEL else config.max_output_tokens,
         system_prompt=config.system_prompt,
         teacher_prompt=config.teacher_prompt,
         endpoints=[_serialize_endpoint_item(item) for item in flat],
@@ -605,7 +606,9 @@ def update_course_llm_config(
     config.is_enabled = payload.is_enabled
     config.response_language = payload.response_language
     config.max_input_tokens = payload.max_input_tokens
-    config.max_output_tokens = payload.max_output_tokens
+    config.max_output_tokens = (
+        UNLIMITED_OUTPUT_TOKEN_SENTINEL if payload.max_output_tokens is None else payload.max_output_tokens
+    )
     config.system_prompt = payload.system_prompt
     config.teacher_prompt = payload.teacher_prompt
     config.updated_by = current_user.id

@@ -210,7 +210,7 @@ def _request_discussion_completion(
     *,
     preset: LLMEndpointPreset,
     messages: list[dict[str, Any]],
-    max_output_tokens: int,
+    max_output_tokens: int | None,
     job: DiscussionLLMJob,
 ) -> dict[str, Any]:
     timeout = httpx.Timeout(
@@ -223,8 +223,9 @@ def _request_discussion_completion(
         "model": preset.model_name,
         "messages": messages,
         "temperature": 0.4,
-        "max_tokens": int(max_output_tokens),
     }
+    if max_output_tokens:
+        payload["max_tokens"] = int(max_output_tokens)
     endpoint_url = _build_chat_completion_url(preset.base_url)
     try:
         with httpx.Client(timeout=timeout) as client:
@@ -278,7 +279,7 @@ def _call_discussion_with_routing(
     db: Session,
     config: CourseLLMConfig,
     messages: list[dict[str, Any]],
-    max_output_tokens: int,
+    max_output_tokens: int | None,
     job: DiscussionLLMJob,
 ) -> dict[str, Any]:
     """Reuse group + flat endpoint routing like grading (text-only; vision not required)."""
@@ -457,7 +458,7 @@ def _run_discussion_llm_reply_unlocked(
         _fail_visible("当前课程未配置可用端点。", release_reservation=False)
         return
 
-    max_out = max(1, min(8000, int(config.max_output_tokens or 1000)))
+    max_out = int(config.max_output_tokens) if config.max_output_tokens else None
     context_parts: list[str] = []
     if hw:
         context_parts.extend(_homework_context_blocks(db, hw, student_id=student.id if student else None))
@@ -480,7 +481,7 @@ def _run_discussion_llm_reply_unlocked(
         user_message=user_visible,
         response_language=config.response_language,
     )
-    est = _estimate_discussion_prompt_tokens(messages, max_out)
+    est = _estimate_discussion_prompt_tokens(messages, max_out or 0)
     job.requester_student_id = student.id if student else None
     db.flush()
 

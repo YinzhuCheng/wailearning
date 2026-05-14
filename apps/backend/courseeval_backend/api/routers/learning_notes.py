@@ -840,7 +840,7 @@ def _run_learning_note_llm_reply(entry_id: int) -> None:
             f"【当前问题】\n{user_visible}"
         )
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user_block}]
-        max_out = max(1, min(8000, int(config.max_output_tokens or 1000)))
+        max_out = int(config.max_output_tokens) if config.max_output_tokens else None
         dummy_job = SimpleNamespace(id=entry.id)
         try:
             result = _call_discussion_with_routing(

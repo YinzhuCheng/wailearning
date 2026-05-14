@@ -18,7 +18,12 @@ from sqlalchemy.orm import Session
 from apps.backend.courseeval_backend.core.auth import get_password_hash, get_current_user_optional
 from apps.backend.courseeval_backend.core.config import settings
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.llm_grading import process_next_grading_task, start_grading_worker, worker_manager
+from apps.backend.courseeval_backend.llm_grading import (
+    UNLIMITED_OUTPUT_TOKEN_SENTINEL,
+    process_next_grading_task,
+    start_grading_worker,
+    worker_manager,
+)
 from apps.backend.courseeval_backend.db.models import (
     Class,
     CourseEnrollment,
@@ -404,7 +409,7 @@ def reset_e2e_scenario(
         subject_id=course_req.id,
         is_enabled=True,
         max_input_tokens=16000,
-        max_output_tokens=None,
+        max_output_tokens=UNLIMITED_OUTPUT_TOKEN_SENTINEL,
     )
     db.add(llm_cfg)
     db.flush()

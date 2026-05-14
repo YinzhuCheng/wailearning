@@ -100,6 +100,7 @@ from apps.backend.courseeval_backend.db.models import (
 # After the first failed grading task for an attempt, enqueue at most this many extra tries.
 _MAX_AUTO_RETRY_TASKS_PER_ATTEMPT = 2
 _LLM_CALL_LOG_MAX_EVENTS = 60
+UNLIMITED_OUTPUT_TOKEN_SENTINEL = 32768
 
 _AUTO_RETRY_ELIGIBLE_ERROR_CODES = frozenset(
     {
@@ -458,7 +459,12 @@ def ensure_course_llm_config(db: Session, subject_id: int, user_id: Optional[int
     if not config:
         try:
             with db.begin_nested():
-                config = CourseLLMConfig(subject_id=subject_id, created_by=user_id, updated_by=user_id)
+                config = CourseLLMConfig(
+                    subject_id=subject_id,
+                    created_by=user_id,
+                    updated_by=user_id,
+                    max_output_tokens=UNLIMITED_OUTPUT_TOKEN_SENTINEL,
+                )
                 db.add(config)
                 db.flush()
                 created = True
