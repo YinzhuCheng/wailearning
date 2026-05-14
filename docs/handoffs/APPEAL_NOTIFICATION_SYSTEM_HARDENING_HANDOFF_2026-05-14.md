@@ -239,6 +239,11 @@ That fallback is now hardened in `apps/web/school/src/views/Scores.vue`:
   context can no longer be restored, and intentionally avoids querying or
   presenting appeals for the wrong course.
 
+Follow-up browser proof was added in
+`tests/e2e/web-school/e2e-scenario-resilience.spec.js` and verified with a
+single-case Playwright run that exercises a foreign-course `subject_id` while
+the teacher already has a different current course selected.
+
 ## Recommended Next Step
 
 If work continues on this branch, the next best follow-up is:

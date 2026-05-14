@@ -1053,6 +1053,38 @@ test.describe('E2E resilience scenarios', () => {
     await expect(page.locator('.appeal-focus-banner')).toContainText('resolved', { timeout: 20000 })
   })
 
+  test('teacher score-appeal deep-link with a foreign subject_id does not fall back to the currently selected course', async ({ page }) => {
+    const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const semesters = await apiGetJson('/api/semesters', teacherToken)
+    const semester = semesters[0]?.name || '2026春季'
+    const reasonText = `E2E missing score appeal course ${s.suffix}_${Date.now()}`
+
+    const created = await apiPostJson(`/api/scores/appeals?subject_id=${s.course_required_id}`, studentToken, {
+      semester,
+      target_component: 'total',
+      reason_text: reasonText,
+      score_id: null
+    })
+
+    await login(page, s.teacher_own.username, s.teacher_own.password)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
+
+    await page.goto(`/scores?subject_id=${s.course_other_teacher_id}&appeal_id=${created.id}`, {
+      waitUntil: 'load',
+      timeout: 60000
+    })
+
+    const warning = page.getByTestId('scores-appeal-course-missing')
+    await expect(warning).toBeVisible({ timeout: 20000 })
+    await expect(warning).toContainText(String(created.id))
+    await expect(page.locator(`[data-testid="score-appeal-row-${created.id}"]`)).toHaveCount(0)
+    await expect(page.locator('.appeals-card')).toHaveCount(0)
+    await expect(page.locator('.appeal-focus-banner')).toHaveCount(0)
+  })
+
   test('student deep-link to student scores recovers from a stale invalid selected_course cache', async ({ page }) => {
     const s = scenario()
 
