@@ -135,6 +135,7 @@ Primary scripts:
 - `ops/scripts/deploy_backend.sh`
 - `ops/scripts/deploy_frontend.sh`
 - `ops/scripts/deploy_parent_portal.sh`
+- `ops/scripts/fresh_install_and_deploy.sh`
 - `ops/scripts/post_deploy_check.sh`
 - `ops/scripts/redeploy.sh`
 - `ops/scripts/pull_and_deploy.sh`
@@ -169,6 +170,38 @@ Recommended full deploy:
 sudo bash ops/scripts/deploy_all.sh
 sudo bash ops/scripts/post_deploy_check.sh
 ```
+
+### Fresh host bootstrap and first deploy
+
+When the target machine is effectively starting from zero, use:
+
+```bash
+sudo \
+  GIT_BRANCH=main \
+  DB_PASSWORD='<strong-db-password>' \
+  SECRET_KEY='<long-random-secret>' \
+  INIT_ADMIN_PASSWORD='<strong-admin-password>' \
+  PUBLIC_HOST='courseeval.example' \
+  PUBLIC_WWW_HOST='www.courseeval.example' \
+  bash ops/scripts/fresh_install_and_deploy.sh
+```
+
+What this script does:
+
+- runs `ops/scripts/setup_server.sh`,
+- clones or force-syncs the repository into `/opt/courseeval/source`,
+- writes `/opt/courseeval/shared/.env.production` from current repository conventions,
+- initializes PostgreSQL with `ops/scripts/init_db.sql`,
+- runs `ops/scripts/deploy_all.sh`,
+- runs `ops/scripts/post_deploy_check.sh`,
+- optionally issues a Let's Encrypt certificate when `ENABLE_CERTBOT=1` and `CERTBOT_EMAIL=...` are provided.
+
+Important safety notes:
+
+- it intentionally refuses to run while `DB_PASSWORD`, `SECRET_KEY`, or `INIT_ADMIN_PASSWORD` still use `CHANGE_ME...` placeholders,
+- it uses the current CourseEval paths and service names (`/opt/courseeval`, `courseeval-backend.service`, `ops/nginx/courseeval.example*.conf`),
+- when reusing an existing server clone, it performs a hard reset and `git clean -ffd` inside `${SOURCE_DIR}`, so do not keep server-only edits there,
+- if you are deploying by bare public IP before DNS exists, set `PUBLIC_IP=...`; HTTPS issuance should wait until the real hostnames resolve.
 
 To include public checks in the final step:
 
