@@ -185,6 +185,13 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert len(prob_times) == 1
         assert prob_times[0]["weekly_schedule"] == "3@3,4"
         assert db.query(CourseMaterial).filter(CourseMaterial.subject_id == prob.id).count() >= 1
+        prob_material_titles = {
+            row.title for row in db.query(CourseMaterial).filter(CourseMaterial.subject_id == prob.id).all()
+        }
+        assert "课程导学：学习目标、先修要求与作业规范" in prob_material_titles
+        assert "讲义：条件概率不是“把竖线看成分号”" in prob_material_titles
+        assert "阶段复盘：如何把公式推导写成规范作业" in prob_material_titles
+        assert db.query(CourseMaterialChapter).filter(CourseMaterialChapter.subject_id == prob.id).count() >= 6
         prob_hw = (
             db.query(Homework)
             .filter(Homework.subject_id == prob.id, Homework.title.contains("初等概率论"))
@@ -194,6 +201,15 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert prob_hw.auto_grading_enabled is True
         assert (prob_hw.rubric_staff_only or "").strip()
         assert (prob_hw.reference_answer or "").strip()
+        prob_hw2 = (
+            db.query(Homework)
+            .filter(Homework.subject_id == prob.id, Homework.title == "初等概率论第二次作业：离散分布建模与事件树表达")
+            .first()
+        )
+        assert prob_hw2 is not None
+        assert prob_hw2.auto_grading_enabled is True
+        assert (prob_hw2.rubric_staff_only or "").strip()
+        assert (prob_hw2.reference_answer or "").strip()
         enrolled_ids = {
             row.student_id
             for row in db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == prob.id).all()
@@ -204,9 +220,29 @@ def test_demo_seed_creates_teacher_students_course_homework():
         assert students_by_no["stu3"].id not in enrolled_ids
         assert students_by_no["stu5"].id not in enrolled_ids
         assert db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == prob_hw.id).count() >= 2
+        assert db.query(HomeworkSubmission).filter(HomeworkSubmission.homework_id == prob_hw2.id).count() >= 2
         prob_cfg = db.query(CourseLLMConfig).filter(CourseLLMConfig.subject_id == prob.id).first()
         assert prob_cfg is not None and prob_cfg.is_enabled is True
         assert db.query(CourseLLMConfigEndpoint).filter(CourseLLMConfigEndpoint.config_id == prob_cfg.id).count() >= 1
+        prob_stu1_attempts = (
+            db.query(HomeworkAttempt)
+            .filter(HomeworkAttempt.homework_id == prob_hw.id, HomeworkAttempt.student_id == students_by_no["stu1"].id)
+            .order_by(HomeworkAttempt.submitted_at.asc(), HomeworkAttempt.id.asc())
+            .all()
+        )
+        assert len(prob_stu1_attempts) >= 2
+        assert prob_stu1_attempts[-1].submission_mode == "feedback_followup"
+        assert prob_stu1_attempts[-1].prior_attempt_id is not None
+        prior_attempt_ids = {attempt.id for attempt in prob_stu1_attempts[:-1]}
+        assert prob_stu1_attempts[-1].prior_attempt_id in prior_attempt_ids
+        prob_stu2_sub = (
+            db.query(HomeworkSubmission)
+            .filter(HomeworkSubmission.homework_id == prob_hw.id, HomeworkSubmission.student_id == students_by_no["stu2"].id)
+            .first()
+        )
+        assert prob_stu2_sub is not None
+        assert prob_stu2_sub.review_score is not None
+        assert (prob_stu2_sub.review_comment or "").strip()
 
         sys_user = db.query(User).filter(User.username == "__system_llm_assistant__").first()
         assert sys_user is not None
@@ -225,11 +261,14 @@ def test_demo_seed_creates_teacher_students_course_homework():
             assert any(row.llm_invocation for row in discussion_rows)
 
         notes = db.query(LearningNote).all()
-        assert len(notes) >= 3
+        assert len(notes) >= 4
         assert {note.subject_id for note in notes}.issuperset({course.id, llm.id, prob.id})
         assert db.query(LearningNoteDiscussionEntry).filter(
             LearningNoteDiscussionEntry.message_kind == "llm_assistant"
         ).count() >= 2
+        prob_note_titles = {note.title for note in notes if note.subject_id == prob.id}
+        assert "Bayes 公式课堂笔记" in prob_note_titles
+        assert "概率论课备课札记：Bayes 单元组织" in prob_note_titles
     finally:
         db.close()
 
