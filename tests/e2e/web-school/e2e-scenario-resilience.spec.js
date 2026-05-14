@@ -888,6 +888,76 @@ test.describe('E2E resilience scenarios', () => {
       })
   })
 
+  test('teacher explicit homework appeal rejection keeps teacher detail, student history, and notification state aligned', async ({ page }) => {
+    const s = scenario()
+    const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
+    const studentReason = `E2E homework reject ${s.suffix}_${Date.now()}`
+    const teacherResponse = `Rejected after rubric review ${s.suffix}_${Date.now()}`
+
+    await apiPostJson(`/api/homeworks/${s.homework_id}/submission`, studentToken, {
+      content: `E2E homework appeal rejection body ${s.suffix}_${Date.now()}`,
+      attachment_name: null,
+      attachment_url: null,
+      remove_attachment: false,
+      used_llm_assist: false,
+      submission_mode: 'full'
+    })
+
+    const history = await apiHomeworkSubmissionHistory(studentToken, s.homework_id)
+    const submissionId = history.summary?.id
+    if (!submissionId) {
+      throw new Error('submission summary not found')
+    }
+
+    await apiPutJson(`/api/homeworks/${s.homework_id}/submissions/${submissionId}/review`, teacherToken, {
+      review_score: 83,
+      review_comment: `before reject ${s.suffix}`
+    })
+
+    await apiPostJson(`/api/homeworks/${s.homework_id}/submissions/${submissionId}/appeal`, studentToken, {
+      reason_text: studentReason
+    })
+
+    await login(page, s.teacher_own.username, s.teacher_own.password)
+    await enterSeededRequiredCourse(page, s.suffix)
+    await page.goto(`/homework/${s.homework_id}/submissions`)
+    await page.getByTestId(`homework-submission-detail-${s.student_plain.username}`).click()
+    await expect(page).toHaveURL(new RegExp(`/homework/${s.homework_id}/submissions/${submissionId}`), { timeout: 20000 })
+    await expect(page.getByText(studentReason)).toBeVisible({ timeout: 20000 })
+
+    await page.getByRole('button', { name: '处理申诉' }).click()
+    await expect(page.getByRole('dialog', { name: '处理作业申诉' })).toBeVisible({ timeout: 15000 })
+    await page.getByRole('textbox', { name: '' }).last().fill(teacherResponse)
+    await page.getByRole('button', { name: '拒绝申诉' }).click()
+    await expect(page.getByRole('dialog', { name: '处理作业申诉' })).toBeHidden({ timeout: 15000 })
+    const reviewStudentSection = page.locator('.review-section--student')
+    await expect(reviewStudentSection.getByText('已拒绝', { exact: true })).toBeVisible({ timeout: 20000 })
+    await expect(reviewStudentSection.getByText(teacherResponse, { exact: true })).toBeVisible({ timeout: 20000 })
+
+    await expect
+      .poll(async () => {
+        const studentHistory = await apiHomeworkSubmissionHistory(studentToken, s.homework_id)
+        const notifications = await apiListNotifications(teacherToken, { subject_id: s.course_required_id, page_size: 100 })
+        const matchingNotification = (notifications.data || []).find(row =>
+          row.notification_kind === 'grade_appeal' &&
+          Number(row.related_homework_id) === Number(s.homework_id) &&
+          Number(row.related_student_id) === Number(s.student_plain.student_row_id)
+        )
+        return {
+          appealStatus: studentHistory.summary?.appeal_status || null,
+          teacherResponse: studentHistory.summary?.appeal_teacher_response || null,
+          notificationStatus: matchingNotification?.appeal_status || null,
+          notificationTitle: matchingNotification?.title || ''
+        }
+      }, { timeout: 30000 })
+      .toMatchObject({
+        appealStatus: 'rejected',
+        teacherResponse,
+        notificationStatus: 'rejected'
+      })
+  })
+
   test('student deep-link to homework list auto-selects course context after fresh login', async ({ page }) => {
     const s = scenario()
 

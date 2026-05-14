@@ -318,6 +318,26 @@ Observed passing validation for this follow-up:
 - `.\.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_appeal_redteam.py -q`
 - `npm.cmd run build`
 
+An additional browser-backed red-team follow-up was run specifically against
+the new homework reject path:
+
+- attack target: teacher explicitly rejects a homework appeal from
+  `HomeworkSubmissionReview.vue`, then student history, teacher detail, and the
+  teacher notification row must all converge to the same `rejected` terminal
+  state within a focused 5-minute budget;
+- command:
+  `node scripts/playwright-external-runner.cjs e2e-scenario-resilience.spec.js --project=chromium --grep "teacher explicit homework appeal rejection keeps teacher detail, student history, and notification state aligned"`
+- result: passed within the focused budget.
+
+Important interpretation note from that red-team pass:
+
+- the first failing attempt was not a product bug; it was a test-authoring
+  false positive where a broad `getByText('已拒绝')` locator matched both the
+  page status tag and the transient success toast;
+- the focused browser proof is now scoped to the submission-review page section
+  instead of a page-global text locator, which makes the test authoritative for
+  the product state instead of the toast layer.
+
 ## Recommended Next Step
 
 If work continues on this branch, the next best follow-up is:
