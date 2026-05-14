@@ -24,7 +24,17 @@
       </div>
     </div>
 
-    <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />
+    <el-alert
+      v-if="missingAppealCourseNotice"
+      data-testid="scores-appeal-course-missing"
+      type="warning"
+      :closable="false"
+      class="appeal-missing-course-alert"
+      :title="missingAppealCourseNotice.title"
+      :description="missingAppealCourseNotice.description"
+    />
+
+    <el-empty v-if="!selectedCourse" :description="emptyStateDescription" />
 
     <template v-else>
       <el-card shadow="never" class="stats-card">
@@ -130,7 +140,7 @@
         <template #header>
           <div class="card-header-inline">
             <strong>成绩申诉</strong>
-            <el-button size="small" @click="loadAppeals">刷新</el-button>
+            <el-button size="small" @click="refreshAppeals">刷新</el-button>
           </div>
         </template>
         <el-alert
@@ -449,8 +459,10 @@ const appeals = ref([])
 const appealResolve = reactive({ appealId: null, response: '', loading: false })
 const focusedAppealStatus = ref('')
 const focusedAppealResponse = ref('')
+const missingAppealCourseContext = ref(null)
 
-const selectedCourse = computed(() => userStore.selectedCourse)
+const selectedCourseRaw = computed(() => userStore.selectedCourse)
+const selectedCourse = computed(() => (missingAppealCourseContext.value ? null : selectedCourseRaw.value))
 
 const form = reactive({
   student_id: null,
@@ -509,6 +521,26 @@ const partsSum = computed(() =>
 )
 
 const partsSumValid = computed(() => partsSum.value === 100)
+
+const DEFAULT_EMPTY_STATE_DESCRIPTION = '请先选择一门课程。'
+
+const missingAppealCourseNotice = computed(() => {
+  const context = missingAppealCourseContext.value
+  if (!context) return null
+  const routeLabel = context.appealId ? `申诉 ID ${context.appealId}` : '该申诉深链'
+  return {
+    title: '无法恢复该申诉对应的课程上下文',
+    description:
+      `${routeLabel} 指向的课程已不在当前可用课程列表中，页面已停止自动定位，` +
+      '以免误将其他课程的成绩申诉当作目标。'
+  }
+})
+
+const emptyStateDescription = computed(() =>
+  missingAppealCourseNotice.value
+    ? '请返回通知列表，或重新选择一门仍然可用的课程后再继续。'
+    : DEFAULT_EMPTY_STATE_DESCRIPTION
+)
 
 const loadSemesters = async () => {
   semesters.value = await api.semesters.list()
@@ -590,28 +622,49 @@ const loadClassCompositions = async () => {
   }
 }
 
-const loadAppeals = async () => {
+const resetFocusedAppealState = () => {
+  focusedAppealStatus.value = ''
+  focusedAppealResponse.value = ''
+}
+
+const syncAppealRouteCourseContext = async () => {
   const routeSubjectId = Number(route.query.subject_id || 0)
-  if (
-    routeSubjectId &&
-    (!selectedCourse.value || Number(selectedCourse.value.id) !== routeSubjectId)
-  ) {
-    const courses = await userStore.fetchTeachingCourses(false)
-    const matchedCourse = courses.find(row => Number(row.id) === routeSubjectId)
-    if (matchedCourse) {
-      userStore.setSelectedCourse(matchedCourse)
-    }
+  const appealId = Number(route.query.appeal_id || 0)
+  missingAppealCourseContext.value = null
+
+  if (!routeSubjectId) {
+    return
   }
+
+  const courses = await userStore.fetchTeachingCourses(true)
+  const matchedCourse = courses.find(row => Number(row.id) === routeSubjectId)
+
+  if (!matchedCourse) {
+    missingAppealCourseContext.value = {
+      subjectId: routeSubjectId,
+      appealId: appealId || null
+    }
+    return
+  }
+
+  if (
+    !selectedCourseRaw.value ||
+    Number(selectedCourseRaw.value.id) !== routeSubjectId ||
+    selectedCourseRaw.value !== matchedCourse
+  ) {
+    userStore.setSelectedCourse(matchedCourse)
+  }
+}
+
+const loadAppeals = async () => {
   if (!selectedCourse.value) {
     appeals.value = []
-    focusedAppealStatus.value = ''
-    focusedAppealResponse.value = ''
+    resetFocusedAppealState()
     return
   }
   appeals.value = await api.scores.listAppeals({ subject_id: selectedCourse.value.id })
   const appealId = Number(route.query.appeal_id || 0)
-  focusedAppealStatus.value = ''
-  focusedAppealResponse.value = ''
+  resetFocusedAppealState()
   if (appealId) {
     const target = appeals.value.find(row => Number(row.id) === appealId)
     if (target) {
@@ -625,6 +678,17 @@ const loadAppeals = async () => {
       }
     }
   }
+}
+
+const refreshAppeals = async () => {
+  await syncAppealRouteCourseContext()
+  await loadAppeals()
+}
+
+const loadScoresPageData = async () => {
+  await syncAppealRouteCourseContext()
+  await Promise.all([loadStudents(), loadScores(), loadWeights(), loadGradeScheme(), loadAppeals()])
+  await loadClassCompositions()
 }
 
 const appealFocusBannerTitle = computed(() => {
@@ -916,14 +980,15 @@ const formatDate = value => {
 
 onMounted(async () => {
   await loadSemesters()
-  await Promise.all([loadStudents(), loadScores(), loadWeights(), loadGradeScheme(), loadAppeals()])
-  await loadClassCompositions()
+  await loadScoresPageData()
 })
 
-watch(selectedCourse, async () => {
-  await Promise.all([loadStudents(), loadScores(), loadWeights(), loadGradeScheme(), loadAppeals()])
-  await loadClassCompositions()
-})
+watch(
+  () => [selectedCourseRaw.value?.id || null, route.query.subject_id || '', route.query.appeal_id || ''],
+  async () => {
+    await loadScoresPageData()
+  }
+)
 </script>
 
 <style scoped>
@@ -1016,6 +1081,10 @@ watch(selectedCourse, async () => {
 }
 
 .appeal-focus-banner {
+  margin-bottom: 12px;
+}
+
+.appeal-missing-course-alert {
   margin-bottom: 12px;
 }
 

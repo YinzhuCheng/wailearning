@@ -203,14 +203,7 @@ The frontend/state resolver now understands all four states, but homework still
 has no native reject path. This is a **spec ambiguity**, not something to
 invent silently.
 
-### B. Deep-link recovery for missing course context is still weak
-
-`Scores.vue` can recover `subject_id` when the target course still exists in the
-teacher's available teaching-course list. If the route points at a course that
-is no longer recoverable there, the page still degrades toward empty selected
-course state rather than a dedicated explanation. This remains a product/UX gap.
-
-### C. Notification body text still depends on projected status line rather than a richer event log
+### B. Notification body text still depends on projected status line rather than a richer event log
 
 The new projection helper prevents contradictory status text, but it still
 stores final user-facing body text directly on the notification row. If product
@@ -223,11 +216,28 @@ later wants a richer timeline like:
 
 that would require a separate event-log model or a more explicit transition log.
 
-### D. Other appeal-status consumers may still exist outside this chain
+### C. Other appeal-status consumers may still exist outside this chain
 
 This round converged the known school-web pages for homework and notifications,
 but future work touching parent portal or new dashboards should grep
 `appeal_status` again before assuming every consumer has been normalized.
+
+## Follow-up Applied After The Main Round
+
+The earlier handoff worried that `/scores?subject_id=...&appeal_id=...` could
+degrade into an empty or misleading course state when the deep-linked course no
+longer existed in the current teacher course list.
+
+That fallback is now hardened in `apps/web/school/src/views/Scores.vue`:
+
+- route recovery still restores the exact course when `subject_id` is still
+  available in the teacher's current course list;
+- when the deep-linked course is no longer recoverable, the page now enters an
+  explicit missing-course state instead of silently continuing with another
+  selected course;
+- the page surfaces a dedicated warning explaining that the target course
+  context can no longer be restored, and intentionally avoids querying or
+  presenting appeals for the wrong course.
 
 ## Recommended Next Step
 
@@ -237,5 +247,5 @@ If work continues on this branch, the next best follow-up is:
    semantics; document that decision instead of leaving it implicit
 2. add one more API regression around notification content/title parity for the
    score appeal `rejected` path if product relies on that text for staff triage
-3. consider a dedicated UX fallback for `/scores?subject_id=...&appeal_id=...`
-   when the target course context can no longer be restored
+3. grep other school-web or parent-facing consumers for `appeal_status` and
+   `related_score_appeal_id` before assuming this chain is fully converged
