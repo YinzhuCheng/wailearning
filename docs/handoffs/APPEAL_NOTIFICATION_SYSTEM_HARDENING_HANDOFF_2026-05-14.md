@@ -244,6 +244,38 @@ Follow-up browser proof was added in
 single-case Playwright run that exercises a foreign-course `subject_id` while
 the teacher already has a different current course selected.
 
+An additional red-team follow-up on the same surface exposed a second-order UX
+bug: once the page entered the missing-course state, a teacher could still be
+effectively trapped there even after manually switching to another accessible
+course from the header course switcher.
+
+That recovery path is now also hardened in `apps/web/school/src/views/Scores.vue`:
+
+- the first blocked deep-link keeps its own route-key and selected-course
+  snapshot;
+- a later manual switch to a different accessible course is treated as an
+  explicit user override of the broken deep-link context;
+- after that override, the warning state is cleared and the stale
+  `subject_id` / `appeal_id` route context is removed so the page can continue
+  under the newly selected course instead of re-blocking itself.
+
+Another red-team follow-up exposed a separate ambiguity on the same page:
+
+- when `subject_id` still points at an accessible course but `appeal_id` is
+  missing, stale, or outside the current course scope, the page previously
+  fell back to the ordinary score/appeal list with no explicit indication that
+  the requested appeal target itself was not found.
+
+That case is now hardened too:
+
+- `Scores.vue` distinguishes “course context missing” from “appeal target
+  missing”;
+- an accessible-but-missing `appeal_id` now surfaces a dedicated
+  target-missing notice instead of silently implying that the ordinary list
+  already represents the requested appeal;
+- focused Playwright coverage was added for this exact condition in
+  `tests/e2e/web-school/e2e-scenario-resilience.spec.js`.
+
 ## Recommended Next Step
 
 If work continues on this branch, the next best follow-up is:

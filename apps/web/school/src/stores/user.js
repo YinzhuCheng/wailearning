@@ -20,6 +20,7 @@ export const useUserStore = defineStore('user', () => {
   const systemSettings = ref(cachedSystemSettings)
   const appearanceState = ref(null)
   const selectedCourse = ref(cachedSelectedCourse)
+  const selectedCourseRevision = ref(0)
   const teachingCourses = ref([])
   const teachingCoursesLoaded = ref(false)
 
@@ -38,6 +39,7 @@ export const useUserStore = defineStore('user', () => {
       : null
 
     selectedCourse.value = normalizedCourse
+    selectedCourseRevision.value += 1
     if (normalizedCourse) {
       localStorage.setItem('selected_course', JSON.stringify(normalizedCourse))
     } else {
@@ -210,6 +212,7 @@ export const useUserStore = defineStore('user', () => {
     systemSettings,
     appearanceState,
     selectedCourse,
+    selectedCourseRevision,
     teachingCourses,
     teachingCoursesLoaded,
     isLoggedIn,
