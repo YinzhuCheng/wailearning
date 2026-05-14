@@ -42,13 +42,21 @@ governance**.
    [`docs/agents/local-agent-workspace.md`](docs/agents/local-agent-workspace.md).
    Use `.agent-run/plan/` for local private plan files and remove a plan file
    after the plan is fully executed or superseded.
+   Use committed handoff documents under [`docs/handoffs/`](docs/handoffs/README.md)
+   when the user asks for cross-session continuation. The current appeal-notification
+   system hardening handoff is
+   [`docs/handoffs/APPEAL_NOTIFICATION_SYSTEM_HARDENING_HANDOFF_2026-05-14.md`](docs/handoffs/APPEAL_NOTIFICATION_SYSTEM_HARDENING_HANDOFF_2026-05-14.md).
 6. Use the pitfall search before classifying local failures:
    `python ops/scripts/dev/search_pitfalls.py "<symptom>"`.
 7. Use the diff-based validation selector before broad manual test selection:
    `python ops/scripts/dev/select_validation_targets.py --worktree`.
-8. After validation finishes, run
-   `python ops/scripts/dev/clean_local_artifacts.py` and apply it when the
-   dry-run is limited to reproducible cache or local housekeeping targets.
+8. At the end of every round, clean local reproducible artifacts under
+   `C:\Users\bloom\wailearning\.agent-run` and other safe cache locations with
+   `python ops/scripts/dev/clean_local_artifacts.py`.
+   Run a dry-run first, then apply the cleanup when the action list is limited
+   to reproducible caches or local housekeeping/archival targets:
+   `python ops/scripts/dev/clean_local_artifacts.py`
+   `python ops/scripts/dev/clean_local_artifacts.py --apply`
 
 High-risk hard boundaries that stay explicit:
 
