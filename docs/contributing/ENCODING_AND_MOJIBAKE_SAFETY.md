@@ -51,7 +51,37 @@ The repository now includes small utilities whose purpose is to reduce encoding
 mistakes during agent work. These helpers are not a license to trust terminal
 glyphs blindly. They provide safer defaults and repeatable inspection paths.
 
-### Current PowerShell session setup
+### Default Windows text-workflow entrypoint
+
+Use this as the default command before inspecting or editing multilingual
+repository files from Windows PowerShell:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1
+```
+
+If you already know the target file, pass it immediately:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1 `
+  -Path apps\web\school\src\views\Layout.vue -StartLine 1 -EndLine 120
+```
+
+This entrypoint:
+
+1. applies the UTF-8-oriented console/session settings;
+2. marks the current shell as a safe-text session;
+3. optionally routes into the safe multilingual file inspection workflow for a
+   specific path.
+
+Use `assert-safe-text-session.ps1` when you want a yes/no check that the
+current shell already entered the safe-text workflow:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\assert-safe-text-session.ps1
+```
+
+### Low-level UTF-8 session setup
 
 Run this at the start of a Windows PowerShell session that may inspect or edit
 multilingual repository files:
@@ -78,19 +108,19 @@ sets:
 - `PYTHONIOENCODING=utf-8`;
 - `LESSCHARSET=utf-8`.
 
-### Executable PowerShell rule
+### File inspection workflow
 
 When a Windows PowerShell session is about to inspect or edit a multilingual
 repository file, use this command first:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe-text-workflow.ps1 -Path <repo-relative-path>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1 -Path <repo-relative-path>
 ```
 
 Example:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe-text-workflow.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1 `
   -Path apps\web\school\src\views\Layout.vue -StartLine 1 -EndLine 120
 ```
 
@@ -100,6 +130,12 @@ What this rule enforces:
 2. Display the target file through `safe_show_text.py`.
 3. Run `check_text_encoding.py` on that exact path.
 4. Only then make patch-based edits or an intentional full-file write.
+
+Implementation note:
+
+- `enter-safe-text-session.ps1` is now the default operator/agent entrypoint.
+- `safe-text-workflow.ps1` remains as the lower-level file-inspection helper
+  invoked by that entrypoint and can still be run directly for compatibility.
 
 Use `-Escape` when terminal rendering is still suspicious and
 `-FailOnSuspicious` when the selected file is expected to be clean.
@@ -280,12 +316,14 @@ Do not combine encoding cleanup with a large refactor unless the encoding issue 
 2. Apply the session helper:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1
 ```
 
 3. If you will keep using the same interactive shell, dot-source the helper
    instead of launching it as a child process.
-4. Continue to prefer ASCII anchors and patch-based edits for source files.
+4. Use `assert-safe-text-session.ps1` when you need a quick verification that
+   the current shell is still in the safe-text workflow.
+5. Continue to prefer ASCII anchors and patch-based edits for source files.
 
 ### Inspecting a suspicious multilingual file
 

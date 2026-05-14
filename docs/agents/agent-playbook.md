@@ -27,18 +27,25 @@ task:
 2. Execute ordinary repository reads, edits, validation discovery, and Git
    operations directly; ask only when an action is destructive,
    privacy-sensitive, or materially outside the task boundary.
-3. Preserve documentation detail when it acts as process memory for future
+3. On Windows PowerShell, enter the repository safe-text workflow before
+   inspecting multilingual files:
+   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops/scripts/windows/enter-safe-text-session.ps1`.
+4. Preserve documentation detail when it acts as process memory for future
    agents. Shorten only when the removed material is obsolete, contradictory, or
    duplicative enough to cause confusion.
-4. Update committed docs in the same change set when behavior, permissions,
+5. Update committed docs in the same change set when behavior, permissions,
    configuration, routing, validation flow, or operational workflow changes.
-5. Keep machine-specific evidence local under `.agent-run/`; use
+6. Keep machine-specific evidence local under `.agent-run/`; use
    [`local-agent-workspace.md`](local-agent-workspace.md) for the workspace
    contract.
-6. For repeated execution traps, prefer converting the lesson into a committed
+7. For repeated execution traps, prefer converting the lesson into a committed
    script, skill, selector rule, or pitfall entry rather than leaving it as
    ad hoc reasoning.
-7. Before committing, scan for private-path leaks and run the narrowest useful
+8. For recurring UI simulation or screenshot work, prefer a committed script
+   over an ignored local helper. The maintained example is
+   `apps/web/school/scripts/capture-homework-layout-runner.cjs`, which uses
+   the supported school E2E startup path and writes local output under `pics/`.
+9. Before committing, scan for private-path leaks and run the narrowest useful
    validation starting with the diff selector in
    `docs/testing/DEVELOPMENT_AND_TESTING.md`.
 

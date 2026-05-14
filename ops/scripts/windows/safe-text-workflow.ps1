@@ -17,11 +17,11 @@ path. Use it before touching Chinese UI copy, mixed-language Markdown, or any
 file whose console rendering may be suspicious.
 
 .EXAMPLE
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe-text-workflow.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1 `
   -Path apps\web\school\src\views\Layout.vue -StartLine 1 -EndLine 120
 
 .EXAMPLE
-. .\ops\scripts\windows\safe-text-workflow.ps1 -Path docs\contributing\ENCODING_AND_MOJIBAKE_SAFETY.md -Escape
+. .\ops\scripts\windows\enter-safe-text-session.ps1 -Path docs\contributing\ENCODING_AND_MOJIBAKE_SAFETY.md -Escape
 #>
 
 [CmdletBinding()]
@@ -32,7 +32,8 @@ param(
     [int]$EndLine,
     [switch]$Escape,
     [switch]$FailOnSuspicious,
-    [switch]$SkipShow
+    [switch]$SkipShow,
+    [switch]$Quiet
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,9 +44,20 @@ $showScript = Join-Path $repoRoot 'ops\scripts\dev\safe_show_text.py'
 $checkScript = Join-Path $repoRoot 'ops\scripts\dev\check_text_encoding.py'
 $utf8Script = Join-Path $PSScriptRoot 'set-utf8-session.ps1'
 
-. $utf8Script -Quiet
+if ($env:COURSEEVAL_SAFE_TEXT_SESSION -ne '1') {
+    . $utf8Script -Quiet
+    $env:COURSEEVAL_SAFE_TEXT_SESSION = '1'
+    if (-not $Quiet) {
+        Write-Warning 'safe-text-workflow.ps1 was run directly. Prefer enter-safe-text-session.ps1 as the default Windows text-workflow entrypoint.'
+    }
+}
 
-$resolvedPath = Resolve-Path -LiteralPath $Path
+$candidatePath = $Path
+if (-not [System.IO.Path]::IsPathRooted($candidatePath)) {
+    $candidatePath = Join-Path $repoRoot $candidatePath
+}
+
+$resolvedPath = Resolve-Path -LiteralPath $candidatePath
 $repoRootWithSlash = ($repoRoot.Path.TrimEnd('\') + '\')
 $resolvedFullPath = $resolvedPath.Path
 if ($resolvedFullPath.StartsWith($repoRootWithSlash, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -54,13 +66,15 @@ if ($resolvedFullPath.StartsWith($repoRootWithSlash, [System.StringComparison]::
     $repoRelativePath = $resolvedFullPath
 }
 
-Write-Output 'PowerShell safe-text rule:'
-Write-Output '1. Keep this shell in UTF-8 mode.'
-Write-Output '2. Inspect multilingual text only through safe_show_text.py.'
-Write-Output '3. Run check_text_encoding.py on the exact file before editing.'
-Write-Output '4. Edit tracked source with patch-based changes; use safe_write_text.py only for intentional full-file writes.'
-Write-Output ''
-Write-Output "Target: $repoRelativePath"
+if (-not $Quiet) {
+    Write-Output 'PowerShell safe-text rule:'
+    Write-Output '1. Keep this shell in UTF-8 mode.'
+    Write-Output '2. Inspect multilingual text only through safe_show_text.py.'
+    Write-Output '3. Run check_text_encoding.py on the exact file before editing.'
+    Write-Output '4. Edit tracked source with patch-based changes; use safe_write_text.py only for intentional full-file writes.'
+    Write-Output ''
+    Write-Output "Target: $repoRelativePath"
+}
 
 if (-not $SkipShow) {
     $showArgs = @($showScript, $repoRelativePath)
@@ -74,8 +88,10 @@ if (-not $SkipShow) {
         $showArgs += '--escape'
     }
 
-    Write-Output ''
-    Write-Output '== Safe file view =='
+    if (-not $Quiet) {
+        Write-Output ''
+        Write-Output '== Safe file view =='
+    }
     & $python @showArgs
 }
 
@@ -84,6 +100,8 @@ if ($FailOnSuspicious) {
     $checkArgs += '--fail-on-suspicious'
 }
 
-Write-Output ''
-Write-Output '== Encoding check =='
+if (-not $Quiet) {
+    Write-Output ''
+    Write-Output '== Encoding check =='
+}
 & $python @checkArgs

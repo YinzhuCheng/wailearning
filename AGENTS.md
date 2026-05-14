@@ -37,11 +37,22 @@ governance**.
    does not replace router or domain enforcement.
 4. Use UTF-8-safe editing practices on Windows PowerShell; start with
    [`docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
+   The default Windows text-workflow entrypoint is
+   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops/scripts/windows/enter-safe-text-session.ps1`.
 5. Use `.agent-run/` for local-only logs, private paths, and machine-specific
    continuation notes; keep durable repository context in committed docs. See
    [`docs/agents/local-agent-workspace.md`](docs/agents/local-agent-workspace.md).
    Use `.agent-run/plan/` for local private plan files and remove a plan file
    after the plan is fully executed or superseded.
+   Use `pics/` for local image handoff from the user to the agent, including
+   screenshots the agent creates during UI work.
+   Treat files in `pics/` as local-only by default. Do not push them to any
+   remote unless the user explicitly asks for that; screenshots in `pics/`
+   should generally remain unpushed.
+   Use `apps/web/school/scripts/capture-homework-layout-runner.cjs` plus
+   `npm.cmd run capture:homework-layout` from `apps/web/school` for the
+   maintained homework-layout simulation and screenshot workflow; default
+   output is `pics/homework-layout-fixed.png`.
    Use committed handoff documents under [`docs/handoffs/`](docs/handoffs/README.md)
    when the user asks for cross-session continuation. The current appeal-notification
    system hardening handoff is
@@ -57,6 +68,11 @@ governance**.
    to reproducible caches or local housekeeping/archival targets:
    `python ops/scripts/dev/clean_local_artifacts.py`
    `python ops/scripts/dev/clean_local_artifacts.py --apply`
+9. After completing a repeated or failure-prone workflow, explicitly decide
+   whether it should become a committed script or repo-local skill.
+   Prefer scripts for stable executable workflows and skills for routing or
+   multi-step agent procedure; do not leave frequently reused workflows as
+   ad hoc terminal lore.
 
 High-risk hard boundaries that stay explicit:
 

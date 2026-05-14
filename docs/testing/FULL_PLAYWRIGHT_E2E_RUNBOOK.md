@@ -55,6 +55,33 @@ npx playwright install chromium
 
 If the project config only targets Chromium, installing Chromium alone is usually sufficient.
 
+### Maintained local screenshot workflow
+
+For the homework list layout regression and similar teacher-facing screenshot
+checks, use the maintained capture command instead of an ignored local helper:
+
+```bash
+cd <REPO_ROOT>/apps/web/school
+npm run capture:homework-layout
+```
+
+What this does:
+
+- starts the school backend and Vite frontend through the supported external
+  runner path;
+- calls `POST /api/e2e/dev/reset-scenario` with the current seed token;
+- creates two teacher-homework rows sized to reproduce the wide rule-text +
+  right-action-column layout pressure;
+- logs in as the seeded teacher and captures `/homework`;
+- writes the screenshot to `<REPO_ROOT>/pics/homework-layout-fixed.png` unless
+  another output path is passed.
+
+Local-output rule:
+
+- `pics/` is for local image handoff and generated screenshots;
+- files under `pics/` are normally not pushed to remotes unless the user
+  explicitly asks for that.
+
 ### Python backend invoked by `webServer`
 
 Playwright `webServer` starts uvicorn. The interpreter must have **`requirements.txt`** installed:

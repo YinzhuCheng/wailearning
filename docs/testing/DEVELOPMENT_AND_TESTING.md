@@ -620,6 +620,26 @@ Key files:
 - `docs/testing/TEST_EXECUTION_PITFALLS.md`
 - `tests/TEST_PROTECTION_RULES.json`
 
+### Maintained local UI screenshot workflow
+
+Use the committed homework-layout screenshot flow when you need a reproducible
+teacher screenshot for the wide homework list layout:
+
+```bash
+cd apps/web/school
+npm run capture:homework-layout
+```
+
+Contract:
+
+- the command starts backend + frontend through the maintained external-runner
+  path;
+- it resets the E2E scenario, seeds two demo homework rows, opens `/homework`,
+  and captures the page;
+- default output is `<repo>/pics/homework-layout-fixed.png`;
+- `pics/` is local-only by default and should not be pushed unless the user
+  explicitly asks.
+
 Before running Playwright on Windows, read the pitfalls document first. Known false-failure causes include:
 
 - `npm.ps1` execution-policy blocking,

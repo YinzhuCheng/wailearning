@@ -55,30 +55,32 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="300">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
-            <el-button size="small" @click="router.push({ name: 'RecentPostsUser', params: { userId: String(row.id) } })">
-              近期发表
-            </el-button>
-            <el-button
-              v-if="isAdmin"
-              type="warning"
-              size="small"
-              data-testid="users-reset-password"
-              :disabled="row.id === userStore.userInfo?.id"
-              @click="openResetPasswordDialog(row)"
-            >
-              重置密码
-            </el-button>
-            <el-button
-              type="danger"
-              size="small"
-              :disabled="isDeleteDisabled(row)"
-              @click="deleteUser(row)"
-            >
-              删除
-            </el-button>
+            <div class="users-table-actions">
+              <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
+              <el-button size="small" @click="router.push({ name: 'RecentPostsUser', params: { userId: String(row.id) } })">
+                近期发表
+              </el-button>
+              <el-button
+                v-if="isAdmin"
+                type="warning"
+                size="small"
+                data-testid="users-reset-password"
+                :disabled="row.id === userStore.userInfo?.id"
+                @click="openResetPasswordDialog(row)"
+              >
+                重置密码
+              </el-button>
+              <el-button
+                type="danger"
+                size="small"
+                :disabled="isDeleteDisabled(row)"
+                @click="deleteUser(row)"
+              >
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
           </el-table>
@@ -722,6 +724,23 @@ watch(
 
 .users-table-scroll :deep(.el-table) {
   min-width: 1120px;
+}
+
+.users-table-scroll :deep(.el-table__fixed-right) {
+  box-shadow: -10px 0 18px rgba(15, 23, 42, 0.06);
+}
+
+.users-table-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.users-table-actions :deep(.el-button) {
+  margin-left: 0;
 }
 
 .page-header {

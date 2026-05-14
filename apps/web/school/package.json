@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:external": "node scripts/playwright-external-runner.cjs",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "capture:homework-layout": "node scripts/capture-homework-layout-runner.cjs",
+    "capture:student-homework-layout": "node scripts/capture-student-homework-layout-runner.cjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

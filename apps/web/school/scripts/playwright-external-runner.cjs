@@ -126,10 +126,19 @@ async function cleanup() {
 }
 
 async function main() {
-  const playwrightArgs = process.argv.slice(2)
+  const rawArgs = process.argv.slice(2)
+  const firstArg = rawArgs[0] || ''
+  const customNodeScript =
+    firstArg &&
+    !firstArg.startsWith('-') &&
+    /\.(cjs|mjs|js)$/.test(firstArg) &&
+    path.isAbsolute(firstArg)
+      ? firstArg
+      : null
+  const playwrightArgs = customNodeScript ? rawArgs.slice(1) : rawArgs
   const wantsParentUi =
     ['1', 'true', 'yes', 'on'].includes(String(process.env.E2E_PARENT_UI || '').trim().toLowerCase()) ||
-    playwrightArgs.some(arg => /parent[-_]portal/i.test(String(arg)))
+    rawArgs.some(arg => /parent[-_]portal/i.test(String(arg)))
   launch(
     'api',
     pythonExe,
@@ -168,7 +177,11 @@ async function main() {
     await waitFor(`${parentUiBase}/`, 'parent-ui')
   }
 
-  const test = spawn(process.execPath, [playwrightCli, 'test', ...playwrightArgs], {
+  const testCommand = customNodeScript
+    ? [customNodeScript, ...playwrightArgs]
+    : [playwrightCli, 'test', ...playwrightArgs]
+
+  const test = spawn(process.execPath, testCommand, {
     cwd: schoolRoot,
     env: {
       ...process.env,

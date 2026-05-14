@@ -72,6 +72,17 @@ For routing or selector drift, also inspect:
 - [TEST_SUITE_MAP.md](TEST_SUITE_MAP.md)
 - [../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md)
 
+For a maintained local screenshot workflow tied to the school E2E startup
+contract, use:
+
+```bash
+cd <repo>/apps/web/school
+npm run capture:homework-layout
+```
+
+This command writes to `<repo>/pics/homework-layout-fixed.png` by default and
+keeps the output local unless the user explicitly asks to push it.
+
 ## Related Files
 
 - [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
@@ -322,12 +333,11 @@ Fix:
 For maintained tests, keep the spec under `<repo>/tests/e2e/web-school` and run
 it by filename from `<repo>/apps/web/school`.
 
-For local screenshot experiments, either:
+For local screenshot experiments, prefer a committed maintained script when the
+workflow is likely to recur. The current example is
+`apps/web/school/scripts/capture-homework-layout-runner.cjs`.
 
-- temporarily add screenshot capture to a maintained spec and remove it before
-  commit; or
-- create an ignored local Node script that imports Playwright directly and also
-  recreates any module-resolution setup the Playwright config normally provides.
+Only fall back to one-off local helpers when the scenario is truly disposable.
 
 Interpretation:
 

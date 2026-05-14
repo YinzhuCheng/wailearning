@@ -288,7 +288,7 @@
                   </el-button>
                 </template>
               </el-table-column>
-              <el-table-column v-if="!userStore.isStudent" label="操作" width="240" align="center" header-align="center">
+              <el-table-column v-if="!userStore.isStudent" label="操作" width="240" fixed="right" align="center" header-align="center">
                 <template #default="{ row }">
                   <div class="wa-table-actions">
                     <el-button
@@ -1826,11 +1826,15 @@ onBeforeUnmount(() => {
 
 .wa-table-actions {
   display: inline-flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: 4px;
   width: 100%;
+}
+
+.materials-table-scroll :deep(.el-table__fixed-right) {
+  box-shadow: -10px 0 18px rgba(15, 23, 42, 0.06);
 }
 
 .materials-main :deep(.el-table__row) {
