@@ -38,7 +38,7 @@
 - 证据来源：
   - 当前未提交 diff
   - `git log --oneline -5`
-  - 代码阅读：[Scores.vue](/abs/path/C:/Users/bloom/wailearning/apps/web/school/src/views/Scores.vue)、[user.js](/abs/path/C:/Users/bloom/wailearning/apps/web/school/src/stores/user.js)
+- 代码阅读：[Scores.vue](../../apps/web/school/src/views/Scores.vue)、[user.js](../../apps/web/school/src/stores/user.js)
 - 备注：
   - 这些修改明显来自多轮持续收敛，不是一次性完成。
   - 当前工作区仍有未提交补丁，后续 agent 必须先确认这些补丁是否自洽。
@@ -54,8 +54,8 @@
     - accessible course + missing `appeal_id` 不应被静默当成成功定位
 - 证据来源：
   - 当前未提交 diff
-  - 代码阅读：[e2e-scenario-resilience.spec.js](/abs/path/C:/Users/bloom/wailearning/tests/e2e/web-school/e2e-scenario-resilience.spec.js)
-  - 交接文档：[APPEAL_NOTIFICATION_SYSTEM_HARDENING_HANDOFF_2026-05-14.md](/abs/path/C:/Users/bloom/wailearning/docs/handoffs/APPEAL_NOTIFICATION_SYSTEM_HARDENING_HANDOFF_2026-05-14.md)
+- 代码阅读：[e2e-scenario-resilience.spec.js](../../tests/e2e/web-school/e2e-scenario-resilience.spec.js)
+  - 交接文档：[APPEAL_NOTIFICATION_SYSTEM_HARDENING_HANDOFF_2026-05-14.md](../handoffs/APPEAL_NOTIFICATION_SYSTEM_HARDENING_HANDOFF_2026-05-14.md)
   - `docs/testing/agent-update-log.csv`
 - 备注：
   - 上下文不足以精确还原每一轮红队覆盖了哪些全部面；只能从测试文件新增用例、hand-off 叙述、update-log 行判断其大致攻击目标。
