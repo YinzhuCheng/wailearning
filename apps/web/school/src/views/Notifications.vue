@@ -316,12 +316,31 @@ const canOpenAppealFromDetail = computed(
     !userStore.isStudent
 )
 
+const canOpenScoreAppealFromDetail = computed(
+  () =>
+    currentNotification.value?.notification_kind === 'score_grade_appeal' &&
+    currentNotification.value?.subject_id &&
+    currentNotification.value?.appeal_status !== 'resolved' &&
+    !userStore.isStudent
+)
+
 const goGradeAppeal = row => {
   if (!row?.related_homework_id || !row?.related_student_id) return
   router.push({
     path: `/homework/${row.related_homework_id}/submissions`,
     query: { student_id: String(row.related_student_id) }
   })
+}
+
+const goScoreAppeal = row => {
+  if (!row?.subject_id) return
+  userStore.selectCourse({
+    id: row.subject_id,
+    name: row.subject_name || '',
+    class_id: row.class_id || null,
+    class_name: row.class_name || ''
+  })
+  router.push('/scores')
 }
 
 const form = reactive({

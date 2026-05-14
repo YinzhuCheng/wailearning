@@ -323,3 +323,55 @@ def test_resolved_grade_appeal_notification_exposes_appeal_status_to_clients():
     grade_rows = [row for row in listed.json().get("data", []) if row.get("notification_kind") == "grade_appeal"]
     assert grade_rows
     assert any(row.get("appeal_status") == "resolved" for row in grade_rows)
+
+
+def test_resolved_score_appeal_notification_exposes_appeal_status_to_clients():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+
+    created = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_h,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "score appeal status field"},
+    )
+    assert created.status_code == 200, created.text
+    appeal_id = created.json()["id"]
+
+    resolved = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=teacher_h,
+        json={"teacher_response": "resolved", "status": "resolved"},
+    )
+    assert resolved.status_code == 200, resolved.text
+
+    listed = client.get("/api/notifications", headers=teacher_h)
+    assert listed.status_code == 200, listed.text
+    rows = [row for row in listed.json().get("data", []) if row.get("notification_kind") == "score_grade_appeal"]
+    assert rows
+    assert any(row.get("appeal_status") == "resolved" for row in rows)
+
+
+def test_pending_score_appeal_notification_exposes_appeal_status_to_clients():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+
+    created = client.post(
+        f"/api/scores/appeals?subject_id={ctx['subject_id']}",
+        headers=student_h,
+        json={"semester": "2026-fall", "target_component": "total", "reason_text": "score appeal pending state"},
+    )
+    assert created.status_code == 200, created.text
+
+    listed = client.get("/api/notifications", headers=teacher_h)
+    assert listed.status_code == 200, listed.text
+    rows = [row for row in listed.json().get("data", []) if row.get("notification_kind") == "score_grade_appeal"]
+    assert rows
+    assert any(row.get("appeal_status") == "pending" for row in rows)

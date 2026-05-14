@@ -26,6 +26,7 @@ from apps.backend.courseeval_backend.db.models import (
     HomeworkGradeAppeal,
     Notification,
     NotificationRead,
+    ScoreGradeAppeal,
     Student,
     User,
     UserRole,
@@ -226,6 +227,13 @@ def _serialize_notification(notification: Notification, current_user: User, db: 
             .first()
         )
         appeal_status = appeal_row[0] if appeal_row else None
+    elif notification.related_score_appeal_id is not None:
+        score_appeal_row = (
+            db.query(ScoreGradeAppeal.status)
+            .filter(ScoreGradeAppeal.id == notification.related_score_appeal_id)
+            .first()
+        )
+        appeal_status = score_appeal_row[0] if score_appeal_row else None
     return NotificationResponse(
         id=notification.id,
         title=notification.title,
