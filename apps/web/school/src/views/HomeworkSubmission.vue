@@ -76,6 +76,12 @@
             </el-tag>
             <span v-else class="muted-text">—</span>
           </el-descriptions-item>
+          <el-descriptions-item v-if="historySummary?.appeal_reason_text" label="申诉理由" :span="2">
+            <span class="appeal-text">{{ historySummary.appeal_reason_text }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="historySummary?.appeal_teacher_response" label="教师回复" :span="2">
+            <span class="appeal-text">{{ historySummary.appeal_teacher_response }}</span>
+          </el-descriptions-item>
         </el-descriptions>
         <el-alert
           v-if="historySummary?.effective_score_note_zh"
@@ -753,6 +759,11 @@ watch(
   background: #fffbeb;
   border: 1px solid #fde68a;
   border-radius: 10px;
+}
+
+.appeal-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
 }
 
 .submit-flow-steps {

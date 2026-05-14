@@ -82,7 +82,7 @@ const openRecentPosts = () => {
 
 const openHomeworkStatus = () => {
   if (!canViewHomeworkStatus.value) return
-  userStore.setSelectedCourse(activeCourse.value)
+  userStore.setSelectedCourse(activeCourse.value, { reason: 'user' })
   router.push({
     name: 'StudentHomeworkByCourse',
     query: { student_id: String(props.studentId) }

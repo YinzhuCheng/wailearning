@@ -46,6 +46,16 @@
             >
               标记已阅
             </el-button>
+            <el-button
+              v-if="isActionableAppealStatus(detailRow.appeal_status)"
+              size="small"
+              type="danger"
+              link
+              class="review-meta-action"
+              @click="openAppealResolveDialog"
+            >
+              处理申诉
+            </el-button>
           </div>
           <div class="review-meta-item">
             <span class="review-meta-label">任务状态</span>
@@ -59,6 +69,14 @@
             </template>
             <span v-else class="muted">—</span>
           </div>
+        </div>
+        <div v-if="detailRow.appeal_reason_text" class="review-appeal-card">
+          <div class="muted small-label">申诉理由</div>
+          <p class="review-appeal-text">{{ detailRow.appeal_reason_text }}</p>
+        </div>
+        <div v-if="detailRow.appeal_teacher_response" class="review-appeal-card">
+          <div class="muted small-label">教师回复</div>
+          <p class="review-appeal-text">{{ detailRow.appeal_teacher_response }}</p>
         </div>
         <p v-if="detailRow.effective_score_note_zh" class="review-effective-note">{{ detailRow.effective_score_note_zh }}</p>
         <div class="review-meta-actions">
@@ -252,6 +270,38 @@
     <el-dialog v-model="logDialogVisible" :title="logDialogTitle" width="min(720px, 92vw)" destroy-on-close>
       <pre class="llm-log-pre" data-testid="dialog-llm-log-body">{{ logDialogBody }}</pre>
     </el-dialog>
+
+    <el-dialog
+      v-model="appealResolveDialogVisible"
+      title="处理作业申诉"
+      width="560px"
+      destroy-on-close
+      @closed="resetAppealResolveDialog"
+    >
+      <div class="review-appeal-dialog">
+        <div v-if="detailRow?.appeal_reason_text" class="review-appeal-card review-appeal-card--dialog">
+          <div class="muted small-label">学生申诉理由</div>
+          <p class="review-appeal-text">{{ detailRow.appeal_reason_text }}</p>
+        </div>
+        <el-input
+          v-model="appealResolveResponse"
+          type="textarea"
+          :rows="5"
+          maxlength="2000"
+          show-word-limit
+          placeholder="填写教师回复"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="appealResolveDialogVisible = false">取消</el-button>
+        <el-button type="danger" :loading="appealResolveLoading" @click="submitAppealResolution('rejected')">
+          拒绝申诉
+        </el-button>
+        <el-button type="primary" :loading="appealResolveLoading" @click="submitAppealResolution('resolved')">
+          设为已处理
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -282,6 +332,9 @@ const loadError = ref('')
 const homework = ref(null)
 const detailRow = ref(null)
 const detailAckLoading = ref(false)
+const appealResolveDialogVisible = ref(false)
+const appealResolveLoading = ref(false)
+const appealResolveResponse = ref('')
 const historyAttempts = ref([])
 const expandedHistoryAttemptIds = ref(new Set())
 const historyOpen = ref(['hist'])
@@ -510,6 +563,39 @@ const acknowledgeAppeal = async () => {
   }
 }
 
+const resetAppealResolveDialog = () => {
+  appealResolveResponse.value = ''
+  appealResolveLoading.value = false
+}
+
+const openAppealResolveDialog = () => {
+  appealResolveResponse.value = detailRow.value?.appeal_teacher_response || ''
+  appealResolveDialogVisible.value = true
+}
+
+const submitAppealResolution = async status => {
+  if (!detailRow.value?.submission_id) {
+    return
+  }
+  const response = appealResolveResponse.value.trim()
+  if (!response) {
+    ElMessage.warning('请填写教师回复')
+    return
+  }
+  appealResolveLoading.value = true
+  try {
+    await api.homework.respondAppeal(homeworkId.value, detailRow.value.submission_id, {
+      teacher_response: response,
+      status
+    })
+    ElMessage.success(status === 'rejected' ? '申诉已拒绝' : '申诉已处理')
+    appealResolveDialogVisible.value = false
+    await loadPage()
+  } finally {
+    appealResolveLoading.value = false
+  }
+}
+
 const openTaskLog = (row, attempt = null) => {
   const log = attempt?.task_log || row?.latest_task_log
   logDialogTitle.value = attempt
@@ -643,6 +729,30 @@ watch(
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.review-appeal-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.review-appeal-card--dialog {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.review-appeal-text {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.review-appeal-dialog {
+  display: grid;
+  gap: 12px;
 }
 
 .review-effective-note {

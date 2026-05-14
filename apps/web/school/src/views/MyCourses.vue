@@ -651,7 +651,7 @@ const selectCourse = course => {
     return
   }
 
-  userStore.setSelectedCourse(course)
+  userStore.setSelectedCourse(course, { reason: 'user' })
   if (userStore.isStudent) {
     router.push('/course-home')
     return
@@ -905,7 +905,7 @@ const submitForm = async () => {
       students: rosterStudents.value
     })
     await Promise.all([loadCourses(), userStore.fetchTeachingCourses(true)])
-    userStore.setSelectedCourse(createdCourse)
+    userStore.setSelectedCourse(createdCourse, { reason: 'user' })
     dialogVisible.value = false
     ElMessage.success('课程已创建')
     router.push('/students')

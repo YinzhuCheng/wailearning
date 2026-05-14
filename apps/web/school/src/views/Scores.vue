@@ -480,29 +480,27 @@ const appeals = ref([])
 const appealResolve = reactive({ appealId: null, response: '', loading: false })
 const focusedAppealStatus = ref('')
 const focusedAppealResponse = ref('')
-const missingAppealCourseContext = ref(null)
-const missingAppealRouteKey = ref('')
-const recoveredFromMissingAppealRoute = ref(false)
-const missingAppealCourseSelectionSnapshot = ref(null)
-const missingAppealTargetContext = ref(null)
+const appealRouteState = ref(null)
 
 const selectedCourseRaw = computed(() => userStore.selectedCourse)
+const routeStateKind = computed(() => appealRouteState.value?.kind || null)
+const routeStateBlockedSubjectId = computed(() => Number(appealRouteState.value?.subjectId || 0))
+const routeStateSnapshotCourseId = computed(() => Number(appealRouteState.value?.selectedCourseSnapshotId || 0))
 const hasRecoveredMissingAppealContext = computed(() => {
-  const context = missingAppealCourseContext.value
-  if (!context) return false
+  if (routeStateKind.value !== 'missing-course') return false
   const selectedCourseId = Number(selectedCourseRaw.value?.id || 0)
-  const snapshotCourseId = Number(missingAppealCourseSelectionSnapshot.value || 0)
-  const blockedSubjectId = Number(context.subjectId || 0)
-  if (!selectedCourseId || selectedCourseId === blockedSubjectId) {
+  if (!selectedCourseId || selectedCourseId === routeStateBlockedSubjectId.value) {
     return false
   }
-  if (!snapshotCourseId) {
+  if (!routeStateSnapshotCourseId.value) {
     return true
   }
-  return selectedCourseId !== snapshotCourseId
+  return selectedCourseId !== routeStateSnapshotCourseId.value
 })
 const selectedCourse = computed(() =>
-  missingAppealCourseContext.value && !recoveredFromMissingAppealRoute.value && !hasRecoveredMissingAppealContext.value
+  routeStateKind.value === 'missing-course' &&
+  !appealRouteState.value?.recovered &&
+  !hasRecoveredMissingAppealContext.value
     ? null
     : selectedCourseRaw.value
 )
@@ -568,9 +566,10 @@ const partsSumValid = computed(() => partsSum.value === 100)
 const DEFAULT_EMPTY_STATE_DESCRIPTION = '请先选择一门课程。'
 
 const missingAppealCourseNotice = computed(() => {
-  if (recoveredFromMissingAppealRoute.value || hasRecoveredMissingAppealContext.value) return null
-  const context = missingAppealCourseContext.value
-  if (!context) return null
+  const context = appealRouteState.value
+  if (!context || context.kind !== 'missing-course' || context.recovered || hasRecoveredMissingAppealContext.value) {
+    return null
+  }
   const routeLabel = context.appealId ? `申诉 ID ${context.appealId}` : '该申诉深链'
   return {
     title: '无法恢复该申诉对应的课程上下文',
@@ -581,8 +580,8 @@ const missingAppealCourseNotice = computed(() => {
 })
 
 const missingAppealTargetNotice = computed(() => {
-  const context = missingAppealTargetContext.value
-  if (!context) return null
+  const context = appealRouteState.value
+  if (!context || context.kind !== 'missing-target') return null
   return {
     title: '未找到目标成绩申诉',
     description: `申诉 ID ${context.appealId} 不存在，或已不在当前课程范围内。页面保留在当前课程，但不会把普通列表误当作目标申诉。`
@@ -688,11 +687,7 @@ const syncAppealRouteCourseContext = async () => {
   const routeKey = getAppealRouteKey()
 
   if (!routeSubjectId) {
-    missingAppealCourseContext.value = null
-    missingAppealRouteKey.value = ''
-    recoveredFromMissingAppealRoute.value = false
-    missingAppealCourseSelectionSnapshot.value = null
-    missingAppealTargetContext.value = null
+    appealRouteState.value = null
     return
   }
 
@@ -700,22 +695,24 @@ const syncAppealRouteCourseContext = async () => {
   const matchedCourse = courses.find(row => Number(row.id) === routeSubjectId)
 
   if (!matchedCourse) {
-    if (missingAppealRouteKey.value !== routeKey) {
-      recoveredFromMissingAppealRoute.value = false
-      missingAppealCourseSelectionSnapshot.value = Number(selectedCourseRaw.value?.id || 0) || null
-    }
-    missingAppealRouteKey.value = routeKey
-    missingAppealCourseContext.value = {
+    const previousState = appealRouteState.value
+    appealRouteState.value = {
+      kind: 'missing-course',
+      routeKey,
       subjectId: routeSubjectId,
-      appealId: appealId || null
+      appealId: appealId || null,
+      recovered: previousState?.kind === 'missing-course' && previousState.routeKey === routeKey
+        ? Boolean(previousState.recovered)
+        : false,
+      selectedCourseSnapshotId:
+        previousState?.kind === 'missing-course' && previousState.routeKey === routeKey
+          ? previousState.selectedCourseSnapshotId
+          : Number(selectedCourseRaw.value?.id || 0) || null
     }
     return
   }
 
-  missingAppealCourseContext.value = null
-  missingAppealRouteKey.value = ''
-  recoveredFromMissingAppealRoute.value = false
-  missingAppealCourseSelectionSnapshot.value = null
+  appealRouteState.value = null
 
   if (
     !selectedCourseRaw.value ||
@@ -730,13 +727,17 @@ const loadAppeals = async () => {
   if (!selectedCourse.value) {
     appeals.value = []
     resetFocusedAppealState()
-    missingAppealTargetContext.value = null
+    if (appealRouteState.value?.kind === 'missing-target') {
+      appealRouteState.value = null
+    }
     return
   }
   appeals.value = await api.scores.listAppeals({ subject_id: selectedCourse.value.id })
   const appealId = Number(route.query.appeal_id || 0)
   resetFocusedAppealState()
-  missingAppealTargetContext.value = null
+  if (appealRouteState.value?.kind === 'missing-target') {
+    appealRouteState.value = null
+  }
   if (appealId) {
     const target = appeals.value.find(row => Number(row.id) === appealId)
     if (target) {
@@ -749,7 +750,10 @@ const loadAppeals = async () => {
         openAppealDialog(target)
       }
     } else {
-      missingAppealTargetContext.value = {
+      appealRouteState.value = {
+        kind: 'missing-target',
+        routeKey: getAppealRouteKey(),
+        subjectId: Number(selectedCourse.value?.id || 0) || null,
         appealId
       }
     }
@@ -765,7 +769,12 @@ const recoverWithCurrentCourse = async () => {
   if (!selectedCourseRaw.value) {
     return
   }
-  recoveredFromMissingAppealRoute.value = true
+  if (appealRouteState.value?.kind === 'missing-course') {
+    appealRouteState.value = {
+      ...appealRouteState.value,
+      recovered: true
+    }
+  }
   await clearStaleAppealRouteContext()
 }
 
@@ -1088,17 +1097,22 @@ watch(
 )
 
 watch(
-  () => userStore.selectedCourseRevision,
-  async (nextRevision, previousRevision) => {
-    if (nextRevision === previousRevision) {
+  () => userStore.selectedCourseSelectionEvent,
+  async (nextEvent, previousEvent) => {
+    if (!nextEvent || nextEvent.sequence === previousEvent?.sequence || nextEvent.reason !== 'user') {
       return
     }
-    const nextCourseId = Number(selectedCourseRaw.value?.id || 0)
-    const blockedSubjectId = Number(missingAppealCourseContext.value?.subjectId || 0)
+    const nextCourseId = Number(nextEvent.courseId || 0)
+    const blockedSubjectId = routeStateBlockedSubjectId.value
     if (!blockedSubjectId || !nextCourseId || nextCourseId === blockedSubjectId) {
       return
     }
-    recoveredFromMissingAppealRoute.value = true
+    if (appealRouteState.value?.kind === 'missing-course') {
+      appealRouteState.value = {
+        ...appealRouteState.value,
+        recovered: true
+      }
+    }
     await clearStaleAppealRouteContext()
   }
 )

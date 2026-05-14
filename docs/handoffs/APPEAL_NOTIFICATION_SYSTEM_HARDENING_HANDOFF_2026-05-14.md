@@ -137,6 +137,8 @@ Coverage now includes:
 - resolved score appeal notification keeps `related_score_appeal_id`
 - homework acknowledged list/detail status parity
 - rejected score appeal terminal projection on notification list/detail
+- rejected homework appeal terminal projection on notification list/detail
+- homework submission detail surfaces `appeal_reason_text` and `appeal_teacher_response`
 
 ### Frontend
 
@@ -185,25 +187,7 @@ Notes:
 
 These are the most important unresolved concerns to hand off.
 
-### A. Homework vs score appeal state machines are still not truly identical
-
-The projection layer is now shared, but backend state progression is still only
-partially aligned:
-
-- homework currently uses:
-  - `pending`
-  - `acknowledged`
-  - `resolved`
-- score appeal currently uses:
-  - `pending`
-  - `resolved`
-  - `rejected`
-
-The frontend/state resolver now understands all four states, but homework still
-has no native reject path. This is a **spec ambiguity**, not something to
-invent silently.
-
-### B. Notification body text still depends on projected status line rather than a richer event log
+### A. Notification body text still depends on projected status line rather than a richer event log
 
 The new projection helper prevents contradictory status text, but it still
 stores final user-facing body text directly on the notification row. If product
@@ -216,7 +200,7 @@ later wants a richer timeline like:
 
 that would require a separate event-log model or a more explicit transition log.
 
-### C. Other appeal-status consumers may still exist outside this chain
+### B. Other appeal-status consumers may still exist outside this chain
 
 This round converged the known school-web pages for homework and notifications,
 but future work touching parent portal or new dashboards should grep
@@ -259,6 +243,43 @@ That recovery path is now also hardened in `apps/web/school/src/views/Scores.vue
   `subject_id` / `appeal_id` route context is removed so the page can continue
   under the newly selected course instead of re-blocking itself.
 
+The latest frontend/system follow-up tightened this same recovery lane further:
+
+- `Scores.vue` now keeps one explicit `appealRouteState` object instead of
+  spreading the recovery state across several loosely coupled refs;
+- the page distinguishes only two route-recovery failure modes at runtime:
+  `missing-course` and `missing-target`, which reduces watcher drift and makes
+  later fixes easier to reason about;
+- the user store no longer exposes a page-agnostic `selectedCourseRevision`
+  counter for this flow; instead it emits a narrower
+  `selectedCourseSelectionEvent` that only fires for explicit user-initiated
+  course selections.
+
+That narrower signal matters because automatic course synchronization on focus,
+visibility change, or route repair should not be interpreted as a teacher's
+explicit recovery decision. The current recovery logic now clears stale
+score-appeal route state only after a real user selection event or the
+dedicated "继续使用当前课程" action.
+
+Focused browser coverage for the score-appeal recovery lane now proves all of
+the following in `tests/e2e/web-school/e2e-scenario-resilience.spec.js`:
+
+- a foreign-course `subject_id` does not silently fall back to the current
+  selected course;
+- an accessible course plus a missing `appeal_id` surfaces a target-missing
+  notice rather than silently treating the list as a successful locate;
+- manual switch to another accessible course clears stale query state and
+  survives reload;
+- later local refresh does not re-poison the manually recovered page;
+- the explicit "继续使用当前课程" recovery button now has clean focused green
+  proof, including stale query cleanup and reload survival.
+
+Observed passing validation for this latest follow-up:
+
+- `npm.cmd run build`
+- `python ops/scripts/dev/check_text_encoding.py apps/web/school/src/views/Scores.vue apps/web/school/src/stores/user.js tests/e2e/web-school/e2e-scenario-resilience.spec.js docs/handoffs/APPEAL_NOTIFICATION_SYSTEM_HARDENING_HANDOFF_2026-05-14.md docs/testing/agent-update-log.csv`
+- `node scripts/playwright-external-runner.cjs e2e-scenario-resilience.spec.js --project=chromium --grep "teacher explicit current-course recovery button clears a foreign score-appeal deep-link warning|teacher explicit current-course recovery clears stale query context and survives reload|teacher manual recovery from a foreign score-appeal deep-link clears stale query context and survives reload|teacher manual recovery from a foreign score-appeal deep-link is not re-poisoned by a later local refresh|teacher can recover from a foreign score-appeal deep-link by manually switching to another accessible course|teacher score-appeal deep-link with a missing appeal_id inside an accessible course is not silently treated as a successful locate|teacher score-appeal deep-link with a foreign subject_id does not fall back to the currently selected course"`
+
 Another red-team follow-up exposed a separate ambiguity on the same page:
 
 - when `subject_id` still points at an accessible course but `appeal_id` is
@@ -276,13 +297,39 @@ That case is now hardened too:
 - focused Playwright coverage was added for this exact condition in
   `tests/e2e/web-school/e2e-scenario-resilience.spec.js`.
 
+The latest backend/frontend follow-up also removed the remaining homework-vs-score
+appeal state-machine mismatch:
+
+- `HomeworkGradeAppeal` now persists `teacher_response` and supports explicit
+  terminal `rejected` handling in addition to `pending`, `acknowledged`, and
+  `resolved`;
+- `PUT /api/homeworks/{homework_id}/submissions/{submission_id}/appeal` now
+  mirrors the score-appeal teacher handling model for `resolved` / `rejected`
+  decisions with required teacher response text;
+- homework submission serializers now expose `appeal_reason_text` and
+  `appeal_teacher_response` so both student and teacher views can render the
+  actual disposition context instead of only a status tag;
+- `HomeworkSubmissionReview.vue` now offers an explicit appeal-resolution dialog
+  instead of relying only on the old “标记已阅” fast path.
+
+Observed passing validation for this follow-up:
+
+- `python -m py_compile apps/backend/courseeval_backend/api/routers/homework.py apps/backend/courseeval_backend/api/schemas.py apps/backend/courseeval_backend/domains/homework/appeals.py apps/backend/courseeval_backend/db/models.py`
+- `.\.venv\Scripts\python.exe -m pytest tests\backend\homework\test_homework_appeal_redteam.py -q`
+- `npm.cmd run build`
+
 ## Recommended Next Step
 
 If work continues on this branch, the next best follow-up is:
 
-1. decide whether homework appeal should ever support explicit `rejected`
-   semantics; document that decision instead of leaving it implicit
+1. add one more browser-backed regression for the new homework appeal
+   `rejected` teacher-resolution dialog if this branch continues to touch the
+   homework review UI
 2. add one more API regression around notification content/title parity for the
    score appeal `rejected` path if product relies on that text for staff triage
 3. grep other school-web or parent-facing consumers for `appeal_status` and
    `related_score_appeal_id` before assuming this chain is fully converged
+4. run the full `school.e2e.scenario_resilience` broad suite again when the
+   branch is ready for broader browser closeout, because the current focused
+   evidence closes the appeal-recovery lane itself but does not replace the
+   full resilience tier as a whole

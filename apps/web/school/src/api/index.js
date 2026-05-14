@@ -386,6 +386,8 @@ const api = {
       http.post(`/homeworks/${homeworkId}/submissions/${submissionId}/appeal`, data),
     acknowledgeAppeal: (homeworkId, submissionId) =>
       http.post(`/homeworks/${homeworkId}/submissions/${submissionId}/appeal/acknowledge`),
+    respondAppeal: (homeworkId, submissionId, data) =>
+      http.put(`/homeworks/${homeworkId}/submissions/${submissionId}/appeal`, data),
     getSubmissionHistory: (homeworkId, submissionId) =>
       http.get(`/homeworks/${homeworkId}/submissions/${submissionId}/history`),
     reviewSubmission: (homeworkId, submissionId, data) =>

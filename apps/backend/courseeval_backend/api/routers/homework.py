@@ -29,6 +29,7 @@ from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.domains.homework.cleanup import purge_homework_row
 from apps.backend.courseeval_backend.domains.homework.appeals import (
     mark_appeal_notifications_acknowledged,
+    mark_appeal_notifications_handled,
     mark_appeal_notifications_resolved,
     notify_teachers_grade_appeal,
 )
@@ -69,6 +70,7 @@ from apps.backend.courseeval_backend.api.schemas import (
     HomeworkCreate,
     HomeworkGradeAppealCreate,
     HomeworkGradeAppealResponse,
+    HomeworkGradeAppealTeacherUpdate,
     HomeworkListResponse,
     HomeworkRegradeRequest,
     HomeworkResponse,
@@ -344,8 +346,19 @@ def _submission_appeal_status(db: Session, submission_id: Optional[int]) -> Opti
     return row.status if row else None
 
 
+def _submission_appeal_row(db: Session, submission_id: Optional[int]) -> Optional[HomeworkGradeAppeal]:
+    if not submission_id:
+        return None
+    return (
+        db.query(HomeworkGradeAppeal)
+        .filter(HomeworkGradeAppeal.submission_id == int(submission_id))
+        .first()
+    )
+
+
 def _serialize_submission(db: Session, submission: HomeworkSubmission) -> HomeworkSubmissionResponse:
     refresh_submission_summary(db, submission)
+    appeal_row = _submission_appeal_row(db, submission.id)
     latest_task = _latest_task_for_attempt(db, submission.latest_attempt_id)
     diag_task = _task_for_error_and_log(db, submission.latest_attempt_id, latest_task)
     latest_attempt = (
@@ -385,7 +398,9 @@ def _serialize_submission(db: Session, submission: HomeworkSubmission) -> Homewo
         latest_task_error=submission.latest_task_error,
         latest_task_error_code=diag_task.error_code if diag_task else None,
         latest_task_log=task_call_log(diag_task),
-        appeal_status=_submission_appeal_status(db, submission.id),
+        appeal_status=appeal_row.status if appeal_row else None,
+        appeal_reason_text=appeal_row.reason_text if appeal_row else None,
+        appeal_teacher_response=appeal_row.teacher_response if appeal_row else None,
         effective_score_attempt_seq=eff_seq,
         effective_score_note_zh=eff_note,
     )
@@ -461,6 +476,7 @@ def _serialize_submission_status(
     class_obj = enrollment.class_obj if enrollment and enrollment.class_obj else (student.class_obj if student else None)
     if submission:
         refresh_submission_summary(db, submission)
+    appeal_row = _submission_appeal_row(db, submission.id if submission else None)
     latest_attempt = submission.latest_attempt if submission else None
     latest_task = _latest_task_for_attempt(db, submission.latest_attempt_id) if submission else None
     diag_task = _task_for_error_and_log(db, submission.latest_attempt_id, latest_task) if submission else None
@@ -493,7 +509,9 @@ def _serialize_submission_status(
         latest_task_error_code=diag_task.error_code if diag_task else None,
         latest_task_log=task_call_log(diag_task),
         attempt_count=len(submission.attempts) if submission else 0,
-        appeal_status=_submission_appeal_status(db, submission.id if submission else None),
+        appeal_status=appeal_row.status if appeal_row else None,
+        appeal_reason_text=appeal_row.reason_text if appeal_row else None,
+        appeal_teacher_response=appeal_row.teacher_response if appeal_row else None,
         effective_score_attempt_seq=eff_seq,
         effective_score_note_zh=eff_note,
     )
@@ -738,6 +756,7 @@ def list_student_homeworks_for_course(
             .filter(HomeworkSubmission.homework_id == hw.id, HomeworkSubmission.student_id == student_id)
             .first()
         )
+        appeal_row = _submission_appeal_row(db, sub.id if sub else None)
         if sub:
             refresh_submission_summary(db, sub)
         rows.append(
@@ -750,7 +769,8 @@ def list_student_homeworks_for_course(
                 attempt_count=len(sub.attempts) if sub else 0,
                 latest_task_status=sub.latest_task_status if sub else None,
                 submission_id=sub.id if sub else None,
-                appeal_status=_submission_appeal_status(db, sub.id if sub else None),
+                appeal_status=appeal_row.status if appeal_row else None,
+                appeal_teacher_response=appeal_row.teacher_response if appeal_row else None,
             )
         )
 
@@ -1380,6 +1400,47 @@ def acknowledge_grade_appeal(
         mark_appeal_notifications_acknowledged(db, appeal.id)
     db.commit()
     return {"message": "已标记为已阅。", "status": appeal.status}
+
+
+@router.put("/{homework_id}/submissions/{submission_id}/appeal", response_model=HomeworkGradeAppealResponse)
+def respond_grade_appeal(
+    homework_id: int,
+    submission_id: int,
+    payload: HomeworkGradeAppealTeacherUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can handle appeals.")
+
+    homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    _ensure_homework_submission_management_access(
+        current_user,
+        homework,
+        db,
+        detail="Only the course instructor can handle appeals.",
+    )
+    appeal = (
+        db.query(HomeworkGradeAppeal)
+        .filter(
+            HomeworkGradeAppeal.submission_id == submission_id,
+            HomeworkGradeAppeal.homework_id == homework.id,
+        )
+        .first()
+    )
+    if not appeal:
+        raise HTTPException(status_code=404, detail="Appeal not found.")
+
+    next_status = (payload.status or "resolved").strip()
+    if next_status not in ("pending", "acknowledged", "resolved", "rejected"):
+        raise HTTPException(status_code=400, detail="Invalid appeal status.")
+
+    appeal.teacher_response = payload.teacher_response.strip()
+    appeal.status = next_status
+    mark_appeal_notifications_handled(db, appeal.id, appeal.status)
+    db.commit()
+    db.refresh(appeal)
+    return appeal
 
 
 @router.get("/{homework_id}/submissions/{submission_id}/history", response_model=HomeworkSubmissionHistoryResponse)

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from apps.backend.courseeval_backend.domains.appeal_notifications import (
     APPEAL_STATUS_ACKNOWLEDGED,
     APPEAL_STATUS_PENDING,
+    APPEAL_STATUS_REJECTED,
     APPEAL_STATUS_RESOLVED,
     sync_appeal_notification_projection,
 )
@@ -99,3 +100,11 @@ def mark_appeal_notifications_resolved(db: Session, appeal_id: int) -> None:
     for row in rows:
         if row.notification_kind == "grade_appeal":
             sync_appeal_notification_projection(row, status=APPEAL_STATUS_RESOLVED)
+
+
+def mark_appeal_notifications_handled(db: Session, appeal_id: int, status: str) -> None:
+    rows = db.query(Notification).filter(Notification.related_appeal_id == appeal_id).all()
+    for row in rows:
+        if row.notification_kind == "grade_appeal":
+            projected_status = status if status in (APPEAL_STATUS_ACKNOWLEDGED, APPEAL_STATUS_RESOLVED, APPEAL_STATUS_REJECTED) else APPEAL_STATUS_PENDING
+            sync_appeal_notification_projection(row, status=projected_status)

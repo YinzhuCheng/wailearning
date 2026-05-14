@@ -486,3 +486,105 @@ def test_rejected_score_appeal_notification_exposes_terminal_status_and_consiste
     assert detail.json().get("appeal_status") == "rejected"
     assert "已拒绝" in str(detail.json().get("title") or "")
     assert "待处理" not in str(detail.json().get("content") or "")
+
+
+def test_rejected_homework_appeal_exposes_terminal_status_teacher_response_and_consistent_notification_projection():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "homework reject projection"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 72, "review_comment": "before reject appeal"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": "please reject this appeal with an explicit explanation"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    rejected = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "rejected because the original scoring already matches the rubric", "status": "rejected"},
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["status"] == "rejected"
+    assert "teacher_response" in rejected.json()
+
+    mine = client.get(f"/api/homeworks/{hid}/submission/me", headers=student_h)
+    assert mine.status_code == 200, mine.text
+    assert mine.json()["appeal_status"] == "rejected"
+    assert "original scoring already matches the rubric" in str(mine.json().get("appeal_teacher_response") or "")
+
+    history = client.get(f"/api/homeworks/{hid}/submission/me/history", headers=student_h)
+    assert history.status_code == 200, history.text
+    assert history.json()["summary"]["appeal_status"] == "rejected"
+    assert "original scoring already matches the rubric" in str(history.json()["summary"].get("appeal_teacher_response") or "")
+
+    listed = client.get("/api/notifications", headers=teacher_h)
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json().get("data", []) if item.get("notification_kind") == "grade_appeal")
+    assert row.get("appeal_status") == "rejected"
+    assert "已拒绝" in str(row.get("title") or "")
+
+    detail = client.get(f"/api/notifications/{row['id']}", headers=teacher_h)
+    assert detail.status_code == 200, detail.text
+    assert detail.json().get("appeal_status") == "rejected"
+    assert "已拒绝" in str(detail.json().get("title") or "")
+    assert "待处理" not in str(detail.json().get("content") or "")
+
+
+def test_teacher_submission_detail_row_exposes_homework_appeal_reason_and_teacher_response():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "teacher detail row appeal fields"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 81, "review_comment": "before detailed appeal response"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal_reason = "please include the derivation detail that was ignored"
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": appeal_reason},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    resolved = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "resolved after rechecking the derivation", "status": "resolved"},
+    )
+    assert resolved.status_code == 200, resolved.text
+
+    detail = client.get(f"/api/homeworks/{hid}/submissions/{sub_id}/status", headers=teacher_h)
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["appeal_status"] == "resolved"
+    assert body["appeal_reason_text"] == appeal_reason
+    assert "resolved after rechecking the derivation" in str(body.get("appeal_teacher_response") or "")

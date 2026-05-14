@@ -772,7 +772,7 @@ const handleCourseSwitch = courseId => {
     return
   }
 
-  userStore.setSelectedCourse(course)
+  userStore.setSelectedCourse(course, { reason: 'user' })
 
   if (/^\/homework\/\d+\//.test(route.path)) {
     router.push('/homework')

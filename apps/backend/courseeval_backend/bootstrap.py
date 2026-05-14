@@ -195,10 +195,12 @@ def ensure_schema_updates() -> None:
             submission_id INTEGER NOT NULL REFERENCES homework_submissions(id),
             reason_text TEXT NOT NULL,
             status VARCHAR NOT NULL DEFAULT 'pending',
+            teacher_response TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        "ALTER TABLE homework_grade_appeals ADD COLUMN IF NOT EXISTS teacher_response TEXT",
         """
         CREATE TABLE IF NOT EXISTS course_grade_schemes (
             id INTEGER PRIMARY KEY,

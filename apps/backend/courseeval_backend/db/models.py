@@ -559,7 +559,8 @@ class HomeworkGradeAppeal(Base):
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
     submission_id = Column(Integer, ForeignKey("homework_submissions.id"), nullable=False, index=True)
     reason_text = Column(Text, nullable=False)
-    status = Column(String, nullable=False, default="pending")  # pending | acknowledged | resolved
+    status = Column(String, nullable=False, default="pending")  # pending | acknowledged | resolved | rejected
+    teacher_response = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

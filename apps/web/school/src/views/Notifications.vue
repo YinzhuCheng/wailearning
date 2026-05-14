@@ -333,7 +333,7 @@ const openAppealFromRow = row => {
   }
   const selectedCourseForRoute = buildAppealRouteSelectedCourse(row)
   if (selectedCourseForRoute) {
-    userStore.setSelectedCourse(selectedCourseForRoute)
+    userStore.setSelectedCourse(selectedCourseForRoute, { reason: 'user' })
   }
   router.push(route)
 }

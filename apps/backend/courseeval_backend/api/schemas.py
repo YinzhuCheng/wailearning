@@ -1237,6 +1237,8 @@ class HomeworkSubmissionResponse(BaseModel):
     latest_task_error_code: Optional[str] = None
     latest_task_log: Optional[list[dict[str, Any]]] = None
     appeal_status: Optional[str] = None
+    appeal_reason_text: Optional[str] = None
+    appeal_teacher_response: Optional[str] = None
     effective_score_attempt_seq: Optional[int] = None
     effective_score_note_zh: str = ""
 
@@ -1317,6 +1319,8 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     latest_task_log: Optional[list[dict[str, Any]]] = None
     attempt_count: int = 0
     appeal_status: Optional[str] = None
+    appeal_reason_text: Optional[str] = None
+    appeal_teacher_response: Optional[str] = None
     effective_score_attempt_seq: Optional[int] = None
     effective_score_note_zh: str = ""
 
@@ -1347,11 +1351,25 @@ class HomeworkGradeAppealResponse(BaseModel):
     submission_id: int
     reason_text: str
     status: str
+    teacher_response: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class HomeworkGradeAppealTeacherUpdate(BaseModel):
+    teacher_response: str = Field(..., min_length=1)
+    status: str = Field(default="resolved")
+
+    @field_validator("teacher_response")
+    @classmethod
+    def strip_teacher_response(cls, value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            raise ValueError("教师回复不能为空。")
+        return text
 
 
 class StudentHomeworkRowResponse(BaseModel):
@@ -1364,6 +1382,7 @@ class StudentHomeworkRowResponse(BaseModel):
     latest_task_status: Optional[str] = None
     submission_id: Optional[int] = None
     appeal_status: Optional[str] = None
+    appeal_teacher_response: Optional[str] = None
 
 
 class StudentHomeworkListResponse(BaseModel):

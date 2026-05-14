@@ -20,7 +20,11 @@ export const useUserStore = defineStore('user', () => {
   const systemSettings = ref(cachedSystemSettings)
   const appearanceState = ref(null)
   const selectedCourse = ref(cachedSelectedCourse)
-  const selectedCourseRevision = ref(0)
+  const selectedCourseSelectionEvent = ref({
+    sequence: 0,
+    reason: 'init',
+    courseId: cachedSelectedCourse?.id ?? null
+  })
   const teachingCourses = ref([])
   const teachingCoursesLoaded = ref(false)
 
@@ -33,17 +37,25 @@ export const useUserStore = defineStore('user', () => {
   const canManageTeaching = computed(() => ['admin', 'class_teacher', 'teacher'].includes(userInfo.value?.role))
   const canSelectCourse = computed(() => ['class_teacher', 'teacher', 'student'].includes(userInfo.value?.role))
 
-  function setSelectedCourse(course) {
+  function setSelectedCourse(course, options = {}) {
+    const { reason = 'system', emitEvent = reason === 'user' } = options
     const normalizedCourse = course
       ? teachingCourses.value.find(item => String(item.id) === String(course.id)) || course
       : null
 
     selectedCourse.value = normalizedCourse
-    selectedCourseRevision.value += 1
     if (normalizedCourse) {
       localStorage.setItem('selected_course', JSON.stringify(normalizedCourse))
     } else {
       localStorage.removeItem('selected_course')
+    }
+
+    if (emitEvent) {
+      selectedCourseSelectionEvent.value = {
+        sequence: selectedCourseSelectionEvent.value.sequence + 1,
+        reason,
+        courseId: normalizedCourse?.id ?? null
+      }
     }
   }
 
@@ -212,7 +224,7 @@ export const useUserStore = defineStore('user', () => {
     systemSettings,
     appearanceState,
     selectedCourse,
-    selectedCourseRevision,
+    selectedCourseSelectionEvent,
     teachingCourses,
     teachingCoursesLoaded,
     isLoggedIn,
