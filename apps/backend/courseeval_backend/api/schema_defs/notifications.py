@@ -20,6 +20,7 @@ class NotificationBase(BaseModel):
     related_homework_id: Optional[int] = None
     related_student_id: Optional[int] = None
     related_appeal_id: Optional[int] = None
+    appeal_status: Optional[str] = None
     target_user_id: Optional[int] = None
     notification_kind: str = "general"
 

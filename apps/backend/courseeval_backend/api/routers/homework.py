@@ -27,7 +27,11 @@ from apps.backend.courseeval_backend.domains.courses.access import (
 )
 from apps.backend.courseeval_backend.db.database import get_db
 from apps.backend.courseeval_backend.domains.homework.cleanup import purge_homework_row
-from apps.backend.courseeval_backend.domains.homework.appeals import mark_appeal_notifications_acknowledged, notify_teachers_grade_appeal
+from apps.backend.courseeval_backend.domains.homework.appeals import (
+    mark_appeal_notifications_acknowledged,
+    mark_appeal_notifications_resolved,
+    notify_teachers_grade_appeal,
+)
 from apps.backend.courseeval_backend.domains.homework.notifications import notify_student_homework_graded
 from apps.backend.courseeval_backend.domains.homework.serialization import preview_text, task_call_log
 from apps.backend.courseeval_backend.domains.homework.submission_rules import (
@@ -1468,6 +1472,7 @@ def review_homework_submission(
     )
     if appeal_row and appeal_row.status in ("pending", "acknowledged"):
         appeal_row.status = "resolved"
+        mark_appeal_notifications_resolved(db, appeal_row.id)
     db.commit()
     db.refresh(submission)
     return _serialize_submission(db, submission)

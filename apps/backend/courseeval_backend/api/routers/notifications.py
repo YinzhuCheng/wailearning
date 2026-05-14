@@ -20,7 +20,16 @@ from apps.backend.courseeval_backend.domains.courses.access import (
 )
 from apps.backend.courseeval_backend.domains.text_content_format import normalize_content_format
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.db.models import Class, CourseEnrollment, Notification, NotificationRead, Student, User, UserRole
+from apps.backend.courseeval_backend.db.models import (
+    Class,
+    CourseEnrollment,
+    HomeworkGradeAppeal,
+    Notification,
+    NotificationRead,
+    Student,
+    User,
+    UserRole,
+)
 from apps.backend.courseeval_backend.domains.courses.class_scope import get_accessible_class_ids
 from apps.backend.courseeval_backend.api.schemas import (
     NotificationCreate,
@@ -209,6 +218,14 @@ def _serialize_notification(notification: Notification, current_user: User, db: 
         NotificationRead.notification_id == notification.id,
         NotificationRead.user_id == current_user.id,
     ).first()
+    appeal_status = None
+    if notification.related_appeal_id is not None:
+        appeal_row = (
+            db.query(HomeworkGradeAppeal.status)
+            .filter(HomeworkGradeAppeal.id == notification.related_appeal_id)
+            .first()
+        )
+        appeal_status = appeal_row[0] if appeal_row else None
     return NotificationResponse(
         id=notification.id,
         title=notification.title,
@@ -224,6 +241,7 @@ def _serialize_notification(notification: Notification, current_user: User, db: 
         related_homework_id=notification.related_homework_id,
         related_student_id=notification.related_student_id,
         related_appeal_id=notification.related_appeal_id,
+        appeal_status=appeal_status,
         target_user_id=notification.target_user_id,
         notification_kind=notification.notification_kind or "general",
         created_by=notification.created_by,

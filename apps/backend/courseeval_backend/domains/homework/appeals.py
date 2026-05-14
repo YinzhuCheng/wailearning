@@ -1,4 +1,4 @@
-"""Teacher notifications for student grade appeals."""
+"""Teacher notifications for student homework grade appeals."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ def notify_teachers_grade_appeal(
     """Create one teacher-targeted notification per course teacher + class teacher."""
     if not homework.subject_id:
         return []
+
     teacher_ids = subject_teacher_user_ids(db, int(homework.subject_id))
     created: list[Notification] = []
     title = f"成绩申诉待处理：{homework.title}"
@@ -26,12 +27,12 @@ def notify_teachers_grade_appeal(
     if len(excerpt) > 500:
         excerpt = excerpt[:500] + "…"
     body_lines = [
-        f"学生 {student_name} 对作业「{homework.title}」提交了成绩申诉。",
+        f"学生 {student_name} 对作业《{homework.title}》提交了成绩申诉。",
         f"申诉编号：{appeal.id}",
         "申诉理由：",
         excerpt or "（无）",
         "",
-        "请在「作业 → 学生提交」中打开对应学生，查看详情并调整分数。",
+        "请在“作业 -> 学生提交”中打开对应学生，查看详情并调整分数。",
     ]
     content = "\n".join(body_lines)
 
@@ -55,7 +56,8 @@ def notify_teachers_grade_appeal(
             existing.created_by = creator_user_id
             created.append(existing)
             continue
-        n = Notification(
+
+        row = Notification(
             title=title,
             content=content,
             priority="important",
@@ -70,15 +72,35 @@ def notify_teachers_grade_appeal(
             notification_kind="grade_appeal",
             created_by=creator_user_id,
         )
-        db.add(n)
-        created.append(n)
+        db.add(row)
+        created.append(row)
+
     return created
 
 
 def mark_appeal_notifications_acknowledged(db: Session, appeal_id: int) -> None:
-    """Soft-update titles after teacher acknowledges."""
+    """Mark teacher notifications as acknowledged without implying the appeal is resolved."""
     rows = db.query(Notification).filter(Notification.related_appeal_id == appeal_id).all()
-    for n in rows:
-        if n.notification_kind == "grade_appeal" and not str(n.title or "").startswith("【已处理】"):
-            n.title = "【已处理】" + str(n.title or "")
-            n.content = (n.content or "") + "\n\n【系统】教师已确认收到申诉。"
+    for row in rows:
+        if row.notification_kind != "grade_appeal":
+            continue
+        title = str(row.title or "")
+        if title.startswith("【已阅】") or title.startswith("【已处理】"):
+            continue
+        row.title = "【已阅】" + title
+        row.content = (row.content or "") + "\n\n【系统】教师已确认收到申诉。"
+
+
+def mark_appeal_notifications_resolved(db: Session, appeal_id: int) -> None:
+    """Mark teacher notifications as handled after the appeal is actually resolved."""
+    rows = db.query(Notification).filter(Notification.related_appeal_id == appeal_id).all()
+    for row in rows:
+        if row.notification_kind != "grade_appeal":
+            continue
+        title = str(row.title or "")
+        if title.startswith("【已处理】"):
+            continue
+        if title.startswith("【已阅】"):
+            title = title[len("【已阅】") :]
+        row.title = "【已处理】" + title
+        row.content = (row.content or "") + "\n\n【系统】教师已处理该申诉。"

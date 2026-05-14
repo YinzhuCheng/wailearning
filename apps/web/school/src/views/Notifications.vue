@@ -78,7 +78,7 @@
           <el-table-column v-if="showAppealActionColumn" label="申诉" width="110">
             <template #default="{ row }">
               <el-button
-                v-if="row.notification_kind === 'grade_appeal' && row.related_homework_id && row.related_student_id"
+                v-if="row.notification_kind === 'grade_appeal' && row.related_homework_id && row.related_student_id && row.appeal_status !== 'resolved'"
                 type="primary"
                 link
                 size="small"
@@ -312,6 +312,7 @@ const canOpenAppealFromDetail = computed(
     currentNotification.value?.notification_kind === 'grade_appeal' &&
     currentNotification.value?.related_homework_id &&
     currentNotification.value?.related_student_id &&
+    currentNotification.value?.appeal_status !== 'resolved' &&
     !userStore.isStudent
 )
 

@@ -14,6 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.orm.attributes import flag_modified
 
 from apps.backend.courseeval_backend.domains.homework.notifications import notify_student_homework_graded
+from apps.backend.courseeval_backend.domains.homework.appeals import mark_appeal_notifications_resolved
 from apps.backend.courseeval_backend.domains.text_content_format import body_text_for_grading_llm
 from apps.backend.courseeval_backend.markdown_llm import append_markdown_with_dataurl_images_to_parts
 from apps.backend.courseeval_backend.domains.llm.attachments import (
@@ -88,6 +89,7 @@ from apps.backend.courseeval_backend.db.models import (
     CourseLLMConfigEndpoint,
     Homework,
     HomeworkAttempt,
+    HomeworkGradeAppeal,
     HomeworkGradingTask,
     HomeworkScoreCandidate,
     HomeworkSubmission,
@@ -1218,6 +1220,14 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         summary.latest_task_status = task.status
         summary.latest_task_error = None
         refresh_submission_summary(db, summary)
+        appeal_row = (
+            db.query(HomeworkGradeAppeal)
+            .filter(HomeworkGradeAppeal.submission_id == summary.id)
+            .first()
+        )
+        if appeal_row and appeal_row.status in ("pending", "acknowledged"):
+            appeal_row.status = "resolved"
+            mark_appeal_notifications_resolved(db, appeal_row.id)
         notify_student_homework_graded(
             db,
             homework_id=homework.id,
