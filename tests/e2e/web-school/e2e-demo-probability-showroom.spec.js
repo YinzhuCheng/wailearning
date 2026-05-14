@@ -14,6 +14,7 @@ const homeworkOneTitle = process.env.DEMO_SHOWROOM_HOMEWORK_ONE || '初等概率
 const homeworkTwoTitle = process.env.DEMO_SHOWROOM_HOMEWORK_TWO || '初等概率论第二次作业：离散分布建模与事件树表达'
 const noteTitle = process.env.DEMO_SHOWROOM_NOTE_TITLE || 'Bayes 公式课堂笔记'
 const teacherNoteTitle = process.env.DEMO_SHOWROOM_TEACHER_NOTE_TITLE || '概率论课备课札记：Bayes 单元组织'
+const readerMaterialTitle = process.env.DEMO_SHOWROOM_READER_MATERIAL || '阅读页样板：从先验、似然到后验的完整说明'
 
 async function screenshot(page, testInfo, name) {
   const output = testInfo.outputPath(`${name}.png`)
@@ -35,6 +36,15 @@ async function homeworkIdByTitle(token, subjectId, title) {
   const hit = (data.data || []).find(row => String(row.title || '') === String(title))
   if (!hit) {
     throw new Error(`homework not found: ${title}`)
+  }
+  return Number(hit.id)
+}
+
+async function materialIdByTitle(token, subjectId, title) {
+  const data = await apiGetJson(`/api/materials?subject_id=${subjectId}&page=1&page_size=100`, token)
+  const hit = (data.data || []).find(row => String(row.title || '') === String(title))
+  if (!hit) {
+    throw new Error(`material not found: ${title}`)
   }
   return Number(hit.id)
 }
@@ -61,6 +71,7 @@ test.describe('demo probability showroom', () => {
     const subjectId = await subjectIdByName(teacherToken, courseName)
     const homeworkOneId = await homeworkIdByTitle(teacherToken, subjectId, homeworkOneTitle)
     const homeworkTwoId = await homeworkIdByTitle(teacherToken, subjectId, homeworkTwoTitle)
+    const readerMaterialId = await materialIdByTitle(teacherToken, subjectId, readerMaterialTitle)
 
     const teacherPage = await browser.newPage()
     await login(teacherPage, teacherUsername, teacherPassword)
@@ -87,6 +98,14 @@ test.describe('demo probability showroom', () => {
     await expect(studentPage.getByText('第一单元：概率空间、事件与计数方法').first()).toBeVisible({ timeout: 20000 })
     await expect(studentPage.getByText('第二单元：条件概率、全概率公式与 Bayes 推断').first()).toBeVisible({ timeout: 20000 })
     await screenshot(studentPage, testInfo, 'demo-probability-student-materials')
+    await studentPage.goto(`/materials/read/${readerMaterialId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await expect(studentPage.getByText('Bayes 推断的阅读页样板').first()).toBeVisible({ timeout: 20000 })
+    await expect(studentPage.locator('.material-read-prose .md-card--example')).toBeVisible({ timeout: 20000 })
+    await expect(studentPage.locator('.material-read-prose .md-card--pricing')).toBeVisible({ timeout: 20000 })
+    await expect(studentPage.locator('.material-read-prose .md-card--note')).toBeVisible({ timeout: 20000 })
+    await expect(studentPage.locator('.material-read-prose .md-card--warning')).toBeVisible({ timeout: 20000 })
+    await expect(studentPage.locator('.material-read-prose .md-card--danger')).toBeVisible({ timeout: 20000 })
+    await screenshot(studentPage, testInfo, 'demo-probability-student-reader-page')
 
     await studentPage.goto(`/homework/${homeworkOneId}/submit`, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await expect(studentPage.getByText('有效成绩与评语（截止前/计入总评取最高）').first()).toBeVisible({ timeout: 20000 })
