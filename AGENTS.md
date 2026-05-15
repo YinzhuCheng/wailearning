@@ -72,7 +72,12 @@ governance**.
    to reproducible caches or local housekeeping/archival targets:
    `python ops/scripts/dev/clean_local_artifacts.py`
    `python ops/scripts/dev/clean_local_artifacts.py --apply`
-9. After completing a repeated or failure-prone workflow, explicitly decide
+9. Before every repository-changing commit, append the round to
+   `docs/testing/agent-update-log.csv` under the rules in
+   [`docs/governance/agent-update-log.md`](docs/governance/agent-update-log.md).
+   Treat this as a required closeout step, not an optional documentation extra.
+   Do not leave a user-visible tracked-code round without an update-log row.
+10. After completing a repeated or failure-prone workflow, explicitly decide
    whether it should become a committed script or repo-local skill.
    Prefer scripts for stable executable workflows and skills for routing or
    multi-step agent procedure; do not leave frequently reused workflows as
