@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class CourseEnrollmentResponse(BaseModel):
@@ -17,8 +17,7 @@ class CourseEnrollmentResponse(BaseModel):
     class_name: Optional[str] = None
     student_user_id: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseRosterStudentInput(BaseModel):

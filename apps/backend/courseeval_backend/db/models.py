@@ -982,6 +982,7 @@ class CourseDiscussionEntry(Base):
     """Linear discussion messages for homework or course materials (scoped by subject + class)."""
 
     __tablename__ = "course_discussion_entries"
+    __mapper_args__ = {"confirm_deleted_rows": False}
 
     id = Column(Integer, primary_key=True, index=True)
     target_type = Column(String, nullable=False, index=True)  # homework | material

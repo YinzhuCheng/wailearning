@@ -108,8 +108,7 @@ class UserResponse(UserBase):
     avatar_url: Optional[str] = None
     discussion_page_size: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProfileSelfUpdate(BaseModel):
@@ -234,8 +233,7 @@ class CourseDiscussionEntryResponse(BaseModel):
     llm_invocation: bool = False
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseDiscussionListResponse(BaseModel):
@@ -282,8 +280,7 @@ class LearningNoteResourceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LearningNoteChapterNode(BaseModel):
@@ -364,8 +361,7 @@ class LearningNoteResponse(LearningNoteBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LearningNoteListResponse(BaseModel):
@@ -442,8 +438,7 @@ class LearningNoteDiscussionEntryResponse(BaseModel):
     llm_invocation: bool = False
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LearningNoteDiscussionListResponse(BaseModel):
@@ -560,8 +555,7 @@ class ClassResponse(BaseModel):
     created_at: datetime
     student_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentBase(BaseModel):
@@ -613,8 +607,7 @@ class StudentResponse(BaseModel):
     has_user: bool = False
     bound_user_id: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentListResponse(BaseModel):
@@ -693,8 +686,7 @@ class SubjectResponse(BaseModel):
     student_count: int = 0
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentCourseCatalogItem(SubjectResponse):
@@ -873,8 +865,7 @@ class SemesterResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScoreBase(BaseModel):
@@ -906,8 +897,7 @@ class ScoreResponse(ScoreBase):
     exam_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScoreListResponse(BaseModel):
@@ -924,8 +914,7 @@ class CourseExamWeightResponse(CourseExamWeightItem):
     id: int
     subject_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseExamWeightUpdateRequest(BaseModel):
@@ -1010,8 +999,7 @@ class ScoreGradeAppealResponse(BaseModel):
     teacher_response: Optional[str] = None
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class HomeworkBase(BaseModel):
@@ -1144,8 +1132,7 @@ class HomeworkResponse(HomeworkBase):
     llm_routing_spec: Optional[dict[str, Any]] = None
     discussion_requires_context: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class HomeworkBatchLateSubmissionUpdate(BaseModel):
@@ -1245,8 +1232,7 @@ class HomeworkSubmissionResponse(BaseModel):
     effective_score_attempt_seq: Optional[int] = None
     effective_score_note_zh: str = ""
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class HomeworkAttemptResponse(BaseModel):
@@ -1276,8 +1262,7 @@ class HomeworkAttemptResponse(BaseModel):
     score_source: Optional[str] = None
     allow_feedback_followup: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class HomeworkSubmissionHistoryResponse(BaseModel):
@@ -1358,8 +1343,7 @@ class HomeworkGradeAppealResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class HomeworkGradeAppealTeacherUpdate(BaseModel):
@@ -1454,8 +1438,7 @@ class LLMEndpointPresetResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseLLMConfigEndpointSelection(BaseModel):
@@ -1582,8 +1565,7 @@ class CourseMaterialResponse(CourseMaterialBase):
     placements: List[CourseMaterialPlacement] = Field(default_factory=list)
     discussion_requires_context: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseMaterialListResponse(BaseModel):

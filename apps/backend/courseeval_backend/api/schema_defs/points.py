@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class PointRuleBase(BaseModel):
@@ -32,8 +32,7 @@ class PointRuleResponse(PointRuleBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentPointResponse(BaseModel):
@@ -46,8 +45,7 @@ class StudentPointResponse(BaseModel):
     student_name: Optional[str] = None
     class_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PointRecordResponse(BaseModel):
@@ -62,8 +60,7 @@ class PointRecordResponse(BaseModel):
     operator_name: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PointRecordListResponse(BaseModel):
@@ -99,8 +96,7 @@ class PointItemResponse(PointItemBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PointExchangeResponse(BaseModel):
@@ -117,8 +113,7 @@ class PointExchangeResponse(BaseModel):
     student_name: Optional[str] = None
     item_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PointExchangeListResponse(BaseModel):

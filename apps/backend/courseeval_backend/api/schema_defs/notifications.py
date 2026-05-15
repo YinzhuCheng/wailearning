@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 ContentFormatLiteral = Literal["markdown", "plain"]
 
@@ -92,8 +92,7 @@ class NotificationResponse(BaseModel):
     subject_name: Optional[str] = None
     is_read: Optional[bool] = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationListResponse(BaseModel):
