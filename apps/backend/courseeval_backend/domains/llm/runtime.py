@@ -107,10 +107,10 @@ def classify_llm_error_code(
     message = (error_message or "").strip()
     if code in PERMANENT_LLM_ERROR_CODES:
         return "permanent"
-    if code in TRANSIENT_LLM_ERROR_CODES:
-        return "transient"
     if any(f"HTTP {status}" in message for status in TERMINAL_HTTP_STATUS_CODES):
         return "permanent"
+    if code in TRANSIENT_LLM_ERROR_CODES:
+        return "transient"
     return "transient"
 
 

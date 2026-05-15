@@ -250,7 +250,7 @@ def _request_discussion_completion(
     if response.status_code in NON_RETRYABLE_STATUS_CODES:
         raise NonRetryableLLMError(f"鉴权或权限失败：HTTP {response.status_code}")
     if response.status_code == 413:
-        raise NonRetryableLLMError("请求内容过大，端点拒绝处理。")
+        raise NonRetryableLLMError("??????????????HTTP 413")
     if response.status_code in RETRYABLE_STATUS_CODES:
         raise RetryableLLMError(f"端点暂时不可用：HTTP {response.status_code}")
     if response.status_code >= 400:
@@ -317,6 +317,7 @@ def _call_discussion_with_routing(
                         last_error = str(exc)
                         routing.note_failure(group_state, link, exc)
                         if request_attempt >= attempt_limit:
+                            group_state.remove_member(link)
                             break
                         wait_seconds = min(
                             int(preset.initial_backoff_seconds or 2) * (2 ** (request_attempt - 1)),
@@ -361,6 +362,33 @@ def _call_discussion_with_routing(
     raise NonRetryableLLMError(last_error_flat or "所有端点都调用失败。")
 
 
+def _claim_discussion_job_for_execution(db: Session, job_id: int) -> Optional[DiscussionLLMJob]:
+    updated = (
+        db.query(DiscussionLLMJob)
+        .filter(
+            DiscussionLLMJob.id == job_id,
+            DiscussionLLMJob.status.in_(("pending", "retry_scheduled")),
+        )
+        .update(
+            {
+                DiscussionLLMJob.status: "processing",
+                DiscussionLLMJob.next_retry_at: None,
+                DiscussionLLMJob.finished_at: None,
+                DiscussionLLMJob.error_code: None,
+                DiscussionLLMJob.error_message: None,
+                DiscussionLLMJob.failure_class: None,
+                DiscussionLLMJob.last_error_at: None,
+            },
+            synchronize_session=False,
+        )
+    )
+    if not updated:
+        db.rollback()
+        return None
+    db.commit()
+    return db.query(DiscussionLLMJob).filter(DiscussionLLMJob.id == job_id).first()
+
+
 def run_discussion_llm_reply_for_job(job_id: int) -> None:
     """Load job in a new session and complete LLM reply (commits internally)."""
     db = SessionLocal()
@@ -370,6 +398,9 @@ def run_discussion_llm_reply_for_job(job_id: int) -> None:
             return
         if not promote_due_discussion_job(db, job) and job.status == "retry_scheduled":
             db.commit()
+            return
+        job = _claim_discussion_job_for_execution(db, job_id)
+        if not job:
             return
         user_entry = db.query(CourseDiscussionEntry).filter(CourseDiscussionEntry.id == job.user_entry_id).first()
         user = db.query(User).filter(User.id == job.requester_user_id).first()
@@ -404,18 +435,17 @@ def _run_discussion_llm_reply_unlocked(
     subject_id: int,
     class_id: int,
 ) -> None:
-    def _fail_visible(msg: str, *, release_reservation: bool, visible: bool = True) -> None:
+    def _schedule_failure(msg: str, *, release_reservation: bool, error_code: str) -> str:
         if release_reservation:
             release_discussion_quota_reservation(db, job.id)
-        failure_class = schedule_discussion_retry(
+        return schedule_discussion_retry(
             db,
             job,
-            error_code="discussion_call_failed" if release_reservation else "discussion_permanent_failure",
+            error_code=error_code,
             error_message=msg,
         )
-        if not visible and failure_class == "transient":
-            db.commit()
-            return
+
+    def _emit_failure_message(msg: str) -> None:
         sys_user = db.query(User).filter(User.username == "__system_llm_assistant__").first()
         if sys_user:
             assistant_entry = CourseDiscussionEntry(
@@ -433,6 +463,21 @@ def _run_discussion_llm_reply_unlocked(
             db.add(assistant_entry)
             db.flush()
             job.assistant_entry_id = assistant_entry.id
+
+    def _fail_visible(
+        msg: str,
+        *,
+        release_reservation: bool,
+        error_code: str,
+        visible: bool = True,
+    ) -> None:
+        failure_class = _schedule_failure(
+            msg,
+            release_reservation=release_reservation,
+            error_code=error_code,
+        )
+        if visible or failure_class != "transient":
+            _emit_failure_message(msg)
         db.commit()
 
     hw: Optional[Homework] = None
@@ -440,17 +485,17 @@ def _run_discussion_llm_reply_unlocked(
     if target_type == "homework":
         hw = db.query(Homework).filter(Homework.id == target_id).first()
         if not hw:
-            _fail_visible("作业不存在。", release_reservation=False, visible=True)
+            _fail_visible("作业不存在。", release_reservation=False, error_code="discussion_target_missing", visible=True)
             return
     else:
         mat = db.query(CourseMaterial).filter(CourseMaterial.id == target_id).first()
         if not mat:
-            _fail_visible("资料不存在。", release_reservation=False, visible=True)
+            _fail_visible("资料不存在。", release_reservation=False, error_code="discussion_target_missing", visible=True)
             return
 
     course = db.query(Subject).filter(Subject.id == subject_id).first()
     if not course:
-        _fail_visible("课程不存在。", release_reservation=False, visible=True)
+        _fail_visible("课程不存在。", release_reservation=False, error_code="discussion_course_missing", visible=True)
         return
 
     student: Optional[Student] = None
@@ -459,15 +504,15 @@ def _run_discussion_llm_reply_unlocked(
         try:
             student = resolve_student_for_discussion_llm(db, user, class_id=class_id)
         except ValueError:
-            _fail_visible("当前账号无法计费：请使用已绑定学籍的学生账号发起智能助教。", release_reservation=False, visible=True)
+            _fail_visible("当前账号无法计费：请使用已绑定学籍的学生账号发起智能助教。", release_reservation=False, error_code="discussion_student_binding_missing", visible=True)
             return
 
     config = ensure_course_llm_config(db, subject_id, user_id=user.id)
     if not config.is_enabled:
-        _fail_visible("当前课程未启用 LLM 配置。", release_reservation=False, visible=True)
+        _fail_visible("当前课程未启用 LLM 配置。", release_reservation=False, error_code="llm_config_disabled", visible=True)
         return
     if not (config.groups or []) and not (config.endpoints or []):
-        _fail_visible("当前课程未配置可用端点。", release_reservation=False, visible=True)
+        _fail_visible("当前课程未配置可用端点。", release_reservation=False, error_code="endpoint_missing", visible=True)
         return
 
     max_out = int(config.max_output_tokens) if config.max_output_tokens else None
@@ -510,7 +555,7 @@ def _run_discussion_llm_reply_unlocked(
             msg = {
                 "quota_exceeded_student": "已达到本日学生 token 上限，智能助教未执行。",
             }.get(err or "", "今日额度已用尽，智能助教未执行。")
-            _fail_visible(msg, release_reservation=False, visible=True)
+            _fail_visible(msg, release_reservation=False, error_code=err or "quota_exceeded_student", visible=True)
             return
 
     try:
@@ -522,15 +567,15 @@ def _run_discussion_llm_reply_unlocked(
             job=job,
         )
     except NonRetryableLLMError as exc:
-        _fail_visible(str(exc) or "LLM 调用失败。", release_reservation=True, visible=False)
+        _fail_visible(str(exc) or "LLM 调用失败。", release_reservation=True, error_code="discussion_call_failed", visible=False)
         return
     except Exception as exc:
-        _fail_visible(f"LLM 调用异常：{exc}", release_reservation=True, visible=False)
+        _fail_visible(f"LLM 调用异常：{exc}", release_reservation=True, error_code="discussion_call_failed", visible=False)
         return
 
     sys_user = db.query(User).filter(User.username == "__system_llm_assistant__").first()
     if not sys_user:
-        _fail_visible("系统未初始化智能助教账号，请联系管理员。", release_reservation=True, visible=True)
+        _fail_visible("系统未初始化智能助教账号，请联系管理员。", release_reservation=True, error_code="discussion_system_user_missing", visible=True)
         return
 
     reply_body = result["text"]
