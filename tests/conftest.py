@@ -118,9 +118,11 @@ _DEFAULT_WORKER_LEADER = os.environ["LLM_GRADING_WORKER_LEADER"] == "true"
 @pytest.fixture(autouse=True)
 def _reset_worker_and_e2e_settings():
     from apps.backend.courseeval_backend.core.config import settings
+    from apps.backend.courseeval_backend.domains.llm.runtime import set_test_clock
     from apps.backend.courseeval_backend.llm_grading import worker_manager
 
     worker_manager.stop()
+    set_test_clock(None)
     settings.ENABLE_LLM_GRADING_WORKER = _DEFAULT_ENABLE_WORKER
     settings.LLM_GRADING_WORKER_LEADER = _DEFAULT_WORKER_LEADER
     settings.LLM_GRADING_WORKER_POLL_SECONDS = 2
@@ -130,6 +132,7 @@ def _reset_worker_and_e2e_settings():
         settings.E2E_DEV_REQUIRE_ADMIN_JWT = False
     yield
     worker_manager.stop()
+    set_test_clock(None)
     settings.ENABLE_LLM_GRADING_WORKER = _DEFAULT_ENABLE_WORKER
     settings.LLM_GRADING_WORKER_LEADER = _DEFAULT_WORKER_LEADER
     settings.LLM_GRADING_WORKER_POLL_SECONDS = 2

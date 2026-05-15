@@ -37,8 +37,11 @@ governance**.
    does not replace router or domain enforcement.
 4. Use UTF-8-safe editing practices on Windows PowerShell; start with
    [`docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
-   The default Windows text-workflow entrypoint is
-   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops/scripts/windows/enter-safe-text-session.ps1`.
+   If the current shell is Windows PowerShell, dot-source
+   `ops/scripts/windows/set-utf8-session.ps1` immediately before repository
+   inspection/editing so the current console process switches to UTF-8.
+   Then use `ops/scripts/windows/enter-safe-text-session.ps1` for
+   multilingual-file inspection workflows.
 5. Use `.agent-run/` for local-only logs, private paths, and machine-specific
    continuation notes; keep durable repository context in committed docs. See
    [`docs/agents/local-agent-workspace.md`](docs/agents/local-agent-workspace.md).

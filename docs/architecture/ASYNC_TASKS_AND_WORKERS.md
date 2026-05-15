@@ -1,6 +1,6 @@
-# Async tasks and workers (LLM homework grading)
+# Async tasks and workers (LLM homework grading + discussion retries)
 
-**Fact:** There is **no** Redis queue or Celery worker package in this repository for grading. Async work is modeled as **database rows** processed by an **in-process background thread** inside the API process.
+**Fact:** There is **no** Redis queue or Celery worker package in this repository for grading or discussion-assistant retries. Async work is modeled as **database rows** processed by an **in-process background thread** inside the API process.
 
 **Primary implementation:** `apps/backend/courseeval_backend/llm_grading.py`.
 
@@ -12,9 +12,11 @@
 |------|--------|
 | ORM model | `HomeworkGradingTask` (`db/models.py`) |
 | Creation | Router/service queues row when auto grading triggers (see homework router + helpers in `llm_grading.py`) |
-| Status values | Typical lifecycle strings include `queued`, `processing`, `completed`, `failed` — confirm in model/router (grep `status=` assignments) |
+| Status values | `queued`, `processing`, `retry_scheduled`, `success`, `failed` |
 
 Tasks are durable: restarting API leaves rows in DB; worker resumes according to stale reclaim rules.
+
+Discussion assistant work uses the sibling durable model `DiscussionLLMJob` with lifecycle `pending`, `retry_scheduled`, `success`, `failed`.
 
 ---
 
@@ -36,8 +38,17 @@ Tasks are durable: restarting API leaves rows in DB; worker resumes according to
 
 1. Poll / sleep `LLM_GRADING_WORKER_POLL_SECONDS`.
 2. `claim_grading_tasks_batch(cap)` marks up to `cap` tasks as processing.
-3. For each task id, `process_grading_task(task_id)` executes vendor HTTP via httpx, writes `HomeworkScoreCandidate`, updates submission summary via `refresh_submission_summary`, marks task terminal state.
-4. Exceptions map to retry vs permanent failure (grep `RetryableLLMError`, `NonRetryableLLMError`).
+3. The same loop also scans for due `DiscussionLLMJob` rows whose `next_retry_at` has matured.
+4. For each grading task id, `process_grading_task(task_id)` executes vendor HTTP via httpx, writes `HomeworkScoreCandidate`, updates submission summary via `refresh_submission_summary`, and marks the task `success`, `failed`, or `retry_scheduled`.
+5. For each due discussion job id, `run_discussion_llm_reply_for_job(job_id)` attempts the assistant reply and marks the same row `success`, `failed`, or `retry_scheduled`.
+6. Exceptions map to retry vs permanent failure (grep `RetryableLLMError`, `NonRetryableLLMError`, `classify_llm_error_code`).
+
+Transient retry model:
+
+- request-local endpoint retries and group failover still happen inside one processing attempt;
+- after those immediate retries are exhausted, transient failures persist on the same row with `retry_count`, `failure_class="transient"`, `last_error_at`, and `next_retry_at`;
+- backoff is exponential and capped at 20 minutes;
+- no unbounded chain of replacement task rows is created for transient grading failures.
 
 ---
 
@@ -53,13 +64,20 @@ If a worker dies mid-processing, reclaim logic should allow tasks to return to q
 
 Before / during execution, quota policies gate token reservations (`domains/llm/` helpers). Exhaustion surfaces as task failure states + UI diagnostics — see [`../product/LLM_HOMEWORK_GUIDE.md`](../product/LLM_HOMEWORK_GUIDE.md).
 
+Billing rule for retried LLM work:
+
+- failed attempts release reservations and do not write billed usage rows;
+- homework usage is written only after a successful grading result;
+- discussion usage is written only after a successful assistant reply.
+
 ---
 
 ## 6. Testing hooks
 
 - Tests frequently patch HTTP (`httpx`) rather than calling live vendors.
 - Worker may be disabled via `tests/conftest.py` defaults to reduce background interference.
-- Direct helpers: `process_grading_task`, `process_next_grading_task` — used in tests.
+- Direct helpers: `process_grading_task`, `process_next_grading_task`, and `run_discussion_llm_reply_for_job` — used in tests.
+- Virtual-time tests can inject a fake clock through `domains/llm/runtime.py` instead of waiting for real backoff windows.
 
 ---
 
@@ -67,14 +85,17 @@ Before / during execution, quota policies gate token reservations (`domains/llm/
 
 | Symptom | Checks |
 |---------|--------|
-| Tasks never leave `queued` | Worker flags; DB connectivity; leader setting |
+| Tasks never leave `queued` / `retry_scheduled` | Worker flags; DB connectivity; leader setting; inspect `next_retry_at` vs current UTC |
 | Stuck `processing` | Stale seconds; kill orphaned workers; DB inspection |
 | Unexpected score | Effective aggregate rule vs latest attempt body — see `refresh_submission_summary` |
+| Discussion reply never appears after transient vendor failure | Inspect `DiscussionLLMJob.status`, `failure_class`, `retry_count`, `next_retry_at`, and worker logs |
 
 Cross-links: [`architecture/TROUBLESHOOTING.md`](../architecture/TROUBLESHOOTING.md), [`testing/TEST_EXECUTION_PITFALLS.md`](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ---
 
-## 8. 待人工确认
+## 8. Current state summary
 
-- Exact exhaustive list of string states for `HomeworkGradingTask.status` and any legacy values still present in historical DB rows — grep model + migration-like updates.
+- `HomeworkGradingTask.status`: `queued`, `processing`, `retry_scheduled`, `success`, `failed`
+- `DiscussionLLMJob.status`: `pending`, `retry_scheduled`, `success`, `failed`
+- Retry metadata is persisted on both row types via `retry_count`, `failure_class`, `last_error_at`, and `next_retry_at`

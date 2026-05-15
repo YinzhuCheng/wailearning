@@ -274,7 +274,15 @@ The note discussion assistant reuses the course LLM routing stack (`ensure_cours
 - `api/routers/discussions.py` — prefix `/api/discussions`.
 - Access uses `ensure_course_access_http` and `is_course_instructor` patterns consistent with other course features.
 
-Discussion LLM jobs (if enabled for a course) are orchestrated through modules referenced from this router and `llm_discussion.py` — **待人工确认**: exact job lifecycle should be verified against `DiscussionLLMJob` usage when changing async discussion behavior.
+Discussion LLM jobs (if enabled for a course) are orchestrated through `api/routers/discussions.py`, `llm_discussion.py`, and the shared runtime helpers under `domains/llm/`.
+Current implementation lifecycle:
+
+- `POST /api/discussions` with `invoke_llm=true` writes a durable `DiscussionLLMJob(status="pending")`;
+- the router still triggers an immediate best-effort background attempt for low-latency success paths;
+- transient failures move the same row to `retry_scheduled` with persisted `retry_count`, `failure_class`, `last_error_at`, and `next_retry_at`;
+- the grading worker loop in `llm_grading.py` also drains due discussion jobs, so later recovery uses the same process-level worker instead of a second daemon;
+- successful completion writes the assistant reply row and discussion usage log, then marks the job `success`;
+- permanent failures end in `failed` and may surface a visible assistant-side failure message.
 
 Implementation-aligned student binding rule for discussion LLM:
 

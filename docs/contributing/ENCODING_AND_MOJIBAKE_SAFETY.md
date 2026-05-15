@@ -53,12 +53,23 @@ glyphs blindly. They provide safer defaults and repeatable inspection paths.
 
 ### Default Windows text-workflow entrypoint
 
-Use this as the default command before inspecting or editing multilingual
+Use this as the default workflow before inspecting or editing multilingual
 repository files from Windows PowerShell:
 
 ```powershell
+. .\ops\scripts\windows\set-utf8-session.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1
 ```
+
+Important:
+
+- dot-sourcing `set-utf8-session.ps1` is what changes the **current**
+  interactive PowerShell process;
+- launching `enter-safe-text-session.ps1` with `-File` is still useful for the
+  repository inspection workflow, but by itself it only affects that child
+  PowerShell process;
+- agents that detect they are already running inside Windows PowerShell should
+  first dot-source `set-utf8-session.ps1`, then continue with repository work.
 
 If you already know the target file, pass it immediately:
 
@@ -107,6 +118,10 @@ sets:
 - `PYTHONUTF8=1`;
 - `PYTHONIOENCODING=utf-8`;
 - `LESSCHARSET=utf-8`.
+
+It also sets `COURSEEVAL_SAFE_TEXT_SESSION=1`, which repository helper scripts
+use as a lightweight marker that the current shell already entered the safe
+UTF-8 baseline.
 
 ### File inspection workflow
 

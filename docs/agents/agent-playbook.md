@@ -27,8 +27,10 @@ task:
 2. Execute ordinary repository reads, edits, validation discovery, and Git
    operations directly; ask only when an action is destructive,
    privacy-sensitive, or materially outside the task boundary.
-3. On Windows PowerShell, enter the repository safe-text workflow before
-   inspecting multilingual files:
+3. On Windows PowerShell, dot-source
+   `ops/scripts/windows/set-utf8-session.ps1` at the start of the current
+   shell before repository inspection/editing. When a multilingual file is
+   involved, continue with the repository safe-text workflow via
    `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops/scripts/windows/enter-safe-text-session.ps1`.
 4. Preserve documentation detail when it acts as process memory for future
    agents. Shorten only when the removed material is obsolete, contradictory, or

@@ -17,14 +17,21 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
-$sessionReady = $env:COURSEEVAL_SAFE_TEXT_SESSION -eq '1'
+$utf8Ready = (
+    [Console]::OutputEncoding.WebName -eq 'utf-8' -and
+    [Console]::InputEncoding.WebName -eq 'utf-8' -and
+    $OutputEncoding.WebName -eq 'utf-8'
+)
+$sessionReady = ($env:COURSEEVAL_SAFE_TEXT_SESSION -eq '1') -and $utf8Ready
 
 if (-not $sessionReady) {
-    Write-Error 'Safe text session is not active. Run ops\scripts\windows\enter-safe-text-session.ps1 first.'
+    Write-Error 'Safe text session is not active. Dot-source ops\scripts\windows\set-utf8-session.ps1 or enter-safe-text-session.ps1 in the current shell first.'
 }
 
 Write-Output 'Safe text session is active.'
+Write-Output "COURSEEVAL_SAFE_TEXT_SESSION=$env:COURSEEVAL_SAFE_TEXT_SESSION"
 Write-Output "Console.OutputEncoding=$([Console]::OutputEncoding.WebName)"
 Write-Output "Console.InputEncoding=$([Console]::InputEncoding.WebName)"
+Write-Output "PowerShell.OutputEncoding=$($OutputEncoding.WebName)"
 Write-Output "PYTHONUTF8=$env:PYTHONUTF8"
 Write-Output "PYTHONIOENCODING=$env:PYTHONIOENCODING"

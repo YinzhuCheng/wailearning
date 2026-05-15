@@ -39,12 +39,14 @@ try {
 [Console]::InputEncoding = $utf8NoBom
 $global:OutputEncoding = $utf8NoBom
 
+$env:COURSEEVAL_SAFE_TEXT_SESSION = '1'
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 $env:LESSCHARSET = 'utf-8'
 
 if (-not $Quiet) {
     Write-Output 'UTF-8 session settings applied.'
+    Write-Output "COURSEEVAL_SAFE_TEXT_SESSION=$env:COURSEEVAL_SAFE_TEXT_SESSION"
     Write-Output "Console.OutputEncoding=$([Console]::OutputEncoding.WebName)"
     Write-Output "Console.InputEncoding=$([Console]::InputEncoding.WebName)"
     Write-Output "PYTHONUTF8=$env:PYTHONUTF8"

@@ -594,6 +594,10 @@ class HomeworkGradingTask(Base):
     billed_total_tokens = Column(Integer, nullable=True)
     current_endpoint_index = Column(Integer, nullable=True)
     current_attempt = Column(Integer, nullable=False, default=0)
+    retry_count = Column(Integer, nullable=False, default=0)
+    failure_class = Column(String, nullable=True)
+    next_retry_at = Column(DateTime(timezone=True), nullable=True)
+    last_error_at = Column(DateTime(timezone=True), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1010,8 +1014,13 @@ class DiscussionLLMJob(Base):
     requester_student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
     user_entry_id = Column(Integer, ForeignKey("course_discussion_entries.id", ondelete="CASCADE"), nullable=False)
     assistant_entry_id = Column(Integer, ForeignKey("course_discussion_entries.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String, nullable=False, default="pending")  # pending | success | failed
+    status = Column(String, nullable=False, default="pending")  # pending | retry_scheduled | success | failed
     error_message = Column(Text, nullable=True)
+    error_code = Column(String, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0)
+    failure_class = Column(String, nullable=True)
+    next_retry_at = Column(DateTime(timezone=True), nullable=True)
+    last_error_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     finished_at = Column(DateTime(timezone=True), nullable=True)
 

@@ -143,6 +143,14 @@ When homework auto-grading is enabled:
 - the worker calls the selected endpoint,
 - the system stores score candidates and updates the submission summary.
 
+Task-level retry semantics:
+
+- homework grading no longer creates an unbounded chain of replacement task rows for transient upstream failures;
+- the same `HomeworkGradingTask` row can move through `queued -> processing -> retry_scheduled -> processing -> success|failed`;
+- `retry_scheduled` means the task is still recoverable and will be reclaimed automatically once `next_retry_at` is due;
+- transient failures use exponential backoff capped at 20 minutes;
+- permanent failures remain terminal `failed` rows and do not re-enter the queue automatically.
+
 **Displayed homework score vs latest attempt**
 
 `HomeworkSubmission.review_score` / `review_comment` shown in student and teacher lists represent **「有效成绩」**: across attempts tied to the submission, take attempts submitted **on/before due** **or** marked **`counts_toward_final_score`** (late attempts excluded when “迟交影响评分” applies), compute each attempt’s winning candidate (teacher beats auto), then pick the **maximum** score. Summaries still mirror the **latest** attempt’s body and LLM task diagnostics so users see their most recent upload while the numeric grade reflects the aggregate rule. See `domains/llm/grading_result.py` for `resolve_effective_submission_score`, `llm_grading.py` for `effective_score_display_zh` / summary refresh compatibility exports, and API fields `effective_score_attempt_seq` / `effective_score_note_zh` on submission payloads.
@@ -181,6 +189,7 @@ The grading worker is database-backed and configuration-driven.
 - `LLM_GRADING_TASK_STALE_SECONDS` controls stale-task reclamation.
 - The worker can recover tasks stuck in processing state.
 - Endpoint failover and retry behavior are part of task processing, not just UI concerns.
+- The same worker loop also drains due `DiscussionLLMJob` retries; discussion assistant recovery is not a separate daemon.
 
 In single-process local development, one process can both serve the API and drain the queue. In multi-instance production, only one intended leader should normally run task draining.
 
@@ -221,6 +230,14 @@ For **discussion LLM** specifically:
 - those staff/admin discussion-LMM calls bypass the student daily token-cap checks and do not allocate a student quota reservation row;
 - student callers remain the only role whose discussion-LMM usage consumes the personal daily token pool.
 
+Discussion assistant retry semantics:
+
+- a course discussion with `invoke_llm=true` creates a durable `DiscussionLLMJob`;
+- transient upstream failures move the same job to `retry_scheduled` with a persisted `next_retry_at`;
+- the background grading worker drains due discussion jobs and completes the reply later when the upstream recovers;
+- transient failures do not create an immediate visible assistant error message in the thread, so a later successful reply does not leave noisy failure rows behind;
+- permanent failures may still surface a visible assistant-side failure message when the request can never recover automatically.
+
 ## Failure and Recovery Patterns
 
 The implementation supports these recovery paths:
@@ -229,6 +246,7 @@ The implementation supports these recovery paths:
 - quota exhaustion blocks or fails the affected task while allowing later recovery,
 - endpoint failure can fall through to another configured preset,
 - retryable transport failures can succeed later,
+- homework grading and course discussion assistant jobs both persist retry metadata (`retry_count`, `failure_class`, `next_retry_at`, `last_error_at`) for eventual completion,
 - teacher regrade can replace a failed auto-grading outcome with a successful one,
 - relogin or refresh should recover the authoritative grading state from the backend.
 
@@ -237,8 +255,10 @@ The implementation supports these recovery paths:
 Useful operational signals include:
 
 - grading task status,
+- discussion job status,
 - error code and error message,
 - endpoint index and attempt count,
+- retry scheduling fields such as `retry_count`, `failure_class`, and `next_retry_at`,
 - billed token fields,
 - notification events for grading completion and appeal handling,
 - student-visible quota summaries.
