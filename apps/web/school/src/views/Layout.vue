@@ -151,7 +151,7 @@
             </div>
           </div>
 
-          <div v-else-if="showCourseContext" class="context-chip">
+          <div v-else-if="showCourseContext" class="context-chip context-chip--course">
             <span class="context-chip__label">当前课程</span>
             <div class="context-chip__meta">
               <strong>{{ selectedCourse?.name }}</strong>
@@ -1244,6 +1244,11 @@ watch(notificationSyncParams, () => {
 .context-chip--class {
   background: var(--wa-color-accent-50);
   color: var(--wa-color-accent-700);
+}
+
+.context-chip--course {
+  padding-left: 18px;
+  gap: 12px;
 }
 
 .context-chip__label {

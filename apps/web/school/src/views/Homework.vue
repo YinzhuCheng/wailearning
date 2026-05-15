@@ -63,26 +63,23 @@
             width="48"
             :reserve-selection="true"
           />
-          <el-table-column prop="title" label="作业标题" :width="userStore.isStudent ? 168 : 188" align="center" header-align="center" show-overflow-tooltip />
-          <el-table-column v-if="!userStore.isStudent" label="提交上限" width="100" align="center" header-align="center">
+          <el-table-column prop="title" label="作业标题" :width="userStore.isStudent ? 156 : 160" align="center" header-align="center" show-overflow-tooltip />
+          <el-table-column v-if="!userStore.isStudent" label="提交上限" width="84" align="center" header-align="center">
             <template #default="{ row }">
               {{ row.max_submissions != null ? `${row.max_submissions} 次` : '不限' }}
             </template>
           </el-table-column>
-          <el-table-column prop="subject_name" label="课程" :width="userStore.isStudent ? 136 : 150" align="center" header-align="center" />
-          <el-table-column :width="userStore.isStudent ? 132 : 152" label="评分" align="center" header-align="center">
+          <el-table-column prop="subject_name" label="课程" :width="userStore.isStudent ? 128 : 128" align="center" header-align="center" />
+          <el-table-column :width="userStore.isStudent ? 96 : 96" label="评分" align="center" header-align="center">
             <template #default="{ row }">
               <div class="rule-cell">
                 <el-tag size="small" :type="row.auto_grading_enabled ? 'success' : 'info'">
                   {{ gradingModeLabel(row.auto_grading_enabled) }}
                 </el-tag>
-                <div class="rule-text rule-text--compact">
-                  {{ summarizeGradingRule(row.grading_rule_hint) }}
-                </div>
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="附件" width="110" align="center" header-align="center">
+          <el-table-column label="附件" width="90" align="center" header-align="center">
             <template #default="{ row }">
               <el-button
                 v-if="row.attachment_url"
@@ -95,12 +92,12 @@
               <span v-else class="muted-text">无</span>
             </template>
           </el-table-column>
-          <el-table-column prop="due_date" label="截止时间" :width="userStore.isStudent ? 150 : 168" align="center" header-align="center">
+          <el-table-column prop="due_date" label="截止时间" :width="userStore.isStudent ? 144 : 146" align="center" header-align="center">
             <template #default="{ row }">
               {{ formatDate(row.due_date) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="userStore.isStudent" label="任务" width="98" align="center" header-align="center">
+          <el-table-column v-if="userStore.isStudent" label="任务" width="96" align="center" header-align="center">
             <template #default="{ row }">
               <div v-if="resolveTaskStatus(row)" class="task-status-cell task-status-cell--student">
                 <el-tag :type="taskTagType(resolveTaskStatus(row))" size="small">
@@ -113,10 +110,12 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            :width="userStore.isStudent ? 92 : 188"
+            :width="userStore.isStudent ? 104 : 224"
             fixed="right"
             align="center"
             header-align="center"
+            class-name="homework-actions-column"
+            label-class-name="homework-actions-column__header"
           >
             <template #default="{ row }">
               <template v-if="userStore.isStudent">
@@ -139,7 +138,7 @@
               </template>
             </template>
           </el-table-column>
-          <el-table-column v-if="userStore.isStudent" label="分数" width="108" align="center" header-align="center">
+          <el-table-column v-if="userStore.isStudent" label="分数" width="100" align="center" header-align="center">
             <template #default="{ row }">
               <div v-if="hasHomeworkReview(row)" class="student-review-summary">
                 <div class="student-review-summary__chips">
@@ -156,8 +155,8 @@
               <span v-else class="muted-text">未评分</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="!userStore.isStudent" prop="creator_name" label="发布人" width="100" align="center" header-align="center" />
-          <el-table-column v-if="!userStore.isStudent" prop="created_at" label="发布时间" width="165" align="center" header-align="center">
+          <el-table-column v-if="!userStore.isStudent" prop="creator_name" label="发布人" width="92" align="center" header-align="center" />
+          <el-table-column v-if="!userStore.isStudent" prop="created_at" label="发布时间" width="146" align="center" header-align="center">
             <template #default="{ row }">
               {{ formatDate(row.created_at) }}
             </template>
@@ -469,26 +468,6 @@ const buildParams = () => {
     page: 1,
     page_size: 100
   }
-}
-
-const DEFAULT_GRADING_RULE_SUMMARY = '?????????'
-
-const summarizeGradingRule = hint => {
-  const text = String(hint || '').trim()
-  if (!text) {
-    return DEFAULT_GRADING_RULE_SUMMARY
-  }
-  const normalized = text.replace(/\s+/g, ' ')
-  const summary = normalized.split(/[??]/).find(Boolean)?.trim() || normalized
-  return summary.length > 34 ? `${summary.slice(0, 34).trim()}?` : summary
-}
-
-const showGradingRuleDetail = hint => {
-  const text = String(hint || '').trim()
-  if (!text) {
-    return false
-  }
-  return summarizeGradingRule(text) !== text.replace(/\s+/g, ' ')
 }
 
 const gradingModeLabel = enabled => (enabled ? '自动评分' : '教师评分')
@@ -833,7 +812,7 @@ watch(selectedCourse, () => {
 <style scoped>
 .homework-page {
   padding: 24px;
-  width: min(100%, 1180px);
+  width: min(100%, 1280px);
   margin: 0 auto;
   min-width: 0;
   overflow-x: hidden;
@@ -933,21 +912,6 @@ watch(selectedCourse, () => {
   gap: 4px;
 }
 
-.rule-text--compact {
-  color: #334155;
-  font-weight: 500;
-  line-height: 1.45;
-}
-
-.rule-text--detail {
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  max-width: 100%;
-  word-break: break-word;
-}
-
 .homework-list-card {
   overflow: hidden;
   border-radius: var(--wa-radius-lg);
@@ -964,11 +928,21 @@ watch(selectedCourse, () => {
 }
 
 .homework-table-scroll :deep(.el-table) {
-  min-width: 1160px;
+  min-width: 1180px;
 }
 
 .homework-table-scroll :deep(.el-table__fixed-right) {
   box-shadow: -10px 0 18px rgba(15, 23, 42, 0.06);
+}
+
+.homework-table-scroll :deep(.homework-actions-column .cell),
+.homework-table-scroll :deep(.homework-actions-column__header .cell) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .homework-table--student :deep(.el-table__row td) {
@@ -978,10 +952,10 @@ watch(selectedCourse, () => {
 
 .wa-table-actions {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
 }
 
@@ -1002,10 +976,11 @@ watch(selectedCourse, () => {
 }
 
 .wa-table-actions--teacher {
-  gap: 4px;
+  gap: 6px;
 }
 
 .wa-table-actions--teacher :deep(.el-button) {
+  white-space: nowrap;
   padding-left: 8px;
   padding-right: 8px;
 }
