@@ -23,7 +23,10 @@ Treat terminal mojibake as untrusted until verified by UTF-8-aware tooling.
 ## Commands
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\safe-text-workflow.ps1 -Path <repo-relative-path>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1 -Path <repo-relative-path>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1 -Command "<repo command>"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-rg.ps1 -Pattern "<rg-pattern>" -Paths "apps/backend/courseeval_backend/llm_grading.py","tests"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-pytest.ps1 -Targets "tests/backend/llm/test_llm_group_routing.py" -PytestArgs "-q"
 python ops/scripts/dev/check_text_encoding.py --fail-on-suspicious <changed-file>
 python ops/scripts/dev/run_validation_target.py static.encoding_text_tools --timeout-seconds 120
 git diff --check
@@ -34,6 +37,8 @@ git diff --check
 - Do not run destructive grep-replace over Chinese or mixed-language text.
 - Do not "fix" mojibake seen only in PowerShell until UTF-8 checks confirm the
   file bytes are wrong.
+- Do not prefer long ad hoc PowerShell one-liners over committed wrappers when
+  quoting-sensitive commands can be scripted once and reused.
 - Keep private local paths out of committed diagnostics.
 - For docs/governance work, also run
   `python ops/scripts/dev/check_repository_normalization.py`.

@@ -57,33 +57,41 @@ Use this as the default workflow before inspecting or editing multilingual
 repository files from Windows PowerShell:
 
 ```powershell
-. .\ops\scripts\windows\set-utf8-session.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1
 ```
 
 Important:
 
-- dot-sourcing `set-utf8-session.ps1` is what changes the **current**
-  interactive PowerShell process;
-- launching `enter-safe-text-session.ps1` with `-File` is still useful for the
-  repository inspection workflow, but by itself it only affects that child
-  PowerShell process;
-- agents that detect they are already running inside Windows PowerShell should
-  first dot-source `set-utf8-session.ps1`, then continue with repository work.
+- this wrapper always starts a child PowerShell process with
+  `-NoProfile -ExecutionPolicy Bypass`;
+- inside that child process it dot-sources
+  `enter-safe-text-session.ps1`, then runs `assert-safe-text-session.ps1`;
+- use `-Command "<repo command>"` to keep repository work in that same
+  UTF-8-safe child process;
+- prefer committed wrappers for complex shell invocations instead of long
+  PowerShell one-liners; for example use
+  `ops\scripts\windows\invoke-safe-rg.ps1` for ripgrep patterns with pipes or
+  quotes and `ops\scripts\windows\invoke-safe-pytest.ps1` for long pytest
+  target lists;
+- if you intentionally need to mutate an already-trusted interactive shell,
+  dot-source `set-utf8-session.ps1` yourself, but that is not the default agent
+  workflow.
 
 If you already know the target file, pass it immediately:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1 `
   -Path apps\web\school\src\views\Layout.vue -StartLine 1 -EndLine 120
 ```
 
 This entrypoint:
 
-1. applies the UTF-8-oriented console/session settings;
-2. marks the current shell as a safe-text session;
-3. optionally routes into the safe multilingual file inspection workflow for a
-   specific path.
+1. starts a child PowerShell process with `-ExecutionPolicy Bypass`;
+2. applies the UTF-8-oriented console/session settings inside that child;
+3. asserts the safe-text state before repository work continues;
+4. optionally routes into the safe multilingual file inspection workflow for a
+   specific path;
+5. can run a repository command in the same safe-text child process.
 
 Use `assert-safe-text-session.ps1` when you want a yes/no check that the
 current shell already entered the safe-text workflow:
@@ -129,28 +137,31 @@ When a Windows PowerShell session is about to inspect or edit a multilingual
 repository file, use this command first:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1 -Path <repo-relative-path>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1 -Path <repo-relative-path>
 ```
 
 Example:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1 `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1 `
   -Path apps\web\school\src\views\Layout.vue -StartLine 1 -EndLine 120
 ```
 
 What this rule enforces:
 
-1. Enter a UTF-8-oriented session with `set-utf8-session.ps1`.
-2. Display the target file through `safe_show_text.py`.
-3. Run `check_text_encoding.py` on that exact path.
-4. Only then make patch-based edits or an intentional full-file write.
+1. Start the safe-text child process with `invoke-safe-text-command.ps1`.
+2. Enter a UTF-8-oriented session with `enter-safe-text-session.ps1`.
+3. Display the target file through `safe_show_text.py`.
+4. Run `check_text_encoding.py` on that exact path.
+5. Only then make patch-based edits or an intentional full-file write.
 
 Implementation note:
 
-- `enter-safe-text-session.ps1` is now the default operator/agent entrypoint.
+- `invoke-safe-text-command.ps1` is now the default Windows PowerShell
+  wrapper for agents and automation.
 - `safe-text-workflow.ps1` remains as the lower-level file-inspection helper
-  invoked by that entrypoint and can still be run directly for compatibility.
+  invoked by `enter-safe-text-session.ps1` and can still be run directly for
+  compatibility.
 
 Use `-Escape` when terminal rendering is still suspicious and
 `-FailOnSuspicious` when the selected file is expected to be clean.
@@ -331,14 +342,22 @@ Do not combine encoding cleanup with a large refactor unless the encoding issue 
 2. Apply the session helper:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\enter-safe-text-session.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-rg.ps1 -Pattern "retry_scheduled|processing"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-pytest.ps1 -Targets "tests/backend/llm/test_llm_group_routing.py" -PytestArgs "-q"
 ```
 
-3. If you will keep using the same interactive shell, dot-source the helper
-   instead of launching it as a child process.
-4. Use `assert-safe-text-session.ps1` when you need a quick verification that
+3. Use `-Command "<repo command>"` when the repository work should run inside
+   that same safe-text child process.
+4. Prefer the committed Windows wrappers instead of long inline PowerShell
+   commands when the task needs `rg`, `pytest`, or other quoting-sensitive
+   tools.
+5. If you intentionally need to mutate an already-trusted interactive shell,
+   dot-source `set-utf8-session.ps1` instead of using the child-process
+   wrapper.
+6. Use `assert-safe-text-session.ps1` when you need a quick verification that
    the current shell is still in the safe-text workflow.
-5. Continue to prefer ASCII anchors and patch-based edits for source files.
+7. Continue to prefer ASCII anchors and patch-based edits for source files.
 
 ### Inspecting a suspicious multilingual file
 

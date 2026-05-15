@@ -37,11 +37,28 @@ governance**.
    does not replace router or domain enforcement.
 4. Use UTF-8-safe editing practices on Windows PowerShell; start with
    [`docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`](docs/contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
-   If the current shell is Windows PowerShell, dot-source
-   `ops/scripts/windows/set-utf8-session.ps1` immediately before repository
-   inspection/editing so the current console process switches to UTF-8.
-   Then use `ops/scripts/windows/enter-safe-text-session.ps1` for
-   multilingual-file inspection workflows.
+   If the current shell is Windows PowerShell, use
+   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops/scripts/windows/invoke-safe-text-command.ps1`
+   as the default repository entrypoint before inspection/editing.
+   That wrapper starts a child PowerShell process, dot-sources
+   `ops/scripts/windows/enter-safe-text-session.ps1`, runs
+   `ops/scripts/windows/assert-safe-text-session.ps1`, and can execute
+   repository commands in the same UTF-8-safe process via `-Command`.
+   Use `-Path <repo-relative-path>` when a multilingual-file inspection
+   workflow should run before editing. Only dot-source
+   `ops/scripts/windows/set-utf8-session.ps1` directly when you explicitly
+   need to mutate an already-trusted interactive shell.
+   Avoid complex Windows PowerShell one-liners for `rg`, `pytest`, or inline
+   scripting when quoting would be fragile; prefer repository wrappers such as
+   `ops/scripts/windows/invoke-safe-rg.ps1`,
+   `ops/scripts/windows/invoke-safe-pytest.ps1`, committed repo scripts, and
+   `apply_patch`.
+   Advocacy rule: treat Windows PowerShell as a launcher, not as the primary
+   surface for complex repository edits. For quoting-sensitive queries, long
+   test target lists, or multi-step automation, prefer committed repository
+   scripts. For tracked source edits, prefer `apply_patch`; avoid ad hoc
+   PowerShell inline scripts or here-strings for non-trivial rewrites,
+   especially on multilingual or mojibake-sensitive files.
 5. Use `.agent-run/` for local-only logs, private paths, and machine-specific
    continuation notes; keep durable repository context in committed docs. See
    [`docs/agents/local-agent-workspace.md`](docs/agents/local-agent-workspace.md).
@@ -103,6 +120,16 @@ High-risk hard boundaries that stay explicit:
    a local execution plan exists for the task.
 6. If the task is non-trivial, route into the appropriate skill from
    [`skills/README.md`](skills/README.md) before planning edits.
+
+Windows PowerShell default safe-text command wrapper:
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops/scripts/windows/invoke-safe-text-command.ps1`
+
+Use `-Command "<repo command>"` to keep repository work in the same safe-text
+child process. Use `-Path <repo-relative-path>` when the safe multilingual-file
+inspection workflow should run before editing.
+Prefer `ops/scripts/windows/invoke-safe-rg.ps1` for complex ripgrep patterns
+and `ops/scripts/windows/invoke-safe-pytest.ps1` for long pytest target lists
+instead of ad hoc PowerShell one-liners.
 
 Detailed operational defaults, tracing workflow, and documentation-maintenance
 triggers live in [`docs/agents/agent-playbook.md`](docs/agents/agent-playbook.md).
