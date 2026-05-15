@@ -13,7 +13,8 @@ development and E2E automation without widening production behavior.
 ## Workflow
 
 1. Read `docs/operations/ADMIN_BOOTSTRAP.md`,
-   `docs/testing/DEVELOPMENT_AND_TESTING.md`, and
+   `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`,
+   `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`, and
    `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`.
 2. Classify the surface: first-admin bootstrap, demo data seed,
    `/api/e2e/dev/*`, mock LLM controls, grading pump, public registration, or

@@ -8,7 +8,7 @@ This document exists primarily for **LLM coding agents** and automation operator
 
 **Implicit premise:** full-suite runs often mean **one backend process** plus a **file-backed SQLite database** reused for the entire CLI session. Many “single spec green, full suite red” outcomes are **state accumulation + harness ambiguity**, not necessarily broken business logic.
 
-Cross-reference: [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (canonical numbered pitfalls), [pitfalls-playwright-and-e2e.md](pitfalls-playwright-and-e2e.md) (narrower Playwright route), [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md), [ENCODING_AND_MOJIBAKE_SAFETY.md](../contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
+Cross-reference: [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md) (canonical numbered pitfalls), [pitfalls-playwright-and-e2e.md](pitfalls-playwright-and-e2e.md) (narrower Playwright route), [VALIDATION_WORKFLOW_AND_TOOLS.md](VALIDATION_WORKFLOW_AND_TOOLS.md), [FULL_VALIDATION_ENVIRONMENT_POLICY.md](FULL_VALIDATION_ENVIRONMENT_POLICY.md), [ENCODING_AND_MOJIBAKE_SAFETY.md](../contributing/ENCODING_AND_MOJIBAKE_SAFETY.md).
 
 Repo-local skill: [`../../skills/school-playwright-e2e/SKILL.md`](../../skills/school-playwright-e2e/SKILL.md)
 for the condensed agent workflow when the full runbook is more detail than the
@@ -323,4 +323,4 @@ cd <REPO_ROOT>
 COURSEEVAL_AUTO_PG_TESTS=1 python3 -m pytest tests/
 ```
 
-See [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) for PostgreSQL provision script and zero-skip expectations.
+See [FULL_VALIDATION_ENVIRONMENT_POLICY.md](FULL_VALIDATION_ENVIRONMENT_POLICY.md) for PostgreSQL provision and zero-skip expectations, and [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) only for the broader local testing handbook.

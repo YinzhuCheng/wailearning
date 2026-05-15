@@ -63,7 +63,7 @@ Use the most specific durable location first:
 | Local workspace rules | `docs/agents/local-agent-workspace.md` |
 | Repository structure and path rules | `docs/architecture/REPOSITORY_STRUCTURE.md` |
 | High-risk module explanations | `docs/architecture/HIGH_RISK_MODULES.md` |
-| Validation flow and CI | `docs/testing/DEVELOPMENT_AND_TESTING.md`, `docs/testing/CI_AND_VALIDATION.md` |
+| Validation flow and CI | `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`, `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`, `docs/testing/CI_AND_VALIDATION.md` |
 | Pitfall recording and triage | `docs/testing/TEST_EXECUTION_PITFALLS.md`, `skills/local-test-triage/SKILL.md` |
 | Validation registry and ledgers | `skills/validation-selection/SKILL.md`, `skills/validation-ledger-maintenance/SKILL.md`, `docs/testing/README.md` |
 | Agent update log policy | `docs/governance/agent-update-log.md` |
@@ -126,7 +126,8 @@ they still affect:
 - `docs/agents/local-agent-workspace.md`
 - `docs/architecture/REPOSITORY_STRUCTURE.md`
 - `docs/architecture/HIGH_RISK_MODULES.md`
-- `docs/testing/DEVELOPMENT_AND_TESTING.md`
+- `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
+- `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`
 - `docs/testing/CI_AND_VALIDATION.md`
 - `docs/testing/TEST_EXECUTION_PITFALLS.md`
 - `docs/governance/agent-update-log.md`

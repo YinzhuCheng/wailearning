@@ -13,7 +13,8 @@ fast local loop, not final evidence for schema-sensitive changes.
 
 ## Workflow
 
-1. Read `docs/testing/DEVELOPMENT_AND_TESTING.md`,
+1. Read `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`,
+   `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`,
    `docs/testing/TEST_EXECUTION_PITFALLS.md`, and
    `docs/testing/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`.
 2. Provision a throwaway PostgreSQL database. Never point tests at production
@@ -82,6 +83,7 @@ ignored artifacts; committed docs should use placeholders such as
 - `ops/scripts/dev/provision_postgres_pytest.sh`
 - `tests/postgres/`
 - `tests/db_reset.py`
-- `docs/testing/DEVELOPMENT_AND_TESTING.md`
+- `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`
+- `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
 - `docs/testing/TEST_EXECUTION_PITFALLS.md`
 - `docs/testing/test-execution-targets.csv`

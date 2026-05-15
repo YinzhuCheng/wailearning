@@ -14,6 +14,13 @@ Use this file to answer:
 - where validation and CI entrypoints live.
 
 For the full documentation hub, start at [`docs/README.md`](docs/README.md).
+For repo-wide governance routing, use
+[`skills/repository-normalization/SKILL.md`](skills/repository-normalization/SKILL.md)
+plus the horizontal governance skills
+[`skills/docs-governance/SKILL.md`](skills/docs-governance/SKILL.md),
+[`skills/boundary-governance/SKILL.md`](skills/boundary-governance/SKILL.md),
+and
+[`skills/structure-governance/SKILL.md`](skills/structure-governance/SKILL.md).
 
 ## Governance model
 
@@ -74,7 +81,10 @@ governance**.
 High-risk hard boundaries that stay explicit:
 
 - Do not weaken `/api/e2e/dev/*` exposure gates without tracing the current E2E
-  contract in [`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md).
+  contract in
+  [`docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`](docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md)
+  and
+  [`docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`](docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md).
 
 ## Startup workflow
 
@@ -128,7 +138,10 @@ full-suite, release-quality, or zero-skip validation. Start with
 the strict/guided workflow in
 [`docs/agents/agent-startup-routing.md`](docs/agents/agent-startup-routing.md)
 plus
-[`docs/testing/DEVELOPMENT_AND_TESTING.md`](docs/testing/DEVELOPMENT_AND_TESTING.md).
+[`docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`](docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md).
+Use
+[`docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`](docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md)
+when the task needs release-grade, full-suite, or zero-skip evidence.
 
 ## CI entrypoints
 

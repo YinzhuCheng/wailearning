@@ -52,7 +52,8 @@ Use change-scoped validation by default unless the user explicitly asks for:
 
 Start with the selector and then route through:
 
-- [`../testing/DEVELOPMENT_AND_TESTING.md`](../testing/DEVELOPMENT_AND_TESTING.md)
+- [`../testing/VALIDATION_WORKFLOW_AND_TOOLS.md`](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md)
+- [`../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`](../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md)
 - [`../testing/CI_AND_VALIDATION.md`](../testing/CI_AND_VALIDATION.md)
 - [`../../skills/validation-selection/SKILL.md`](../../skills/validation-selection/SKILL.md)
 
@@ -133,5 +134,6 @@ Do not leave frequently reused workflows as ad hoc terminal lore.
 - [`agent-playbook.md`](agent-playbook.md)
 - [`local-agent-workspace.md`](local-agent-workspace.md)
 - [`../governance/agent-update-log.md`](../governance/agent-update-log.md)
-- [`../testing/DEVELOPMENT_AND_TESTING.md`](../testing/DEVELOPMENT_AND_TESTING.md)
+- [`../testing/VALIDATION_WORKFLOW_AND_TOOLS.md`](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md)
+- [`../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`](../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md)
 - [`../testing/pitfalls-ledger-and-selector-tooling.md`](../testing/pitfalls-ledger-and-selector-tooling.md)

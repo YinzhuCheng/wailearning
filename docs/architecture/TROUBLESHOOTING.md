@@ -40,7 +40,7 @@ Most failures are **environment or harness**, not application logic.
 | Symptom | Likely cause | Detail |
 |---------|--------------|--------|
 | Port already in use (`3012`, `8012`, etc.) | Stale `node` / `uvicorn` | [../testing/pitfalls-playwright-and-e2e.md](../testing/pitfalls-playwright-and-e2e.md) for port hygiene and Playwright harness startup |
-| Seed returns `404` | `E2E_DEV_SEED_ENABLED` false or wrong token | [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) |
+| Seed returns `404` | `E2E_DEV_SEED_ENABLED` false or wrong token | [../testing/VALIDATION_WORKFLOW_AND_TOOLS.md](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md) and [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md) |
 | Powerful `/api/e2e/dev/*` returns `401` or `403` | Dual gate requires admin JWT plus seed header | same |
 | Element Plus dropdowns behave flakily | Hover-trigger menus, teleported poppers | pitfalls doc for course switcher / dialog patterns |
 | Full suite timeouts on layout tests | Too many `boundingBox()` calls | pitfalls doc for sampling strategy |
@@ -51,7 +51,7 @@ Full runbook: [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWR
 
 ## pytest failures only on SQLite or only on PostgreSQL
 
-- Some tests require PostgreSQL (`TEST_DATABASE_URL`); see [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) and [../testing/pitfalls-postgres-and-pytest.md](../testing/pitfalls-postgres-and-pytest.md).
+- Some tests require PostgreSQL (`TEST_DATABASE_URL`); see [../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md](../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md) and [../testing/pitfalls-postgres-and-pytest.md](../testing/pitfalls-postgres-and-pytest.md).
 - SQLite has different concurrency and timestamp semantics; do not assume parity.
 
 ---

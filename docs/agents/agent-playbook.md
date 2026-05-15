@@ -12,7 +12,7 @@
 2. **Capabilities:** [`architecture/SYSTEM_OVERVIEW.md`](../architecture/SYSTEM_OVERVIEW.md) — roles and route families (not every endpoint).
 3. **Slices:** [`architecture/CORE_BUSINESS_FLOWS.md`](../architecture/CORE_BUSINESS_FLOWS.md) — homework + LLM + notifications vertical traces with code anchors.
 4. **Config:** [`architecture/CONFIGURATION_REFERENCE.md`](../architecture/CONFIGURATION_REFERENCE.md) — every `Settings` field and major `VITE_*` vars.
-5. **Tests:** [`testing/DEVELOPMENT_AND_TESTING.md`](../testing/DEVELOPMENT_AND_TESTING.md) + [`testing/TEST_EXECUTION_PITFALLS.md`](../testing/TEST_EXECUTION_PITFALLS.md).
+5. **Tests:** [`testing/VALIDATION_WORKFLOW_AND_TOOLS.md`](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md) + [`testing/TEST_EXECUTION_PITFALLS.md`](../testing/TEST_EXECUTION_PITFALLS.md), then [`testing/DEVELOPMENT_AND_TESTING.md`](../testing/DEVELOPMENT_AND_TESTING.md) for the broader harness handbook when needed.
 
 Skipping step 1 causes agents to “fix” generated artifacts or propose forbidden package layouts.
 
@@ -155,7 +155,7 @@ Update docs **in the same change set** when you:
 | New/changed env var | `architecture/CONFIGURATION_REFERENCE.md`, possibly root `README.md` quick start |
 | Router prefix / major flow | `architecture/SYSTEM_OVERVIEW.md`, `architecture/CORE_BUSINESS_FLOWS.md` |
 | Demo seed behavior | `operations/ADMIN_BOOTSTRAP.md`, `product/LLM_HOMEWORK_GUIDE.md` demo sections |
-| Test harness / pitfalls | `testing/DEVELOPMENT_AND_TESTING.md`, `testing/TEST_EXECUTION_PITFALLS.md` |
+| Test harness / pitfalls | `testing/VALIDATION_WORKFLOW_AND_TOOLS.md`, `testing/TEST_EXECUTION_PITFALLS.md`, `testing/DEVELOPMENT_AND_TESTING.md` |
 | Known regressions / unclear ownership | `governance/known-issues-and-risks.md` |
 
 ---

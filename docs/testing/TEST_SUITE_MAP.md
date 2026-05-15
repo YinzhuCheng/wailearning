@@ -367,7 +367,7 @@ Operational notes for agents authoring similar specs live under **â€œPitfall 50â
 
 ### `tests/postgres/`
 
-Small pytest package gated by dialect: when the effective engine is **not** PostgreSQL, tests **skip** at module level (set `TEST_DATABASE_URL`, or on Linux/macOS after `ops/scripts/dev/provision_postgres_pytest.sh` set **`COURSEEVAL_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects the standard throwaway URL). Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` and `docs/testing/DEVELOPMENT_AND_TESTING.md` (agent triage subsection).
+Small pytest package gated by dialect: when the effective engine is **not** PostgreSQL, tests **skip** at module level (set `TEST_DATABASE_URL`, or on Linux/macOS after `ops/scripts/dev/provision_postgres_pytest.sh` set **`COURSEEVAL_AUTO_PG_TESTS=1`** so `tests/conftest.py` auto-selects the standard throwaway URL). Use for `information_schema`, transactional visibility, and uniqueness smoke that SQLite does not model the same way. See `tests/postgres/conftest.py` plus `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md` for the PostgreSQL/zero-skip lane and `docs/testing/DEVELOPMENT_AND_TESTING.md` only for the broader harness handbook.
 
 Files:
 

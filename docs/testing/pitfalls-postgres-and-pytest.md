@@ -24,7 +24,7 @@ entries that have not been moved yet still remain in
    ```
 
 2. Open:
-   [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)
+   [FULL_VALIDATION_ENVIRONMENT_POLICY.md](FULL_VALIDATION_ENVIRONMENT_POLICY.md)
 3. If the problem is local-environment shaped rather than product behavior,
    route through:
    [../../skills/local-test-triage/SKILL.md](../../skills/local-test-triage/SKILL.md)
@@ -70,7 +70,8 @@ Use:
 ## Related Files
 
 - [TEST_EXECUTION_PITFALLS.md](TEST_EXECUTION_PITFALLS.md)
-- [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)
+- [FULL_VALIDATION_ENVIRONMENT_POLICY.md](FULL_VALIDATION_ENVIRONMENT_POLICY.md)
+- [VALIDATION_WORKFLOW_AND_TOOLS.md](VALIDATION_WORKFLOW_AND_TOOLS.md)
 - [../../skills/postgres-release-validation/SKILL.md](../../skills/postgres-release-validation/SKILL.md)
 - [../../skills/local-test-triage/SKILL.md](../../skills/local-test-triage/SKILL.md)
 
@@ -342,7 +343,7 @@ Context:
 
 Cause:
 
-Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or **`COURSEEVAL_AUTO_PG_TESTS=1`** auto-pick is enabled — see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)).
+Default `tests/conftest.py` uses **SQLite** unless `TEST_DATABASE_URL` is set (or **`COURSEEVAL_AUTO_PG_TESTS=1`** auto-pick is enabled — see [FULL_VALIDATION_ENVIRONMENT_POLICY.md](FULL_VALIDATION_ENVIRONMENT_POLICY.md)).
 
 Fix:
 
@@ -380,7 +381,7 @@ python3 -m pip install -r requirements.txt
 python3 -m pytest tests/ -q
 ```
 
-Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) Local Development Setup); the important invariant is that the **same interpreter** that runs pytest has project dependencies installed.
+Prefer a dedicated `.venv` when the environment allows (see [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md) for the broader local setup handbook); the important invariant is that the **same interpreter** that runs pytest has project dependencies installed.
 
 ### Interpretation
 

@@ -110,7 +110,9 @@ guessing.
 | [testing/README.md](testing/README.md) | Structured execution tables: CSV target metadata, append-only run history, and recent summary rows for incremental-test decisions |
 | [testing/TEST_EXECUTION_LEDGER.md](testing/TEST_EXECUTION_LEDGER.md) | Stable human entry point for the CSV execution ledger |
 | [testing/TEST_EXECUTION_SUMMARY.md](testing/TEST_EXECUTION_SUMMARY.md) | Stable human entry point for the CSV recent validation summary |
-| [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md) | Local workflow, pytest/Playwright layers, diff-based validation workflow, and broad/full validation rules |
+| [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md) | Broad local testing handbook: pytest/Playwright workflows, environment context, and historical testing guidance |
+| [testing/VALIDATION_WORKFLOW_AND_TOOLS.md](testing/VALIDATION_WORKFLOW_AND_TOOLS.md) | Primary validation entrypoint for diff-based target selection, runner choice, and honest evidence reporting |
+| [testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md](testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md) | Heavy validation policy for release-grade, full-suite, and zero-skip claims |
 | [testing/CI_AND_VALIDATION.md](testing/CI_AND_VALIDATION.md) | Current cloud entrypoints, CI scope, and validation reporting rules |
 | [testing/TEST_SUITE_MAP.md](testing/TEST_SUITE_MAP.md) | What lives where in `tests/` |
 | [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md) | Large execution encyclopedia: Windows/PowerShell, ports, Element Plus, SQLite vs PG, Playwright, CI hazards |
@@ -154,8 +156,11 @@ guessing.
   documents before changing code, tests, structure, or deployment assets.
 - The documentation set is part of the implementation surface, not optional
   commentary.
-- For database-related tests and zero-skip full `pytest` claims, see the full
-  regression prerequisites in
+- For ordinary validation selection and reporting, start with
+  [testing/VALIDATION_WORKFLOW_AND_TOOLS.md](testing/VALIDATION_WORKFLOW_AND_TOOLS.md).
+- For database-related tests and zero-skip full `pytest` claims, use
+  [testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md](testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md)
+  together with the broader harness context in
   [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md).
 - Large structured ledgers belong in CSV/JSON/YAML; Markdown should link to
   them and explain interpretation rules. The current test execution ledgers
@@ -202,11 +207,12 @@ Why:
 
 Read:
 
-1. [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md)
+1. [testing/VALIDATION_WORKFLOW_AND_TOOLS.md](testing/VALIDATION_WORKFLOW_AND_TOOLS.md)
 2. [contributing/ENCODING_AND_MOJIBAKE_SAFETY.md](contributing/ENCODING_AND_MOJIBAKE_SAFETY.md)
 3. [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md)
 4. [architecture/TROUBLESHOOTING.md](architecture/TROUBLESHOOTING.md) for a short symptom index
 5. [testing/CI_AND_VALIDATION.md](testing/CI_AND_VALIDATION.md) when CI scope or cloud gating matters
+6. [testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md](testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md) when the claim is release-grade, full-suite, or zero-skip
 
 Why:
 
@@ -241,13 +247,14 @@ Why:
 
 ### Local development
 
-1. [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md)
+1. [testing/VALIDATION_WORKFLOW_AND_TOOLS.md](testing/VALIDATION_WORKFLOW_AND_TOOLS.md)
 2. [testing/CI_AND_VALIDATION.md](testing/CI_AND_VALIDATION.md)
 3. [contributing/ENCODING_AND_MOJIBAKE_SAFETY.md](contributing/ENCODING_AND_MOJIBAKE_SAFETY.md)
-4. [testing/TEST_SUITE_MAP.md](testing/TEST_SUITE_MAP.md)
-5. [testing/TEST_REDUNDANCY_AUDIT.md](testing/TEST_REDUNDANCY_AUDIT.md)
-6. [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md)
-7. [architecture/MAINTAINER_AGENT_GUIDE.md](architecture/MAINTAINER_AGENT_GUIDE.md)
+4. [testing/DEVELOPMENT_AND_TESTING.md](testing/DEVELOPMENT_AND_TESTING.md)
+5. [testing/TEST_SUITE_MAP.md](testing/TEST_SUITE_MAP.md)
+6. [testing/TEST_REDUNDANCY_AUDIT.md](testing/TEST_REDUNDANCY_AUDIT.md)
+7. [testing/TEST_EXECUTION_PITFALLS.md](testing/TEST_EXECUTION_PITFALLS.md)
+8. [architecture/MAINTAINER_AGENT_GUIDE.md](architecture/MAINTAINER_AGENT_GUIDE.md)
 
 ### Autonomous agent onboarding (Codex / Cursor / cloud agents)
 

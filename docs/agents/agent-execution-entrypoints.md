@@ -77,7 +77,7 @@ Strict mode means:
 
 - start from `AGENTS.md`, `docs/README.md`,
   `docs/governance/repository-governance.md`,
-  `docs/testing/DEVELOPMENT_AND_TESTING.md`,
+  `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`,
   `docs/testing/CI_AND_VALIDATION.md`, and
   `docs/testing/TEST_EXECUTION_PITFALLS.md`;
 - then read the task-scoped docs and skills already routed elsewhere in the
@@ -98,7 +98,8 @@ Guided mode means:
 
 Then use the detailed workflow in:
 
-- [`../testing/DEVELOPMENT_AND_TESTING.md`](../testing/DEVELOPMENT_AND_TESTING.md)
+- [`../testing/VALIDATION_WORKFLOW_AND_TOOLS.md`](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md)
+- [`../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`](../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md)
 - [`../../skills/validation-selection/SKILL.md`](../../skills/validation-selection/SKILL.md)
 - [`agent-closeout.md`](agent-closeout.md)
 
@@ -125,5 +126,6 @@ honestly.
 - [`agent-playbook.md`](agent-playbook.md)
 - [`agent-closeout.md`](agent-closeout.md)
 - [`../contributing/ENCODING_AND_MOJIBAKE_SAFETY.md`](../contributing/ENCODING_AND_MOJIBAKE_SAFETY.md)
-- [`../testing/DEVELOPMENT_AND_TESTING.md`](../testing/DEVELOPMENT_AND_TESTING.md)
+- [`../testing/VALIDATION_WORKFLOW_AND_TOOLS.md`](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md)
+- [`../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`](../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md)
 - [`../testing/CI_AND_VALIDATION.md`](../testing/CI_AND_VALIDATION.md)

@@ -60,7 +60,7 @@ Use these when locating behavior:
 
 ## Testing expectations
 
-- **pytest**: run from repo root; database selection documented in [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md).
+- **pytest**: run from repo root; validation routing starts in [../testing/VALIDATION_WORKFLOW_AND_TOOLS.md](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md), while the broader local harness notes remain in [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md).
 - **Playwright**: prefer `cd apps/web/school && npm run test:e2e`; env contract in `playwright.config.cjs`. Failures often environmental — see [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ---
@@ -71,7 +71,7 @@ If you change:
 
 - a **default port**, env var, or startup gate → update [CONFIGURATION_REFERENCE.md](CONFIGURATION_REFERENCE.md) and the root [README.md](../../README.md) quick start if user-visible.
 - a **route prefix** or major flow → update [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) and [CORE_BUSINESS_FLOWS.md](CORE_BUSINESS_FLOWS.md).
-- **E2E harness** behavior → update [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) and pitfalls.
+- **E2E harness** behavior → update [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md), [../testing/VALIDATION_WORKFLOW_AND_TOOLS.md](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md) when selector/reporting semantics changed, and the relevant pitfalls docs.
 
 ---
 

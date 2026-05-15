@@ -64,7 +64,8 @@ The baseline drift guard lives in:
 
 For detailed local validation workflow, use:
 
-- [`DEVELOPMENT_AND_TESTING.md`](DEVELOPMENT_AND_TESTING.md)
+- [`VALIDATION_WORKFLOW_AND_TOOLS.md`](VALIDATION_WORKFLOW_AND_TOOLS.md)
+- [`FULL_VALIDATION_ENVIRONMENT_POLICY.md`](FULL_VALIDATION_ENVIRONMENT_POLICY.md)
 - [`FULL_PLAYWRIGHT_E2E_RUNBOOK.md`](FULL_PLAYWRIGHT_E2E_RUNBOOK.md)
 - [`../architecture/TROUBLESHOOTING.md`](../architecture/TROUBLESHOOTING.md)
 - [`../../skills/validation-selection/SKILL.md`](../../skills/validation-selection/SKILL.md)
@@ -128,6 +129,8 @@ When reporting validation:
 ## Related Files
 
 - `docs/testing/DEVELOPMENT_AND_TESTING.md`
+- `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
+- `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`
 - `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`
 - `docs/testing/TEST_COVERAGE_MATRIX_AND_RUN_REPORT_2026-05.md`
 - `ops/ci/pr-pipeline.yml`

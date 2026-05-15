@@ -25,7 +25,7 @@ Historical entries that have not been moved yet still remain in
    ```
 
 2. Open:
-   - [DEVELOPMENT_AND_TESTING.md](DEVELOPMENT_AND_TESTING.md)
+   - [VALIDATION_WORKFLOW_AND_TOOLS.md](VALIDATION_WORKFLOW_AND_TOOLS.md)
    - [README.md](README.md)
    - [../governance/agent-update-log.md](../governance/agent-update-log.md)
 3. If the issue is about target choice or durable evidence, route through:

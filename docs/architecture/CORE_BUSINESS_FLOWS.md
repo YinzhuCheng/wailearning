@@ -326,7 +326,7 @@ School SPA discussion list rendering:
 1. `POST /api/e2e/dev/reset-scenario` with `X-E2E-Seed-Token` seeds users/courses/homework for Playwright.
 2. “Powerful” endpoints (mock LLM, forced grading pump) may require **dual gate**: seed token **plus** admin JWT when `E2E_DEV_REQUIRE_ADMIN_JWT=true` — default in `apps/web/school/playwright.config.cjs` for managed subprocesses.
 
-Details: [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md) and [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
+Details: [../testing/VALIDATION_WORKFLOW_AND_TOOLS.md](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md), [../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md](../testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md), and [../testing/TEST_EXECUTION_PITFALLS.md](../testing/TEST_EXECUTION_PITFALLS.md).
 
 ---
 
@@ -342,4 +342,4 @@ Details: [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TEST
 
 - Deployment shape — [../operations/DEPLOYMENT_AND_OPERATIONS.md](../operations/DEPLOYMENT_AND_OPERATIONS.md)
 - Full env reference — [CONFIGURATION_REFERENCE.md](CONFIGURATION_REFERENCE.md)
-- Test layers and commands — [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md)
+- Test layers and commands — [../testing/VALIDATION_WORKFLOW_AND_TOOLS.md](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md) and [../testing/DEVELOPMENT_AND_TESTING.md](../testing/DEVELOPMENT_AND_TESTING.md)

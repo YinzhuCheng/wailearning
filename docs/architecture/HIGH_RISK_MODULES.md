@@ -69,7 +69,8 @@ Risk surface:
 
 Route with:
 
-- `docs/testing/DEVELOPMENT_AND_TESTING.md`
+- `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
+- `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`
 - `skills/seed-surface-hardening/SKILL.md`
 - `skills/school-playwright-e2e/SKILL.md`
 
@@ -95,4 +96,5 @@ Route with:
 - `docs/architecture/CORE_BUSINESS_FLOWS.md`
 - `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`
 - `docs/operations/ADMIN_BOOTSTRAP.md`
-- `docs/testing/DEVELOPMENT_AND_TESTING.md`
+- `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
+- `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`
