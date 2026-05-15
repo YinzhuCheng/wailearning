@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import threading
 import uuid
 from unittest import mock
@@ -198,6 +199,35 @@ def test_m4_claim_batch_respects_parallel_cap(client: TestClient) -> None:
         assert len(claimed) == 3
         claimed2 = claim_grading_tasks_batch(cap)
         assert len(claimed2) == 2
+    finally:
+        db.close()
+
+
+def test_m4b_claim_batch_randomizes_first_wave_selection(client: TestClient) -> None:
+    ensure_admin()
+    s = make_multi_student_scenario(5)
+    ah = login_api(client, "pytest_admin", "pytest_admin_pass")
+    client.put("/api/llm-settings/admin/quota-policy", headers=ah, json={"max_parallel_grading_tasks": 3})
+    h = s["homework_id"]
+    for st in s["students"]:
+        hdr = login_api(client, st["username"], st["password"])
+        assert client.post(f"/api/homeworks/{h}/submission", headers=hdr, json={"content": st["username"]}).status_code == 200
+
+    picks_seen: list[list[int]] = []
+
+    def fake_sample(seq, k):
+        chosen = list(reversed(list(seq)[:k]))
+        picks_seen.append([task.id for task in chosen])
+        return chosen
+
+    db = SessionLocal()
+    try:
+        with mock.patch("apps.backend.courseeval_backend.llm_grading.random.sample", fake_sample):
+            claimed = claim_grading_tasks_batch(3)
+        assert len(claimed) == 3
+        expected_default = [row[0] for row in db.query(HomeworkGradingTask.id).order_by(HomeworkGradingTask.id.asc()).limit(3).all()]
+        assert claimed != expected_default
+        assert picks_seen and claimed == picks_seen[0]
     finally:
         db.close()
 

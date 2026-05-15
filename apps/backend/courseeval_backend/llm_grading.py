@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -82,6 +84,7 @@ from apps.backend.courseeval_backend.domains.llm.runtime import (
     RetryPolicy,
     classify_llm_error_code,
     compute_next_retry_at,
+    ensure_utc_datetime,
     now_utc,
     sleep_with_test_scaling,
 )
@@ -109,6 +112,7 @@ from apps.backend.courseeval_backend.db.models import (
 _LLM_CALL_LOG_MAX_EVENTS = 60
 UNLIMITED_OUTPUT_TOKEN_SENTINEL = 32768
 _LLM_TASK_RETRY_POLICY = RetryPolicy()
+_CLAIM_FAIRNESS_WINDOW_SECONDS = 1.0
 
 
 from apps.backend.courseeval_backend.domains.llm.errors import NonRetryableLLMError, RetryableLLMError
@@ -536,6 +540,20 @@ def queue_grading_task(
     queue_reason: str = "new_submission",
     billed_user_id: int | None = None,
 ) -> HomeworkGradingTask:
+    def _sync_submission_summary(task: HomeworkGradingTask, *, force_queued: bool = False) -> None:
+        summary = (
+            db.query(HomeworkSubmission)
+            .filter(
+                HomeworkSubmission.homework_id == attempt.homework_id,
+                HomeworkSubmission.student_id == attempt.student_id,
+            )
+            .first()
+        )
+        if summary:
+            summary.latest_task_status = "queued" if force_queued else task.status
+            summary.latest_task_error = task.error_message
+            refresh_submission_summary(db, summary)
+
     existing_task = (
         db.query(HomeworkGradingTask)
         .filter(
@@ -546,28 +564,30 @@ def queue_grading_task(
         .first()
     )
     if existing_task:
-        if existing_task.status == "retry_scheduled":
-            existing_task.status = "queued"
-            existing_task.queue_reason = queue_reason
-            existing_task.next_retry_at = None
-            existing_task.error_code = None
-            existing_task.error_message = None
-            existing_task.failure_class = None
-            existing_task.finished_at = None
-            existing_task.updated_at = _now_utc()
-        summary = (
-            db.query(HomeworkSubmission)
-            .filter(
-                HomeworkSubmission.homework_id == attempt.homework_id,
-                HomeworkSubmission.student_id == attempt.student_id,
-            )
-            .first()
-        )
-        if summary:
-            summary.latest_task_status = "queued" if existing_task.status == "retry_scheduled" else existing_task.status
-            summary.latest_task_error = existing_task.error_message
-            refresh_submission_summary(db, summary)
-        return existing_task
+        existing_billed_user_id = getattr(existing_task, "billed_user_id", None)
+        allow_billing_owner_reuse = existing_task.status in ("queued", "retry_scheduled")
+        if billed_user_id is not None:
+            if existing_billed_user_id is not None and int(existing_billed_user_id) != int(billed_user_id):
+                existing_task = None
+            elif existing_billed_user_id is None and queue_reason != "new_submission" and not allow_billing_owner_reuse:
+                existing_task = None
+        if existing_task is not None:
+            if allow_billing_owner_reuse and billed_user_id is not None and (
+                existing_billed_user_id is None or int(existing_billed_user_id) != int(billed_user_id)
+            ):
+                existing_task.billed_user_id = billed_user_id
+                existing_task.updated_at = _now_utc()
+            if existing_task.status == "retry_scheduled":
+                existing_task.status = "queued"
+                existing_task.queue_reason = queue_reason
+                existing_task.next_retry_at = None
+                existing_task.error_code = None
+                existing_task.error_message = None
+                existing_task.failure_class = None
+                existing_task.finished_at = None
+                existing_task.updated_at = _now_utc()
+            _sync_submission_summary(existing_task, force_queued=existing_task.status == "queued")
+            return existing_task
 
     task = HomeworkGradingTask(
         attempt_id=attempt.id,
@@ -580,18 +600,7 @@ def queue_grading_task(
     )
     db.add(task)
     db.flush()
-    summary = (
-        db.query(HomeworkSubmission)
-        .filter(
-            HomeworkSubmission.homework_id == attempt.homework_id,
-            HomeworkSubmission.student_id == attempt.student_id,
-        )
-        .first()
-    )
-    if summary:
-        summary.latest_task_status = task.status
-        summary.latest_task_error = None
-        refresh_submission_summary(db, summary)
+    _sync_submission_summary(task, force_queued=True)
     return task
 
 
@@ -973,7 +982,9 @@ def estimate_request_tokens_from_material(
 
 def claim_grading_tasks_batch(max_tasks: int) -> list[int]:
     """
-    Atomically move up to max_tasks rows from queued -> processing (oldest first).
+    Atomically move up to max_tasks rows from queued -> processing.
+    When more tasks are simultaneously eligible than the current parallel cap,
+    select the first wave fairly instead of always preferring the same ids.
     Returns list of task ids claimed in this transaction (empty if none).
     """
     if max_tasks < 1:
@@ -988,18 +999,41 @@ def claim_grading_tasks_batch(max_tasks: int) -> list[int]:
                 HomeworkGradingTask.status.in_(("queued", "retry_scheduled")),
                 func.coalesce(HomeworkGradingTask.next_retry_at, HomeworkGradingTask.created_at) <= now,
             )
-            .order_by(
-                func.coalesce(HomeworkGradingTask.next_retry_at, HomeworkGradingTask.created_at).asc(),
-                HomeworkGradingTask.id.asc(),
-            )
-            .limit(max_tasks)
+            .order_by(HomeworkGradingTask.id.asc())
             .all()
         )
         if not candidates:
             return []
+        candidates = [
+            task
+            for task in candidates
+            if (ensure_utc_datetime(task.next_retry_at or task.created_at) or now) <= now
+        ]
+        if not candidates:
+            return []
+        scheduled_due = sorted(
+            [task for task in candidates if task.next_retry_at is not None],
+            key=lambda task: (
+                ensure_utc_datetime(task.next_retry_at) or now,
+                task.id,
+            ),
+        )
+        fresh_due = [task for task in candidates if task.next_retry_at is None]
+
+        selected: list[HomeworkGradingTask] = []
+        remaining = max_tasks
+        if scheduled_due:
+            selected.extend(scheduled_due[:remaining])
+            remaining -= len(selected)
+        if remaining > 0 and fresh_due:
+            if len(fresh_due) > remaining:
+                selected.extend(random.sample(fresh_due, remaining))
+            else:
+                selected.extend(sorted(fresh_due, key=lambda task: task.id))
         now = _now_utc()
         claimed: list[int] = []
-        for task in candidates:
+        for task in selected:
+            claim_token = uuid.uuid4().hex
             n = (
                 db.query(HomeworkGradingTask)
                 .filter(HomeworkGradingTask.id == task.id, HomeworkGradingTask.status.in_(("queued", "retry_scheduled")))
@@ -1009,7 +1043,8 @@ def claim_grading_tasks_batch(max_tasks: int) -> list[int]:
                         HomeworkGradingTask.started_at: now,
                         HomeworkGradingTask.updated_at: now,
                         HomeworkGradingTask.next_retry_at: None,
-                        HomeworkGradingTask.task_summary: "处理中",
+                        HomeworkGradingTask.claim_token: claim_token,
+                        HomeworkGradingTask.task_summary: "processing",
                     },
                     synchronize_session=False,
                 )
@@ -1026,7 +1061,6 @@ def claim_grading_tasks_batch(max_tasks: int) -> list[int]:
         raise
     finally:
         db.close()
-
 
 def process_next_grading_task() -> bool:
     claimed = claim_grading_tasks_batch(1)
@@ -1091,6 +1125,7 @@ def _process_grading_task_unlocked(task_id: int) -> None:
         if task.status in ("queued", "retry_scheduled"):
             # Claim the task (tests call process_grading_task directly; worker uses process_next which pre-sets processing).
             now = _now_utc()
+            claim_token = uuid.uuid4().hex
             n = (
                 db.query(HomeworkGradingTask)
                 .filter(HomeworkGradingTask.id == task_id, HomeworkGradingTask.status.in_(("queued", "retry_scheduled")))
@@ -1099,7 +1134,9 @@ def _process_grading_task_unlocked(task_id: int) -> None:
                         HomeworkGradingTask.status: "processing",
                         HomeworkGradingTask.started_at: now,
                         HomeworkGradingTask.updated_at: now,
-                        HomeworkGradingTask.task_summary: "处理中",
+                        HomeworkGradingTask.next_retry_at: None,
+                        HomeworkGradingTask.claim_token: claim_token,
+                        HomeworkGradingTask.task_summary: "processing",
                     },
                     synchronize_session=False,
                 )
@@ -1108,20 +1145,25 @@ def _process_grading_task_unlocked(task_id: int) -> None:
                 return
             db.commit()
             task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
-        elif task.status != "processing":
+        elif task.status == "processing":
+            claim_token = task.claim_token or ""
+            if not claim_token:
+                return
+        else:
             return
         try:
-            _run_grading_after_claim(db, task_id, task)
+            _run_grading_after_claim(db, task_id, task, claim_token=claim_token)
         except Exception as exc:
             db.rollback()
             task2 = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).first()
             if task2:
-                _mark_task_failed(db, task2, "unexpected_error", f"评分任务异常：{exc}")
+                _mark_task_failed(db, task2, "unexpected_error", f"unexpected grading error: {exc}")
     finally:
         db.close()
 
-
-def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTask) -> None:
+def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTask, *, claim_token: str) -> None:
+    if getattr(task, "claim_token", None) != claim_token:
+        return
     attempt = db.query(HomeworkAttempt).filter(HomeworkAttempt.id == task.attempt_id).first()
     if not attempt:
         _mark_task_failed(db, task, "attempt_not_found", "找不到对应的提交记录。")
@@ -1203,6 +1245,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
         task.status = "success"
         task.error_code = None
         task.error_message = None
+        task.claim_token = None
         task.finished_at = _now_utc()
         task.task_summary = "已跳过：该次提交已有教师评分，未调用模型。"
         summary = (
@@ -1264,6 +1307,7 @@ def _run_grading_after_claim(db: Session, task_id: int, task: HomeworkGradingTas
     task.status = "success"
     task.error_code = None
     task.error_message = None
+    task.claim_token = None
     task.finished_at = _now_utc()
     task.task_summary = "评分成功"
     record_usage_if_needed(db, task, config, response["usage"])
@@ -1315,6 +1359,7 @@ def _mark_task_failed(
     task.task_summary = error_message
     if failure_class == "transient":
         task.status = "retry_scheduled"
+        task.claim_token = None
         task.next_retry_at = compute_next_retry_at(
             retry_count=max(0, int(task.retry_count or 1) - 1),
             policy=_LLM_TASK_RETRY_POLICY,
@@ -1324,6 +1369,7 @@ def _mark_task_failed(
         task.finished_at = None
     else:
         task.status = "failed"
+        task.claim_token = None
         task.next_retry_at = None
         task.finished_at = task.last_error_at
     summary = (
@@ -1655,11 +1701,9 @@ def _grade_with_endpoint_group(
                         return score_result
                     except RetryableLLMError as exc:
                         last_error = str(exc)
-                        n_before = len(group_state.current_order)
                         routing.note_failure(group_state, link, exc)
                         if request_attempt >= attempt_limit:
-                            if n_before == 1:
-                                group_state.remove_member(link)
+                            group_state.remove_member(link)
                             _update_routing_artifact(
                                 {
                                     "status": "adaptive_shift",

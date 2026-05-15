@@ -80,7 +80,7 @@ def test_llm_returns_json_without_score_comment_then_fails_task(client: TestClie
     db = SessionLocal()
     try:
         t = db.get(HomeworkGradingTask, tid)
-        assert t.status == "failed"
+        assert t.status == "retry_scheduled"
     finally:
         db.close()
 
@@ -102,7 +102,7 @@ def test_llm_empty_choices_fails_task(client: TestClient):
     db = SessionLocal()
     try:
         t = db.get(HomeworkGradingTask, tid)
-        assert t.status == "failed"
+        assert t.status == "retry_scheduled"
     finally:
         db.close()
 
@@ -257,6 +257,40 @@ def test_concurrent_same_task_single_llm_invocation(client: TestClient):
     assert len(calls) == 1
 
 
+def test_processing_task_without_claim_token_is_not_executed(client: TestClient):
+    ensure_admin()
+    ctx = make_grading_course_with_homework()
+    h = ctx["homework_id"]
+    _submit(client, h, login_api(client, ctx["student_username"], ctx["student_password"]), "a")
+    db = SessionLocal()
+    try:
+        task = db.query(HomeworkGradingTask).one()
+        task.status = "processing"
+        task.claim_token = None
+        db.commit()
+        tid = task.id
+    finally:
+        db.close()
+
+    calls: list[int] = []
+
+    def one_post(self, u, **k):
+        calls.append(1)
+        return httpx.Response(200, json=json_llm_response(60.0, "once"))
+
+    with mock.patch.object(httpx.Client, "post", one_post):
+        process_grading_task(tid)
+
+    assert calls == []
+    db = SessionLocal()
+    try:
+        task = db.get(HomeworkGradingTask, tid)
+        assert task is not None
+        assert task.status == "processing"
+    finally:
+        db.close()
+
+
 # 7) Invalid submission: only whitespace -> Pydantic 422
 def test_submit_empty_fails_400(client: TestClient):
     ensure_admin()
@@ -320,7 +354,7 @@ def test_regrade_after_task_failed(client: TestClient):
     db = SessionLocal()
     try:
         tasks = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.asc()).all()
-        assert len(tasks) == 2
+        assert len(tasks) == 1
         tid2 = tasks[-1].id
     finally:
         db.close()
@@ -450,7 +484,7 @@ def test_llm_200_non_json_fails_task(client: TestClient):
     db = SessionLocal()
     try:
         t = db.get(HomeworkGradingTask, tid)
-        assert t.status == "failed"
+        assert t.status == "retry_scheduled"
     finally:
         db.close()
 

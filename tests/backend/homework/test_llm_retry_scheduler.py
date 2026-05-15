@@ -20,6 +20,18 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _reset_db():
+    from tests.db_reset import reset_test_database_schema
+
+    reset_test_database_schema()
+    from apps.backend.courseeval_backend.bootstrap import ensure_schema_updates
+
+    ensure_schema_updates()
+    yield
+    SessionLocal().close()
+
+
 def test_grading_task_transient_failure_becomes_retry_scheduled_then_succeeds(client: TestClient):
     ctx = make_grading_course_with_homework(preset_max_retries=0)
     student_h = login_api(client, ctx["student_username"], ctx["student_password"])

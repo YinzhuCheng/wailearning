@@ -596,6 +596,7 @@ class HomeworkGradingTask(Base):
     current_attempt = Column(Integer, nullable=False, default=0)
     retry_count = Column(Integer, nullable=False, default=0)
     failure_class = Column(String, nullable=True)
+    claim_token = Column(String, nullable=True)
     next_retry_at = Column(DateTime(timezone=True), nullable=True)
     last_error_at = Column(DateTime(timezone=True), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)

@@ -757,26 +757,133 @@ def test_group_503_on_first_member_then_succeeds_on_sibling():
     finally:
         db.close()
 
-    calls: list[str] = []
 
-    def fake_post(self, url, **kwargs):
-        m = (kwargs.get("json") or {}).get("model") or ""
-        calls.append(m)
-        if m == "ma2":
-            return httpx.Response(503, json={"e": 1})
-        if m == "mb2":
-            return httpx.Response(200, json=json_llm_response(10.0, "ok b2"))
-        return httpx.Response(500)
-
-    # Avoid depending on task_id % n rotation (SQLite rowids are often odd on first insert).
-    with mock.patch.object(_GroupState, "apply_round_robin_start", lambda self, task_id: None):
-        with mock.patch.object(httpx.Client, "post", fake_post):
-            process_grading_task(tid)
-
-    assert "ma2" in calls
-    assert "mb2" in calls
+def test_group_retryable_failures_do_not_loop_forever_when_all_members_fail():
+    ensure_admin()
     db = SessionLocal()
     try:
-        assert db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).one().status == "success"
+        klass = Class(name="loop_guard_class", grade=2026)
+        db.add(klass)
+        db.flush()
+        teacher = User(
+            username="loop_guard_teacher",
+            hashed_password=get_password_hash("loop"),
+            real_name="Loop Teacher",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(teacher)
+        db.flush()
+        student_user = User(
+            username="loop_guard_student",
+            hashed_password=get_password_hash("loop-student"),
+            real_name="Loop Student",
+            role=UserRole.STUDENT.value,
+            class_id=klass.id,
+        )
+        db.add(student_user)
+        db.flush()
+        student = Student(name="Loop Student", student_no="loop_guard_student", class_id=klass.id)
+        db.add(student)
+        db.flush()
+        course = Subject(name="Loop Guard Course", teacher_id=teacher.id, class_id=klass.id)
+        db.add(course)
+        db.flush()
+        db.add(
+            CourseEnrollment(
+                subject_id=course.id,
+                student_id=student.id,
+                class_id=klass.id,
+                enrollment_type="required",
+            )
+        )
+        preset_a = LLMEndpointPreset(
+            name="loop-a",
+            base_url="https://loop-a.test/v1/",
+            api_key="ka",
+            model_name="loop-a",
+            max_retries=0,
+            is_active=True,
+            supports_vision=True,
+            validation_status="validated",
+        )
+        preset_b = LLMEndpointPreset(
+            name="loop-b",
+            base_url="https://loop-b.test/v1/",
+            api_key="kb",
+            model_name="loop-b",
+            max_retries=0,
+            is_active=True,
+            supports_vision=True,
+            validation_status="validated",
+        )
+        db.add_all([preset_a, preset_b])
+        db.flush()
+        cfg = CourseLLMConfig(
+            subject_id=course.id,
+            is_enabled=True,
+            max_input_tokens=4000,
+            max_output_tokens=500,
+        )
+        db.add(cfg)
+        db.flush()
+        group = LLMGroup(config_id=cfg.id, priority=1, name="loop-group")
+        db.add(group)
+        db.flush()
+        db.add(CourseLLMConfigEndpoint(config_id=cfg.id, group_id=group.id, preset_id=preset_a.id, priority=1))
+        db.add(CourseLLMConfigEndpoint(config_id=cfg.id, group_id=group.id, preset_id=preset_b.id, priority=2))
+        homework = Homework(
+            title="Loop Homework",
+            content="content",
+            class_id=klass.id,
+            subject_id=course.id,
+            max_score=100,
+            auto_grading_enabled=True,
+            created_by=teacher.id,
+        )
+        db.add(homework)
+        db.flush()
+        submission = HomeworkSubmission(
+            homework_id=homework.id,
+            student_id=student.id,
+            subject_id=course.id,
+            class_id=klass.id,
+            content="seed",
+        )
+        db.add(submission)
+        db.flush()
+        attempt = HomeworkAttempt(
+            homework_id=homework.id,
+            student_id=student.id,
+            subject_id=course.id,
+            class_id=klass.id,
+            submission_summary_id=submission.id,
+            content="seed",
+            is_late=False,
+        )
+        db.add(attempt)
+        db.flush()
+        submission.latest_attempt_id = attempt.id
+        task = queue_grading_task(db, attempt, "pytest_group_loop_guard")
+        db.commit()
+        task_id = task.id
+    finally:
+        db.close()
+
+    call_models: list[str] = []
+
+    def fake_post(self, url, **kwargs):
+        model = (kwargs.get("json") or {}).get("model") or ""
+        call_models.append(model)
+        return httpx.Response(503, json={"error": "upstream"})
+
+    with mock.patch.object(_GroupState, "apply_round_robin_start", lambda self, task_id: None):
+        with mock.patch.object(httpx.Client, "post", fake_post):
+            process_grading_task(task_id)
+
+    assert call_models == ["loop-a", "loop-b"]
+    db = SessionLocal()
+    try:
+        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == task_id).one()
+        assert task.status == "retry_scheduled"
     finally:
         db.close()
