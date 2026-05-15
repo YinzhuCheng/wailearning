@@ -364,14 +364,14 @@ def record_usage_if_needed(
             usage_date=usage_date,
             timezone=timezone_name,
             input_tokens=prompt_tokens,
-            output_tokens=None,
-            total_tokens=prompt_for_quota,
+            output_tokens=completion_tokens,
+            total_tokens=total_tokens,
             billing_note=billing_note,
         )
     )
     task.billed_input_tokens = prompt_tokens
-    task.billed_output_tokens = None
-    task.billed_total_tokens = prompt_for_quota
+    task.billed_output_tokens = completion_tokens
+    task.billed_total_tokens = total_tokens
 
 
 def release_discussion_quota_reservation(db: Session, job_id: int) -> None:

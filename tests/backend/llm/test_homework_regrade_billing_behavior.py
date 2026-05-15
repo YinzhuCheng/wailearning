@@ -78,20 +78,20 @@ def test_teacher_regrade_is_not_counted_against_student_quota():
         db.flush()
 
         submission_task = queue_grading_task(db, attempt, "new_submission", billed_user_id=None)
+        original_submission_task_id = submission_task.id
+        db.flush()
+        submission_task.status = "success"
         db.flush()
         regrade_task = queue_grading_task(db, attempt, "regrade", billed_user_id=teacher.id)
-        if regrade_task.id == submission_task.id:
-            submission_task.status = "success"
-            db.flush()
-            regrade_task = queue_grading_task(db, attempt, "regrade", billed_user_id=teacher.id)
         db.flush()
 
         assert submission_task.billed_user_id is None
+        assert regrade_task.id != original_submission_task_id
         assert regrade_task.billed_user_id == teacher.id
 
         db.add(
             LLMQuotaReservation(
-                task_id=submission_task.id,
+                task_id=original_submission_task_id,
                 student_id=student.id,
                 subject_id=course.id,
                 billed_user_id=None,
@@ -123,7 +123,7 @@ def test_teacher_regrade_is_not_counted_against_student_quota():
 
         record_usage_if_needed(
             db,
-            submission_task,
+            db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == original_submission_task_id).one(),
             config,
             {"prompt_tokens": 120, "completion_tokens": 900, "total_tokens": 1020},
         )
@@ -146,11 +146,11 @@ def test_teacher_regrade_is_not_counted_against_student_quota():
         usage_rows = db.query(LLMTokenUsageLog).order_by(LLMTokenUsageLog.task_id.asc()).all()
         assert len(usage_rows) == 2
         assert usage_rows[0].input_tokens == 120
-        assert usage_rows[0].output_tokens is None
-        assert usage_rows[0].total_tokens == 120
+        assert usage_rows[0].output_tokens == 900
+        assert usage_rows[0].total_tokens == 1020
         assert usage_rows[1].billed_user_id == teacher.id
-        assert usage_rows[1].output_tokens is None
-        assert usage_rows[1].total_tokens == 220
+        assert usage_rows[1].output_tokens == 1800
+        assert usage_rows[1].total_tokens == 2020
     finally:
         db.close()
 
@@ -291,5 +291,62 @@ def test_teacher_regrade_does_not_create_a_new_submission_attempt():
         assert before_count == 1
         assert after_count == 1
         assert db.query(HomeworkAttempt).filter(HomeworkAttempt.submission_summary_id == submission.id).count() == 1
+    finally:
+        db.close()
+
+
+def test_teacher_regrade_reuses_queued_task_and_updates_billing_owner():
+    db = SessionLocal()
+    try:
+        klass = Class(name="regrade_reuse_class", grade=2026)
+        db.add(klass)
+        db.flush()
+        teacher = User(
+            username="regrade_reuse_teacher",
+            hashed_password="x",
+            real_name="Teacher",
+            role=UserRole.TEACHER.value,
+        )
+        db.add(teacher)
+        db.flush()
+        student = Student(name="Student", student_no="regrade_reuse_student", class_id=klass.id)
+        db.add(student)
+        db.flush()
+        course = Subject(name="Regrade Reuse Course", teacher_id=teacher.id, class_id=klass.id)
+        db.add(course)
+        db.flush()
+        config = CourseLLMConfig(subject_id=course.id, is_enabled=True, max_input_tokens=16000, max_output_tokens=None)
+        db.add(config)
+        db.flush()
+        homework = Homework(
+            title="Regrade Reuse Homework",
+            content="content",
+            class_id=klass.id,
+            subject_id=course.id,
+            max_score=100,
+            auto_grading_enabled=True,
+            created_by=teacher.id,
+        )
+        db.add(homework)
+        db.flush()
+        attempt = HomeworkAttempt(
+            homework_id=homework.id,
+            student_id=student.id,
+            subject_id=course.id,
+            class_id=klass.id,
+            content="submission",
+        )
+        db.add(attempt)
+        db.flush()
+
+        original_task = queue_grading_task(db, attempt, "new_submission", billed_user_id=None)
+        db.flush()
+        reused_task = queue_grading_task(db, attempt, "regrade", billed_user_id=teacher.id)
+        db.flush()
+
+        assert reused_task.id == original_task.id
+        assert reused_task.status == "queued"
+        assert reused_task.queue_reason == "new_submission"
+        assert reused_task.billed_user_id == teacher.id
     finally:
         db.close()
