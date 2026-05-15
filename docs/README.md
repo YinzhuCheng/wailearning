@@ -128,6 +128,7 @@ guessing.
 | [product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md](product/CONTENT_FORMAT_MARKDOWN_AND_PLAIN_TEXT.md) | Homework/submission `content_format` |
 | [testing/TEST_REDUNDANCY_AUDIT.md](testing/TEST_REDUNDANCY_AUDIT.md) | Test merge/delete policy |
 | [reports/AGENT_GOVERNANCE_AUTOMATION_EXPERIMENT_2026-05-14.md](reports/AGENT_GOVERNANCE_AUTOMATION_EXPERIMENT_2026-05-14.md) | Record of the prompt-routed agent-governance automation experiment, what worked, and why the repository retained text-first workflow guidance instead of a hard agent-control router |
+| [reports/REMOTE_CI_FAILURE_REVIEW_2026-05-15.md](reports/REMOTE_CI_FAILURE_REVIEW_2026-05-15.md) | Dated root-cause review for the 2026-05-15 remote CI failures before remediation, including grading retry-contract analysis and pitfall-index drift classification |
 
 ---
 
