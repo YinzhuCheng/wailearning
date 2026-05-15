@@ -95,6 +95,19 @@ function run() {
   assert(scoreRoute.query.appeal_id === '78', 'score route appeal id mismatch')
   assert(scoreRoute.query.subject_id === '56', 'score route subject id mismatch')
 
+  const scoreHomeworkNotification = {
+    notification_kind: 'score_grade_appeal',
+    subject_id: 56,
+    related_score_appeal_id: 78,
+    related_homework_id: 90,
+    related_student_id: 34,
+    appeal_status: APPEAL_STATUS_PENDING
+  }
+  assert(getAppealReadonlyLabel(scoreHomeworkNotification) === '查看对应作业评分页', 'score-homework readonly label mismatch')
+  const scoreHomeworkRoute = buildAppealNotificationRoute(scoreHomeworkNotification)
+  assert(scoreHomeworkRoute && scoreHomeworkRoute.path === '/homework/90/submissions', 'score-homework route path mismatch')
+  assert(scoreHomeworkRoute.query.student_id === '34', 'score-homework route student id mismatch')
+
   const incompleteScoreNotification = {
     notification_kind: 'score_grade_appeal',
     subject_id: 56,

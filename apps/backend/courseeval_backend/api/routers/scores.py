@@ -15,7 +15,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     subject_linked_class_ids,
 )
 from apps.backend.courseeval_backend.db.database import get_db
-from apps.backend.courseeval_backend.db.models import CourseEnrollment, CourseExamWeight, CourseGradeScheme, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
+from apps.backend.courseeval_backend.db.models import CourseEnrollment, CourseExamWeight, CourseGradeScheme, Homework, HomeworkSubmission, Score, ScoreGradeAppeal, Student, Subject, User, UserRole
 from apps.backend.courseeval_backend.core.permissions import is_student
 from apps.backend.courseeval_backend.domains.courses.class_scope import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.courseeval_backend.domains.scores.composition import OTHER_DAILY_EXAM_TYPE, build_composition_for_student, get_scheme_dto, upsert_scheme
@@ -86,14 +86,28 @@ def _serialize_exam_weight(item: CourseExamWeight) -> CourseExamWeightResponse:
 
 def _serialize_score_appeal(db: Session, appeal: ScoreGradeAppeal) -> ScoreGradeAppealResponse:
     st = db.query(Student).filter(Student.id == appeal.student_id).first()
+    target_component = (appeal.target_component or "").strip()
+    homework_id = None
+    homework_title = None
+    if target_component.startswith("homework:"):
+        try:
+            homework_id = int(target_component.split(":", 1)[1])
+        except (TypeError, ValueError):
+            homework_id = None
+        if homework_id:
+            homework = db.query(Homework).filter(Homework.id == homework_id).first()
+            homework_title = homework.title if homework else None
+        target_component = "homework"
     return ScoreGradeAppealResponse(
         id=appeal.id,
         subject_id=appeal.subject_id,
         student_id=appeal.student_id,
         student_name=st.name if st else None,
+        homework_id=homework_id,
+        homework_title=homework_title,
         score_id=appeal.score_id,
         semester=appeal.semester,
-        target_component=appeal.target_component,
+        target_component=target_component,
         reason_text=appeal.reason_text,
         status=appeal.status,
         teacher_response=appeal.teacher_response,
@@ -411,16 +425,40 @@ def create_score_grade_appeal(
 
     allowed = {"total", "homework_avg", OTHER_DAILY_EXAM_TYPE}
     exam_types = {r.exam_type for r in db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).all()}
-    if payload.target_component not in allowed and payload.target_component not in exam_types:
+    raw_target_component = payload.target_component.strip()
+    if raw_target_component not in allowed and raw_target_component not in exam_types and raw_target_component != "homework":
         raise HTTPException(status_code=400, detail="无效的申诉对象。")
+
+    internal_target_component = raw_target_component
+    related_homework_id = None
+    if raw_target_component == "homework":
+        if payload.homework_id is None:
+            raise HTTPException(status_code=400, detail="请选择要申诉的作业。")
+        homework = db.query(Homework).filter(Homework.id == payload.homework_id).first()
+        if not homework or homework.subject_id != subject_id:
+            raise HTTPException(status_code=400, detail="homework_id 与当前课程不符。")
+        submission = (
+            db.query(HomeworkSubmission)
+            .filter(
+                HomeworkSubmission.homework_id == homework.id,
+                HomeworkSubmission.student_id == student.id,
+            )
+            .first()
+        )
+        if not submission or submission.review_score is None:
+            raise HTTPException(status_code=400, detail="该作业尚无可申诉的评分结果。")
+        related_homework_id = homework.id
+        internal_target_component = f"homework:{homework.id}"
 
     if payload.score_id is not None:
         sc = db.query(Score).filter(Score.id == payload.score_id).first()
         if not sc or sc.student_id != student.id or sc.subject_id != subject_id or sc.semester != payload.semester:
             raise HTTPException(status_code=400, detail="score_id 与课程或学期不符。")
-        if payload.target_component == OTHER_DAILY_EXAM_TYPE and sc.exam_type != OTHER_DAILY_EXAM_TYPE:
+        if raw_target_component == "homework":
+            raise HTTPException(status_code=400, detail="作业申诉不需要关联成绩 ID。")
+        if raw_target_component == OTHER_DAILY_EXAM_TYPE and sc.exam_type != OTHER_DAILY_EXAM_TYPE:
             raise HTTPException(status_code=400, detail="score_id 与申诉对象不符。")
-        if payload.target_component in exam_types and sc.exam_type != payload.target_component:
+        if raw_target_component in exam_types and sc.exam_type != raw_target_component:
             raise HTTPException(status_code=400, detail="score_id 与申诉对象不符。")
 
     dup = (
@@ -429,7 +467,7 @@ def create_score_grade_appeal(
             ScoreGradeAppeal.student_id == student.id,
             ScoreGradeAppeal.subject_id == subject_id,
             ScoreGradeAppeal.semester == payload.semester.strip(),
-            ScoreGradeAppeal.target_component == payload.target_component.strip(),
+            ScoreGradeAppeal.target_component == internal_target_component,
             ScoreGradeAppeal.status == "pending",
         )
         .first()
@@ -440,9 +478,9 @@ def create_score_grade_appeal(
     appeal = ScoreGradeAppeal(
         subject_id=subject_id,
         student_id=student.id,
-        score_id=payload.score_id,
+        score_id=None if raw_target_component == "homework" else payload.score_id,
         semester=payload.semester.strip(),
-        target_component=payload.target_component.strip(),
+        target_component=internal_target_component,
         reason_text=payload.reason_text.strip(),
         status="pending",
     )
@@ -454,6 +492,7 @@ def create_score_grade_appeal(
             appeal=appeal,
             student_name=student.name or "",
             creator_user_id=current_user.id,
+            related_homework_id=related_homework_id,
         )
         db.commit()
     except IntegrityError as exc:

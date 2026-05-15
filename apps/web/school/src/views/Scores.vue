@@ -184,7 +184,11 @@
           </el-table-column>
           <el-table-column prop="student_name" label="学生" width="100" />
           <el-table-column prop="semester" label="学期" width="120" />
-          <el-table-column prop="target_component" label="申诉对象" min-width="120" />
+          <el-table-column label="申诉对象" min-width="160">
+            <template #default="{ row }">
+              {{ formatAppealTarget(row) }}
+            </template>
+          </el-table-column>
           <el-table-column prop="reason_text" label="理由" min-width="160" show-overflow-tooltip />
           <el-table-column prop="status" label="状态" width="100" />
           <el-table-column prop="teacher_response" label="教师回复" min-width="180" show-overflow-tooltip />
@@ -805,6 +809,16 @@ const appealFocusBannerTitle = computed(() => {
     ? `已定位到目标申诉；当前状态：${statusLabel}；教师回复：${response}`
     : `已定位到目标申诉；当前状态：${statusLabel}`
 })
+
+const formatAppealTarget = row => {
+  if (row?.target_component === 'homework') {
+    return row?.homework_title ? `作业：${row.homework_title}` : '作业'
+  }
+  if (row?.target_component === 'homework_avg') {
+    return '作业平时分（均分）'
+  }
+  return row?.target_component || '—'
+}
 
 const resetForm = () => {
   form.student_id = null

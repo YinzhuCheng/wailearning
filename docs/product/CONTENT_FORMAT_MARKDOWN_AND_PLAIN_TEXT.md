@@ -141,6 +141,33 @@ They assert round-trip persistence for homework update + student submission, dis
 10. **Removal of teacher 「课程仪表盘」 (`Dashboard.vue`) + standalone `/teaching-calendar` page**
    Product decision: delete the aggregated dashboard view as low-value/noisy and avoid splitting the same attendance workflow across two sidebar destinations. **Teaching calendar** (`TeachingCalendar.vue`, titled 「教学日历」 inside the widget) previously moved through a standalone wrapper, but the current supported owner is **`Attendance.vue`** at **`/attendance`**. The widget is embedded at the top of the attendance page; selecting a rendered course day updates the attendance date and reloads / re-syncs the attendance draft for that day.
    - **任课教师 sidebar:** exposes **考勤管理** only for this workflow. There is no separate **教学日历** menu item; the calendar is part of attendance management.
+
+11. **Student score appeals: homework-target branch**
+   `StudentScores.vue` no longer exposes the raw **关联成绩ID** field. The
+   student appeal form now supports:
+   - total score;
+   - homework average;
+   - one specific homework score;
+   - other daily score;
+   - configured exam components.
+
+   Homework-target rule:
+   when the student chooses the homework branch, the UI must render a homework
+   selector sourced from `composition.homework_assignments`, limited to rows
+   that already have a review score. The API request carries `homework_id`
+   instead of `score_id`.
+
+   Backend/storage rule:
+   score-appeal rows keep using `score_grade_appeals`, but the homework branch
+   is encoded as `target_component = "homework:<homework_id>"`. Teacher-facing
+   serializers normalize that branch back to `target_component = "homework"`
+   plus `homework_id` / `homework_title`.
+
+   Notification rule:
+   score-appeal notifications for that homework-target branch must also carry
+   `related_homework_id`, so teacher notification actions can jump directly to
+   `/homework/:id/submissions` for the affected homework rather than only to
+   the generic `/scores` appeal list.
    - **班主任 sidebar:** keeps teaching operations under **班级教学** and does not expose a standalone calendar page.
    - **Login / root redirect:** teachers and class teachers default to **`/students`** (see `Login.vue`, empty-path redirect in `router/index.js`). **`/dashboard` → `/students` redirect** preserves stale bookmarks without resurrecting the Vue page.  
    - **Historical deep link:** `/teaching-calendar` remains in `router/index.js` only as a compatibility redirect to **`/attendance`**. Agents should not recreate `TeachingCalendarPage.vue`; tests should assert the redirect and the embedded `.attendance-page .teaching-calendar` widget.

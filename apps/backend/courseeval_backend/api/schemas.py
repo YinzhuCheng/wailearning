@@ -986,6 +986,7 @@ class ScoreGradeAppealCreate(BaseModel):
     semester: str
     target_component: str = Field(..., min_length=1, max_length=64)
     reason_text: str = Field(..., min_length=1)
+    homework_id: Optional[int] = None
     score_id: Optional[int] = None
 
 
@@ -999,6 +1000,8 @@ class ScoreGradeAppealResponse(BaseModel):
     subject_id: int
     student_id: int
     student_name: Optional[str] = None
+    homework_id: Optional[int] = None
+    homework_title: Optional[str] = None
     score_id: Optional[int] = None
     semester: str
     target_component: str

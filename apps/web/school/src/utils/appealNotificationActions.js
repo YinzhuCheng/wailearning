@@ -58,6 +58,9 @@ export function getAppealActionLabel(notification) {
 }
 
 export function getAppealReadonlyLabel(notification) {
+  if (isScoreAppealNotification(notification) && notification?.related_homework_id) {
+    return '查看对应作业评分页'
+  }
   if (isScoreAppealNotification(notification)) {
     return '查看对应成绩申诉'
   }
@@ -83,6 +86,12 @@ export function buildAppealNotificationRoute(notification) {
   }
 
   if (isScoreAppealNotification(notification)) {
+    if (notification.related_homework_id) {
+      return {
+        path: `/homework/${notification.related_homework_id}/submissions`,
+        query: notification.related_student_id ? { student_id: String(notification.related_student_id) } : {}
+      }
+    }
     if (!notification.related_score_appeal_id) {
       return null
     }

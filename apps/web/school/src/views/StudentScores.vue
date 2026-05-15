@@ -89,6 +89,7 @@
             <el-select v-model="appealForm.target_component" placeholder="选择" style="width: 100%">
               <el-option label="加权总成绩" value="total" />
               <el-option label="作业平时分（均分）" value="homework_avg" />
+              <el-option label="单次作业成绩" value="homework" />
               <el-option :label="OTHER_DAILY" :value="OTHER_DAILY" />
               <el-option
                 v-for="w in composition?.scheme?.exam_weights || []"
@@ -98,14 +99,19 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="关联成绩ID">
-            <el-input-number
-              v-model="appealForm.score_id"
-              :min="0"
-              :controls="false"
-              placeholder="选填，针对某条录入成绩时填写"
+          <el-form-item v-if="appealForm.target_component === 'homework'" label="选择作业">
+            <el-select
+              v-model="appealForm.homework_id"
+              placeholder="选择要申诉的作业"
               style="width: 100%"
-            />
+            >
+              <el-option
+                v-for="item in appealableHomeworkAssignments"
+                :key="item.homework_id"
+                :label="item.title"
+                :value="item.homework_id"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item label="申诉理由">
             <el-input v-model="appealForm.reason_text" type="textarea" :rows="4" maxlength="2000" show-word-limit />
@@ -138,8 +144,12 @@ const appealSubmitting = ref(false)
 const appealForm = ref({
   target_component: 'total',
   reason_text: '',
-  score_id: null
+  homework_id: null
 })
+
+const appealableHomeworkAssignments = computed(() =>
+  (composition.value?.homework_assignments || []).filter(item => item.review_score != null)
+)
 
 const loadSemesters = async () => {
   semesters.value = await api.semesters.list()
@@ -172,21 +182,34 @@ const submitAppeal = async () => {
     ElMessage.warning('请填写申诉理由')
     return
   }
+  if (appealForm.value.target_component === 'homework' && !appealForm.value.homework_id) {
+    ElMessage.warning('请选择要申诉的作业')
+    return
+  }
   appealSubmitting.value = true
   try {
     const payload = {
       semester: semester.value,
       target_component: appealForm.value.target_component,
       reason_text: appealForm.value.reason_text.trim(),
-      score_id: appealForm.value.score_id > 0 ? appealForm.value.score_id : null
+      homework_id: appealForm.value.target_component === 'homework' ? appealForm.value.homework_id : null
     }
     await api.scores.createAppeal(selectedCourse.value.id, payload)
     ElMessage.success('申诉已提交')
-    appealForm.value = { target_component: 'total', reason_text: '', score_id: null }
+    appealForm.value = { target_component: 'total', reason_text: '', homework_id: null }
   } finally {
     appealSubmitting.value = false
   }
 }
+
+watch(
+  () => appealForm.value.target_component,
+  targetComponent => {
+    if (targetComponent !== 'homework') {
+      appealForm.value.homework_id = null
+    }
+  }
+)
 
 onMounted(async () => {
   await loadSemesters()

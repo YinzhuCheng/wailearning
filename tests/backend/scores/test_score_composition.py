@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
 from apps.backend.courseeval_backend.main import app
-from apps.backend.courseeval_backend.db.models import HomeworkScoreCandidate, HomeworkSubmission
+from apps.backend.courseeval_backend.db.models import HomeworkScoreCandidate, HomeworkSubmission, Notification
 from apps.backend.courseeval_backend.domains.scores.composition import (
     OTHER_DAILY_EXAM_TYPE,
 )
@@ -222,3 +222,50 @@ def test_appeal_response_invalid_status(client: TestClient):
     )
     assert bad.status_code == 400
 
+
+def test_homework_target_score_appeal_links_notification_to_homework(client: TestClient):
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    sid = ctx["subject_id"]
+    hid = ctx["homework_id"]
+    sem = "2026-春季"
+
+    client.put(f"/api/scores/grade-scheme/{sid}", headers=th, json={"homework_weight": 30, "extra_daily_weight": 20})
+    assert client.post(f"/api/homeworks/{hid}/submission", headers=sh, json={"content": "hw appeal body"}).status_code == 200
+
+    db = SessionLocal()
+    try:
+        _set_homework_score(db, hid, ctx["student_id"], ctx["teacher_id"], 88.0)
+    finally:
+        db.close()
+
+    ap = client.post(
+        f"/api/scores/appeals?subject_id={sid}",
+        headers=sh,
+        json={
+            "semester": sem,
+            "target_component": "homework",
+            "homework_id": hid,
+            "reason_text": "这次作业评分我有异议，想请老师复核。"
+        },
+    )
+    assert ap.status_code == 200, ap.text
+    body = ap.json()
+    assert body["target_component"] == "homework"
+    assert body["homework_id"] == hid
+    assert body["homework_title"]
+    assert body["score_id"] is None
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Notification)
+            .filter(Notification.related_score_appeal_id == body["id"])
+            .all()
+        )
+        assert rows
+        assert all(row.related_homework_id == hid for row in rows)
+    finally:
+        db.close()

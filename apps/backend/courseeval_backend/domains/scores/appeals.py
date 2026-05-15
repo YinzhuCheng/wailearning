@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.domains.appeal_notifications import sync_appeal_notification_projection
 from apps.backend.courseeval_backend.domains.courses.access import subject_teacher_user_ids
-from apps.backend.courseeval_backend.db.models import Notification, ScoreGradeAppeal, Subject
+from apps.backend.courseeval_backend.db.models import Homework, Notification, ScoreGradeAppeal, Subject
 
 
 def notify_teachers_score_grade_appeal(
@@ -15,25 +15,28 @@ def notify_teachers_score_grade_appeal(
     appeal: ScoreGradeAppeal,
     student_name: str,
     creator_user_id: int,
+    related_homework_id: int | None = None,
 ) -> list[Notification]:
     course = db.query(Subject).filter(Subject.id == appeal.subject_id).first()
     class_id = course.class_id if course else None
     teacher_ids = subject_teacher_user_ids(db, int(appeal.subject_id))
     created: list[Notification] = []
-    title = "成绩构成申诉"
+    homework = db.query(Homework).filter(Homework.id == related_homework_id).first() if related_homework_id else None
+    title = f"成绩构成申诉：{homework.title}" if homework else "成绩构成申诉"
     excerpt = (appeal.reason_text or "").strip()
     if len(excerpt) > 500:
         excerpt = excerpt[:500] + "..."
+    target_label = f"作业《{homework.title}》" if homework else appeal.target_component
     content = "\n".join(
         [
             f"学生 {student_name} 提交了成绩申诉。",
             f"申诉编号：{appeal.id}",
             f"学期：{appeal.semester}",
-            f"申诉对象：{appeal.target_component}",
+            f"申诉对象：{target_label}",
             "申诉理由：",
             excerpt or "（无）",
             "",
-            "请在“成绩管理”中查看学生成绩构成并处理。",
+            "请在对应页面中查看并处理。",
         ]
     )
 
@@ -50,6 +53,7 @@ def notify_teachers_score_grade_appeal(
         if existing:
             existing.class_id = class_id
             existing.subject_id = appeal.subject_id
+            existing.related_homework_id = related_homework_id
             existing.related_student_id = appeal.student_id
             existing.created_by = creator_user_id
             sync_appeal_notification_projection(existing, status=appeal.status, content=content)
@@ -65,7 +69,7 @@ def notify_teachers_score_grade_appeal(
             subject_id=appeal.subject_id,
             target_student_id=None,
             target_user_id=uid,
-            related_homework_id=None,
+            related_homework_id=related_homework_id,
             related_student_id=appeal.student_id,
             related_appeal_id=None,
             related_score_appeal_id=appeal.id,
