@@ -11,6 +11,10 @@ Keep CourseEval schema and data-repair work honest while the repository has no
 Alembic migration tree. Current compatibility DDL lives in
 `apps/backend/courseeval_backend/bootstrap.py::ensure_schema_updates()`.
 
+This skill should route agents quickly to the current schema truth, bootstrap
+truth, and validation truth instead of treating all schema-adjacent changes as
+one flat migration checklist.
+
 ## When to Use
 
 Use this before changing:
@@ -31,16 +35,39 @@ Use this before changing:
 
 ## Workflow
 
-1. Read `docs/reference/DATA_MODEL_ESSENTIALS.md`,
-   `docs/operations/ADMIN_BOOTSTRAP.md`, and `docs/governance/known-issues-and-risks.md`.
+1. Read:
+   - `docs/reference/DATA_MODEL_ESSENTIALS.md`
+   - `docs/operations/ADMIN_BOOTSTRAP.md`
+   - `docs/governance/known-issues-and-risks.md`
+   - `docs/architecture/BACKEND_PACKAGE_STRUCTURE.md` when a boundary split may
+     affect schema/bootstrap ownership
 2. Compare `db/models.py` with `bootstrap.ensure_schema_updates()`.
 3. For new columns/tables used by existing deployments, add idempotent DDL to
    `ensure_schema_updates()` or document why `create_all` is sufficient.
 4. For student identity changes, run audit before repair; do not restore
    username/student-number guessing as normal feature behavior.
-5. For destructive cleanup or fallback removal, document migration evidence,
+5. Route to `roster-identity-repair-playbook` when the core task is really
+   student identity / `users.student_id` / roster drift repair rather than
+   general schema-governance work.
+6. Use the focused validation docs to decide whether the evidence claim is an
+   everyday targeted validation result or a full release-grade schema claim.
+7. For destructive cleanup or fallback removal, document migration evidence,
    rollback boundary, and validation before deleting compatibility code.
-6. Update docs and selector targets in the same change set.
+8. Update docs and selector targets in the same change set.
+
+## Document Routing Rules
+
+- Use `DATA_MODEL_ESSENTIALS.md` as the canonical source for current model and
+  table-shape truth.
+- Use `ADMIN_BOOTSTRAP.md` as the canonical source for startup/bootstrap and
+  demo-seed sequencing.
+- Use `known-issues-and-risks.md` for active schema-governance risks,
+  historical traps, and unresolved migration concerns.
+- Use `VALIDATION_WORKFLOW_AND_TOOLS.md` for selector/runner/profile behavior.
+- Use `FULL_VALIDATION_ENVIRONMENT_POLICY.md` when the claim is zero-skip,
+  PostgreSQL-backed, or release-grade rather than an everyday targeted check.
+- Use `roster-identity-repair-playbook` when the real task is identity repair
+  workflow rather than general schema governance.
 
 ## Commands
 
@@ -61,6 +88,8 @@ python ops/scripts/dev/run_validation_target.py static.schema_governance --timeo
   repair.
 - PostgreSQL-required validation is either run or explicitly deferred as an
   environment-dependent broad/full target.
+- Schema claims, bootstrap claims, and identity-repair claims should be
+  classified separately instead of folded into one vague migration note.
 
 ## Failure Handling
 
@@ -76,7 +105,11 @@ python ops/scripts/dev/run_validation_target.py static.schema_governance --timeo
 - `apps/backend/courseeval_backend/db/models.py`
 - `apps/backend/courseeval_backend/bootstrap.py`
 - `docs/reference/DATA_MODEL_ESSENTIALS.md`
+- `docs/operations/ADMIN_BOOTSTRAP.md`
 - `docs/governance/known-issues-and-risks.md`
+- `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
+- `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`
 - `ops/scripts/dev/check_schema_governance.py`
 - `ops/scripts/dev/audit_student_identity.py`
 - `ops/scripts/dev/repair_student_identity.py`
+- `skills/roster-identity-repair-playbook/SKILL.md`

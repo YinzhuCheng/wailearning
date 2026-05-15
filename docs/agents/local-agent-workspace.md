@@ -41,6 +41,18 @@ Do not treat any local planning note in `.agent-run/` as a durable repository
 entrypoint. If a plan becomes part of the repository contract, promote the
 durable part into committed docs and let the local note disappear.
 
+Plan maintenance rules:
+
+- create one local plan file per distinct active lane when the task needs
+  durable step memory;
+- re-read the active plan files at the start of each new round in that lane so
+  previous priorities and deferred work are not forgotten;
+- keep plans detailed enough to survive interruption without guesswork;
+- update each active plan at the end of every execution round so the remaining
+  work stays explicit;
+- delete a plan file once the plan is fully executed or clearly superseded;
+- do not leave stale completed plans in `.agent-run/plan/`.
+
 ## What Stays Out Of Commits
 
 Do not commit:

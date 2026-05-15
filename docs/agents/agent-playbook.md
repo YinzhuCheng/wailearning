@@ -24,14 +24,16 @@ Use these defaults unless the user gives a narrower instruction for the current
 task:
 
 1. Read `AGENTS.md`, `docs/README.md`, and the task-scoped docs before editing.
+   Use [`agent-startup-routing.md`](agent-startup-routing.md) when you need the
+   full startup matrix rather than the procedural defaults in this file.
 2. Execute ordinary repository reads, edits, validation discovery, and Git
    operations directly; ask only when an action is destructive,
    privacy-sensitive, or materially outside the task boundary.
-3. On Windows PowerShell, dot-source
-   `ops/scripts/windows/set-utf8-session.ps1` at the start of the current
-   shell before repository inspection/editing. When a multilingual file is
-   involved, continue with the repository safe-text workflow via
-   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops/scripts/windows/enter-safe-text-session.ps1`.
+3. On Windows PowerShell, use
+   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops/scripts/windows/invoke-safe-text-command.ps1`
+   as the default repository entrypoint before inspection/editing. Only
+   dot-source `ops/scripts/windows/set-utf8-session.ps1` directly when you
+   intentionally need to mutate an already-trusted interactive shell.
 4. Preserve documentation detail when it acts as process memory for future
    agents. Shorten only when the removed material is obsolete, contradictory, or
    duplicative enough to cause confusion.
@@ -47,12 +49,13 @@ task:
    over an ignored local helper. The maintained example is
    `apps/web/school/scripts/capture-homework-layout-runner.cjs`, which uses
    the supported school E2E startup path and writes local output under `pics/`.
-9. Before committing, scan for private-path leaks and run the narrowest useful
-   validation starting with the diff selector in
-   `docs/testing/DEVELOPMENT_AND_TESTING.md`.
+9. Before committing, follow the closeout sequence in
+   [`agent-closeout.md`](agent-closeout.md).
 
 Related policy docs:
 
+- [`agent-startup-routing.md`](agent-startup-routing.md)
+- [`agent-closeout.md`](agent-closeout.md)
 - [`../governance/repository-governance.md`](../governance/repository-governance.md)
 - [`../governance/agent-update-log.md`](../governance/agent-update-log.md)
 - [`local-agent-workspace.md`](local-agent-workspace.md)
@@ -127,7 +130,7 @@ may still be useful locally. The repository CI baseline itself is now Python
 
 **Source:** `tests/conftest.py` (loaded automatically).
 
-- Sets `DATABASE_URL` to `TEST_DATABASE_URL` **or** auto-selected Postgres when `COURSEEVAL_AUTO_PG_TESTS` matches **or** fallback SQLite file `<repo>/.pytest_tmp/test.sqlite`.
+- Sets `DATABASE_URL` to `TEST_DATABASE_URL` **or** auto-selected Postgres when `COURSEEVAL_AUTO_PG_TESTS` matches **or** fallback SQLite file `<repo>/.pytest_tmp/test_<pid>.sqlite` by default, overridable with `PYTEST_SQLITE_BASENAME`.
 - Forces `INIT_DEFAULT_DATA=false` during tests.
 - Disables LLM worker by default (`TEST_ENABLE_LLM_GRADING_WORKER` overrides).
 

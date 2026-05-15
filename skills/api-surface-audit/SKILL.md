@@ -11,6 +11,10 @@ Keep CourseEval's backend routers, frontend API clients, docs, and validation
 targets aligned. This skill is for API contract changes; it does not replace a
 full OpenAPI export.
 
+This skill should route agents to the current API-surface truth quickly:
+router shape, schema shape, client usage, permission boundary, and the right
+validation lane for contract changes.
+
 ## When to Use
 
 Use this before changing:
@@ -32,9 +36,11 @@ Use this before changing:
 
 ## Workflow
 
-1. Read `docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`,
-   `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`, and the affected
-   feature doc.
+1. Read:
+   - `docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`
+   - `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`
+   - `docs/architecture/SYSTEM_OVERVIEW.md`
+   - the affected feature doc
 2. Open the backend router and `api/schemas.py` before trusting frontend helper
    names or older docs.
 3. Confirm route prefix, method, query-vs-body shape, response model, and
@@ -42,8 +48,28 @@ Use this before changing:
 4. If the admin or parent SPA calls the route, update the matching API helper in
    the same change set.
 5. If route semantics changed, update docs and selector targets together.
-6. Prefer pytest/API regression for contract changes; reserve Playwright for
+6. Route to `frontend-backend-contract-audit` when the real issue is a narrow
+   request/response contract such as pagination bounds, request body shape, or
+   response field usage rather than a broader route-family or router-surface
+   change.
+7. Use `VALIDATION_WORKFLOW_AND_TOOLS.md` to choose the right selector/runner
+   lane instead of treating the older broad testing handbook as the first
+   validation source.
+8. Prefer pytest/API regression for contract changes; reserve Playwright for
    browser routing, visibility, or multi-tab behavior.
+
+## Document Routing Rules
+
+- Use `docs/reference/CODE_MAP_AND_ENTRYPOINTS.md` for where routers, clients,
+  and schema surfaces live.
+- Use `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md` when the route
+  change might really be a permission-boundary problem.
+- Use `docs/architecture/SYSTEM_OVERVIEW.md` for route-family and capability
+  context.
+- Use `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md` for selector, target, and
+  profile behavior.
+- Use `frontend-backend-contract-audit` when the problem is really a focused
+  frontend/backend request contract issue, not a broader API surface audit.
 
 ## Commands
 
@@ -63,6 +89,8 @@ python ops/scripts/dev/run_validation_target.py security.api_regression --timeou
   expose.
 - Authorization-sensitive changes have backend tests, not only hidden UI
   buttons.
+- Route-family drift, client drift, and permission-boundary drift should be
+  classified separately instead of folded into one vague “API issue”.
 
 ## Failure Handling
 
@@ -80,7 +108,10 @@ python ops/scripts/dev/run_validation_target.py security.api_regression --timeou
 - `apps/backend/courseeval_backend/api/schemas.py`
 - `apps/web/school/src/api/index.js`
 - `apps/web/parent/src/api/index.js`
+- `docs/architecture/SYSTEM_OVERVIEW.md`
 - `docs/reference/CODE_MAP_AND_ENTRYPOINTS.md`
 - `docs/reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`
+- `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
 - `ops/scripts/dev/check_api_surface_governance.py`
 - `tests/TEST_SELECTION_TARGETS.json`
+- `skills/frontend-backend-contract-audit/SKILL.md`

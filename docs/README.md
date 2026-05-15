@@ -37,8 +37,11 @@ guessing.
 
 | Document | Role |
 |----------|------|
-| [`AGENTS.md`](../AGENTS.md) (repository root) | Agent startup contract: startup workflow, task routing, high-risk areas, grep entrypoints, validation/CI entrypoints |
+| [`AGENTS.md`](../AGENTS.md) (repository root) | Short agent startup contract and non-negotiable operating rules |
+| [`agents/agent-startup-routing.md`](agents/agent-startup-routing.md) | Detailed startup routing: task matrix, high-risk areas, grep entrypoints, validation/CI entrypoints |
+| [`agents/agent-execution-entrypoints.md`](agents/agent-execution-entrypoints.md) | Execution mechanics after routing: Windows safe entry, failure triage, validation, and CI entrypoints |
 | [`agents/agent-playbook.md`](agents/agent-playbook.md) | Procedural workflows and autonomous operating defaults: tracing features, bootstrap order, verification |
+| [`agents/agent-closeout.md`](agents/agent-closeout.md) | Required closeout procedure: validation, update-log, private-path review, and local artifact cleanup |
 | [`agents/local-agent-workspace.md`](agents/local-agent-workspace.md) | `.agent-run/` contract for local-only notes, logs, and machine-specific evidence |
 | [`reference/CODE_MAP_AND_ENTRYPOINTS.md`](reference/CODE_MAP_AND_ENTRYPOINTS.md) | File-level map of routers, SPAs, tests, CI YAML, and extended grep entrypoints |
 | [`reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md`](reference/PERMISSIONS_AND_SECURITY_BOUNDARIES.md) | Roles, course access helpers, JWT vs parent-code |
@@ -51,8 +54,8 @@ guessing.
 | [`governance/high-risk-path-metadata.json`](governance/high-risk-path-metadata.json) | Committed owner/risk/validation metadata for the highest-risk repository paths |
 | [`testing/CI_AND_VALIDATION.md`](testing/CI_AND_VALIDATION.md) | Current CI entrypoints and how to interpret cloud versus local validation scope |
 | [`../skills/README.md`](../skills/README.md) | Full repo-local skill catalog and layering guide |
-| [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Top-level governance orchestrator for repo normalization, skill taxonomy, and governance routing |
-| [`../skills/docs-governance/SKILL.md`](../skills/docs-governance/SKILL.md) | Horizontal docs governance: documentation truth, link checks, reports, and repeated-pitfall-to-rule workflow |
+| [`../skills/repository-normalization/SKILL.md`](../skills/repository-normalization/SKILL.md) | Top-level governance orchestrator for repo normalization, layered agent-document routing, skill taxonomy, and governance routing |
+| [`../skills/docs-governance/SKILL.md`](../skills/docs-governance/SKILL.md) | Horizontal docs governance: documentation truth, layered agent-document structure, link checks, reports, and repeated-pitfall-to-rule workflow |
 | [`../skills/boundary-governance/SKILL.md`](../skills/boundary-governance/SKILL.md) | Horizontal boundary governance: functional/module/permission/data-flow boundary discovery and low-risk extraction workflow |
 | [`../skills/structure-governance/SKILL.md`](../skills/structure-governance/SKILL.md) | Horizontal structure governance: root-file, directory hierarchy, file-move, and structural reference workflow |
 | [`../skills/security-redteam-iteration/SKILL.md`](../skills/security-redteam-iteration/SKILL.md) | Iterative red-team hardening workflow with dense tests, fixes, docs, ledgers, pitfalls, validation, and commit discipline |
@@ -249,13 +252,16 @@ Why:
 ### Autonomous agent onboarding (Codex / Cursor / cloud agents)
 
 1. [AGENTS.md](../AGENTS.md)
-2. [agents/agent-playbook.md](agents/agent-playbook.md)
-3. [agents/local-agent-workspace.md](agents/local-agent-workspace.md)
-4. [reference/CODE_MAP_AND_ENTRYPOINTS.md](reference/CODE_MAP_AND_ENTRYPOINTS.md)
-5. [governance/repository-governance.md](governance/repository-governance.md)
-6. [governance/known-issues-and-risks.md](governance/known-issues-and-risks.md)
-7. [architecture/CORE_BUSINESS_FLOWS.md](architecture/CORE_BUSINESS_FLOWS.md)
-8. [../skills/README.md](../skills/README.md)
+2. [agents/agent-startup-routing.md](agents/agent-startup-routing.md)
+3. [agents/agent-execution-entrypoints.md](agents/agent-execution-entrypoints.md)
+4. [agents/agent-playbook.md](agents/agent-playbook.md)
+5. [agents/agent-closeout.md](agents/agent-closeout.md)
+6. [agents/local-agent-workspace.md](agents/local-agent-workspace.md)
+7. [reference/CODE_MAP_AND_ENTRYPOINTS.md](reference/CODE_MAP_AND_ENTRYPOINTS.md)
+8. [governance/repository-governance.md](governance/repository-governance.md)
+9. [governance/known-issues-and-risks.md](governance/known-issues-and-risks.md)
+10. [architecture/CORE_BUSINESS_FLOWS.md](architecture/CORE_BUSINESS_FLOWS.md)
+11. [../skills/README.md](../skills/README.md)
 
 ### Production deployment
 

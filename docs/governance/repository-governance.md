@@ -56,7 +56,10 @@ Use the most specific durable location first:
 | Topic | Primary location |
 |-------|------------------|
 | Agent startup contract and routing | `AGENTS.md` |
+| Agent startup matrix, high-risk routing, and grep discovery | `docs/agents/agent-startup-routing.md` |
+| Agent execution entrypoints | `docs/agents/agent-execution-entrypoints.md` |
 | Agent workflows and defaults | `docs/agents/agent-playbook.md` |
+| Agent closeout procedure | `docs/agents/agent-closeout.md` |
 | Local workspace rules | `docs/agents/local-agent-workspace.md` |
 | Repository structure and path rules | `docs/architecture/REPOSITORY_STRUCTURE.md` |
 | High-risk module explanations | `docs/architecture/HIGH_RISK_MODULES.md` |
@@ -82,6 +85,16 @@ Use:
 - **scripts** for repeatable machine-enforced checks or append helpers;
 - **reports** only for dated evidence that still needs to remain searchable.
 
+For the agent-facing doc system specifically, prefer layered text-first routing
+when it is clearer than a script-first control surface:
+
+- keep `AGENTS.md` short and contractual;
+- keep hub/index routing in `docs/README.md`;
+- keep startup routing, execution entrypoints, playbook defaults, closeout, and
+  local workspace rules in separate `docs/agents/` topic docs;
+- remove repeated prose from broader entrypoints once a narrower authoritative
+  layer exists.
+
 ## Historical Drift Policy
 
 Do not keep solved cleanup work as an active rule.
@@ -106,7 +119,10 @@ they still affect:
 
 - `AGENTS.md`
 - `docs/README.md`
+- `docs/agents/agent-startup-routing.md`
+- `docs/agents/agent-execution-entrypoints.md`
 - `docs/agents/agent-playbook.md`
+- `docs/agents/agent-closeout.md`
 - `docs/agents/local-agent-workspace.md`
 - `docs/architecture/REPOSITORY_STRUCTURE.md`
 - `docs/architecture/HIGH_RISK_MODULES.md`

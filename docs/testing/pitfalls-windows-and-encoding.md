@@ -59,11 +59,15 @@ entries that have not been moved yet still remain in
 ## Recommended Commands
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1
 python ops\scripts\dev\safe_show_text.py <path> --escape
 python ops\scripts\dev\check_text_encoding.py <path>
 python ops\scripts\dev\pytest_sqlite_guard.py --json
 ```
+
+Use `set-utf8-session.ps1` directly only when you intentionally need to mutate
+an already-trusted interactive shell instead of using the default child-process
+wrapper.
 
 ## Related Files
 
@@ -114,13 +118,14 @@ underlying file content is correct.
 The branch now includes explicit helper scripts so agents do not have to
 rediscover the same PowerShell encoding setup every time.
 
-For the current Windows PowerShell process, run:
+For the default repository-safe workflow, run:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\set-utf8-session.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\invoke-safe-text-command.ps1
 ```
 
-For an already-open interactive shell, dot-source instead:
+For an already-open interactive shell that must keep the encoding changes in
+place, dot-source instead:
 
 ```powershell
 . .\ops\scripts\windows\set-utf8-session.ps1

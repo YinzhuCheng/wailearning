@@ -78,6 +78,27 @@ clusters already migrated into the topic docs above. Use the encyclopedia for
 unmigrated or mixed-surface entries; use the topic docs directly when the
 structured index already routes that cluster there.
 
+## Validation workflow entrypoint
+
+Use [VALIDATION_WORKFLOW_AND_TOOLS.md](VALIDATION_WORKFLOW_AND_TOOLS.md) when
+the task is specifically about:
+
+- diff-based validation scope
+- selector output
+- validation target runner
+- validation profile runner
+- artifact/evidence interpretation
+
+## Full validation policy entrypoint
+
+Use [FULL_VALIDATION_ENVIRONMENT_POLICY.md](FULL_VALIDATION_ENVIRONMENT_POLICY.md)
+when the task is specifically about:
+
+- zero-skip / release-quality expectations
+- PostgreSQL-backed full validation
+- RAR extractor environment policy
+- Playwright/runtime dependency requirements for full validation
+
 ## Rules
 
 1. Record only observed executions. Selector output, dry-run planning, and typed
@@ -89,7 +110,10 @@ structured index already routes that cluster there.
 4. Keep long explanations in Markdown docs such as
    `../TEST_EXECUTION_PITFALLS.md`; keep CSV notes short and factual.
 5. Use UTF-8 and the repository safe-text workflow before editing these files
-   from Windows PowerShell.
+   from Windows PowerShell. The default entrypoint is
+   `ops/scripts/windows/invoke-safe-text-command.ps1`; use
+   `set-utf8-session.ps1` directly only when an already-open interactive shell
+   must be mutated.
 6. Follow the pitfall recording policy in `TEST_EXECUTION_PITFALLS.md` when
    adding or reclassifying a pitfall.
 7. Follow the per-round update-log policy in

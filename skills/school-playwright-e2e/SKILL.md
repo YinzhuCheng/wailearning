@@ -11,25 +11,45 @@ Run CourseEval school Playwright with the repository's supported workflow instea
 of ad hoc browser commands. Prefer the repo's external runner for real runs so
 API/UI startup and teardown stay owned by one process.
 
+This skill should route through the narrowest current Playwright docs first,
+instead of defaulting to the full testing handbook for every browser task.
+
 ## Workflow
 
-1. Read `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`,
-   `docs/testing/TEST_EXECUTION_PITFALLS.md`, and
-   `docs/testing/DEVELOPMENT_AND_TESTING.md`.
-2. Confirm school package dependencies and browsers exist in
+1. Read:
+   - `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`
+   - `docs/testing/pitfalls-playwright-and-e2e.md`
+   - `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
+2. If the run is being treated as full-suite, zero-skip, or release-grade,
+   also read:
+   - `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`
+3. Confirm school package dependencies and browsers exist in
    `apps/web/school/`.
-3. For a real targeted run, prefer the external runner from the school package:
+4. For a real targeted run, prefer the external runner from the school package:
    `node scripts/playwright-external-runner.cjs <spec>.spec.js --project=chromium`
-4. Use `tests/e2e/web-school/fixtures.cjs` and
+5. Use `tests/e2e/web-school/fixtures.cjs` and
    `future-advanced-coverage-helpers.cjs` patterns before inventing new seed,
    login, or API helper flows.
-5. If the browser scenario needs complex state, create it through seeded API
+6. If the browser scenario needs complex state, create it through seeded API
    helpers first, then assert the browser-visible outcome.
-6. Record whether a failure came from product behavior, seed/reset, browser
+7. Record whether a failure came from product behavior, seed/reset, browser
    startup, stale ports, or teardown/cleanup.
-7. Run external-runner commands serially when using the default ports/database.
+8. Run external-runner commands serially when using the default ports/database.
    Parallel default runners can make Vite switch away from port 3012 while
    Playwright still navigates to 3012, and can lock the shared SQLite database.
+
+## Document Routing Rules
+
+- Use `FULL_PLAYWRIGHT_E2E_RUNBOOK.md` as the canonical source for the full
+  school Playwright environment contract.
+- Use `pitfalls-playwright-and-e2e.md` as the first pitfall route when the
+  failure shape is clearly browser/harness/UI-flow related.
+- Use `VALIDATION_WORKFLOW_AND_TOOLS.md` for selector, target, and profile
+  behavior when deciding how much Playwright to run.
+- Use `FULL_VALIDATION_ENVIRONMENT_POLICY.md` only when the browser work is part
+  of a full-suite / release-grade validation claim.
+- Use `TEST_EXECUTION_PITFALLS.md` as the mixed-surface fallback, not the first
+  read in every Playwright task.
 
 ## Commands
 
@@ -58,6 +78,8 @@ node scripts/playwright-external-runner.cjs
   blaming a missing UI row.
 - Treat spawn errors, missing browsers, stale ports, or teardown timeouts as
   harness signals first.
+- Do not claim selector recommendations or partial browser smoke as release-grade
+  browser coverage without following the full-validation policy lane.
 
 ## Related Files
 
@@ -66,4 +88,7 @@ node scripts/playwright-external-runner.cjs
 - `tests/e2e/web-school/fixtures.cjs`
 - `tests/e2e/web-school/future-advanced-coverage-helpers.cjs`
 - `docs/testing/FULL_PLAYWRIGHT_E2E_RUNBOOK.md`
+- `docs/testing/pitfalls-playwright-and-e2e.md`
+- `docs/testing/VALIDATION_WORKFLOW_AND_TOOLS.md`
+- `docs/testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`
 - `docs/testing/TEST_EXECUTION_PITFALLS.md`

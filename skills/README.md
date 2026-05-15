@@ -18,8 +18,8 @@ Use skills from broad to narrow.
 ### 1. Top-level orchestrator
 
 - [`repository-normalization/SKILL.md`](repository-normalization/SKILL.md)
-  for repo-wide governance, skill taxonomy, package/path drift, and broad
-  governance routing.
+  for repo-wide governance, layered agent-document routing, skill taxonomy,
+  package/path drift, and broad governance routing.
 
 ### 2. Horizontal governance skills
 
@@ -28,6 +28,9 @@ Use skills from broad to narrow.
 - [`structure-governance/SKILL.md`](structure-governance/SKILL.md)
 
 Use these to scope the problem before dropping into a specialized domain.
+`docs-governance` also owns the layered agent-document-system discipline:
+entrypoint layering, de-duplication without information loss, and deciding
+whether a repeated workflow belongs in docs, a skill, or a script.
 
 ### 3. Specialized audit and execution skills
 
