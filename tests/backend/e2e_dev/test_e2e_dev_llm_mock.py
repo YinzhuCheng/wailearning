@@ -228,7 +228,7 @@ def test_e2e_worker_status_and_control():
             try:
                 task = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first()
                 assert task is not None
-                if task.status in {"failed", "success"}:
+                if task.status in {"failed", "success", "retry_scheduled"}:
                     break
             finally:
                 db.close()
@@ -243,7 +243,13 @@ def test_e2e_worker_status_and_control():
     assert state.status_code == 200, state.text
     task_counts = state.json()["tasks"]
     assert task_counts["total"] >= 1
-    assert task_counts["failed"] + task_counts["queued"] + task_counts["processing"] >= 1
+    assert (
+        task_counts["failed"]
+        + task_counts["queued"]
+        + task_counts["processing"]
+        + task_counts["retry_scheduled"]
+        >= 1
+    )
 
     stopped = client.post(
         "/api/e2e/dev/worker",

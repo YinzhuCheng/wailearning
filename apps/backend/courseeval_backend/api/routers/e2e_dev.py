@@ -619,6 +619,7 @@ def grading_state_for_e2e(
         "tasks": {
             "queued": counts.get("queued", 0),
             "processing": counts.get("processing", 0),
+            "retry_scheduled": counts.get("retry_scheduled", 0),
             "success": counts.get("success", 0),
             "failed": counts.get("failed", 0),
             "total": sum(counts.values()),

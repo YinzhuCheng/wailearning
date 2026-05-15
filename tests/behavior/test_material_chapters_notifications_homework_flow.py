@@ -534,7 +534,12 @@ def test_ui29_llm_non_json_content_fails_task(client: TestClient) -> None:
         process_grading_task(tid)
     db = SessionLocal()
     try:
-        assert db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid, HomeworkGradingTask.status == "failed").count() == 1
+        assert (
+            db.query(HomeworkGradingTask)
+            .filter(HomeworkGradingTask.id == tid, HomeworkGradingTask.status == "retry_scheduled")
+            .count()
+            == 1
+        )
     finally:
         db.close()
 
@@ -583,7 +588,12 @@ def test_ui31_llm_500_response_fails_task(client: TestClient) -> None:
         process_grading_task(tid)
     db = SessionLocal()
     try:
-        assert db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid, HomeworkGradingTask.status == "failed").count() == 1
+        assert (
+            db.query(HomeworkGradingTask)
+            .filter(HomeworkGradingTask.id == tid, HomeworkGradingTask.status == "retry_scheduled")
+            .count()
+            == 1
+        )
     finally:
         db.close()
 

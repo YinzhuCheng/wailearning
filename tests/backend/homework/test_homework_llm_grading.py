@@ -554,10 +554,10 @@ def test_auto_retry_after_llm_failure_queues_second_task(grading_context: dict):
             .order_by(HomeworkGradingTask.id.asc())
             .all()
         )
-        assert len(tasks) == 2
+        assert len(tasks) == 1
         assert tasks[0].status == "failed"
-        assert tasks[1].status == "queued"
-        assert "auto_retry" in (tasks[1].queue_reason or "")
+        assert tasks[0].failure_class == "permanent"
+        assert tasks[0].next_retry_at is None
     finally:
         db.close()
 
@@ -763,7 +763,7 @@ def test_latest_passing_validated_routes_to_newest_preset(grading_context: dict)
 
 
 def test_all_endpoints_exhausted_fails(grading_context: dict):
-    """Single preset, max_retries=0: 503 and no more attempts → task fails."""
+    """Single preset, max_retries=0: 503 enters persistent retry scheduling on the same row."""
     ctx = make_grading_course_with_homework(preset_max_retries=0)
     client = grading_context["client"]
     student_h = login_api(client, ctx["student_username"], ctx["student_password"])
@@ -783,7 +783,9 @@ def test_all_endpoints_exhausted_fails(grading_context: dict):
     db = SessionLocal()
     try:
         task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
-        assert task.status == "failed"
+        assert task.status == "retry_scheduled"
+        assert task.failure_class == "transient"
+        assert task.next_retry_at is not None
         assert "503" in (task.error_message or "") or "暂时不可用" in (task.error_message or "")
     finally:
         db.close()
