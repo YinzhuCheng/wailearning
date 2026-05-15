@@ -86,6 +86,7 @@ from apps.backend.courseeval_backend.domains.llm.runtime import (
     compute_next_retry_at,
     ensure_utc_datetime,
     now_utc,
+    retry_window_exhausted,
     sleep_with_test_scaling,
 )
 
@@ -1351,6 +1352,12 @@ def _mark_task_failed(
 ) -> None:
     release_quota_reservation(db, task.id)
     failure_class = classify_llm_error_code(error_code=error_code, error_message=error_message)
+    if failure_class == "transient" and retry_window_exhausted(
+        created_at=task.created_at,
+        policy=_LLM_TASK_RETRY_POLICY,
+        current_time=_now_utc(),
+    ):
+        failure_class = "permanent"
     task.failure_class = failure_class
     task.error_code = error_code
     task.error_message = error_message

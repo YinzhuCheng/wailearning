@@ -39,7 +39,49 @@ TERMINAL_HTTP_STATUS_CODES = frozenset({401, 403, 404, 413})
 
 DEFAULT_RETRY_INITIAL_SECONDS = 60
 DEFAULT_RETRY_MAX_SECONDS = 20 * 60
+DEFAULT_RETRY_MAX_LIFETIME_SECONDS = 7 * 24 * 60 * 60
 DEFAULT_RETRY_MULTIPLIER = 2.0
+
+PERMANENT_ERROR_MESSAGE_SNIPPETS = frozenset(
+    {
+        "invalid_api_key",
+        "authentication",
+        "permission denied",
+        "forbidden",
+        "unauthorized",
+        "model_not_found",
+        "model not found",
+        "context_length",
+        "context length",
+        "max_tokens",
+        "max token",
+        "request too large",
+        "input too large",
+        "unsupported_parameter",
+        "unsupported parameter",
+    }
+)
+
+TRANSIENT_ERROR_MESSAGE_SNIPPETS = frozenset(
+    {
+        "rate_limit",
+        "rate limit",
+        "too many requests",
+        "rpm",
+        "tpm",
+        "slow down",
+        "temporarily unavailable",
+        "service unavailable",
+        "timeout",
+        "timed out",
+        "connection reset",
+        "connection refused",
+        "connection aborted",
+        "overloaded",
+        "capacity",
+        "upstream",
+    }
+)
 
 _test_clock_lock = threading.Lock()
 _test_clock_now: Optional[datetime] = None
@@ -49,6 +91,7 @@ _test_clock_now: Optional[datetime] = None
 class RetryPolicy:
     initial_delay_seconds: int = DEFAULT_RETRY_INITIAL_SECONDS
     max_delay_seconds: int = DEFAULT_RETRY_MAX_SECONDS
+    max_lifetime_seconds: int = DEFAULT_RETRY_MAX_LIFETIME_SECONDS
     multiplier: float = DEFAULT_RETRY_MULTIPLIER
 
 
@@ -105,11 +148,16 @@ def classify_llm_error_code(
 ) -> str:
     code = (error_code or "").strip()
     message = (error_message or "").strip()
+    message_lower = message.lower()
     if code in PERMANENT_LLM_ERROR_CODES:
         return "permanent"
     if any(f"HTTP {status}" in message for status in TERMINAL_HTTP_STATUS_CODES):
         return "permanent"
+    if any(snippet in message_lower for snippet in PERMANENT_ERROR_MESSAGE_SNIPPETS):
+        return "permanent"
     if code in TRANSIENT_LLM_ERROR_CODES:
+        return "transient"
+    if any(snippet in message_lower for snippet in TRANSIENT_ERROR_MESSAGE_SNIPPETS):
         return "transient"
     return "transient"
 
@@ -133,3 +181,17 @@ def compute_next_retry_at(
 ) -> datetime:
     base = ensure_utc_datetime(base_time) or now_utc()
     return base + timedelta(seconds=compute_retry_delay_seconds(retry_count=retry_count, policy=policy))
+
+
+def retry_window_exhausted(
+    *,
+    created_at: Optional[datetime],
+    policy: RetryPolicy | None = None,
+    current_time: Optional[datetime] = None,
+) -> bool:
+    created = ensure_utc_datetime(created_at)
+    if created is None:
+        return False
+    pol = policy or RetryPolicy()
+    now_value = ensure_utc_datetime(current_time) or now_utc()
+    return (now_value - created).total_seconds() >= int(pol.max_lifetime_seconds or DEFAULT_RETRY_MAX_LIFETIME_SECONDS)

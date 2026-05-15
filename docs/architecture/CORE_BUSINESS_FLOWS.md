@@ -280,6 +280,8 @@ Current implementation lifecycle:
 - `POST /api/discussions` with `invoke_llm=true` writes a durable `DiscussionLLMJob(status="pending")`;
 - the router still triggers an immediate best-effort background attempt for low-latency success paths;
 - transient failures move the same row to `retry_scheduled` with persisted `retry_count`, `failure_class`, `last_error_at`, and `next_retry_at`;
+- the shared runtime classifier decides transient vs permanent using normalized error codes plus HTTP/error-message semantics, so hard provider failures such as `401`, `403`, `404`, and `413` do not keep re-entering the retry lane;
+- retry intervals grow exponentially but cap at 20 minutes, and the default total retry lifetime is 7 days before the row becomes permanently failed;
 - the grading worker loop in `llm_grading.py` also drains due discussion jobs, so later recovery uses the same process-level worker instead of a second daemon;
 - successful completion writes the assistant reply row and discussion usage log, then marks the job `success`;
 - permanent failures end in `failed` and may surface a visible assistant-side failure message.

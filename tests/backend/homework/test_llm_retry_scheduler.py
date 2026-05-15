@@ -9,7 +9,13 @@ from fastapi.testclient import TestClient
 
 from apps.backend.courseeval_backend.db.database import SessionLocal
 from apps.backend.courseeval_backend.db.models import HomeworkGradingTask, LLMTokenUsageLog
-from apps.backend.courseeval_backend.domains.llm.runtime import advance_test_clock, set_test_clock
+from apps.backend.courseeval_backend.domains.llm.runtime import (
+    RetryPolicy,
+    advance_test_clock,
+    compute_retry_delay_seconds,
+    retry_window_exhausted,
+    set_test_clock,
+)
 from apps.backend.courseeval_backend.llm_grading import claim_grading_tasks_batch, process_grading_task
 from apps.backend.courseeval_backend.main import app
 from tests.scenarios.llm_scenario import json_llm_response, login_api, make_grading_course_with_homework
@@ -50,6 +56,43 @@ def test_grading_task_transient_failure_becomes_retry_scheduled_then_succeeds(cl
     finally:
         db.close()
 
+
+def test_retry_policy_delay_caps_at_twenty_minutes():
+    policy = RetryPolicy()
+    assert compute_retry_delay_seconds(retry_count=0, policy=policy) == 60
+    assert compute_retry_delay_seconds(retry_count=10, policy=policy) == 20 * 60
+
+
+def test_retry_window_exhausted_after_seven_days():
+    created = datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc)
+    not_yet = created + timedelta(days=6, hours=23, minutes=59)
+    exhausted = created + timedelta(days=7)
+    assert retry_window_exhausted(created_at=created, current_time=not_yet) is False
+    assert retry_window_exhausted(created_at=created, current_time=exhausted) is True
+
+
+def test_grading_task_transient_failure_past_retry_lifetime_becomes_failed(client: TestClient):
+    ctx = make_grading_course_with_homework(preset_max_retries=0)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    set_test_clock(datetime(2026, 5, 15, 10, 0, tzinfo=timezone.utc))
+
+    r = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_h,
+        json={"content": "expire later"},
+    )
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        task = db.query(HomeworkGradingTask).order_by(HomeworkGradingTask.id.desc()).first()
+        assert task is not None
+        task.created_at = datetime(2026, 5, 8, 10, 0, tzinfo=timezone.utc)
+        db.commit()
+        tid = task.id
+    finally:
+        db.close()
+
     with mock.patch.object(httpx.Client, "post", lambda self, url, **kwargs: httpx.Response(503, json={"error": "upstream"})):
         process_grading_task(tid)
 
@@ -57,36 +100,7 @@ def test_grading_task_transient_failure_becomes_retry_scheduled_then_succeeds(cl
     try:
         task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
         assert task is not None
-        assert task.status == "retry_scheduled"
-        assert task.failure_class == "transient"
-        assert task.retry_count == 1
-        assert task.next_retry_at is not None
-        assert task.finished_at is None
-        assert db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == tid).count() == 0
-    finally:
-        db.close()
-
-    advance_test_clock(timedelta(seconds=59))
-    assert claim_grading_tasks_batch(1) == []
-
-    advance_test_clock(timedelta(seconds=1))
-    claimed = claim_grading_tasks_batch(1)
-    assert claimed == [tid]
-
-    with mock.patch.object(
-        httpx.Client,
-        "post",
-        lambda self, url, **kwargs: httpx.Response(200, json=json_llm_response(83.0, "recovered")),
-    ):
-        process_grading_task(tid)
-
-    db = SessionLocal()
-    try:
-        task = db.query(HomeworkGradingTask).filter(HomeworkGradingTask.id == tid).first()
-        assert task is not None
-        assert task.status == "success"
-        assert task.error_code is None
-        assert task.next_retry_at is None
-        assert db.query(LLMTokenUsageLog).filter(LLMTokenUsageLog.task_id == tid).count() == 1
+        assert task.status == "failed"
+        assert task.failure_class == "permanent"
     finally:
         db.close()

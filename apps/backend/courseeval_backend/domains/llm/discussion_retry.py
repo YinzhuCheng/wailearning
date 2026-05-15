@@ -12,6 +12,7 @@ from apps.backend.courseeval_backend.domains.llm.runtime import (
     compute_next_retry_at,
     ensure_utc_datetime,
     now_utc,
+    retry_window_exhausted,
 )
 
 
@@ -26,6 +27,12 @@ def schedule_discussion_retry(
     error_message: str,
 ) -> str:
     failure_class = classify_llm_error_code(error_code=error_code, error_message=error_message)
+    if failure_class == "transient" and retry_window_exhausted(
+        created_at=job.created_at,
+        policy=DISCUSSION_RETRY_POLICY,
+        current_time=now_utc(),
+    ):
+        failure_class = "permanent"
     job.error_code = error_code
     job.error_message = error_message
     job.last_error_at = now_utc()

@@ -48,6 +48,8 @@ Transient retry model:
 - request-local endpoint retries and group failover still happen inside one processing attempt;
 - after those immediate retries are exhausted, transient failures persist on the same row with `retry_count`, `failure_class="transient"`, `last_error_at`, and `next_retry_at`;
 - backoff is exponential and capped at 20 minutes;
+- persisted task/job retries are not immortal; the default total retry lifetime is 7 days, after which the same durable row becomes `failed`;
+- retry vs permanent classification is shared runtime logic based on normalized error codes plus HTTP/error-message semantics, with hard provider statuses such as `401`, `403`, `404`, and `413` treated as permanent;
 - no unbounded chain of replacement task rows is created for transient grading failures.
 
 ---

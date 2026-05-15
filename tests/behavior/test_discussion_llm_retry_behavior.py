@@ -197,6 +197,51 @@ def test_discussion_llm_permanent_failure_emits_visible_reply(monkeypatch):
     finally:
         db.close()
 
+
+def test_discussion_job_transient_failure_past_retry_lifetime_becomes_failed(monkeypatch):
+    client = TestClient(app)
+    ctx = make_grading_course_with_homework(preset_max_retries=0)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    set_test_clock(datetime(2026, 5, 15, 10, 0, tzinfo=timezone.utc))
+
+    monkeypatch.setattr(
+        "apps.backend.courseeval_backend.api.routers.discussions.threading.Thread",
+        lambda *args, **kwargs: type("NoopThread", (), {"start": lambda self: None})(),
+    )
+
+    payload = {
+        "target_type": "homework",
+        "target_id": ctx["homework_id"],
+        "subject_id": ctx["subject_id"],
+        "class_id": ctx["class_id"],
+        "body": "@LLM\nplease retry later",
+        "invoke_llm": True,
+    }
+    created = client.post("/api/discussions", headers=student_h, json=payload)
+    assert created.status_code == 200, created.text
+
+    db = SessionLocal()
+    try:
+        job = db.query(DiscussionLLMJob).order_by(DiscussionLLMJob.id.desc()).first()
+        assert job is not None
+        job.created_at = datetime(2026, 5, 8, 10, 0, tzinfo=timezone.utc)
+        db.commit()
+        job_id = job.id
+    finally:
+        db.close()
+
+    with mock.patch.object(httpx.Client, "post", lambda self, url, **kwargs: httpx.Response(503, json={"error": "upstream"})):
+        run_discussion_llm_reply_for_job(job_id)
+
+    db = SessionLocal()
+    try:
+        job = db.query(DiscussionLLMJob).filter(DiscussionLLMJob.id == job_id).first()
+        assert job is not None
+        assert job.status == "failed"
+        assert job.failure_class == "permanent"
+    finally:
+        db.close()
+
     with mock.patch.object(httpx.Client, "post", lambda self, url, **kwargs: httpx.Response(413, json={"error": "too_large"})):
         run_discussion_llm_reply_for_job(job_id)
 

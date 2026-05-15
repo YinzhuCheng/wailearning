@@ -149,6 +149,7 @@ Task-level retry semantics:
 - the same `HomeworkGradingTask` row can move through `queued -> processing -> retry_scheduled -> processing -> success|failed`;
 - `retry_scheduled` means the task is still recoverable and will be reclaimed automatically once `next_retry_at` is due;
 - transient failures use exponential backoff capped at 20 minutes;
+- the default total retry lifetime is 7 days, after which a still-failing task becomes terminal `failed`;
 - permanent failures remain terminal `failed` rows and do not re-enter the queue automatically.
 
 **Displayed homework score vs latest attempt**
