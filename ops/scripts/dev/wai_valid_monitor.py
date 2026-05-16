@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -14,7 +15,15 @@ DEFAULT_REFRESH_SECONDS = 2
 
 
 def clear_screen() -> None:
-    os.system("cls")
+    # Some Windows consoles intermittently render a blank screen after repeated
+    # cls calls from a long-lived Python loop. Prefer a visible section break.
+    try:
+        if os.name == "nt":
+            print("\n" + "=" * 100)
+        else:
+            print("\033[2J\033[H", end="")
+    except Exception:
+        print("\n" + "=" * 100)
 
 
 def load_json(path: Path) -> dict | None:
@@ -187,6 +196,7 @@ def main() -> int:
                 render_progress(progress_path, run_id)
             except Exception as exc:
                 print(f"[WAI-VALID] progress render error: {exc}")
+        sys.stdout.flush()
         time.sleep(DEFAULT_REFRESH_SECONDS)
 
 
