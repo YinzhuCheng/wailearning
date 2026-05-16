@@ -5,10 +5,17 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from wai_valid_render import render_progress_snapshot
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -150,6 +157,11 @@ def parse_args() -> argparse.Namespace:
         default="medium",
         help="Logical regression intensity label for reporting and future expansion rules.",
     )
+    parser.add_argument(
+        "--no-console-report",
+        action="store_true",
+        help="Disable supervisor-side live console reporting.",
+    )
     args = parser.parse_args()
     if args.block_spec:
         if args.concurrency is not None:
@@ -173,6 +185,18 @@ def ensure_python() -> None:
         raise SystemExit(f"Missing repository venv interpreter: {PYTHON_EXE}")
 
 
+def is_valid_test_target(path_text: str) -> bool:
+    normalized = path_text.replace("\\", "/").strip()
+    if not normalized:
+        return False
+    parts = [part for part in normalized.split("/") if part]
+    if any(part == "__pycache__" for part in parts):
+        return False
+    if any(part.startswith(".") for part in parts):
+        return False
+    return True
+
+
 def safe_name(shard: str) -> str:
     out = shard
     for ch in "\\/:. ":
@@ -184,6 +208,8 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
     tasks: list[Task] = []
     pg_index = 0
     for raw_path in paths:
+        if not is_valid_test_target(raw_path):
+            continue
         path = raw_path.replace("\\", "/")
         if path.startswith("tests/postgres/"):
             tasks.append(
@@ -361,6 +387,14 @@ def classify_block_tasks(block_specs: list[BlockSpec], postgres_base_port: int) 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def render_console_report(progress_payload: dict[str, Any]) -> None:
+    print("\n" + "=" * 100)
+    payload = dict(progress_payload)
+    payload["events_file_path"] = str(Path(str(progress_payload["run_dir"])) / "events.log")
+    render_progress_snapshot(payload, str(progress_payload.get("run_id") or "n/a"))
+    sys.stdout.flush()
 
 
 def write_queue_snapshot(
@@ -681,8 +715,11 @@ def append_result(results_path: Path, running_task: RunningTask, exit_code: int)
 
 
 def classify_failure_type(result: dict[str, Any]) -> str:
-    if int(result.get("exit_code") or 0) == 0:
+    exit_code = int(result.get("exit_code") or 0)
+    if exit_code == 0:
         return "passed"
+    if exit_code == 3221225786:
+        return "external-interrupt-control-c"
 
     candidate_paths = []
     for key in ("stderr_path", "log_path"):
@@ -841,7 +878,7 @@ def main() -> int:
         block_concurrency=block_concurrency,
     )
     write_queue_snapshot(queue, run_id, run_dir, max_concurrency, args.regression_mode, block_concurrency)
-    update_progress(
+    progress_payload = update_progress(
         run_dir=run_dir,
         block=block,
         concurrency=max_concurrency,
@@ -854,6 +891,13 @@ def main() -> int:
         tasks=tasks,
         block_concurrency=block_concurrency,
     )
+    if not args.no_console_report:
+        render_console_report(
+            {
+                **json.loads((run_dir / "progress.json").read_text(encoding="utf-8")),
+                "run_dir": str(run_dir),
+            }
+        )
 
     try:
         while queue or running:
@@ -930,6 +974,13 @@ def main() -> int:
                     block_summaries=block_summaries,
                     block_concurrency=block_concurrency,
                 )
+                if not args.no_console_report:
+                    render_console_report(
+                        {
+                            **json.loads((run_dir / "progress.json").read_text(encoding="utf-8")),
+                            "run_dir": str(run_dir),
+                        }
+                    )
                 last_progress_write = now
             time.sleep(1)
     except Exception:
@@ -995,6 +1046,13 @@ def main() -> int:
         block_summaries=block_summaries,
         block_concurrency=block_concurrency,
     )
+    if not args.no_console_report:
+        render_console_report(
+            {
+                **json.loads((run_dir / "progress.json").read_text(encoding="utf-8")),
+                "run_dir": str(run_dir),
+            }
+        )
     return 0 if not failed else 1
 
 
