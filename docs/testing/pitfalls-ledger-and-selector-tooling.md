@@ -281,3 +281,62 @@ Mitigation:
   failures are real product or registry issues.
 - Inspect the first bytes when all ledger ids appear missing. `239 187 191`
   (`EF BB BF`) at the start of a CSV ledger indicates a BOM.
+
+### Pitfall 90: detached validation runners can leave a stale progress file that looks alive
+
+During the May 2026 parallel-validation experiments, several ad hoc detached
+orchestrators launched test workers successfully but then stopped updating the
+shared `progress.json`. The visible monitor continued to show the last known
+state, making it look as if eight shards were still running even though the
+real child processes had already exited or been replaced.
+
+Observed pattern:
+
+1. a detached launcher writes `progress.json` once when the first workers start;
+2. the launcher or its worker-tracking loop hangs, exits, or loses access to
+   its child state;
+3. shard logs continue to exist and some even complete successfully;
+4. the monitor is truthful to the file it was given, but the file itself is
+   stale and no longer represents reality.
+
+Mitigation:
+
+- Treat the progress file as a protocol, not an assumption.
+- The active run must be registered through a durable current-run pointer such
+  as `.agent-run/validation-daemon/WAI-VALID-current-run.json`.
+- The supervisor must rewrite `progress.json` on every state change, not only
+  at batch start.
+- If `updated_at` stops moving while CPU and child-process counts also fall,
+  suspect a frozen supervisor rather than a slow test.
+- Cross-check with shard log `LastWriteTime`, `results.jsonl`, and live process
+  tables before concluding the tests themselves are hung.
+
+### Pitfall 91: PowerShell-generated worker scripts can corrupt PostgreSQL DSNs through variable interpolation
+
+The local PostgreSQL worker templates initially embedded:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql+psycopg2://$dbUser:$dbPass@127.0.0.1:$port/$dbName"
+```
+
+Inside a generated PowerShell script this can fail because `:` directly after a
+variable name is parsed as part of the variable reference. The resulting worker
+dies before pytest starts, and the outer scheduler may incorrectly attribute
+the failure to the shard rather than to worker bootstrap.
+
+Observed symptom:
+
+- the PostgreSQL shard directory contains only the generated worker script plus
+  empty wrapper logs;
+- `pytest.log` never appears;
+- stderr shows:
+  `Variable reference is not valid. ':' was not followed by a valid variable name character.`
+
+Mitigation:
+
+- In generated PowerShell scripts, use `${dbUser}`, `${dbPass}`, `${port}`, and
+  `${dbName}` inside DSN strings.
+- Prefer validating the generated script once before launching many PostgreSQL
+  workers.
+- When a PostgreSQL shard fails too quickly to produce `pytest.log`, inspect
+  the worker wrapper stderr before debugging product code.

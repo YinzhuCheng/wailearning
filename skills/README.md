@@ -40,6 +40,7 @@ whether a repeated workflow belongs in docs, a skill, or a script.
 - [`frontend-backend-contract-audit/SKILL.md`](frontend-backend-contract-audit/SKILL.md)
 - [`local-test-triage/SKILL.md`](local-test-triage/SKILL.md)
 - [`permission-audit/SKILL.md`](permission-audit/SKILL.md)
+- [`parallel-validation-orchestration/SKILL.md`](parallel-validation-orchestration/SKILL.md)
 - [`postgres-release-validation/SKILL.md`](postgres-release-validation/SKILL.md)
 - [`roster-identity-repair-playbook/SKILL.md`](roster-identity-repair-playbook/SKILL.md)
 - [`school-playwright-e2e/SKILL.md`](school-playwright-e2e/SKILL.md)
@@ -60,7 +61,10 @@ whether a repeated workflow belongs in docs, a skill, or a script.
    evidence.
 4. Prefer the richer, more executable skill when two skills overlap.
 5. Shrink or remove duplicate guidance instead of keeping multiple competing
-   versions of the same workflow.
+  versions of the same workflow.
+6. Use `parallel-validation-orchestration` when the main problem is no longer
+   “which test should I run?” but “how do I supervise many shards with
+   automatic refill, progress files, and optional PostgreSQL isolation?”
 
 ## Related Files
 

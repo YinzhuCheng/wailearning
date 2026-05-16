@@ -18,6 +18,7 @@ from apps.backend.courseeval_backend.db.models import (
     UserRole,
 )
 from apps.backend.courseeval_backend.domains.llm.quota import get_used_tokens_for_scope, record_usage_if_needed
+from apps.backend.courseeval_backend.domains.llm.token_quota import resolve_global_quota_calendar
 from apps.backend.courseeval_backend.llm_grading import queue_grading_task
 
 
@@ -36,6 +37,7 @@ def _reset_db():
 def test_teacher_regrade_is_not_counted_against_student_quota():
     db = SessionLocal()
     try:
+        usage_date, timezone_name = resolve_global_quota_calendar(db)
         klass = Class(name="billing_class", grade=2026)
         db.add(klass)
         db.flush()
@@ -95,8 +97,8 @@ def test_teacher_regrade_is_not_counted_against_student_quota():
                 student_id=student.id,
                 subject_id=course.id,
                 billed_user_id=None,
-                usage_date="2026-05-15",
-                timezone="Asia/Shanghai",
+                usage_date=usage_date,
+                timezone=timezone_name,
                 reserved_tokens=120,
             )
         )
@@ -106,8 +108,8 @@ def test_teacher_regrade_is_not_counted_against_student_quota():
                 student_id=student.id,
                 subject_id=course.id,
                 billed_user_id=teacher.id,
-                usage_date="2026-05-15",
-                timezone="Asia/Shanghai",
+                usage_date=usage_date,
+                timezone=timezone_name,
                 reserved_tokens=220,
             )
         )
@@ -115,8 +117,8 @@ def test_teacher_regrade_is_not_counted_against_student_quota():
 
         used_before = get_used_tokens_for_scope(
             db,
-            usage_date="2026-05-15",
-            timezone_name="Asia/Shanghai",
+            usage_date=usage_date,
+            timezone_name=timezone_name,
             student_id=student.id,
         )
         assert used_before == 0
@@ -137,8 +139,8 @@ def test_teacher_regrade_is_not_counted_against_student_quota():
 
         student_used = get_used_tokens_for_scope(
             db,
-            usage_date="2026-05-15",
-            timezone_name="Asia/Shanghai",
+            usage_date=usage_date,
+            timezone_name=timezone_name,
             student_id=student.id,
         )
         assert student_used == 120
@@ -158,6 +160,7 @@ def test_teacher_regrade_is_not_counted_against_student_quota():
 def test_student_submission_auto_grading_still_counts_against_student_quota():
     db = SessionLocal()
     try:
+        usage_date, timezone_name = resolve_global_quota_calendar(db)
         klass = Class(name="student_billing_class", grade=2026)
         db.add(klass)
         db.flush()
@@ -206,8 +209,8 @@ def test_student_submission_auto_grading_still_counts_against_student_quota():
                 student_id=student.id,
                 subject_id=course.id,
                 billed_user_id=None,
-                usage_date="2026-05-15",
-                timezone="Asia/Shanghai",
+                usage_date=usage_date,
+                timezone=timezone_name,
                 reserved_tokens=150,
             )
         )
@@ -223,8 +226,8 @@ def test_student_submission_auto_grading_still_counts_against_student_quota():
 
         student_used = get_used_tokens_for_scope(
             db,
-            usage_date="2026-05-15",
-            timezone_name="Asia/Shanghai",
+            usage_date=usage_date,
+            timezone_name=timezone_name,
             student_id=student.id,
         )
         assert student_used == 150
