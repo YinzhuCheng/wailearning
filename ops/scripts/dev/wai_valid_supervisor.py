@@ -54,6 +54,62 @@ class BlockSpec:
     paths: list[str]
 
 
+REGRESSION_EXPANSIONS: dict[str, dict[str, list[str]]] = {
+    "homework": {
+        "medium": [
+            "tests/backend/homework/test_homework_llm_grading.py",
+            "tests/behavior/test_homework_lifecycle_llm_behavior.py",
+        ],
+        "heavy": [
+            "tests/backend/homework/test_homework_llm_grading.py",
+            "tests/behavior/test_homework_lifecycle_llm_behavior.py",
+            "tests/behavior/test_course_roster_homework_edge_behavior.py",
+            "tests/behavior/test_material_chapters_notifications_homework_flow.py",
+        ],
+    },
+    "llm": {
+        "medium": [
+            "tests/backend/homework/test_homework_llm_grading.py",
+            "tests/behavior/test_homework_lifecycle_llm_behavior.py",
+        ],
+        "heavy": [
+            "tests/backend/homework/test_homework_llm_grading.py",
+            "tests/behavior/test_homework_lifecycle_llm_behavior.py",
+            "tests/behavior/test_per_course_llm_quota_advanced_behavior.py",
+            "tests/behavior/test_regression_llm_quota_behavior.py",
+        ],
+    },
+    "notifications": {
+        "medium": [
+            "tests/behavior/test_notification_sync_api_edge_behavior.py",
+        ],
+        "heavy": [
+            "tests/behavior/test_notification_sync_api_edge_behavior.py",
+            "tests/behavior/test_material_chapters_notifications_homework_flow.py",
+        ],
+    },
+    "discussions": {
+        "medium": [
+            "tests/behavior/test_discussion_api_behavior.py",
+        ],
+        "heavy": [
+            "tests/behavior/test_discussion_api_behavior.py",
+            "tests/behavior/test_discussion_api_advanced_behavior.py",
+            "tests/behavior/test_discussion_llm_retry_behavior.py",
+        ],
+    },
+    "roster": {
+        "medium": [
+            "tests/backend/courses/test_student_course_roster_behavior.py",
+        ],
+        "heavy": [
+            "tests/backend/courses/test_student_course_roster_behavior.py",
+            "tests/behavior/test_course_roster_homework_edge_behavior.py",
+        ],
+    },
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", help="Pytest shard paths or directories to supervise.")
@@ -202,6 +258,58 @@ def build_block_specs(args: argparse.Namespace) -> list[BlockSpec]:
     return [BlockSpec(name=block_name, concurrency=int(args.concurrency), paths=list(args.paths))]
 
 
+def classify_domain_tags(path: str) -> set[str]:
+    normalized = path.replace("\\", "/")
+    tags: set[str] = set()
+    for tag in ("homework", "llm", "notifications", "discussions", "roster"):
+        if tag in normalized:
+            tags.add(tag)
+    return tags
+
+
+def infer_block_name_from_path(path: str) -> str:
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("tests/postgres/"):
+        return "backend-postgres-sensitive"
+    if normalized.startswith("tests/behavior/"):
+        return "behavior"
+    if normalized.startswith("tests/e2e/"):
+        return "playwright-e2e"
+    if normalized.startswith("tests/backend/"):
+        return "backend-sqlite-compatible"
+    return "generic"
+
+
+def expand_block_specs_for_regression(block_specs: list[BlockSpec], regression_mode: str) -> list[BlockSpec]:
+    if regression_mode == "light":
+        return block_specs
+
+    expanded: list[BlockSpec] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    domain_tags = set()
+    for block_spec in block_specs:
+        for path in block_spec.paths:
+            seen_pairs.add((block_spec.name, path))
+            domain_tags.update(classify_domain_tags(path))
+        expanded.append(BlockSpec(name=block_spec.name, concurrency=block_spec.concurrency, paths=list(block_spec.paths)))
+
+    for tag in sorted(domain_tags):
+        for extra_path in REGRESSION_EXPANSIONS.get(tag, {}).get(regression_mode, []):
+            block_name = infer_block_name_from_path(extra_path)
+            pair = (block_name, extra_path)
+            if pair in seen_pairs:
+                continue
+            existing = next((spec for spec in expanded if spec.name == block_name), None)
+            if existing is None:
+                # Use a conservative default for newly expanded blocks.
+                concurrency = 1 if block_name in ("backend-postgres-sensitive", "playwright-e2e") else 2
+                expanded.append(BlockSpec(name=block_name, concurrency=concurrency, paths=[extra_path]))
+            else:
+                existing.paths.append(extra_path)
+            seen_pairs.add(pair)
+    return expanded
+
+
 def classify_block_tasks(block_specs: list[BlockSpec], postgres_base_port: int) -> tuple[list[Task], dict[str, int]]:
     tasks: list[Task] = []
     block_concurrency: dict[str, int] = {}
@@ -209,6 +317,11 @@ def classify_block_tasks(block_specs: list[BlockSpec], postgres_base_port: int) 
     for block_spec in block_specs:
         block_concurrency[block_spec.name] = block_spec.concurrency
         block_tasks = classify_tasks(block_spec.paths, block_spec.name, port_cursor)
+        direct_paths = {path.replace("\\", "/") for path in block_spec.paths}
+        for task in block_tasks:
+            if task.shard not in direct_paths:
+                task.origin = "regression"
+                task.origin_detail = "mode-expansion"
         tasks.extend(block_tasks)
         postgres_count = sum(1 for task in block_tasks if task.kind == "postgres")
         port_cursor += postgres_count
@@ -542,7 +655,7 @@ def main() -> int:
     ensure_python()
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     run_id = ensure_prefixed_run_id(args.run_id)
-    block_specs = build_block_specs(args)
+    block_specs = expand_block_specs_for_regression(build_block_specs(args), args.regression_mode)
     tasks, block_concurrency = classify_block_tasks(block_specs, args.postgres_base_port)
     if not tasks:
         raise SystemExit("No tasks were classified from the provided paths.")

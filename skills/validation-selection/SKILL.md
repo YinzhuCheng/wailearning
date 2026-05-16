@@ -35,6 +35,10 @@ through the larger `DEVELOPMENT_AND_TESTING.md` handbook first.
    until the full/broad target is run or explicitly deferred with a reason.
 8. Record only real executed results in durable docs; selector planning output
    alone is not a test ledger entry.
+9. When the task is no longer just "which target should I run?" but also
+   "how should I expand this into light/medium/heavy regression blocks with
+   different concurrency?", route into
+   `skills/parallel-validation-orchestration/SKILL.md`.
 
 ## Document Routing Rules
 
@@ -71,6 +75,12 @@ python ops/scripts/dev/lint_validation_registry.py
 - Keep `.agent-run/` run artifacts local and uncommitted.
 - Prefer the focused validation docs over repeating large chunks of selector or
   environment policy in handoffs and nearby docs.
+- Do not treat `light` / `medium` / `heavy` regression expansion as the
+  selector's responsibility alone; selector chooses targets, while the
+  orchestration layer may widen them into block-aware regression runs.
+- When the user explicitly asks for a regression intensity, preserve the
+  selector's target choice as the seed set and let the orchestration layer
+  expand from there instead of hand-widening the target list ad hoc.
 
 ## Related Files
 

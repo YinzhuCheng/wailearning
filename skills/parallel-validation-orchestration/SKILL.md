@@ -178,6 +178,34 @@ Recommended vocabulary:
 The run config, progress file, and monitor should all expose the chosen
 regression intensity explicitly.
 
+The first tracked implementation now expands some domains this way:
+
+- `light`
+  - direct targets only
+- `medium`
+  - direct targets plus a small adjacent regression surface
+- `heavy`
+  - direct targets plus a wider related logic surface
+
+Current first-pass domain coverage includes:
+
+- `homework`
+- `llm`
+- `notifications`
+- `discussions`
+- `roster`
+
+These expansion rules are intentionally conservative and committed in the
+runtime so they can be revised through repository history instead of terminal
+lore.
+
+Observed first-pass proof:
+
+- `light` on `tests/backend/homework/test_homework_llm_grading.py` stayed at
+  1 direct task
+- `heavy` on the same input expanded to a 6-task run that also scheduled
+  related behavior suites
+
 ## Progress Listener
 
 The process pair should include a progress listener that:

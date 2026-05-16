@@ -101,6 +101,26 @@ recommendation looks too narrow, run the broader target and update
 [`tests/TEST_SELECTION_TARGETS.json`](../../tests/TEST_SELECTION_TARGETS.json)
 when the gap is repeatable.
 
+For larger local validation runs, especially when the operator wants:
+
+- explicit blocks,
+- different concurrency per block,
+- automatic slot refill,
+- or `light` / `medium` / `heavy` regression intensity,
+
+use the committed orchestration layer described in
+[`../../skills/parallel-validation-orchestration/SKILL.md`](../../skills/parallel-validation-orchestration/SKILL.md)
+instead of treating the selector output as a flat manual checklist.
+
+Current local orchestration support includes a first-pass distinction between:
+
+- `light` regression: direct targets only
+- `medium` regression: direct targets plus a small adjacent regression surface
+- `heavy` regression: direct targets plus a wider related logic surface
+
+This expansion is currently implemented as a committed explicit mapping table
+in the local orchestration runtime, not as an all-knowing semantic planner.
+
 ## Artifact And Evidence Rules
 
 - `.agent-run/validation-history.jsonl` and `.agent-run/logs/` are ignored
