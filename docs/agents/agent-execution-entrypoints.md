@@ -101,6 +101,7 @@ Then use the detailed workflow in:
 - [`../testing/VALIDATION_WORKFLOW_AND_TOOLS.md`](../testing/VALIDATION_WORKFLOW_AND_TOOLS.md)
 - [`../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md`](../testing/FULL_VALIDATION_ENVIRONMENT_POLICY.md)
 - [`../../skills/validation-selection/SKILL.md`](../../skills/validation-selection/SKILL.md)
+- [`../../skills/parallel-validation-orchestration/SKILL.md`](../../skills/parallel-validation-orchestration/SKILL.md) when the main problem is shard supervision, automatic slot refill, or visible live monitoring rather than simple target choice
 - [`agent-closeout.md`](agent-closeout.md)
 
 Use repository-normalization guardrails for docs/governance/path work:

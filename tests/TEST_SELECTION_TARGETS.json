@@ -72,7 +72,8 @@
                     "ops/scripts/*.sql",
                     "ops/scripts/dev/*.py",
                     "ops/scripts/*.ps1",
-                    "ops/scripts/windows/*.ps1"
+                    "ops/scripts/windows/*.ps1",
+                    "ops/scripts/windows/*.bat"
                 ]
             },
             "ledger_id": "static.encoding_text_tools",
