@@ -43,6 +43,7 @@ whether a repeated workflow belongs in docs, a skill, or a script.
 - [`parallel-validation-orchestration/SKILL.md`](parallel-validation-orchestration/SKILL.md)
 - [`postgres-release-validation/SKILL.md`](postgres-release-validation/SKILL.md)
 - [`roster-identity-repair-playbook/SKILL.md`](roster-identity-repair-playbook/SKILL.md)
+- [`round-plan-discipline/SKILL.md`](round-plan-discipline/SKILL.md)
 - [`school-playwright-e2e/SKILL.md`](school-playwright-e2e/SKILL.md)
 - [`security-redteam-iteration/SKILL.md`](security-redteam-iteration/SKILL.md)
 - [`seed-surface-hardening/SKILL.md`](seed-surface-hardening/SKILL.md)
@@ -65,6 +66,9 @@ whether a repeated workflow belongs in docs, a skill, or a script.
 6. Use `parallel-validation-orchestration` when the main problem is no longer
    “which test should I run?” but “how do I supervise many shards with
    automatic refill, progress files, and optional PostgreSQL isolation?”
+7. Use `round-plan-discipline` when the user requires explicit multi-round
+   execution with plan re-reading, round-end plan updates, AGENTS closeout,
+   and local commit-without-push behavior every round.
 
 ## Related Files
 

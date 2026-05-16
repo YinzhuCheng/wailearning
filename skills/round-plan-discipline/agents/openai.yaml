@@ -1,0 +1,4 @@
+interface:
+  display_name: "Round Plan Discipline"
+  short_description: "Run long tasks in bounded rounds with plan re-read, closeout, and local commit discipline."
+  default_prompt: "Use this skill to execute the task in explicit rounds with plan review, round-end plan updates, AGENTS.md closeout, and local commits without push."
