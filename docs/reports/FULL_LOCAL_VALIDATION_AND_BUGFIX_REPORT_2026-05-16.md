@@ -336,6 +336,32 @@ Immediate hardening direction:
   file, state file, and results file together so the monitor has one coherent
   source of truth.
 
+### Checkpoint 7: validation routing and selector alignment completed
+
+After the first tracked supervisor landed, the validation routing layer still
+had one gap:
+
+- `ops/scripts/windows/start-validation-supervisor.bat` was not yet covered by
+  the selector registry, so the diff selector reported an unmatched path
+
+Follow-up completed in this round:
+
+- updated `tests/TEST_SELECTION_TARGETS.json` so `ops/scripts/windows/*.bat`
+  routes into the static encoding / text-tooling validation surface
+- updated `docs/agents/agent-startup-routing.md` to route parallel shard
+  supervision into `parallel-validation-orchestration`
+- updated `docs/agents/agent-execution-entrypoints.md` so validation execution
+  explicitly references the new orchestration skill when the problem is live
+  shard supervision instead of plain target selection
+
+Observed result:
+
+- `check_docs_governance.py` passed
+- `check_repo_skills.py` passed
+- `lint_validation_registry.py` passed
+- the diff selector no longer reported unmatched paths for the new supervisor
+  launcher and the non-full validation status returned to `acceptable`
+
 ## Final Outcome
 
 In progress.
