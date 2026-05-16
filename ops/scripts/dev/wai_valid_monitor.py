@@ -12,18 +12,21 @@ STATE_DIR = REPO_ROOT / ".agent-run" / "validation-daemon"
 LOG_ROOT = REPO_ROOT / ".agent-run" / "logs"
 MONITOR_TITLE = "WAI-VALID-monitor"
 DEFAULT_REFRESH_SECONDS = 2
+ANSI_CLEAR_AND_HOME = "\033[2J\033[H"
 
 
 def clear_screen() -> None:
     # Some Windows consoles intermittently render a blank screen after repeated
-    # cls calls from a long-lived Python loop. Prefer a visible section break.
+    # cls calls from a long-lived Python loop. Prefer ANSI redraw when
+    # available, and fall back to a visible section break otherwise.
     try:
-        if os.name == "nt":
-            print("\n" + "=" * 100)
-        else:
-            print("\033[2J\033[H", end="")
+        print(ANSI_CLEAR_AND_HOME, end="")
     except Exception:
         print("\n" + "=" * 100)
+
+
+def separator_fallback() -> None:
+    print("\n" + "=" * 100)
 
 
 def load_json(path: Path) -> dict | None:
@@ -187,7 +190,10 @@ def main() -> int:
         pass
 
     while True:
-        clear_screen()
+        try:
+            clear_screen()
+        except Exception:
+            separator_fallback()
         progress_path, run_id = find_current_run()
         if progress_path is None:
             print("[WAI-VALID] waiting for a progress file...")
@@ -195,6 +201,7 @@ def main() -> int:
             try:
                 render_progress(progress_path, run_id)
             except Exception as exc:
+                separator_fallback()
                 print(f"[WAI-VALID] progress render error: {exc}")
         sys.stdout.flush()
         time.sleep(DEFAULT_REFRESH_SECONDS)
