@@ -243,6 +243,14 @@ The visible monitor window should:
 - show per-block pass / fail / total and current slot occupancy
 - be easy to inspect without switching away from chat
 
+The first tracked monitor layout now aims to read like a live report with:
+
+- a run header
+- an overall summary
+- a per-block section
+- a running-slot section
+- a recent-events section
+
 The monitor window is for visibility; the progress file remains the source of
 truth.
 

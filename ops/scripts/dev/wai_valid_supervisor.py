@@ -52,6 +52,7 @@ class BlockSpec:
     name: str
     concurrency: int
     paths: list[str]
+    path_metadata: dict[str, dict[str, str]] | None = None
 
 
 REGRESSION_EXPANSIONS: dict[str, dict[str, list[str]]] = {
@@ -247,7 +248,7 @@ def parse_block_specs(specs: list[str]) -> list[BlockSpec]:
         paths = [path.strip() for path in path_blob.split(",") if path.strip()]
         if not paths:
             raise SystemExit(f"Invalid --block-spec paths: {raw_spec}")
-        block_specs.append(BlockSpec(name=name, concurrency=concurrency, paths=paths))
+        block_specs.append(BlockSpec(name=name, concurrency=concurrency, paths=paths, path_metadata={}))
     return block_specs
 
 
@@ -255,7 +256,7 @@ def build_block_specs(args: argparse.Namespace) -> list[BlockSpec]:
     if args.block_spec:
         return parse_block_specs(args.block_spec)
     block_name = args.block if args.block != "auto" else "auto"
-    return [BlockSpec(name=block_name, concurrency=int(args.concurrency), paths=list(args.paths))]
+    return [BlockSpec(name=block_name, concurrency=int(args.concurrency), paths=list(args.paths), path_metadata={})]
 
 
 def classify_domain_tags(path: str) -> set[str]:
@@ -291,7 +292,17 @@ def expand_block_specs_for_regression(block_specs: list[BlockSpec], regression_m
         for path in block_spec.paths:
             seen_pairs.add((block_spec.name, path))
             domain_tags.update(classify_domain_tags(path))
-        expanded.append(BlockSpec(name=block_spec.name, concurrency=block_spec.concurrency, paths=list(block_spec.paths)))
+        base_metadata = dict(block_spec.path_metadata or {})
+        for path in block_spec.paths:
+            base_metadata.setdefault(path.replace("\\", "/"), {"origin": "primary", "origin_detail": "direct-target"})
+        expanded.append(
+            BlockSpec(
+                name=block_spec.name,
+                concurrency=block_spec.concurrency,
+                paths=list(block_spec.paths),
+                path_metadata=base_metadata,
+            )
+        )
 
     for tag in sorted(domain_tags):
         for extra_path in REGRESSION_EXPANSIONS.get(tag, {}).get(regression_mode, []):
@@ -303,9 +314,27 @@ def expand_block_specs_for_regression(block_specs: list[BlockSpec], regression_m
             if existing is None:
                 # Use a conservative default for newly expanded blocks.
                 concurrency = 1 if block_name in ("backend-postgres-sensitive", "playwright-e2e") else 2
-                expanded.append(BlockSpec(name=block_name, concurrency=concurrency, paths=[extra_path]))
+                expanded.append(
+                    BlockSpec(
+                        name=block_name,
+                        concurrency=concurrency,
+                        paths=[extra_path],
+                        path_metadata={
+                            extra_path: {
+                                "origin": "regression",
+                                "origin_detail": f"{regression_mode}-expansion:{tag}",
+                            }
+                        },
+                    )
+                )
             else:
                 existing.paths.append(extra_path)
+                if existing.path_metadata is None:
+                    existing.path_metadata = {}
+                existing.path_metadata[extra_path] = {
+                    "origin": "regression",
+                    "origin_detail": f"{regression_mode}-expansion:{tag}",
+                }
             seen_pairs.add(pair)
     return expanded
 
@@ -317,11 +346,12 @@ def classify_block_tasks(block_specs: list[BlockSpec], postgres_base_port: int) 
     for block_spec in block_specs:
         block_concurrency[block_spec.name] = block_spec.concurrency
         block_tasks = classify_tasks(block_spec.paths, block_spec.name, port_cursor)
-        direct_paths = {path.replace("\\", "/") for path in block_spec.paths}
+        metadata = block_spec.path_metadata or {}
         for task in block_tasks:
-            if task.shard not in direct_paths:
-                task.origin = "regression"
-                task.origin_detail = "mode-expansion"
+            task_meta = metadata.get(task.shard)
+            if task_meta:
+                task.origin = task_meta.get("origin", task.origin)
+                task.origin_detail = task_meta.get("origin_detail", task.origin_detail)
         tasks.extend(block_tasks)
         postgres_count = sum(1 for task in block_tasks if task.kind == "postgres")
         port_cursor += postgres_count
