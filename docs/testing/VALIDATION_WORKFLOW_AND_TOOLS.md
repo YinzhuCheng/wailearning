@@ -254,6 +254,9 @@ Operational rules:
 - If `non_full_validation.status` is `needs_review`, targeted validation may
   still be the right first pass, but the output names the expensive or
   environment-sensitive target that needs operator judgment
+- For long-running block-based validation, prefer the WAI-VALID supervisor
+  artifacts plus the generated `block-summary.txt` / `block-report.json` pair
+  when reconnecting after a dropped chat session.
 - `history_status=stale` does not mean a target failed. It means the previous
   ledger or structured run result should not be counted as current evidence for
   this diff

@@ -680,6 +680,108 @@ def append_result(results_path: Path, running_task: RunningTask, exit_code: int)
         handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
+def classify_failure_type(result: dict[str, Any]) -> str:
+    if int(result.get("exit_code") or 0) == 0:
+        return "passed"
+
+    candidate_paths = []
+    for key in ("stderr_path", "log_path"):
+        value = result.get(key)
+        if value:
+            candidate_paths.append(Path(str(value)))
+    run_dir = result.get("run_dir")
+    if run_dir:
+        candidate_paths.extend(
+            [
+                Path(str(run_dir)) / "wrapper.err.log",
+                Path(str(run_dir)) / "postgres.err.log",
+                Path(str(run_dir)) / "initdb.log",
+            ]
+        )
+
+    text_parts: list[str] = []
+    for candidate in candidate_paths:
+        try:
+            if candidate.exists():
+                text_parts.append(candidate.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            continue
+    combined = "\n".join(text_parts)
+    lowered = combined.lower()
+
+    if "could not create restricted token" in lowered or "postgres not ready" in lowered or "initdb failed" in lowered:
+        return "environment-postgres-bootstrap"
+    if "modulenotfounderror" in lowered or "no module named" in lowered:
+        return "environment-python-deps"
+    if "npm" in lowered and "not recognized" in lowered:
+        return "environment-node-tooling"
+    if "error: spawn eperm" in lowered or "spawn eperm" in lowered:
+        return "environment-process-spawn"
+    if "assertionerror" in lowered or "failed" in lowered or "traceback" in lowered:
+        return "test-or-product-failure"
+    return "unknown-failure"
+
+
+def write_block_report(run_dir: Path, summary_payload: dict[str, Any]) -> None:
+    results_path = run_dir / "results.jsonl"
+    parsed_results: list[dict[str, Any]] = []
+    if results_path.exists():
+        for line in results_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            payload["failure_type"] = classify_failure_type(payload)
+            parsed_results.append(payload)
+
+    failure_counts: dict[str, int] = {}
+    for result in parsed_results:
+        failure_type = str(result.get("failure_type") or "unknown-failure")
+        if failure_type == "passed":
+            continue
+        failure_counts[failure_type] = failure_counts.get(failure_type, 0) + 1
+
+    report_payload = {
+        "run_id": summary_payload.get("run_id"),
+        "status": summary_payload.get("status"),
+        "regression_mode": summary_payload.get("regression_mode"),
+        "block_concurrency": summary_payload.get("block_concurrency"),
+        "total": summary_payload.get("total"),
+        "completed_count": summary_payload.get("completed_count"),
+        "failed_count": summary_payload.get("failed_count"),
+        "failure_type_counts": failure_counts,
+        "results": parsed_results,
+    }
+    write_json(run_dir / "block-report.json", report_payload)
+
+    lines = [
+        f"run_id: {summary_payload.get('run_id')}",
+        f"status: {summary_payload.get('status')}",
+        f"regression_mode: {summary_payload.get('regression_mode')}",
+        f"total: {summary_payload.get('total')}",
+        f"passed: {summary_payload.get('completed_count')}",
+        f"failed: {summary_payload.get('failed_count')}",
+        "failure_types:",
+    ]
+    if failure_counts:
+        for failure_type, count in sorted(failure_counts.items()):
+            lines.append(f" - {failure_type}: {count}")
+    else:
+        lines.append(" - none")
+    lines.append("failed_shards:")
+    failed_results = [result for result in parsed_results if result.get("failure_type") != "passed"]
+    if failed_results:
+        for result in failed_results:
+            lines.append(
+                f" - {result.get('shard')} | {result.get('failure_type')} | exit={result.get('exit_code')}"
+            )
+    else:
+        lines.append(" - none")
+    (run_dir / "block-summary.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     args = parse_args()
     ensure_python()
@@ -850,23 +952,22 @@ def main() -> int:
             PID_PATH.unlink()
 
     summary_status = "passed" if not failed else "failed"
-    write_json(
-        run_dir / "summary.json",
-        {
-            "run_id": run_id,
-            "status": summary_status,
-            "block": block,
-            "concurrency": max_concurrency,
-            "regression_mode": args.regression_mode,
-            "block_concurrency": block_concurrency,
-            "total": len(tasks),
-            "completed_count": len(completed),
-            "failed_count": len(failed),
-            "completed_shards": completed,
-            "failed_shards": failed,
-            "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
-        },
-    )
+    summary_payload = {
+        "run_id": run_id,
+        "status": summary_status,
+        "block": block,
+        "concurrency": max_concurrency,
+        "regression_mode": args.regression_mode,
+        "block_concurrency": block_concurrency,
+        "total": len(tasks),
+        "completed_count": len(completed),
+        "failed_count": len(failed),
+        "completed_shards": completed,
+        "failed_shards": failed,
+        "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+    }
+    write_json(run_dir / "summary.json", summary_payload)
+    write_block_report(run_dir, summary_payload)
     update_progress(
         run_dir=run_dir,
         block=block,

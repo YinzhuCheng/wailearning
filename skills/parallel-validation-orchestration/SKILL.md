@@ -118,6 +118,8 @@ Produce these durable artifacts:
 - a results file
 - per-shard logs
 - a final summary
+- a block report file
+- a plain-text block summary file
 
 ## Automatic Block Splitting
 
@@ -426,6 +428,21 @@ When a worker fails:
    first failure”
 4. write the failed shard log path into state
 5. leave enough information for a later focused rerun
+
+## Resume / Reconnect Aid
+
+Every finished run should leave behind a quick human-readable summary file in
+the run directory. Use it on reconnect to answer:
+
+- which blocks completed
+- which shards failed
+- whether the failures look like product/test regressions or environment /
+  bootstrap problems
+
+Preferred artifact pair:
+
+- `block-report.json`
+- `block-summary.txt`
 
 ## Task Metadata
 
