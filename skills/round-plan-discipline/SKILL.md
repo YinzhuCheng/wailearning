@@ -20,6 +20,33 @@ Use this skill when the user asks for stepwise execution, phased work, durable
 plan memory, or repeated "finish a round, commit, review plan, continue"
 behavior.
 
+## Execution Modes
+
+This skill supports two operating modes:
+
+### 1. Continuous Mode
+
+Default mode for long tasks.
+
+- execute consecutive rounds without stopping between every round
+- only pause when a round finishes, a blocker appears, or the user changes the
+  goal
+- still re-read the plan at the start of each new round
+
+### 2. Interruption Mode
+
+Use when the user wants a tighter control loop.
+
+- stop after every round, or even after a sub-step inside a round when the user
+  asks for finer granularity
+- re-check the plan and user direction before resuming
+- useful when the operator wants to inspect progress between blocks, fixes, or
+  validation transitions
+
+If the user says to "hang up after each round" or to "stop after a smaller
+sub-step", treat that as interruption mode. If the user says to continue until
+further notice, use continuous mode.
+
 ## Round Contract
 
 Every round must satisfy this order:

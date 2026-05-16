@@ -68,7 +68,9 @@ whether a repeated workflow belongs in docs, a skill, or a script.
    automatic refill, progress files, and optional PostgreSQL isolation?”
 7. Use `round-plan-discipline` when the user requires explicit multi-round
    execution with plan re-reading, round-end plan updates, AGENTS closeout,
-   and local commit-without-push behavior every round.
+   and local commit-without-push behavior every round. The skill supports both
+   continuous execution and user-requested interruption mode with finer-grained
+   pause points.
 
 ## Related Files
 
