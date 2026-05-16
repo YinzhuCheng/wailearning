@@ -40,6 +40,7 @@ class Task:
     kind: str
     block: str
     port: int | None = None
+    aux_port: int | None = None
     origin: str = "primary"
     origin_detail: str = "direct"
 
@@ -207,6 +208,7 @@ def safe_name(shard: str) -> str:
 def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -> list[Task]:
     tasks: list[Task] = []
     pg_index = 0
+    pw_index = 0
     for raw_path in paths:
         if not is_valid_test_target(raw_path):
             continue
@@ -223,6 +225,22 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                 )
             )
             pg_index += 1
+            continue
+        if path.startswith("tests/e2e/web-school/") and path.endswith(".spec.js"):
+            api_port = 18112 + pw_index
+            ui_port = 19112 + pw_index
+            tasks.append(
+                Task(
+                    shard=path,
+                    kind="playwright",
+                    block=block_name if block_name != "auto" else "playwright-school-e2e",
+                    port=api_port,
+                    aux_port=ui_port,
+                    origin="primary",
+                    origin_detail="direct-target",
+                )
+            )
+            pw_index += 1
             continue
         if path.startswith("tests/behavior/"):
             tasks.append(
@@ -691,9 +709,41 @@ def start_postgres_worker(task: Task, run_dir: Path) -> RunningTask:
     )
 
 
+def start_playwright_worker(task: Task, run_dir: Path) -> RunningTask:
+    if task.port is None or task.aux_port is None:
+        raise ValueError(f"Playwright task missing ports: {task.shard}")
+    safe = safe_name(task.shard)
+    log_path = run_dir / f"WAI-VALID-worker-{safe}.log"
+    err_path = run_dir / f"WAI-VALID-worker-{safe}.err.log"
+    out_fh = log_path.open("wb")
+    err_fh = err_path.open("wb")
+    spec_name = Path(task.shard).name
+    runner = REPO_ROOT / "apps" / "web" / "school" / "scripts" / "playwright-external-runner.cjs"
+    proc = subprocess.Popen(
+        [
+            "node",
+            str(runner),
+            spec_name,
+            "--project=chromium",
+        ],
+        cwd=str(REPO_ROOT / "apps" / "web" / "school"),
+        env={
+            **os.environ,
+            "E2E_API_PORT": str(task.port),
+            "E2E_UI_PORT": str(task.aux_port),
+            "PLAYWRIGHT_USE_EXTERNAL_SERVERS": "true",
+        },
+        stdout=out_fh,
+        stderr=err_fh,
+    )
+    return RunningTask(task=task, proc=proc, log_path=log_path, err_path=err_path, run_dir=None, started_at=time.time())
+
+
 def start_task(task: Task, run_dir: Path) -> RunningTask:
     if task.kind == "postgres":
         return start_postgres_worker(task, run_dir)
+    if task.kind == "playwright":
+        return start_playwright_worker(task, run_dir)
     return start_pytest_worker(task, run_dir)
 
 
