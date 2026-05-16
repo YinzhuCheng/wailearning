@@ -59,12 +59,17 @@ def tail_lines(path: Path, count: int = 10) -> list[str]:
 def render_progress(progress_path: Path, run_id: str) -> None:
     payload = load_json(progress_path) or {}
     total = int(payload.get("total") or 0)
-    done = int(payload.get("completed_count") or 0)
+    done = int(payload.get("completed_count") or payload.get("passed_count") or 0)
     failed = int(payload.get("failed_count") or 0)
     running = list(payload.get("running") or [])
     queue = int(payload.get("queue_remaining") or 0)
     active_block = str(payload.get("block") or payload.get("active_block") or "")
     concurrency = payload.get("concurrency") or payload.get("block_concurrency") or ""
+    regression_mode = str(payload.get("regression_mode") or "n/a")
+    report = payload.get("report") or {}
+    block_report = report.get("blocks") or {}
+    origin_report = report.get("origins") or {}
+    running_slots = payload.get("running_slots") or []
     pct = int(round((done / total) * 100)) if total else 0
     bar_len = 30
     filled = min(bar_len, max(0, int((pct / 100) * bar_len)))
@@ -72,14 +77,37 @@ def render_progress(progress_path: Path, run_id: str) -> None:
 
     print(f"[WAI-VALID] [{bar}] {pct}%")
     print(f"run={run_id}")
-    print(f"block={active_block or 'n/a'} concurrency={concurrency or 'n/a'}")
-    print(f"done={done}/{total} running={len(running)} failed={failed} queue={queue}")
+    print(f"block={active_block or 'n/a'} concurrency={concurrency or 'n/a'} regression={regression_mode}")
+    print(f"passed={done}/{total} running={len(running)} failed={failed} queue={queue}")
     if payload.get("updated_at"):
         print(f"updated={payload['updated_at']}")
+    print(
+        "origins:"
+        f" primary={origin_report.get('primary_total', 0)}"
+        f" regression={origin_report.get('regression_total', 0)}"
+        f" retry={origin_report.get('retry_total', 0)}"
+    )
     print()
-    print("running shards:")
-    for shard in running:
-        print(f" - {shard}")
+    print("running slots:")
+    if running_slots:
+        for slot in running_slots:
+            print(
+                f" - [{slot.get('block', 'n/a')}] {slot.get('shard', 'n/a')}"
+                f" origin={slot.get('origin', 'n/a')}"
+            )
+    else:
+        print(" - none")
+    print()
+    print("blocks:")
+    for block_name, block_payload in block_report.items():
+        print(
+            f" - {block_name}:"
+            f" pass={block_payload.get('completed_count', 0)}/{block_payload.get('total', 0)}"
+            f" fail={block_payload.get('failed_count', 0)}"
+            f" run={block_payload.get('running_count', 0)}"
+            f" queue={block_payload.get('queue_remaining', 0)}"
+            f" conc={block_payload.get('configured_concurrency', 'n/a')}"
+        )
     print()
     print("recent events:")
     events_file = progress_path.with_name("events.log")

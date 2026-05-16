@@ -33,6 +33,8 @@ class Task:
     kind: str
     block: str
     port: int | None = None
+    origin: str = "primary"
+    origin_detail: str = "direct"
 
 
 @dataclass
@@ -72,6 +74,12 @@ def parse_args() -> argparse.Namespace:
         default=HEARTBEAT_SECONDS,
         help="Rewrite progress at least this often even when no shard starts or ends.",
     )
+    parser.add_argument(
+        "--regression-mode",
+        choices=("light", "medium", "heavy"),
+        default="medium",
+        help="Logical regression intensity label for reporting and future expansion rules.",
+    )
     return parser.parse_args()
 
 
@@ -103,6 +111,8 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                     kind="postgres",
                     block=block_name if block_name != "auto" else "backend-postgres-sensitive",
                     port=postgres_base_port + pg_index,
+                    origin="primary",
+                    origin_detail="direct-target",
                 )
             )
             pg_index += 1
@@ -113,6 +123,8 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                     shard=path,
                     kind="pytest",
                     block=block_name if block_name != "auto" else "behavior",
+                    origin="primary",
+                    origin_detail="direct-target",
                 )
             )
             continue
@@ -122,6 +134,8 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                     shard=path,
                     kind="pytest",
                     block=block_name if block_name != "auto" else "backend-sqlite-compatible",
+                    origin="primary",
+                    origin_detail="direct-target",
                 )
             )
             continue
@@ -130,6 +144,8 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                 shard=path,
                 kind="pytest",
                 block=block_name if block_name != "auto" else "generic",
+                origin="primary",
+                origin_detail="direct-target",
             )
         )
     return tasks
@@ -140,13 +156,20 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def write_queue_snapshot(queue: list[Task], run_id: str, run_dir: Path, concurrency: int) -> None:
+def write_queue_snapshot(
+    queue: list[Task],
+    run_id: str,
+    run_dir: Path,
+    concurrency: int,
+    regression_mode: str,
+) -> None:
     write_json(
         QUEUE_PATH,
         {
             "run_id": run_id,
             "run_dir": str(run_dir),
             "concurrency": concurrency,
+            "regression_mode": regression_mode,
             "queue_remaining": [asdict(task) for task in queue],
         },
     )
@@ -165,6 +188,7 @@ def update_current_run(run_id: str, run_dir: Path) -> None:
             "progress_file": str(run_dir / "progress.json"),
             "events_file": str(run_dir / "events.log"),
             "results_file": str(run_dir / "results.jsonl"),
+            "run_config_file": str(run_dir / "run-config.json"),
             "mode": "supervisor",
         },
     )
@@ -177,9 +201,11 @@ def update_state(
     status: str,
     block: str,
     concurrency: int,
+    regression_mode: str,
     total: int,
     completed: list[str],
     failed: list[str],
+    block_summaries: dict[str, Any],
 ) -> None:
     write_json(
         STATE_PATH,
@@ -189,11 +215,13 @@ def update_state(
             "status": status,
             "block": block,
             "concurrency": concurrency,
+            "regression_mode": regression_mode,
             "total": total,
             "completed_count": len(completed),
             "failed_count": len(failed),
             "completed": completed,
             "failed": failed,
+            "blocks": block_summaries,
             "pid": os.getpid(),
             "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
         },
@@ -205,12 +233,62 @@ def update_progress(
     run_dir: Path,
     block: str,
     concurrency: int,
+    regression_mode: str,
     queue: list[Task],
     running: list[RunningTask],
     completed: list[str],
     failed: list[str],
     total: int,
+    tasks: list[Task],
 ) -> None:
+    task_index = {task.shard: task for task in tasks}
+    block_names = sorted({task.block for task in tasks})
+    block_summaries: dict[str, Any] = {}
+    completed_set = set(completed)
+    failed_set = set(failed)
+    queued_counts: dict[str, int] = {}
+    for queued in queue:
+        queued_counts[queued.block] = queued_counts.get(queued.block, 0) + 1
+
+    running_entries: list[dict[str, Any]] = []
+    for running_task in running:
+        running_entries.append(
+            {
+                "shard": running_task.task.shard,
+                "block": running_task.task.block,
+                "kind": running_task.task.kind,
+                "origin": running_task.task.origin,
+                "origin_detail": running_task.task.origin_detail,
+                "slot_label": running_task.task.shard,
+                "started_at_epoch": running_task.started_at,
+            }
+        )
+
+    for block_name in block_names:
+        block_tasks = [task for task in tasks if task.block == block_name]
+        block_completed = sum(1 for task in block_tasks if task.shard in completed_set)
+        block_failed = sum(1 for task in block_tasks if task.shard in failed_set)
+        block_running = [entry for entry in running_entries if entry["block"] == block_name]
+        block_summaries[block_name] = {
+            "name": block_name,
+            "configured_concurrency": concurrency if block_name == block else None,
+            "total": len(block_tasks),
+            "completed_count": block_completed,
+            "failed_count": block_failed,
+            "running_count": len(block_running),
+            "queue_remaining": queued_counts.get(block_name, 0),
+            "running_slots": block_running,
+            "origins": {
+                "primary": sum(1 for task in block_tasks if task.origin == "primary"),
+                "regression": sum(1 for task in block_tasks if task.origin == "regression"),
+                "retry": sum(1 for task in block_tasks if task.origin == "retry"),
+            },
+        }
+
+    primary_total = sum(1 for task in tasks if task.origin == "primary")
+    regression_total = sum(1 for task in tasks if task.origin == "regression")
+    retry_total = sum(1 for task in tasks if task.origin == "retry")
+
     write_json(
         run_dir / "progress.json",
         {
@@ -218,13 +296,31 @@ def update_progress(
             "run_id": run_dir.name,
             "block": block,
             "concurrency": concurrency,
+            "regression_mode": regression_mode,
             "queue_remaining": len(queue),
             "running": [task.task.shard for task in running],
+            "running_slots": running_entries,
             "completed_count": len(completed),
             "failed_count": len(failed),
             "completed": completed,
             "failed": failed,
             "total": total,
+            "passed_count": len(completed),
+            "report": {
+                "summary": {
+                    "passed": len(completed),
+                    "failed": len(failed),
+                    "total": total,
+                    "running": len(running),
+                    "queued": len(queue),
+                },
+                "blocks": block_summaries,
+                "origins": {
+                    "primary_total": primary_total,
+                    "regression_total": regression_total,
+                    "retry_total": retry_total,
+                },
+            },
         },
     )
 
@@ -392,6 +488,7 @@ def main() -> int:
             "block": block,
             "concurrency": args.concurrency,
             "heartbeat_seconds": args.heartbeat_seconds,
+            "regression_mode": args.regression_mode,
             "tasks": [asdict(task) for task in tasks],
         },
     )
@@ -410,20 +507,24 @@ def main() -> int:
         status="running",
         block=block,
         concurrency=args.concurrency,
+        regression_mode=args.regression_mode,
         total=len(tasks),
         completed=completed,
         failed=failed,
+        block_summaries={},
     )
-    write_queue_snapshot(queue, run_id, run_dir, args.concurrency)
+    write_queue_snapshot(queue, run_id, run_dir, args.concurrency, args.regression_mode)
     update_progress(
         run_dir=run_dir,
         block=block,
         concurrency=args.concurrency,
+        regression_mode=args.regression_mode,
         queue=queue,
         running=running,
         completed=completed,
         failed=failed,
         total=len(tasks),
+        tasks=tasks,
     )
 
     try:
@@ -435,9 +536,9 @@ def main() -> int:
                 running.append(worker)
                 append_event(
                     events_path,
-                    f"START {task.kind} {task.shard} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
+                    f"START {task.kind} {task.shard} block={task.block} origin={task.origin} detail={task.origin_detail} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
                 )
-                write_queue_snapshot(queue, run_id, run_dir, args.concurrency)
+                write_queue_snapshot(queue, run_id, run_dir, args.concurrency, args.regression_mode)
                 state_changed = True
 
             next_running: list[RunningTask] = []
@@ -453,9 +554,9 @@ def main() -> int:
                 append_result(results_path, worker, exit_code)
                 append_event(
                     events_path,
-                    f"END {worker.task.kind} {worker.task.shard} exit={exit_code} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
+                    f"END {worker.task.kind} {worker.task.shard} block={worker.task.block} origin={worker.task.origin} exit={exit_code} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
                 )
-                write_queue_snapshot(queue, run_id, run_dir, args.concurrency)
+                write_queue_snapshot(queue, run_id, run_dir, args.concurrency, args.regression_mode)
                 state_changed = True
             running = next_running
 
@@ -465,21 +566,26 @@ def main() -> int:
                     run_dir=run_dir,
                     block=block,
                     concurrency=args.concurrency,
+                    regression_mode=args.regression_mode,
                     queue=queue,
                     running=running,
                     completed=completed,
                     failed=failed,
                     total=len(tasks),
+                    tasks=tasks,
                 )
+                block_summaries = (json.loads((run_dir / "progress.json").read_text(encoding="utf-8")).get("report") or {}).get("blocks") or {}
                 update_state(
                     run_id=run_id,
                     run_dir=run_dir,
                     status="running",
                     block=block,
                     concurrency=args.concurrency,
+                    regression_mode=args.regression_mode,
                     total=len(tasks),
                     completed=completed,
                     failed=failed,
+                    block_summaries=block_summaries,
                 )
                 last_progress_write = now
             time.sleep(1)
@@ -490,9 +596,11 @@ def main() -> int:
             status="supervisor_error",
             block=block,
             concurrency=args.concurrency,
+            regression_mode=args.regression_mode,
             total=len(tasks),
             completed=completed,
             failed=failed,
+            block_summaries={},
         )
         raise
     finally:
@@ -507,6 +615,7 @@ def main() -> int:
             "status": summary_status,
             "block": block,
             "concurrency": args.concurrency,
+            "regression_mode": args.regression_mode,
             "total": len(tasks),
             "completed_count": len(completed),
             "failed_count": len(failed),
@@ -519,21 +628,26 @@ def main() -> int:
         run_dir=run_dir,
         block=block,
         concurrency=args.concurrency,
+        regression_mode=args.regression_mode,
         queue=queue,
         running=running,
         completed=completed,
         failed=failed,
         total=len(tasks),
+        tasks=tasks,
     )
+    block_summaries = (json.loads((run_dir / "progress.json").read_text(encoding="utf-8")).get("report") or {}).get("blocks") or {}
     update_state(
         run_id=run_id,
         run_dir=run_dir,
         status=summary_status,
         block=block,
         concurrency=args.concurrency,
+        regression_mode=args.regression_mode,
         total=len(tasks),
         completed=completed,
         failed=failed,
+        block_summaries=block_summaries,
     )
     return 0 if not failed else 1
 

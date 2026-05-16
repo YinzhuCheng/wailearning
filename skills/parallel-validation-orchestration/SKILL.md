@@ -99,6 +99,7 @@ Accept either:
 - explicit test paths/files
 - a directory list
 - a mixed list of test samples
+- a natural-language regression intent such as `light`, `medium`, or `heavy`
 
 The skill must then perform **automatic block splitting** by:
 
@@ -149,6 +150,27 @@ Examples:
 The supervisor must keep the block-specific concurrency in the progress file so
 the operator can see which block is using which budget.
 
+## Regression Intensity
+
+The orchestration layer should accept a regression intensity label in addition
+to the raw shard list.
+
+Recommended vocabulary:
+
+- `light`
+  - direct targets only
+  - minimum static/governance validation
+- `medium`
+  - direct targets
+  - nearby related blocks
+  - historically fragile regressions when relevant
+- `heavy`
+  - any logic change expands to the related logic surface
+  - still not equivalent to full-suite by default
+
+The run config, progress file, and monitor should all expose the chosen
+regression intensity explicitly.
+
 ## Progress Listener
 
 The process pair should include a progress listener that:
@@ -182,6 +204,8 @@ The visible monitor window should:
 - refresh on an interval
 - show block name, concurrency, running, completed, failed, and queue counts
 - list the currently running shards
+- show regression intensity and regression-origin breakdown
+- show per-block pass / fail / total and current slot occupancy
 - be easy to inspect without switching away from chat
 
 The monitor window is for visibility; the progress file remains the source of
@@ -343,6 +367,10 @@ Minimum fields in the progress file:
 - failed shard list
 - active block name
 - configured concurrency
+- regression intensity
+- running slot metadata
+- per-block summary metadata
+- regression-origin totals
 
 ## Failure Handling
 
@@ -354,6 +382,23 @@ When a worker fails:
    first failure”
 4. write the failed shard log path into state
 5. leave enough information for a later focused rerun
+
+## Task Metadata
+
+Every supervised task should be able to carry:
+
+- `block`
+- `kind`
+- `origin`
+  - `primary`
+  - `regression`
+  - `retry`
+- `origin_detail`
+  - short label such as `direct-target`, `adjacent-surface`, or
+    `failure-rerun`
+
+The monitor should expose these labels so the operator can distinguish direct
+tests from expanded regression coverage.
 
 ## Guardrails
 
