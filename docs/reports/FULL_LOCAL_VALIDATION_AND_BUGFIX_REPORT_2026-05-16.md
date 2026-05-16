@@ -316,6 +316,26 @@ Follow-up direction:
   rewrites progress on every state change and performs automatic slot refill
   instead of batch-style manual topping up
 
+### Checkpoint 6: run-directory reuse drift identified and supervisor replacement started
+
+Additional diagnosis from the stale `manual-10way` artifacts:
+
+- the same event log contained duplicate `START` lines for the first wave of
+  behavior shards at different timestamps;
+- this is consistent with an ad hoc rerun reusing the same run directory and
+  appending new evidence to old evidence instead of starting a fresh
+  run-identity boundary.
+
+Immediate hardening direction:
+
+- the tracked supervisor should use a `WAI-VALID-*` run id as the execution
+  identity;
+- a fresh run must refuse to reuse an existing run directory unless resume or
+  explicit replacement semantics were requested;
+- the supervisor must own the current-run pointer, queue snapshot, progress
+  file, state file, and results file together so the monitor has one coherent
+  source of truth.
+
 ## Final Outcome
 
 In progress.

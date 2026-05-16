@@ -340,3 +340,26 @@ Mitigation:
   workers.
 - When a PostgreSQL shard fails too quickly to produce `pytest.log`, inspect
   the worker wrapper stderr before debugging product code.
+
+### Pitfall 92: reusing the same validation run directory can append old events and hide the real run boundary
+
+During the May 2026 parallel-validation experiments, some ad hoc reruns reused
+an existing run directory and appended new `START ...` lines to the existing
+`events.log`. That produced misleading duplicates for the first wave of shards
+and made it harder to tell whether the scheduler had actually refilled slots or
+had simply replayed old evidence in place.
+
+Observed symptom:
+
+- the same shard appears to "start" twice in one event log even though only one
+  final result record exists for the later attempt;
+- the visible monitor looks frozen or contradictory because the old run history
+  and the new partial rerun live in the same directory.
+
+Mitigation:
+
+- treat the run directory as part of the execution identity, not just a cache;
+- use a fresh `WAI-VALID-*` run id for fresh work;
+- only reuse a run directory when resume semantics are explicit and the
+  supervisor knows how to reconstruct queue/running/completed state from it;
+- otherwise fail fast when the target run directory already exists.

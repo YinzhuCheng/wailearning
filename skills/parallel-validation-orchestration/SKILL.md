@@ -189,11 +189,15 @@ truth.
 
 Recommended implementation files:
 
+- `ops/scripts/dev/wai_valid_supervisor.py`
 - `ops/scripts/dev/wai_valid_monitor.py`
 - `ops/scripts/windows/start-validation-monitor.bat`
+- `ops/scripts/windows/start-validation-supervisor.bat`
 
 Default operator behavior:
 
+- launching `start-validation-supervisor.bat` should start a visible Win10
+  console titled `WAI-VALID-supervisor`
 - launching `start-validation-monitor.bat` should open a visible Win10 console
   window titled `WAI-VALID-monitor`
 - the monitor should discover the current run automatically from
@@ -242,6 +246,13 @@ Keep these names in the docs and scripts:
 
 Do not rename these casually. They are intentionally the stable discovery
 surface for the operator.
+
+The first tracked implementation now lives in:
+
+- `ops/scripts/dev/wai_valid_supervisor.py`
+- `ops/scripts/windows/start-validation-supervisor.bat`
+- `ops/scripts/dev/wai_valid_monitor.py`
+- `ops/scripts/windows/start-validation-monitor.bat`
 
 ## Input Contract
 
