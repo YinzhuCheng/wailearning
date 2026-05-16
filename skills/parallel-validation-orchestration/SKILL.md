@@ -150,6 +150,13 @@ Examples:
 The supervisor must keep the block-specific concurrency in the progress file so
 the operator can see which block is using which budget.
 
+The first tracked runtime now supports block-aware launch specs such as:
+
+```text
+--block-spec behavior:5:tests/behavior/test_admin_llm_policy_behavior.py,tests/behavior/test_discussion_api_behavior.py
+--block-spec backend-postgres-sensitive:2:tests/postgres/test_postgres_dialect_guards.py,tests/postgres/test_postgres_llm_schema_and_policy.py
+```
+
 ## Regression Intensity
 
 The orchestration layer should accept a regression intensity label in addition
@@ -371,6 +378,7 @@ Minimum fields in the progress file:
 - running slot metadata
 - per-block summary metadata
 - regression-origin totals
+- block concurrency mapping
 
 ## Failure Handling
 
@@ -428,6 +436,20 @@ Escalation may be required when:
 
 If escalation is required, request it explicitly and explain that it is for the
 `WAI-VALID-*` supervisor / worker system.
+
+## Current Runtime Boundary
+
+The first tracked runtime now supports:
+
+- multi-block runs through repeated `--block-spec`
+- per-block concurrency enforcement
+- block-aware progress reporting
+
+It does **not** yet fully implement:
+
+- automatic natural-language expansion from `light` / `medium` / `heavy`
+  regression modes into additional tasks
+- a finished watchdog/resume stack
 
 ## Related Files
 

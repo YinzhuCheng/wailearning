@@ -47,15 +47,28 @@ class RunningTask:
     started_at: float
 
 
+@dataclass
+class BlockSpec:
+    name: str
+    concurrency: int
+    paths: list[str]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("paths", nargs="+", help="Pytest shard paths or directories to supervise.")
+    parser.add_argument("paths", nargs="*", help="Pytest shard paths or directories to supervise.")
     parser.add_argument("--run-id", required=True, help="Logical run id. 'WAI-VALID-' is added if missing.")
-    parser.add_argument("--concurrency", type=int, required=True, help="Maximum concurrent shards for this run.")
+    parser.add_argument("--concurrency", type=int, help="Maximum concurrent shards for a single-block run.")
     parser.add_argument(
         "--block",
         default="auto",
         help="Optional logical block name for progress reporting. Defaults to auto classification.",
+    )
+    parser.add_argument(
+        "--block-spec",
+        action="append",
+        default=[],
+        help="Block definition in the form block-name:concurrency:path1,path2,path3 . May be repeated.",
     )
     parser.add_argument(
         "--postgres-base-port",
@@ -80,7 +93,18 @@ def parse_args() -> argparse.Namespace:
         default="medium",
         help="Logical regression intensity label for reporting and future expansion rules.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.block_spec:
+        if args.concurrency is not None:
+            raise SystemExit("--concurrency cannot be combined with --block-spec.")
+        if args.paths:
+            raise SystemExit("Positional paths cannot be combined with --block-spec.")
+    else:
+        if args.concurrency is None:
+            raise SystemExit("--concurrency is required when --block-spec is not used.")
+        if not args.paths:
+            raise SystemExit("At least one path is required for a single-block run.")
+    return args
 
 
 def ensure_prefixed_run_id(run_id: str) -> str:
@@ -151,6 +175,46 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
     return tasks
 
 
+def parse_block_specs(specs: list[str]) -> list[BlockSpec]:
+    block_specs: list[BlockSpec] = []
+    for raw_spec in specs:
+        if raw_spec.count(":") < 2:
+            raise SystemExit(f"Invalid --block-spec: {raw_spec}")
+        name, concurrency_text, path_blob = raw_spec.split(":", 2)
+        name = name.strip()
+        if not name:
+            raise SystemExit(f"Invalid --block-spec name: {raw_spec}")
+        try:
+            concurrency = int(concurrency_text.strip())
+        except ValueError as exc:
+            raise SystemExit(f"Invalid --block-spec concurrency: {raw_spec}") from exc
+        paths = [path.strip() for path in path_blob.split(",") if path.strip()]
+        if not paths:
+            raise SystemExit(f"Invalid --block-spec paths: {raw_spec}")
+        block_specs.append(BlockSpec(name=name, concurrency=concurrency, paths=paths))
+    return block_specs
+
+
+def build_block_specs(args: argparse.Namespace) -> list[BlockSpec]:
+    if args.block_spec:
+        return parse_block_specs(args.block_spec)
+    block_name = args.block if args.block != "auto" else "auto"
+    return [BlockSpec(name=block_name, concurrency=int(args.concurrency), paths=list(args.paths))]
+
+
+def classify_block_tasks(block_specs: list[BlockSpec], postgres_base_port: int) -> tuple[list[Task], dict[str, int]]:
+    tasks: list[Task] = []
+    block_concurrency: dict[str, int] = {}
+    port_cursor = postgres_base_port
+    for block_spec in block_specs:
+        block_concurrency[block_spec.name] = block_spec.concurrency
+        block_tasks = classify_tasks(block_spec.paths, block_spec.name, port_cursor)
+        tasks.extend(block_tasks)
+        postgres_count = sum(1 for task in block_tasks if task.kind == "postgres")
+        port_cursor += postgres_count
+    return tasks, block_concurrency
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -162,6 +226,7 @@ def write_queue_snapshot(
     run_dir: Path,
     concurrency: int,
     regression_mode: str,
+    block_concurrency: dict[str, int],
 ) -> None:
     write_json(
         QUEUE_PATH,
@@ -170,6 +235,7 @@ def write_queue_snapshot(
             "run_dir": str(run_dir),
             "concurrency": concurrency,
             "regression_mode": regression_mode,
+            "block_concurrency": block_concurrency,
             "queue_remaining": [asdict(task) for task in queue],
         },
     )
@@ -206,6 +272,7 @@ def update_state(
     completed: list[str],
     failed: list[str],
     block_summaries: dict[str, Any],
+    block_concurrency: dict[str, int],
 ) -> None:
     write_json(
         STATE_PATH,
@@ -216,6 +283,7 @@ def update_state(
             "block": block,
             "concurrency": concurrency,
             "regression_mode": regression_mode,
+            "block_concurrency": block_concurrency,
             "total": total,
             "completed_count": len(completed),
             "failed_count": len(failed),
@@ -240,6 +308,7 @@ def update_progress(
     failed: list[str],
     total: int,
     tasks: list[Task],
+    block_concurrency: dict[str, int],
 ) -> None:
     task_index = {task.shard: task for task in tasks}
     block_names = sorted({task.block for task in tasks})
@@ -271,7 +340,7 @@ def update_progress(
         block_running = [entry for entry in running_entries if entry["block"] == block_name]
         block_summaries[block_name] = {
             "name": block_name,
-            "configured_concurrency": concurrency if block_name == block else None,
+            "configured_concurrency": block_concurrency.get(block_name),
             "total": len(block_tasks),
             "completed_count": block_completed,
             "failed_count": block_failed,
@@ -297,6 +366,7 @@ def update_progress(
             "block": block,
             "concurrency": concurrency,
             "regression_mode": regression_mode,
+            "block_concurrency": block_concurrency,
             "queue_remaining": len(queue),
             "running": [task.task.shard for task in running],
             "running_slots": running_entries,
@@ -472,12 +542,14 @@ def main() -> int:
     ensure_python()
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     run_id = ensure_prefixed_run_id(args.run_id)
-    tasks = classify_tasks(args.paths, args.block, args.postgres_base_port)
+    block_specs = build_block_specs(args)
+    tasks, block_concurrency = classify_block_tasks(block_specs, args.postgres_base_port)
     if not tasks:
         raise SystemExit("No tasks were classified from the provided paths.")
-    block = args.block if args.block != "auto" else tasks[0].block
+    block = tasks[0].block
     run_dir = LOG_ROOT / run_id
     ensure_clean_run_dir(run_dir, args.replace_run_dir)
+    max_concurrency = max(block_concurrency.values())
 
     PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
     update_current_run(run_id, run_dir)
@@ -486,9 +558,18 @@ def main() -> int:
         {
             "run_id": run_id,
             "block": block,
-            "concurrency": args.concurrency,
+            "concurrency": max_concurrency,
             "heartbeat_seconds": args.heartbeat_seconds,
             "regression_mode": args.regression_mode,
+            "blocks": [
+                {
+                    "name": block_spec.name,
+                    "concurrency": block_spec.concurrency,
+                    "paths": block_spec.paths,
+                }
+                for block_spec in block_specs
+            ],
+            "block_concurrency": block_concurrency,
             "tasks": [asdict(task) for task in tasks],
         },
     )
@@ -506,18 +587,19 @@ def main() -> int:
         run_dir=run_dir,
         status="running",
         block=block,
-        concurrency=args.concurrency,
+        concurrency=max_concurrency,
         regression_mode=args.regression_mode,
         total=len(tasks),
         completed=completed,
         failed=failed,
         block_summaries={},
+        block_concurrency=block_concurrency,
     )
-    write_queue_snapshot(queue, run_id, run_dir, args.concurrency, args.regression_mode)
+    write_queue_snapshot(queue, run_id, run_dir, max_concurrency, args.regression_mode, block_concurrency)
     update_progress(
         run_dir=run_dir,
         block=block,
-        concurrency=args.concurrency,
+        concurrency=max_concurrency,
         regression_mode=args.regression_mode,
         queue=queue,
         running=running,
@@ -525,21 +607,34 @@ def main() -> int:
         failed=failed,
         total=len(tasks),
         tasks=tasks,
+        block_concurrency=block_concurrency,
     )
 
     try:
         while queue or running:
             state_changed = False
-            while queue and len(running) < args.concurrency:
-                task = queue.pop(0)
+            next_task_index: int | None = None
+            for index, candidate in enumerate(queue):
+                block_running_count = sum(1 for worker in running if worker.task.block == candidate.block)
+                if block_running_count < block_concurrency.get(candidate.block, max_concurrency):
+                    next_task_index = index
+                    break
+            while next_task_index is not None:
+                task = queue.pop(next_task_index)
                 worker = start_task(task, run_dir)
                 running.append(worker)
                 append_event(
                     events_path,
                     f"START {task.kind} {task.shard} block={task.block} origin={task.origin} detail={task.origin_detail} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
                 )
-                write_queue_snapshot(queue, run_id, run_dir, args.concurrency, args.regression_mode)
+                write_queue_snapshot(queue, run_id, run_dir, max_concurrency, args.regression_mode, block_concurrency)
                 state_changed = True
+                next_task_index = None
+                for index, candidate in enumerate(queue):
+                    block_running_count = sum(1 for worker in running if worker.task.block == candidate.block)
+                    if block_running_count < block_concurrency.get(candidate.block, max_concurrency):
+                        next_task_index = index
+                        break
 
             next_running: list[RunningTask] = []
             for worker in running:
@@ -556,16 +651,17 @@ def main() -> int:
                     events_path,
                     f"END {worker.task.kind} {worker.task.shard} block={worker.task.block} origin={worker.task.origin} exit={exit_code} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
                 )
-                write_queue_snapshot(queue, run_id, run_dir, args.concurrency, args.regression_mode)
+                write_queue_snapshot(queue, run_id, run_dir, max_concurrency, args.regression_mode, block_concurrency)
                 state_changed = True
             running = next_running
 
+            active_block = running[0].task.block if running else (queue[0].block if queue else block)
             now = time.time()
             if state_changed or now - last_progress_write >= args.heartbeat_seconds:
                 update_progress(
                     run_dir=run_dir,
-                    block=block,
-                    concurrency=args.concurrency,
+                    block=active_block,
+                    concurrency=max_concurrency,
                     regression_mode=args.regression_mode,
                     queue=queue,
                     running=running,
@@ -573,19 +669,21 @@ def main() -> int:
                     failed=failed,
                     total=len(tasks),
                     tasks=tasks,
+                    block_concurrency=block_concurrency,
                 )
                 block_summaries = (json.loads((run_dir / "progress.json").read_text(encoding="utf-8")).get("report") or {}).get("blocks") or {}
                 update_state(
                     run_id=run_id,
                     run_dir=run_dir,
                     status="running",
-                    block=block,
-                    concurrency=args.concurrency,
+                    block=active_block,
+                    concurrency=max_concurrency,
                     regression_mode=args.regression_mode,
                     total=len(tasks),
                     completed=completed,
                     failed=failed,
                     block_summaries=block_summaries,
+                    block_concurrency=block_concurrency,
                 )
                 last_progress_write = now
             time.sleep(1)
@@ -595,12 +693,13 @@ def main() -> int:
             run_dir=run_dir,
             status="supervisor_error",
             block=block,
-            concurrency=args.concurrency,
+            concurrency=max_concurrency,
             regression_mode=args.regression_mode,
             total=len(tasks),
             completed=completed,
             failed=failed,
             block_summaries={},
+            block_concurrency=block_concurrency,
         )
         raise
     finally:
@@ -614,8 +713,9 @@ def main() -> int:
             "run_id": run_id,
             "status": summary_status,
             "block": block,
-            "concurrency": args.concurrency,
+            "concurrency": max_concurrency,
             "regression_mode": args.regression_mode,
+            "block_concurrency": block_concurrency,
             "total": len(tasks),
             "completed_count": len(completed),
             "failed_count": len(failed),
@@ -627,7 +727,7 @@ def main() -> int:
     update_progress(
         run_dir=run_dir,
         block=block,
-        concurrency=args.concurrency,
+        concurrency=max_concurrency,
         regression_mode=args.regression_mode,
         queue=queue,
         running=running,
@@ -635,6 +735,7 @@ def main() -> int:
         failed=failed,
         total=len(tasks),
         tasks=tasks,
+        block_concurrency=block_concurrency,
     )
     block_summaries = (json.loads((run_dir / "progress.json").read_text(encoding="utf-8")).get("report") or {}).get("blocks") or {}
     update_state(
@@ -642,12 +743,13 @@ def main() -> int:
         run_dir=run_dir,
         status=summary_status,
         block=block,
-        concurrency=args.concurrency,
+        concurrency=max_concurrency,
         regression_mode=args.regression_mode,
         total=len(tasks),
         completed=completed,
         failed=failed,
         block_summaries=block_summaries,
+        block_concurrency=block_concurrency,
     )
     return 0 if not failed else 1
 
