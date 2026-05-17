@@ -15,6 +15,7 @@ from wai_valid_render import render_progress_snapshot
 REPO_ROOT = Path(__file__).resolve().parents[3]
 STATE_DIR = REPO_ROOT / ".agent-run" / "validation-daemon"
 LOG_ROOT = REPO_ROOT / ".agent-run" / "logs"
+CURRENT_RUN_PATH = STATE_DIR / "WAI-VALID-current-run.json"
 MONITOR_TITLE = "WAI-VALID-monitor"
 DEFAULT_REFRESH_SECONDS = 2
 
@@ -26,28 +27,79 @@ def load_json(path: Path) -> dict | None:
         return None
 
 
+def progress_score(progress_path: Path) -> tuple[int, float]:
+    payload = load_json(progress_path) or {}
+    total = int(payload.get("total") or 0)
+    done = int(payload.get("completed_count") or payload.get("passed_count") or 0)
+    running = len(list(payload.get("running") or []))
+    queue = int(payload.get("queue_remaining") or 0)
+    is_active = 1 if (running > 0 or queue > 0 or (total and done < total)) else 0
+    try:
+        mtime = progress_path.stat().st_mtime
+    except FileNotFoundError:
+        mtime = 0.0
+    return is_active, mtime
+
+
+def write_current_run(progress_path: Path, run_id: str) -> None:
+    run_dir = progress_path.parent
+    payload = {
+        "run_id": run_id,
+        "progress_file": str(progress_path),
+        "events_file": str(run_dir / "events.log"),
+        "results_file": str(run_dir / "results.jsonl"),
+        "run_config_file": str(run_dir / "run-config.json"),
+        "mode": "monitor-autoselect",
+    }
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    CURRENT_RUN_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def find_current_run() -> tuple[Path | None, str]:
-    current_run = STATE_DIR / "WAI-VALID-current-run.json"
-    if current_run.exists():
-        payload = load_json(current_run)
+    pinned_progress: Path | None = None
+    pinned_run_id = "n/a"
+    if CURRENT_RUN_PATH.exists():
+        payload = load_json(CURRENT_RUN_PATH)
         if payload:
             progress = payload.get("progress_file")
             if progress:
                 p = Path(str(progress))
                 if p.exists():
-                    return p, str(payload.get("run_id") or p.parent.name)
+                    pinned_progress = p
+                    pinned_run_id = str(payload.get("run_id") or p.parent.name)
 
     candidates = []
     for path in LOG_ROOT.glob("*/progress.json"):
         try:
-            candidates.append((path.stat().st_mtime, path))
+            candidates.append((progress_score(path), path))
         except FileNotFoundError:
             continue
-    if not candidates:
+    if pinned_progress is None and not candidates:
         return None, "n/a"
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    p = candidates[0][1]
-    return p, p.parent.name
+
+    best_progress: Path | None = None
+    best_run_id = "n/a"
+    if candidates:
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        best_progress = candidates[0][1]
+        best_run_id = best_progress.parent.name
+
+    if pinned_progress is not None:
+        pinned_active, pinned_mtime = progress_score(pinned_progress)
+        if pinned_active:
+            return pinned_progress, pinned_run_id
+        if best_progress is None:
+            return pinned_progress, pinned_run_id
+        best_active, best_mtime = progress_score(best_progress)
+        if best_progress != pinned_progress and (best_active > pinned_active or best_mtime > pinned_mtime):
+            write_current_run(best_progress, best_run_id)
+            return best_progress, best_run_id
+        return pinned_progress, pinned_run_id
+
+    if best_progress is not None:
+        write_current_run(best_progress, best_run_id)
+        return best_progress, best_run_id
+    return None, "n/a"
 
 
 def render_progress(progress_path: Path, run_id: str) -> None:
@@ -63,6 +115,8 @@ def main() -> int:
         ctypes.windll.kernel32.SetConsoleTitleW(MONITOR_TITLE)
     except Exception:
         pass
+
+    print("[WAI-VALID] monitor starting...", flush=True)
 
     while True:
         if os.name == "nt":
