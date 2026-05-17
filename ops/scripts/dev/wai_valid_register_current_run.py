@@ -25,7 +25,7 @@ def _run_preference(run_name: str) -> int:
 
 def _progress_score(progress_path: Path) -> tuple[int, int, int, float]:
     try:
-        payload = json.loads(progress_path.read_text(encoding="utf-8"))
+        payload = json.loads(progress_path.read_text(encoding="utf-8-sig"))
     except Exception:
         return (0, 0, progress_path.stat().st_mtime)
 

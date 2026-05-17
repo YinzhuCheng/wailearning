@@ -25,7 +25,7 @@ ACTIVE_STALE_AFTER_SECONDS = 15
 
 def load_json(path: Path) -> dict | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
         return None
 
