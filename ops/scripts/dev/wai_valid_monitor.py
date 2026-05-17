@@ -140,6 +140,7 @@ def find_current_run(forced_run_id: str | None = None) -> tuple[Path | None, str
         if forced_progress.exists():
             write_current_run(forced_progress, run_name)
             return forced_progress, run_name
+        return None, run_name
     pinned_progress: Path | None = None
     pinned_run_id = "n/a"
     if CURRENT_RUN_PATH.exists():

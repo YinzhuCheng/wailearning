@@ -403,3 +403,73 @@ Mitigation:
   durable validation claims.
 - when a block summary looks suspiciously all-red or all-green, sample several
   shard logs before deciding whether the product or the runner is at fault.
+
+### Pitfall 94: Windows WAI-VALID launchers can silently drop very long block arguments before the detached supervisor starts
+
+During the May 2026 Playwright block restart work, the visible launch command
+returned without error and the monitor window could still open, but no new
+`WAI-VALID-*` run directory, `progress.json`, or `events.log` appeared for the
+requested Playwright block.
+
+Observed artifact shape:
+
+- `wai_valid_windows_launcher.py` recorded the intended long `--block-spec`
+  argument in `WAI-VALID-launcher.log`;
+- `WAI-VALID-supervisor-launch.log` showed no matching `START/ARGS/PID` entry
+  for that run id;
+- `WAI-VALID-current-run.json` still pointed at the older successful run;
+- re-running a short proof launch through the same path succeeded immediately.
+
+Interpretation:
+
+- the failure is in the Windows launch chain before the detached supervisor
+  begins, not in `wai_valid_supervisor.py`, the monitor, or the Playwright
+  worker itself;
+- long block argument payloads, especially full Playwright spec lists, should
+  not be trusted to survive direct pass-through as one giant command line.
+
+Mitigation:
+
+- for detached Windows launches, write a short wrapper script that contains the
+  real argument array and launch PowerShell against that wrapper instead of
+  passing the full shard list inline;
+- after any long-argument launch, confirm all three signals before trusting the
+  monitor:
+  - a new `WAI-VALID-supervisor-launch.log` `START/ARGS/PID` entry,
+  - a new run directory under `.agent-run/logs/`,
+  - `WAI-VALID-current-run.json` updated to the new run id.
+
+### Pitfall 95: a monitor started with `--run-id` can falsely show an older run if the target progress file has not been created yet
+
+During the May 2026 block-by-block validation restart, a visible monitor window
+was launched for the next block with an explicit run id, but the window still
+rendered the last successful backend run instead of waiting for the new block.
+
+Observed artifact shape:
+
+- the operator launched `start-validation-monitor.bat <new-run-id>`;
+- the requested run did not yet have `.agent-run/logs/<run-id>/progress.json`;
+- `wai_valid_monitor.py --run-id <new-run-id>` fell back into the normal
+  auto-discovery path instead of waiting for the requested run;
+- the visible window therefore rendered the old run pinned in
+  `WAI-VALID-current-run.json`, which looked like a stale monitor bug even
+  though the new run had simply not written its first progress file yet.
+
+Interpretation:
+
+- explicit monitor pinning is only trustworthy if the monitor treats the run id
+  as a hard requirement;
+- when the forced run is not ready yet, the correct operator signal is
+  "waiting for that run", not a silent fallback to unrelated historical
+  progress.
+
+Mitigation:
+
+- when `wai_valid_monitor.py` is started with `--run-id`, return `None` and the
+  requested run id until that exact `progress.json` exists;
+- only resume auto-discovery when the monitor was started without a forced run
+  id;
+- after launching a new block, treat a monitor that immediately shows an older
+  completed run as a launch/pinning bug and inspect both:
+  - whether the new run wrote `progress.json`,
+  - whether the monitor was allowed to fall back from the requested run id.

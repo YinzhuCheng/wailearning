@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -38,9 +39,6 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    monitor = subparsers.add_parser("monitor", help="Open a visible monitor window.")
-    monitor.add_argument("--run-id", help="Optional explicit run id to pin the monitor to.")
-
     background = subparsers.add_parser("background", help="Start a detached background process.")
     background.add_argument("script_path", help="Absolute or repository-relative script path to launch.")
     background.add_argument("script_args", nargs=argparse.REMAINDER, help="Optional script arguments.")
@@ -55,37 +53,46 @@ def _normalize_script_path(path_text: str) -> Path:
     return REPO_ROOT / candidate
 
 
-def launch_monitor(run_id: str | None) -> int:
-    monitor_script = REPO_ROOT / "ops" / "scripts" / "dev" / "wai_valid_monitor.py"
-    cmd = f'"{PYTHON_EXE}" -u "{monitor_script}"'
-    if run_id:
-        cmd += f' --run-id "{run_id}"'
-    launcher_body = "@echo off\r\n" + f"title WAI-VALID-monitor\r\n{cmd}\r\n"
+def _ps_single_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _build_background_wrapper(script: Path, script_args: list[str]) -> Path:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    MONITOR_LAUNCHER_CMD.write_text(launcher_body, encoding="utf-8")
-    write_launch_log(f"monitor cmd={cmd}")
-    subprocess.Popen(
-        ["cmd.exe", "/c", "start", '"WAI-VALID-monitor"', str(MONITOR_LAUNCHER_CMD)],
-        cwd=str(REPO_ROOT),
-        creationflags=DETACHED_FLAGS,
-        close_fds=True,
+    wrapper_path = STATE_DIR / f"WAI-VALID-background-launch-{int(time.time() * 1000)}.ps1"
+    wrapper_lines = [
+        "$ErrorActionPreference = 'Stop'",
+        f"$scriptPath = {_ps_single_quote(str(script))}",
+        "$scriptArgs = @(",
+    ]
+    wrapper_lines.extend(f"    {_ps_single_quote(arg)}" for arg in script_args)
+    wrapper_lines.extend(
+        [
+            ")",
+            "& $scriptPath @scriptArgs",
+            "",
+        ]
     )
-    return 0
+    wrapper_path.write_text("\n".join(wrapper_lines), encoding="utf-8")
+    return wrapper_path
 
 
 def launch_background(script_path: str, script_args: list[str]) -> int:
     script = _normalize_script_path(script_path)
     if not script.exists():
         raise SystemExit(f"Script not found: {script}")
+    wrapper = _build_background_wrapper(script, script_args)
     args = [
         "powershell.exe",
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        str(script),
+        str(wrapper),
     ]
-    args.extend(script_args)
+    write_launch_log(f"background script={script}")
+    write_launch_log(f"background wrapper={wrapper}")
+    write_launch_log(f"background script_args={script_args!r}")
     write_launch_log(f"background args={args!r}")
     subprocess.Popen(
         args,
@@ -99,8 +106,6 @@ def launch_background(script_path: str, script_args: list[str]) -> int:
 
 def main() -> int:
     args = parse_args()
-    if args.command == "monitor":
-        return launch_monitor(args.run_id)
     if args.command == "background":
         return launch_background(args.script_path, args.script_args)
     raise SystemExit(f"Unknown command: {args.command}")
