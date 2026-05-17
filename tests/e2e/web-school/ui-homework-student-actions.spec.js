@@ -30,15 +30,12 @@ test.describe('UI: homework student actions (requires globalSetup seed)', () => 
     const row = page.locator('tbody tr').first()
     await expect(row).toBeVisible({ timeout: 15000 })
 
-    await row.getByRole('button', { name: '作业与提交' }).click()
+    await row.getByRole('button', { name: /^提交$|^去交$/ }).click()
     await expect(page).toHaveURL(/\/homework\/\d+\/submit$/)
 
     await page.goBack()
     await expect(row).toBeVisible({ timeout: 15000 })
-
-    const splitHost = row.locator('.el-dropdown').filter({ has: page.getByRole('button', { name: '作业与提交' }) })
-    await splitHost.locator('.el-dropdown__caret-button').click()
-    await page.getByRole('menuitem', { name: '仅查看说明' }).click()
+    await row.getByRole('button', { name: '说明' }).click()
     await expect(page.locator('.el-dialog').filter({ hasText: '作业详情' })).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: '关闭', exact: true }).click()
   })

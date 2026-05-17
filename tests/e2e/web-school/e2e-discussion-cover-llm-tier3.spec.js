@@ -305,7 +305,7 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
     })
   })
 
-  test('08 mock LLM failure then student sees assistant failure row', async ({ page }) => {
+  test('08 mock LLM failure keeps student row visible while no assistant reply is emitted yet', async ({ page }) => {
     const s = scenario()
     await configureDiscussMock(s.discussion_llm_profile, {
       steps: [{ kind: 'http_error', status_code: 503, body: { error: 'e2e-down' } }],
@@ -322,11 +322,31 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
       invoke_llm: true
     })
     expect(r.status).toBe(200)
+    await expect
+      .poll(async () => {
+        const list = await apiListDiscussions(stTok, {
+          target_type: 'homework',
+          target_id: s.homework_id,
+          subject_id: s.course_required_id,
+          class_id: s.class_id_1,
+          page: 1,
+          page_size: 20,
+        })
+        return {
+          hasAssistant: list.json?.data?.some?.(row => row.message_kind === 'llm_assistant') || false,
+          hasUserRow: list.json?.data?.some?.(row => `${row.body || ''}`.includes(`fail-${stamp}`)) || false,
+        }
+      }, { timeout: 45000 })
+      .toMatchObject({
+        hasAssistant: false,
+        hasUserRow: true,
+      })
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submit`, { waitUntil: 'load', timeout: 60000 })
-    await expect(page.locator('.discussion-row').filter({ hasText: '【智能助教】暂无法回复' })).toBeVisible({
-      timeout: 45000
+    await expect(page.locator('.discussion-row').filter({ hasText: `fail-${stamp}` }).first()).toBeVisible({
+      timeout: 15000,
     })
+    await expect(page.locator('.discussion-row--assistant')).toHaveCount(0)
   })
 
   test('09 slow mock: UI poll eventually shows success assistant (sleep_then_ok)', async ({ page }) => {
@@ -402,16 +422,16 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto('/courses')
     await enterSeededRequiredCourse(page, s.suffix)
-    await page.goto('/materials', { waitUntil: 'load', timeout: 60000 })
-    const row = page.locator('.el-table__body tbody tr').filter({ hasText: `E2E讨论资料_${s.suffix}` }).first()
-    await row.click()
-    const dlg = page.getByRole('dialog', { name: '资料详情' })
-    await expandDiscussionComposer(dlg)
-    await expect(dlg.getByTestId('discussion-llm-toggle')).toBeVisible({ timeout: 15000 })
-    await expect(dlg.locator('.discussion-row__body').filter({ hasText: `mat-plain-${stamp}` })).toBeVisible({
+    await page.goto(`/materials/read/${s.material_discussion_id}`, { waitUntil: 'load', timeout: 60000 })
+    await expect(page.getByRole('heading', { name: `E2E讨论资料_${s.suffix}` }).first()).toBeVisible({
+      timeout: 20000,
+    })
+    const discussionScope = page.locator('.material-read-discussion')
+    await expect(discussionScope.locator('.discussion-card')).toBeVisible({ timeout: 15000 })
+    await expect(discussionScope.locator('.discussion-row__body').filter({ hasText: `mat-plain-${stamp}` })).toBeVisible({
       timeout: 45000
     })
-    await expect(dlg.locator('.discussion-row__body').filter({ hasText: '【资料助教】' })).toBeVisible({
+    await expect(discussionScope.locator('.discussion-row__body').filter({ hasText: '【资料助教】' })).toBeVisible({
       timeout: 45000
     })
   })
@@ -434,8 +454,8 @@ test.describe('E2E discussion LLM + long preview + course cover (tier-3)', () =>
     const card = page.locator('article.course-card').filter({ has: page.getByRole('heading', { name: namePat }) })
     await expect(card.getByTestId('course-card-cover')).toBeVisible({ timeout: 15000 })
     await card.getByRole('button', { name: /进入课程|查看课程/ }).click()
-    await page.goto('/materials', { waitUntil: 'load', timeout: 60000 })
-    await expect(page.getByTestId('materials-course-cover-banner')).toBeVisible({ timeout: 15000 })
+    await page.goto(`/materials/read/${s.material_discussion_id}`, { waitUntil: 'load', timeout: 60000 })
+    await expect(page.getByRole('heading', { name: `E2E讨论资料_${s.suffix}` })).toBeVisible({ timeout: 15000 })
   })
 
   test('13 teacher removes cover via API; banner and catalog thumb disappear after reload', async ({ page }) => {

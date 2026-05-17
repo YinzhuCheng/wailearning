@@ -16,6 +16,7 @@ from apps.backend.courseeval_backend.domains.courses.access import (
     is_course_instructor,
     prepare_student_course_context,
     remove_course_enrollment,
+    refresh_subject_primary_class_id,
     subject_linked_class_ids,
     sync_course_enrollments,
 )

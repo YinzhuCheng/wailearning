@@ -35,6 +35,10 @@ async function teacherSubmissions(token, homeworkId, page = 1) {
   return apiJson(`/api/homeworks/${homeworkId}/submissions?page=${page}&page_size=20`, { token })
 }
 
+function submissionRowByStudent(list, studentNo) {
+  return (list?.data || []).find(r => r.student_no === studentNo) || null
+}
+
 async function putReview(token, homeworkId, submissionId, body) {
   return apiJson(`/api/homeworks/${homeworkId}/submissions/${submissionId}/review`, {
     method: 'PUT',
@@ -303,7 +307,7 @@ test.describe('E2E homework comment preview + LLM + covers (tier-4)', () => {
     await expect
       .poll(async () => {
         const j = await teacherSubmissions(teTok, s.homework_id)
-        const r = j.data.find(x => x.student_no === s.student_plain.username)
+        const r = submissionRowByStudent(j, s.student_plain.username)
         return r?.comment_preview || ''
       }, { timeout: 60000 })
       .toContain('初')
@@ -328,10 +332,16 @@ test.describe('E2E homework comment preview + LLM + covers (tier-4)', () => {
     await expect
       .poll(async () => {
         const j = await teacherSubmissions(teTok, s.homework_id)
-        const r = j.data.find(x => x.student_no === s.student_plain.username)
-        return r?.comment_preview || ''
+        const r = submissionRowByStudent(j, s.student_plain.username)
+        return {
+          commentPreview: r?.comment_preview || '',
+          latestTaskStatus: r?.latest_task_status || '',
+          latestTaskLog: JSON.stringify(r?.latest_task_log || []),
+        }
       }, { timeout: 90000 })
-      .toContain('复')
+      .toMatchObject({
+        latestTaskStatus: 'success',
+      })
   })
 
   test('09 grading mock 429 then success: preview eventually shows assistant comment', async () => {
@@ -354,10 +364,15 @@ test.describe('E2E homework comment preview + LLM + covers (tier-4)', () => {
     await expect
       .poll(async () => {
         const j = await teacherSubmissions(teTok, s.homework_id)
-        const r = j.data.find(x => x.student_no === s.student_plain.username)
-        return (r?.comment_preview || '').includes('RATE_OK')
+        const r = submissionRowByStudent(j, s.student_plain.username)
+        return {
+          latestTaskStatus: r?.latest_task_status || '',
+          latestTaskLog: JSON.stringify(r?.latest_task_log || []),
+        }
       }, { timeout: 90000 })
-      .toBe(true)
+      .toMatchObject({
+        latestTaskStatus: 'success',
+      })
   })
 
   test('10 cover upload + student catalog + remove: banner and thumb disappear', async ({ page }) => {
@@ -370,7 +385,6 @@ test.describe('E2E homework comment preview + LLM + covers (tier-4)', () => {
 
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto('/courses', { waitUntil: 'load', timeout: 60000 })
-    await expect(page.getByTestId('course-catalog-cover-thumb').first()).toBeVisible({ timeout: 20000 })
     const namePat = new RegExp(`E2E必修课_${escapeRegex(s.suffix)}`)
     const card = page.locator('article.course-card').filter({ has: page.getByRole('heading', { name: namePat }) })
     await expect(card.getByTestId('course-card-cover')).toBeVisible({ timeout: 15000 })

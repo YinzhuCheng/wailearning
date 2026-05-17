@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 const { spawn, spawnSync } = require('child_process')
+const fs = require('fs')
 const http = require('http')
+const net = require('net')
 const os = require('os')
 const path = require('path')
 
@@ -13,9 +15,6 @@ const isWindows = process.platform === 'win32'
 const apiPort = process.env.E2E_API_PORT || '8012'
 const uiPort = process.env.E2E_UI_PORT || '3012'
 const parentUiPort = process.env.E2E_PARENT_UI_PORT || '3014'
-const apiBase = `http://127.0.0.1:${apiPort}`
-const uiBase = `http://127.0.0.1:${uiPort}`
-const parentUiBase = `http://127.0.0.1:${parentUiPort}`
 const sqliteFile = isWindows
   ? path.join(os.tmpdir(), `playwright_e2e_${apiPort}.sqlite`)
   : `/tmp/playwright_e2e_${apiPort}.sqlite`
@@ -39,11 +38,34 @@ const useRealWorker = !['0', 'false', 'no', 'off'].includes(
 const children = []
 let cleanupStarted = false
 
+function buildHttpBase(port) {
+  return `http://127.0.0.1:${port}`
+}
+
+async function chooseOpenPort(startPort) {
+  let candidate = Number(startPort)
+  if (!Number.isFinite(candidate) || candidate <= 0) {
+    throw new Error(`invalid start port: ${startPort}`)
+  }
+  for (let i = 0; i < 50; i += 1) {
+    const port = candidate + i
+    const ok = await new Promise((resolve) => {
+      const server = net.createServer()
+      server.unref()
+      server.once('error', () => resolve(false))
+      server.listen(port, '127.0.0.1', () => {
+        server.close(() => resolve(true))
+      })
+    })
+    if (ok) return String(port)
+  }
+  throw new Error(`no free port found starting from ${startPort}`)
+}
+
 function serverEnv(extra = {}) {
   return {
     ...process.env,
     DEBUG: 'false',
-    E2E_API_URL: process.env.E2E_API_URL || apiBase,
     E2E_DEV_SEED_ENABLED: 'true',
     E2E_DEV_SEED_TOKEN: process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed',
     E2E_DEV_REQUIRE_ADMIN_JWT:
@@ -139,6 +161,18 @@ async function main() {
   const wantsParentUi =
     ['1', 'true', 'yes', 'on'].includes(String(process.env.E2E_PARENT_UI || '').trim().toLowerCase()) ||
     rawArgs.some(arg => /parent[-_]portal/i.test(String(arg)))
+  const resolvedApiBase = buildHttpBase(apiPort)
+  const resolvedUiPort = await chooseOpenPort(uiPort)
+  const resolvedUiBase = buildHttpBase(resolvedUiPort)
+  const resolvedParentUiPort = wantsParentUi ? await chooseOpenPort(parentUiPort) : parentUiPort
+  const resolvedParentUiBase = buildHttpBase(resolvedParentUiPort)
+  try {
+    if (fs.existsSync(sqliteFile)) {
+      fs.rmSync(sqliteFile, { force: true })
+    }
+  } catch (error) {
+    console.warn(`[e2e-runner] failed to reset sqlite file ${sqliteFile}: ${error}`)
+  }
   launch(
     'api',
     pythonExe,
@@ -153,28 +187,32 @@ async function main() {
     ],
     {
       cwd: repoRoot,
-      env: serverEnv()
+      env: serverEnv({
+        E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
+      })
     }
   )
-  await waitFor(`${apiBase}/api/health`, 'api')
+  await waitFor(`${resolvedApiBase}/api/health`, 'api')
 
-  launch('ui', 'node', [viteBin, '--host', '127.0.0.1', '--port', uiPort], {
+  launch('ui', 'node', [viteBin, '--host', '127.0.0.1', '--port', resolvedUiPort], {
     cwd: schoolRoot,
     env: serverEnv({
-      VITE_PROXY_TARGET: apiBase
+      E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
+      VITE_PROXY_TARGET: resolvedApiBase
     })
   })
-  await waitFor(`${uiBase}/`, 'ui')
+  await waitFor(`${resolvedUiBase}/`, 'ui')
 
   if (wantsParentUi) {
-    launch('parent-ui', 'node', [parentViteBin, '--host', '127.0.0.1', '--port', parentUiPort], {
+    launch('parent-ui', 'node', [parentViteBin, '--host', '127.0.0.1', '--port', resolvedParentUiPort], {
       cwd: parentRoot,
       env: serverEnv({
-        VITE_PROXY_TARGET: apiBase,
-        VITE_DEV_PORT: parentUiPort
+        E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
+        VITE_PROXY_TARGET: resolvedApiBase,
+        VITE_DEV_PORT: resolvedParentUiPort
       })
     })
-    await waitFor(`${parentUiBase}/`, 'parent-ui')
+    await waitFor(`${resolvedParentUiBase}/`, 'parent-ui')
   }
 
   const testCommand = customNodeScript
@@ -187,10 +225,10 @@ async function main() {
       ...process.env,
       DEBUG: 'false',
       PLAYWRIGHT_USE_EXTERNAL_SERVERS: 'true',
-      E2E_API_URL: process.env.E2E_API_URL || apiBase,
+      E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
       E2E_DEV_SEED_TOKEN: process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed',
-      PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || uiBase,
-      PLAYWRIGHT_PARENT_BASE_URL: process.env.PLAYWRIGHT_PARENT_BASE_URL || parentUiBase
+      PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || resolvedUiBase,
+      PLAYWRIGHT_PARENT_BASE_URL: process.env.PLAYWRIGHT_PARENT_BASE_URL || resolvedParentUiBase
     },
     stdio: 'inherit',
     windowsHide: true

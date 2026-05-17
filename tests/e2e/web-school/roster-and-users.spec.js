@@ -12,6 +12,14 @@ async function login(page, username, password) {
   await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 15000 })
 }
 
+function tableRowByKey(page, id) {
+  return page.locator(`tr[data-row-key="${id}"]`).first()
+}
+
+function firstDataRow(page) {
+  return page.locator('tbody tr.el-table__row').first()
+}
+
 test.describe('E2E roster + users (requires globalSetup seed)', () => {
   test.describe.configure({ timeout: 180_000 })
   test.beforeEach(async ({}, testInfo) => {
@@ -32,7 +40,9 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await login(page, s.admin.username, s.admin.password)
 
     await page.goto('/subjects')
-    await page.getByTestId(`btn-roster-enroll-${s.course_required_id}`).click()
+    const enrollBtn = page.getByTestId(`btn-roster-enroll-${s.course_required_id}`)
+    await expect(enrollBtn).toBeVisible({ timeout: 30000 })
+    await enrollBtn.click()
     await expect(page.getByTestId('dialog-roster-enroll')).toBeVisible()
 
     const row = page.locator(`[data-testid="table-roster-enroll-pick"] tr:has-text("${s.student_b.username}")`)
@@ -93,10 +103,9 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await login(page, s.admin.username, s.admin.password)
     await page.goto('/users')
 
-    const rowA = page.locator(`tr:has-text("${s.student_plain.username}")`)
-    await rowA.scrollIntoViewIfNeeded()
+    const rowA = page.locator('tr').filter({ hasText: s.student_plain.username }).first()
     await expect(rowA).toBeVisible({ timeout: 30000 })
-    await rowA.locator('.el-checkbox').first().click({ force: true })
+    await rowA.locator('.el-checkbox').first().click()
     await expect(page.getByTestId('users-open-batch-class')).toBeEnabled({ timeout: 30000 })
     await page.getByTestId('users-open-batch-class').click()
     await expect(page.getByTestId('dialog-batch-class')).toBeVisible({ timeout: 30000 })
@@ -128,7 +137,7 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     await expect(page.getByTestId('users-open-create')).toBeVisible()
   })
 
-  test('admin: students page keeps has_user false when same username account is bound in another class', async ({ page }) => {
+  test('admin: direct student create rejects when same student account is already bound in another class', async () => {
     const s = scenario()
     const adminTok = await obtainAccessToken(s.admin.username, s.admin.password)
     const sharedNo = `ui_guard_${s.suffix}`
@@ -142,28 +151,24 @@ test.describe('E2E roster + users (requires globalSetup seed)', () => {
     })
     expect(boundElsewhere.student_id).toBeTruthy()
 
-    const rosterOnly = await apiPostJson('/api/students', adminTok, {
-      name: 'Roster Only',
-      student_no: sharedNo,
-      gender: 'male',
-      class_id: Number(s.class_id_1)
-    })
-    expect(rosterOnly.has_user).toBe(false)
-
-    await login(page, s.admin.username, s.admin.password)
-    await page.goto(`/students?class_id=${s.class_id_1}`)
-
-    const row = page.locator('tr').filter({ hasText: sharedNo }).first()
-    await expect(row).toBeVisible({ timeout: 30000 })
-    await expect(row.getByText('未生成')).toBeVisible({ timeout: 15000 })
-    await expect(row.getByText('已生成')).toHaveCount(0)
+    await expect(
+      apiPostJson('/api/students', adminTok, {
+        name: 'Roster Only',
+        student_no: sharedNo,
+        gender: 'male',
+        class_id: Number(s.class_id_1)
+      })
+    ).rejects.toThrow(/POST \/api\/students failed 400/)
   })
 
   test('orphan course: roster dialog shows empty state', async ({ page }) => {
     const s = scenario()
     await login(page, s.admin.username, s.admin.password)
     await page.goto('/subjects')
-    await page.getByTestId(`btn-roster-enroll-${s.course_orphan_id}`).click()
-    await expect(page.getByText('当前课程未绑定班级，无法从花名册进课。')).toBeVisible()
+    const orphanEnrollBtn = page.getByTestId(`btn-roster-enroll-${s.course_orphan_id}`)
+    await expect(orphanEnrollBtn).toBeVisible({ timeout: 30000 })
+    await orphanEnrollBtn.click()
+    await expect(page.getByTestId('dialog-roster-enroll')).toBeVisible()
+    await expect(page.locator('.el-empty__description')).toContainText('当前课程未绑定行政班')
   })
 })

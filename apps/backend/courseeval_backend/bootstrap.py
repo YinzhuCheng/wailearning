@@ -637,6 +637,8 @@ def _backfill_subject_class_links() -> None:
     """
     db = SessionLocal()
     try:
+        if db.bind and db.bind.dialect.name == "sqlite":
+            db.execute(text("PRAGMA busy_timeout = 10000"))
         for subj in db.query(Subject).all():
             ct = (subj.course_type or "required").strip().lower()
             if ct == "elective":
@@ -681,6 +683,8 @@ def _backfill_course_material_chapters() -> None:
     """Ensure uncategorized chapter per course and link existing materials."""
     db = SessionLocal()
     try:
+        if db.bind and db.bind.dialect.name == "sqlite":
+            db.execute(text("PRAGMA busy_timeout = 10000"))
         for subj in db.query(Subject).all():
             unc = (
                 db.query(CourseMaterialChapter)
@@ -708,22 +712,30 @@ def _backfill_course_material_chapters() -> None:
                 .all()
             )
             for idx, mat in enumerate(mats):
+                db.query(CourseMaterialSection).filter(
+                    CourseMaterialSection.material_id == mat.id,
+                    CourseMaterialSection.chapter_id == unc.id,
+                ).update(
+                    {CourseMaterialSection.sort_order: idx},
+                    synchronize_session=False,
+                )
                 exists = (
-                    db.query(CourseMaterialSection)
+                    db.query(CourseMaterialSection.id)
                     .filter(
                         CourseMaterialSection.material_id == mat.id,
                         CourseMaterialSection.chapter_id == unc.id,
                     )
                     .first()
                 )
-                if not exists:
-                    db.add(
-                        CourseMaterialSection(
-                            material_id=mat.id,
-                            chapter_id=unc.id,
-                            sort_order=idx,
-                        )
+                if exists:
+                    continue
+                db.add(
+                    CourseMaterialSection(
+                        material_id=mat.id,
+                        chapter_id=unc.id,
+                        sort_order=idx,
                     )
+                )
         db.commit()
     except Exception:
         db.rollback()
