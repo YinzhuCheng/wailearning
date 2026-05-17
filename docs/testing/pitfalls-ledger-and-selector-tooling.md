@@ -363,3 +363,43 @@ Mitigation:
 - only reuse a run directory when resume semantics are explicit and the
   supervisor knows how to reconstruct queue/running/completed state from it;
 - otherwise fail fast when the target run directory already exists.
+
+### Pitfall 93: local WAI-VALID result ledgers can mark fully passing shards as failed when worker exit codes are missing
+
+During the May 2026 behavior-block rerun experiments, a local fallback runner
+recorded:
+
+```text
+passed=0/17 failed=17
+```
+
+even though every per-shard pytest log ended with `N passed` and every
+corresponding `*.err` file was empty.
+
+Observed artifact shape:
+
+- `results.jsonl` stored `exit_code: null` for completed `Start-Process`
+  workers;
+- the runner treated `null` as failure by default;
+- `summary.json` and `progress.json` therefore reported all shards failed;
+- direct inspection of `tests_behavior_*.log` showed normal pytest success
+  summaries such as `16 passed`, `42 passed`, or `2 passed, 1 skipped`.
+
+Interpretation:
+
+- this is an orchestration/accounting bug, not evidence that the behavior block
+  genuinely failed;
+- a green block can look fully red if the runner trusts only the PowerShell
+  process object and does not have a fallback interpretation path.
+
+Mitigation:
+
+- when `ExitCode` is unavailable from a completed worker process, inspect the
+  captured stdout/stderr and classify success from the pytest trailer only if:
+  - a `passed` summary is present;
+  - no `failed` summary is present;
+  - no `ERROR`, `Traceback`, `AssertionError`, or `FAILURES` section is present.
+- prefer structured supervisor results over ad hoc per-window local runners for
+  durable validation claims.
+- when a block summary looks suspiciously all-red or all-green, sample several
+  shard logs before deciding whether the product or the runner is at fault.

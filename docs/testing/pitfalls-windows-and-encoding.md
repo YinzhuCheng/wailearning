@@ -400,3 +400,34 @@ Normal local staging may fail even though file changes are correct on disk.
 If `git add` or related index-writing commands fail with index-lock permission
 errors in this environment, treat that as an execution-permission problem
 rather than a repository-integrity problem.
+
+### Pitfall 11: visible validation windows can flash and disappear when the launcher kills or depends on its own console host
+
+During the May 2026 WAI-VALID monitor/supervisor hardening pass on Windows,
+visible startup wrappers repeatedly showed this failure shape:
+
+- a PowerShell or batch window flashes open;
+- the window closes immediately;
+- the intended background validation or monitor process never survives long
+  enough to write fresh progress.
+
+Observed causes included:
+
+1. the monitor batch file set its own console title to `WAI-VALID-monitor`
+   before calling `taskkill /FI "WINDOWTITLE eq WAI-VALID-monitor"`, so the
+   launcher could kill the just-opened window instead of only stale prior
+   monitors;
+2. startup chains that rely on the visible PowerShell window as the lifetime
+   anchor can still die if the host console exits before the real child process
+   has been detached cleanly.
+
+Mitigation:
+
+- do not use the current console title as the selector before the replacement
+  monitor process is safely launched;
+- prefer a launcher that creates a new process independently of the visible
+  startup shell;
+- on Windows, treat "window flashed and disappeared" as a launcher/process-model
+  bug first, not as proof that the validation target itself failed immediately;
+- keep a local launch log or pid file for the monitor/supervisor startup path
+  so the next triage step is evidence-based instead of guessing from the UI.
