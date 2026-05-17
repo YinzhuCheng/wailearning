@@ -178,7 +178,8 @@ def test_pg07_returning_clause_returns_inserted_id():
 
 def test_pg08_uncommitted_insert_not_visible_in_other_session():
     uid = uuid.uuid4().hex[:8]
-    barrier = threading.Barrier(2)
+    insert_ready = threading.Event()
+    read_complete = threading.Event()
     visible: dict[str, bool] = {"ok": False}
 
     def writer():
@@ -188,10 +189,8 @@ def test_pg08_uncommitted_insert_not_visible_in_other_session():
                 text("INSERT INTO classes (name, grade) VALUES (:n, :g)"),
                 {"n": f"pg_tx_{uid}", "g": 2026},
             )
-            barrier.wait()
-            import time
-
-            time.sleep(0.15)
+            insert_ready.set()
+            assert read_complete.wait(timeout=2), "reader did not check visibility before writer commit"
             dbw.commit()
         finally:
             dbw.close()
@@ -199,12 +198,13 @@ def test_pg08_uncommitted_insert_not_visible_in_other_session():
     def reader():
         dbr = SessionLocal()
         try:
-            barrier.wait()
+            assert insert_ready.wait(timeout=2), "writer did not insert row before reader visibility check"
             cnt = dbr.execute(
                 text("SELECT COUNT(*) FROM classes WHERE name = :n"),
                 {"n": f"pg_tx_{uid}"},
             ).scalar_one()
             visible["ok"] = cnt == 0
+            read_complete.set()
         finally:
             dbr.close()
 
