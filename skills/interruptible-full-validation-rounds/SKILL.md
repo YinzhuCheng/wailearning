@@ -84,9 +84,11 @@ A validation block round contains:
 2. identify the single target block
 3. reconstruct that block's shard list
 4. choose the user-specified concurrency for that block
-5. launch one WAI-VALID run for that block only
-6. confirm that durable run artifacts are being written
-7. stop communication
+5. open the visible monitor window for the current run when the repository has
+   one
+6. launch one WAI-VALID run for that block only
+7. confirm that durable run artifacts are being written
+8. stop communication
 
 ### B. Bug-Fix Round
 
@@ -218,6 +220,25 @@ Use these artifacts, not chat memory, to answer on reconnect:
 - what passed
 - what failed
 - whether the failures look like product, test, or environment issues
+
+## Monitor Requirement
+
+When this skill launches a validation block, it should also start the visible
+monitor window whenever the repository provides one.
+
+Current repository path:
+
+- [`../../ops/scripts/windows/start-validation-monitor.bat`](../../ops/scripts/windows/start-validation-monitor.bat)
+
+Current monitor runtime:
+
+- [`../../ops/scripts/dev/wai_valid_monitor.py`](../../ops/scripts/dev/wai_valid_monitor.py)
+
+Default policy for future rounds:
+
+- launch the monitor before or alongside the block run
+- keep it as the user-facing live status surface
+- rely on durable artifacts as the source of truth on reconnect
 
 ## Launch / Hang-Up Procedure
 
