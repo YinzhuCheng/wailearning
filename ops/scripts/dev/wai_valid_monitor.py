@@ -18,6 +18,7 @@ LOG_ROOT = REPO_ROOT / ".agent-run" / "logs"
 CURRENT_RUN_PATH = STATE_DIR / "WAI-VALID-current-run.json"
 MONITOR_TITLE = "WAI-VALID-monitor"
 DEFAULT_REFRESH_SECONDS = 2
+ACTIVE_STALE_AFTER_SECONDS = 15
 
 
 def load_json(path: Path) -> dict | None:
@@ -27,18 +28,21 @@ def load_json(path: Path) -> dict | None:
         return None
 
 
-def progress_score(progress_path: Path) -> tuple[int, float]:
+def progress_score(progress_path: Path) -> tuple[int, int, float]:
     payload = load_json(progress_path) or {}
     total = int(payload.get("total") or 0)
     done = int(payload.get("completed_count") or payload.get("passed_count") or 0)
     running = len(list(payload.get("running") or []))
     queue = int(payload.get("queue_remaining") or 0)
-    is_active = 1 if (running > 0 or queue > 0 or (total and done < total)) else 0
     try:
         mtime = progress_path.stat().st_mtime
     except FileNotFoundError:
         mtime = 0.0
-    return is_active, mtime
+    age_seconds = max(0.0, time.time() - mtime)
+    is_recent = 1 if age_seconds <= ACTIVE_STALE_AFTER_SECONDS else 0
+    has_unfinished_work = 1 if (queue > 0 or (total and done < total)) else 0
+    is_active = 1 if (running > 0 or (has_unfinished_work and is_recent)) else 0
+    return running, is_active, mtime
 
 
 def write_current_run(progress_path: Path, run_id: str) -> None:
@@ -85,13 +89,17 @@ def find_current_run() -> tuple[Path | None, str]:
         best_run_id = best_progress.parent.name
 
     if pinned_progress is not None:
-        pinned_active, pinned_mtime = progress_score(pinned_progress)
+        pinned_running, pinned_active, pinned_mtime = progress_score(pinned_progress)
         if pinned_active:
             return pinned_progress, pinned_run_id
         if best_progress is None:
             return pinned_progress, pinned_run_id
-        best_active, best_mtime = progress_score(best_progress)
-        if best_progress != pinned_progress and (best_active > pinned_active or best_mtime > pinned_mtime):
+        best_running, best_active, best_mtime = progress_score(best_progress)
+        if best_progress != pinned_progress and (
+            best_running > pinned_running
+            or best_active > pinned_active
+            or best_mtime > pinned_mtime
+        ):
             write_current_run(best_progress, best_run_id)
             return best_progress, best_run_id
         return pinned_progress, pinned_run_id

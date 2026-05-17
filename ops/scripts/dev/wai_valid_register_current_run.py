@@ -1,26 +1,32 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 STATE_DIR = REPO_ROOT / ".agent-run" / "validation-daemon"
 LOG_ROOT = REPO_ROOT / ".agent-run" / "logs"
+ACTIVE_STALE_AFTER_SECONDS = 15
 
 
-def _progress_score(progress_path: Path) -> tuple[int, float]:
+def _progress_score(progress_path: Path) -> tuple[int, int, float]:
     try:
         payload = json.loads(progress_path.read_text(encoding="utf-8"))
     except Exception:
-        return (0, progress_path.stat().st_mtime)
+        return (0, 0, progress_path.stat().st_mtime)
 
     total = int(payload.get("total") or 0)
     done = int(payload.get("completed_count") or 0)
     running = len(list(payload.get("running") or []))
     queue = int(payload.get("queue_remaining") or 0)
-    is_active = 1 if (running > 0 or queue > 0 or (total and done < total)) else 0
-    return (is_active, progress_path.stat().st_mtime)
+    mtime = progress_path.stat().st_mtime
+    age_seconds = max(0.0, time.time() - mtime)
+    is_recent = 1 if age_seconds <= ACTIVE_STALE_AFTER_SECONDS else 0
+    has_unfinished_work = 1 if (queue > 0 or (total and done < total)) else 0
+    is_active = 1 if (running > 0 or (has_unfinished_work and is_recent)) else 0
+    return (running, is_active, mtime)
 
 
 def main() -> int:
