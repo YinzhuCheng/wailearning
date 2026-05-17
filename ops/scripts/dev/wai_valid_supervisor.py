@@ -692,6 +692,7 @@ def build_pg_worker_script(task: Task, run_dir: Path) -> Path:
         raise ValueError(f"PostgreSQL task missing port: {task.shard}")
     db_name = f"courseeval_pytest_{task.port}"
     script_path = run_dir / "WAI-VALID-pg-worker.ps1"
+    pytest_log_name = "pytest.log"
     script_body = f"""$ErrorActionPreference = 'Stop'
 $pythonExe = '{PYTHON_EXE}'
 $postgresExe = '{POSTGRES_EXE}'
@@ -701,7 +702,7 @@ $dataDir = Join-Path '{run_dir}' 'data'
 $pgOut = Join-Path '{run_dir}' 'postgres.out.log'
 $pgErr = Join-Path '{run_dir}' 'postgres.err.log'
 $initLog = Join-Path '{run_dir}' 'initdb.log'
-$pytestLog = Join-Path '{run_dir}' 'WAI-VALID-worker-{safe_name(task.shard)}.log'
+$pytestLog = Join-Path '{run_dir}' '{pytest_log_name}'
 $dbName = '{db_name}'
 $dbUser = 'courseeval_test'
 $dbPass = 'courseeval_test'
@@ -786,7 +787,7 @@ def start_postgres_worker(task: Task, run_dir: Path) -> RunningTask:
     return RunningTask(
         task=task,
         proc=proc,
-        log_path=worker_dir / f"WAI-VALID-worker-{safe}.log",
+        log_path=worker_dir / "pytest.log",
         err_path=err_path,
         run_dir=worker_dir,
         started_at=time.time(),
