@@ -38,6 +38,7 @@ whether a repeated workflow belongs in docs, a skill, or a script.
 - [`data-migration-audit/SKILL.md`](data-migration-audit/SKILL.md)
 - [`deployment-governance/SKILL.md`](deployment-governance/SKILL.md)
 - [`frontend-backend-contract-audit/SKILL.md`](frontend-backend-contract-audit/SKILL.md)
+- [`interruptible-full-validation-rounds/SKILL.md`](interruptible-full-validation-rounds/SKILL.md)
 - [`local-test-triage/SKILL.md`](local-test-triage/SKILL.md)
 - [`permission-audit/SKILL.md`](permission-audit/SKILL.md)
 - [`parallel-validation-orchestration/SKILL.md`](parallel-validation-orchestration/SKILL.md)
@@ -62,7 +63,7 @@ whether a repeated workflow belongs in docs, a skill, or a script.
    evidence.
 4. Prefer the richer, more executable skill when two skills overlap.
 5. Shrink or remove duplicate guidance instead of keeping multiple competing
-  versions of the same workflow.
+   versions of the same workflow.
 6. Use `parallel-validation-orchestration` when the main problem is no longer
    “which test should I run?” but “how do I supervise many shards with
    automatic refill, progress files, and optional PostgreSQL isolation?”
@@ -71,6 +72,12 @@ whether a repeated workflow belongs in docs, a skill, or a script.
    and local commit-without-push behavior every round. The skill supports both
    continuous execution and user-requested interruption mode with finer-grained
    pause points.
+8. Use `interruptible-full-validation-rounds` when the user wants a full
+   validation campaign executed block-by-block, with one block launched per
+   round, communication stopped after launch, and reconnect decisions driven by
+   durable WAI-VALID artifacts rather than memory. This skill must in turn
+   route through `round-plan-discipline` and require plans that explicitly name
+   `parallel-validation-orchestration`.
 
 ## Related Files
 

@@ -65,6 +65,7 @@ guessing.
 | [`../skills/permission-audit/SKILL.md`](../skills/permission-audit/SKILL.md) | Backend authorization, role-boundary, and course-access audit workflow |
 | [`../skills/deployment-governance/SKILL.md`](../skills/deployment-governance/SKILL.md) | Deployment script, env template, nginx/systemd, and ops-doc governance |
 | [`../skills/local-test-triage/SKILL.md`](../skills/local-test-triage/SKILL.md) | Local pytest / SQLite / Playwright / process hazard triage |
+| [`../skills/interruptible-full-validation-rounds/SKILL.md`](../skills/interruptible-full-validation-rounds/SKILL.md) | Block-by-block full validation workflow where each round launches one block, hangs up, and resumes later from durable WAI-VALID artifacts |
 | [`../skills/school-playwright-e2e/SKILL.md`](../skills/school-playwright-e2e/SKILL.md) | Repo-supported school Playwright E2E execution, external-runner usage, and browser-harness triage |
 | [`../skills/data-migration-audit/SKILL.md`](../skills/data-migration-audit/SKILL.md) | Schema repair, migration audit, and no-Alembic data-governance workflow |
 | [`../skills/api-surface-audit/SKILL.md`](../skills/api-surface-audit/SKILL.md) | FastAPI router, frontend API client, API-doc, and route-contract audit workflow |
