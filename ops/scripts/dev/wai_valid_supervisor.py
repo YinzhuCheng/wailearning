@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -204,7 +206,12 @@ def safe_name(shard: str) -> str:
     out = shard
     for ch in "\\/:. ":
         out = out.replace(ch, "_")
-    return out
+    out = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in out)
+    digest = hashlib.sha1(shard.encode("utf-8")).hexdigest()[:12]
+    max_prefix_length = 72
+    if len(out) > max_prefix_length:
+        out = out[:max_prefix_length].rstrip("_")
+    return f"{out}__{digest}"
 
 
 def normalize_path_text(path_text: str) -> str:
@@ -530,27 +537,39 @@ def update_state(
     failed: list[str],
     block_summaries: dict[str, Any],
     block_concurrency: dict[str, int],
+    error: dict[str, Any] | None = None,
 ) -> None:
-    write_json(
-        STATE_PATH,
-        {
-            "run_id": run_id,
-            "run_dir": str(run_dir),
-            "status": status,
-            "block": block,
-            "concurrency": concurrency,
-            "regression_mode": regression_mode,
-            "block_concurrency": block_concurrency,
-            "total": total,
-            "completed_count": len(completed),
-            "failed_count": len(failed),
-            "completed": completed,
-            "failed": failed,
-            "blocks": block_summaries,
-            "pid": os.getpid(),
-            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
-        },
-    )
+    payload = {
+        "run_id": run_id,
+        "run_dir": str(run_dir),
+        "status": status,
+        "block": block,
+        "concurrency": concurrency,
+        "regression_mode": regression_mode,
+        "block_concurrency": block_concurrency,
+        "total": total,
+        "completed_count": len(completed),
+        "failed_count": len(failed),
+        "completed": completed,
+        "failed": failed,
+        "blocks": block_summaries,
+        "pid": os.getpid(),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+    }
+    if error:
+        payload["error"] = error
+    write_json(STATE_PATH, payload)
+
+
+def write_supervisor_error(run_dir: Path, exc: BaseException) -> dict[str, str]:
+    error_payload = {
+        "type": exc.__class__.__name__,
+        "message": str(exc),
+        "traceback_file": str(run_dir / "supervisor-error.txt"),
+    }
+    traceback_text = "".join(traceback.format_exception(exc))
+    (run_dir / "supervisor-error.txt").write_text(traceback_text, encoding="utf-8")
+    return error_payload
 
 
 def update_progress(
@@ -1098,7 +1117,12 @@ def main() -> int:
                     )
                 last_progress_write = now
             time.sleep(1)
-    except Exception:
+    except Exception as exc:
+        error_payload = write_supervisor_error(run_dir, exc)
+        append_event(
+            events_path,
+            f"SUPERVISOR_ERROR type={error_payload['type']} message={error_payload['message']} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
+        )
         update_state(
             run_id=run_id,
             run_dir=run_dir,
@@ -1111,6 +1135,7 @@ def main() -> int:
             failed=failed,
             block_summaries={},
             block_concurrency=block_concurrency,
+            error=error_payload,
         )
         raise
     finally:
