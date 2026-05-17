@@ -53,6 +53,22 @@ pytest, Playwright discovery, or a target that skipped due to missing
 dependencies can still be useful for iteration, but they are not complete
 evidence that the skipped behavior works.
 
+## Current WAI-VALID Shard Contract
+
+For the maintained local WAI-VALID orchestration workflow:
+
+- non-E2E pytest blocks are expected to execute at **case level** using pytest
+  nodeids collected from file inputs
+- school Playwright E2E remains at **file level** using one `.spec.js` file per
+  shard
+
+This distinction is deliberate:
+
+- pytest case-level tasks improve automatic slot refill, reconnectability, and
+  precise failure accounting
+- Playwright file-level tasks avoid over-fragmenting browser startup, seed, and
+  local port/DB isolation costs
+
 ## PostgreSQL Zero-Skip Guidance
 
 If you only run `pytest` on the default SQLite configuration, note that

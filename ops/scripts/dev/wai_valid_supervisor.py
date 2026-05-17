@@ -43,6 +43,8 @@ class Task:
     aux_port: int | None = None
     origin: str = "primary"
     origin_detail: str = "direct"
+    target: str | None = None
+    source_path: str | None = None
 
 
 @dataclass
@@ -205,6 +207,48 @@ def safe_name(shard: str) -> str:
     return out
 
 
+def normalize_path_text(path_text: str) -> str:
+    return path_text.replace("\\", "/").strip()
+
+
+def is_pytest_file_target(path_text: str) -> bool:
+    normalized = normalize_path_text(path_text)
+    return normalized.endswith(".py") and "::" not in normalized
+
+
+def collect_pytest_nodeids(path_text: str) -> list[str]:
+    normalized = normalize_path_text(path_text)
+    if "::" in normalized:
+        return [normalized]
+    proc = subprocess.run(
+        [str(PYTHON_EXE), "-m", "pytest", normalized, "--collect-only", "-q"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="ignore",
+        check=False,
+    )
+    if proc.returncode != 0:
+        combined = "\n".join(part for part in (proc.stdout, proc.stderr) if part).strip()
+        raise SystemExit(f"pytest collect-only failed for {normalized}:\n{combined}")
+    nodeids: list[str] = []
+    for line in proc.stdout.splitlines():
+        candidate = line.strip()
+        if not candidate:
+            continue
+        if candidate.startswith("="):
+            continue
+        if candidate.endswith(" collected"):
+            continue
+        if "::" not in candidate:
+            continue
+        nodeids.append(candidate.replace("\\", "/"))
+    if not nodeids:
+        raise SystemExit(f"pytest collect-only returned no nodeids for {normalized}")
+    return nodeids
+
+
 def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -> list[Task]:
     tasks: list[Task] = []
     pg_index = 0
@@ -212,19 +256,23 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
     for raw_path in paths:
         if not is_valid_test_target(raw_path):
             continue
-        path = raw_path.replace("\\", "/")
+        path = normalize_path_text(raw_path)
         if path.startswith("tests/postgres/"):
-            tasks.append(
-                Task(
-                    shard=path,
-                    kind="postgres",
-                    block=block_name if block_name != "auto" else "backend-postgres-sensitive",
-                    port=postgres_base_port + pg_index,
-                    origin="primary",
-                    origin_detail="direct-target",
+            postgres_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
+            for target in postgres_targets:
+                tasks.append(
+                    Task(
+                        shard=target,
+                        kind="postgres",
+                        block=block_name if block_name != "auto" else "backend-postgres-sensitive",
+                        port=postgres_base_port + pg_index,
+                        origin="primary",
+                        origin_detail="direct-target",
+                        target=target,
+                        source_path=path,
+                    )
                 )
-            )
-            pg_index += 1
+                pg_index += 1
             continue
         if path.startswith("tests/e2e/web-school/") and path.endswith(".spec.js"):
             api_port = 18112 + pw_index
@@ -238,41 +286,55 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                     aux_port=ui_port,
                     origin="primary",
                     origin_detail="direct-target",
+                    target=path,
+                    source_path=path,
                 )
             )
             pw_index += 1
             continue
         if path.startswith("tests/behavior/"):
-            tasks.append(
-                Task(
-                    shard=path,
-                    kind="pytest",
-                    block=block_name if block_name != "auto" else "behavior",
-                    origin="primary",
-                    origin_detail="direct-target",
+            behavior_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
+            for target in behavior_targets:
+                tasks.append(
+                    Task(
+                        shard=target,
+                        kind="pytest",
+                        block=block_name if block_name != "auto" else "behavior",
+                        origin="primary",
+                        origin_detail="direct-target",
+                        target=target,
+                        source_path=path,
+                    )
                 )
-            )
             continue
         if path.startswith("tests/backend/"):
+            backend_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
+            for target in backend_targets:
+                tasks.append(
+                    Task(
+                        shard=target,
+                        kind="pytest",
+                        block=block_name if block_name != "auto" else "backend-sqlite-compatible",
+                        origin="primary",
+                        origin_detail="direct-target",
+                        target=target,
+                        source_path=path,
+                    )
+                )
+            continue
+        generic_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
+        for target in generic_targets:
             tasks.append(
                 Task(
-                    shard=path,
+                    shard=target,
                     kind="pytest",
-                    block=block_name if block_name != "auto" else "backend-sqlite-compatible",
+                    block=block_name if block_name != "auto" else "generic",
                     origin="primary",
                     origin_detail="direct-target",
+                    target=target,
+                    source_path=path,
                 )
             )
-            continue
-        tasks.append(
-            Task(
-                shard=path,
-                kind="pytest",
-                block=block_name if block_name != "auto" else "generic",
-                origin="primary",
-                origin_detail="direct-target",
-            )
-        )
     return tasks
 
 
@@ -392,7 +454,7 @@ def classify_block_tasks(block_specs: list[BlockSpec], postgres_base_port: int) 
         block_tasks = classify_tasks(block_spec.paths, block_spec.name, port_cursor)
         metadata = block_spec.path_metadata or {}
         for task in block_tasks:
-            task_meta = metadata.get(task.shard)
+            task_meta = metadata.get(task.shard) or metadata.get(task.source_path or "")
             if task_meta:
                 task.origin = task_meta.get("origin", task.origin)
                 task.origin_detail = task_meta.get("origin_detail", task.origin_detail)
@@ -519,6 +581,9 @@ def update_progress(
         running_entries.append(
             {
                 "shard": running_task.task.shard,
+                "display_name": running_task.task.shard,
+                "source_path": running_task.task.source_path,
+                "target": running_task.task.target or running_task.task.shard,
                 "block": running_task.task.block,
                 "kind": running_task.task.kind,
                 "origin": running_task.task.origin,
@@ -674,7 +739,7 @@ def start_pytest_worker(task: Task, run_dir: Path) -> RunningTask:
     out_fh = log_path.open("wb")
     err_fh = err_path.open("wb")
     proc = subprocess.Popen(
-        [str(PYTHON_EXE), "-m", "pytest", task.shard, "-q"],
+        [str(PYTHON_EXE), "-m", "pytest", task.target or task.shard, "-q"],
         cwd=str(REPO_ROOT),
         stdout=out_fh,
         stderr=err_fh,

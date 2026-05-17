@@ -80,8 +80,11 @@ def render_blocks(block_report: dict) -> None:
         if running_slots:
             print("   slots:")
             for slot in running_slots:
+                source_path = slot.get("source_path")
+                display = slot.get("display_name") or slot.get("shard", "n/a")
+                label = f"{source_path} :: {display}" if source_path and source_path != display else display
                 print(
-                    f"    - {slot.get('shard', 'n/a')}"
+                    f"    - {label}"
                     f" [{slot.get('origin', 'n/a')}]"
                 )
 
@@ -93,8 +96,11 @@ def render_running_slots(running_slots: list[dict]) -> None:
         print(" - none")
         return
     for slot in running_slots:
+        source_path = slot.get("source_path")
+        display = slot.get("display_name") or slot.get("shard", "n/a")
+        label = f"{source_path} :: {display}" if source_path and source_path != display else display
         print(
-            f" - {slot.get('shard', 'n/a')}"
+            f" - {label}"
             f" | block={format_block_name(str(slot.get('block', 'n/a')))}"
             f" | origin={slot.get('origin', 'n/a')}"
             f" | detail={slot.get('origin_detail', 'n/a')}"

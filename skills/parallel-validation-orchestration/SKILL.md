@@ -382,12 +382,24 @@ The only exceptions are:
 
 ### Behavior
 
-- file-level shards are preferred
+- pytest case-level shards are preferred via collected nodeids
 - automatic refill is allowed
-- keep a close eye on CPU because behavior files can be heavy
+- keep a close eye on CPU because behavior collections can expand one file into
+  many runnable tasks
+
+### General pytest blocks
+
+- for non-E2E blocks (`tests/backend/**`, `tests/behavior/**`,
+  `tests/security/**`, `tests/postgres/**`), the preferred shard unit is one
+  pytest nodeid per task
+- the orchestrator may accept file paths as input, but it should collect and
+  expand them into case-level runnable targets before queue execution
+- progress and monitor output should show both the source file and the current
+  pytest case when possible
 
 ### Playwright E2E
 
+- keep Playwright at file-level `.spec.js` shards by default
 - parallelism is allowed only with explicit isolation:
   - distinct API ports
   - distinct UI ports

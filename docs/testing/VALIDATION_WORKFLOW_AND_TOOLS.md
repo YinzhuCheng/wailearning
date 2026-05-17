@@ -121,6 +121,18 @@ Current local orchestration support includes a first-pass distinction between:
 This expansion is currently implemented as a committed explicit mapping table
 in the local orchestration runtime, not as an all-knowing semantic planner.
 
+When the local orchestration layer is used, shard granularity is intentionally
+mixed:
+
+- non-E2E pytest surfaces (`tests/backend/**`, `tests/behavior/**`,
+  `tests/security/**`, `tests/postgres/**`) should expand file inputs into
+  pytest nodeids and run one collected case per task
+- school Playwright E2E remains at one `.spec.js` file per task unless a future
+  committed browser harness explicitly proves a safer finer-grained model
+
+Treat this as the current repository contract for WAI-VALID planning,
+monitoring, and reconnect reasoning.
+
 ## Artifact And Evidence Rules
 
 - `.agent-run/validation-history.jsonl` and `.agent-run/logs/` are ignored
