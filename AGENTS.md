@@ -77,6 +77,14 @@ governance**.
    Prefer scripts for stable executable workflows and skills for routing or
    multi-step agent procedure; do not leave frequently reused workflows as
    ad hoc terminal lore.
+11. Interpret `round`, `iteration`, `batch`, `attack`, and similar execution
+    units by the most specific active contract first:
+    - if the user explicitly defines the unit, follow the user;
+    - else if a task-scoped doc or repo-local skill defines the unit, follow
+      that doc or skill;
+    - else treat one action unit as one round by default.
+    Do not silently collapse a multi-attack contract into a single fix/commit
+    turn when the active skill or handoff defines a larger repository round.
 
 High-risk hard boundaries that stay explicit:
 

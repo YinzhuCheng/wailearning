@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import threading
+from unittest import mock
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from apps.backend.courseeval_backend.api.routers import scores as scores_router
 from apps.backend.courseeval_backend.db.database import Base, SessionLocal, engine
 from apps.backend.courseeval_backend.main import app
 from apps.backend.courseeval_backend.db.models import HomeworkScoreCandidate, HomeworkSubmission, Notification
@@ -271,6 +275,129 @@ def test_terminal_score_appeal_cannot_be_reopened_or_rewritten(
     row = next(item for item in listed.json() if int(item["id"]) == appeal_id)
     assert row["status"] == terminal_status
     assert row["teacher_response"] == first_response
+
+
+def test_concurrent_conflicting_terminal_score_appeal_updates_do_not_both_succeed(client: TestClient):
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    sid = ctx["subject_id"]
+
+    created = client.post(
+        f"/api/scores/appeals?subject_id={sid}",
+        headers=sh,
+        json={"semester": "2026-concurrent-terminal", "target_component": "total", "reason_text": "race terminal states"},
+    )
+    assert created.status_code == 200, created.text
+    appeal_id = int(created.json()["id"])
+
+    barrier = threading.Barrier(2)
+    statuses: list[int] = []
+    errors: list[str] = []
+    original = scores_router.mark_score_appeal_notifications_handled
+
+    def delayed_mark(db, target_appeal_id: int, status: str) -> None:
+        if int(target_appeal_id) == appeal_id:
+            try:
+                barrier.wait(timeout=5)
+            except threading.BrokenBarrierError:
+                pass
+        original(db, target_appeal_id, status)
+
+    def worker(status: str, teacher_response: str) -> None:
+        try:
+            with TestClient(app) as thread_client:
+                resp = thread_client.put(
+                    f"/api/scores/appeals/{appeal_id}",
+                    headers=th,
+                    json={"teacher_response": teacher_response, "status": status},
+                )
+            statuses.append(resp.status_code)
+        except Exception as exc:  # pragma: no cover
+            errors.append(str(exc))
+
+    with mock.patch.object(scores_router, "mark_score_appeal_notifications_handled", side_effect=delayed_mark):
+        threads = [
+            threading.Thread(target=worker, args=("resolved", "resolved first")),
+            threading.Thread(target=worker, args=("rejected", "rejected second")),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    assert not errors
+    assert sorted(statuses) == [200, 409]
+
+
+def test_teacher_cannot_leave_score_appeal_pending_after_writing_a_response(client: TestClient):
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    sid = ctx["subject_id"]
+
+    created = client.post(
+        f"/api/scores/appeals?subject_id={sid}",
+        headers=sh,
+        json={"semester": "2026-pending-rewrite", "target_component": "total", "reason_text": "teacher should decide terminally"},
+    )
+    assert created.status_code == 200, created.text
+    appeal_id = int(created.json()["id"])
+
+    pending = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=th,
+        json={"teacher_response": "looked at it but keeping pending", "status": "pending"},
+    )
+    assert pending.status_code == 400, pending.text
+
+
+def test_finalized_score_appeal_exact_replay_is_idempotent_without_extra_notification_rows(client: TestClient):
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    sid = ctx["subject_id"]
+
+    created = client.post(
+        f"/api/scores/appeals?subject_id={sid}",
+        headers=sh,
+        json={"semester": "2026-terminal-idempotent", "target_component": "total", "reason_text": "same terminal replay"},
+    )
+    assert created.status_code == 200, created.text
+    appeal_id = int(created.json()["id"])
+
+    first = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=th,
+        json={"teacher_response": "resolved once", "status": "resolved"},
+    )
+    assert first.status_code == 200, first.text
+
+    db = SessionLocal()
+    try:
+        before_rows = db.query(Notification).filter(Notification.related_score_appeal_id == appeal_id).all()
+        assert len(before_rows) == 1
+    finally:
+        db.close()
+
+    replay = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=th,
+        json={"teacher_response": "resolved once", "status": "resolved"},
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["status"] == "resolved"
+    assert replay.json()["teacher_response"] == "resolved once"
+
+    db = SessionLocal()
+    try:
+        after_rows = db.query(Notification).filter(Notification.related_score_appeal_id == appeal_id).all()
+        assert len(after_rows) == 1
+    finally:
+        db.close()
 
 
 def test_homework_target_score_appeal_links_notification_to_homework(client: TestClient):

@@ -48,6 +48,25 @@ def is_readonly_appeal_status(status: Optional[str]) -> bool:
     return normalize_appeal_status(status) in READONLY_APPEAL_STATUSES
 
 
+def can_transition_score_appeal_status(
+    current_status: Optional[str],
+    next_status: Optional[str],
+    *,
+    has_teacher_response: bool,
+) -> tuple[bool, Optional[str]]:
+    current = normalize_appeal_status(current_status)
+    nxt = normalize_appeal_status(next_status)
+    if nxt not in {APPEAL_STATUS_PENDING, APPEAL_STATUS_RESOLVED, APPEAL_STATUS_REJECTED}:
+        return False, "invalid_status"
+    if is_readonly_appeal_status(current):
+        if current == nxt:
+            return True, None
+        return False, "finalized"
+    if nxt == APPEAL_STATUS_PENDING and has_teacher_response:
+        return False, "pending_with_response"
+    return True, None
+
+
 def strip_appeal_notification_title_prefix(title: Optional[str]) -> str:
     text = str(title or "")
     for prefix in _TITLE_PREFIX_BY_STATUS.values():

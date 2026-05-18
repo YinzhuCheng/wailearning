@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ from apps.backend.courseeval_backend.db.models import CourseEnrollment, CourseEx
 from apps.backend.courseeval_backend.core.permissions import is_student
 from apps.backend.courseeval_backend.domains.courses.class_scope import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.courseeval_backend.domains.scores.composition import OTHER_DAILY_EXAM_TYPE, build_composition_for_student, get_scheme_dto, upsert_scheme
-from apps.backend.courseeval_backend.domains.appeal_notifications import is_readonly_appeal_status, normalize_appeal_status
+from apps.backend.courseeval_backend.domains.appeal_notifications import can_transition_score_appeal_status, normalize_appeal_status
 from apps.backend.courseeval_backend.domains.scores.appeals import mark_score_appeal_notifications_handled, notify_teachers_score_grade_appeal
 from apps.backend.courseeval_backend.api.schemas import (
     CourseExamWeightResponse,
@@ -535,31 +535,64 @@ def respond_score_grade_appeal(
     current_user: User = Depends(get_current_active_user),
 ):
     if is_student(current_user):
-        raise HTTPException(status_code=403, detail="仅教师可处理申诉。")
+        raise HTTPException(status_code=403, detail="Only teachers can handle appeals.")
     appeal = db.query(ScoreGradeAppeal).filter(ScoreGradeAppeal.id == appeal_id).first()
     if not appeal:
-        raise HTTPException(status_code=404, detail="申诉不存在。")
+        raise HTTPException(status_code=404, detail="Appeal not found.")
     course = ensure_course_access_http(appeal.subject_id, current_user, db)
     _ensure_score_course_write_access(current_user, course)
     next_status = (payload.status or "resolved").strip()
-    if next_status not in ("pending", "resolved", "rejected"):
-        raise HTTPException(status_code=400, detail="无效的处理状态。")
-    current_status = normalize_appeal_status(appeal.status)
     next_status_normalized = normalize_appeal_status(next_status)
     next_teacher_response = payload.teacher_response.strip()
-    if is_readonly_appeal_status(current_status):
-        current_teacher_response = (appeal.teacher_response or "").strip()
-        if current_status == next_status_normalized and current_teacher_response == next_teacher_response:
-            return _serialize_score_appeal(db, appeal)
+    allowed, reason = can_transition_score_appeal_status(
+        appeal.status,
+        next_status_normalized,
+        has_teacher_response=bool(next_teacher_response),
+    )
+    if not allowed and reason == "invalid_status":
+        raise HTTPException(status_code=400, detail="Invalid appeal status.")
+    if not allowed and reason == "pending_with_response":
+        raise HTTPException(status_code=400, detail="A teacher response must resolve or reject the appeal; it cannot remain pending.")
+    current_status = normalize_appeal_status(appeal.status)
+    current_teacher_response = (appeal.teacher_response or "").strip()
+    if current_status == next_status_normalized and current_teacher_response == next_teacher_response:
+        return _serialize_score_appeal(db, appeal)
+    if not allowed and reason == "finalized":
         raise HTTPException(status_code=409, detail="This appeal has already been finalized and cannot be changed.")
+
+    updated_rows = db.execute(
+        update(ScoreGradeAppeal)
+        .where(
+            ScoreGradeAppeal.id == appeal.id,
+            ScoreGradeAppeal.status == appeal.status,
+        )
+        .values(
+            teacher_response=next_teacher_response,
+            status=next_status_normalized,
+        )
+    ).rowcount
+    if updated_rows != 1:
+        db.rollback()
+        fresh = db.query(ScoreGradeAppeal).filter(ScoreGradeAppeal.id == appeal.id).first()
+        if not fresh:
+            raise HTTPException(status_code=404, detail="Appeal not found.")
+        fresh_allowed, fresh_reason = can_transition_score_appeal_status(
+            fresh.status,
+            next_status_normalized,
+            has_teacher_response=bool(next_teacher_response),
+        )
+        if not fresh_allowed and fresh_reason == "finalized":
+            raise HTTPException(status_code=409, detail="This appeal has already been finalized and cannot be changed.")
+        if not fresh_allowed and fresh_reason == "pending_with_response":
+            raise HTTPException(status_code=400, detail="A teacher response must resolve or reject the appeal; it cannot remain pending.")
+        raise HTTPException(status_code=409, detail="This appeal changed during processing; please refresh and retry.")
+
     appeal.teacher_response = next_teacher_response
-    appeal.status = next_status
+    appeal.status = next_status_normalized
     mark_score_appeal_notifications_handled(db, appeal.id, appeal.status)
     db.commit()
     db.refresh(appeal)
     return _serialize_score_appeal(db, appeal)
-
-
 @router.put("/{score_id}", response_model=ScoreResponse)
 def update_score(
     score_id: int,
