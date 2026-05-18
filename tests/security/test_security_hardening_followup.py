@@ -3949,3 +3949,156 @@ def test_hard140_class_teacher_cannot_list_teacher_owned_visible_student_homewor
     )
 
     assert r.status_code == 403
+
+
+def test_hard141_class_teacher_cannot_batch_regrade_teacher_owned_visible_homework_submissions(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=True, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_batch_regrade_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard141 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+    submission_id = int(submission.json()["id"])
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/batch-regrade",
+        headers=headers,
+        json={"submission_ids": [submission_id], "only_latest_attempt": True},
+    )
+
+    assert r.status_code == 403
+
+
+def test_hard142_class_teacher_cannot_respond_to_teacher_owned_visible_homework_appeal(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_appeal_resolve_visible")
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    submission = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submission",
+        headers=student_headers,
+        json={"content": "hard142 submission"},
+    )
+    assert submission.status_code == 200, submission.text
+    submission_id = int(submission.json()["id"])
+
+    review = client.put(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/review",
+        headers=teacher_headers,
+        json={"review_score": 86, "review_comment": "teacher-reviewed before hard142 appeal"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/appeal",
+        headers=student_headers,
+        json={"reason_text": "hard142 appeal reason long enough for submission"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    r = client.put(
+        f"/api/homeworks/{ctx['homework_id']}/submissions/{submission_id}/appeal",
+        headers=headers,
+        json={"teacher_response": "ct should not resolve", "status": "resolved"},
+    )
+
+    assert r.status_code == 403
+
+    db = SessionLocal()
+    try:
+        row = db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == submission_id).first()
+        assert row is not None
+        assert row.status == "pending"
+        assert not row.teacher_response
+    finally:
+        db.close()
+
+
+def test_hard143_class_teacher_cannot_create_teacher_owned_visible_material_chapter(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_material_chapter_create_visible")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+
+    r = client.post(
+        f"/api/material-chapters?subject_id={ctx['subject_id']}",
+        headers=headers,
+        json={"title": "hard143 forbidden chapter", "parent_id": None},
+    )
+
+    assert r.status_code == 403
+
+
+def test_hard144_class_teacher_cannot_update_teacher_owned_visible_material_chapter(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_material_chapter_update_visible")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    chapter_id = _create_chapter(ctx["subject_id"], "hard144 original chapter")
+
+    r = client.put(
+        f"/api/material-chapters/{chapter_id}",
+        headers=headers,
+        json={"title": "hard144 forbidden rename"},
+    )
+
+    assert r.status_code == 403
+
+
+def test_hard145_class_teacher_cannot_delete_teacher_owned_visible_material_chapter(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_material_chapter_delete_visible")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    chapter_id = _create_chapter(ctx["subject_id"], "hard145 delete chapter")
+
+    r = client.delete(f"/api/material-chapters/{chapter_id}", headers=headers)
+
+    assert r.status_code == 403
+
+
+def test_hard146_class_teacher_cannot_remove_teacher_owned_visible_material_placement(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_material_placement_delete_visible")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    chapter_id = _create_chapter(ctx["subject_id"], "hard146 placement chapter")
+    material_id, section_id = _create_material_section(ctx["subject_id"], ctx["class_id"], ctx["teacher_id"], chapter_id)
+
+    r = client.delete(
+        f"/api/material-chapters/placements/{section_id}?subject_id={ctx['subject_id']}",
+        headers=headers,
+    )
+
+    assert r.status_code == 403
+    assert _material_section_count(material_id) == 1
+
+
+def test_hard147_class_teacher_cannot_remove_teacher_owned_visible_homework_link(client: TestClient):
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    ct = _create_class_teacher_for_class(ctx["class_id"], "ct_homework_link_delete_visible")
+    headers = login_api(client, str(ct["username"]), str(ct["password"]))
+    chapter_id = _create_chapter(ctx["subject_id"], "hard147 homework link chapter")
+    homework_id = _create_course_homework(ctx["subject_id"], ctx["class_id"], ctx["teacher_id"], "hard147 linked homework")
+
+    db = SessionLocal()
+    try:
+        link = CourseMaterialHomeworkLink(
+            chapter_id=chapter_id,
+            homework_id=homework_id,
+            sort_order=0,
+        )
+        db.add(link)
+        db.commit()
+        link_id = int(link.id)
+    finally:
+        db.close()
+
+    r = client.delete(
+        f"/api/material-chapters/homework-links/{link_id}?subject_id={ctx['subject_id']}",
+        headers=headers,
+    )
+
+    assert r.status_code == 403
+    assert _homework_link_count(chapter_id) == 1
