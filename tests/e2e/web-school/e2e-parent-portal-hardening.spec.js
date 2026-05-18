@@ -88,7 +88,53 @@ async function seedHiddenParentContent(s, hiddenPrefix) {
   return { hiddenHomework, hiddenNotice, visibleNotice }
 }
 
-test.describe('parent portal hardening E2E (8 cases)', () => {
+async function seedVisibleParentEnrollmentContent(s, prefix) {
+  const teacherToken = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+  const enrolled = await apiStatus(`/api/subjects/${s.course_elective_id}/student-self-enroll`, {
+    method: 'POST',
+    token: await obtainAccessToken(s.student_plain.username, s.password_teacher_student),
+    body: {}
+  })
+  expect([200, 400]).toContain(enrolled.status)
+  const visibleHomework = `${prefix} visible elective homework ${Date.now()}`
+  const visibleNotice = `${prefix} visible elective notice ${Date.now()}`
+  const hw = await apiStatus('/api/homeworks', {
+    method: 'POST',
+    token: teacherToken,
+    body: {
+      title: visibleHomework,
+      content: 'parent UI should initially render this enrolled elective homework',
+      content_format: 'plain',
+      class_id: s.class_id_1,
+      subject_id: s.course_elective_id,
+      due_date: null,
+      max_score: 100,
+      grade_precision: 'integer',
+      auto_grading_enabled: false,
+      allow_late_submission: true,
+      late_submission_affects_score: false,
+      max_submissions: null,
+      llm_routing_spec: null
+    }
+  })
+  expect(hw.status).toBe(200)
+  const notice = await apiStatus('/api/notifications', {
+    method: 'POST',
+    token: teacherToken,
+    body: {
+      title: visibleNotice,
+      content: 'parent UI should initially render this enrolled elective notice',
+      content_format: 'plain',
+      priority: 'normal',
+      class_id: s.class_id_1,
+      subject_id: s.course_elective_id
+    }
+  })
+  expect(notice.status).toBe(200)
+  return { visibleHomework, visibleNotice, teacherToken }
+}
+
+test.describe('parent portal hardening E2E (10 cases)', () => {
   test.describe.configure({ timeout: 180_000 })
 
   test.beforeEach(async ({}, testInfo) => {
@@ -237,5 +283,47 @@ test.describe('parent portal hardening E2E (8 cases)', () => {
     }))
     expect(stored.parentCode).toBeNull()
     expect(stored.studentName).toBeNull()
+  })
+
+  test('09 parent homework UI drops elective rows after enrollment is removed in another session', async ({ page }) => {
+    const s = scenario()
+    const seeded = await seedVisibleParentEnrollmentContent(s, 'E2E_PARENT_DRIFT_HW')
+
+    await page.goto(`${parentBase()}/login`)
+    await page.getByRole('textbox').fill(s.parent_code)
+    await page.getByRole('button').click()
+    await expect(page).toHaveURL(/\/home$/, { timeout: 30000 })
+    await page.goto(`${parentBase()}/homework`)
+    await expect(page.locator('.homework-list')).toContainText(seeded.visibleHomework, { timeout: 30000 })
+
+    const removed = await apiStatus(`/api/subjects/${s.course_elective_id}/students/${s.student_plain.student_row_id}`, {
+      method: 'DELETE',
+      token: seeded.teacherToken
+    })
+    expect([200, 404]).toContain(removed.status)
+
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
+    await expect(page.locator('.homework-list')).not.toContainText(seeded.visibleHomework)
+  })
+
+  test('10 parent notifications UI drops elective rows after enrollment is removed in another session', async ({ page }) => {
+    const s = scenario()
+    const seeded = await seedVisibleParentEnrollmentContent(s, 'E2E_PARENT_DRIFT_NOTICE')
+
+    await page.goto(`${parentBase()}/login`)
+    await page.getByRole('textbox').fill(s.parent_code)
+    await page.getByRole('button').click()
+    await expect(page).toHaveURL(/\/home$/, { timeout: 30000 })
+    await page.goto(`${parentBase()}/notifications`)
+    await expect(page.locator('.notification-list')).toContainText(seeded.visibleNotice, { timeout: 30000 })
+
+    const removed = await apiStatus(`/api/subjects/${s.course_elective_id}/students/${s.student_plain.student_row_id}`, {
+      method: 'DELETE',
+      token: seeded.teacherToken
+    })
+    expect([200, 404]).toContain(removed.status)
+
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
+    await expect(page.locator('.notification-list')).not.toContainText(seeded.visibleNotice)
   })
 })
