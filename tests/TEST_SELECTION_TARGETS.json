@@ -1769,6 +1769,48 @@
             "notes": "Pair with backend homework/LLM pytest for API-heavy changes."
         },
         {
+            "id": "school.e2e.homework_appeal_stale_tabs",
+            "category": "school-playwright",
+            "risk": "targeted",
+            "description": "Targeted school Playwright suite for teacher stale-tab homework-appeal convergence, terminal-state conflict recovery, review/appeal interleave, and reload-safe non-actionable detail state.",
+            "working_directory": "apps/web/school",
+            "requires_review_reason": "Playwright targets depend on local browser, managed backend/frontend ports, seed/reset helpers, and should be run serially on default ports.",
+            "coverage_tags": [
+                "school-playwright",
+                "homework",
+                "appeals",
+                "concurrency",
+                "teacher-ui"
+            ],
+            "commands": [
+                {
+                    "label": "playwright targeted",
+                    "argv": [
+                        "node",
+                        "scripts/playwright-external-runner.cjs",
+                        "e2e-homework-appeal-stale-tabs.spec.js",
+                        "--project=chromium"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/e2e/web-school/e2e-homework-appeal-stale-tabs.spec.js",
+                    "tests/e2e/web-school/fixtures.cjs",
+                    "tests/e2e/web-school/future-advanced-coverage-helpers.cjs",
+                    "apps/web/school/src/views/HomeworkSubmissionReview.vue",
+                    "apps/web/school/src/views/HomeworkSubmissions.vue",
+                    "apps/backend/courseeval_backend/api/routers/homework.py",
+                    "apps/backend/courseeval_backend/domains/appeal_notifications.py"
+                ],
+                "globs": [
+                    "apps/web/school/src/**/Homework*.vue"
+                ]
+            },
+            "ledger_id": "school.e2e.homework_appeal_stale_tabs",
+            "notes": "Use when homework appeal terminal-state recovery, stale teacher tabs, or detail-page appeal actions change. Pair with backend homework appeal pytest for API-only invariants."
+        },
+        {
             "id": "school.e2e.core_flows_smoke",
             "category": "school-playwright",
             "risk": "targeted",

@@ -591,6 +591,13 @@ const submitAppealResolution = async status => {
     ElMessage.success(status === 'rejected' ? '申诉已拒绝' : '申诉已处理')
     appealResolveDialogVisible.value = false
     await loadPage()
+  } catch (e) {
+    if (e?.response?.status === 409) {
+      appealResolveDialogVisible.value = false
+      await loadPage()
+      return
+    }
+    throw e
   } finally {
     appealResolveLoading.value = false
   }
