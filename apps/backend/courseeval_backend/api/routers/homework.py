@@ -33,6 +33,7 @@ from apps.backend.courseeval_backend.domains.homework.appeals import (
     mark_appeal_notifications_resolved,
     notify_teachers_grade_appeal,
 )
+from apps.backend.courseeval_backend.domains.appeal_notifications import can_transition_homework_appeal_status, normalize_appeal_status
 from apps.backend.courseeval_backend.domains.homework.notifications import notify_student_homework_graded
 from apps.backend.courseeval_backend.domains.homework.serialization import preview_text, task_call_log
 from apps.backend.courseeval_backend.domains.homework.submission_rules import (
@@ -1435,8 +1436,20 @@ def respond_grade_appeal(
     if next_status not in ("pending", "acknowledged", "resolved", "rejected"):
         raise HTTPException(status_code=400, detail="Invalid appeal status.")
 
-    appeal.teacher_response = payload.teacher_response.strip()
-    appeal.status = next_status
+    next_status_normalized = normalize_appeal_status(next_status)
+    current_status_normalized = normalize_appeal_status(appeal.status)
+    current_teacher_response = (appeal.teacher_response or "").strip()
+    next_teacher_response = payload.teacher_response.strip()
+    allowed, reason = can_transition_homework_appeal_status(current_status_normalized, next_status_normalized)
+    if not allowed and reason == "invalid_status":
+        raise HTTPException(status_code=400, detail="Invalid appeal status.")
+    if current_status_normalized == next_status_normalized and current_teacher_response == next_teacher_response:
+        return appeal
+    if not allowed and reason == "finalized":
+        raise HTTPException(status_code=409, detail="This appeal has already been finalized and cannot be changed.")
+
+    appeal.teacher_response = next_teacher_response
+    appeal.status = next_status_normalized
     mark_appeal_notifications_handled(db, appeal.id, appeal.status)
     db.commit()
     db.refresh(appeal)

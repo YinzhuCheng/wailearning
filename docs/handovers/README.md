@@ -13,4 +13,4 @@ Rules:
 
 Current contents:
 
-- [redteam-handoff.md](redteam-handoff.md)
+- this README only; active durable handoffs now live under [`docs/handoffs/`](../handoffs/README.md)

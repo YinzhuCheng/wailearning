@@ -67,6 +67,21 @@ def can_transition_score_appeal_status(
     return True, None
 
 
+def can_transition_homework_appeal_status(
+    current_status: Optional[str],
+    next_status: Optional[str],
+) -> tuple[bool, Optional[str]]:
+    current = normalize_appeal_status(current_status)
+    nxt = normalize_appeal_status(next_status)
+    if nxt not in KNOWN_APPEAL_STATUSES:
+        return False, "invalid_status"
+    if is_readonly_appeal_status(current):
+        if current == nxt:
+            return True, None
+        return False, "finalized"
+    return True, None
+
+
 def strip_appeal_notification_title_prefix(title: Optional[str]) -> str:
     text = str(title or "")
     for prefix in _TITLE_PREFIX_BY_STATUS.values():

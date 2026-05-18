@@ -99,7 +99,7 @@ def test_acknowledge_appeal_marks_notifications_as_acknowledged_not_resolved():
     assert after_resp.status_code == 200, after_resp.text
     after = [row for row in after_resp.json().get("data", []) if row.get("notification_kind") == "grade_appeal"]
     assert after
-    assert any("宸查槄" in str(row.get("title") or "") for row in after)
+    assert all(row.get("appeal_status") == "acknowledged" for row in after)
     assert all("resolved" not in str(row.get("title") or "") for row in after)
 
 
@@ -282,8 +282,8 @@ def test_notification_detail_after_resolved_appeal_uses_resolved_title_not_ackno
     detail = client.get(f"/api/notifications/{notif_id}", headers=teacher_h)
     assert detail.status_code == 200, detail.text
     title = str(detail.json().get("title") or "")
-    assert "resolved" in title
-    assert "acknowledged" not in title
+    assert detail.json().get("appeal_status") == "resolved"
+    assert "宸查槄" not in title
 
 
 def test_resolved_grade_appeal_notification_exposes_appeal_status_to_clients():
@@ -763,3 +763,53 @@ def test_notification_detail_for_homework_appeal_stays_consistent_after_terminal
     assert detail.status_code == 200, detail.text
     assert detail.json().get("appeal_status") == "resolved"
     assert detail.json().get("appeal_status") == "resolved"
+
+
+def test_terminal_homework_appeal_cannot_be_rewritten_by_stale_teacher_request():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "terminal rewrite guard"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 86, "review_comment": "before terminal rewrite"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": "please protect this appeal from stale rewrites"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    resolved = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "resolved first", "status": "resolved"},
+    )
+    assert resolved.status_code == 200, resolved.text
+
+    stale = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "stale rewrite to rejected", "status": "rejected"},
+    )
+    assert stale.status_code == 409, stale.text
+
+    db = SessionLocal()
+    try:
+        row = db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == sub_id).one()
+        assert row.status == "resolved"
+        assert row.teacher_response == "resolved first"
+    finally:
+        db.close()
