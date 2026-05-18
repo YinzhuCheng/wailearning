@@ -1,6 +1,6 @@
 ---
 name: security-redteam-iteration
-description: Use this when continuing CourseEval iterative red-team hardening rounds: selecting dense security tests, adding backend and Playwright coverage, fixing discovered bugs, updating docs and CSV ledgers, recording pitfalls, running scoped validation, and committing without push.
+description: Use this when continuing CourseEval iterative red-team hardening rounds: selecting dense security tests, planning four parallel attacks with at least one E2E/browser-backed attack, fixing discovered bugs, updating docs and CSV ledgers, recording pitfalls, running scoped validation, and committing without push.
 ---
 
 # Security Red-Team Iteration
@@ -32,7 +32,7 @@ Default red-team operating contract for this repository:
    the observed attack result honestly and continue the attack campaign unless
    the user explicitly asks for regression or the next step is otherwise
    blocked.
-4. Run attacks in batches of `4`.
+4. Run attacks in batches of `4`, planned as one parallel batch.
 5. After every `4` attacks, stop and do one concentrated hardening pass that
    addresses the shared root causes or nearby latent weaknesses exposed by
    those attacks. The goal is not only to cover the exact exploited surface,
@@ -57,39 +57,45 @@ Default red-team operating contract for this repository:
    the round (`1/4` through `4/4`) and keep each attack narrowly scoped enough
    to fit the default `5` minute budget unless the user explicitly overrides
    it.
-3. Select risks from recent failures, current pitfalls/known issues, and
+3. Plan the four attacks as one batch before implementing them. That batch must
+   contain at least one browser-backed E2E attack from `tests/e2e/web-school/`.
+   Route through `skills/security-redteam-parallel-attacks/SKILL.md` and the
+   helper script when the batch needs a durable slot plan instead of ad hoc
+   attack selection.
+4. Select risks from recent failures, current pitfalls/known issues, and
    current code. Prefer boundaries around role vs ownership, parent-code,
    course enrollment, class links, bulk APIs, status re-entry, dashboard
    aggregation, notification state, seed/dev APIs, and UI cache bypass.
-4. Design a compact batch, usually 8-12 tests. Use pytest for dense API/data
-   invariants and 1-2 Playwright/browser-backed cases when seed/login/localStorage
-   or UI state adds value. One test may assert multiple related invariants.
-5. Implement tests first. Accept red runs. Classify failures as product bug,
+5. Design a compact batch, usually 8-12 tests. Use pytest for dense API/data
+   invariants and require at least 1 Playwright/browser-backed case when
+   seed/login/localStorage or UI state adds value. One test may assert multiple
+   related invariants.
+6. Implement tests first. Accept red runs. Classify failures as product bug,
    test-contract bug, or harness/environment issue before editing product code.
-6. Fix every confirmed product bug found by the current attack before moving to
+7. Fix every confirmed product bug found by the current attack before moving to
    the next attack. Keep the immediate patch bounded to the surfaced behavior,
    then use the concentrated hardening pass after attack `4/4` to widen the fix
    where shared root causes justify it.
-7. After an immediate attack fix, do not run broad regression by default. Run
+8. After an immediate attack fix, do not run broad regression by default. Run
    only the minimum validation needed to confirm the attack surface changed as
    intended, and record broader validation debt honestly.
-8. Update docs whenever behavior, permissions, API contracts, validation flow,
+9. Update docs whenever behavior, permissions, API contracts, validation flow,
    or agent workflow changes. Update pitfalls when a repeatable failure mode,
    timeout, tool trap, or harness issue occurs.
-9. Append observed runs to `test-execution-runs.csv`, including failed,
+10. Append observed runs to `test-execution-runs.csv`, including failed,
    timed-out, blocked, and final passed runs. Add concise summary rows when
    useful. Append `agent-update-log.csv` once per repository-changing round.
-10. Run selector-recommended static checks, targeted tests, targeted Playwright,
+11. Run selector-recommended static checks, targeted tests, targeted Playwright,
    and a broad suite when the selector or risk warrants it. Record high-cost
    full targets such as `full.pytest.postgres` honestly when deferred.
-11. Use the post-attack concentrated hardening pass to attack the flaw class,
+12. Use the post-attack concentrated hardening pass to attack the flaw class,
    not only the exact failing example. Expand guards, shared helpers,
    permission checks, or state-convergence rules when the first four attacks
    show a repeated pattern.
-12. Before commit, scan changed files for private paths/artifacts, run CSV
+13. Before commit, scan changed files for private paths/artifacts, run CSV
    parse smoke, `git diff --check`, and enough validation to support the final
    claim.
-13. Commit locally. Do not push unless the user explicitly asks.
+14. Commit locally. Do not push unless the user explicitly asks.
 
 ## Script Helpers
 
@@ -103,6 +109,7 @@ python skills/security-redteam-iteration/scripts/suggest_next_ids.py
 python skills/security-redteam-iteration/scripts/changed_text_files.py
 python skills/security-redteam-iteration/scripts/csv_smoke.py
 python skills/security-redteam-iteration/scripts/private_path_scan.py --staged
+python skills/security-redteam-iteration/scripts/plan_parallel_attack_batch.py
 ```
 
 Append CSV rows with:
@@ -135,6 +142,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File skills/security-redteam-
 
 - `skills/permission-audit/SKILL.md`
 - `skills/school-playwright-e2e/SKILL.md`
+- `skills/security-redteam-parallel-attacks/SKILL.md`
 - `skills/validation-selection/SKILL.md`
 - `skills/validation-ledger-maintenance/SKILL.md`
 - `skills/repository-normalization/SKILL.md`

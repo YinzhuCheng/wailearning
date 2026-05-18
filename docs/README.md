@@ -59,6 +59,7 @@ guessing.
 | [`../skills/boundary-governance/SKILL.md`](../skills/boundary-governance/SKILL.md) | Horizontal boundary governance: functional/module/permission/data-flow boundary discovery and low-risk extraction workflow |
 | [`../skills/structure-governance/SKILL.md`](../skills/structure-governance/SKILL.md) | Horizontal structure governance: root-file, directory hierarchy, file-move, and structural reference workflow |
 | [`../skills/security-redteam-iteration/SKILL.md`](../skills/security-redteam-iteration/SKILL.md) | Iterative red-team hardening workflow with dense tests, fixes, docs, ledgers, pitfalls, validation, and commit discipline |
+| [`testing/REDTEAM_PARALLEL_ATTACKS.md`](testing/REDTEAM_PARALLEL_ATTACKS.md) | Parallel red-team batch planning contract: 4 attacks per round with at least 1 browser-backed E2E slot |
 | [`../skills/validation-selection/SKILL.md`](../skills/validation-selection/SKILL.md) | Change-scoped validation selection and honest validation reporting |
 | [`../skills/validation-ledger-maintenance/SKILL.md`](../skills/validation-ledger-maintenance/SKILL.md) | Validation registry, `ledger_id`, CSV target/run history, and selector-history maintenance |
 | [`../skills/utf8-safe-editing/SKILL.md`](../skills/utf8-safe-editing/SKILL.md) | UTF-8-safe editing for multilingual / PowerShell-sensitive files |

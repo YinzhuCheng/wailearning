@@ -46,6 +46,7 @@ whether a repeated workflow belongs in docs, a skill, or a script.
 - [`roster-identity-repair-playbook/SKILL.md`](roster-identity-repair-playbook/SKILL.md)
 - [`round-plan-discipline/SKILL.md`](round-plan-discipline/SKILL.md)
 - [`school-playwright-e2e/SKILL.md`](school-playwright-e2e/SKILL.md)
+- [`security-redteam-parallel-attacks/SKILL.md`](security-redteam-parallel-attacks/SKILL.md)
 - [`security-redteam-iteration/SKILL.md`](security-redteam-iteration/SKILL.md)
 - [`seed-surface-hardening/SKILL.md`](seed-surface-hardening/SKILL.md)
 - [`utf8-safe-editing/SKILL.md`](utf8-safe-editing/SKILL.md)
