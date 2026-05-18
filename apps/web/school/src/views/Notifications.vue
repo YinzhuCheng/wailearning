@@ -533,12 +533,26 @@ const submitForm = async () => {
 }
 
 const viewNotification = async row => {
-  currentNotification.value = await api.notifications.get(row.id)
-  if (!currentNotification.value.is_read) {
-    await api.notifications.markRead(row.id)
+  try {
+    currentNotification.value = await api.notifications.get(row.id)
+    if (!currentNotification.value.is_read) {
+      await api.notifications.markRead(row.id)
+    }
+    detailVisible.value = true
+    await loadNotifications()
+  } catch (error) {
+    const message = `${error?.message || error || ''}`
+    if (message.includes('404')) {
+      currentNotification.value = null
+      detailVisible.value = false
+      await loadNotifications()
+      ElMessage.info('该通知已被删除，列表已刷新。')
+      broadcastNotificationChange()
+      return
+    }
+    console.error('打开通知详情失败', error)
+    ElMessage.error('打开通知失败，请重试。')
   }
-  detailVisible.value = true
-  await loadNotifications()
 }
 
 const openAttachment = async row => {

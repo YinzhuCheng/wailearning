@@ -1069,7 +1069,7 @@ class NotificationRead(Base):
     __tablename__ = "notification_reads"
 
     id = Column(Integer, primary_key=True, index=True)
-    notification_id = Column(Integer, ForeignKey("notifications.id"), nullable=False)
+    notification_id = Column(Integer, ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_read = Column(Boolean, default=False)
     read_at = Column(DateTime(timezone=True), nullable=True)

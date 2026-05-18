@@ -1,11 +1,13 @@
-"""Red-team checks for homework appeal state transitions and gating."""
+﻿"""Red-team checks for homework appeal state transitions and gating."""
 
 from __future__ import annotations
 
+import threading
 from fastapi.testclient import TestClient
 
 from apps.backend.courseeval_backend.main import app
 from apps.backend.courseeval_backend.db.database import SessionLocal
+from apps.backend.courseeval_backend.db.models import HomeworkGradeAppeal, Notification
 from tests.scenarios.llm_scenario import ensure_admin, login_api, make_grading_course_with_homework
 
 
@@ -87,7 +89,7 @@ def test_acknowledge_appeal_marks_notifications_as_acknowledged_not_resolved():
     assert noted.status_code == 200, noted.text
     before = [row for row in noted.json().get("data", []) if row.get("notification_kind") == "grade_appeal"]
     assert before
-    assert any("已处理" not in str(row.get("title") or "") for row in before)
+    assert all("resolved" not in str(row.get("title") or "") for row in before)
 
     ack = client.post(f"/api/homeworks/{hid}/submissions/{sub_id}/appeal/acknowledge", headers=teacher_h)
     assert ack.status_code == 200, ack.text
@@ -97,8 +99,8 @@ def test_acknowledge_appeal_marks_notifications_as_acknowledged_not_resolved():
     assert after_resp.status_code == 200, after_resp.text
     after = [row for row in after_resp.json().get("data", []) if row.get("notification_kind") == "grade_appeal"]
     assert after
-    assert any("已阅" in str(row.get("title") or "") for row in after)
-    assert all("已处理" not in str(row.get("title") or "") for row in after)
+    assert any("宸查槄" in str(row.get("title") or "") for row in after)
+    assert all("resolved" not in str(row.get("title") or "") for row in after)
 
 
 def test_review_after_acknowledge_moves_appeal_to_resolved_state():
@@ -153,7 +155,7 @@ def test_review_after_acknowledge_moves_appeal_to_resolved_state():
     assert after_resp.status_code == 200, after_resp.text
     after = [row for row in after_resp.json().get("data", []) if row.get("notification_kind") == "grade_appeal"]
     assert after
-    assert any("已处理" in str(row.get("title") or "") for row in after)
+    assert any(row.get("appeal_status") == "resolved" for row in after)
 
 
 def test_llm_regrade_resolves_pending_homework_appeal_after_success():
@@ -231,7 +233,7 @@ def test_llm_regrade_resolves_pending_homework_appeal_after_success():
     assert after_resp.status_code == 200, after_resp.text
     after = [row for row in after_resp.json().get("data", []) if row.get("notification_kind") == "grade_appeal"]
     assert after
-    assert any("已处理" in str(row.get("title") or "") for row in after)
+    assert any(row.get("appeal_status") == "resolved" for row in after)
 
 
 def test_notification_detail_after_resolved_appeal_uses_resolved_title_not_acknowledged_title():
@@ -280,8 +282,8 @@ def test_notification_detail_after_resolved_appeal_uses_resolved_title_not_ackno
     detail = client.get(f"/api/notifications/{notif_id}", headers=teacher_h)
     assert detail.status_code == 200, detail.text
     title = str(detail.json().get("title") or "")
-    assert "已处理" in title
-    assert "已阅" not in title
+    assert "resolved" in title
+    assert "acknowledged" not in title
 
 
 def test_resolved_grade_appeal_notification_exposes_appeal_status_to_clients():
@@ -479,13 +481,13 @@ def test_rejected_score_appeal_notification_exposes_terminal_status_and_consiste
     row = next(item for item in listed.json().get("data", []) if item.get("notification_kind") == "score_grade_appeal")
     assert row.get("appeal_status") == "rejected"
     assert int(row.get("related_score_appeal_id") or 0) == int(appeal_id)
-    assert "已拒绝" in str(row.get("title") or "")
+    assert row.get("appeal_status") == "rejected"
 
     detail = client.get(f"/api/notifications/{row['id']}", headers=teacher_h)
     assert detail.status_code == 200, detail.text
     assert detail.json().get("appeal_status") == "rejected"
-    assert "已拒绝" in str(detail.json().get("title") or "")
-    assert "待处理" not in str(detail.json().get("content") or "")
+    assert detail.json().get("appeal_status") == "rejected"
+    assert "pending" not in str(detail.json().get("content") or "")
 
 
 def test_rejected_homework_appeal_exposes_terminal_status_teacher_response_and_consistent_notification_projection():
@@ -538,13 +540,13 @@ def test_rejected_homework_appeal_exposes_terminal_status_teacher_response_and_c
     assert listed.status_code == 200, listed.text
     row = next(item for item in listed.json().get("data", []) if item.get("notification_kind") == "grade_appeal")
     assert row.get("appeal_status") == "rejected"
-    assert "已拒绝" in str(row.get("title") or "")
+    assert row.get("appeal_status") == "rejected"
 
     detail = client.get(f"/api/notifications/{row['id']}", headers=teacher_h)
     assert detail.status_code == 200, detail.text
     assert detail.json().get("appeal_status") == "rejected"
-    assert "已拒绝" in str(detail.json().get("title") or "")
-    assert "待处理" not in str(detail.json().get("content") or "")
+    assert detail.json().get("appeal_status") == "rejected"
+    assert "pending" not in str(detail.json().get("content") or "")
 
 
 def test_teacher_submission_detail_row_exposes_homework_appeal_reason_and_teacher_response():
@@ -588,3 +590,176 @@ def test_teacher_submission_detail_row_exposes_homework_appeal_reason_and_teache
     assert body["appeal_status"] == "resolved"
     assert body["appeal_reason_text"] == appeal_reason
     assert "resolved after rechecking the derivation" in str(body.get("appeal_teacher_response") or "")
+
+
+def test_concurrent_homework_appeal_acknowledge_and_resolve_do_not_both_win():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "ack resolve race"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 77, "review_comment": "before concurrent appeal race"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": "please review the score and comment carefully"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    barrier = threading.Barrier(2)
+    statuses: list[int] = []
+    errors: list[str] = []
+
+    def ack_one() -> None:
+        try:
+            with TestClient(app) as thread_client:
+                barrier.wait(timeout=5)
+                resp = thread_client.post(f"/api/homeworks/{hid}/submissions/{sub_id}/appeal/acknowledge", headers=teacher_h)
+                statuses.append(resp.status_code)
+        except Exception as exc:  # pragma: no cover
+            errors.append(str(exc))
+
+    def resolve_one() -> None:
+        try:
+            with TestClient(app) as thread_client:
+                barrier.wait(timeout=5)
+                resp = thread_client.put(
+                    f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+                    headers=teacher_h,
+                    json={"teacher_response": "resolved during race", "status": "resolved"},
+                )
+                statuses.append(resp.status_code)
+        except Exception as exc:  # pragma: no cover
+            errors.append(str(exc))
+
+    threads = [threading.Thread(target=ack_one), threading.Thread(target=resolve_one)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not errors, errors
+    assert sorted(statuses) == [200, 200]
+
+    db = SessionLocal()
+    try:
+        row = db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == sub_id).one()
+        assert row.status in {"acknowledged", "resolved"}
+        notes = db.query(Notification).filter(Notification.related_appeal_id == row.id).all()
+        assert len(notes) == 1
+        assert notes[0].notification_kind == "grade_appeal"
+    finally:
+        db.close()
+
+
+def test_final_homework_appeal_replay_keeps_notification_projection_stable():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "replay stable"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 84, "review_comment": "before replay"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": "please recheck the grading details"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    first = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "resolved once", "status": "resolved"},
+    )
+    assert first.status_code == 200, first.text
+
+    replay = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "resolved once", "status": "resolved"},
+    )
+    assert replay.status_code == 200, replay.text
+
+    db = SessionLocal()
+    try:
+        row = db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == sub_id).one()
+        assert row.status == "resolved"
+        assert row.teacher_response == "resolved once"
+        notes = db.query(Notification).filter(Notification.related_appeal_id == row.id).all()
+        assert len(notes) == 1
+        assert notes[0].notification_kind == "grade_appeal"
+    finally:
+        db.close()
+
+
+def test_notification_detail_for_homework_appeal_stays_consistent_after_terminal_transition():
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "detail consistency"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 80, "review_comment": "before consistency"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": "please verify list and detail stay aligned"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    ack = client.post(f"/api/homeworks/{hid}/submissions/{sub_id}/appeal/acknowledge", headers=teacher_h)
+    assert ack.status_code == 200, ack.text
+
+    resolved = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "resolved for consistency", "status": "resolved"},
+    )
+    assert resolved.status_code == 200, resolved.text
+
+    listed = client.get("/api/notifications", headers=teacher_h)
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json().get("data", []) if item.get("notification_kind") == "grade_appeal")
+    assert row.get("appeal_status") == "resolved"
+    detail = client.get(f"/api/notifications/{row['id']}", headers=teacher_h)
+    assert detail.status_code == 200, detail.text
+    assert detail.json().get("appeal_status") == "resolved"
+    assert detail.json().get("appeal_status") == "resolved"

@@ -1,4 +1,4 @@
-"""High-difficulty API regressions for notification sync-status vs list visibility (behavior layer).
+﻿"""High-difficulty API regressions for notification sync-status vs list visibility (behavior layer).
 
 These complement existing coverage in ``test_complex_regression_roundtrip_behavior.py`` (c6/c7/c7b)
 by stressing **contract alignment** between ``GET /api/notifications`` and
@@ -17,7 +17,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi.testclient import TestClient
 
 from apps.backend.courseeval_backend.db.database import SessionLocal
-from apps.backend.courseeval_backend.db.models import CourseEnrollment, NotificationRead, Student, Subject
+from apps.backend.courseeval_backend.db.models import CourseEnrollment, Notification, NotificationRead, Student, Subject
+from apps.backend.courseeval_backend.main import app
 from tests.scenarios.llm_scenario import login_api, make_grading_course_with_homework
 
 
@@ -402,5 +403,132 @@ def test_ns10_parallel_sync_reads_do_not_duplicate_notification_read_rows(client
         rows = db.query(NotificationRead).filter(NotificationRead.notification_id == nid).all()
         assert len(rows) == 1
         assert rows[0].is_read is True
+    finally:
+        db.close()
+
+
+def test_ns11_delete_while_mark_read_is_inflight_converges_without_orphan_reads(client: TestClient) -> None:
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    meta = _subject_meta(client, ctx["subject_id"])
+
+    created = client.post(
+        "/api/notifications",
+        headers=teacher_headers,
+        json={
+            "title": "delete-read-race",
+            "content": "race",
+            "class_id": meta["class_id"],
+            "subject_id": ctx["subject_id"],
+        },
+    )
+    assert created.status_code == 200, created.text
+    nid = int(created.json()["id"])
+
+    barrier = threading.Barrier(2)
+    results: list[tuple[str, int, str]] = []
+    errors: list[str] = []
+
+    def mark_read() -> None:
+        try:
+            with TestClient(app) as thread_client:
+                barrier.wait(timeout=10)
+                resp = thread_client.post(f"/api/notifications/{nid}/read", headers=student_headers)
+                results.append(("read", resp.status_code, resp.text))
+        except Exception as exc:  # pragma: no cover
+            errors.append(f"read:{exc}")
+
+    def delete_row() -> None:
+        try:
+            with TestClient(app) as thread_client:
+                barrier.wait(timeout=10)
+                resp = thread_client.delete(f"/api/notifications/{nid}", headers=teacher_headers)
+                results.append(("delete", resp.status_code, resp.text))
+        except Exception as exc:  # pragma: no cover
+            errors.append(f"delete:{exc}")
+
+    threads = [threading.Thread(target=mark_read), threading.Thread(target=delete_row)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not errors, errors
+    statuses = {kind: status for kind, status, _ in results}
+    assert statuses.get("delete") == 200, results
+    assert statuses.get("read") in {200, 403, 404}, results
+
+    db = SessionLocal()
+    try:
+        assert db.query(Notification).filter(Notification.id == nid).count() == 0
+        assert db.query(NotificationRead).filter(NotificationRead.notification_id == nid).count() == 0
+    finally:
+        db.close()
+
+
+def test_ns12_delete_while_mark_all_read_is_inflight_converges_without_orphan_reads(client: TestClient) -> None:
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    teacher_headers = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    student_headers = login_api(client, ctx["student_username"], ctx["student_password"])
+    meta = _subject_meta(client, ctx["subject_id"])
+
+    created_ids: list[int] = []
+    for i in range(3):
+        created = client.post(
+            "/api/notifications",
+            headers=teacher_headers,
+            json={
+                "title": f"delete-bulk-read-{i}",
+                "content": "bulk",
+                "class_id": meta["class_id"],
+                "subject_id": ctx["subject_id"],
+            },
+        )
+        assert created.status_code == 200, created.text
+        created_ids.append(int(created.json()["id"]))
+
+    target_id = created_ids[0]
+    barrier = threading.Barrier(2)
+    results: list[tuple[str, int, str]] = []
+    errors: list[str] = []
+
+    def mark_all() -> None:
+        try:
+            with TestClient(app) as thread_client:
+                barrier.wait(timeout=10)
+                resp = thread_client.post(
+                    "/api/notifications/mark-all-read",
+                    headers=student_headers,
+                    params={"subject_id": ctx["subject_id"]},
+                )
+                results.append(("mark_all", resp.status_code, resp.text))
+        except Exception as exc:  # pragma: no cover
+            errors.append(f"mark_all:{exc}")
+
+    def delete_row() -> None:
+        try:
+            with TestClient(app) as thread_client:
+                barrier.wait(timeout=10)
+                resp = thread_client.delete(f"/api/notifications/{target_id}", headers=teacher_headers)
+                results.append(("delete", resp.status_code, resp.text))
+        except Exception as exc:  # pragma: no cover
+            errors.append(f"delete:{exc}")
+
+    threads = [threading.Thread(target=mark_all), threading.Thread(target=delete_row)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not errors, errors
+    statuses = {kind: status for kind, status, _ in results}
+    assert statuses.get("delete") == 200, results
+    assert statuses.get("mark_all") == 200, results
+
+    db = SessionLocal()
+    try:
+        assert db.query(Notification).filter(Notification.id.in_(created_ids)).count() == 2
+        assert db.query(NotificationRead).filter(NotificationRead.notification_id.in_(created_ids)).count() == 2
     finally:
         db.close()
