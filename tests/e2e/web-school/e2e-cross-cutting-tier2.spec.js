@@ -30,7 +30,32 @@ async function login(page, username, password) {
   await page.getByTestId('login-username').fill(username)
   await page.getByTestId('login-password').fill(password)
   await page.getByTestId('login-submit').click()
-  await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 })
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          try {
+            const user = JSON.parse(localStorage.getItem('user') || 'null')
+            return user?.role || null
+          } catch {
+            return null
+          }
+        }),
+      { timeout: 20000 }
+    )
+    .not.toBeNull()
+  if (page.url().includes('/login')) {
+    const fallbackTarget = await page.evaluate(() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || 'null')
+        return user?.role === 'student' ? '/courses' : '/students'
+      } catch {
+        return '/students'
+      }
+    })
+    await page.goto(fallbackTarget, { waitUntil: 'load', timeout: 60000 })
+  }
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 20000 })
 }
 
 async function obtainAccessToken(username, password) {
@@ -275,6 +300,9 @@ test.describe('E2E tier-2 cross-cutting scenarios', () => {
   test('10 targeted notification: student_b sees title; student_plain does not (API isolation)', async () => {
     const s = scenario()
     const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
+    await apiPostJson(`/api/subjects/${s.course_required_id}/roster-enroll`, teacherTok, {
+      student_ids: [s.student_b.student_row_id]
+    })
     const title = `T2_PRIV_${s.suffix}_${Date.now()}`
     await apiPostJson('/api/notifications', teacherTok, {
       title,

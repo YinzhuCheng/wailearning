@@ -159,6 +159,8 @@ incomplete.
 
 The user may specify concurrency in any of these forms:
 
+- if the user does not specify a value, the repository default is `10` for
+  every block
 - one global value applied to every block
 - one value per block
 - a mixed map such as:

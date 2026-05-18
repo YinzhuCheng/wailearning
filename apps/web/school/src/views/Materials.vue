@@ -1276,6 +1276,7 @@ onMounted(async () => {
   if (typeof window !== 'undefined') {
     window.addEventListener(MATERIAL_PRESENTATION_EVENT, handleMaterialPresentationStyleChange)
   }
+  await userStore.ensureSelectedCourse(true, { preserveEmptySelection: true })
   await loadChapterTree()
   await loadMaterials()
 })

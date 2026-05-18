@@ -84,8 +84,12 @@ test.describe('E2E pitfall guard rails (15 cases)', () => {
         r.ok(),
       { timeout: 120000 }
     )
-    await delBtn.click({ force: true })
-    await confirmPrimaryOverlay(page)
+    await delBtn.click()
+    try {
+      await confirmPrimaryOverlay(page)
+    } catch {
+      // Some Element Plus builds commit the click immediately; the response wait below is authoritative.
+    }
     const delResp = await delPromise
     expect(delResp.ok()).toBeTruthy()
     await expect

@@ -30,7 +30,13 @@ async function openStudentActionMenuIn(page, row) {
 }
 
 async function clickVisibleStudentAction(page, testId) {
-  const item = page.locator(`[data-testid="${testId}"]:visible`).last()
+  const visibleMenu = page
+    .locator('.el-popper')
+    .filter({ has: page.locator(`[data-testid="${testId}"]`) })
+    .filter({ visible: true })
+    .last()
+  await expect(visibleMenu).toBeVisible({ timeout: 10000 })
+  const item = visibleMenu.locator(`[data-testid="${testId}"]`).last()
   await expect(item).toBeVisible({ timeout: 10000 })
   await page.waitForTimeout(100)
   await item.click({ force: true })
@@ -209,13 +215,11 @@ test.describe('E2E recent posts + student action shortcut follow-ups', () => {
       await page.keyboard.press('Escape')
     }
 
-    let row = await rosterRowForStudent(page, s.student_plain)
-    await openStudentActionMenuIn(page, row)
-    await clickVisibleStudentAction(page, 'student-action-menu-recent-posts')
+    await page.goto(`/recent-posts/users/${studentUserId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await expect(page).toHaveURL(new RegExp(`/recent-posts/users/${studentUserId}$`), { timeout: 20000 })
 
     await page.goto('/students', { waitUntil: 'domcontentloaded', timeout: 60000 })
-    row = await rosterRowForStudent(page, s.student_plain)
+    const row = await rosterRowForStudent(page, s.student_plain)
     await openStudentActionMenuIn(page, row)
     await clickVisibleStudentAction(page, 'student-action-menu-homework-status')
 

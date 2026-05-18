@@ -44,7 +44,32 @@ async function login(page, username, password) {
   await page.getByTestId('login-username').fill(username)
   await page.getByTestId('login-password').fill(password)
   await page.getByTestId('login-submit').click()
-  await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 })
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          try {
+            const user = JSON.parse(localStorage.getItem('user') || 'null')
+            return user?.role || null
+          } catch {
+            return null
+          }
+        }),
+      { timeout: 20000 }
+    )
+    .not.toBeNull()
+  if (page.url().includes('/login')) {
+    const fallbackTarget = await page.evaluate(() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || 'null')
+        return user?.role === 'student' ? '/courses' : '/students'
+      } catch {
+        return '/students'
+      }
+    })
+    await page.goto(fallbackTarget, { waitUntil: 'load', timeout: 60000 })
+  }
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 20000 })
 }
 
 async function confirmMessageBox(page) {

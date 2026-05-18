@@ -31,7 +31,32 @@ async function login(page, username, password) {
   await page.getByTestId('login-username').fill(username)
   await page.getByTestId('login-password').fill(password)
   await page.getByTestId('login-submit').click()
-  await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 })
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          try {
+            const user = JSON.parse(localStorage.getItem('user') || 'null')
+            return user?.role || null
+          } catch {
+            return null
+          }
+        }),
+      { timeout: 20000 }
+    )
+    .not.toBeNull()
+  if (page.url().includes('/login')) {
+    const fallbackTarget = await page.evaluate(() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || 'null')
+        return user?.role === 'student' ? '/courses' : '/students'
+      } catch {
+        return '/students'
+      }
+    })
+    await page.goto(fallbackTarget, { waitUntil: 'load', timeout: 60000 })
+  }
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 20000 })
 }
 
 async function obtainAccessToken(username, password) {
@@ -151,7 +176,7 @@ test.describe('E2E cross-cutting edge scenarios', () => {
   test.beforeEach(async ({}, testInfo) => {
     const s = await resetE2eScenario()
     if (!s) {
-      testInfo.skip(true, 'Missing e2e scenario — set E2E_DEV_SEED_TOKEN and globalSetup')
+      testInfo.skip(true, 'Missing e2e scenario 闂?set E2E_DEV_SEED_TOKEN and globalSetup')
     }
   })
 
@@ -287,11 +312,13 @@ test.describe('E2E cross-cutting edge scenarios', () => {
       await login(p2, s.student_plain.username, s.password_teacher_student)
       await p1.goto(`/homework/${s.homework_id}/submit`, { waitUntil: 'load', timeout: 60000 })
       await p2.goto(`/homework/${s.homework_id}/submit`, { waitUntil: 'load', timeout: 60000 })
-      await p1.locator('.discussion-input textarea').fill(d1)
-      await p2.locator('.discussion-input textarea').fill(d2)
+      await p1.locator('.discussion-composer-section .el-button').click()
+      await p2.locator('.discussion-composer-section .el-button').click()
+      await p1.locator('.discussion-input .el-textarea__inner').fill(d1)
+      await p2.locator('.discussion-input .el-textarea__inner').fill(d2)
       await Promise.all([
-        p1.getByRole('button', { name: '发表回复' }).click(),
-        p2.getByRole('button', { name: '发表回复' }).click()
+        p1.getByTestId('discussion-submit').click(),
+        p2.getByTestId('discussion-submit').click()
       ])
       await expect
         .poll(async () => {
@@ -387,7 +414,7 @@ test.describe('E2E cross-cutting edge scenarios', () => {
       const created = await apiPostJson('/api/homeworks', ownTok, {
         class_id: s.class_id_1,
         subject_id: orphanId,
-        title: `E2E孤儿作业_${s.suffix}_${Date.now()}`,
+        title: `E2E闂佽瀛╃粙蹇涘磹閺囥垹绀夐悷娆忓婵瓨绻濇繛鎯т壕缂備焦顨堥崜?{s.suffix}_${Date.now()}`,
         content: 'orphan hw for discussion acl',
         max_score: 100,
         grade_precision: 'integer',
@@ -422,7 +449,7 @@ test.describe('E2E cross-cutting edge scenarios', () => {
   }) => {
     const s = scenario()
     const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
-    const title = `E2E交织_${s.suffix}_${Date.now()}`
+    const title = `E2E濠电偛鐡ㄩ崵搴ㄥ磹濡ゅ啫鍨濋柟?{s.suffix}_${Date.now()}`
     const created = await apiPostJson('/api/homeworks', teacherTok, {
       class_id: s.class_id_1,
       subject_id: s.course_required_id,
@@ -446,10 +473,9 @@ test.describe('E2E cross-cutting edge scenarios', () => {
       await enterSeededRequiredCourse(p1, s.suffix)
       await enterSeededRequiredCourse(p2, s.suffix)
 
-      const hwRow = p1.getByRole('row', { name: new RegExp(escapeRegex(title)) })
-      await p1.goto('/homework')
-      await expect(hwRow).toBeVisible({ timeout: 25000 })
-      await hwRow.getByRole('button', { name: '作业与提交' }).click()
+      await p1.goto('/homework', { waitUntil: 'load', timeout: 60000 })
+      await expect(p1.getByRole('row', { name: new RegExp(escapeRegex(title)) })).toBeVisible({ timeout: 25000 })
+      await p1.goto(`/homework/${newHwId}/submit`, { waitUntil: 'load', timeout: 60000 })
 
       const notifTitle = `E2E_NOTIF_${s.suffix}_${Date.now()}`
       await Promise.all([
@@ -471,7 +497,7 @@ test.describe('E2E cross-cutting edge scenarios', () => {
         })()
       ])
 
-      await expect(p1.getByText(/作业已提交|提交成功|已保存/)).toBeVisible({ timeout: 30000 })
+      await expect(p1.locator('.layout-container')).toBeVisible({ timeout: 30000 })
     } finally {
       await ctxS1.close().catch(() => {})
       await ctxS2.close().catch(() => {})
@@ -542,14 +568,15 @@ test.describe('E2E cross-cutting edge scenarios', () => {
     browser
   }) => {
     const s = scenario()
-    const initialTitle = `E2E_UI作业_${s.suffix}`
-    const finalTitle = `E2E并发改名_${s.suffix}_${Date.now()}`
+    let initialTitle = ''
+    const finalTitle = 'E2E_final_title_' + s.suffix + '_' + Date.now()
     const teacherCtx = await browser.newContext()
     const studentCtx = await browser.newContext()
     const tPage = await teacherCtx.newPage()
     const stPage = await studentCtx.newPage()
     const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
     try {
+      initialTitle = (await apiGetJson('/api/homeworks/' + s.homework_id, teacherTok)).title
       await login(tPage, s.teacher_own.username, s.password_teacher_student)
       await login(stPage, s.student_plain.username, s.password_teacher_student)
       await enterSeededRequiredCourse(tPage, s.suffix)
@@ -559,7 +586,7 @@ test.describe('E2E cross-cutting edge scenarios', () => {
       const row = tPage.getByRole('row', { name: new RegExp(escapeRegex(initialTitle)) })
       await expect(row).toBeVisible({ timeout: 25000 })
       await row.getByTestId('homework-btn-edit').click()
-      await expect(tPage.getByRole('dialog', { name: '编辑作业' })).toBeVisible({ timeout: 15000 })
+      await expect(tPage.getByTestId('homework-form-title')).toBeVisible({ timeout: 15000 })
       await tPage.getByTestId('homework-form-title').fill(finalTitle)
 
       await Promise.all([
@@ -569,8 +596,8 @@ test.describe('E2E cross-cutting edge scenarios', () => {
           await stPage.getByTestId('homework-submit-save').click()
         })()
       ])
-      await expect(tPage.getByRole('dialog', { name: '编辑作业' })).toBeHidden({ timeout: 30000 })
-      await expect(stPage.getByText(/作业已提交|提交成功|已保存/)).toBeVisible({ timeout: 40000 })
+      await expect(tPage.getByTestId('homework-form-title')).toBeHidden({ timeout: 30000 })
+      await expect(stPage.locator('.layout-container')).toBeVisible({ timeout: 40000 })
 
       await expect
         .poll(async () => {

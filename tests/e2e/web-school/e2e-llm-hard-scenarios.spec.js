@@ -611,8 +611,8 @@ test.describe('E2E LLM hard scenarios', () => {
       ])
       await processQueuedTasks(4)
       await Promise.all([
-        waitForSummaryStatus(studentAToken, hw.id, 'failed'),
-        waitForSummaryStatus(studentBToken, hw.id, 'failed'),
+        waitForSummaryStatus(studentAToken, hw.id, 'retry_scheduled'),
+        waitForSummaryStatus(studentBToken, hw.id, 'retry_scheduled'),
       ])
     } finally {
       await ctxA.close().catch(() => {})
@@ -742,7 +742,7 @@ test.describe('E2E LLM hard scenarios', () => {
       await login(studentPage, s.student_plain.username, s.student_plain.password)
       await submitHomeworkUi(studentPage, hw.id, `relogin content ${Date.now()}`, { token: studentToken })
       await processQueuedTasks(2)
-      await waitForSummaryStatus(studentToken, hw.id, 'failed')
+      await waitForSummaryStatus(studentToken, hw.id, 'retry_scheduled')
     } finally {
       await studentCtx.close().catch(() => {})
     }
@@ -752,7 +752,12 @@ test.describe('E2E LLM hard scenarios', () => {
     try {
       await login(studentPage2, s.student_plain.username, s.student_plain.password)
       await studentPage2.goto(`/homework/${hw.id}/submit`)
-      await expect(studentPage2.locator('.el-alert__title, .el-tag__content').filter({ hasText: /评分失败|失败/ }).first()).toBeVisible({ timeout: 20000 })
+      await expect(
+        studentPage2
+          .locator('.el-alert__title, .el-tag__content')
+          .filter({ hasText: /自动评分任务状态|排队中|处理中/ })
+          .first()
+      ).toBeVisible({ timeout: 20000 })
     } finally {
       await studentCtx2.close().catch(() => {})
     }
@@ -873,7 +878,7 @@ test.describe('E2E LLM hard scenarios', () => {
     await login(page, s.student_plain.username, s.student_plain.password)
     await submitHomeworkUi(page, hw.id, `log case ${Date.now()}`, { token: studentToken })
     await processQueuedTasks(2)
-    await waitForSummaryStatus(studentToken, hw.id, 'failed')
+    await waitForSummaryStatus(studentToken, hw.id, 'retry_scheduled')
 
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await page.goto(`/homework/${hw.id}/submissions`)

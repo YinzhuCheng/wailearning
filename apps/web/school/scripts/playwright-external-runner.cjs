@@ -12,15 +12,9 @@ const repoRoot = path.resolve(schoolRoot, '..', '..', '..')
 const parentRoot = path.resolve(repoRoot, 'apps', 'web', 'parent')
 const isWindows = process.platform === 'win32'
 
-const apiPort = process.env.E2E_API_PORT || '8012'
-const uiPort = process.env.E2E_UI_PORT || '3012'
-const parentUiPort = process.env.E2E_PARENT_UI_PORT || '3014'
-const sqliteFile = isWindows
-  ? path.join(os.tmpdir(), `playwright_e2e_${apiPort}.sqlite`)
-  : `/tmp/playwright_e2e_${apiPort}.sqlite`
-const sqliteUrl = isWindows
-  ? `sqlite:///${sqliteFile.replace(/\\/g, '/')}`
-  : `sqlite:////tmp/playwright_e2e_${apiPort}.sqlite`
+const requestedApiPort = process.env.E2E_API_PORT || '8012'
+const requestedUiPort = process.env.E2E_UI_PORT || '3012'
+const requestedParentUiPort = process.env.E2E_PARENT_UI_PORT || '3014'
 
 const pythonExe =
   process.env.E2E_PYTHON ||
@@ -73,7 +67,6 @@ function serverEnv(extra = {}) {
         ? process.env.E2E_DEV_REQUIRE_ADMIN_JWT
         : 'true',
     INIT_DEFAULT_DATA: 'false',
-    DATABASE_URL: sqliteUrl,
     SECRET_KEY: 'playwright-e2e-secret-key-minimum-32-chars-xx',
     ENABLE_LLM_GRADING_WORKER: useRealWorker ? 'true' : 'false',
     LLM_GRADING_WORKER_LEADER: useRealWorker ? 'true' : 'false',
@@ -161,11 +154,25 @@ async function main() {
   const wantsParentUi =
     ['1', 'true', 'yes', 'on'].includes(String(process.env.E2E_PARENT_UI || '').trim().toLowerCase()) ||
     rawArgs.some(arg => /parent[-_]portal/i.test(String(arg)))
-  const resolvedApiBase = buildHttpBase(apiPort)
-  const resolvedUiPort = await chooseOpenPort(uiPort)
+  const resolvedApiPort = await chooseOpenPort(requestedApiPort)
+  const resolvedApiBase = buildHttpBase(resolvedApiPort)
+  const resolvedUiPort = await chooseOpenPort(requestedUiPort)
   const resolvedUiBase = buildHttpBase(resolvedUiPort)
-  const resolvedParentUiPort = wantsParentUi ? await chooseOpenPort(parentUiPort) : parentUiPort
+  const resolvedParentUiPort = wantsParentUi ? await chooseOpenPort(requestedParentUiPort) : requestedParentUiPort
   const resolvedParentUiBase = buildHttpBase(resolvedParentUiPort)
+  const sqliteFile = isWindows
+    ? path.join(os.tmpdir(), `playwright_e2e_${resolvedApiPort}.sqlite`)
+    : `/tmp/playwright_e2e_${resolvedApiPort}.sqlite`
+  const sqliteUrl = isWindows
+    ? `sqlite:///${sqliteFile.replace(/\\/g, '/')}`
+    : `sqlite:////tmp/playwright_e2e_${resolvedApiPort}.sqlite`
+  const resolvedServerEnv = serverEnv({
+    E2E_API_PORT: resolvedApiPort,
+    E2E_UI_PORT: resolvedUiPort,
+    E2E_PARENT_UI_PORT: resolvedParentUiPort,
+    E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
+    DATABASE_URL: sqliteUrl,
+  })
   try {
     if (fs.existsSync(sqliteFile)) {
       fs.rmSync(sqliteFile, { force: true })
@@ -183,34 +190,32 @@ async function main() {
       '--host',
       '127.0.0.1',
       '--port',
-      apiPort
+      resolvedApiPort
     ],
     {
       cwd: repoRoot,
-      env: serverEnv({
-        E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
-      })
+      env: resolvedServerEnv
     }
   )
   await waitFor(`${resolvedApiBase}/api/health`, 'api')
 
   launch('ui', 'node', [viteBin, '--host', '127.0.0.1', '--port', resolvedUiPort], {
     cwd: schoolRoot,
-    env: serverEnv({
-      E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
+    env: {
+      ...resolvedServerEnv,
       VITE_PROXY_TARGET: resolvedApiBase
-    })
+    }
   })
   await waitFor(`${resolvedUiBase}/`, 'ui')
 
   if (wantsParentUi) {
     launch('parent-ui', 'node', [parentViteBin, '--host', '127.0.0.1', '--port', resolvedParentUiPort], {
       cwd: parentRoot,
-      env: serverEnv({
-        E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
+      env: {
+        ...resolvedServerEnv,
         VITE_PROXY_TARGET: resolvedApiBase,
         VITE_DEV_PORT: resolvedParentUiPort
-      })
+      }
     })
     await waitFor(`${resolvedParentUiBase}/`, 'parent-ui')
   }
@@ -225,6 +230,9 @@ async function main() {
       ...process.env,
       DEBUG: 'false',
       PLAYWRIGHT_USE_EXTERNAL_SERVERS: 'true',
+      E2E_API_PORT: resolvedApiPort,
+      E2E_UI_PORT: resolvedUiPort,
+      E2E_PARENT_UI_PORT: resolvedParentUiPort,
       E2E_API_URL: process.env.E2E_API_URL || resolvedApiBase,
       E2E_DEV_SEED_TOKEN: process.env.E2E_DEV_SEED_TOKEN || 'test-playwright-seed',
       PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || resolvedUiBase,

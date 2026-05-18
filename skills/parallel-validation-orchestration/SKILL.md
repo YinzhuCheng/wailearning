@@ -343,13 +343,31 @@ Example conceptual input:
     "tests/behavior/test_discussion_api_behavior.py",
     "tests/behavior/test_multi_actor_timeline_behavior.py"
   ],
-  "concurrency": 8,
+  "concurrency": 10,
   "cpu_target": 75,
   "memory_target": 85,
   "postgres_isolation": true,
   "resume": true
 }
 ```
+
+## Default Concurrency Contract
+
+Unless the user or an explicit plan file says otherwise, assume a default
+concurrency of **10 for every block**.
+
+This repository default applies to:
+
+- `static-and-build`
+- `backend-sqlite-compatible`
+- `behavior`
+- `security`
+- `backend-postgres-sensitive`
+- `playwright-school-e2e`
+
+If a run needs a lower value for stability or isolation, do not silently drift
+from the default. Record the exact override and the concrete reason in the plan
+or handoff before launching that block.
 
 ## Automatic Slot Refill Rule
 

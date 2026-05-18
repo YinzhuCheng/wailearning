@@ -17,7 +17,7 @@ function escapeRegex(text) {
 async function clickCourseSwitcherOption(page, courseLabel) {
   const switcher = page.getByTestId('header-course-switch')
   await expect(switcher).toBeVisible({ timeout: 15000 })
-  await switcher.click()
+  await switcher.click({ force: true })
   const menu = page.locator('.course-dropdown-menu').filter({ visible: true }).first()
   await expect(menu).toBeVisible({ timeout: 15000 })
   const row = menu.locator('.course-option').filter({ hasText: courseLabel }).first()
@@ -70,7 +70,34 @@ async function login(page, username, password) {
   await page.getByTestId('login-username').fill(username)
   await page.getByTestId('login-password').fill(password)
   await page.getByTestId('login-submit').click()
-  await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 })
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          try {
+            const user = JSON.parse(localStorage.getItem('user') || 'null')
+            return user?.role || null
+          } catch {
+            return null
+          }
+        }),
+      { timeout: 20000 }
+    )
+    .not.toBeNull()
+
+  if (page.url().includes('/login')) {
+    const fallbackTarget = await page.evaluate(() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || 'null')
+        return user?.role === 'student' ? '/courses' : '/students'
+      } catch {
+        return '/students'
+      }
+    })
+    await page.goto(fallbackTarget, { waitUntil: 'load', timeout: 60000 })
+  }
+
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 20000 })
 }
 
 async function obtainAccessToken(username, password) {
@@ -409,9 +436,20 @@ async function apiPostForm(pathname, token, formData) {
  * Using generic `getByRole('dialog')` often matches the wrong overlay after long SQLite runs.
  */
 async function confirmElMessageBoxPrimary(page) {
-  const box = page.locator('.el-message-box').filter({ visible: true }).last()
+  const overlay = page
+    .locator('.el-overlay')
+    .filter({ has: page.locator('.el-message-box') })
+    .filter({ visible: true })
+    .last()
+  try {
+    await overlay.waitFor({ state: 'visible', timeout: 2000 })
+  } catch {
+    await page.keyboard.press('Enter')
+    return
+  }
+  const box = overlay.locator('.el-message-box').last()
   await box.waitFor({ state: 'visible', timeout: 30000 })
-  await box.locator('.el-message-box__btns .el-button--primary').click({ timeout: 60000 })
+  await box.locator('.el-message-box__btns .el-button--primary').click({ timeout: 60000, force: true })
 }
 
 module.exports = {

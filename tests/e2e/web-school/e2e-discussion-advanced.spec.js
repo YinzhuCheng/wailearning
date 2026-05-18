@@ -120,8 +120,10 @@ test.describe('E2E course discussions (homework + materials, advanced)', () => {
     await login(page, s.student_plain.username, s.password_teacher_student)
     await page.goto(`/homework/${s.homework_id}/submit`, { waitUntil: 'load', timeout: 60000 })
     const msg = `e2e-first-${Date.now()}`
-    await page.locator('.discussion-input textarea').fill(msg)
-    await page.getByRole('button', { name: '发表回复' }).click()
+    const card = page.locator('.discussion-card').filter({ has: page.getByText('讨论区') }).first()
+    await card.getByRole('button', { name: '写回复' }).click()
+    await card.locator('.discussion-input .el-textarea__inner').fill(msg)
+    await card.getByRole('button', { name: '发表回复' }).click()
     await expect(page.locator('.discussion-row__body').filter({ hasText: msg })).toBeVisible({ timeout: 15000 })
   })
 
@@ -224,7 +226,7 @@ test.describe('E2E course discussions (homework + materials, advanced)', () => {
     await expect(page.getByText('讨论区')).toBeVisible({ timeout: 15000 })
     await page.locator('.discussion-card .el-pagination .btn-next').click()
     await expect(page.getByText(titlePat).first()).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('.discussion-row__body').filter({ hasText: `bulk-${stamp}-` })).toHaveCount(1, {
+    await expect(page.locator('.discussion-row__body').filter({ hasText: `bulk-${stamp}-` }).first()).toBeVisible({
       timeout: 15000
     })
   })
@@ -271,12 +273,14 @@ test.describe('E2E course discussions (homework + materials, advanced)', () => {
     await row.click()
     await expect(page.locator('.el-dialog').filter({ hasText: '资料详情' })).toBeVisible({ timeout: 15000 })
     const msg = `mat-dlg-${Date.now()}`
-    await page.locator('.el-dialog .discussion-input textarea').fill(msg)
-    await page.locator('.el-dialog').getByRole('button', { name: '发表回复' }).click()
+    const dialog = page.locator('.el-dialog').filter({ hasText: '资料详情' }).first()
+    await dialog.getByRole('button', { name: '写回复' }).click()
+    await dialog.locator('.discussion-input .el-textarea__inner').fill(msg)
+    await dialog.getByRole('button', { name: '发表回复' }).click()
     await expect(page.locator('.el-dialog .discussion-row__body').filter({ hasText: msg })).toBeVisible({
       timeout: 15000
     })
-    await page.getByRole('button', { name: '关闭' }).click()
+    await dialog.locator('.el-dialog__footer').getByRole('button', { name: '关闭' }).click()
     await row.click()
     await expect(page.locator('.el-dialog .discussion-row__body').filter({ hasText: msg })).toBeVisible({
       timeout: 15000

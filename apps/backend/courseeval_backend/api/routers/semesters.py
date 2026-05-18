@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
 from apps.backend.courseeval_backend.db.database import get_db
@@ -20,7 +21,10 @@ def init_default_semesters(db: Session):
             )
             db.add(semester)
     
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
 
 
 def sync_semester_name_references(db: Session, old_name: str, new_name: str) -> None:

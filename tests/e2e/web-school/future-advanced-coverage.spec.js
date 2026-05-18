@@ -258,7 +258,11 @@ test.describe('Future advanced E2E coverage expansion', () => {
       .poll(async () => {
         const list = await apiListNotifications(teacherToken, { page_size: 100 })
         return (list.data || []).filter(
-          n => n.notification_kind === 'score_grade_appeal' && titlePat.test(n.title || '')
+          n =>
+            n.notification_kind === 'score_grade_appeal' &&
+            Number(n.subject_id) === Number(s.course_required_id) &&
+            Number(n.related_student_id) === Number(s.student_plain.student_row_id) &&
+            String(n.content || '').includes(reason)
         ).length
       }, { timeout: 30000 })
       .toBeGreaterThanOrEqual(1)
