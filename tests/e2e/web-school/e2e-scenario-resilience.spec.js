@@ -835,6 +835,18 @@ test.describe('E2E resilience scenarios', () => {
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBeTruthy()
   })
 
+  test('student deep-link to material reader auto-selects course context after fresh login', async ({ page }) => {
+    const s = scenario()
+
+    await login(page, s.student_plain.username, s.student_plain.password)
+    await page.goto(`/materials/read/${s.material_discussion_id}`)
+
+    await expect(page).toHaveURL(new RegExp(`/materials/read/${s.material_discussion_id}$`))
+    await expect(page.getByTestId('material-read-back')).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.material-read-title')).toBeVisible({ timeout: 20000 })
+    await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
+  })
+
   test('deep-link homework submit recovers from a stale invalid selected_course cache', async ({ page }) => {
     const s = scenario()
 
@@ -847,6 +859,76 @@ test.describe('E2E resilience scenarios', () => {
     await expect(page).toHaveURL(new RegExp(`/homework/${s.homework_id}/submit$`))
     await expect(page.getByTestId('homework-submit-content')).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
+  })
+
+  test('material reader deep-link recovers from a stale invalid selected_course cache', async ({ page }) => {
+    const s = scenario()
+
+    await login(page, s.student_plain.username, s.student_plain.password)
+    await page.evaluate(() => {
+      localStorage.setItem('selected_course', JSON.stringify({ id: 999999, name: 'stale-course' }))
+    })
+    await page.goto(`/materials/read/${s.material_discussion_id}`)
+
+    await expect(page).toHaveURL(new RegExp(`/materials/read/${s.material_discussion_id}$`))
+    await expect(page.getByTestId('material-read-back')).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.material-read-title')).toBeVisible({ timeout: 20000 })
+    await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
+  })
+
+  test('parallel cold student deep-links converge across notifications, scores, homework submit, and material reader', async ({ browser }) => {
+    const s = scenario()
+
+    const notificationsCtx = await browser.newContext()
+    const scoresCtx = await browser.newContext()
+    const homeworkCtx = await browser.newContext()
+    const materialsCtx = await browser.newContext()
+    const notificationsPage = await notificationsCtx.newPage()
+    const scoresPage = await scoresCtx.newPage()
+    const homeworkPage = await homeworkCtx.newPage()
+    const materialsPage = await materialsCtx.newPage()
+
+    try {
+      await Promise.all([
+        login(notificationsPage, s.student_plain.username, s.student_plain.password),
+        login(scoresPage, s.student_plain.username, s.student_plain.password),
+        login(homeworkPage, s.student_plain.username, s.student_plain.password),
+        login(materialsPage, s.student_plain.username, s.student_plain.password)
+      ])
+
+      await Promise.all([
+        notificationsPage.goto('/notifications'),
+        scoresPage.goto('/student-scores'),
+        homeworkPage.goto(`/homework/${s.homework_id}/submit`),
+        materialsPage.goto(`/materials/read/${s.material_discussion_id}`)
+      ])
+
+      await Promise.all([
+        expect(notificationsPage).toHaveURL(/\/notifications$/, { timeout: 20000 }),
+        expect(scoresPage).toHaveURL(/\/student-scores$/, { timeout: 20000 }),
+        expect(homeworkPage).toHaveURL(new RegExp(`/homework/${s.homework_id}/submit$`), { timeout: 20000 }),
+        expect(materialsPage).toHaveURL(new RegExp(`/materials/read/${s.material_discussion_id}$`), { timeout: 20000 })
+      ])
+
+      await Promise.all([
+        expect(notificationsPage.getByTestId('sidebar-notifications')).toBeVisible({ timeout: 20000 }),
+        expect(scoresPage.locator('textarea').first()).toBeVisible({ timeout: 20000 }),
+        expect(homeworkPage.getByTestId('homework-submit-content')).toBeVisible({ timeout: 20000 }),
+        expect(materialsPage.getByTestId('material-read-back')).toBeVisible({ timeout: 20000 })
+      ])
+
+      await Promise.all([
+        expect.poll(() => currentSelectedCourseId(notificationsPage), { timeout: 15000 }).toBe(s.course_required_id),
+        expect.poll(() => currentSelectedCourseId(scoresPage), { timeout: 15000 }).toBe(s.course_required_id),
+        expect.poll(() => currentSelectedCourseId(homeworkPage), { timeout: 15000 }).toBe(s.course_required_id),
+        expect.poll(() => currentSelectedCourseId(materialsPage), { timeout: 15000 }).toBe(s.course_required_id)
+      ])
+    } finally {
+      await notificationsCtx.close().catch(() => {})
+      await scoresCtx.close().catch(() => {})
+      await homeworkCtx.close().catch(() => {})
+      await materialsCtx.close().catch(() => {})
+    }
   })
 
   test('concurrent duplicate homework appeal requests return one success and one conflict without a server error', async () => {

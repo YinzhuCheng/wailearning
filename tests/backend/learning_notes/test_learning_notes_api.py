@@ -6,7 +6,9 @@ looks similar to course materials while intentionally using note-owned tables.
 
 from __future__ import annotations
 
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,6 +21,7 @@ from apps.backend.courseeval_backend.db.models import (
     CourseMaterial,
     CourseMaterialChapter,
     CourseMaterialSection,
+    Attendance,
     LearningNoteDiscussionEntry,
     Student,
     Subject,
@@ -529,3 +532,110 @@ def test_ln11_attendance_single_create_parses_iso_date_string_for_sqlite(client:
         },
     )
     assert duplicate.status_code == 400
+
+
+def test_ln12_attendance_single_create_concurrent_duplicate_requests_do_not_create_two_rows(client: TestClient):
+    """Single-create attendance should remain idempotent under concurrent duplicate writes."""
+    ctx = _scenario()
+    teacher = login_api(client, ctx["teacher_username"], "pass")
+    db = SessionLocal()
+    try:
+        student = db.query(Student).filter(Student.student_no == ctx["owner_username"]).first()
+        class_id = student.class_id
+        student_id = student.id
+    finally:
+        db.close()
+
+    payload = {
+        "student_id": student_id,
+        "class_id": class_id,
+        "subject_id": ctx["course_id"],
+        "date": "2026-05-08",
+        "status": "present",
+        "remark": "concurrent duplicate create",
+    }
+
+    from apps.backend.courseeval_backend.main import app
+
+    barrier = threading.Barrier(2)
+
+    def post_once():
+        with TestClient(app) as local_client:
+            barrier.wait(timeout=30)
+            return local_client.post("/api/attendance", headers=teacher, json=payload)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = [future.result() for future in [executor.submit(post_once), executor.submit(post_once)]]
+
+    statuses = sorted(response.status_code for response in responses)
+
+    db = SessionLocal()
+    try:
+        count = (
+            db.query(Attendance)
+            .filter(
+                Attendance.student_id == student_id,
+                Attendance.class_id == class_id,
+                Attendance.subject_id == ctx["course_id"],
+                Attendance.remark == "concurrent duplicate create",
+            )
+            .count()
+        )
+    finally:
+        db.close()
+
+    assert statuses == [200, 400], statuses
+    assert count == 1, count
+
+
+def test_ln13_attendance_class_batch_concurrent_duplicate_requests_do_not_create_two_rows(client: TestClient):
+    """Class-batch attendance should stay idempotent under concurrent duplicate writes."""
+    ctx = _scenario()
+    teacher = login_api(client, ctx["teacher_username"], "pass")
+    db = SessionLocal()
+    try:
+        student = db.query(Student).filter(Student.student_no == ctx["owner_username"]).first()
+        class_id = student.class_id
+        student_id = student.id
+    finally:
+        db.close()
+
+    payload = {
+        "class_id": class_id,
+        "subject_id": ctx["course_id"],
+        "date": "2026-05-09",
+        "status": "late",
+        "remark": "concurrent class batch",
+    }
+
+    from apps.backend.courseeval_backend.main import app
+
+    barrier = threading.Barrier(2)
+
+    def post_once():
+        with TestClient(app) as local_client:
+            barrier.wait(timeout=30)
+            return local_client.post("/api/attendance/class-batch", headers=teacher, json=payload)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = [future.result() for future in [executor.submit(post_once), executor.submit(post_once)]]
+
+    statuses = sorted(response.status_code for response in responses)
+
+    db = SessionLocal()
+    try:
+        count = (
+            db.query(Attendance)
+            .filter(
+                Attendance.student_id == student_id,
+                Attendance.class_id == class_id,
+                Attendance.subject_id == ctx["course_id"],
+                Attendance.remark == "concurrent class batch",
+            )
+            .count()
+        )
+    finally:
+        db.close()
+
+    assert statuses == [200, 200], statuses
+    assert count == 1, count

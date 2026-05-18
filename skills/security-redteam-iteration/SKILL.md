@@ -17,36 +17,79 @@ Use when the user asks to continue a hardening round, add about 10 high-difficul
 security/robustness tests, include E2E, red-team a surface, or follow the
 previous "test, fix, docs, ledger, commit without push" workflow.
 
+## Round Contract
+
+This skill must follow the repository startup contract in `AGENTS.md` and the
+task-scoped reading gates it routes to before editing code, tests, docs, or
+validation ledgers.
+
+Default red-team operating contract for this repository:
+
+1. One red-team attack attempt has a default wall-clock budget of `5` minutes.
+2. If an attack reveals a real product bug, fix that bug in the same attack
+   turn before moving on.
+3. After an immediate bug fix, do not run broad regression by default. Record
+   the observed attack result honestly and continue the attack campaign unless
+   the user explicitly asks for regression or the next step is otherwise
+   blocked.
+4. Run attacks in batches of `4`.
+5. After every `4` attacks, stop and do one concentrated hardening pass that
+   addresses the shared root causes or nearby latent weaknesses exposed by
+   those attacks. The goal is not only to cover the exact exploited surface,
+   but to prevent closely related attacks from succeeding again through the
+   same underlying flaw class.
+6. Define `4` red-team attacks plus `1` concentrated hardening pass as one
+   repository round.
+7. After each repository round, summarize:
+   - which attacks succeeded or were blocked;
+   - which bugs were fixed immediately;
+   - which deeper structural weaknesses were found;
+   - what the concentrated hardening pass changed;
+   - what should be attacked next round.
+
 ## Workflow
 
 1. Preflight: read `AGENTS.md`, `docs/README.md`,
    `docs/testing/README.md`, `docs/testing/TEST_SUITE_MAP.md`,
    `docs/testing/TEST_EXECUTION_PITFALLS.md`, and feature-specific docs.
    Capture the starting commit hash for `agent-update-log.csv` and new pitfalls.
-2. Select risks from recent failures, current pitfalls/known issues, and
+2. Before starting a repository round, declare the current attack count within
+   the round (`1/4` through `4/4`) and keep each attack narrowly scoped enough
+   to fit the default `5` minute budget unless the user explicitly overrides
+   it.
+3. Select risks from recent failures, current pitfalls/known issues, and
    current code. Prefer boundaries around role vs ownership, parent-code,
    course enrollment, class links, bulk APIs, status re-entry, dashboard
    aggregation, notification state, seed/dev APIs, and UI cache bypass.
-3. Design a compact batch, usually 8-12 tests. Use pytest for dense API/data
+4. Design a compact batch, usually 8-12 tests. Use pytest for dense API/data
    invariants and 1-2 Playwright/browser-backed cases when seed/login/localStorage
    or UI state adds value. One test may assert multiple related invariants.
-4. Implement tests first. Accept red runs. Classify failures as product bug,
+5. Implement tests first. Accept red runs. Classify failures as product bug,
    test-contract bug, or harness/environment issue before editing product code.
-5. Fix only confirmed product bugs. Keep the patch bounded to the surfaced
-   behavior.
-6. Update docs whenever behavior, permissions, API contracts, validation flow,
+6. Fix every confirmed product bug found by the current attack before moving to
+   the next attack. Keep the immediate patch bounded to the surfaced behavior,
+   then use the concentrated hardening pass after attack `4/4` to widen the fix
+   where shared root causes justify it.
+7. After an immediate attack fix, do not run broad regression by default. Run
+   only the minimum validation needed to confirm the attack surface changed as
+   intended, and record broader validation debt honestly.
+8. Update docs whenever behavior, permissions, API contracts, validation flow,
    or agent workflow changes. Update pitfalls when a repeatable failure mode,
    timeout, tool trap, or harness issue occurs.
-7. Append observed runs to `test-execution-runs.csv`, including failed,
+9. Append observed runs to `test-execution-runs.csv`, including failed,
    timed-out, blocked, and final passed runs. Add concise summary rows when
    useful. Append `agent-update-log.csv` once per repository-changing round.
-8. Run selector-recommended static checks, targeted tests, targeted Playwright,
+10. Run selector-recommended static checks, targeted tests, targeted Playwright,
    and a broad suite when the selector or risk warrants it. Record high-cost
    full targets such as `full.pytest.postgres` honestly when deferred.
-9. Before commit, scan changed files for private paths/artifacts, run CSV
+11. Use the post-attack concentrated hardening pass to attack the flaw class,
+   not only the exact failing example. Expand guards, shared helpers,
+   permission checks, or state-convergence rules when the first four attacks
+   show a repeated pattern.
+12. Before commit, scan changed files for private paths/artifacts, run CSV
    parse smoke, `git diff --check`, and enough validation to support the final
    claim.
-10. Commit locally. Do not push unless the user explicitly asks.
+13. Commit locally. Do not push unless the user explicitly asks.
 
 ## Script Helpers
 

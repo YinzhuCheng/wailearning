@@ -108,6 +108,36 @@ def ensure_schema_updates() -> None:
         )
         """,
         "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
+        """
+        DELETE FROM attendances
+        WHERE id NOT IN (
+            SELECT MIN(id)
+            FROM attendances
+            WHERE subject_id IS NOT NULL
+            GROUP BY student_id, subject_id, date
+        )
+        AND subject_id IS NOT NULL
+        """,
+        """
+        DELETE FROM attendances
+        WHERE id NOT IN (
+            SELECT MIN(id)
+            FROM attendances
+            WHERE subject_id IS NULL
+            GROUP BY student_id, class_id, date
+        )
+        AND subject_id IS NULL
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_attendance_student_subject_date
+        ON attendances(student_id, subject_id, date)
+        WHERE subject_id IS NOT NULL
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_attendance_student_class_date_no_subject
+        ON attendances(student_id, class_id, date)
+        WHERE subject_id IS NULL
+        """,
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         """
         CREATE TABLE IF NOT EXISTS user_appearance_styles (
@@ -639,6 +669,8 @@ def _backfill_subject_class_links() -> None:
     try:
         if db.bind and db.bind.dialect.name == "sqlite":
             db.execute(text("PRAGMA busy_timeout = 10000"))
+        is_sqlite = bool(db.bind and db.bind.dialect.name == "sqlite")
+
         for subj in db.query(Subject).all():
             ct = (subj.course_type or "required").strip().lower()
             if ct == "elective":
@@ -648,15 +680,37 @@ def _backfill_subject_class_links() -> None:
 
             existing = db.query(SubjectClassLink).filter(SubjectClassLink.subject_id == subj.id).first()
             if not existing and subj.class_id:
-                db.add(
-                    SubjectClassLink(
-                        subject_id=subj.id,
-                        class_id=subj.class_id,
-                        enrollment_mode="all_in_class",
+                if is_sqlite:
+                    db.execute(
+                        text(
+                            """
+                            INSERT OR IGNORE INTO subject_class_links (subject_id, class_id, enrollment_mode)
+                            VALUES (:subject_id, :class_id, :enrollment_mode)
+                            """
+                        ),
+                        {
+                            "subject_id": subj.id,
+                            "class_id": subj.class_id,
+                            "enrollment_mode": "all_in_class",
+                        },
                     )
-                )
+                else:
+                    try:
+                        db.add(
+                            SubjectClassLink(
+                                subject_id=subj.id,
+                                class_id=subj.class_id,
+                                enrollment_mode="all_in_class",
+                            )
+                        )
+                        db.flush()
+                    except IntegrityError:
+                        db.rollback()
+                        if db.bind and db.bind.dialect.name == "sqlite":
+                            db.execute(text("PRAGMA busy_timeout = 10000"))
 
-        db.flush()
+        if is_sqlite:
+            db.flush()
 
         for subj in db.query(Subject).all():
             ct = (subj.course_type or "required").strip().lower()

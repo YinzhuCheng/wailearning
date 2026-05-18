@@ -2,6 +2,7 @@ from datetime import datetime, time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.courseeval_backend.core.auth import get_current_active_user
@@ -69,6 +70,38 @@ def _serialize_attendance(attendance: Attendance) -> AttendanceResponse:
         student_name=attendance.student.name if attendance.student else None,
         class_name=attendance.class_obj.name if attendance.class_obj else None,
         subject_name=attendance.subject.name if attendance.subject else None,
+    )
+
+
+def _upsert_attendance_row(
+    db: Session,
+    *,
+    student_id: int,
+    class_id: int,
+    subject_id: Optional[int],
+    attendance_date: datetime,
+    status,
+    remark: Optional[str],
+) -> None:
+    existing = db.query(Attendance).filter(
+        Attendance.student_id == student_id,
+        Attendance.date == attendance_date,
+        Attendance.subject_id == subject_id,
+    ).first()
+    if existing:
+        existing.status = status
+        existing.remark = remark
+        return
+
+    db.add(
+        Attendance(
+            student_id=student_id,
+            class_id=class_id,
+            subject_id=subject_id,
+            date=attendance_date,
+            status=status,
+            remark=remark,
+        )
     )
 
 
@@ -187,7 +220,11 @@ def create_attendance(
         remark=attendance_data.remark,
     )
     db.add(attendance)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Attendance already exists for this date and course.")
     db.refresh(attendance)
     return _serialize_attendance(attendance)
 
@@ -315,6 +352,7 @@ async def create_attendances_batch(
 
     results = []
     errors = []
+    normalized_rows = []
 
     for index, attendance_data in enumerate(attendances_list, 1):
         if not isinstance(attendance_data, dict):
@@ -372,28 +410,34 @@ async def create_attendances_batch(
             errors.append(f"Row {index}: invalid date format.")
             continue
 
-        existing = db.query(Attendance).filter(
-            Attendance.student_id == student.id,
-            Attendance.date == attendance_date,
-            Attendance.subject_id == subject_id,
-        ).first()
-        if existing:
-            existing.status = status
-            existing.remark = attendance_data.get("remark", "")
-        else:
-            db.add(
-                Attendance(
-                    student_id=student.id,
-                    class_id=class_id,
-                    subject_id=subject_id,
-                    date=attendance_date,
-                    status=status,
-                    remark=attendance_data.get("remark", ""),
-                )
-            )
+        remark = attendance_data.get("remark", "")
+        normalized_rows.append(
+            {
+                "student_id": student.id,
+                "class_id": class_id,
+                "subject_id": subject_id,
+                "attendance_date": attendance_date,
+                "status": status,
+                "remark": remark,
+            }
+        )
+        _upsert_attendance_row(
+            db,
+            student_id=student.id,
+            class_id=class_id,
+            subject_id=subject_id,
+            attendance_date=attendance_date,
+            status=status,
+            remark=remark,
+        )
         results.append(f"{student.name} {attendance_date.strftime('%Y-%m-%d')}")
 
     try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        for row in normalized_rows:
+            _upsert_attendance_row(db, **row)
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -451,29 +495,36 @@ async def create_class_attendance_batch(
         return {"success": 0, "failed": 1, "errors": ["No students found in this class."]}
 
     results = []
+    normalized_rows = []
     for student in students:
-        existing = db.query(Attendance).filter(
-            Attendance.student_id == student.id,
-            Attendance.date == attendance_date,
-            Attendance.subject_id == subject_id,
-        ).first()
-        if existing:
-            existing.status = status
-            existing.remark = remark
-        else:
-            db.add(
-                Attendance(
-                    student_id=student.id,
-                    class_id=class_id,
-                    subject_id=subject_id,
-                    date=attendance_date,
-                    status=status,
-                    remark=remark,
-                )
-            )
+        normalized_rows.append(
+            {
+                "student_id": student.id,
+                "class_id": class_id,
+                "subject_id": subject_id,
+                "attendance_date": attendance_date,
+                "status": status,
+                "remark": remark,
+            }
+        )
+        _upsert_attendance_row(
+            db,
+            student_id=student.id,
+            class_id=class_id,
+            subject_id=subject_id,
+            attendance_date=attendance_date,
+            status=status,
+            remark=remark,
+        )
         results.append(student.name)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        for row in normalized_rows:
+            _upsert_attendance_row(db, **row)
+        db.commit()
     return {"success": len(results), "failed": 0, "errors": [], "message": f"Updated attendance for {len(results)} students."}
 
 
