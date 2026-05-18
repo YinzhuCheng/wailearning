@@ -19,6 +19,7 @@ from apps.backend.courseeval_backend.db.models import CourseEnrollment, CourseEx
 from apps.backend.courseeval_backend.core.permissions import is_student
 from apps.backend.courseeval_backend.domains.courses.class_scope import apply_class_id_filter, get_accessible_class_ids
 from apps.backend.courseeval_backend.domains.scores.composition import OTHER_DAILY_EXAM_TYPE, build_composition_for_student, get_scheme_dto, upsert_scheme
+from apps.backend.courseeval_backend.domains.appeal_notifications import is_readonly_appeal_status, normalize_appeal_status
 from apps.backend.courseeval_backend.domains.scores.appeals import mark_score_appeal_notifications_handled, notify_teachers_score_grade_appeal
 from apps.backend.courseeval_backend.api.schemas import (
     CourseExamWeightResponse,
@@ -543,7 +544,15 @@ def respond_score_grade_appeal(
     next_status = (payload.status or "resolved").strip()
     if next_status not in ("pending", "resolved", "rejected"):
         raise HTTPException(status_code=400, detail="无效的处理状态。")
-    appeal.teacher_response = payload.teacher_response.strip()
+    current_status = normalize_appeal_status(appeal.status)
+    next_status_normalized = normalize_appeal_status(next_status)
+    next_teacher_response = payload.teacher_response.strip()
+    if is_readonly_appeal_status(current_status):
+        current_teacher_response = (appeal.teacher_response or "").strip()
+        if current_status == next_status_normalized and current_teacher_response == next_teacher_response:
+            return _serialize_score_appeal(db, appeal)
+        raise HTTPException(status_code=409, detail="This appeal has already been finalized and cannot be changed.")
+    appeal.teacher_response = next_teacher_response
     appeal.status = next_status
     mark_score_appeal_notifications_handled(db, appeal.id, appeal.status)
     db.commit()

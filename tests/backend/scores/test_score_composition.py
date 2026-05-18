@@ -223,6 +223,56 @@ def test_appeal_response_invalid_status(client: TestClient):
     assert bad.status_code == 400
 
 
+@pytest.mark.parametrize(
+    ("terminal_status", "next_status"),
+    [
+        ("resolved", "pending"),
+        ("rejected", "resolved"),
+    ],
+)
+def test_terminal_score_appeal_cannot_be_reopened_or_rewritten(
+    client: TestClient,
+    terminal_status: str,
+    next_status: str,
+):
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    th = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    sh = login_api(client, ctx["student_username"], ctx["student_password"])
+    sid = ctx["subject_id"]
+    sem = f"2026-lock-{terminal_status}"
+
+    created = client.post(
+        f"/api/scores/appeals?subject_id={sid}",
+        headers=sh,
+        json={"semester": sem, "target_component": "total", "reason_text": f"lock after {terminal_status}"},
+    )
+    assert created.status_code == 200, created.text
+    appeal_id = int(created.json()["id"])
+
+    first_response = f"teacher marked {terminal_status}"
+    finalized = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=th,
+        json={"teacher_response": first_response, "status": terminal_status},
+    )
+    assert finalized.status_code == 200, finalized.text
+    assert finalized.json()["status"] == terminal_status
+
+    blocked = client.put(
+        f"/api/scores/appeals/{appeal_id}",
+        headers=th,
+        json={"teacher_response": f"stale rewrite to {next_status}", "status": next_status},
+    )
+    assert blocked.status_code == 409, blocked.text
+
+    listed = client.get("/api/scores/appeals", headers=th, params={"subject_id": sid})
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json() if int(item["id"]) == appeal_id)
+    assert row["status"] == terminal_status
+    assert row["teacher_response"] == first_response
+
+
 def test_homework_target_score_appeal_links_notification_to_homework(client: TestClient):
     ensure_admin()
     ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
