@@ -166,6 +166,15 @@ async function apiStudentCourseCatalog(token) {
   return apiGetJson('/api/subjects/course-catalog', token)
 }
 
+async function apiCatalogCourseNameById(token, courseId) {
+  const catalog = await apiStudentCourseCatalog(token)
+  const row = Array.isArray(catalog) ? catalog.find(item => Number(item.id) === Number(courseId)) : null
+  if (!row?.name) {
+    throw new Error(`catalog course ${courseId} not found`)
+  }
+  return row.name
+}
+
 async function apiHomeworkSubmissionHistory(token, homeworkId) {
   return apiGetJson(`/api/homeworks/${homeworkId}/submission/me/history`, token)
 }
@@ -276,7 +285,7 @@ async function clickElectiveCatalogEnroll(page, courseName) {
 async function clickElectiveCatalogDrop(page, courseName) {
   const row = electiveCatalogRow(page, courseName)
   await expect(row).toBeVisible({ timeout: 90000 })
-  const btn = row.getByRole('button', { name: /??|???/ })
+  const btn = row.getByRole('button', { name: '退选' })
   // Button stays disabled until local `courses` includes this elective (MyCourses.vue isElectiveEnrollment).
   await expect(btn).toBeEnabled({ timeout: 60000 })
   await btn.click()
@@ -560,9 +569,9 @@ test.describe('E2E resilience scenarios', () => {
     const s = scenario()
     const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
     const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
-    const electiveName = `E2E閫変慨璇綺${s.suffix}`
 
     await apiPostJson(`/api/subjects/${s.course_elective_id}/student-self-enroll`, studentToken, {})
+    const electiveName = await apiCatalogCourseNameById(studentToken, s.course_elective_id)
 
     const ctxA = await browser.newContext()
     const ctxB = await browser.newContext()
@@ -1033,13 +1042,16 @@ test.describe('E2E resilience scenarios', () => {
     await expect(page).toHaveURL(new RegExp(`/homework/${s.homework_id}/submissions/${submissionId}`), { timeout: 20000 })
     await expect(page.getByText(studentReason)).toBeVisible({ timeout: 20000 })
 
-    await page.getByRole('button', { name: '澶勭悊鐢宠瘔' }).click()
-    await expect(page.getByRole('dialog', { name: '澶勭悊浣滀笟鐢宠瘔' })).toBeVisible({ timeout: 15000 })
-    await page.getByRole('textbox', { name: '' }).last().fill(teacherResponse)
-    await page.getByRole('button', { name: '鎷掔粷鐢宠瘔' }).click()
-    await expect(page.getByRole('dialog', { name: '澶勭悊浣滀笟鐢宠瘔' })).toBeHidden({ timeout: 15000 })
     const reviewStudentSection = page.locator('.review-section--student')
-    await expect(reviewStudentSection.getByText('宸叉嫆缁?, { exact: true })).toBeVisible({ timeout: 20000 })
+    const appealResolveButton = reviewStudentSection.locator('.review-meta-action').last()
+    await expect(appealResolveButton).toBeVisible({ timeout: 20000 })
+    await appealResolveButton.click()
+    const appealDialog = page.locator('.el-dialog').filter({ has: page.locator('.review-appeal-dialog textarea') }).last()
+    await expect(appealDialog).toBeVisible({ timeout: 15000 })
+    await appealDialog.locator('textarea').fill(teacherResponse)
+    await appealDialog.locator('.el-dialog__footer .el-button--danger').click()
+    await expect(appealDialog).toBeHidden({ timeout: 15000 })
+    await expect(reviewStudentSection.getByText('申诉已拒绝', { exact: true })).toBeVisible({ timeout: 20000 })
     await expect(reviewStudentSection.getByText(teacherResponse, { exact: true })).toBeVisible({ timeout: 20000 })
 
     await expect
@@ -1551,7 +1563,6 @@ test.describe('E2E resilience scenarios', () => {
     const studentUserId = await apiFindUserIdByUsername(adminToken, s.student_b.username)
     const classes = await apiListClasses(adminToken)
     const class2 = classes.find(row => Number(row.id) === Number(s.class_id_2))
-    const electiveName = `E2E閫変慨璇綺${s.suffix}`
     if (!class2) {
       throw new Error(`class ${s.class_id_2} not found`)
     }
@@ -1564,6 +1575,7 @@ test.describe('E2E resilience scenarios', () => {
     try {
       await login(studentPage, s.student_b.username, s.student_b.password)
       await studentPage.goto('/courses')
+      const electiveName = await apiCatalogCourseNameById(studentToken, s.course_elective_id)
       await expect(courseCatalogRow(studentPage, electiveName)).toBeVisible({ timeout: 20000 })
 
       await apiBatchSetClass(adminToken, [studentUserId], s.class_id_2)
