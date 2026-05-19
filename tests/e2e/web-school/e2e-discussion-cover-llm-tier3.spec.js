@@ -5,6 +5,7 @@
  */
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { login } = require('./future-advanced-coverage-helpers.cjs')
 const { seedHeaders } = require('./e2e-seed-headers.cjs')
 
 const scenario = () => loadE2eScenario()
@@ -17,49 +18,6 @@ const ONE_PX_PNG = Buffer.from(
 
 function apiBase() {
   return (process.env.E2E_API_URL || 'http://127.0.0.1:8012').replace(/\/$/, '')
-}
-
-async function login(page, username, password) {
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
-  await page.evaluate(() => {
-    try {
-      localStorage.clear()
-      sessionStorage.clear()
-    } catch {
-      /* ignore */
-    }
-  })
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
-  await expect(page.getByTestId('login-username')).toBeVisible({ timeout: 30000 })
-  await page.getByTestId('login-username').fill(username)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(() => {
-          try {
-            const user = JSON.parse(localStorage.getItem('user') || 'null')
-            return user?.role || null
-          } catch {
-            return null
-          }
-        }),
-      { timeout: 20000 }
-    )
-    .not.toBeNull()
-  if (page.url().includes('/login')) {
-    const fallbackTarget = await page.evaluate(() => {
-      try {
-        const user = JSON.parse(localStorage.getItem('user') || 'null')
-        return user?.role === 'student' ? '/courses' : '/students'
-      } catch {
-        return '/students'
-      }
-    })
-    await page.goto(fallbackTarget, { waitUntil: 'load', timeout: 60000 })
-  }
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 20000 })
 }
 
 async function obtainAccessToken(username, password) {

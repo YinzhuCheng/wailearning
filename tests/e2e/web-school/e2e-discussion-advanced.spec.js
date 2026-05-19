@@ -5,29 +5,12 @@
  */
 const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
+const { login } = require('./future-advanced-coverage-helpers.cjs')
 
 const scenario = () => loadE2eScenario()
 
 function apiBase() {
   return (process.env.E2E_API_URL || 'http://127.0.0.1:8012').replace(/\/$/, '')
-}
-
-async function login(page, username, password) {
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
-  await page.evaluate(() => {
-    try {
-      localStorage.clear()
-      sessionStorage.clear()
-    } catch {
-      /* ignore */
-    }
-  })
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
-  await expect(page.getByTestId('login-username')).toBeVisible({ timeout: 30000 })
-  await page.getByTestId('login-username').fill(username)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 20000 })
 }
 
 async function obtainAccessToken(username, password) {

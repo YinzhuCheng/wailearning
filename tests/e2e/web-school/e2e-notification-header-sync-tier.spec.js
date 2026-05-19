@@ -269,36 +269,39 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
       .toMatchObject({ ok: true })
   })
 
-  test('08 second browser tab eventually matches badge after focus poll (same storage session)', async ({
+  test('08 second browser tab eventually matches badge after focus poll', async ({
     browser
   }) => {
     const s = scenario()
     const teacherTok = await obtainAccessToken(s.teacher_own.username, s.password_teacher_student)
 
-    const ctx = await browser.newContext()
-    const pageA = await ctx.newPage()
-    const pageB = await ctx.newPage()
+    const ctxA = await browser.newContext()
+    const ctxB = await browser.newContext()
+    const pageA = await ctxA.newPage()
+    const pageB = await ctxB.newPage()
 
-    await login(pageA, s.student_plain.username, s.password_teacher_student)
-    await enterSeededRequiredCourse(pageA, s.suffix)
+    try {
+      await login(pageA, s.student_plain.username, s.password_teacher_student)
+      await enterSeededRequiredCourse(pageA, s.suffix)
 
-    await login(pageB, s.student_plain.username, s.password_teacher_student)
-    await enterSeededRequiredCourse(pageB, s.suffix)
+      await login(pageB, s.student_plain.username, s.password_teacher_student)
+      await enterSeededRequiredCourse(pageB, s.suffix)
 
-    await apiPostJson('/api/notifications', teacherTok, {
-      title: `E2E_HDR_TAB_${s.suffix}_${Date.now()}`,
-      content: 'tab-08',
-      class_id: s.class_id_1,
-      subject_id: s.course_required_id
-    })
+      await apiPostJson('/api/notifications', teacherTok, {
+        title: `E2E_HDR_TAB_${s.suffix}_${Date.now()}`,
+        content: 'tab-08',
+        class_id: s.class_id_1,
+        subject_id: s.course_required_id
+      })
 
-    await triggerHeaderPoll(pageA)
-    await expect(await badgeContentLocator(pageA)).toBeVisible({ timeout: 25000 })
+      await triggerHeaderPoll(pageA)
+      await expect(await badgeContentLocator(pageA)).toBeVisible({ timeout: 25000 })
 
-    await triggerHeaderPoll(pageB)
-    await expect(await badgeContentLocator(pageB)).toBeVisible({ timeout: 25000 })
-
-    await ctx.close()
+      await triggerHeaderPoll(pageB)
+      await expect(await badgeContentLocator(pageB)).toBeVisible({ timeout: 25000 })
+    } finally {
+      await Promise.all([ctxA.close().catch(() => {}), ctxB.close().catch(() => {})])
+    }
   })
 
   test('09 sidebar footer notification entry navigates to /notifications', async ({ page }) => {
