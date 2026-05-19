@@ -22,6 +22,7 @@ from wai_valid_render import render_progress_snapshot
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PYTHON_EXE = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
+PYTEST_WORKER_SCRIPT = REPO_ROOT / "ops" / "scripts" / "dev" / "wai_valid_pytest_worker.py"
 STATE_DIR = REPO_ROOT / ".agent-run" / "validation-daemon"
 LOG_ROOT = REPO_ROOT / ".agent-run" / "logs"
 PID_PATH = STATE_DIR / "WAI-VALID-supervisor.pid"
@@ -29,6 +30,7 @@ STATE_PATH = STATE_DIR / "WAI-VALID-state.json"
 QUEUE_PATH = STATE_DIR / "WAI-VALID-queue.json"
 CURRENT_RUN_PATH = STATE_DIR / "WAI-VALID-current-run.json"
 HEARTBEAT_SECONDS = 2
+DEFAULT_MAX_RUNTIME_SECONDS = 3 * 60 * 60
 
 PG_BIN = Path(r"C:\Users\bloom\tools\postgres\pgsql\bin")
 POSTGRES_EXE = PG_BIN / "postgres.exe"
@@ -123,6 +125,13 @@ REGRESSION_EXPANSIONS: dict[str, dict[str, list[str]]] = {
 }
 
 
+def load_json(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", help="Pytest shard paths or directories to supervise.")
@@ -167,6 +176,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable supervisor-side live console reporting.",
     )
+    parser.add_argument(
+        "--process-tag",
+        help="Marker string propagated into WAI-VALID-owned long-lived python processes.",
+    )
+    parser.add_argument(
+        "--max-runtime-seconds",
+        type=int,
+        default=DEFAULT_MAX_RUNTIME_SECONDS,
+        help="Maximum supervisor lifetime before self-termination. Defaults to 10800 seconds.",
+    )
     args = parser.parse_args()
     if args.block_spec:
         if args.concurrency is not None:
@@ -185,9 +204,17 @@ def ensure_prefixed_run_id(run_id: str) -> str:
     return run_id if run_id.startswith("WAI-VALID-") else f"WAI-VALID-{run_id}"
 
 
+def ensure_process_tag(run_id: str, process_tag: str | None) -> str:
+    if process_tag:
+        return process_tag
+    return run_id if run_id.startswith("WAI-VALID-") else f"WAI-VALID-{run_id}"
+
+
 def ensure_python() -> None:
     if not PYTHON_EXE.exists():
         raise SystemExit(f"Missing repository venv interpreter: {PYTHON_EXE}")
+    if not PYTEST_WORKER_SCRIPT.exists():
+        raise SystemExit(f"Missing pytest worker wrapper: {PYTEST_WORKER_SCRIPT}")
 
 
 def is_valid_test_target(path_text: str) -> bool:
@@ -256,14 +283,44 @@ def collect_pytest_nodeids(path_text: str) -> list[str]:
     return nodeids
 
 
-def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -> list[Task]:
+def classify_tasks(
+    paths: list[str],
+    block_name: str,
+    postgres_base_port: int,
+    progress_callback=None,
+    processed_input_paths_start: int = 0,
+    discovered_tasks_start: int = 0,
+    include_counters: bool = False,
+) -> list[Task] | tuple[list[Task], int, int]:
     tasks: list[Task] = []
     pg_index = 0
     pw_index = 0
+    processed_input_paths = processed_input_paths_start
+    discovered_tasks = discovered_tasks_start
     for raw_path in paths:
         if not is_valid_test_target(raw_path):
             continue
         path = normalize_path_text(raw_path)
+        processed_input_paths += 1
+        if path.startswith("validation-target:"):
+            target_id = path.split(":", 1)[1].strip()
+            if not target_id:
+                raise SystemExit(f"Invalid validation target task: {raw_path}")
+            tasks.append(
+                Task(
+                    shard=path,
+                    kind="validation-target",
+                    block=block_name if block_name != "auto" else "static-and-build",
+                    origin="primary",
+                    origin_detail="selector-derived-target",
+                    target=target_id,
+                    source_path=path,
+                )
+            )
+            discovered_tasks += 1
+            if progress_callback:
+                progress_callback(block_name, path, processed_input_paths, discovered_tasks)
+            continue
         if path.startswith("tests/postgres/"):
             postgres_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
             for target in postgres_targets:
@@ -280,6 +337,9 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                     )
                 )
                 pg_index += 1
+                discovered_tasks += 1
+            if progress_callback:
+                progress_callback(block_name, path, processed_input_paths, discovered_tasks)
             continue
         if path.startswith("tests/e2e/web-school/") and path.endswith(".spec.js"):
             api_port = 18112 + pw_index
@@ -298,6 +358,9 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                 )
             )
             pw_index += 1
+            discovered_tasks += 1
+            if progress_callback:
+                progress_callback(block_name, path, processed_input_paths, discovered_tasks)
             continue
         if path.startswith("tests/behavior/"):
             behavior_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
@@ -313,6 +376,27 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                         source_path=path,
                     )
                 )
+                discovered_tasks += 1
+            if progress_callback:
+                progress_callback(block_name, path, processed_input_paths, discovered_tasks)
+            continue
+        if path.startswith("tests/security/"):
+            security_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
+            for target in security_targets:
+                tasks.append(
+                    Task(
+                        shard=target,
+                        kind="pytest",
+                        block=block_name if block_name != "auto" else "security",
+                        origin="primary",
+                        origin_detail="direct-target",
+                        target=target,
+                        source_path=path,
+                    )
+                )
+                discovered_tasks += 1
+            if progress_callback:
+                progress_callback(block_name, path, processed_input_paths, discovered_tasks)
             continue
         if path.startswith("tests/backend/"):
             backend_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
@@ -328,6 +412,9 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                         source_path=path,
                     )
                 )
+                discovered_tasks += 1
+            if progress_callback:
+                progress_callback(block_name, path, processed_input_paths, discovered_tasks)
             continue
         generic_targets = collect_pytest_nodeids(path) if is_pytest_file_target(path) else [path]
         for target in generic_targets:
@@ -342,6 +429,11 @@ def classify_tasks(paths: list[str], block_name: str, postgres_base_port: int) -
                     source_path=path,
                 )
             )
+            discovered_tasks += 1
+        if progress_callback:
+            progress_callback(block_name, path, processed_input_paths, discovered_tasks)
+    if include_counters:
+        return tasks, processed_input_paths, discovered_tasks
     return tasks
 
 
@@ -383,10 +475,14 @@ def classify_domain_tags(path: str) -> set[str]:
 
 def infer_block_name_from_path(path: str) -> str:
     normalized = path.replace("\\", "/")
+    if normalized.startswith("validation-target:"):
+        return "static-and-build"
     if normalized.startswith("tests/postgres/"):
         return "backend-postgres-sensitive"
     if normalized.startswith("tests/behavior/"):
         return "behavior"
+    if normalized.startswith("tests/security/"):
+        return "security"
     if normalized.startswith("tests/e2e/"):
         return "playwright-e2e"
     if normalized.startswith("tests/backend/"):
@@ -452,13 +548,27 @@ def expand_block_specs_for_regression(block_specs: list[BlockSpec], regression_m
     return expanded
 
 
-def classify_block_tasks(block_specs: list[BlockSpec], postgres_base_port: int) -> tuple[list[Task], dict[str, int]]:
+def classify_block_tasks(
+    block_specs: list[BlockSpec],
+    postgres_base_port: int,
+    progress_callback=None,
+) -> tuple[list[Task], dict[str, int]]:
     tasks: list[Task] = []
     block_concurrency: dict[str, int] = {}
     port_cursor = postgres_base_port
+    processed_input_paths = 0
+    discovered_tasks = 0
     for block_spec in block_specs:
         block_concurrency[block_spec.name] = block_spec.concurrency
-        block_tasks = classify_tasks(block_spec.paths, block_spec.name, port_cursor)
+        block_tasks, processed_input_paths, discovered_tasks = classify_tasks(
+            block_spec.paths,
+            block_spec.name,
+            port_cursor,
+            progress_callback=progress_callback,
+            processed_input_paths_start=processed_input_paths,
+            discovered_tasks_start=discovered_tasks,
+            include_counters=True,
+        )
         metadata = block_spec.path_metadata or {}
         for task in block_tasks:
             task_meta = metadata.get(task.shard) or metadata.get(task.source_path or "")
@@ -474,6 +584,66 @@ def classify_block_tasks(block_specs: list[BlockSpec], postgres_base_port: int) 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def write_bootstrap_progress(
+    *,
+    run_dir: Path,
+    run_id: str,
+    phase: str,
+    regression_mode: str,
+    block_concurrency: dict[str, int],
+    input_paths: int,
+    processed_input_paths: int,
+    block_specs: int,
+    discovered_tasks: int,
+    message: str,
+    current_path: str | None = None,
+) -> None:
+    write_json(
+        run_dir / "progress.json",
+        {
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+            "run_id": run_id,
+            "phase": phase,
+            "block": next(iter(block_concurrency.keys()), ""),
+            "concurrency": max(block_concurrency.values()) if block_concurrency else "",
+            "regression_mode": regression_mode,
+            "block_concurrency": block_concurrency,
+            "queue_remaining": 0,
+            "running": [],
+            "running_slots": [],
+            "completed_count": 0,
+            "failed_count": 0,
+            "completed": [],
+            "failed": [],
+            "total": discovered_tasks,
+            "passed_count": 0,
+            "bootstrap": {
+                "message": message,
+                "input_paths": input_paths,
+                "processed_input_paths": processed_input_paths,
+                "block_specs": block_specs,
+                "discovered_tasks": discovered_tasks,
+                "current_path": current_path,
+            },
+            "report": {
+                "summary": {
+                    "passed": 0,
+                    "failed": 0,
+                    "total": discovered_tasks,
+                    "running": 0,
+                    "queued": 0,
+                },
+                "blocks": {},
+                "origins": {
+                    "primary_total": 0,
+                    "regression_total": 0,
+                    "retry_total": 0,
+                },
+            },
+        },
+    )
 
 
 def render_console_report(progress_payload: dict[str, Any]) -> None:
@@ -537,6 +707,9 @@ def update_state(
     failed: list[str],
     block_summaries: dict[str, Any],
     block_concurrency: dict[str, int],
+    process_tag: str | None = None,
+    started_at_epoch: float | None = None,
+    max_runtime_seconds: int | None = None,
     error: dict[str, Any] | None = None,
 ) -> None:
     payload = {
@@ -556,6 +729,12 @@ def update_state(
         "pid": os.getpid(),
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
     }
+    if process_tag:
+        payload["process_tag"] = process_tag
+    if started_at_epoch is not None:
+        payload["started_at_epoch"] = started_at_epoch
+    if max_runtime_seconds is not None:
+        payload["max_runtime_seconds"] = max_runtime_seconds
     if error:
         payload["error"] = error
     write_json(STATE_PATH, payload)
@@ -585,6 +764,10 @@ def update_progress(
     total: int,
     tasks: list[Task],
     block_concurrency: dict[str, int],
+    status: str = "running",
+    process_tag: str | None = None,
+    started_at_epoch: float | None = None,
+    max_runtime_seconds: int | None = None,
 ) -> None:
     task_index = {task.shard: task for task in tasks}
     block_names = sorted({task.block for task in tasks})
@@ -609,6 +792,7 @@ def update_progress(
                 "origin_detail": running_task.task.origin_detail,
                 "slot_label": running_task.task.shard,
                 "started_at_epoch": running_task.started_at,
+                "pid": running_task.proc.pid,
             }
         )
 
@@ -642,6 +826,7 @@ def update_progress(
         {
             "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
             "run_id": run_dir.name,
+            "status": status,
             "block": block,
             "concurrency": concurrency,
             "regression_mode": regression_mode,
@@ -672,6 +857,14 @@ def update_progress(
             },
         },
     )
+    progress_payload = load_json(run_dir / "progress.json") or {}
+    if process_tag:
+        progress_payload["process_tag"] = process_tag
+    if started_at_epoch is not None:
+        progress_payload["started_at_epoch"] = started_at_epoch
+    if max_runtime_seconds is not None:
+        progress_payload["max_runtime_seconds"] = max_runtime_seconds
+    write_json(run_dir / "progress.json", progress_payload)
 
 
 def ensure_clean_run_dir(run_dir: Path, replace_run_dir: bool) -> None:
@@ -687,7 +880,7 @@ def ensure_clean_run_dir(run_dir: Path, replace_run_dir: bool) -> None:
     )
 
 
-def build_pg_worker_script(task: Task, run_dir: Path) -> Path:
+def build_pg_worker_script(task: Task, run_dir: Path, process_tag: str, run_id: str) -> Path:
     if task.port is None:
         raise ValueError(f"PostgreSQL task missing port: {task.shard}")
     db_name = f"courseeval_pytest_{task.port}"
@@ -742,7 +935,7 @@ try {{
   if ($LASTEXITCODE -ne 0) {{ throw 'grant failed' }}
 
   $env:TEST_DATABASE_URL = "postgresql+psycopg2://${{dbUser}}:${{dbPass}}@127.0.0.1:${{port}}/${{dbName}}"
-  & $pythonExe -m pytest '{task.shard}' -q *>&1 | Tee-Object -FilePath $pytestLog
+  & $pythonExe '{PYTEST_WORKER_SCRIPT}' --process-tag '{process_tag}' --run-id '{run_id}' --target '{task.shard}' *>&1 | Tee-Object -FilePath $pytestLog
   exit $LASTEXITCODE
 }} finally {{
   if ($pgProcess -and -not $pgProcess.HasExited) {{ Stop-Process -Id $pgProcess.Id -Force }}
@@ -752,14 +945,23 @@ try {{
     return script_path
 
 
-def start_pytest_worker(task: Task, run_dir: Path) -> RunningTask:
+def start_pytest_worker(task: Task, run_dir: Path, process_tag: str, run_id: str) -> RunningTask:
     safe = safe_name(task.shard)
     log_path = run_dir / f"WAI-VALID-worker-{safe}.log"
     err_path = run_dir / f"WAI-VALID-worker-{safe}.err.log"
     out_fh = log_path.open("wb")
     err_fh = err_path.open("wb")
     proc = subprocess.Popen(
-        [str(PYTHON_EXE), "-m", "pytest", task.target or task.shard, "-q"],
+        [
+            str(PYTHON_EXE),
+            str(PYTEST_WORKER_SCRIPT),
+            "--process-tag",
+            process_tag,
+            "--run-id",
+            run_id,
+            "--target",
+            task.target or task.shard,
+        ],
         cwd=str(REPO_ROOT),
         stdout=out_fh,
         stderr=err_fh,
@@ -767,13 +969,13 @@ def start_pytest_worker(task: Task, run_dir: Path) -> RunningTask:
     return RunningTask(task=task, proc=proc, log_path=log_path, err_path=err_path, run_dir=None, started_at=time.time())
 
 
-def start_postgres_worker(task: Task, run_dir: Path) -> RunningTask:
+def start_postgres_worker(task: Task, run_dir: Path, process_tag: str, run_id: str) -> RunningTask:
     safe = safe_name(task.shard)
     worker_dir = run_dir / f"WAI-VALID-pg-worker-{safe}"
     if worker_dir.exists():
         shutil.rmtree(worker_dir)
     worker_dir.mkdir(parents=True, exist_ok=True)
-    script_path = build_pg_worker_script(task, worker_dir)
+    script_path = build_pg_worker_script(task, worker_dir, process_tag, run_id)
     out_path = worker_dir / "wrapper.out.log"
     err_path = worker_dir / "wrapper.err.log"
     out_fh = out_path.open("wb")
@@ -824,12 +1026,59 @@ def start_playwright_worker(task: Task, run_dir: Path) -> RunningTask:
     return RunningTask(task=task, proc=proc, log_path=log_path, err_path=err_path, run_dir=None, started_at=time.time())
 
 
-def start_task(task: Task, run_dir: Path) -> RunningTask:
+def start_validation_target_worker(task: Task, run_dir: Path, process_tag: str, run_id: str) -> RunningTask:
+    if not task.target:
+        raise ValueError(f"Validation target task missing target id: {task.shard}")
+    safe = safe_name(task.shard)
+    log_path = run_dir / f"WAI-VALID-worker-{safe}.log"
+    err_path = run_dir / f"WAI-VALID-worker-{safe}.err.log"
+    out_fh = log_path.open("wb")
+    err_fh = err_path.open("wb")
+    proc = subprocess.Popen(
+        [
+            str(PYTHON_EXE),
+            str(REPO_ROOT / "ops" / "scripts" / "dev" / "run_validation_target.py"),
+            task.target,
+            "--repo-root",
+            str(REPO_ROOT),
+            "--timeout-seconds",
+            "900",
+        ],
+        cwd=str(REPO_ROOT),
+        stdout=out_fh,
+        stderr=err_fh,
+    )
+    return RunningTask(task=task, proc=proc, log_path=log_path, err_path=err_path, run_dir=None, started_at=time.time())
+
+
+def start_task(task: Task, run_dir: Path, process_tag: str, run_id: str) -> RunningTask:
     if task.kind == "postgres":
-        return start_postgres_worker(task, run_dir)
+        return start_postgres_worker(task, run_dir, process_tag, run_id)
     if task.kind == "playwright":
         return start_playwright_worker(task, run_dir)
-    return start_pytest_worker(task, run_dir)
+    if task.kind == "validation-target":
+        return start_validation_target_worker(task, run_dir, process_tag, run_id)
+    return start_pytest_worker(task, run_dir, process_tag, run_id)
+
+
+def terminate_running_tasks(running: list[RunningTask], grace_seconds: float = 3.0) -> None:
+    for worker in running:
+        if worker.proc.poll() is None:
+            try:
+                worker.proc.terminate()
+            except Exception:
+                continue
+    deadline = time.time() + grace_seconds
+    while time.time() < deadline:
+        if all(worker.proc.poll() is not None for worker in running):
+            return
+        time.sleep(0.2)
+    for worker in running:
+        if worker.proc.poll() is None:
+            try:
+                worker.proc.kill()
+            except Exception:
+                continue
 
 
 def append_result(results_path: Path, running_task: RunningTask, exit_code: int) -> None:
@@ -959,25 +1208,93 @@ def main() -> int:
     ensure_python()
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     run_id = ensure_prefixed_run_id(args.run_id)
-    block_specs = expand_block_specs_for_regression(build_block_specs(args), args.regression_mode)
-    tasks, block_concurrency = classify_block_tasks(block_specs, args.postgres_base_port)
+    process_tag = ensure_process_tag(run_id, args.process_tag)
+    started_at_epoch = time.time()
+    run_dir = LOG_ROOT / run_id
+    ensure_clean_run_dir(run_dir, args.replace_run_dir)
+    PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
+    update_current_run(run_id, run_dir)
+    initial_block_specs = build_block_specs(args)
+    initial_block_concurrency = {spec.name: spec.concurrency for spec in initial_block_specs}
+    initial_input_paths = sum(len(spec.paths) for spec in initial_block_specs)
+    write_bootstrap_progress(
+        run_dir=run_dir,
+        run_id=run_id,
+        phase="collecting",
+        regression_mode=args.regression_mode,
+        block_concurrency=initial_block_concurrency,
+        input_paths=initial_input_paths,
+        processed_input_paths=0,
+        block_specs=len(initial_block_specs),
+        discovered_tasks=0,
+        message="Collecting pytest nodeids and classifying run blocks.",
+    )
+    update_state(
+        run_id=run_id,
+        run_dir=run_dir,
+        status="preparing",
+        block=next(iter(initial_block_concurrency.keys()), ""),
+        concurrency=max(initial_block_concurrency.values()) if initial_block_concurrency else 0,
+        regression_mode=args.regression_mode,
+        total=0,
+        completed=[],
+        failed=[],
+        block_summaries={},
+        block_concurrency=initial_block_concurrency,
+        process_tag=process_tag,
+        started_at_epoch=started_at_epoch,
+        max_runtime_seconds=args.max_runtime_seconds,
+    )
+    append_event(
+        run_dir / "events.log",
+        f"BOOTSTRAP collect-start run_id={run_id} input_paths={initial_input_paths} block_specs={len(initial_block_specs)} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
+    )
+    block_specs = expand_block_specs_for_regression(initial_block_specs, args.regression_mode)
+    def report_collect_progress(active_block: str, current_path: str, processed_input_paths: int, discovered_tasks: int) -> None:
+        write_bootstrap_progress(
+            run_dir=run_dir,
+            run_id=run_id,
+            phase="collecting",
+            regression_mode=args.regression_mode,
+            block_concurrency=initial_block_concurrency,
+            input_paths=initial_input_paths,
+            processed_input_paths=processed_input_paths,
+            block_specs=len(initial_block_specs),
+            discovered_tasks=discovered_tasks,
+            message="Collecting pytest nodeids and classifying run blocks.",
+            current_path=current_path,
+        )
+    tasks, block_concurrency = classify_block_tasks(
+        block_specs,
+        args.postgres_base_port,
+        progress_callback=report_collect_progress,
+    )
     if not tasks:
         raise SystemExit("No tasks were classified from the provided paths.")
     block = tasks[0].block
-    run_dir = LOG_ROOT / run_id
-    ensure_clean_run_dir(run_dir, args.replace_run_dir)
     max_concurrency = max(block_concurrency.values())
-
-    PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
-    update_current_run(run_id, run_dir)
+    write_bootstrap_progress(
+        run_dir=run_dir,
+        run_id=run_id,
+        phase="prepared",
+        regression_mode=args.regression_mode,
+        block_concurrency=block_concurrency,
+        input_paths=initial_input_paths,
+        processed_input_paths=initial_input_paths,
+        block_specs=len(block_specs),
+        discovered_tasks=len(tasks),
+        message="Task collection finished; worker queue is being prepared.",
+    )
     write_json(
         run_dir / "run-config.json",
         {
             "run_id": run_id,
+            "process_tag": process_tag,
             "block": block,
             "concurrency": max_concurrency,
             "heartbeat_seconds": args.heartbeat_seconds,
             "regression_mode": args.regression_mode,
+            "max_runtime_seconds": args.max_runtime_seconds,
             "blocks": [
                 {
                     "name": block_spec.name,
@@ -1011,9 +1328,16 @@ def main() -> int:
         failed=failed,
         block_summaries={},
         block_concurrency=block_concurrency,
+        process_tag=process_tag,
+        started_at_epoch=started_at_epoch,
+        max_runtime_seconds=args.max_runtime_seconds,
     )
     write_queue_snapshot(queue, run_id, run_dir, max_concurrency, args.regression_mode, block_concurrency)
-    progress_payload = update_progress(
+    append_event(
+        events_path,
+        f"BOOTSTRAP collect-finished run_id={run_id} discovered_tasks={len(tasks)} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
+    )
+    update_progress(
         run_dir=run_dir,
         block=block,
         concurrency=max_concurrency,
@@ -1025,6 +1349,9 @@ def main() -> int:
         total=len(tasks),
         tasks=tasks,
         block_concurrency=block_concurrency,
+        process_tag=process_tag,
+        started_at_epoch=started_at_epoch,
+        max_runtime_seconds=args.max_runtime_seconds,
     )
     if not args.no_console_report:
         render_console_report(
@@ -1036,6 +1363,47 @@ def main() -> int:
 
     try:
         while queue or running:
+            if time.time() - started_at_epoch > args.max_runtime_seconds:
+                append_event(
+                    events_path,
+                    f"SUPERVISOR_TIMEOUT run_id={run_id} max_runtime_seconds={args.max_runtime_seconds} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
+                )
+                terminate_running_tasks(running)
+                update_progress(
+                    run_dir=run_dir,
+                    block=running[0].task.block if running else (queue[0].block if queue else block),
+                    concurrency=max_concurrency,
+                    regression_mode=args.regression_mode,
+                    queue=queue,
+                    running=[],
+                    completed=completed,
+                    failed=failed,
+                    total=len(tasks),
+                    tasks=tasks,
+                    block_concurrency=block_concurrency,
+                    status="timed_out",
+                    process_tag=process_tag,
+                    started_at_epoch=started_at_epoch,
+                    max_runtime_seconds=args.max_runtime_seconds,
+                )
+                block_summaries = (json.loads((run_dir / "progress.json").read_text(encoding="utf-8")).get("report") or {}).get("blocks") or {}
+                update_state(
+                    run_id=run_id,
+                    run_dir=run_dir,
+                    status="timed_out",
+                    block=running[0].task.block if running else (queue[0].block if queue else block),
+                    concurrency=max_concurrency,
+                    regression_mode=args.regression_mode,
+                    total=len(tasks),
+                    completed=completed,
+                    failed=failed,
+                    block_summaries=block_summaries,
+                    block_concurrency=block_concurrency,
+                    process_tag=process_tag,
+                    started_at_epoch=started_at_epoch,
+                    max_runtime_seconds=args.max_runtime_seconds,
+                )
+                return 2
             state_changed = False
             next_task_index: int | None = None
             for index, candidate in enumerate(queue):
@@ -1045,7 +1413,7 @@ def main() -> int:
                     break
             while next_task_index is not None:
                 task = queue.pop(next_task_index)
-                worker = start_task(task, run_dir)
+                worker = start_task(task, run_dir, process_tag, run_id)
                 running.append(worker)
                 append_event(
                     events_path,
@@ -1108,6 +1476,9 @@ def main() -> int:
                     failed=failed,
                     block_summaries=block_summaries,
                     block_concurrency=block_concurrency,
+                    process_tag=process_tag,
+                    started_at_epoch=started_at_epoch,
+                    max_runtime_seconds=args.max_runtime_seconds,
                 )
                 if not args.no_console_report:
                     render_console_report(
@@ -1136,6 +1507,9 @@ def main() -> int:
             failed=failed,
             block_summaries={},
             block_concurrency=block_concurrency,
+            process_tag=process_tag,
+            started_at_epoch=started_at_epoch,
+            max_runtime_seconds=args.max_runtime_seconds,
             error=error_payload,
         )
         raise
@@ -1150,6 +1524,7 @@ def main() -> int:
         "block": block,
         "concurrency": max_concurrency,
         "regression_mode": args.regression_mode,
+        "process_tag": process_tag,
         "block_concurrency": block_concurrency,
         "total": len(tasks),
         "completed_count": len(completed),
@@ -1172,6 +1547,10 @@ def main() -> int:
         total=len(tasks),
         tasks=tasks,
         block_concurrency=block_concurrency,
+        status=summary_status,
+        process_tag=process_tag,
+        started_at_epoch=started_at_epoch,
+        max_runtime_seconds=args.max_runtime_seconds,
     )
     block_summaries = (json.loads((run_dir / "progress.json").read_text(encoding="utf-8")).get("report") or {}).get("blocks") or {}
     update_state(
@@ -1186,6 +1565,9 @@ def main() -> int:
         failed=failed,
         block_summaries=block_summaries,
         block_concurrency=block_concurrency,
+        process_tag=process_tag,
+        started_at_epoch=started_at_epoch,
+        max_runtime_seconds=args.max_runtime_seconds,
     )
     if not args.no_console_report:
         render_console_report(

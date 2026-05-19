@@ -26,6 +26,8 @@ def render_header(
     concurrency: object,
     regression_mode: str,
     updated_at: str | None,
+    phase: str | None,
+    progress_seen_at: str | None,
 ) -> None:
     bar_len = 30
     filled = min(bar_len, max(0, int((pct / 100) * bar_len)))
@@ -37,13 +39,39 @@ def render_header(
         f"active_block={format_block_name(active_block) if active_block else 'n/a'}  "
         f"active_concurrency={concurrency or 'n/a'}"
     )
+    if phase:
+        print(f"phase={phase}")
     if updated_at:
         print(f"updated={updated_at}")
+    if progress_seen_at:
+        print(f"progress_seen={progress_seen_at}")
 
 
-def render_summary(done: int, failed: int, total: int, running_count: int, queue: int, origin_report: dict) -> None:
+def render_summary(
+    done: int,
+    failed: int,
+    total: int,
+    running_count: int,
+    queue: int,
+    origin_report: dict,
+    bootstrap_message: str | None,
+    bootstrap_counts: dict | None,
+) -> None:
     print()
     print("summary:")
+    if bootstrap_message:
+        print(f" - status={bootstrap_message}")
+    if bootstrap_counts:
+        print(
+            f" - bootstrap:"
+            f" input_paths={bootstrap_counts.get('input_paths', 0)}"
+            f" processed_input_paths={bootstrap_counts.get('processed_input_paths', 0)}"
+            f" block_specs={bootstrap_counts.get('block_specs', 0)}"
+            f" discovered_tasks={bootstrap_counts.get('discovered_tasks', 0)}"
+        )
+        current_path = bootstrap_counts.get("current_path")
+        if current_path:
+            print(f" - collecting_now={current_path}")
     print(
         f" - passed={done}/{total}"
         f" failed={failed}"
@@ -127,9 +155,33 @@ def render_progress_snapshot(progress_payload: dict, run_id: str) -> None:
     block_report = report.get("blocks") or {}
     origin_report = report.get("origins") or {}
     running_slots = progress_payload.get("running_slots") or []
+    phase = progress_payload.get("phase")
+    bootstrap = progress_payload.get("bootstrap") or {}
     pct = int(round((done / total) * 100)) if total else 0
-    render_header(pct, run_id, active_block, concurrency, regression_mode, progress_payload.get("updated_at"))
-    render_summary(done, failed, total, len(running), queue, origin_report)
+    render_header(
+        pct,
+        run_id,
+        active_block,
+        concurrency,
+        regression_mode,
+        progress_payload.get("updated_at"),
+        phase,
+        progress_payload.get("updated_at"),
+    )
+    render_summary(
+        done,
+        failed,
+        total,
+        len(running),
+        queue,
+        origin_report,
+        bootstrap.get("message"),
+        {
+            "input_paths": bootstrap.get("input_paths", 0),
+            "block_specs": bootstrap.get("block_specs", 0),
+            "discovered_tasks": bootstrap.get("discovered_tasks", 0),
+        },
+    )
     render_blocks(block_report)
     render_running_slots(running_slots)
     events_file_value = progress_payload.get("events_file_path")

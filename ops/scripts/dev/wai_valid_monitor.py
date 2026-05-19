@@ -18,9 +18,13 @@ STATE_DIR = REPO_ROOT / ".agent-run" / "validation-daemon"
 LOG_ROOT = REPO_ROOT / ".agent-run" / "logs"
 CURRENT_RUN_PATH = STATE_DIR / "WAI-VALID-current-run.json"
 MONITOR_PID_PATH = STATE_DIR / "WAI-VALID-monitor.pid"
+MONITOR_READY_PATH = STATE_DIR / "WAI-VALID-monitor-ready.json"
+MONITOR_HEARTBEAT_PATH = STATE_DIR / "WAI-VALID-monitor-heartbeat.json"
 MONITOR_TITLE = "WAI-VALID-monitor"
 DEFAULT_REFRESH_SECONDS = 2
 ACTIVE_STALE_AFTER_SECONDS = 15
+DEFAULT_STARTUP_TIMEOUT_SECONDS = 120
+DEFAULT_FINAL_GRACE_SECONDS = 15
 
 
 def load_json(path: Path) -> dict | None:
@@ -125,11 +129,52 @@ def release_monitor_ownership() -> None:
             MONITOR_PID_PATH.unlink()
         except FileNotFoundError:
             pass
+    for extra_path in (MONITOR_READY_PATH, MONITOR_HEARTBEAT_PATH):
+        try:
+            extra_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def write_monitor_ready(run_id: str | None, phase: str) -> None:
+    payload = {
+        "pid": os.getpid(),
+        "run_id": run_id or "",
+        "phase": phase,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+    }
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    MONITOR_READY_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def write_monitor_heartbeat(
+    run_id: str | None,
+    progress_path: Path | None,
+    rendered: bool,
+    phase: str,
+    progress_updated_at: str | None = None,
+    progress_mtime_epoch: float | None = None,
+) -> None:
+    payload = {
+        "pid": os.getpid(),
+        "run_id": run_id or "",
+        "progress_file": str(progress_path) if progress_path else "",
+        "rendered": rendered,
+        "phase": phase,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+        "progress_updated_at": progress_updated_at or "",
+        "progress_mtime_epoch": progress_mtime_epoch if progress_mtime_epoch is not None else "",
+    }
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    MONITOR_HEARTBEAT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id", help="Prefer a specific run id instead of auto-discovery.")
+    parser.add_argument("--process-tag", help="Marker for WAI-VALID-owned python monitor processes.")
+    parser.add_argument("--startup-timeout-seconds", type=int, default=DEFAULT_STARTUP_TIMEOUT_SECONDS)
+    parser.add_argument("--final-grace-seconds", type=int, default=DEFAULT_FINAL_GRACE_SECONDS)
     return parser.parse_args()
 
 
@@ -208,6 +253,18 @@ def render_progress(progress_path: Path, run_id: str) -> None:
     render_progress_snapshot(payload, run_id)
 
 
+def is_final_progress(payload: dict) -> bool:
+    status = str(payload.get("status") or "").strip().lower()
+    if status in {"passed", "failed", "timed_out", "supervisor_error"}:
+        return True
+    total = int(payload.get("total") or 0)
+    queue = int(payload.get("queue_remaining") or 0)
+    running = list(payload.get("running") or [])
+    done = int(payload.get("completed_count") or payload.get("passed_count") or 0)
+    failed = int(payload.get("failed_count") or 0)
+    return total > 0 and queue == 0 and not running and (done + failed) >= total
+
+
 def main() -> int:
     args = parse_args()
     claim_monitor_ownership()
@@ -219,6 +276,9 @@ def main() -> int:
         pass
 
     print("[WAI-VALID] monitor starting...", flush=True)
+    write_monitor_ready(args.run_id, "starting")
+    startup_started = time.time()
+    final_seen_at: float | None = None
 
     try:
         while True:
@@ -229,12 +289,42 @@ def main() -> int:
             progress_path, run_id = find_current_run(args.run_id)
             if progress_path is None:
                 print("[WAI-VALID] waiting for a progress file...")
+                write_monitor_heartbeat(run_id if args.run_id else None, None, False, "waiting")
+                if args.run_id and (time.time() - startup_started) > args.startup_timeout_seconds:
+                    print(
+                        f"[WAI-VALID] startup timeout: no progress file for requested run within {args.startup_timeout_seconds}s"
+                    )
+                    return 2
             else:
                 try:
-                    render_progress(progress_path, run_id)
+                    payload = load_json(progress_path) or {}
+                    payload["events_file_path"] = str(progress_path.with_name("events.log"))
+                    try:
+                        progress_mtime_epoch = progress_path.stat().st_mtime
+                    except FileNotFoundError:
+                        progress_mtime_epoch = None
+                    render_progress_snapshot(payload, run_id)
+                    write_monitor_ready(run_id, "running")
+                    write_monitor_heartbeat(
+                        run_id,
+                        progress_path,
+                        True,
+                        str(payload.get("phase") or payload.get("status") or "running"),
+                        str(payload.get("updated_at") or ""),
+                        progress_mtime_epoch,
+                    )
+                    if is_final_progress(payload):
+                        if final_seen_at is None:
+                            final_seen_at = time.time()
+                        elif (time.time() - final_seen_at) >= args.final_grace_seconds:
+                            print(f"[WAI-VALID] final state observed for {args.final_grace_seconds}s; monitor exiting.")
+                            return 0
+                    else:
+                        final_seen_at = None
                 except Exception as exc:
                     print("\n" + "=" * 100)
                     print(f"[WAI-VALID] progress render error: {exc}")
+                    write_monitor_heartbeat(run_id, progress_path, False, "render-error")
             sys.stdout.flush()
             time.sleep(DEFAULT_REFRESH_SECONDS)
     finally:

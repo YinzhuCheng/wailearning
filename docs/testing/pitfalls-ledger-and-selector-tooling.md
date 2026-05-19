@@ -473,3 +473,56 @@ Mitigation:
   completed run as a launch/pinning bug and inspect both:
   - whether the new run wrote `progress.json`,
   - whether the monitor was allowed to fall back from the requested run id.
+
+### Pitfall 96: full WAI-VALID launches can spend a long time in pytest collection before any progress file exists
+
+During the May 2026 full validation launch attempts, the detached supervisor
+process could be alive and still not write a run-local `progress.json` for a
+long time because it first expanded large backend/behavior/security file lists
+into pytest nodeids via repeated `pytest --collect-only` calls.
+
+Observed symptom:
+
+- the operator starts a fresh full validation run;
+- the monitor window shows only:
+
+```text
+[WAI-VALID] waiting for a progress file...
+```
+
+- the new supervisor PID exists, but `WAI-VALID-current-run.json` still points
+  at the previous run or the requested run directory has not yet appeared;
+- this looks like a broken launch even though the process is still busy doing
+  expensive collection work.
+
+Mitigation:
+
+- write `WAI-VALID-current-run.json`, an initial `progress.json`, and
+  `WAI-VALID-state.json` immediately after argument parsing and run-directory
+  creation, before pytest item collection begins;
+- expose a bootstrap phase such as `collecting` or `prepared` in the progress
+  payload so the monitor can render real status during pre-queue work;
+- for repository-default full runs on Windows, prefer
+  `ops/scripts/windows/start-full-validation-supervisor.bat`, which also
+  avoids fragile inline mega-command block lists by using a JSON args file.
+
+### Pitfall 97: long-lived WAI-VALID python processes can survive indefinitely without explicit lifetime rules
+
+During repeated local validation iterations, detached supervisors, monitors, or
+worker wrappers could stay alive after the operator had already abandoned the
+run, especially when startup or progress visibility was inconsistent. That left
+stale tagged python processes competing for ports, SQLite files, or attention.
+
+Mitigation:
+
+- give every WAI-VALID-owned long-lived python process a shared marker such as
+  `--process-tag WAI-VALID-<run-id>`;
+- make the supervisor self-stop when `--max-runtime-seconds` is exceeded;
+- make the monitor self-stop when the requested run never produces progress
+  within the startup timeout, and after a short final-state grace period;
+- use the explicit cleanup command when stale tagged python processes still
+  need operator-forced removal:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\stop-tagged-python-processes.ps1 "WAI-VALID-<run-id>"
+```

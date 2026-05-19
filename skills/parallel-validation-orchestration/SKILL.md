@@ -30,6 +30,11 @@ These names must remain explicit in every future revision of the workflow:
 - `WAI-VALID-pg-worker`
 - `WAI-VALID-watchdog`
 
+Every long-lived WAI-VALID-owned python process should also carry a
+command-line marker:
+
+- `--process-tag WAI-VALID-<run-id-or-operator-tag>`
+
 On Windows the actual executable name may still be `python.exe` or
 `powershell.exe`, but the **script filenames, pid files, state files, command
 lines, log directories, and progress files** must include the `WAI-VALID-`
@@ -72,7 +77,7 @@ Recommended log roots:
 4. Before starting a run, ask the operator to confirm:
    - blocks
    - per-block concurrency
-   - whether visible monitoring is desired
+   - whether visible monitoring should use the default repository monitor flow
 5. Start one **`WAI-VALID-supervisor`** process for the current run.
 6. The supervisor:
    - loads the task queue
@@ -80,8 +85,8 @@ Recommended log roots:
    - watches for completed workers
    - immediately refills freed slots from the queue
    - writes progress after every state change
-7. If the operator asked for live visibility, open a **foreground progress
-   monitor window** that tails the progress file and prints updates.
+7. Open a **foreground progress monitor window** that tails the progress file
+   and prints updates, unless the user explicitly asked for no visible monitor.
 8. Normal backend/behavior shards use `WAI-VALID-worker`.
 9. PostgreSQL-sensitive shards use `WAI-VALID-pg-worker`, one isolated fresh
    cluster / port / data dir per shard.
@@ -232,10 +237,11 @@ Recommended console format:
 
 ### Visible Monitor Window
 
-If the operator wants to watch progress live, the workflow should expose a
-foreground monitor window rather than a hidden-only background process.
+The workflow should expose a foreground monitor window by default rather than a
+hidden-only background process. Skip it only when the user explicitly asks for
+no visible monitor.
 
-The visible monitor window should:
+The visible monitor window must:
 
 - remain open for the duration of the run
 - refresh on an interval
@@ -260,8 +266,14 @@ Recommended implementation files:
 
 - `ops/scripts/dev/wai_valid_supervisor.py`
 - `ops/scripts/dev/wai_valid_monitor.py`
+- `ops/scripts/dev/wai_valid_status.py`
+- `ops/scripts/dev/wai_valid_build_full_args.py`
+- `ops/scripts/windows/restart-validation-block-round-clean.ps1`
+- `ops/scripts/windows/show-validation-status.bat`
 - `ops/scripts/windows/start-validation-monitor.bat`
+- `ops/scripts/windows/start-validation-monitor-detached.ps1`
 - `ops/scripts/windows/start-validation-supervisor.bat`
+- `ops/scripts/windows/start-full-validation-supervisor.bat`
 
 Default operator behavior:
 
@@ -269,8 +281,52 @@ Default operator behavior:
   console titled `WAI-VALID-supervisor`
 - launching `start-validation-monitor.bat` should open a visible Win10 console
   window titled `WAI-VALID-monitor`
+- repository launchers should prefer `start-validation-monitor-detached.ps1`
+  when they need to open that visible monitor from another background or batch
+  entrypoint
+- on Windows, prefer the detached PowerShell monitor helper over `cmd /c` or a
+  nested batch launch so the user gets a clearly visible independent monitor
+  window rather than a short-lived shell host
 - the monitor should discover the current run automatically from
   `WAI-VALID-current-run.json`
+- the monitor should also publish lightweight ready/heartbeat artifacts under
+  `.agent-run/validation-daemon/` so automation can distinguish:
+  - monitor window failed to launch
+  - monitor process is alive but waiting for progress
+  - monitor is actively rendering fresh progress
+- the monitor heartbeat should include the latest progress timestamp it has
+  observed from the run's `progress.json`
+- when started with a concrete run id, the monitor should exit by itself if the
+  requested progress file never appears within the startup timeout
+- after a run reaches a final state, the monitor should keep the final summary
+  visible briefly and then exit by itself
+- during an active run, Windows may show a foreground `python.exe` process
+  owned by the visible monitor window; this is expected while the monitor is
+  rendering progress and is not a zombie process by itself
+- after the monitor Python process exits, the detached PowerShell shell may
+  remain open by design to preserve the final visible report; the shell should
+  have a `WAI-VALID-monitor:<run>` title and is low-memory compared with the
+  supervisor/workers
+
+Operator interpretation rule:
+
+- during long pytest collection, the monitor may temporarily show `phase=collecting`
+  with `passed=0/0` or `discovered_tasks=0`
+- this does **not** mean the block failed to launch by itself
+- treat the run as alive when:
+  - `events.log` contains `BOOTSTRAP collect-start`, and
+  - `progress.json` keeps receiving fresh timestamps
+- treat collection as complete only after `events.log` records
+  `BOOTSTRAP collect-finished` and `progress.json` shows a non-zero total
+- when the window appears visually stale, compare:
+  - the monitor heartbeat `updated_at`
+  - the heartbeat `progress_updated_at`
+  - the run `progress.json` `updated_at`
+  This distinguishes a stale display from a stalled run
+- if the monitor heartbeat `updated_at` advances but both
+  `progress_updated_at` and the run `progress.json` timestamp do not advance,
+  treat the run as stalled/stale; restart the block with the clean block
+  restart workflow instead of repeatedly restarting only the monitor
 
 ## Block Switching Rules
 
@@ -288,6 +344,41 @@ Only switch blocks when:
 - the current block is clean
 - or it is honestly blocked
 - or the operator explicitly requests a transition
+
+## Post-Fix Lightweight Validation
+
+After fixing a bug in the WAI-VALID workflow itself, do not jump straight to a
+full repository rerun unless the user explicitly asks for that.
+
+Preferred repository-default sequence:
+
+1. keep the same WAI-VALID supervisor / monitor / progress-file workflow;
+2. derive the seed set through the repository selector workflow first, using
+   `skills/validation-selection/SKILL.md` and
+   `run_validation_profile.py selector-recommended` or
+   `select_validation_targets.py --json`;
+3. launch a **small concurrent bugfix verification run** from that
+   selector-derived seed set instead of hand-picking ad hoc nodeids;
+4. allow the orchestration layer to keep `regression_mode=light`, which means
+   direct targets only from the selected seed set;
+5. keep concurrency greater than `1` when the lane is safely parallelizable, so
+   the post-fix run still exercises slot refill and concurrent orchestration;
+6. only escalate to a larger block or full run after the lightweight
+   concurrent verification is green.
+
+Recommended shape for this post-fix run:
+
+- `regression_mode=light`
+- one explicit block only
+- selector-derived direct targets only
+- a short operator-visible run id such as
+  `WAI-VALID-light-bugfix-<topic>-<date>`
+- the same `--process-tag`, monitor, timeout, and durable artifacts as a normal
+  WAI-VALID run
+
+This rule exists so orchestration fixes are validated through the real
+repository workflow without paying the cost or risk of an immediate full-suite
+rerun.
 
 ## Resume Rules
 
@@ -322,6 +413,109 @@ The first tracked implementation now lives in:
 - `ops/scripts/windows/start-validation-supervisor.bat`
 - `ops/scripts/dev/wai_valid_monitor.py`
 - `ops/scripts/windows/start-validation-monitor.bat`
+
+For the repository-default full validation block plan, prefer the maintained
+launcher:
+
+```powershell
+ops\scripts\windows\start-full-validation-supervisor.bat full-validation-<date>
+```
+
+This launcher:
+
+- discovers the maintained backend / behavior / security / postgres /
+  Playwright file lists;
+- writes the long `--block-spec` array into a JSON args file instead of
+  trusting one huge inline Windows command line;
+- launches the detached supervisor through the normal repository entrypoint;
+- opens the visible monitor for the same run id by default.
+
+Treat this as the default full-run entrypoint unless the task needs a custom
+block subset or custom block order.
+
+## Early Bootstrap Visibility
+
+The supervisor must expose bootstrap progress before the expensive pytest
+collection/classification stage finishes.
+
+Current contract:
+
+- after parsing arguments and creating the run directory, immediately write:
+  - `WAI-VALID-current-run.json`
+  - an initial `progress.json`
+  - an initial `WAI-VALID-state.json`
+- the initial progress payload should show a bootstrap phase such as
+  `collecting` with a short message like:
+  `Collecting pytest nodeids and classifying run blocks.`
+- the visible monitor should render this bootstrap phase instead of waiting on
+  a missing progress file for long-running full validation launches
+
+This avoids the operator-facing false signal where the supervisor is alive but
+the monitor only shows `waiting for a progress file...` during long
+`pytest --collect-only` expansion work.
+
+## Lifetime And Self-Exit Contract
+
+WAI-VALID-owned python processes should not live forever by accident.
+
+Current repository contract:
+
+- supervisor:
+  - exits normally when the queue drains
+  - force-stops the run when `--max-runtime-seconds` is exceeded
+- monitor:
+  - exits if a forced `--run-id` still has no progress file after the startup
+    timeout
+  - exits shortly after the run reaches a final state
+- pytest worker wrapper processes:
+  - carry the same `--process-tag`
+  - exit naturally when their single target finishes
+
+For repository-default full validation on Windows, the maintained launcher now
+accepts:
+
+```powershell
+ops\scripts\windows\start-full-validation-supervisor.bat full-validation-<date> 10800
+```
+
+where the second positional argument is the maximum supervisor lifetime in
+seconds. Keep this value operator-adjustable.
+
+## Tagged Cleanup
+
+Use the tagged cleanup script when a stale WAI-VALID python fleet needs to be
+cleared explicitly:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\stop-tagged-python-processes.ps1 "WAI-VALID-full-validation-<date>"
+```
+
+This script is intentionally marker-based rather than path-guess-based.
+
+For stale block runs, prefer the clean block restart wrapper:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\scripts\windows\restart-validation-block-round-clean.ps1 behavior behavior-round-<date> 10800 10 light
+```
+
+This wrapper is the default recovery path when a block shows stale progress. It:
+
+- stops the recorded supervisor, worker, and monitor process trees for the run;
+- removes the stale run directory and monitor heartbeat artifacts;
+- rebuilds the block args through the repository block selector;
+- launches the block with the configured concurrency and max lifetime;
+- opens the visible monitor; and
+- verifies that `progress.json`, `WAI-VALID-current-run.json`,
+  `WAI-VALID-monitor-ready.json`, and `WAI-VALID-monitor-heartbeat.json` all
+  point at the fresh run before reporting success;
+- verifies that `heartbeat.progress_updated_at` matches the run's
+  `progress.json.updated_at`, proving the monitor rendered the latest known
+  progress rather than only starting a stale window.
+
+Use the same clean wrapper for ordinary next-block launches, not only for stale
+run recovery, unless the operator explicitly asks for manual lower-level
+commands. This keeps cleanup, launch, monitor startup, and freshness checks on
+one reproducible path.
 
 ## Input Contract
 
@@ -468,6 +662,21 @@ the run directory. Use it on reconnect to answer:
 - which shards failed
 - whether the failures look like product/test regressions or environment /
   bootstrap problems
+
+Status inspection should use the compact status entrypoint first:
+
+```powershell
+ops\scripts\windows\show-validation-status.bat --run-id <run-id>
+```
+
+This wrapper calls `ops/scripts/dev/wai_valid_status.py`, prints WAI-VALID
+pid-file liveness, and intentionally omits long completed-shard lists. Do not
+dump raw `summary.json` or `progress.json` into chat by default; those files may
+include hundreds of completed shards and can truncate the useful answer. Open
+raw JSON only for artifact corruption or serialization debugging, and summarize
+the relevant fields. On Windows, treat `tasklist` access-denied PID probes as
+ambiguous until the compact status script's PowerShell `Get-Process` fallback
+also says the pid is gone.
 
 Preferred artifact pair:
 

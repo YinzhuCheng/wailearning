@@ -29,6 +29,7 @@ from pytest_sqlite_guard import build_report, is_pytest_process  # noqa: E402
 from search_pitfalls import build_corpus, search_blocks  # noqa: E402
 from select_validation_targets import parse_ledger  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
+from wai_valid_supervisor import classify_tasks, infer_block_name_from_path  # noqa: E402
 from run_validation_target import (
     RESULT_BLOCKED,
     expand_command_placeholders,
@@ -691,6 +692,27 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertEqual(updated[:-1], argv)
         self.assertEqual(updated[-1], f"--junitxml={output_path}")
 
+    def test_wai_valid_infers_security_block_for_security_paths(self):
+        self.assertEqual(
+            infer_block_name_from_path("tests/security/test_security_regression.py"),
+            "security",
+        )
+
+    def test_wai_valid_classifies_security_file_as_security_pytest_task(self):
+        tasks = classify_tasks(
+            ["tests/security/test_security_regression.py::test_sec01_unauthenticated_users_list_returns_401"],
+            "auto",
+            postgres_base_port=15460,
+        )
+
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0].kind, "pytest")
+        self.assertEqual(tasks[0].block, "security")
+        self.assertEqual(
+            tasks[0].source_path,
+            "tests/security/test_security_regression.py::test_sec01_unauthenticated_users_list_returns_401",
+        )
+
     def test_runner_normalizes_cross_platform_command_names(self):
         npm_argv, _npm_notes = resolve_command_argv(REPO_ROOT, ["npm", "run", "build"])
         npx_cmd_argv, _npx_notes = resolve_command_argv(REPO_ROOT, ["npx.cmd", "playwright", "test"])
@@ -818,7 +840,9 @@ class ValidationSelectorTests(unittest.TestCase):
         self.assertIn("school.e2e.homework_comment_cover_tier4", runs_by_id)
         self.assertEqual(runs_by_id["school.e2e.homework_comment_cover_tier4"]["action"], "skipped")
         self.assertIn("requires operator review", runs_by_id["school.e2e.homework_comment_cover_tier4"]["reason"])
-        self.assertEqual(payload["deferred_targets"][0]["target_id"], "school.e2e.homework_comment_cover_tier4")
+        deferred_ids = [item["target_id"] for item in payload["deferred_targets"]]
+        self.assertIn("school.e2e.homework_comment_cover_tier4", deferred_ids)
+        self.assertIn("school.e2e.homework_appeal_stale_tabs", deferred_ids)
         self.assertEqual(
             payload["selection"]["required_validation"]["required_targets"][0]["id"],
             "frontend.school.build",

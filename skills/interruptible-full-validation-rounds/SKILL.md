@@ -90,6 +90,18 @@ A validation block round contains:
 7. confirm that durable run artifacts are being written
 8. stop communication
 
+The monitor requirement is strict:
+
+- the round should replace any previous WAI-VALID monitor ownership with the
+  newly launched block run;
+- the visible monitor should point at the new run id for that block, not an
+  older current-run pointer;
+- the launch is not confirmed until the run's `progress.json`,
+  `WAI-VALID-current-run.json`, `WAI-VALID-monitor-ready.json`, and
+  `WAI-VALID-monitor-heartbeat.json` all point at the same new run id;
+- after confirming the new block wrote durable artifacts, the agent should stop
+  communication without continuing to narrate execution in chat.
+
 ### B. Bug-Fix Round
 
 The user reconnects after a block finished and the agent either:
@@ -216,6 +228,27 @@ minimum:
 - `block-summary.txt`
 - `events.log`
 
+For reconnect/status answers, use the compact status entrypoint first:
+
+```powershell
+ops\scripts\windows\show-validation-status.bat --run-id <run-id>
+```
+
+Equivalent direct Python entrypoint:
+
+```powershell
+python ops\scripts\dev\wai_valid_status.py --run-id <run-id>
+```
+
+Do not paste raw `summary.json` or `progress.json` into chat by default. Those
+files can contain long shard lists such as `completed_shards` and can truncate
+the useful answer. The compact status entrypoint also reports WAI-VALID pid-file
+liveness for supervisor, monitor Python, and monitor shell ownership. Open raw
+JSON only when debugging serialization or artifact corruption, and then
+summarize the relevant fields. On Windows, let the status script's PowerShell
+`Get-Process` fallback resolve `tasklist` access-denied probes before calling a
+pid file stale.
+
 Use these artifacts, not chat memory, to answer on reconnect:
 
 - what ran
@@ -231,6 +264,7 @@ monitor window whenever the repository provides one.
 Current repository path:
 
 - [`../../ops/scripts/windows/start-validation-monitor.bat`](../../ops/scripts/windows/start-validation-monitor.bat)
+- [`../../ops/scripts/windows/start-validation-monitor-detached.ps1`](../../ops/scripts/windows/start-validation-monitor-detached.ps1)
 
 Current monitor runtime:
 
@@ -238,9 +272,31 @@ Current monitor runtime:
 
 Default policy for future rounds:
 
-- launch the monitor before or alongside the block run
+- for normal repository block rounds, prefer
+  `ops/scripts/windows/restart-validation-block-round-clean.ps1` rather than
+  manually composing supervisor and monitor commands
+- when the block itself is launched from another script, prefer the detached
+  visible monitor helper so the user reliably gets a separate monitor window
+- for a clean block restart after stale progress, use
+  `ops/scripts/windows/restart-validation-block-round-clean.ps1` so cleanup,
+  cache removal, block launch, monitor launch, and heartbeat verification stay
+  one reproducible workflow
 - keep it as the user-facing live status surface
 - rely on durable artifacts as the source of truth on reconnect
+- do not treat an early `collecting` screen with `0/0` as proof that the block
+  failed to launch; verify `events.log` and fresh `progress.json` timestamps
+  first
+- prefer launch flows that also verify monitor ready/heartbeat artifacts before
+  declaring the monitor successfully attached
+- when deciding whether a launched block is genuinely progressing, compare the
+  monitor heartbeat's observed progress timestamp with the run's own
+  `progress.json` timestamp before concluding the run is stuck
+- when using the clean restart wrapper, require its freshness check to compare
+  `heartbeat.progress_updated_at` to `progress.json.updated_at`; if they differ,
+  the monitor is not proven attached to the latest rendered state
+- if the monitor heartbeat is fresh but the observed progress timestamp is old,
+  diagnose the run/supervisor rather than the monitor; a clean block restart is
+  the default recovery when the supervisor is no longer alive
 
 ## Launch / Hang-Up Procedure
 
@@ -248,10 +304,19 @@ When the user says to start the next block:
 
 1. re-read the active plan
 2. reconstruct the shard list for the next block
-3. launch one WAI-VALID run for that block only
-4. verify that the run directory and current-run pointer were written
+3. launch one WAI-VALID run for that block only through
+   `ops/scripts/windows/restart-validation-block-round-clean.ps1` unless the
+   user explicitly asks for a lower-level command
+4. verify that the run directory, current-run pointer, monitor ready artifact,
+   and heartbeat artifact all point at the requested run
 5. tell the user which block was launched and which run id to watch
 6. stop communication
+
+For repository-default block launches, treat this as a hang-up boundary:
+
+- once the requested block is launched and the monitor is attached to that run,
+  do not continue the round in chat;
+- the next turn should begin from WAI-VALID artifacts after the user reconnects.
 
 Do not remain in chat narrating the run after the block has been launched if
 the user requested hang-up mode.
@@ -262,7 +327,7 @@ When the user reconnects after a block finished:
 
 1. re-read:
    - the active plan
-   - `summary.json`
+   - compact status from `ops\scripts\windows\show-validation-status.bat`
    - `block-report.json`
    - `block-summary.txt`
    - `events.log`

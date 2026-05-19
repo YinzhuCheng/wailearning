@@ -15,6 +15,8 @@ MONITOR_LAUNCHER_CMD = STATE_DIR / "WAI-VALID-launch-monitor.cmd"
 SUPERVISOR_SCRIPT = REPO_ROOT / "ops" / "scripts" / "dev" / "wai_valid_supervisor.py"
 SUPERVISOR_LAUNCH_LOG = STATE_DIR / "WAI-VALID-supervisor-launch.log"
 SUPERVISOR_PID_PATH = STATE_DIR / "WAI-VALID-supervisor-detached.pid"
+SUPERVISOR_STDOUT_LOG = STATE_DIR / "WAI-VALID-supervisor-stdout.log"
+SUPERVISOR_STDERR_LOG = STATE_DIR / "WAI-VALID-supervisor-stderr.log"
 
 
 def _windows_creation_flags(*flags: int) -> int:
@@ -43,6 +45,10 @@ def parse_args() -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     supervisor = subparsers.add_parser("supervisor", help="Start the validation supervisor detached.")
+    supervisor.add_argument(
+        "--args-file",
+        help="Optional JSON file containing the full wai_valid_supervisor.py argument array.",
+    )
     supervisor.add_argument("supervisor_args", nargs=argparse.REMAINDER, help="Arguments for wai_valid_supervisor.py.")
 
     background = subparsers.add_parser("background", help="Start a detached background process.")
@@ -84,8 +90,9 @@ def _build_background_wrapper(script: Path, script_args: list[str]) -> Path:
 
 
 def _resolve_supervisor_args(raw_args: list[str]) -> list[str]:
-    if len(raw_args) >= 2 and raw_args[0] == "--args-file":
-        args_path = Path(raw_args[1])
+    resolved = list(raw_args)
+    while len(resolved) >= 2 and resolved[0] == "--args-file":
+        args_path = Path(resolved[1])
         if not args_path.is_absolute():
             args_path = REPO_ROOT / args_path
         payload = args_path.read_text(encoding="utf-8")
@@ -94,22 +101,27 @@ def _resolve_supervisor_args(raw_args: list[str]) -> list[str]:
         parsed = json.loads(payload)
         if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
             raise SystemExit(f"Invalid supervisor args file: {args_path}")
-        return list(parsed)
-    return list(raw_args)
+        resolved = [*parsed, *resolved[2:]]
+    return resolved
 
 
-def launch_supervisor(supervisor_args: list[str]) -> int:
+def launch_supervisor(supervisor_args: list[str], args_file: str | None = None) -> int:
     if not PYTHON_EXE.exists():
         raise SystemExit(f"Missing repository venv interpreter: {PYTHON_EXE}")
     if not SUPERVISOR_SCRIPT.exists():
         raise SystemExit(f"Missing supervisor script: {SUPERVISOR_SCRIPT}")
-    resolved_args = _resolve_supervisor_args(supervisor_args)
+    raw_args = list(supervisor_args)
+    if args_file:
+        raw_args = ["--args-file", args_file, *raw_args]
+    resolved_args = _resolve_supervisor_args(raw_args)
     proc_args = [str(PYTHON_EXE), "-u", str(SUPERVISOR_SCRIPT), *resolved_args]
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     write_launch_log(f"supervisor args={proc_args!r}")
     with SUPERVISOR_LAUNCH_LOG.open("a", encoding="utf-8") as handle:
         handle.write(f"START {time.strftime('%Y-%m-%dT%H:%M:%S%z')} python={PYTHON_EXE}\n")
         handle.write(f"ARGS  {' '.join(proc_args[1:])}\n")
+    stdout_handle = SUPERVISOR_STDOUT_LOG.open("ab")
+    stderr_handle = SUPERVISOR_STDERR_LOG.open("ab")
     proc = subprocess.Popen(
         proc_args,
         cwd=str(REPO_ROOT),
@@ -117,8 +129,8 @@ def launch_supervisor(supervisor_args: list[str]) -> int:
         close_fds=True,
         env=os.environ.copy(),
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=stdout_handle,
+        stderr=stderr_handle,
     )
     SUPERVISOR_PID_PATH.write_text(str(proc.pid), encoding="utf-8")
     with SUPERVISOR_LAUNCH_LOG.open("a", encoding="utf-8") as handle:
@@ -159,7 +171,7 @@ def launch_background(script_path: str, script_args: list[str]) -> int:
 def main() -> int:
     args = parse_args()
     if args.command == "supervisor":
-        return launch_supervisor(args.supervisor_args)
+        return launch_supervisor(args.supervisor_args, args.args_file)
     if args.command == "background":
         return launch_background(args.script_path, args.script_args)
     raise SystemExit(f"Unknown command: {args.command}")
