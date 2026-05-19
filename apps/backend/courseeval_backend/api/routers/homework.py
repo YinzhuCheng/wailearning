@@ -6,7 +6,7 @@ from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
@@ -1396,7 +1396,32 @@ def acknowledge_grade_appeal(
     if not appeal:
         raise HTTPException(status_code=404, detail="Appeal not found.")
 
-    if appeal.status == "pending":
+    current_status_normalized = normalize_appeal_status(appeal.status)
+    if current_status_normalized == "pending":
+        updated_rows = db.execute(
+            update(HomeworkGradeAppeal)
+            .where(
+                HomeworkGradeAppeal.id == appeal.id,
+                HomeworkGradeAppeal.status == appeal.status,
+            )
+            .values(
+                status="acknowledged",
+                updated_at=datetime.now(timezone.utc),
+            )
+        ).rowcount
+        if updated_rows != 1:
+            db.rollback()
+            fresh = (
+                db.query(HomeworkGradeAppeal)
+                .filter(
+                    HomeworkGradeAppeal.submission_id == submission_id,
+                    HomeworkGradeAppeal.homework_id == homework.id,
+                )
+                .first()
+            )
+            if not fresh:
+                raise HTTPException(status_code=404, detail="Appeal not found.")
+            return {"message": "宸叉爣璁颁负宸查槄銆?", "status": fresh.status}
         appeal.status = "acknowledged"
         mark_appeal_notifications_acknowledged(db, appeal.id)
     db.commit()
@@ -1447,6 +1472,44 @@ def respond_grade_appeal(
         return appeal
     if not allowed and reason == "finalized":
         raise HTTPException(status_code=409, detail="This appeal has already been finalized and cannot be changed.")
+
+    updated_rows = db.execute(
+        update(HomeworkGradeAppeal)
+        .where(
+            HomeworkGradeAppeal.id == appeal.id,
+            HomeworkGradeAppeal.status == appeal.status,
+        )
+        .values(
+            teacher_response=next_teacher_response,
+            status=next_status_normalized,
+            updated_at=datetime.now(timezone.utc),
+        )
+    ).rowcount
+    if updated_rows != 1:
+        db.rollback()
+        fresh = (
+            db.query(HomeworkGradeAppeal)
+            .filter(
+                HomeworkGradeAppeal.submission_id == submission_id,
+                HomeworkGradeAppeal.homework_id == homework.id,
+            )
+            .first()
+        )
+        if not fresh:
+            raise HTTPException(status_code=404, detail="Appeal not found.")
+        fresh_status_normalized = normalize_appeal_status(fresh.status)
+        fresh_teacher_response = (fresh.teacher_response or "").strip()
+        if fresh_status_normalized == next_status_normalized and fresh_teacher_response == next_teacher_response:
+            return fresh
+        fresh_allowed, fresh_reason = can_transition_homework_appeal_status(
+            fresh_status_normalized,
+            next_status_normalized,
+        )
+        if not fresh_allowed and fresh_reason == "invalid_status":
+            raise HTTPException(status_code=400, detail="Invalid appeal status.")
+        if not fresh_allowed and fresh_reason == "finalized":
+            raise HTTPException(status_code=409, detail="This appeal has already been finalized and cannot be changed.")
+        raise HTTPException(status_code=409, detail="This appeal changed during processing; please refresh and retry.")
 
     appeal.teacher_response = next_teacher_response
     appeal.status = next_status_normalized

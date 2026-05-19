@@ -1,8 +1,6 @@
-const fs = require('fs')
-const path = require('path')
-
 const { expect } = require('@playwright/test')
 const { refreshE2eAdminBearer } = require('./e2e-seed-headers.cjs')
+const { readScenarioCache, writeScenarioCache } = require('./scenario-cache.cjs')
 
 let cached
 
@@ -17,12 +15,7 @@ function loadE2eScenario() {
   if (cached !== undefined) {
     return cached
   }
-  const p = path.join(__dirname, '.cache', 'scenario.json')
-  if (!fs.existsSync(p)) {
-    cached = null
-    return null
-  }
-  cached = JSON.parse(fs.readFileSync(p, 'utf8'))
+  cached = readScenarioCache()
   return cached
 }
 
@@ -41,9 +34,7 @@ async function resetE2eScenario() {
   }
   const data = await res.json()
   await refreshE2eAdminBearer(data)
-  const p = path.join(__dirname, '.cache', 'scenario.json')
-  fs.mkdirSync(path.dirname(p), { recursive: true })
-  fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8')
+  writeScenarioCache(data)
   cached = data
   return data
 }

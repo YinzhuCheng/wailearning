@@ -23,8 +23,8 @@ from wai_valid_render import render_progress_snapshot
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PYTHON_EXE = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
 PYTEST_WORKER_SCRIPT = REPO_ROOT / "ops" / "scripts" / "dev" / "wai_valid_pytest_worker.py"
-STATE_DIR = REPO_ROOT / ".agent-run" / "validation-daemon"
-LOG_ROOT = REPO_ROOT / ".agent-run" / "logs"
+STATE_DIR = Path(os.environ.get("WAI_VALID_STATE_DIR", str(REPO_ROOT / ".agent-run" / "validation-daemon")))
+LOG_ROOT = Path(os.environ.get("WAI_VALID_LOG_ROOT", str(REPO_ROOT / ".agent-run" / "logs")))
 PID_PATH = STATE_DIR / "WAI-VALID-supervisor.pid"
 STATE_PATH = STATE_DIR / "WAI-VALID-state.json"
 QUEUE_PATH = STATE_DIR / "WAI-VALID-queue.json"

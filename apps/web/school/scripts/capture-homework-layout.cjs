@@ -6,8 +6,7 @@ const { chromium } = require('playwright')
 
 const schoolRoot = path.resolve(__dirname, '..')
 const repoRoot = path.resolve(schoolRoot, '..', '..', '..')
-const cacheDir = path.join(repoRoot, 'tests', 'e2e', 'web-school', '.cache')
-const scenarioPath = path.join(cacheDir, 'scenario.json')
+const { writeScenarioCache } = require(path.join(repoRoot, 'tests', 'e2e', 'web-school', 'scenario-cache.cjs'))
 
 const apiPort = process.env.E2E_API_PORT || '8012'
 const uiPort = process.env.E2E_UI_PORT || '3012'
@@ -70,8 +69,7 @@ async function refreshScenario() {
     throw new Error(`reset-scenario failed ${res.status}: ${await res.text()}`)
   }
   const scenario = await res.json()
-  fs.mkdirSync(cacheDir, { recursive: true })
-  fs.writeFileSync(scenarioPath, JSON.stringify(scenario, null, 2), 'utf8')
+  writeScenarioCache(scenario)
   return scenario
 }
 

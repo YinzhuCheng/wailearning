@@ -32,6 +32,10 @@ const useRealWorker = !['0', 'false', 'no', 'off'].includes(
 const children = []
 let cleanupStarted = false
 
+function hasCliOption(args, optionName) {
+  return args.some((arg, index) => arg === optionName || (index > 0 && args[index - 1] === optionName))
+}
+
 function buildHttpBase(port) {
   return `http://127.0.0.1:${port}`
 }
@@ -179,6 +183,17 @@ async function main() {
     }
   } catch (error) {
     console.warn(`[e2e-runner] failed to reset sqlite file ${sqliteFile}: ${error}`)
+  }
+  const isolatedOutputDir = path.join(os.tmpdir(), 'courseeval-playwright-results', `playwright_${resolvedApiPort}`)
+  if (!hasCliOption(playwrightArgs, '--output')) {
+    playwrightArgs.push('--output', isolatedOutputDir)
+  }
+  try {
+    if (fs.existsSync(isolatedOutputDir)) {
+      fs.rmSync(isolatedOutputDir, { recursive: true, force: true })
+    }
+  } catch (error) {
+    console.warn(`[e2e-runner] failed to reset output dir ${isolatedOutputDir}: ${error}`)
   }
   launch(
     'api',

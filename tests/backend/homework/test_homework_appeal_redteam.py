@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from fastapi.testclient import TestClient
 
+from apps.backend.courseeval_backend.api.routers import homework as homework_router
 from apps.backend.courseeval_backend.main import app
 from apps.backend.courseeval_backend.db.database import SessionLocal
 from apps.backend.courseeval_backend.db.models import HomeworkGradeAppeal, Notification
@@ -652,7 +653,7 @@ def test_concurrent_homework_appeal_acknowledge_and_resolve_do_not_both_win():
         thread.join()
 
     assert not errors, errors
-    assert sorted(statuses) == [200, 200]
+    assert sorted(statuses) in ([200, 200], [200, 409])
 
     db = SessionLocal()
     try:
@@ -811,5 +812,161 @@ def test_terminal_homework_appeal_cannot_be_rewritten_by_stale_teacher_request()
         row = db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == sub_id).one()
         assert row.status == "resolved"
         assert row.teacher_response == "resolved first"
+    finally:
+        db.close()
+
+
+def test_stale_reject_request_cannot_overwrite_already_resolved_homework_appeal(monkeypatch):
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "stale reject overwrite"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 87, "review_comment": "before stale reject overwrite"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": "please prevent stale reject from overwriting resolve"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    stale_loaded = threading.Event()
+    allow_stale_continue = threading.Event()
+    original_can_transition = homework_router.can_transition_homework_appeal_status
+
+    def blocking_can_transition(current_status, next_status):
+        if next_status == "rejected":
+            stale_loaded.set()
+            assert allow_stale_continue.wait(timeout=5), "stale reject thread did not resume in time"
+        return original_can_transition(current_status, next_status)
+
+    monkeypatch.setattr(homework_router, "can_transition_homework_appeal_status", blocking_can_transition)
+
+    stale_result: dict[str, object] = {}
+
+    def stale_reject() -> None:
+        with TestClient(app) as thread_client:
+            stale_result["response"] = thread_client.put(
+                f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+                headers=teacher_h,
+                json={"teacher_response": "stale reject should lose", "status": "rejected"},
+            )
+
+    thread = threading.Thread(target=stale_reject, name="stale-reject-thread")
+    thread.start()
+    assert stale_loaded.wait(timeout=5), "stale reject request did not reach the loaded-state barrier"
+
+    resolved = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "resolved wins", "status": "resolved"},
+    )
+    assert resolved.status_code == 200, resolved.text
+
+    allow_stale_continue.set()
+    thread.join(timeout=10)
+    assert not thread.is_alive(), "stale reject thread did not finish"
+    stale_response = stale_result["response"]
+    assert stale_response.status_code == 409, stale_response.text
+
+    db = SessionLocal()
+    try:
+        row = db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == sub_id).one()
+        assert row.status == "resolved"
+        assert row.teacher_response == "resolved wins"
+        notes = db.query(Notification).filter(Notification.related_appeal_id == row.id).all()
+        assert len(notes) == 1
+        assert notes[0].notification_kind == "grade_appeal"
+    finally:
+        db.close()
+
+
+def test_stale_resolve_request_cannot_overwrite_already_rejected_homework_appeal(monkeypatch):
+    _reset_db()
+    ensure_admin()
+    ctx = make_grading_course_with_homework(auto_grading=False, course_llm_enabled=False)
+    client = TestClient(app)
+    student_h = login_api(client, ctx["student_username"], ctx["student_password"])
+    teacher_h = login_api(client, ctx["teacher_username"], ctx["teacher_password"])
+    hid = ctx["homework_id"]
+
+    sub = client.post(f"/api/homeworks/{hid}/submission", headers=student_h, json={"content": "stale resolve overwrite"})
+    assert sub.status_code == 200, sub.text
+    sub_id = sub.json()["id"]
+
+    review = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/review",
+        headers=teacher_h,
+        json={"review_score": 78, "review_comment": "before stale resolve overwrite"},
+    )
+    assert review.status_code == 200, review.text
+
+    appeal = client.post(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=student_h,
+        json={"reason_text": "please prevent stale resolve from overwriting reject"},
+    )
+    assert appeal.status_code == 200, appeal.text
+
+    stale_loaded = threading.Event()
+    allow_stale_continue = threading.Event()
+    original_can_transition = homework_router.can_transition_homework_appeal_status
+
+    def blocking_can_transition(current_status, next_status):
+        if next_status == "resolved":
+            stale_loaded.set()
+            assert allow_stale_continue.wait(timeout=5), "stale resolve thread did not resume in time"
+        return original_can_transition(current_status, next_status)
+
+    monkeypatch.setattr(homework_router, "can_transition_homework_appeal_status", blocking_can_transition)
+
+    stale_result: dict[str, object] = {}
+
+    def stale_resolve() -> None:
+        with TestClient(app) as thread_client:
+            stale_result["response"] = thread_client.put(
+                f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+                headers=teacher_h,
+                json={"teacher_response": "stale resolve should lose", "status": "resolved"},
+            )
+
+    thread = threading.Thread(target=stale_resolve, name="stale-resolve-thread")
+    thread.start()
+    assert stale_loaded.wait(timeout=5), "stale resolve request did not reach the loaded-state barrier"
+
+    rejected = client.put(
+        f"/api/homeworks/{hid}/submissions/{sub_id}/appeal",
+        headers=teacher_h,
+        json={"teacher_response": "rejected wins", "status": "rejected"},
+    )
+    assert rejected.status_code == 200, rejected.text
+
+    allow_stale_continue.set()
+    thread.join(timeout=10)
+    assert not thread.is_alive(), "stale resolve thread did not finish"
+    stale_response = stale_result["response"]
+    assert stale_response.status_code == 409, stale_response.text
+
+    db = SessionLocal()
+    try:
+        row = db.query(HomeworkGradeAppeal).filter(HomeworkGradeAppeal.submission_id == sub_id).one()
+        assert row.status == "rejected"
+        assert row.teacher_response == "rejected wins"
+        notes = db.query(Notification).filter(Notification.related_appeal_id == row.id).all()
+        assert len(notes) == 1
+        assert notes[0].notification_kind == "grade_appeal"
     finally:
         db.close()
