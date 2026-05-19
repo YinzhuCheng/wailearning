@@ -37,11 +37,39 @@ export const useUserStore = defineStore('user', () => {
   const canManageTeaching = computed(() => ['admin', 'class_teacher', 'teacher'].includes(userInfo.value?.role))
   const canSelectCourse = computed(() => ['class_teacher', 'teacher', 'student'].includes(userInfo.value?.role))
 
+  function mergeCourseSnapshot(preferredCourse, cachedCourse) {
+    if (!preferredCourse && !cachedCourse) {
+      return null
+    }
+    if (!preferredCourse) {
+      return cachedCourse
+    }
+    if (!cachedCourse) {
+      return preferredCourse
+    }
+    // Keep the freshest route/page snapshot while retaining any stable fields
+    // from the cached teaching-courses entry.
+    return {
+      ...cachedCourse,
+      ...preferredCourse
+    }
+  }
+
   function setSelectedCourse(course, options = {}) {
     const { reason = 'system', emitEvent = reason === 'user' } = options
-    const normalizedCourse = course
-      ? teachingCourses.value.find(item => String(item.id) === String(course.id)) || course
+    const matchedCourse = course
+      ? teachingCourses.value.find(item => String(item.id) === String(course.id)) || null
       : null
+    const normalizedCourse = mergeCourseSnapshot(course, matchedCourse)
+
+    if (normalizedCourse) {
+      const nextCourses = [...teachingCourses.value]
+      const index = nextCourses.findIndex(item => String(item.id) === String(normalizedCourse.id))
+      if (index >= 0) {
+        nextCourses[index] = mergeCourseSnapshot(normalizedCourse, nextCourses[index])
+        teachingCourses.value = nextCourses
+      }
+    }
 
     selectedCourse.value = normalizedCourse
     if (normalizedCourse) {

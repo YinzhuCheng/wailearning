@@ -283,4 +283,12 @@ apps/backend/courseeval_backend/api/routers/e2e_dev.py
 apps/backend/courseeval_backend/core/auth.py","Changes to the spec itself.
 Changes to login token persistence, multi-role browser routing, notification convergence, or mixed API-plus-UI edge handling covered by the suite.
 Use this targeted browser check when auth/notification edge semantics change but a full Playwright pass would be disproportionate.",cursor/repository-normalization-schema-notifications,this commit,not run,2026-05-13,0,0
+school.e2e.homework_appeal_stale_tabs,school-playwright,"Targeted school Playwright suite for teacher stale-tab homework-appeal convergence, terminal-state conflict recovery, review/appeal interleave, and reload-safe non-actionable detail state.",node scripts/playwright-external-runner.cjs e2e-homework-appeal-stale-tabs.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-homework-appeal-stale-tabs.spec.js
+tests/e2e/web-school/fixtures.cjs
+tests/e2e/web-school/future-advanced-coverage-helpers.cjs
+apps/web/school/src/views/HomeworkSubmissionReview.vue
+apps/web/school/src/views/HomeworkSubmissions.vue
+apps/backend/courseeval_backend/api/routers/homework.py
+apps/backend/courseeval_backend/domains/appeal_notifications.py","Changes to stale-tab homework-appeal browser recovery, terminal-state detail-page rendering, teacher review/appeal interleave, or homework-appeal notification projection in the school UI.
+Pair with backend homework appeal pytest when API-only terminal-state invariants change.",cursor/repository-normalization-schema-notifications,not run,not run,,0,0
 backend.files.attachment_api,backend-pytest,"Focused backend file upload/download API regressions for attachment response shape, upload compliance, stored-name downloads, and course cover-image upload reuse.",.venv\Scripts\python.exe -m pytest tests\backend\files -q,<repo>,"tests/backend/files/; apps/backend/courseeval_backend/api/routers/files.py; apps/backend/courseeval_backend/api/routers/subjects.py; apps/backend/courseeval_backend/api/schema_defs/files.py; apps/backend/courseeval_backend/attachments.py; apps/backend/courseeval_backend/attachment_compliance.py","Changes to file upload/download routes, upload response DTOs, attachment compliance, stored-name download ACL behavior, or course cover-image upload reuse.",cursor/repository-normalization,this commit,passed,2026-05-13,1,1
