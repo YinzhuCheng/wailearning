@@ -1362,14 +1362,22 @@ class ValidationSelectorTests(unittest.TestCase):
             issues,
         )
 
-    def test_repository_admin_playwright_targets_use_external_runner(self):
+    def test_repository_school_playwright_targets_use_supported_runners(self):
         registry = json.loads((REPO_ROOT / "tests/TEST_SELECTION_TARGETS.json").read_text(encoding="utf-8"))
         targets = [target for target in registry["targets"] if target.get("category") == "school-playwright"]
 
         self.assertGreater(len(targets), 0)
         for target in targets:
             argv = target["commands"][0]["argv"]
-            self.assertEqual(argv[:2], ["node", "scripts/playwright-external-runner.cjs"])
+            if argv[:2] == ["node", "scripts/playwright-external-runner.cjs"]:
+                continue
+            self.assertEqual(
+                argv[:2],
+                [".venv/Scripts/python.exe", "ops/scripts/dev/wai_valid_supervisor.py"],
+                target["id"],
+            )
+            self.assertIn("--sample", argv, target["id"])
+            self.assertIn("--concurrency", argv, target["id"])
 
     def test_repository_full_playwright_target_uses_external_runner(self):
         registry = json.loads((REPO_ROOT / "tests/TEST_SELECTION_TARGETS.json").read_text(encoding="utf-8"))
