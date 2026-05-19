@@ -174,22 +174,35 @@ export const useUserStore = defineStore('user', () => {
     formData.append('username', username)
     formData.append('password', password)
 
-    const data = await api.auth.login(formData)
-    token.value = data.access_token
-    localStorage.setItem('token', data.access_token)
+    try {
+      const data = await api.auth.login(formData)
+      token.value = data.access_token
+      localStorage.setItem('token', data.access_token)
 
-    const userData = await api.auth.getCurrentUser()
-    userInfo.value = userData
-    localStorage.setItem('user', JSON.stringify(userData))
+      const userData = await api.auth.getCurrentUser()
+      userInfo.value = userData
+      localStorage.setItem('user', JSON.stringify(userData))
 
-    if (userData?.role === 'student') {
-      clearSelectedCourse()
+      if (userData?.role === 'student') {
+        clearSelectedCourse()
+      }
+
+      await fetchSystemSettings()
+      await fetchAppearanceState()
+
+      return userData
+    } catch (error) {
+      token.value = ''
+      userInfo.value = null
+      appearanceState.value = null
+      selectedCourse.value = null
+      teachingCourses.value = []
+      teachingCoursesLoaded.value = false
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      localStorage.removeItem('selected_course')
+      throw error
     }
-
-    await fetchSystemSettings()
-    await fetchAppearanceState()
-
-    return userData
   }
 
   async function refreshUserInfo() {

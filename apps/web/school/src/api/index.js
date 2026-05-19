@@ -54,6 +54,28 @@ const attachSlowBusyWatcher = config => {
   return config
 }
 
+const attachAuthToken = config => {
+  const token = localStorage.getItem('token') || ''
+  config._authTokenAtDispatch = token
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+}
+
+const clearCurrentSessionForUnauthorized = config => {
+  const requestToken = config?._authTokenAtDispatch || ''
+  const currentToken = localStorage.getItem('token') || ''
+  if (!requestToken || requestToken !== currentToken) {
+    return false
+  }
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  localStorage.removeItem('selected_course')
+  window.location.href = '/login'
+  return true
+}
+
 /** FastAPI/Pydantic 422: { detail: [{ loc, msg, type }, ...] } — must stringify for ElMessage. */
 const formatValidationDetail = detail => {
   if (!Array.isArray(detail) || !detail.length) {
@@ -129,10 +151,7 @@ const extractErrorMessage = async error => {
 
 http.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    attachAuthToken(config)
     attachSlowBusyWatcher(config)
     return config
   },
@@ -152,10 +171,7 @@ http.interceptors.response.use(
         ElMessage.error(message)
       }
       if (error.response.status === 401) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        localStorage.removeItem('selected_course')
-        window.location.href = '/login'
+        clearCurrentSessionForUnauthorized(error.config)
       }
     } else if (error.code === 'ECONNABORTED') {
       ElMessage.error('Request timed out')
@@ -173,10 +189,7 @@ const httpQuiet = axios.create({
 })
 httpQuiet.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    attachAuthToken(config)
     attachSlowBusyWatcher(config)
     return config
   },
@@ -190,10 +203,7 @@ httpQuiet.interceptors.response.use(
   error => {
     clearSlowBusyIfAny(error.config)
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      localStorage.removeItem('selected_course')
-      window.location.href = '/login'
+      clearCurrentSessionForUnauthorized(error.config)
     }
     return Promise.reject(error)
   }

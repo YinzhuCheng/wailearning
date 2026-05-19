@@ -283,6 +283,19 @@ apps/backend/courseeval_backend/api/routers/e2e_dev.py
 apps/backend/courseeval_backend/core/auth.py","Changes to the spec itself.
 Changes to login token persistence, multi-role browser routing, notification convergence, or mixed API-plus-UI edge handling covered by the suite.
 Use this targeted browser check when auth/notification edge semantics change but a full Playwright pass would be disproportionate.",cursor/repository-normalization-schema-notifications,this commit,not run,2026-05-13,0,0
+school.e2e.redteam_auth_notification_samples,school-playwright,"Self-organized WAI-VALID target for one-file E2E red-team samples covering auth rollback, same-context login races, selected_course cache poisoning, and parallel login isolation.",".venv\Scripts\python.exe ops\scripts\dev\wai_valid_supervisor.py --run-id e2e-redteam-auth-notification-samples --replace-run-dir --block self-organized-e2e-redteam --concurrency 10 --regression-mode light --playwright-shard-timeout-seconds 1200 --sample tests/e2e/web-school/e2e-redteam-auth-login-me-failure-rollback.spec.js --sample tests/e2e/web-school/e2e-redteam-notification-same-context-tabs.spec.js --sample tests/e2e/web-school/e2e-redteam-selected-course-cache-poison-badge.spec.js --sample tests/e2e/web-school/e2e-redteam-parallel-login-context-isolation.spec.js",<repo>,"tests/e2e/web-school/e2e-redteam-auth-login-me-failure-rollback.spec.js
+tests/e2e/web-school/e2e-redteam-notification-same-context-tabs.spec.js
+tests/e2e/web-school/e2e-redteam-selected-course-cache-poison-badge.spec.js
+tests/e2e/web-school/e2e-redteam-parallel-login-context-isolation.spec.js
+apps/web/school/src/api/index.js
+apps/web/school/src/stores/user.js
+apps/web/school/src/views/Login.vue
+apps/web/school/src/views/Layout.vue
+apps/web/school/src/views/Notifications.vue
+tests/e2e/web-school/fixtures.cjs
+tests/e2e/web-school/future-advanced-coverage-helpers.cjs
+ops/scripts/dev/wai_valid_supervisor.py","Changes to auth bootstrap rollback, frontend 401 session handling, localStorage login/session helpers, selected_course healing, notification header badge convergence, same-context tabs, or WAI-VALID Playwright shard scheduling.
+Keep samples one spec file per attack so arbitrary sample blocks can schedule them independently.",cursor/repository-normalization-schema-notifications,this commit,passed,2026-05-19,1,1
 school.e2e.homework_appeal_stale_tabs,school-playwright,"Targeted school Playwright suite for teacher stale-tab homework-appeal convergence, terminal-state conflict recovery, review/appeal interleave, and reload-safe non-actionable detail state.",node scripts/playwright-external-runner.cjs e2e-homework-appeal-stale-tabs.spec.js --project=chromium,<repo>/apps/web/school,"tests/e2e/web-school/e2e-homework-appeal-stale-tabs.spec.js
 tests/e2e/web-school/fixtures.cjs
 tests/e2e/web-school/future-advanced-coverage-helpers.cjs

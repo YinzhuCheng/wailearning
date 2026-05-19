@@ -329,6 +329,38 @@ Another targeted suite: **`e2e-agent-followup-batch.spec.js`** (10 cases) — ad
 
 Another additive hazard file: **`e2e-agent-hazard-tier-15.spec.js`** (15 cases) — API-only checks for authz edges, LLM admin vs student boundaries, parallel `mark-all-read`, and E2E dev seed header gates. Same globalSetup contract as `e2e-postgres-hazard-tier.spec.js`; run serially (Pitfall 41).
 
+### Red-team E2E sample corpus
+
+Targeted red-team browser attacks that need to be replayed by arbitrary sample
+blocks live as one Playwright spec file per sample under
+`tests/e2e/web-school/`. Keep this granularity: each file is independently
+schedulable by WAI-VALID custom sample blocks, so future agents can compose
+small concurrent regression sets without serial ad hoc E2E runs.
+
+Current red-team sample files:
+
+- `e2e-redteam-auth-login-me-failure-rollback.spec.js`: forces
+  `/api/auth/login` to succeed and the following `/api/auth/me` bootstrap to
+  fail, then verifies the browser returns to `/login` without leaving `token`,
+  `user`, or `selected_course` in localStorage.
+- `e2e-redteam-notification-same-context-tabs.spec.js`: logs the same student
+  into two pages sharing one browser context and verifies a second-tab login
+  does not invalidate the first tab or prevent notification badge convergence.
+- `e2e-redteam-selected-course-cache-poison-badge.spec.js`: poisons
+  `selected_course` with a cross-class `class_id` and verifies the student
+  notification badge does not expand to another class broadcast.
+- `e2e-redteam-parallel-login-context-isolation.spec.js`: logs five seeded
+  actors into isolated browser contexts concurrently and checks role/token
+  isolation.
+
+Registered target:
+`school.e2e.redteam_auth_notification_samples` runs these samples through the
+foreground WAI-VALID supervisor with `self-organized-e2e-redteam`,
+`concurrency=10`, and `regression_mode=light`. For ad hoc red-team regression,
+compose the desired spec paths into a sample file or repeated `--sample`
+arguments and use the same WAI-VALID custom block path; do not run a series of
+these samples serially.
+
 ### Coverage gap addressed in May 2026 (notification header badge + sync-status)
 
 Earlier Playwright suites exercised **`POST /api/notifications`** and list/mark-read flows extensively, but **did not systematically assert** the school SPA header surfaces documented in [NOTIFICATION_HEADER_AND_REALTIME_SYNC.md](../frontend/NOTIFICATION_HEADER_AND_REALTIME_SYNC.md):

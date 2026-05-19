@@ -1597,6 +1597,68 @@
             "notes": "Does not replace full PostgreSQL validation for schema-sensitive authorization behavior."
         },
         {
+            "id": "school.e2e.redteam_auth_notification_samples",
+            "category": "school-playwright",
+            "risk": "targeted",
+            "description": "Self-organized WAI-VALID target for one-file E2E red-team samples covering auth rollback, same-context login races, selected_course cache poisoning, and parallel login isolation.",
+            "working_directory": ".",
+            "requires_review_reason": "Runs Playwright shards through the foreground WAI-VALID supervisor so each spec gets isolated API/UI ports and SQLite state; keep concurrency at 10 unless resource pressure is observed.",
+            "coverage_tags": [
+                "school-playwright",
+                "red-team",
+                "auth",
+                "notifications",
+                "concurrency"
+            ],
+            "commands": [
+                {
+                    "label": "wai-valid red-team samples",
+                    "argv": [
+                        ".venv/Scripts/python.exe",
+                        "ops/scripts/dev/wai_valid_supervisor.py",
+                        "--run-id",
+                        "e2e-redteam-auth-notification-samples",
+                        "--replace-run-dir",
+                        "--block",
+                        "self-organized-e2e-redteam",
+                        "--concurrency",
+                        "10",
+                        "--regression-mode",
+                        "light",
+                        "--playwright-shard-timeout-seconds",
+                        "1200",
+                        "--sample",
+                        "tests/e2e/web-school/e2e-redteam-auth-login-me-failure-rollback.spec.js",
+                        "--sample",
+                        "tests/e2e/web-school/e2e-redteam-notification-same-context-tabs.spec.js",
+                        "--sample",
+                        "tests/e2e/web-school/e2e-redteam-selected-course-cache-poison-badge.spec.js",
+                        "--sample",
+                        "tests/e2e/web-school/e2e-redteam-parallel-login-context-isolation.spec.js"
+                    ]
+                }
+            ],
+            "triggers": {
+                "paths": [
+                    "tests/e2e/web-school/e2e-redteam-auth-login-me-failure-rollback.spec.js",
+                    "tests/e2e/web-school/e2e-redteam-notification-same-context-tabs.spec.js",
+                    "tests/e2e/web-school/e2e-redteam-selected-course-cache-poison-badge.spec.js",
+                    "tests/e2e/web-school/e2e-redteam-parallel-login-context-isolation.spec.js",
+                    "apps/web/school/src/api/index.js",
+                    "apps/web/school/src/stores/user.js",
+                    "apps/web/school/src/views/Login.vue",
+                    "apps/web/school/src/views/Layout.vue",
+                    "apps/web/school/src/views/Notifications.vue",
+                    "tests/e2e/web-school/fixtures.cjs",
+                    "tests/e2e/web-school/future-advanced-coverage-helpers.cjs",
+                    "ops/scripts/dev/wai_valid_supervisor.py"
+                ],
+                "globs": []
+            },
+            "ledger_id": "school.e2e.redteam_auth_notification_samples",
+            "notes": "This target keeps red-team attacks as one spec file per sample while using WAI-VALID concurrent scheduling. Use it for auth/localStorage/session races and notification badge cache-poisoning changes."
+        },
+        {
             "id": "school.e2e.security_hardening_followup",
             "category": "school-playwright",
             "risk": "targeted",
