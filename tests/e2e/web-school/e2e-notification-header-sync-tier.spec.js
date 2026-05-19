@@ -121,7 +121,8 @@ test.describe('E2E notification header sync tier (10 cases)', () => {
     const badge = await badgeContentLocator(page)
     await expect(badge).toBeVisible({ timeout: 20000 })
 
-    const electiveLabel = `E2E选修课_${s.suffix}`
+    const elective = await apiGetJson(`/api/subjects/${s.course_elective_id}`, teacherTok)
+    const electiveLabel = elective.name
     await clickCourseSwitcherOption(page, electiveLabel)
     await page.waitForURL(/\/course-home|\/courses/)
     await triggerHeaderPoll(page)

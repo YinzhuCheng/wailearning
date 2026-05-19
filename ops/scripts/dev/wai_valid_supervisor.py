@@ -31,11 +31,23 @@ QUEUE_PATH = STATE_DIR / "WAI-VALID-queue.json"
 CURRENT_RUN_PATH = STATE_DIR / "WAI-VALID-current-run.json"
 HEARTBEAT_SECONDS = 2
 DEFAULT_MAX_RUNTIME_SECONDS = 3 * 60 * 60
+DEFAULT_CONCURRENCY = 10
+DEFAULT_PLAYWRIGHT_SHARD_TIMEOUT_SECONDS = 15 * 60
 
-PG_BIN = Path(r"C:\Users\bloom\tools\postgres\pgsql\bin")
-POSTGRES_EXE = PG_BIN / "postgres.exe"
-PSQL_EXE = PG_BIN / "psql.exe"
-INITDB_EXE = PG_BIN / "initdb.exe"
+def resolve_postgres_tool(name: str) -> Path:
+    for env_name in ("WAI_VALID_PG_BIN", "POSTGRES_BIN"):
+        pg_bin = os.environ.get(env_name)
+        if pg_bin:
+            candidate = Path(pg_bin) / name
+            if candidate.exists():
+                return candidate
+    found = shutil.which(name)
+    return Path(found) if found else Path(name)
+
+
+POSTGRES_EXE = resolve_postgres_tool("postgres.exe")
+PSQL_EXE = resolve_postgres_tool("psql.exe")
+INITDB_EXE = resolve_postgres_tool("initdb.exe")
 
 
 @dataclass
@@ -132,15 +144,62 @@ def load_json(path: Path) -> dict | None:
         return None
 
 
+def load_sample_file(path_text: str) -> list[str]:
+    path = Path(path_text)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    try:
+        raw = path.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        raise SystemExit(f"Cannot read WAI-VALID sample file {path}: {exc}") from exc
+    stripped = raw.strip()
+    if not stripped:
+        return []
+    if stripped.startswith("[") or stripped.startswith("{"):
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Invalid JSON sample file {path}: {exc}") from exc
+        if isinstance(payload, dict):
+            payload = payload.get("samples") or payload.get("paths") or payload.get("targets")
+        if not isinstance(payload, list):
+            raise SystemExit(f"JSON sample file must contain a list or samples/paths/targets list: {path}")
+        samples = [str(item).strip() for item in payload if str(item).strip()]
+    else:
+        samples = []
+        for line in raw.splitlines():
+            candidate = line.strip()
+            if not candidate or candidate.startswith("#"):
+                continue
+            samples.append(candidate)
+    return samples
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", help="Pytest shard paths or directories to supervise.")
     parser.add_argument("--run-id", required=True, help="Logical run id. 'WAI-VALID-' is added if missing.")
-    parser.add_argument("--concurrency", type=int, help="Maximum concurrent shards for a single-block run.")
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        help=f"Maximum concurrent shards for a single-block run. Defaults to {DEFAULT_CONCURRENCY}.",
+    )
     parser.add_argument(
         "--block",
         default="auto",
         help="Optional logical block name for progress reporting. Defaults to auto classification.",
+    )
+    parser.add_argument(
+        "--sample",
+        action="append",
+        default=[],
+        help="Add one explicit sample/path/nodeid to the single-block run. May be repeated.",
+    )
+    parser.add_argument(
+        "--samples-file",
+        action="append",
+        default=[],
+        help="Read samples for the single-block run from a UTF-8 text or JSON file. May be repeated.",
     )
     parser.add_argument(
         "--block-spec",
@@ -186,15 +245,25 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_MAX_RUNTIME_SECONDS,
         help="Maximum supervisor lifetime before self-termination. Defaults to 10800 seconds.",
     )
+    parser.add_argument(
+        "--playwright-shard-timeout-seconds",
+        type=int,
+        default=DEFAULT_PLAYWRIGHT_SHARD_TIMEOUT_SECONDS,
+        help="Maximum lifetime for one Playwright shard before the supervisor kills it and records a timeout.",
+    )
     args = parser.parse_args()
+    file_samples: list[str] = []
+    for sample_file in args.samples_file:
+        file_samples.extend(load_sample_file(sample_file))
+    args.paths = [*args.paths, *args.sample, *file_samples]
     if args.block_spec:
         if args.concurrency is not None:
             raise SystemExit("--concurrency cannot be combined with --block-spec.")
         if args.paths:
-            raise SystemExit("Positional paths cannot be combined with --block-spec.")
+            raise SystemExit("Positional paths, --sample, and --samples-file cannot be combined with --block-spec.")
     else:
         if args.concurrency is None:
-            raise SystemExit("--concurrency is required when --block-spec is not used.")
+            args.concurrency = DEFAULT_CONCURRENCY
         if not args.paths:
             raise SystemExit("At least one path is required for a single-block run.")
     return args
@@ -248,6 +317,23 @@ def normalize_path_text(path_text: str) -> str:
 def is_pytest_file_target(path_text: str) -> bool:
     normalized = normalize_path_text(path_text)
     return normalized.endswith(".py") and "::" not in normalized
+
+
+def is_playwright_school_target(path_text: str) -> bool:
+    normalized = normalize_path_text(path_text)
+    if not normalized.startswith("tests/e2e/web-school/"):
+        return False
+    spec_path = normalized.split(":", 1)[0]
+    return spec_path.endswith(".spec.js")
+
+
+def playwright_spec_arg(path_text: str) -> str:
+    normalized = normalize_path_text(path_text)
+    rel = normalized.split(":", 1)[0]
+    spec_name = Path(rel).name
+    if ":" not in normalized:
+        return spec_name
+    return f"{spec_name}:{normalized.split(':', 1)[1]}"
 
 
 def collect_pytest_nodeids(path_text: str) -> list[str]:
@@ -341,7 +427,7 @@ def classify_tasks(
             if progress_callback:
                 progress_callback(block_name, path, processed_input_paths, discovered_tasks)
             continue
-        if path.startswith("tests/e2e/web-school/") and path.endswith(".spec.js"):
+        if is_playwright_school_target(path):
             api_port = 18112 + pw_index
             ui_port = 19112 + pw_index
             tasks.append(
@@ -1004,13 +1090,13 @@ def start_playwright_worker(task: Task, run_dir: Path) -> RunningTask:
     err_path = run_dir / f"WAI-VALID-worker-{safe}.err.log"
     out_fh = log_path.open("wb")
     err_fh = err_path.open("wb")
-    spec_name = Path(task.shard).name
+    spec_arg = playwright_spec_arg(task.shard)
     runner = REPO_ROOT / "apps" / "web" / "school" / "scripts" / "playwright-external-runner.cjs"
     proc = subprocess.Popen(
         [
             "node",
             str(runner),
-            spec_name,
+            spec_arg,
             "--project=chromium",
         ],
         cwd=str(REPO_ROOT / "apps" / "web" / "school"),
@@ -1065,7 +1151,15 @@ def terminate_running_tasks(running: list[RunningTask], grace_seconds: float = 3
     for worker in running:
         if worker.proc.poll() is None:
             try:
-                worker.proc.terminate()
+                if os.name == "nt":
+                    subprocess.run(
+                        ["taskkill.exe", "/PID", str(worker.proc.pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+                else:
+                    worker.proc.terminate()
             except Exception:
                 continue
     deadline = time.time() + grace_seconds
@@ -1081,13 +1175,23 @@ def terminate_running_tasks(running: list[RunningTask], grace_seconds: float = 3
                 continue
 
 
-def append_result(results_path: Path, running_task: RunningTask, exit_code: int) -> None:
+def mark_worker_timed_out(worker: RunningTask, reason: str) -> None:
+    try:
+        with worker.err_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"\n[WAI-VALID] worker timed out: {reason}\n")
+    except Exception:
+        pass
+    terminate_running_tasks([worker], grace_seconds=3.0)
+
+
+def append_result(results_path: Path, running_task: RunningTask, exit_code: int, timed_out: bool = False) -> None:
     payload = {
         "shard": running_task.task.shard,
         "kind": running_task.task.kind,
         "block": running_task.task.block,
         "port": running_task.task.port,
         "exit_code": exit_code,
+        "timed_out": timed_out,
         "log_path": str(running_task.log_path),
         "stderr_path": str(running_task.err_path),
         "run_dir": str(running_task.run_dir) if running_task.run_dir else None,
@@ -1102,6 +1206,8 @@ def classify_failure_type(result: dict[str, Any]) -> str:
     exit_code = int(result.get("exit_code") or 0)
     if exit_code == 0:
         return "passed"
+    if result.get("timed_out"):
+        return "worker-timeout"
     if exit_code == 3221225786:
         return "external-interrupt-control-c"
 
@@ -1295,6 +1401,7 @@ def main() -> int:
             "heartbeat_seconds": args.heartbeat_seconds,
             "regression_mode": args.regression_mode,
             "max_runtime_seconds": args.max_runtime_seconds,
+            "playwright_shard_timeout_seconds": args.playwright_shard_timeout_seconds,
             "blocks": [
                 {
                     "name": block_spec.name,
@@ -1430,6 +1537,27 @@ def main() -> int:
 
             next_running: list[RunningTask] = []
             for worker in running:
+                if (
+                    worker.task.kind == "playwright"
+                    and args.playwright_shard_timeout_seconds > 0
+                    and time.time() - worker.started_at > args.playwright_shard_timeout_seconds
+                ):
+                    mark_worker_timed_out(
+                        worker,
+                        f"playwright shard exceeded {args.playwright_shard_timeout_seconds}s",
+                    )
+                    exit_code = worker.proc.poll()
+                    if exit_code is None:
+                        exit_code = -9
+                    failed.append(worker.task.shard)
+                    append_result(results_path, worker, exit_code, timed_out=True)
+                    append_event(
+                        events_path,
+                        f"TIMEOUT {worker.task.kind} {worker.task.shard} block={worker.task.block} origin={worker.task.origin} elapsed_seconds={int(time.time() - worker.started_at)} {time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}",
+                    )
+                    write_queue_snapshot(queue, run_id, run_dir, max_concurrency, args.regression_mode, block_concurrency)
+                    state_changed = True
+                    continue
                 exit_code = worker.proc.poll()
                 if exit_code is None:
                     next_running.append(worker)

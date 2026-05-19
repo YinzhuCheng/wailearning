@@ -133,6 +133,52 @@ mixed:
 Treat this as the current repository contract for WAI-VALID planning,
 monitoring, and reconnect reasoning.
 
+### Custom Self-Organized Sample Blocks
+
+When an agent/operator wants to run any series of concrete samples that is not
+already one explicitly requested single command, build a self-organized
+WAI-VALID block and run it concurrently. Do not hand-run a list of samples as a
+serial terminal checklist.
+
+Supported sample inputs:
+
+- positional samples passed directly to `wai_valid_supervisor.py`
+- repeated `--sample <path-or-nodeid>`
+- repeated `--samples-file <utf8-text-or-json-file>`
+- the Windows convenience launcher
+  `ops\scripts\windows\start-custom-validation-block.bat`
+
+Sample files may be UTF-8 text with one sample per line and `#` comments, or a
+JSON list / object with `samples`, `paths`, or `targets`.
+
+Default custom-block behavior:
+
+- default concurrency is `10` when no lower value is explicitly justified
+- `regression_mode=light` means only the supplied direct samples are scheduled
+- fixed repository block launchers remain the default full-validation lanes,
+  but arbitrary sample lists are first-class validation inputs
+- Playwright samples are safe to include in WAI-VALID custom blocks because the
+  supervisor assigns isolated API/UI ports and SQLite state per shard
+- if a Playwright shard exceeds its per-shard timeout, the supervisor records a
+  `worker-timeout` failure and continues draining the rest of the block
+
+Example:
+
+```powershell
+@"
+tests/backend/manual/test_validation_selector.py::ValidationSelectorTests::test_wai_valid_sample_file_loads_text_samples
+tests/backend/manual/test_validation_selector.py::ValidationSelectorTests::test_wai_valid_custom_block_args_keep_default_concurrency_10
+tests/backend/integration/test_sqlite_connection_pragmas.py::test_sqlite_connection_pragmas_enable_busy_timeout_and_foreign_keys
+"@ | Set-Content -Encoding UTF8 .agent-run\plan\custom-tooling-samples.txt
+
+ops\scripts\windows\start-custom-validation-block.bat custom-tooling-<date> self-organized-tooling .agent-run\plan\custom-tooling-samples.txt 900 10 light
+```
+
+This rule also applies to lightweight regression after a fix: compose the
+directly affected samples plus the smallest adjacent safety surface into a new
+custom block, run it with concurrent slot refill, then report the remaining
+failure count from `block-summary.txt` / `block-report.json`.
+
 For the repository-default full validation block set on Windows, prefer the
 maintained launcher:
 

@@ -120,10 +120,10 @@
             <template #default="{ row }">
               <template v-if="userStore.isStudent">
                 <div class="student-homework-actions">
-                  <el-button size="small" type="primary" @click="goToSubmitPage(row)">
+                  <el-button size="small" type="primary" data-testid="homework-student-submit" @click="goToSubmitPage(row)">
                     {{ row.attempt_count ? '提交' : '去交' }}
                   </el-button>
-                  <el-button size="small" link @click="viewHomework(row)">说明</el-button>
+                  <el-button size="small" link data-testid="homework-student-detail" @click="viewHomework(row)">说明</el-button>
                 </div>
               </template>
               <template v-else>

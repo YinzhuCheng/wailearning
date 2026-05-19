@@ -1,6 +1,6 @@
 ﻿const { expect, test } = require('@playwright/test')
 const { loadE2eScenario, resetE2eScenario, enterSeededRequiredCourse } = require('./fixtures.cjs')
-const { clickCourseSwitcherOption } = require('./future-advanced-coverage-helpers.cjs')
+const { clickCourseSwitcherOption, login } = require('./future-advanced-coverage-helpers.cjs')
 const scenario = () => loadE2eScenario()
 
 function apiBase() {
@@ -9,49 +9,6 @@ function apiBase() {
 
 function escapeRegex(text) {
   return `${text || ''}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-async function login(page, username, password) {
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
-  await page.evaluate(() => {
-    try {
-      localStorage.clear()
-      sessionStorage.clear()
-    } catch {
-      /* ignore */
-    }
-  })
-  await page.goto('/login', { waitUntil: 'load', timeout: 60000 })
-  await expect(page.getByTestId('login-username')).toBeVisible({ timeout: 30000 })
-  await page.getByTestId('login-username').fill(username)
-  await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(() => {
-          try {
-            const user = JSON.parse(localStorage.getItem('user') || 'null')
-            return user?.role || null
-          } catch {
-            return null
-          }
-        }),
-      { timeout: 20000 }
-    )
-    .not.toBeNull()
-  if (page.url().includes('/login')) {
-    const fallbackTarget = await page.evaluate(() => {
-      try {
-        const user = JSON.parse(localStorage.getItem('user') || 'null')
-        return user?.role === 'student' ? '/courses' : '/students'
-      } catch {
-        return '/students'
-      }
-    })
-    await page.goto(fallbackTarget, { waitUntil: 'load', timeout: 60000 })
-  }
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 20000 })
 }
 
 async function obtainAccessToken(username, password) {
@@ -158,6 +115,22 @@ async function apiGetCourseLlmConfig(token, subjectId) {
   return apiGetJson(`/api/llm-settings/courses/${subjectId}`, token)
 }
 
+async function apiSubjectNameById(token, subjectId) {
+  const subject = await apiGetJson(`/api/subjects/${subjectId}`, token)
+  if (!subject?.name) {
+    throw new Error(`subject ${subjectId} has no name`)
+  }
+  return subject.name
+}
+
+async function apiHomeworkTitleById(token, homeworkId) {
+  const homework = await apiGetJson(`/api/homeworks/${homeworkId}`, token)
+  if (!homework?.title) {
+    throw new Error(`homework ${homeworkId} has no title`)
+  }
+  return homework.title
+}
+
 async function apiListClasses(token) {
   return apiGetJson('/api/classes', token)
 }
@@ -211,6 +184,13 @@ async function apiListScoreAppeals(token, params = {}) {
   return res.json()
 }
 
+async function latestNotificationFor(token, predicate, params = {}) {
+  const list = await apiListNotifications(token, { page_size: 100, ...params })
+  const rows = (list.data || []).filter(predicate)
+  rows.sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
+  return rows[0] || null
+}
+
 async function apiListUsers(token) {
   return apiGetJson('/api/users', token)
 }
@@ -250,6 +230,22 @@ async function currentSelectedCourseId(page) {
   })
 }
 
+function changePasswordSubmit(page) {
+  return page.locator('.pwd-actions .el-button--primary')
+}
+
+function notificationCreateButton(page) {
+  return page.locator('.notifications-page .header-actions > .el-button--primary').first()
+}
+
+function notificationMarkAllReadButton(page) {
+  return page.locator('.notifications-page .header-actions .el-badge .el-button').first()
+}
+
+function notificationDialog(page) {
+  return page.locator('.el-dialog').filter({ has: page.locator('.md-panel') }).last()
+}
+
 function homeworkRow(page, title) {
   return page.getByRole('row', { name: new RegExp(escapeRegex(title)) })
 }
@@ -277,7 +273,7 @@ function electiveCatalogRow(page, courseName) {
 async function clickElectiveCatalogEnroll(page, courseName) {
   const row = electiveCatalogRow(page, courseName)
   await expect(row).toBeVisible({ timeout: 90000 })
-  const btn = row.getByRole('button', { name: '閫夎' })
+  const btn = row.getByRole('button').first()
   await expect(btn).toBeEnabled({ timeout: 60000 })
   await btn.click()
 }
@@ -285,17 +281,21 @@ async function clickElectiveCatalogEnroll(page, courseName) {
 async function clickElectiveCatalogDrop(page, courseName) {
   const row = electiveCatalogRow(page, courseName)
   await expect(row).toBeVisible({ timeout: 90000 })
-  const btn = row.getByRole('button', { name: '退选' })
+  const btn = row.getByRole('button').first()
   // Button stays disabled until local `courses` includes this elective (MyCourses.vue isElectiveEnrollment).
   await expect(btn).toBeEnabled({ timeout: 60000 })
   await btn.click()
+}
+
+function homeworkFormDialog(page) {
+  return page.locator('.el-dialog').filter({ has: page.getByTestId('homework-form-save') }).last()
 }
 
 async function openHomeworkEditDialog(page, title) {
   const row = homeworkRow(page, title)
   await expect(row).toBeVisible({ timeout: 20000 })
   await row.getByTestId('homework-btn-edit').click()
-  await expect(page.getByRole('dialog', { name: /鍙戝竷浣滀笟|缂栬緫浣滀笟/ })).toBeVisible({ timeout: 15000 })
+  await expect(homeworkFormDialog(page)).toBeVisible({ timeout: 15000 })
 }
 
 /** Batch-class UI helper removed 鈥?large SQLite accumulations make Users-table selection flaky; tests use `POST /api/users/batch-set-class` instead (same backend semantics). */
@@ -344,10 +344,10 @@ test.describe('E2E resilience scenarios', () => {
 
   test('concurrent stale homework edit converges to one final state across teacher and student views', async ({ browser }) => {
     const s = scenario()
-    const initialTitle = `E2E_UI浣滀笟_${s.suffix}`
     const intermediateTitle = `E2E骞跺彂涓棿鎬乢${s.suffix}_${Date.now()}`
     const finalTitle = `E2E骞跺彂鏈€缁堟€乢${s.suffix}_${Date.now()}`
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
+    const initialTitle = await apiHomeworkTitleById(teacherToken, s.homework_id)
 
     const teacherA = await browser.newContext()
     const teacherB = await browser.newContext()
@@ -371,11 +371,11 @@ test.describe('E2E resilience scenarios', () => {
       await openHomeworkEditDialog(pageB, initialTitle)
       await pageB.getByTestId('homework-form-title').fill(intermediateTitle)
       await pageB.getByTestId('homework-form-save').click()
-      await expect(pageB.getByRole('dialog', { name: /鍙戝竷浣滀笟|缂栬緫浣滀笟/ })).toBeHidden({ timeout: 25000 })
+      await expect(homeworkFormDialog(pageB)).toBeHidden({ timeout: 25000 })
       await expect(homeworkRow(pageB, intermediateTitle)).toBeVisible({ timeout: 20000 })
 
       await pageA.getByTestId('homework-form-save').click()
-      await expect(pageA.getByRole('dialog', { name: /鍙戝竷浣滀笟|缂栬緫浣滀笟/ })).toBeHidden({ timeout: 25000 })
+      await expect(homeworkFormDialog(pageA)).toBeHidden({ timeout: 25000 })
       await expect(homeworkRow(pageA, finalTitle)).toBeVisible({ timeout: 20000 })
 
       await expect
@@ -442,11 +442,11 @@ test.describe('E2E resilience scenarios', () => {
     await page.getByTestId('homework-btn-create').click()
     await page.getByTestId('homework-form-title').fill(title)
     await page.getByTestId('homework-form-save').click()
-    await expect(page.getByRole('dialog', { name: /鍙戝竷浣滀笟/ })).toBeVisible({ timeout: 15000 })
+    await expect(homeworkFormDialog(page)).toBeVisible({ timeout: 15000 })
     await expect(page.getByTestId('homework-form-save')).toBeEnabled({ timeout: 15000 })
 
     await page.getByTestId('homework-form-save').click()
-    await expect(page.getByRole('dialog', { name: /鍙戝竷浣滀笟/ })).toBeHidden({ timeout: 25000 })
+    await expect(homeworkFormDialog(page)).toBeHidden({ timeout: 25000 })
     await expect(homeworkRow(page, title)).toBeVisible({ timeout: 20000 })
 
     const afterRows = await apiListHomeworkRows(teacherToken, s.course_required_id)
@@ -468,7 +468,7 @@ test.describe('E2E resilience scenarios', () => {
 
     const studentCtx = await browser.newContext()
     const studentPage = await studentCtx.newPage()
-    const requiredCourseName = `E2E蹇呬慨璇綺${s.suffix}`
+    const requiredCourseName = await apiSubjectNameById(adminToken, s.course_required_id)
 
     try {
       await login(studentPage, s.student_plain.username, s.student_plain.password)
@@ -526,7 +526,7 @@ test.describe('E2E resilience scenarios', () => {
     const s = scenario()
     const adminToken = await obtainAccessToken(s.admin.username, s.admin.password)
     const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
-    const electiveName = `E2E閫変慨璇綺${s.suffix}`
+    const electiveName = await apiCatalogCourseNameById(studentToken, s.course_elective_id)
 
     const ctxA = await browser.newContext()
     const ctxB = await browser.newContext()
@@ -668,9 +668,9 @@ test.describe('E2E resilience scenarios', () => {
     })
 
     await page.getByTestId('homework-submit-content').fill(content)
-    await page.getByRole('button', { name: /淇濆瓨鎻愪氦/ }).click()
+    await page.getByTestId('homework-submit-save').click()
     await expect(page.getByTestId('homework-submit-content')).toHaveValue(content, { timeout: 15000 })
-    await page.getByRole('button', { name: /淇濆瓨鎻愪氦/ }).click()
+    await page.getByTestId('homework-submit-save').click()
 
     await expect
       .poll(async () => {
@@ -690,8 +690,8 @@ test.describe('E2E resilience scenarios', () => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
     const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
-    const submitContent = `E2E鐢宠瘔鎻愪氦_${s.suffix}_${Date.now()}`
-    const appealText = `杩欐槸涓€鏉＄敤浜庡苟鍙戠敵璇夊幓閲嶉獙璇佺殑璇存槑_${s.suffix}`
+    const submitContent = `E2E appeal submit ${s.suffix}_${Date.now()}`
+    const appealText = `Concurrent appeal dedupe reason ${s.suffix}`
 
     const setupPageCtx = await browser.newContext()
     const setupPage = await setupPageCtx.newPage()
@@ -700,7 +700,7 @@ test.describe('E2E resilience scenarios', () => {
       await enterSeededRequiredCourse(setupPage, s.suffix)
       await setupPage.goto(`/homework/${s.homework_id}/submit`)
       await setupPage.getByTestId('homework-submit-content').fill(submitContent)
-      await setupPage.getByRole('button', { name: /淇濆瓨鎻愪氦/ }).click()
+      await setupPage.getByTestId('homework-submit-save').click()
     } finally {
       await setupPageCtx.close().catch(() => {})
     }
@@ -719,7 +719,7 @@ test.describe('E2E resilience scenarios', () => {
     }
     await apiPutJson(`/api/homeworks/${s.homework_id}/submissions/${submissionId}/review`, teacherToken, {
       review_score: 78,
-      review_comment: `E2E鐢宠瘔鍓嶈瘎鍒哶${s.suffix}`
+      review_comment: `E2E before appeal review ${s.suffix}`
     })
 
     const ctxA = await browser.newContext()
@@ -735,13 +735,13 @@ test.describe('E2E resilience scenarios', () => {
       await pageA.goto(`/homework/${s.homework_id}/submit`)
       await pageB.goto(`/homework/${s.homework_id}/submit`)
 
-      await pageA.getByRole('button', { name: /鐢宠瘔/ }).click()
-      await pageA.locator('.el-dialog textarea').fill(appealText)
-      await pageA.getByRole('button', { name: /鎻愪氦鐢宠瘔/ }).click()
+      await pageA.getByTestId('homework-submit-open-appeal').click()
+      await pageA.getByTestId('homework-submit-appeal-reason').fill(appealText)
+      await pageA.getByTestId('homework-submit-appeal-confirm').click()
 
-      await pageB.getByRole('button', { name: /鐢宠瘔/ }).click()
-      await pageB.locator('.el-dialog textarea').fill(`${appealText}_閲嶅`)
-      await pageB.getByRole('button', { name: /鎻愪氦鐢宠瘔/ }).click()
+      await pageB.getByTestId('homework-submit-open-appeal').click()
+      await pageB.getByTestId('homework-submit-appeal-reason').fill(`${appealText}_retry`)
+      await pageB.getByTestId('homework-submit-appeal-confirm').click()
 
       await expect
         .poll(async () => {
@@ -758,7 +758,7 @@ test.describe('E2E resilience scenarios', () => {
   test('course LLM config keeps system quota out of course form and recovers cleanly after a failed save', async ({ page }) => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
-    const courseName = `E2E蹇呬慨璇綺${s.suffix}`
+    const courseName = await apiSubjectNameById(teacherToken, s.course_required_id)
     let failedOnce = false
 
     await login(page, s.teacher_own.username, s.teacher_own.password)
@@ -791,11 +791,11 @@ test.describe('E2E resilience scenarios', () => {
       await route.continue()
     })
 
-    await dialog.getByRole('button', { name: /淇濆瓨閰嶇疆/ }).click()
+    await page.getByTestId('llm-course-save').click()
     await expect(dialog).toBeVisible({ timeout: 15000 })
     await expect(enableSwitch).toHaveAttribute('aria-checked', 'false')
 
-    await dialog.getByRole('button', { name: /淇濆瓨閰嶇疆/ }).click()
+    await page.getByTestId('llm-course-save').click()
     await expect(dialog).toBeHidden({ timeout: 25000 })
 
     await expect
@@ -828,7 +828,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto('/student-scores')
 
     await expect(page).toHaveURL(/\/student-scores$/)
-    await expect(page.getByRole('heading', { name: /鎴戠殑鎴愮哗/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.student-scores-page')).toBeVisible({ timeout: 20000 })
     await expect(page.locator('textarea').first()).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBeTruthy()
   })
@@ -840,7 +840,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto('/notifications')
 
     await expect(page).toHaveURL(/\/notifications$/)
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.notifications-page')).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBeTruthy()
   })
 
@@ -944,9 +944,9 @@ test.describe('E2E resilience scenarios', () => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
     const studentToken = await obtainAccessToken(s.student_b.username, s.student_b.password)
-    const appealText = `E2E骞跺彂鐢宠瘔_${s.suffix}_${Date.now()}`
+    const appealText = `E2E concurrent homework appeal ${s.suffix}_${Date.now()}`
     await apiPostJson(`/api/homeworks/${s.homework_id}/submission`, studentToken, {
-      content: `E2E鐢宠瘔鍓嶆彁浜${s.suffix}_${Date.now()}`,
+      content: `E2E before homework appeal ${s.suffix}_${Date.now()}`,
       attachment_name: null,
       attachment_url: null,
       remove_attachment: false,
@@ -961,7 +961,7 @@ test.describe('E2E resilience scenarios', () => {
     }
     await apiPutJson(`/api/homeworks/${s.homework_id}/submissions/${submissionId}/review`, teacherToken, {
       review_score: 84,
-      review_comment: `E2E骞跺彂鐢宠瘔鍓嶈瘎闃卂${s.suffix}`
+      review_comment: `E2E before concurrent homework appeal review ${s.suffix}`
     })
 
     const results = await Promise.all([
@@ -1084,7 +1084,7 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto('/homework')
 
     await expect(page).toHaveURL(/\/homework$/)
-    await expect(page.getByRole('heading', { name: /璇剧▼浣滀笟|浣滀笟/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.homework-page')).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_required_id)
   })
 
@@ -1098,14 +1098,14 @@ test.describe('E2E resilience scenarios', () => {
     await page.goto('/notifications')
 
     await expect(page).toHaveURL(/\/notifications$/)
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.notifications-page')).toBeVisible({ timeout: 20000 })
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBeTruthy()
   })
 
   test('concurrent score appeal requests create at most one pending row for the same component', async () => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
-    const reasonText = `E2E鎴愮哗鐢宠瘔_${s.suffix}_${Date.now()}`
+    const reasonText = `E2E score appeal ${s.suffix}_${Date.now()}`
     const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
     const payloadA = {
       semester: '2026-绉嬪',
@@ -1227,12 +1227,27 @@ test.describe('E2E resilience scenarios', () => {
     await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/notifications', { waitUntil: 'load', timeout: 60000 })
 
-    const targetRow = page.locator('tr').filter({ has: page.getByRole('button', { name: '鏌ョ湅' }) }).first()
+    const notification = await expect
+      .poll(
+        () =>
+          latestNotificationFor(
+            teacherToken,
+            row => Number(row.related_score_appeal_id) === Number(created.id),
+            { subject_id: s.course_required_id }
+          ),
+        { timeout: 30000 }
+      )
+      .not.toBeNull()
+      .then(async () =>
+        latestNotificationFor(
+          teacherToken,
+          row => Number(row.related_score_appeal_id) === Number(created.id),
+          { subject_id: s.course_required_id }
+        )
+      )
+    const targetRow = page.locator('tr').filter({ hasText: notification.title }).first()
     await expect(targetRow).toBeVisible({ timeout: 30000 })
-    await expect(targetRow).toContainText('鎴愮哗鏋勬垚鐢宠瘔')
-    const action = targetRow.getByRole('button', { name: '鏌ョ湅' })
-    await expect(action).toBeVisible({ timeout: 10000 })
-    await action.click()
+    await page.getByTestId(`notification-appeal-action-${notification.id}`).click()
 
     await expect(page).toHaveURL(
       new RegExp(`/scores\\?appeal_id=${created.id}&subject_id=${s.course_required_id}|/scores\\?subject_id=${s.course_required_id}&appeal_id=${created.id}`),
@@ -1316,7 +1331,7 @@ test.describe('E2E resilience scenarios', () => {
     })
 
     await expect(page.getByTestId('scores-appeal-course-missing')).toBeVisible({ timeout: 20000 })
-    await clickCourseSwitcherOption(page, `E2E閫変慨璇綺${s.suffix}`)
+    await clickCourseSwitcherOption(page, await apiSubjectNameById(teacherToken, s.course_elective_id))
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_elective_id)
     await expect(page.getByTestId('scores-appeal-course-missing')).toHaveCount(0)
     await expect(page.locator('.appeals-card')).toBeVisible({ timeout: 20000 })
@@ -1346,7 +1361,7 @@ test.describe('E2E resilience scenarios', () => {
     })
 
     await expect(page.getByTestId('scores-appeal-course-missing')).toBeVisible({ timeout: 20000 })
-    await clickCourseSwitcherOption(page, `E2E閫変慨璇綺${s.suffix}`)
+    await clickCourseSwitcherOption(page, await apiSubjectNameById(teacherToken, s.course_elective_id))
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_elective_id)
     await expect.poll(() => page.url(), { timeout: 15000 }).not.toContain('subject_id=')
     await expect.poll(() => page.url(), { timeout: 15000 }).not.toContain('appeal_id=')
@@ -1381,9 +1396,9 @@ test.describe('E2E resilience scenarios', () => {
     })
 
     await expect(page.getByTestId('scores-appeal-course-missing')).toBeVisible({ timeout: 20000 })
-    await clickCourseSwitcherOption(page, `E2E閫変慨璇綺${s.suffix}`)
+    await clickCourseSwitcherOption(page, await apiSubjectNameById(teacherToken, s.course_elective_id))
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBe(s.course_elective_id)
-    await page.locator('.appeals-card').getByRole('button', { name: '鍒锋柊', exact: true }).click()
+    await page.locator('.appeals-card .card-header-inline .el-button').first().click()
     await expect(page.getByTestId('scores-appeal-course-missing')).toHaveCount(0)
     await expect(page.locator('.appeals-card')).toBeVisible({ timeout: 20000 })
     await expect.poll(() => page.url(), { timeout: 15000 }).not.toContain('subject_id=')
@@ -1476,7 +1491,7 @@ test.describe('E2E resilience scenarios', () => {
   test('duplicate stale teacher roster-enroll submits create one authoritative elective enrollment', async ({ browser }) => {
     const s = scenario()
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
-    const electiveName = `E2E閫変慨璇綺${s.suffix}`
+    const electiveName = await apiSubjectNameById(teacherToken, s.course_elective_id)
 
     await apiDelete(`/api/subjects/${s.course_elective_id}/students/${s.student_b.student_row_id}`, teacherToken).catch(() => {})
 
@@ -1509,7 +1524,7 @@ test.describe('E2E resilience scenarios', () => {
     const s = scenario()
     const studentToken = await obtainAccessToken(s.student_plain.username, s.student_plain.password)
     const teacherToken = await obtainAccessToken(s.teacher_own.username, s.teacher_own.password)
-    const electiveName = `E2E閫変慨璇綺${s.suffix}`
+    const electiveName = await apiCatalogCourseNameById(studentToken, s.course_elective_id)
 
     await apiPostJson(`/api/subjects/${s.course_elective_id}/student-self-enroll`, studentToken, {}).catch(() => {})
 
@@ -1793,12 +1808,12 @@ test.describe('E2E resilience scenarios', () => {
       await passwordInputs.nth(0).fill('definitely-wrong-password')
       await passwordInputs.nth(1).fill(nextPassword)
       await passwordInputs.nth(2).fill(nextPassword)
-      await page.getByRole('button', { name: /瀵嗙爜/ }).click()
+      await changePasswordSubmit(page).click()
 
       await passwordInputs.nth(0).fill(s.student_plain.password)
       await passwordInputs.nth(1).fill(nextPassword)
       await passwordInputs.nth(2).fill(nextPassword)
-      await page.getByRole('button', { name: /瀵嗙爜/ }).click()
+      await changePasswordSubmit(page).click()
 
       await expect
         .poll(async () => {
@@ -1847,14 +1862,14 @@ test.describe('E2E resilience scenarios', () => {
       await route.continue()
     })
 
-    await page.getByRole('button', { name: /鍙戝竷/ }).click()
-    const dialog = page.getByRole('dialog')
+    await notificationCreateButton(page).click()
+    const dialog = notificationDialog(page)
     await expect(dialog).toBeVisible({ timeout: 15000 })
     await dialog.locator('input').first().fill(title)
     await dialog.locator('textarea').first().fill('notification retry convergence')
-    await dialog.getByRole('button', { name: /淇濆瓨/ }).click()
+    await dialog.locator('.el-dialog__footer .el-button--primary').click()
     await expect(dialog).toBeVisible({ timeout: 15000 })
-    await dialog.getByRole('button', { name: /淇濆瓨/ }).click()
+    await dialog.locator('.el-dialog__footer .el-button--primary').click()
     await expect(dialog).toBeHidden({ timeout: 25000 })
 
     await expect
@@ -1886,7 +1901,7 @@ test.describe('E2E resilience scenarios', () => {
     })
     await page.goto('/notifications')
     await expect.poll(() => currentSelectedCourseId(page), { timeout: 15000 }).toBeTruthy()
-    await page.getByRole('button', { name: /宸茶/ }).click()
+    await notificationMarkAllReadButton(page).click()
 
     await expect
       .poll(async () => {
@@ -1919,19 +1934,27 @@ test.describe('E2E resilience scenarios', () => {
     await login(page, s.student_plain.username, s.student_plain.password)
     await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/notifications', { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.notifications-page')).toBeVisible({ timeout: 20000 })
+
+    let deletedBeforeDetailFetch = false
+    await page.route(`**/api/notifications/${row.id}`, async route => {
+      if (!deletedBeforeDetailFetch && route.request().method() === 'GET') {
+        deletedBeforeDetailFetch = true
+        await apiDelete(`/api/notifications/${row.id}`, teacherToken).catch(() => {})
+      }
+      await route.continue()
+    })
 
     const targetRow = page.locator('tr').filter({ hasText: title }).first()
     await expect(targetRow).toBeVisible({ timeout: 20000 })
-    await apiDelete(`/api/notifications/${row.id}`, teacherToken).catch(() => {})
     await targetRow.click()
 
     await expect.poll(async () => pageErrors.length, { timeout: 15000 }).toBe(0)
     await expect(page).toHaveURL(/\/notifications$/, { timeout: 20000 })
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.notifications-page')).toBeVisible({ timeout: 20000 })
     await expect(page.locator('body')).toBeVisible()
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.notifications-page')).toBeVisible({ timeout: 20000 })
   })
 
   test('notifications mark-all-read remains stable when a teacher deletes one unread row mid-flight', async ({ page }) => {
@@ -1960,7 +1983,7 @@ test.describe('E2E resilience scenarios', () => {
     await login(page, s.student_plain.username, s.student_plain.password)
     await enterSeededRequiredCourse(page, s.suffix)
     await page.goto('/notifications', { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.notifications-page')).toBeVisible({ timeout: 20000 })
 
     const targetRow = page.locator('tr').filter({ hasText: created[0].title }).first()
     await expect(targetRow).toBeVisible({ timeout: 20000 })
@@ -1968,7 +1991,7 @@ test.describe('E2E resilience scenarios', () => {
     const markAllUrl = new URL(`${apiBase()}/api/notifications/mark-all-read`)
     markAllUrl.searchParams.set('subject_id', String(s.course_required_id))
     await Promise.all([
-      page.getByRole('button', { name: /鍏ㄩ儴鏍囦负宸茶/ }).click(),
+      notificationMarkAllReadButton(page).click(),
       apiDelete(`/api/notifications/${created[0].id}`, teacherToken).catch(() => {})
     ])
 
@@ -1978,7 +2001,7 @@ test.describe('E2E resilience scenarios', () => {
       headers: { Authorization: `Bearer ${studentToken}` }
     }).then(res => res.json())
     expect(Number(sync.unread_count)).toBeGreaterThanOrEqual(0)
-    await expect(page.getByRole('heading', { name: /閫氱煡涓績/ })).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('.notifications-page')).toBeVisible({ timeout: 20000 })
     await expect(page.locator('body')).toBeVisible()
   })
 
@@ -2003,18 +2026,19 @@ test.describe('E2E resilience scenarios', () => {
     await login(page, s.teacher_own.username, s.teacher_own.password)
     await enterSeededRequiredCourse(page, s.suffix)
     await page.goto(`/homework/${s.homework_id}/submissions/${submission.id}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await expect(page.getByText(studentReason)).toBeVisible({ timeout: 20000 })
+    const pageAppealText = page.locator('.submission-review-page .review-appeal-text')
+    await expect(pageAppealText.filter({ hasText: studentReason }).first()).toBeVisible({ timeout: 20000 })
 
-    await page.getByRole('button', { name: '澶勭悊鐢宠瘔' }).click()
+    await page.locator('.review-meta-action.el-button--danger').click()
     await page.getByRole('textbox').last().fill(teacherResponse)
-    await page.getByRole('button', { name: '瑙ｅ喅鐢宠瘔' }).click()
+    await page.locator('.el-dialog__footer .el-button--primary').last().click()
 
-    await expect(page.getByText(studentReason)).toBeVisible({ timeout: 20000 })
-    await expect(page.getByText(teacherResponse)).toBeVisible({ timeout: 20000 })
+    await expect(pageAppealText.filter({ hasText: studentReason }).first()).toBeVisible({ timeout: 20000 })
+    await expect(pageAppealText.filter({ hasText: teacherResponse }).first()).toBeVisible({ timeout: 20000 })
 
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
-    await expect(page.getByText(studentReason)).toBeVisible({ timeout: 20000 })
-    await expect(page.getByText(teacherResponse)).toBeVisible({ timeout: 20000 })
+    await expect(pageAppealText.filter({ hasText: studentReason }).first()).toBeVisible({ timeout: 20000 })
+    await expect(pageAppealText.filter({ hasText: teacherResponse }).first()).toBeVisible({ timeout: 20000 })
     const history = await apiHomeworkSubmissionHistory(studentToken, s.homework_id)
     expect(history.summary?.appeal_status).toBe('resolved')
     expect(history.summary?.appeal_teacher_response).toBe(teacherResponse)
@@ -2034,7 +2058,7 @@ test.describe('E2E resilience scenarios', () => {
 
     const studentCtx = await browser.newContext()
     const studentPage = await studentCtx.newPage()
-    const requiredCourseName = `E2E蹇呬慨璇綺${s.suffix}`
+    const requiredCourseName = await apiCatalogCourseNameById(studentToken, s.course_required_id)
 
     try {
       await login(studentPage, s.student_plain.username, s.student_plain.password)

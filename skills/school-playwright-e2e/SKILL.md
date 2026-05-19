@@ -37,6 +37,11 @@ instead of defaulting to the full testing handbook for every browser task.
 8. Run external-runner commands serially when using the default ports/database.
    Parallel default runners can make Vite switch away from port 3012 while
    Playwright still navigates to 3012, and can lock the shared SQLite database.
+9. When running more than one Playwright spec as a validation series, prefer a
+   WAI-VALID self-organized custom block instead of serial ad hoc commands.
+   WAI-VALID assigns isolated API/UI ports and SQLite state per spec, so the
+   default custom-block concurrency is `10` unless resource pressure requires a
+   documented lower value.
 
 ## Document Routing Rules
 
@@ -73,6 +78,8 @@ node scripts/playwright-external-runner.cjs
 - Do not start two `npm.cmd run test:e2e:external -- ...` commands in parallel
   on the default ports. If parallelism is required, assign distinct
   `E2E_API_PORT`, `E2E_UI_PORT`, and database paths per process.
+- WAI-VALID custom blocks are the supported parallel Playwright path because
+  they provide per-shard API/UI port isolation and supervised timeout handling.
 - Reuse fixture helpers before adding bespoke login or seed code.
 - For API-heavy browser scenarios, assert the API-side precondition before
   blaming a missing UI row.

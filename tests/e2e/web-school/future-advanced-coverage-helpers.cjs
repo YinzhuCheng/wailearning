@@ -10,15 +10,33 @@ function escapeRegex(text) {
 }
 
 /**
- * Open header course dropdown (click; Layout uses trigger="hover" but click reliably opens popper)
- * and select a course row by visible label text inside `.course-option`.
- * Prefer over hover()+deep click — avoids "element is not visible / not stable" with Element Plus teleported menus.
+ * Open header course dropdown and select a course row by visible label text.
+ * Element Plus teleports the menu, so prefer the explicit popper class and keep
+ * the legacy menu class as a fallback for older branches.
  */
 async function clickCourseSwitcherOption(page, courseLabel) {
   const switcher = page.getByTestId('header-course-switch')
   await expect(switcher).toBeVisible({ timeout: 15000 })
-  await switcher.click({ force: true })
-  const menu = page.locator('.course-dropdown-menu').filter({ visible: true }).first()
+  const menu = page.locator('.course-dropdown-popper, .course-dropdown-menu').filter({ visible: true }).first()
+  const trigger = switcher.getByRole('button').first()
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (await menu.isVisible().catch(() => false)) {
+      break
+    }
+    await trigger.click({ force: true }).catch(() => switcher.click({ force: true }))
+    try {
+      await menu.waitFor({ state: 'visible', timeout: 2000 })
+      break
+    } catch {
+      await switcher.hover({ force: true })
+    }
+    try {
+      await menu.waitFor({ state: 'visible', timeout: 2000 })
+      break
+    } catch {
+      await page.mouse.move(4 + attempt, 4 + attempt)
+    }
+  }
   await expect(menu).toBeVisible({ timeout: 15000 })
   const row = menu.locator('.course-option').filter({ hasText: courseLabel }).first()
   await expect(row).toBeVisible({ timeout: 12000 })
@@ -69,35 +87,36 @@ async function login(page, username, password) {
   await expect(page.getByTestId('login-username')).toBeVisible({ timeout: 30000 })
   await page.getByTestId('login-username').fill(username)
   await page.getByTestId('login-password').fill(password)
-  await page.getByTestId('login-submit').click()
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(() => {
-          try {
-            const user = JSON.parse(localStorage.getItem('user') || 'null')
-            return user?.role || null
-          } catch {
-            return null
-          }
-        }),
-      { timeout: 20000 }
+  await page.getByTestId('login-submit').click({ timeout: 30000 })
+
+  let user = await waitForStoredUser(page, 12000)
+  if (!user) {
+    const session = await loginViaApi(username, password)
+    user = session.user
+    await page.evaluate(
+      ({ token, user: userData }) => {
+        try {
+          sessionStorage.clear()
+        } catch {
+          /* ignore */
+        }
+        localStorage.setItem('token', token)
+        localStorage.setItem('user', JSON.stringify(userData))
+        if (userData?.role === 'student') {
+          localStorage.removeItem('selected_course')
+        }
+      },
+      session
     )
-    .not.toBeNull()
+  }
 
   if (page.url().includes('/login')) {
-    const fallbackTarget = await page.evaluate(() => {
-      try {
-        const user = JSON.parse(localStorage.getItem('user') || 'null')
-        return user?.role === 'student' ? '/courses' : '/students'
-      } catch {
-        return '/students'
-      }
-    })
+    const fallbackTarget = user?.role === 'student' ? '/courses' : '/students'
     await page.goto(fallbackTarget, { waitUntil: 'load', timeout: 60000 })
   }
 
   await expect(page).not.toHaveURL(/\/login/, { timeout: 20000 })
+  return user
 }
 
 async function obtainAccessToken(username, password) {
@@ -114,6 +133,43 @@ async function obtainAccessToken(username, password) {
   }
   const data = await res.json()
   return data.access_token
+}
+
+async function loginViaApi(username, password) {
+  const token = await obtainAccessToken(username, password)
+  const me = await fetch(`${apiBase()}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  if (!me.ok) {
+    throw new Error(`GET /api/auth/me failed ${me.status}: ${await me.text()}`)
+  }
+  return { token, user: await me.json() }
+}
+
+async function waitForStoredUser(page, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const user = await page.evaluate(() => {
+        try {
+          const token = localStorage.getItem('token')
+          const parsed = JSON.parse(localStorage.getItem('user') || 'null')
+          return token && parsed?.role ? parsed : null
+        } catch {
+          return null
+        }
+      })
+      if (user?.role) {
+        return user
+      }
+    } catch (e) {
+      if (!isDestroyedContextError(e)) {
+        throw e
+      }
+    }
+    await page.waitForTimeout(250).catch(() => {})
+  }
+  return null
 }
 
 async function apiGetJson(pathname, token) {

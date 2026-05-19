@@ -29,7 +29,17 @@ from pytest_sqlite_guard import build_report, is_pytest_process  # noqa: E402
 from search_pitfalls import build_corpus, search_blocks  # noqa: E402
 from select_validation_targets import parse_ledger  # noqa: E402
 from validation_history import changed_paths_signature  # noqa: E402
-from wai_valid_supervisor import classify_tasks, infer_block_name_from_path  # noqa: E402
+from wai_valid_build_custom_args import (  # noqa: E402
+    DEFAULT_CONCURRENCY as CUSTOM_BLOCK_DEFAULT_CONCURRENCY,
+    build_args as build_custom_block_args,
+)
+from wai_valid_supervisor import (  # noqa: E402
+    DEFAULT_CONCURRENCY as SUPERVISOR_DEFAULT_CONCURRENCY,
+    classify_tasks,
+    infer_block_name_from_path,
+    load_sample_file,
+    playwright_spec_arg,
+)
 from run_validation_target import (
     RESULT_BLOCKED,
     expand_command_placeholders,
@@ -712,6 +722,56 @@ class ValidationSelectorTests(unittest.TestCase):
             tasks[0].source_path,
             "tests/security/test_security_regression.py::test_sec01_unauthenticated_users_list_returns_401",
         )
+
+    def test_wai_valid_sample_file_loads_text_samples(self):
+        sample_file = REPO_ROOT / ".agent-run/test-custom-wai-valid-samples.txt"
+        sample_file.parent.mkdir(parents=True, exist_ok=True)
+        sample_file.write_text(
+            "\n".join(
+                [
+                    "# comment",
+                    "tests/backend/manual/test_validation_selector.py::ValidationSelectorTests::test_wai_valid_infers_security_block_for_security_paths",
+                    "",
+                    "validation-target:static.validation_selector",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(
+            load_sample_file(str(sample_file)),
+            [
+                "tests/backend/manual/test_validation_selector.py::ValidationSelectorTests::test_wai_valid_infers_security_block_for_security_paths",
+                "validation-target:static.validation_selector",
+            ],
+        )
+
+    def test_wai_valid_custom_block_args_keep_default_concurrency_10(self):
+        payload = build_custom_block_args(
+            run_id="sample-regression",
+            block="self-organized-light-regression",
+            concurrency=CUSTOM_BLOCK_DEFAULT_CONCURRENCY,
+            regression_mode="light",
+            samples_files=["C:/tmp/samples.txt"],
+            samples=[],
+        )
+
+        self.assertEqual(SUPERVISOR_DEFAULT_CONCURRENCY, 10)
+        self.assertEqual(CUSTOM_BLOCK_DEFAULT_CONCURRENCY, 10)
+        self.assertIn("--no-console-report", payload)
+        self.assertIn("--concurrency", payload)
+        self.assertEqual(payload[payload.index("--concurrency") + 1], "10")
+        self.assertIn("--samples-file", payload)
+
+    def test_wai_valid_classifies_playwright_line_sample_as_playwright_task(self):
+        target = "tests/e2e/web-school/e2e-scenario-resilience.spec.js:647"
+        tasks = classify_tasks([target], "self-organized-e2e", postgres_base_port=15460)
+
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0].kind, "playwright")
+        self.assertEqual(tasks[0].block, "self-organized-e2e")
+        self.assertEqual(tasks[0].source_path, target)
+        self.assertEqual(playwright_spec_arg(target), "e2e-scenario-resilience.spec.js:647")
 
     def test_runner_normalizes_cross_platform_command_names(self):
         npm_argv, _npm_notes = resolve_command_argv(REPO_ROOT, ["npm", "run", "build"])

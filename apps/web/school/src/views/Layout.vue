@@ -164,7 +164,7 @@
         </div>
 
         <div class="header-right">
-          <el-dropdown v-if="showCourseSwitcher" trigger="hover" data-testid="header-course-switch" @command="handleCourseSwitch">
+          <el-dropdown v-if="showCourseSwitcher" trigger="click" data-testid="header-course-switch" popper-class="course-dropdown-popper" @command="handleCourseSwitch">
             <el-button text>
               切换课程
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>

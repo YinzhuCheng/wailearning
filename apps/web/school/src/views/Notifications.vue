@@ -82,6 +82,7 @@
                 type="primary"
                 link
                 size="small"
+                :data-testid="`notification-appeal-action-${row.id}`"
                 @click.stop="openAppealFromRow(row)"
               >
                 {{ appealActionLabel(row) }}

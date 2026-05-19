@@ -10,6 +10,7 @@ description: Use this when CourseEval validation should run in parallel with aut
 Run large CourseEval validation workloads with:
 
 - automatic slot refill instead of manual batch replacement
+- arbitrary self-organized sample blocks instead of fixed block-only runs
 - explicit long-lived supervisor processes
 - stable progress files that future rounds can read
 - per-block and per-shard concurrency settings
@@ -73,7 +74,8 @@ Recommended log roots:
    - backend PostgreSQL-sensitive
    - behavior
    - Playwright E2E
-3. Choose concurrency **per block**, not globally.
+3. Choose concurrency **per block**, not globally. Default to `10` unless the
+   operator or a committed run plan records a specific lower value and why.
 4. Before starting a run, ask the operator to confirm:
    - blocks
    - per-block concurrency
@@ -102,6 +104,9 @@ Recommended log roots:
 Accept either:
 
 - explicit test paths/files
+- explicit pytest nodeids or Playwright spec files
+- repeated `--sample` values
+- one or more `--samples-file` UTF-8 text / JSON files
 - a directory list
 - a mixed list of test samples
 - a natural-language regression intent such as `light`, `medium`, or `heavy`
@@ -112,6 +117,11 @@ The skill must then perform **automatic block splitting** by:
 2. grouping into backend / behavior / Playwright
 3. further separating PostgreSQL-sensitive shards from SQLite-compatible shards
 4. assigning the requested concurrency per block
+
+For any operator-selected series of samples, the default execution shape is a
+self-organized custom WAI-VALID block with concurrent slot refill. Do not run
+that series as serial ad hoc terminal commands unless the user explicitly names
+one single command or requests serial execution.
 
 ### Output
 
@@ -162,6 +172,18 @@ The first tracked runtime now supports block-aware launch specs such as:
 ```text
 --block-spec behavior:5:tests/behavior/test_admin_llm_policy_behavior.py,tests/behavior/test_discussion_api_behavior.py
 --block-spec backend-postgres-sensitive:2:tests/postgres/test_postgres_dialect_guards.py,tests/postgres/test_postgres_llm_schema_and_policy.py
+```
+
+It also supports custom arbitrary sample blocks:
+
+```powershell
+ops\scripts\windows\start-custom-validation-block.bat custom-light-<date> self-organized-light .agent-run\plan\custom-samples.txt 900 10 light
+```
+
+Lower-level equivalent:
+
+```powershell
+ops\scripts\windows\start-validation-supervisor.bat --run-id custom-light-<date> --replace-run-dir --regression-mode light --block self-organized-light --concurrency 10 --samples-file .agent-run\plan\custom-samples.txt --process-tag WAI-VALID-custom-light-<date> --max-runtime-seconds 900
 ```
 
 ## Regression Intensity
@@ -570,6 +592,8 @@ This is the core rule of the skill:
 - **never wait for a whole batch to finish before starting the next shard**
 - the supervisor must refill any freed slot as soon as a worker ends and the
   queue still has work
+- when running a chosen series of samples, create a custom concurrent block and
+  let WAI-VALID refill slots; do not iterate through the list by hand
 
 The only exceptions are:
 
@@ -618,6 +642,12 @@ The only exceptions are:
   - distinct DB / SQLite state
   - separate webServer lifecycles
 - otherwise run serial or low-concurrency
+- WAI-VALID custom blocks provide the required isolated API/UI ports and should
+  use the default custom-block concurrency of `10` unless local resource
+  pressure requires a documented lower value
+- a Playwright shard timeout defaults to `900` seconds; timeout failures should
+  be reported as `worker-timeout` rather than leaving the block permanently
+  running
 
 ## Monitoring Rules
 
@@ -734,8 +764,13 @@ If escalation is required, request it explicitly and explain that it is for the
 The first tracked runtime now supports:
 
 - multi-block runs through repeated `--block-spec`
+- custom arbitrary samples through `--sample` and `--samples-file`
+- default single-block concurrency of `10`
+- Windows custom launch through
+  `ops/scripts/windows/start-custom-validation-block.bat`
 - per-block concurrency enforcement
 - block-aware progress reporting
+- Playwright shard timeout enforcement
 
 It does **not** yet fully implement:
 
